@@ -1,3 +1,5 @@
+process.env.TZ = 'UTC'
+
 import { describe, it, expect } from 'vitest'
 import { groupByCategory, filterTodoItems } from '@/lib/list-helpers'
 import type { ListItemShape } from '@/lib/list-helpers'

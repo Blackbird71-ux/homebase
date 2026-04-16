@@ -32,6 +32,11 @@ export async function POST(
     return NextResponse.json({ error: 'content is required' }, { status: 400 })
   }
 
+  const parsed = dueDate ? new Date(dueDate) : null
+  if (parsed !== null && isNaN(parsed.getTime())) {
+    return NextResponse.json({ error: 'dueDate is not a valid ISO date' }, { status: 400 })
+  }
+
   const list = await prisma.list.findFirst({
     where: { id, familyId: user.familyId },
   })
@@ -41,7 +46,7 @@ export async function POST(
     data: {
       content,
       category: category ?? null,
-      dueDate: dueDate ? new Date(dueDate) : null,
+      dueDate: parsed,
       sortOrder: sortOrder ?? 0,
       createdBy: user.id,
       listId: id,

@@ -21,6 +21,11 @@ export async function PATCH(
   })
   if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
+  const parsed = dueDate ? new Date(dueDate) : null
+  if (parsed !== null && isNaN(parsed.getTime())) {
+    return NextResponse.json({ error: 'dueDate is not a valid ISO date' }, { status: 400 })
+  }
+
   const updated = await prisma.listItem.update({
     where: { id: itemId },
     data: {
@@ -28,7 +33,7 @@ export async function PATCH(
       ...(isCompleted !== undefined && { isCompleted }),
       ...(category !== undefined && { category }),
       ...(sortOrder !== undefined && { sortOrder }),
-      ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+      ...(dueDate !== undefined && { dueDate: parsed }),
     },
   })
   return NextResponse.json(updated)
