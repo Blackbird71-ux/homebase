@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Family {
+  id             String        @id @default(cuid())
+  name           String
+  umamiScriptUrl String?
+  umamiSiteId    String?
+  users          User[]
+  events         Event[]
+  lists          List[]
+  recipes        Recipe[]
+  mealPlans      MealPlan[]
+  coziImports    CoziImport[]
+  inviteCodes    InviteCode[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  name          String
+  role          String   @default("member")
+  familyId      String
+  family        Family   @relation(fields: [familyId], references: [id])
+  theme         String   @default("dark")
+  fontSize      String   @default("base")
+  weekStartsOn  Int      @default(0)
+  uiPreferences String?
+  createdAt     DateTime @default(now())
+}
+
+model InviteCode {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  used      Boolean  @default(false)
+  usedBy    String?
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  start       DateTime
+  end         DateTime
+  isAllDay    Boolean  @default(false)
+  category    String?
+  color       String?
+  createdBy   String
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model List {
+  id        String     @id @default(cuid())
+  name      String
+  type      String
+  isActive  Boolean    @default(true)
+  items     ListItem[]
+  familyId  String
+  family    Family     @relation(fields: [familyId], references: [id])
+  createdAt DateTime   @default(now())
+}
+
+model ListItem {
+  id          String   @id @default(cuid())
+  content     String
+  isCompleted Boolean  @default(false)
+  category    String?
+  sortOrder   Int      @default(0)
+  dueDate     DateTime?
+  createdBy   String
+  listId      String
+  list        List     @relation(fields: [listId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Recipe {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  ingredients  String
+  instructions String
+  image        String?
+  sourceUrl    String?
+  prepTime     Int?
+  cookTime     Int?
+  servings     Int?
+  tags         String?
+  createdBy    String
+  familyId     String
+  family       Family     @relation(fields: [familyId], references: [id])
+  mealPlans    MealPlan[]
+  createdAt    DateTime   @default(now())
+}
+
+model MealPlan {
+  id        String   @id @default(cuid())
+  date      DateTime
+  mealType  String   @default("dinner")
+  recipeId  String?
+  recipe    Recipe?  @relation(fields: [recipeId], references: [id])
+  note      String?
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+}
+
+model CoziImport {
+  id         String   @id @default(cuid())
+  importedAt DateTime @default(now())
+  importedBy String
+  eventCount Int      @default(0)
+  listCount  Int      @default(0)
+  itemCount  Int      @default(0)
+  notes      String?
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id])
+}
