@@ -62,8 +62,8 @@ export function NewListDialog({ open, onOpenChange, onCreated }: NewListDialogPr
               autoFocus
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Type</Label>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="text-sm font-medium leading-none">Type</legend>
             <div className="flex gap-3">
               {(['SHOPPING', 'TODO'] as const).map((t) => (
                 <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -78,7 +78,7 @@ export function NewListDialog({ open, onOpenChange, onCreated }: NewListDialogPr
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
           <DialogFooter>
             <Button type="submit" disabled={loading || !name.trim()}>
               {loading ? 'Creating...' : 'Create'}

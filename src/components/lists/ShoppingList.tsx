@@ -7,6 +7,7 @@ import { ListItemRow } from './ListItemRow'
 import { groupByCategory, SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ListItemShape, ShoppingCategory } from '@/lib/list-helpers'
 import { PlusIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface ShoppingListProps {
   listId: string
@@ -33,6 +34,8 @@ export function ShoppingList({ listId, initialItems }: ShoppingListProps) {
       const item = await res.json()
       setItems((prev) => [...prev, { ...item, dueDate: item.dueDate ? new Date(item.dueDate) : null, createdAt: new Date(item.createdAt) }])
       setNewContent('')
+    } else {
+      toast.error('Failed to save. Please try again.')
     }
   }
 
@@ -47,6 +50,8 @@ export function ShoppingList({ listId, initialItems }: ShoppingListProps) {
         setItems((prev) =>
           prev.map((i) => (i.id === id ? { ...i, isCompleted } : i))
         )
+      } else {
+        toast.error('Failed to save. Please try again.')
       }
     })
   }
@@ -55,6 +60,8 @@ export function ShoppingList({ listId, initialItems }: ShoppingListProps) {
     const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setItems((prev) => prev.filter((i) => i.id !== id))
+    } else {
+      toast.error('Failed to save. Please try again.')
     }
   }
 
@@ -62,6 +69,8 @@ export function ShoppingList({ listId, initialItems }: ShoppingListProps) {
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
       setItems((prev) => prev.filter((i) => !i.isCompleted))
+    } else {
+      toast.error('Failed to save. Please try again.')
     }
   }
 

@@ -59,7 +59,7 @@ export function ListItemRow({
         variant="ghost"
         size="icon-sm"
         onClick={() => onDelete(id)}
-        className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
+        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
         aria-label="Delete item"
       >
         <Trash2Icon className="h-3.5 w-3.5" />

@@ -52,11 +52,12 @@ export function ListsClient({ initialLists }: ListsClientProps) {
   const activeList = lists.find((l) => l.id === activeListId) ?? null
 
   function handleCreated(list: { id: string; name: string; type: string }) {
+    const familyId = initialLists[0]?.familyId ?? ''
     const newList: SerializedList = {
       ...list,
       isActive: true,
       createdAt: new Date().toISOString(),
-      familyId: '',
+      familyId,
       items: [],
       _count: { items: 0 },
     }

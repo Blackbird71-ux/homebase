@@ -18,15 +18,16 @@ export default async function ListsPage() {
   const lists = await getLists(user.familyId)
 
   // Serialize dates for client
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serialized = (lists as any[]).map((l: any) => ({
+  type RawList = Awaited<ReturnType<typeof getLists>>[number]
+  type RawItem = RawList['items'][number]
+
+  const serialized = lists.map((l: RawList) => ({
     ...l,
-    createdAt: (l.createdAt as Date).toISOString(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items: (l.items as any[]).map((i: any) => ({
+    createdAt: l.createdAt.toISOString(),
+    items: l.items.map((i: RawItem) => ({
       ...i,
-      dueDate: i.dueDate ? (i.dueDate as Date).toISOString() : null,
-      createdAt: (i.createdAt as Date).toISOString(),
+      dueDate: i.dueDate ? i.dueDate.toISOString() : null,
+      createdAt: i.createdAt.toISOString(),
     })),
   }))
 

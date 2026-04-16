@@ -7,6 +7,7 @@ import { ListItemRow } from './ListItemRow'
 import { filterTodoItems } from '@/lib/list-helpers'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
 import { PlusIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface TodoListProps {
   listId: string
@@ -41,6 +42,8 @@ export function TodoList({ listId, initialItems }: TodoListProps) {
       ])
       setNewContent('')
       setNewDueDate('')
+    } else {
+      toast.error('Failed to save. Please try again.')
     }
   }
 
@@ -55,6 +58,8 @@ export function TodoList({ listId, initialItems }: TodoListProps) {
         setItems((prev) =>
           prev.map((i) => (i.id === id ? { ...i, isCompleted } : i))
         )
+      } else {
+        toast.error('Failed to save. Please try again.')
       }
     })
   }
@@ -63,6 +68,8 @@ export function TodoList({ listId, initialItems }: TodoListProps) {
     const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setItems((prev) => prev.filter((i) => i.id !== id))
+    } else {
+      toast.error('Failed to save. Please try again.')
     }
   }
 
