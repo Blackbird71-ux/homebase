@@ -11,9 +11,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'url is required' }, { status: 400 })
   }
 
+  // Validate URL is a safe external https URL (prevent SSRF)
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(url)
+  } catch {
+    return NextResponse.json({ error: 'url is not a valid URL' }, { status: 400 })
+  }
+  if (parsedUrl.protocol !== 'https:') {
+    return NextResponse.json({ error: 'url must use https' }, { status: 400 })
+  }
+  // Block private/loopback IP ranges
+  const hostname = parsedUrl.hostname
+  const privatePatterns = [
+    /^localhost$/i,
+    /^127\./,
+    /^10\./,
+    /^172\.(1[6-9]|2\d|3[01])\./,
+    /^192\.168\./,
+    /^169\.254\./,
+    /^::1$/,
+    /^fc00:/i,
+    /^fe80:/i,
+  ]
+  if (privatePatterns.some((p) => p.test(hostname))) {
+    return NextResponse.json({ error: 'url must not target a private address' }, { status: 400 })
+  }
+
   let html: string
   try {
-    const res = await fetch(url, {
+    const res = await fetch(parsedUrl.toString(), {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (compatible; HomebaseBot/1.0; +https://homebase.family)',

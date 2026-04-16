@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 
+function safeParseArray(json: string): string[] {
+  try {
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 export async function GET(req: Request) {
   const user = await requireSession()
   const { searchParams } = new URL(req.url)
@@ -17,6 +26,7 @@ export async function GET(req: Request) {
   })
 
   // Filter by tag client-side (SQLite LIKE on comma-sep is messy)
+  // TODO: migrate tags to a junction table for indexed lookup if collection grows large
   const tagList = tags ? tags.split(',').map((t) => t.trim().toLowerCase()) : []
   const filtered = tagList.length
     ? recipes.filter((r) => {
@@ -28,8 +38,8 @@ export async function GET(req: Request) {
   return NextResponse.json(
     filtered.map((r) => ({
       ...r,
-      ingredients: JSON.parse(r.ingredients) as string[],
-      instructions: JSON.parse(r.instructions) as string[],
+      ingredients: safeParseArray(r.ingredients),
+      instructions: safeParseArray(r.instructions),
       tags: r.tags ? r.tags.split(',').map((t) => t.trim()) : [],
       createdAt: r.createdAt.toISOString(),
     }))

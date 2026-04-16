@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 
+function safeParseArray(json: string): string[] {
+  try {
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 function serializeRecipe(r: {
   id: string; title: string; description: string | null
   ingredients: string; instructions: string; image: string | null
@@ -11,8 +20,8 @@ function serializeRecipe(r: {
 }) {
   return {
     ...r,
-    ingredients: JSON.parse(r.ingredients) as string[],
-    instructions: JSON.parse(r.instructions) as string[],
+    ingredients: safeParseArray(r.ingredients),
+    instructions: safeParseArray(r.instructions),
     tags: r.tags ? r.tags.split(',').map((t) => t.trim()) : [],
     createdAt: r.createdAt.toISOString(),
   }
