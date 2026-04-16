@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { todayBoundsInTz } from '@/lib/timezone'
 import type { DashboardData } from '@/types'
 
 export async function GET() {
   const user = await requireSession()
+  const timezone = user.timezone ?? 'Australia/Sydney'
+  const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const [upcomingEvents, tonightsMeal, shoppingLists, todoLists] = await Promise.all([

@@ -16,6 +16,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
+          include: { family: { select: { timezone: true } } },
         })
 
         if (!user) return null
@@ -32,6 +33,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           role: user.role,
           familyId: user.familyId,
+          timezone: user.family.timezone,
         }
       },
     }),
@@ -42,6 +44,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id
         token.role = (user as SessionUser).role
         token.familyId = (user as SessionUser).familyId
+        token.timezone = (user as SessionUser).timezone
       }
       return token
     },
@@ -50,6 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string
         session.user.role = token.role as string
         session.user.familyId = token.familyId as string
+        session.user.timezone = token.timezone as string
       }
       return session
     },

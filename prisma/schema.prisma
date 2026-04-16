@@ -9,6 +9,7 @@ datasource db {
 model Family {
   id             String        @id @default(cuid())
   name           String
+  timezone       String        @default("Australia/Sydney")
   umamiScriptUrl String?
   umamiSiteId    String?
   users          User[]

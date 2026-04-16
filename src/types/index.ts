@@ -7,6 +7,7 @@ export interface SessionUser {
   role: UserRole
   familyId: string
   weekStartsOn: number
+  timezone: string  // IANA timezone string e.g. 'Australia/Sydney'
 }
 
 export interface DashboardData {

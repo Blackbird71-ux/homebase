@@ -6,12 +6,14 @@ declare module 'next-auth' {
       id: string
       role: string
       familyId: string
+      timezone: string
     } & DefaultSession['user']
   }
 
   interface User {
     role?: string
     familyId?: string
+    timezone?: string
   }
 }
 
@@ -20,5 +22,6 @@ declare module 'next-auth/jwt' {
     id?: string
     role?: string
     familyId?: string
+    timezone?: string
   }
 }
