@@ -1,0 +1,56 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth-helpers'
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string; itemId: string }> }
+) {
+  const user = await requireSession()
+  const { id, itemId } = await params
+  const body = await req.json()
+  const { content, isCompleted, category, sortOrder, dueDate } = body
+
+  const list = await prisma.list.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const existing = await prisma.listItem.findFirst({
+    where: { id: itemId, listId: id },
+  })
+  if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+
+  const updated = await prisma.listItem.update({
+    where: { id: itemId },
+    data: {
+      ...(content !== undefined && { content }),
+      ...(isCompleted !== undefined && { isCompleted }),
+      ...(category !== undefined && { category }),
+      ...(sortOrder !== undefined && { sortOrder }),
+      ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+    },
+  })
+  return NextResponse.json(updated)
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string; itemId: string }> }
+) {
+  const user = await requireSession()
+  const { id, itemId } = await params
+
+  const list = await prisma.list.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const existing = await prisma.listItem.findFirst({
+    where: { id: itemId, listId: id },
+  })
+  if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+
+  await prisma.listItem.delete({ where: { id: itemId } })
+  return NextResponse.json({ success: true })
+}
