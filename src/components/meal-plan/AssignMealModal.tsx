@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,7 @@ interface AssignMealModalProps {
   onOpenChange: (open: boolean) => void
   date: string // YYYY-MM-DD
   mealType: string
-  onAssign: (data: { recipeId?: string; note?: string }) => void
+  onAssign: (data: { recipeId?: string; note?: string }) => Promise<void>
 }
 
 export function AssignMealModal({
@@ -40,9 +41,12 @@ export function AssignMealModal({
   useEffect(() => {
     if (!open) return
     fetch('/api/recipes')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load recipes')
+        return r.json()
+      })
       .then((data: Recipe[]) => setRecipes(data))
-      .catch(() => {})
+      .catch(() => toast.error('Failed to load recipes'))
   }, [open])
 
   const filtered = recipes.filter((r) =>
@@ -52,7 +56,7 @@ export function AssignMealModal({
   async function assignRecipe(recipeId: string) {
     setSaving(true)
     try {
-      onAssign({ recipeId })
+      await onAssign({ recipeId })
       onOpenChange(false)
       setSearch('')
     } finally {
@@ -65,7 +69,7 @@ export function AssignMealModal({
     if (!note.trim()) return
     setSaving(true)
     try {
-      onAssign({ note: note.trim() })
+      await onAssign({ note: note.trim() })
       onOpenChange(false)
       setNote('')
     } finally {

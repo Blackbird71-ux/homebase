@@ -5,6 +5,8 @@ import { MealSlotCell } from './MealSlotCell'
 import { AssignMealModal } from './AssignMealModal'
 import { Button } from '@/components/ui/button'
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { todayStringInTz } from '@/lib/timezone'
+import { toast } from 'sonner'
 
 interface MealPlanEntry {
   id: string
@@ -20,6 +22,7 @@ interface MealPlanGridProps {
   weekStartsOn: number // 0 = Sunday, 1 = Monday
   initialWeekStart: string // ISO date string of first day to show YYYY-MM-DD
   initialEntries: MealPlanEntry[]
+  timezone: string
 }
 
 function getWeekDays(startDate: Date): Date[] {
@@ -47,6 +50,7 @@ export function MealPlanGrid({
   weekStartsOn,
   initialWeekStart,
   initialEntries,
+  timezone,
 }: MealPlanGridProps) {
   const [weekStart, setWeekStart] = useState(() => new Date(initialWeekStart + 'T00:00:00'))
   const [entries, setEntries] = useState<MealPlanEntry[]>(initialEntries)
@@ -71,12 +75,15 @@ export function MealPlanGrid({
     fetch(`/api/meal-plan?from=${from}T00:00:00Z&to=${to}T23:59:59Z`)
       .then((r) => r.json())
       .then((data: MealPlanEntry[]) => setEntries(data))
-      .catch(() => {})
+      .catch(() => toast.error('Failed to load meal plan'))
       .finally(() => setLoading(false))
   }
 
   function goToday() {
-    const todayWeekStart = startOfWeek(new Date(), weekStartsOn)
+    // Get today's local date string in the family's timezone
+    const todayStr = todayStringInTz(timezone)
+    const localToday = new Date(todayStr + 'T00:00:00')
+    const todayWeekStart = startOfWeek(localToday, weekStartsOn)
     setWeekStart(todayWeekStart)
     const from = toYMD(todayWeekStart)
     const toDate = new Date(todayWeekStart)
@@ -87,7 +94,7 @@ export function MealPlanGrid({
     fetch(`/api/meal-plan?from=${from}T00:00:00Z&to=${to}T23:59:59Z`)
       .then((r) => r.json())
       .then((data: MealPlanEntry[]) => setEntries(data))
-      .catch(() => {})
+      .catch(() => toast.error('Failed to load meal plan'))
       .finally(() => setLoading(false))
   }
 
@@ -96,7 +103,7 @@ export function MealPlanGrid({
     setModalOpen(true)
   }
 
-  async function handleAssign(data: { recipeId?: string; note?: string }) {
+  async function handleAssign(data: { recipeId?: string; note?: string }): Promise<void> {
     if (!selectedDate) return
     const res = await fetch('/api/meal-plan', {
       method: 'POST',
@@ -115,6 +122,8 @@ export function MealPlanGrid({
         )
         return [...filtered, entry]
       })
+    } else {
+      toast.error('Failed to save meal. Please try again.')
     }
   }
 
@@ -122,10 +131,12 @@ export function MealPlanGrid({
     const res = await fetch(`/api/meal-plan/${entryId}`, { method: 'DELETE' })
     if (res.ok) {
       setEntries((prev) => prev.filter((e) => e.id !== entryId))
+    } else {
+      toast.error('Failed to clear meal. Please try again.')
     }
   }
 
-  const today = toYMD(new Date())
+  const today = todayStringInTz(timezone)
 
   return (
     <div className="flex flex-col gap-4 p-6 h-full overflow-auto">

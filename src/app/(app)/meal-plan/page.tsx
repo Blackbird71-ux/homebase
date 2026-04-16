@@ -1,6 +1,7 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { MealPlanGrid } from '@/components/meal-plan/MealPlanGrid'
+import { todayStringInTz } from '@/lib/timezone'
 
 function startOfWeek(date: Date, weekStartsOn: number): Date {
   const d = new Date(date)
@@ -17,7 +18,9 @@ function toYMD(date: Date): string {
 
 export default async function MealPlanPage() {
   const user = await requireSession()
-  const weekStart = startOfWeek(new Date(), user.weekStartsOn)
+  const todayStr = todayStringInTz(user.timezone)
+  const localToday = new Date(todayStr + 'T00:00:00')
+  const weekStart = startOfWeek(localToday, user.weekStartsOn)
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekEnd.getDate() + 6)
   weekEnd.setHours(23, 59, 59, 999)
@@ -46,6 +49,7 @@ export default async function MealPlanPage() {
       weekStartsOn={user.weekStartsOn}
       initialWeekStart={toYMD(weekStart)}
       initialEntries={serialized}
+      timezone={user.timezone}
     />
   )
 }
