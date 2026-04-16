@@ -6,7 +6,6 @@ import { RecipeForm } from '@/components/recipes/RecipeForm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PlusIcon, SearchIcon } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
 interface RecipeSummary {
   id: string
@@ -24,7 +23,6 @@ export function RecipesClient({ initialRecipes }: { initialRecipes: RecipeSummar
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
-  const router = useRouter()
 
   const allTags = useMemo(() => {
     const tagSet = new Set<string>()
@@ -44,8 +42,17 @@ export function RecipesClient({ initialRecipes }: { initialRecipes: RecipeSummar
     return result
   }, [recipes, search, activeTag])
 
-  function handleCreated() {
-    router.refresh()
+  function handleCreated(newRecipe: {
+    id: string
+    title: string
+    description: string | null
+    tags: string[]
+    prepTime: number | null
+    cookTime: number | null
+    servings: number | null
+    createdAt: string
+  }) {
+    setRecipes((prev) => [newRecipe, ...prev])
     setFormOpen(false)
   }
 
@@ -94,6 +101,7 @@ export function RecipesClient({ initialRecipes }: { initialRecipes: RecipeSummar
       )}
 
       <RecipeForm
+        key={formOpen ? 'open' : 'closed'}
         open={formOpen}
         onOpenChange={setFormOpen}
         onCreated={handleCreated}

@@ -17,7 +17,16 @@ import { LinkIcon } from 'lucide-react'
 interface RecipeFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreated: () => void
+  onCreated: (newRecipe: {
+    id: string
+    title: string
+    description: string | null
+    tags: string[]
+    prepTime: number | null
+    cookTime: number | null
+    servings: number | null
+    createdAt: string
+  }) => void
   initialData?: {
     title?: string
     description?: string
@@ -49,6 +58,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData }: Recip
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   async function handleScrape(e: React.FormEvent) {
     e.preventDefault()
@@ -80,6 +90,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData }: Recip
     e.preventDefault()
     if (!title.trim()) return
     setSaving(true)
+    setSaveError('')
     try {
       const res = await fetch('/api/recipes', {
         method: 'POST',
@@ -96,9 +107,12 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData }: Recip
           sourceUrl: sourceUrl.trim() || null,
         }),
       })
+      const data = await res.json()
       if (res.ok) {
-        onCreated()
+        onCreated(data)
         onOpenChange(false)
+      } else {
+        setSaveError(data.error ?? 'Failed to save recipe')
       }
     } finally {
       setSaving(false)
@@ -118,18 +132,22 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData }: Recip
           </TabsList>
 
           <TabsContent value="url" className="mt-4">
-            <form onSubmit={handleScrape} className="flex gap-2">
-              <Input
-                value={scrapeUrl}
-                onChange={(e) => setScrapeUrl(e.target.value)}
-                placeholder="https://example.com/recipe"
-                type="url"
-                className="flex-1"
-              />
-              <Button type="submit" variant="outline" disabled={scraping}>
-                <LinkIcon className="h-4 w-4 mr-1" />
-                {scraping ? 'Fetching...' : 'Import'}
-              </Button>
+            <form onSubmit={handleScrape} className="flex flex-col gap-2">
+              <Label htmlFor="scrape-url">Recipe URL</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="scrape-url"
+                  value={scrapeUrl}
+                  onChange={(e) => setScrapeUrl(e.target.value)}
+                  placeholder="https://example.com/recipe"
+                  type="url"
+                  className="flex-1"
+                />
+                <Button type="submit" variant="outline" disabled={scraping}>
+                  <LinkIcon className="h-4 w-4 mr-1" />
+                  {scraping ? 'Fetching...' : 'Import'}
+                </Button>
+              </div>
             </form>
             {scrapeError && (
               <p className="text-sm text-destructive mt-2">{scrapeError}</p>
@@ -202,6 +220,9 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData }: Recip
                 <Input id="recipe-url" type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
               </div>
 
+              {saveError && (
+                <p className="text-sm text-destructive">{saveError}</p>
+              )}
               <DialogFooter>
                 <Button type="submit" disabled={saving || !title.trim()}>
                   {saving ? 'Saving...' : 'Save recipe'}

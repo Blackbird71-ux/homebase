@@ -36,17 +36,21 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
 
   async function handleDelete() {
     setDeleting(true)
+    setDeleteError('')
     try {
       const res = await fetch(`/api/recipes/${recipe.id}`, { method: 'DELETE' })
       if (res.ok) {
         router.push('/recipes')
         router.refresh()
+      } else {
+        setDeleteError('Failed to delete recipe. Please try again.')
       }
     } finally {
       setDeleting(false)
@@ -178,6 +182,9 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
           <p className="text-sm text-muted-foreground">
             This will permanently delete &ldquo;{recipe.title}&rdquo;. This cannot be undone.
           </p>
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
