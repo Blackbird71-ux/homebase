@@ -114,6 +114,8 @@ model MealPlan {
   note      String?
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
+
+  @@unique([familyId, date, mealType])
 }
 
 model CoziImport {
