@@ -1,0 +1,78 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth-helpers'
+
+function serializeRecipe(r: {
+  id: string; title: string; description: string | null
+  ingredients: string; instructions: string; image: string | null
+  sourceUrl: string | null; prepTime: number | null; cookTime: number | null
+  servings: number | null; tags: string | null; createdBy: string
+  familyId: string; createdAt: Date
+}) {
+  return {
+    ...r,
+    ingredients: JSON.parse(r.ingredients) as string[],
+    instructions: JSON.parse(r.instructions) as string[],
+    tags: r.tags ? r.tags.split(',').map((t) => t.trim()) : [],
+    createdAt: r.createdAt.toISOString(),
+  }
+}
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await requireSession()
+  const { id } = await params
+  const recipe = await prisma.recipe.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!recipe) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(serializeRecipe(recipe))
+}
+
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await requireSession()
+  const { id } = await params
+  const body = await req.json()
+  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl } = body
+
+  const existing = await prisma.recipe.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const updated = await prisma.recipe.update({
+    where: { id },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(description !== undefined && { description }),
+      ...(ingredients !== undefined && { ingredients: JSON.stringify(ingredients) }),
+      ...(instructions !== undefined && { instructions: JSON.stringify(instructions) }),
+      ...(tags !== undefined && { tags: Array.isArray(tags) ? tags.join(',') : tags }),
+      ...(prepTime !== undefined && { prepTime }),
+      ...(cookTime !== undefined && { cookTime }),
+      ...(servings !== undefined && { servings }),
+      ...(sourceUrl !== undefined && { sourceUrl }),
+    },
+  })
+
+  return NextResponse.json(serializeRecipe(updated))
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await requireSession()
+  const { id } = await params
+  const existing = await prisma.recipe.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  await prisma.recipe.delete({ where: { id } })
+  return NextResponse.json({ success: true })
+}
