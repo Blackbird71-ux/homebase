@@ -62,4 +62,14 @@ describe('GET /api/auth/google/callback', () => {
     const res = await GET(req)
     expect(res.headers.get('location')).toContain('/settings?google=connected')
   })
+
+  it('returns 400 if refresh_token is missing from token response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: 'at' }), // no refresh_token
+    })
+    const req = new Request('http://localhost:3300/api/auth/google/callback?code=abc&state=state-abc')
+    const res = await GET(req)
+    expect(res.status).toBe(400)
+  })
 })
