@@ -81,7 +81,13 @@ export default async function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="data">
-            <div className="text-muted-foreground text-sm">Data — coming in Task 5.</div>
+            <DataTab
+              coziImports={coziImports.map(c => ({
+                ...c,
+                importedAt: c.importedAt instanceof Date ? c.importedAt.toISOString() : String(c.importedAt),
+              }))}
+              userEmail={user.email}
+            />
           </TabsContent>
         </Tabs>
       </div>
