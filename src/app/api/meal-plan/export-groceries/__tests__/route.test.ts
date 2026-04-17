@@ -66,6 +66,11 @@ describe('POST /api/meal-plan/export-groceries', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 if an item has an invalid category', async () => {
+    const res = await POST(makeRequest({ items: [{ text: 'milk', key: 'milk', category: 'Snacks' }], mode: 'replace' }))
+    expect(res.status).toBe(400)
+  })
+
   it('upserts IngredientCategory for each item', async () => {
     const { prisma } = await import('@/lib/prisma')
     await POST(makeRequest({ items: sampleItems, mode: 'append' }))
