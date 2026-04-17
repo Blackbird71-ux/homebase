@@ -17,15 +17,16 @@ const navItems = [
   { href: '/meal-plan', label: 'Meal Plan', icon: CalendarDays },
 ]
 
-export function Sidebar() {
+// Exported separately so it can be used inside the Sheet on mobile
+export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
 
   return (
-    <aside className="flex flex-col w-52 shrink-0 h-full border-r border-border" style={{ backgroundColor: 'var(--color-sidebar)' }}>
+    <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-sidebar)' }}>
       {/* Logo */}
       <div className="px-4 py-5 border-b border-border">
         <span className="text-sm font-bold tracking-widest text-muted-foreground uppercase">
-          🏠 Homebase
+          <span aria-hidden="true">🏠</span> Homebase
         </span>
       </div>
 
@@ -35,9 +36,10 @@ export function Sidebar() {
           <Link
             key={href}
             href={href}
+            onClick={onNavigate}
             className={cn(
               'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-              pathname.startsWith(href)
+              pathname === href || pathname.startsWith(href + '/')
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}
@@ -52,6 +54,7 @@ export function Sidebar() {
       <div className="px-2 py-4 border-t border-border space-y-1">
         <Link
           href="/settings"
+          onClick={onNavigate}
           className={cn(
             'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
             pathname.startsWith('/settings')
@@ -63,6 +66,7 @@ export function Sidebar() {
           Settings
         </Link>
         <button
+          type="button"
           onClick={() => signOut({ callbackUrl: '/login' })}
           className="flex w-full items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         >
@@ -70,6 +74,15 @@ export function Sidebar() {
           Sign out
         </button>
       </div>
+    </div>
+  )
+}
+
+// Desktop sidebar wrapper — hidden on mobile via md:flex
+export function Sidebar() {
+  return (
+    <aside className="hidden md:flex flex-col w-52 shrink-0 h-full border-r border-border">
+      <SidebarContent />
     </aside>
   )
 }
