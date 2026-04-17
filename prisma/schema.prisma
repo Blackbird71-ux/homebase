@@ -137,6 +137,7 @@ model IngredientCategory {
   family    Family   @relation(fields: [familyId], references: [id])
   key       String
   category  String
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([familyId, key])
