@@ -7,18 +7,19 @@ datasource db {
 }
 
 model Family {
-  id             String        @id @default(cuid())
-  name           String
-  timezone       String        @default("Australia/Sydney")
-  umamiScriptUrl String?
-  umamiSiteId    String?
-  users          User[]
-  events         Event[]
-  lists          List[]
-  recipes        Recipe[]
-  mealPlans      MealPlan[]
-  coziImports    CoziImport[]
-  inviteCodes    InviteCode[]
+  id                   String                @id @default(cuid())
+  name                 String
+  timezone             String                @default("Australia/Sydney")
+  umamiScriptUrl       String?
+  umamiSiteId          String?
+  users                User[]
+  events               Event[]
+  lists                List[]
+  recipes              Recipe[]
+  mealPlans            MealPlan[]
+  coziImports          CoziImport[]
+  inviteCodes          InviteCode[]
+  ingredientCategories IngredientCategory[]
 }
 
 model User {
@@ -128,4 +129,15 @@ model CoziImport {
   notes      String?
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
+}
+
+model IngredientCategory {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  key       String
+  category  String
+  updatedAt DateTime @updatedAt
+
+  @@unique([familyId, key])
 }
