@@ -36,20 +36,26 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
 
   async function handleCoziImport() {
     if (!icsFile) return
+    if (!icsFile.name.toLowerCase().endsWith('.ics')) {
+      setImportResult({ success: false, error: 'Please select a .ics file.' })
+      return
+    }
     setImportLoading(true)
     setImportResult(null)
-
-    const form = new FormData()
-    form.append('ics', icsFile)
-
-    const res = await fetch('/api/import/cozi', { method: 'POST', body: form })
-    const data = await res.json()
-    setImportLoading(false)
-
-    if (!res.ok) {
-      setImportResult({ success: false, error: data.error ?? 'Import failed' })
-    } else {
-      setImportResult({ success: true, eventCount: data.eventCount, message: data.message })
+    try {
+      const form = new FormData()
+      form.append('ics', icsFile)
+      const res = await fetch('/api/import/cozi', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) {
+        setImportResult({ success: false, error: data.error ?? 'Import failed' })
+      } else {
+        setImportResult({ success: true, eventCount: data.eventCount, message: data.message })
+      }
+    } catch {
+      setImportResult({ success: false, error: 'Network error.' })
+    } finally {
+      setImportLoading(false)
     }
   }
 
@@ -80,7 +86,8 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
 
   return (
     <div className="space-y-6">
-      {/* Cozi Import */}
+      {/* Cozi Import — admin only */}
+      {isAdmin && (
       <Card>
         <CardHeader>
           <CardTitle>Import from Cozi</CardTitle>
@@ -123,6 +130,7 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
           </p>
         </CardContent>
       </Card>
+      )}
 
       {/* Umami Analytics — admin only */}
       <Card>
@@ -143,7 +151,7 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
                   id="umami-script-url"
                   type="url"
                   value={umamiScriptUrl}
-                  onChange={e => setUmamiScriptUrl(e.target.value)}
+                  onChange={e => { setUmamiScriptUrl(e.target.value); setUmamiStatus(null) }}
                   placeholder="https://your-umami-instance.com/script.js"
                 />
               </div>
@@ -152,7 +160,7 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
                 <Input
                   id="umami-site-id"
                   value={umamiSiteId}
-                  onChange={e => setUmamiSiteId(e.target.value)}
+                  onChange={e => { setUmamiSiteId(e.target.value); setUmamiStatus(null) }}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 />
               </div>
