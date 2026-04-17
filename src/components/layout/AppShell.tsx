@@ -24,6 +24,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile slide-in nav */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-52 md:hidden transform transition-transform duration-200 ease-in-out ${navOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        role="dialog"
+        aria-modal="true"
         aria-label="Navigation"
       >
         <SidebarContent onNavigate={() => setNavOpen(false)} />

@@ -67,7 +67,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
         <button
           type="button"
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => { onNavigate?.(); signOut({ callbackUrl: '/login' }) }}
           className="flex w-full items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         >
           <LogOut className="h-4 w-4 shrink-0" />
