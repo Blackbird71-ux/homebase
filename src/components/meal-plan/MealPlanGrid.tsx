@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { MealSlotCell } from './MealSlotCell'
 import { AssignMealModal } from './AssignMealModal'
+import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { Button } from '@/components/ui/button'
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
 import { toast } from 'sonner'
 
@@ -58,6 +59,7 @@ export function MealPlanGrid({
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedMealType] = useState('dinner')
   const [loading, setLoading] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   const days = getWeekDays(weekStart)
 
@@ -143,6 +145,14 @@ export function MealPlanGrid({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Meal Plan</h1>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setExportOpen(true)}
+          >
+            <ShoppingCartIcon className="h-4 w-4 mr-1" />
+            Groceries
+          </Button>
           <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
           <Button
             variant="ghost"
@@ -222,6 +232,12 @@ export function MealPlanGrid({
           onAssign={handleAssign}
         />
       )}
+      <ExportGroceriesModal
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        weekFrom={toYMD(weekStart)}
+        weekTo={toYMD(days[days.length - 1])}
+      />
     </div>
   )
 }
