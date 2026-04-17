@@ -57,11 +57,13 @@ export function ExportGroceriesModal({
 
   useEffect(() => {
     if (!open) return
+    const controller = new AbortController()
     setStatus('loading')
     setOverrides(new Map())
 
     fetch(
-      `/api/meal-plan/export-preview?from=${weekFrom}T00:00:00Z&to=${weekTo}T23:59:59Z`
+      `/api/meal-plan/export-preview?from=${weekFrom}T00:00:00Z&to=${weekTo}T23:59:59Z`,
+      { signal: controller.signal }
     )
       .then((r) => r.json())
       .then((data) => {
@@ -74,11 +76,14 @@ export function ExportGroceriesModal({
         setGroceriesList(data.groceriesList)
         setStatus('ready')
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err.name === 'AbortError') return
         onOpenChange(false)
         toast.error('Failed to load ingredients. Please try again.')
       })
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    return () => controller.abort()
+  }, [open, weekFrom, weekTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function getCategory(ing: PreviewIngredient): ShoppingCategory {
     return (overrides.get(ing.key) ?? ing.category) as ShoppingCategory
@@ -168,6 +173,7 @@ export function ExportGroceriesModal({
                         >
                           <span className="flex-1 text-sm">{ing.text}</span>
                           <select
+                            aria-label={`Category for ${ing.text}`}
                             value={cat}
                             onChange={(e) =>
                               setCategory(ing.key, e.target.value as ShoppingCategory)
@@ -196,8 +202,8 @@ export function ExportGroceriesModal({
             {status === 'confirming' ? (
               <div className="px-6 py-4 border-t border-border space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Groceries already has {groceriesList!.itemCount} item
-                  {groceriesList!.itemCount !== 1 ? 's' : ''}. What would you
+                  Groceries already has {groceriesList?.itemCount ?? 0} item
+                  {(groceriesList?.itemCount ?? 0) !== 1 ? 's' : ''}. What would you
                   like to do?
                 </p>
                 <div className="flex gap-2 justify-end">
