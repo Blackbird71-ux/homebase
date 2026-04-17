@@ -52,13 +52,13 @@ export function CalendarView({ initialEvents, weekStartsOn }: CalendarViewProps)
     : `Week of ${format(currentDate, 'MMM d, yyyy')}`
 
   return (
-    <div className="flex flex-col h-full p-4 gap-3">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="flex flex-col h-full p-3 md:p-4 gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => navigate('prev')}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <h2 className="text-lg font-semibold w-52 text-center">{title}</h2>
+          <h2 className="text-base md:text-lg font-semibold w-40 md:w-52 text-center truncate">{title}</h2>
           <Button variant="outline" size="icon" onClick={() => navigate('next')}>
             <ChevronRight className="h-4 w-4" />
           </Button>

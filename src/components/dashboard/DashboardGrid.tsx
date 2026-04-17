@@ -6,7 +6,7 @@ import { TodoCard } from './TodoCard'
 
 export function DashboardGrid({ data }: { data: DashboardData }) {
   return (
-    <div className="grid grid-cols-2 gap-4 h-full">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
       <UpcomingEventsCard events={data.upcomingEvents} />
       <TonightsDinnerCard dinner={data.tonightsDinner} />
       <ShoppingListCard list={data.shoppingList} />

@@ -31,7 +31,8 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
       <div className="grid grid-cols-7 border-b border-border">
         {dayHeaders.map(d => (
           <div key={d} className="py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            {d}
+            <span className="hidden sm:inline">{d}</span>
+            <span className="sm:hidden">{d.slice(0, 1)}</span>
           </div>
         ))}
       </div>
@@ -45,9 +46,9 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
             <div
               key={day.toISOString()}
               onClick={() => onDayClick(day)}
-              className={`border-b border-r border-border p-1 flex flex-col gap-1 cursor-pointer hover:bg-accent/30 transition-colors overflow-hidden ${!inMonth ? 'opacity-40' : ''}`}
+              className={`border-b border-r border-border p-0.5 md:p-1 flex flex-col gap-1 cursor-pointer hover:bg-accent/30 transition-colors overflow-hidden ${!inMonth ? 'opacity-40' : ''}`}
             >
-              <span className={`text-xs font-medium self-start w-6 h-6 flex items-center justify-center rounded-full ${today ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
+              <span className={`text-xs font-medium self-start w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full ${today ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
                 {format(day, 'd')}
               </span>
               <div className="flex flex-col gap-0.5 overflow-hidden">

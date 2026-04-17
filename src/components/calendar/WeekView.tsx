@@ -21,7 +21,8 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="h-full overflow-x-auto">
+    <div className="flex flex-col h-full overflow-hidden min-w-[480px]">
       <div className="grid grid-cols-7 border-b border-border shrink-0">
         {days.map(day => (
           <div key={day.toISOString()}
@@ -63,6 +64,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
           })}
         </div>
       </div>
+    </div>
     </div>
   )
 }

@@ -139,7 +139,7 @@ export function MealPlanGrid({
   const today = todayStringInTz(timezone)
 
   return (
-    <div className="flex flex-col gap-4 p-6 h-full overflow-auto">
+    <div className="flex flex-col gap-4 p-6 h-full overflow-auto overflow-x-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Meal Plan</h1>
         <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export function MealPlanGrid({
       </p>
 
       {/* Grid */}
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-2 min-w-[640px]">
         {/* Day headers */}
         {days.map((day) => {
           const ymd = toYMD(day)

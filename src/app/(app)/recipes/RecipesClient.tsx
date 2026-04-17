@@ -57,7 +57,7 @@ export function RecipesClient({ initialRecipes }: { initialRecipes: RecipeSummar
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6 h-full overflow-auto">
+    <div className="flex flex-col gap-4 p-4 md:p-6 h-full overflow-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Recipes</h1>
         <Button size="sm" onClick={() => setFormOpen(true)}>
