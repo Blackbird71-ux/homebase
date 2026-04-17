@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AccountTab } from '@/components/settings/AccountTab'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
+import { IntegrationsTab } from '@/components/settings/IntegrationsTab'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -59,7 +60,11 @@ export default async function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="integrations">
-            <div className="text-muted-foreground text-sm">Integrations — coming in Task 4.</div>
+            <IntegrationsTab
+              isAdmin={user.role === 'admin'}
+              initialUmamiScriptUrl={user.family.umamiScriptUrl}
+              initialUmamiSiteId={user.family.umamiSiteId}
+            />
           </TabsContent>
 
           <TabsContent value="data">
