@@ -61,6 +61,11 @@ describe('POST /api/meal-plan/export-groceries', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 if an item is missing key', async () => {
+    const res = await POST(makeRequest({ items: [{ text: 'milk', key: '', category: 'Dairy' }], mode: 'replace' }))
+    expect(res.status).toBe(400)
+  })
+
   it('upserts IngredientCategory for each item', async () => {
     const { prisma } = await import('@/lib/prisma')
     await POST(makeRequest({ items: sampleItems, mode: 'append' }))
@@ -79,6 +84,17 @@ describe('POST /api/meal-plan/export-groceries', () => {
     await POST(makeRequest({ items: sampleItems, mode: 'replace' }))
     expect(prisma.listItem.deleteMany).toHaveBeenCalledWith({ where: { listId: 'list-1' } })
     expect(prisma.listItem.createMany).toHaveBeenCalled()
+    expect(prisma.listItem.createMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          content: '500g beef mince',
+          category: 'Meat',
+          sortOrder: 0,
+          createdBy: 'user-1',
+          listId: 'list-1',
+        }),
+      ]),
+    })
   })
 
   it('append mode does NOT clear existing items', async () => {
