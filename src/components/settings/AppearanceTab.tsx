@@ -80,6 +80,7 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
               <button
                 key={value}
                 type="button"
+                aria-pressed={theme === value}
                 onClick={() => setLocalTheme(value)}
                 className={cn(
                   'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors flex-1',
@@ -108,6 +109,7 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
               <button
                 key={value}
                 type="button"
+                aria-pressed={fontSize === value}
                 onClick={() => setFontSize(value)}
                 className={cn(
                   'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors flex-1',
@@ -136,6 +138,7 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
               <button
                 key={value}
                 type="button"
+                aria-pressed={weekStartsOn === value}
                 onClick={() => setWeekStartsOn(value)}
                 className={cn(
                   'flex items-center justify-center p-3 rounded-lg border-2 transition-colors flex-1',
@@ -156,7 +159,10 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
       </Button>
 
       {status && (
-        <div className={`flex items-start gap-2 text-sm p-3 rounded-md ${status.type === 'success' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+        <div
+          role="alert"
+          className={`flex items-start gap-2 text-sm p-3 rounded-md ${status.type === 'success' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}
+        >
           {status.type === 'success'
             ? <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
             : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}

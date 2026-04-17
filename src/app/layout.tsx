@@ -36,8 +36,8 @@ export default async function RootLayout({
       })
       if (user?.fontSize) fontSize = user.fontSize
     }
-  } catch {
-    // Not logged in or DB error — use default
+  } catch (err) {
+    console.error('[layout] Failed to read user fontSize:', err)
   }
 
   const fontSizeClass = fontSizeClassMap[fontSize] ?? 'text-base'
