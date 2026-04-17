@@ -17,9 +17,13 @@ interface AppearanceTabProps {
 type Status = { type: 'success' | 'error'; message: string } | null
 
 const themeOptions = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Monitor },
+  { value: 'light', label: 'Light', icon: Sun, swatch: 'bg-white border border-zinc-200' },
+  { value: 'dark', label: 'Dark', icon: Moon, swatch: 'bg-zinc-900' },
+  { value: 'system', label: 'System', icon: Monitor, swatch: 'bg-gradient-to-br from-white to-zinc-900' },
+  { value: 'modern', label: 'Modern', icon: Sun, swatch: 'bg-[#f5f5f7]' },
+  { value: 'midnight', label: 'Midnight', icon: Moon, swatch: 'bg-[#0b0e14]' },
+  { value: 'apple-grey', label: 'Apple', icon: Sun, swatch: 'bg-[#f2f2f7]' },
+  { value: 'glass-dark', label: 'Glass', icon: Moon, swatch: 'bg-black' },
 ] as const
 
 const fontSizeOptions = [
@@ -75,21 +79,21 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
           <CardDescription>Choose how Homebase looks to you.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-3">
-            {themeOptions.map(({ value, label, icon: Icon }) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {themeOptions.map(({ value, label, icon: Icon, swatch }) => (
               <button
                 key={value}
                 type="button"
                 aria-pressed={theme === value}
                 onClick={() => setLocalTheme(value)}
                 className={cn(
-                  'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors flex-1',
+                  'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors',
                   theme === value
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-muted-foreground/30'
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <div className={`w-6 h-6 rounded-full ${swatch} shrink-0`} />
                 <span className="text-xs font-medium">{label}</span>
               </button>
             ))}

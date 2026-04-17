@@ -37,7 +37,7 @@ export async function PATCH(req: Request) {
 
   const { theme, fontSize, weekStartsOn, name, currentPassword, newPassword } = body
 
-  if (theme !== undefined && !['light', 'dark', 'system'].includes(theme)) {
+  if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark'].includes(theme)) {
     return NextResponse.json({ error: 'Invalid theme value' }, { status: 400 })
   }
   if (fontSize !== undefined && !['sm', 'base', 'lg'].includes(fontSize)) {
