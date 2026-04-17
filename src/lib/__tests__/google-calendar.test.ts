@@ -94,6 +94,11 @@ describe('updateGoogleEvent', () => {
       expect.objectContaining({ method: 'PUT' })
     )
   })
+
+  it('throws on non-ok response', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 403 })
+    await expect(updateGoogleEvent('tok', 'gid-1', sampleEvent)).rejects.toThrow()
+  })
 })
 
 describe('deleteGoogleEvent', () => {
@@ -106,5 +111,10 @@ describe('deleteGoogleEvent', () => {
       'https://www.googleapis.com/calendar/v3/calendars/primary/events/gid-2',
       expect.objectContaining({ method: 'DELETE' })
     )
+  })
+
+  it('throws on non-ok response', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
+    await expect(deleteGoogleEvent('tok', 'gid-2')).rejects.toThrow()
   })
 })

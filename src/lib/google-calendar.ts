@@ -61,6 +61,7 @@ export async function createGoogleEvent(accessToken: string, event: GoogleEventI
   })
   if (!res.ok) throw new Error(`Google Calendar API error: ${res.status}`)
   const data = await res.json() as { id: string }
+  if (!data.id) throw new Error('Google Calendar API did not return an event id')
   return data.id
 }
 
@@ -80,11 +81,12 @@ export async function updateGoogleEvent(accessToken: string, googleEventId: stri
 }
 
 export async function deleteGoogleEvent(accessToken: string, googleEventId: string): Promise<void> {
-  await fetch(
+  const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`,
     {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${accessToken}` },
     }
   )
+  if (!res.ok) throw new Error(`Google Calendar API error: ${res.status}`)
 }
