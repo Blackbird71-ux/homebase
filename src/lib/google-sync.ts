@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { getAccessToken, createGoogleEvent, updateGoogleEvent } from '@/lib/google-calendar'
+import { getAccessToken, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from '@/lib/google-calendar'
 
 export async function pushEventToGoogle(
   eventId: string,
@@ -40,14 +40,17 @@ export async function pushEventToGoogle(
         const user = allConnected.find((u) => u.id === sync.userId)
         if (user?.googleRefreshToken) {
           try {
-            const { deleteGoogleEvent } = await import('@/lib/google-calendar')
             const token = await getAccessToken(user.googleRefreshToken)
             await deleteGoogleEvent(token, sync.googleEventId)
           } catch {
             // swallow
           }
         }
-        await prisma.googleCalendarSync.delete({ where: { id: sync.id } })
+        try {
+          await prisma.googleCalendarSync.delete({ where: { id: sync.id } })
+        } catch {
+          // swallow DB error
+        }
       }
     }
 

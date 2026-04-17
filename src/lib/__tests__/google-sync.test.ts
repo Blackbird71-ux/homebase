@@ -99,4 +99,31 @@ describe('pushEventToGoogle', () => {
     await pushEventToGoogle('evt-1', 'create')
     expect(gc.createGoogleEvent).not.toHaveBeenCalled()
   })
+
+  it('removes sync row and deletes Google event for user when visibility changes to personal', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    const gc = await import('@/lib/google-calendar')
+    // user-2 has an existing sync row but the event is now personal (creator = user-1)
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(personalEvent as never)
+    vi.mocked(prisma.googleCalendarSync.findMany).mockResolvedValue([
+      { id: 's2', eventId: 'evt-1', userId: 'user-2', googleEventId: 'gid-2', createdAt: new Date() },
+    ] as never)
+    await pushEventToGoogle('evt-1', 'update')
+    expect(gc.deleteGoogleEvent).toHaveBeenCalledWith('tok', 'gid-2')
+    expect(prisma.googleCalendarSync.delete).toHaveBeenCalledWith({ where: { id: 's2' } })
+  })
+
+  it('creates sync row for newly eligible user when visibility changes to family', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    const gc = await import('@/lib/google-calendar')
+    // family event, user-2 has no sync row yet
+    vi.mocked(prisma.googleCalendarSync.findMany).mockResolvedValue([
+      { id: 's1', eventId: 'evt-1', userId: 'user-1', googleEventId: 'gid-1', createdAt: new Date() },
+    ] as never)
+    await pushEventToGoogle('evt-1', 'update')
+    // user-1 should update, user-2 should create
+    expect(gc.updateGoogleEvent).toHaveBeenCalledTimes(1)
+    expect(gc.createGoogleEvent).toHaveBeenCalledTimes(1)
+    expect(prisma.googleCalendarSync.create).toHaveBeenCalledTimes(1)
+  })
 })
