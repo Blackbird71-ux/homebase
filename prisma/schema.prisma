@@ -23,18 +23,22 @@ model Family {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  password      String
-  name          String
-  role          String   @default("member")
-  familyId      String
-  family        Family   @relation(fields: [familyId], references: [id])
-  theme         String   @default("dark")
-  fontSize      String   @default("base")
-  weekStartsOn  Int      @default(0)
-  uiPreferences String?
-  createdAt     DateTime @default(now())
+  id                  String                @id @default(cuid())
+  email               String                @unique
+  password            String
+  name                String
+  role                String                @default("member")
+  familyId            String
+  family              Family                @relation(fields: [familyId], references: [id])
+  theme               String                @default("dark")
+  fontSize            String                @default("base")
+  weekStartsOn        Int                   @default(0)
+  uiPreferences       String?
+  googleConnected     Boolean               @default(false)
+  googleEmail         String?
+  googleRefreshToken  String?
+  googleCalendarSyncs GoogleCalendarSync[]
+  createdAt           DateTime              @default(now())
 }
 
 model InviteCode {
@@ -49,18 +53,20 @@ model InviteCode {
 }
 
 model Event {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  start       DateTime
-  end         DateTime
-  isAllDay    Boolean  @default(false)
-  category    String?
-  color       String?
-  createdBy   String
-  familyId    String
-  family      Family   @relation(fields: [familyId], references: [id])
-  createdAt   DateTime @default(now())
+  id                   String                 @id @default(cuid())
+  title                String
+  description          String?
+  start                DateTime
+  end                  DateTime
+  isAllDay             Boolean                @default(false)
+  isPersonal           Boolean                @default(false)
+  category             String?
+  color                String?
+  createdBy            String
+  familyId             String
+  family               Family                 @relation(fields: [familyId], references: [id])
+  googleCalendarSyncs  GoogleCalendarSync[]
+  createdAt            DateTime               @default(now())
 }
 
 model List {
@@ -141,4 +147,17 @@ model IngredientCategory {
   updatedAt DateTime @updatedAt
 
   @@unique([familyId, key])
+}
+
+model GoogleCalendarSync {
+  id            String   @id @default(cuid())
+  eventId       String
+  userId        String
+  googleEventId String
+  createdAt     DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
 }
