@@ -22,10 +22,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'from and to are required' }, { status: 400 })
   }
 
+  const fromDate = new Date(from)
+  const toDate = new Date(to)
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    return NextResponse.json({ error: 'from and to must be valid ISO dates' }, { status: 400 })
+  }
+
   const entries = await prisma.mealPlan.findMany({
     where: {
       familyId: user.familyId,
-      date: { gte: new Date(from), lte: new Date(to) },
+      date: { gte: fromDate, lte: toDate },
       recipeId: { not: null },
     },
     include: { recipe: true },

@@ -51,6 +51,12 @@ describe('GET /api/meal-plan/export-preview', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 for invalid date strings', async () => {
+    const req = new Request('http://localhost/api/meal-plan/export-preview?from=not-a-date&to=also-bad')
+    const res = await GET(req)
+    expect(res.status).toBe(400)
+  })
+
   it('returns empty recipes array when no meal plans in range', async () => {
     const { prisma } = await import('@/lib/prisma')
     vi.mocked(prisma.mealPlan.findMany).mockResolvedValue([])
