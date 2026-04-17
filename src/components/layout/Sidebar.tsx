@@ -51,28 +51,16 @@ export function Sidebar() {
       {/* Bottom: Settings + Sign out */}
       <div className="px-2 py-4 border-t border-border space-y-1">
         <Link
-          href="/settings/general"
+          href="/settings"
           className={cn(
             'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-            pathname === '/settings/general'
+            pathname.startsWith('/settings')
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
           )}
         >
           <Settings className="h-4 w-4 shrink-0" />
-          General
-        </Link>
-        <Link
-          href="/settings/integrations"
-          className={cn(
-            'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-            pathname === '/settings/integrations'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-          )}
-        >
-          <Settings className="h-4 w-4 shrink-0" />
-          Integrations
+          Settings
         </Link>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}

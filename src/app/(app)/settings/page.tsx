@@ -1,0 +1,67 @@
+import { requireSession } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/prisma'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AccountTab } from '@/components/settings/AccountTab'
+
+export default async function SettingsPage() {
+  const session = await requireSession()
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      theme: true,
+      fontSize: true,
+      weekStartsOn: true,
+      family: {
+        select: {
+          id: true,
+          name: true,
+          umamiScriptUrl: true,
+          umamiSiteId: true,
+        },
+      },
+    },
+  })
+
+  if (!user) return null
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto">
+      <div className="p-6 pb-0">
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <p className="text-muted-foreground mt-1">Manage your account and family preferences.</p>
+      </div>
+
+      <div className="flex-1 p-6">
+        <Tabs defaultValue="account" className="w-full max-w-2xl">
+          <TabsList className="mb-6">
+            <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="appearance">Appearance</TabsTrigger>
+            <TabsTrigger value="integrations">Integrations</TabsTrigger>
+            <TabsTrigger value="data">Data</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="account">
+            <AccountTab user={user} />
+          </TabsContent>
+
+          <TabsContent value="appearance">
+            <div className="text-muted-foreground text-sm">Appearance settings — coming in Task 3.</div>
+          </TabsContent>
+
+          <TabsContent value="integrations">
+            <div className="text-muted-foreground text-sm">Integrations — coming in Task 4.</div>
+          </TabsContent>
+
+          <TabsContent value="data">
+            <div className="text-muted-foreground text-sm">Data — coming in Task 5.</div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  )
+}
