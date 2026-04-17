@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { requireSession, requireAdmin } from '@/lib/auth-helpers'
 
 // Common IANA timezone list for the selector
 export const SUPPORTED_TIMEZONES = [
@@ -35,7 +35,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const user = await requireSession()
+  const user = await requireAdmin()
   const body = await req.json()
   const { timezone, name, umamiScriptUrl, umamiSiteId } = body
 
@@ -45,7 +45,9 @@ export async function PATCH(req: Request) {
 
   const updateData: Record<string, unknown> = {}
   if (timezone !== undefined) updateData.timezone = timezone
-  if (name !== undefined) updateData.name = name
+  if (name !== undefined && typeof name === 'string' && name.trim().length > 0) {
+    updateData.name = name.trim()
+  }
   if (umamiScriptUrl !== undefined) updateData.umamiScriptUrl = umamiScriptUrl === '' ? null : umamiScriptUrl
   if (umamiSiteId !== undefined) updateData.umamiSiteId = umamiSiteId === '' ? null : umamiSiteId
 
