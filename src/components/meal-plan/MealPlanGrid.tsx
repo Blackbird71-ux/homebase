@@ -139,7 +139,7 @@ export function MealPlanGrid({
   const today = todayStringInTz(timezone)
 
   return (
-    <div className="flex flex-col gap-4 p-6 h-full overflow-auto overflow-x-auto">
+    <div className="flex flex-col gap-4 p-4 md:p-6 h-full overflow-hidden">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Meal Plan</h1>
         <div className="flex items-center gap-2">
@@ -170,7 +170,8 @@ export function MealPlanGrid({
         {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
       </p>
 
-      {/* Grid */}
+      {/* Grid — scrolls horizontally on mobile */}
+      <div className="overflow-x-auto flex-1">
       <div className="grid grid-cols-7 gap-2 min-w-[640px]">
         {/* Day headers */}
         {days.map((day) => {
@@ -209,6 +210,7 @@ export function MealPlanGrid({
             />
           )
         })}
+      </div>
       </div>
 
       {selectedDate && (
