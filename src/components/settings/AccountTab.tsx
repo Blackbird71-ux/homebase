@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle, AlertCircle, Copy, RefreshCw } from 'lucide-react'
+import { CheckCircle, AlertCircle, Copy, RefreshCw, Check } from 'lucide-react'
 
 interface InviteCode {
   id: string
@@ -68,6 +68,10 @@ export function AccountTab({ user }: AccountTabProps) {
   // Members (admin only)
   const [members, setMembers] = useState<FamilyMember[]>([])
   const [membersLoaded, setMembersLoaded] = useState(false)
+  const [membersError, setMembersError] = useState<string | null>(null)
+
+  // Clipboard feedback
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
   async function saveName() {
     if (!name.trim()) return
@@ -153,9 +157,17 @@ export function AccountTab({ user }: AccountTabProps) {
   }
 
   async function loadInviteCodes() {
-    setInviteCodesLoaded(true)
-    const res = await fetch('/api/invite')
-    if (res.ok) setInviteCodes(await res.json())
+    try {
+      const res = await fetch('/api/invite')
+      if (res.ok) {
+        setInviteCodes(await res.json())
+        setInviteCodesLoaded(true)
+      } else {
+        setInviteStatus({ type: 'error', message: 'Failed to load invite codes.' })
+      }
+    } catch {
+      setInviteStatus({ type: 'error', message: 'Network error loading invite codes.' })
+    }
   }
 
   async function generateInvite() {
@@ -165,11 +177,11 @@ export function AccountTab({ user }: AccountTabProps) {
       const res = await fetch('/api/invite', { method: 'POST' })
       if (res.ok) {
         const newCode = await res.json()
-        setInviteCodes(prev => [
-          { ...newCode, used: false, usedBy: null, id: newCode.code, createdAt: new Date().toISOString() },
-          ...prev,
-        ])
         setInviteStatus({ type: 'success', message: `Invite code generated: ${newCode.code}` })
+        // Refresh the full list so we have proper IDs from the database
+        setInviteCodesLoaded(true)
+        const listRes = await fetch('/api/invite')
+        if (listRes.ok) setInviteCodes(await listRes.json())
       } else {
         setInviteStatus({ type: 'error', message: 'Failed to generate invite code.' })
       }
@@ -181,13 +193,28 @@ export function AccountTab({ user }: AccountTabProps) {
   }
 
   async function loadMembers() {
-    setMembersLoaded(true)
-    const res = await fetch('/api/family/members')
-    if (res.ok) setMembers(await res.json())
+    setMembersError(null)
+    try {
+      const res = await fetch('/api/family/members')
+      if (res.ok) {
+        setMembers(await res.json())
+        setMembersLoaded(true)
+      } else {
+        setMembersError('Failed to load members.')
+      }
+    } catch {
+      setMembersError('Network error loading members.')
+    }
   }
 
-  function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text)
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedCode(text)
+      setTimeout(() => setCopiedCode(null), 2000)
+    } catch {
+      // clipboard not available (non-HTTPS or no focus)
+    }
   }
 
   return (
@@ -327,8 +354,11 @@ export function AccountTab({ user }: AccountTabProps) {
                         <button
                           onClick={() => copyToClipboard(code.code)}
                           className="text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label="Copy invite code"
                         >
-                          <Copy className="h-3.5 w-3.5" />
+                          {copiedCode === code.code
+                            ? <Check className="h-3.5 w-3.5 text-green-500" />
+                            : <Copy className="h-3.5 w-3.5" />}
                         </button>
                       )}
                     </div>
@@ -351,9 +381,12 @@ export function AccountTab({ user }: AccountTabProps) {
             <CardDescription>All accounts with access to your family&apos;s Homebase.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {membersError && (
+              <p className="text-sm text-destructive">{membersError}</p>
+            )}
             {!membersLoaded && (
               <Button variant="outline" onClick={loadMembers}>
-                Load Members
+                {membersError ? 'Retry' : 'Load Members'}
               </Button>
             )}
             {membersLoaded && members.length > 0 && (
