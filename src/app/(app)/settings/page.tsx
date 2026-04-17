@@ -2,6 +2,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AccountTab } from '@/components/settings/AccountTab'
+import { AppearanceTab } from '@/components/settings/AppearanceTab'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -50,7 +51,11 @@ export default async function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="appearance">
-            <div className="text-muted-foreground text-sm">Appearance settings — coming in Task 3.</div>
+            <AppearanceTab
+                initialTheme={user.theme}
+                initialFontSize={user.fontSize}
+                initialWeekStartsOn={user.weekStartsOn}
+              />
           </TabsContent>
 
           <TabsContent value="integrations">
