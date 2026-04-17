@@ -98,3 +98,25 @@ export async function PATCH(req: Request) {
 
   return NextResponse.json(updated)
 }
+
+export async function DELETE() {
+  const session = await requireSession()
+
+  // Safety check: don't allow the last admin to delete themselves
+  const adminCount = await prisma.user.count({
+    where: { familyId: session.familyId, role: 'admin' },
+  })
+
+  if (adminCount === 1 && session.role === 'admin') {
+    return NextResponse.json(
+      {
+        error:
+          'You are the only admin. Promote another family member to admin before deleting your account.',
+      },
+      { status: 400 }
+    )
+  }
+
+  await prisma.user.delete({ where: { id: session.id } })
+  return NextResponse.json({ success: true })
+}

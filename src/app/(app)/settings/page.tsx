@@ -4,30 +4,43 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AccountTab } from '@/components/settings/AccountTab'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab'
+import { DataTab } from '@/components/settings/DataTab'
 
 export default async function SettingsPage() {
   const session = await requireSession()
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      theme: true,
-      fontSize: true,
-      weekStartsOn: true,
-      family: {
-        select: {
-          id: true,
-          name: true,
-          umamiScriptUrl: true,
-          umamiSiteId: true,
+  const [user, coziImports] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        theme: true,
+        fontSize: true,
+        weekStartsOn: true,
+        family: {
+          select: {
+            id: true,
+            name: true,
+            umamiScriptUrl: true,
+            umamiSiteId: true,
+          },
         },
       },
-    },
-  })
+    }),
+    prisma.coziImport.findMany({
+      where: { familyId: session.familyId },
+      orderBy: { importedAt: 'desc' },
+      select: {
+        id: true,
+        importedAt: true,
+        eventCount: true,
+        notes: true,
+      },
+    }),
+  ])
 
   if (!user) return null
 
