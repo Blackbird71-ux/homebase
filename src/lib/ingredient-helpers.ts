@@ -16,14 +16,20 @@ export const KEYWORD_MAP: Record<ShoppingCategory, string[]> = {
 // "2 cloves garlic" → "garlic"
 // "4 chicken thighs" → "chicken thighs"
 // "olive oil" → "olive oil"
+// "2 heads of garlic" → "garlic"
+// "½ cup sugar" → "sugar"
+const UNICODE_FRACTIONS: Record<string, string> = {
+  '½': '1/2', '⅓': '1/3', '¼': '1/4', '¾': '3/4', '⅔': '2/3', '⅛': '1/8',
+}
 const UNIT_RE = /^\d+[\d./]*\s*(g|kg|ml|l|oz|lb|cups?|tbsps?|tsps?|teaspoons?|tablespoons?|bunches?|cloves?|heads?|cans?|tins?|packets?|large|small|medium|x)\s+/i
 const BARE_NUMBER_RE = /^\d+\s+/
+const PREPOSITION_RE = /^(of|the|a|an)\s+/i
 
 export function normalizeIngredient(text: string): string {
-  const trimmed = text.trim()
+  const trimmed = text.trim().replace(/[½⅓¼¾⅔⅛]/g, (c) => UNICODE_FRACTIONS[c] ?? c)
   const afterUnit = trimmed.replace(UNIT_RE, '')
-  const key = afterUnit === trimmed ? trimmed.replace(BARE_NUMBER_RE, '') : afterUnit
-  return key.toLowerCase().trim()
+  const afterBare = afterUnit === trimmed ? trimmed.replace(BARE_NUMBER_RE, '') : afterUnit
+  return afterBare.replace(PREPOSITION_RE, '').toLowerCase().trim()
 }
 
 export function autoGuessCategory(key: string): ShoppingCategory {

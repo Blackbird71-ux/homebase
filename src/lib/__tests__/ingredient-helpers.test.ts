@@ -29,6 +29,14 @@ describe('normalizeIngredient', () => {
   it('trims whitespace', () => {
     expect(normalizeIngredient('  1 onion  ')).toBe('onion')
   })
+
+  it('strips preposition after unit word', () => {
+    expect(normalizeIngredient('2 heads of garlic')).toBe('garlic')
+  })
+
+  it('handles unicode fraction quantities', () => {
+    expect(normalizeIngredient('½ cup sugar')).toBe('sugar')
+  })
 })
 
 describe('autoGuessCategory', () => {
