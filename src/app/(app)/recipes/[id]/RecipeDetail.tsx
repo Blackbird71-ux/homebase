@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon } from 'lucide-react'
+import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon } from 'lucide-react'
+import { AddToListDialog } from '@/components/lists/AddToListDialog'
 import Link from 'next/link'
 import {
   Dialog,
@@ -37,6 +38,7 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [addToListOpen, setAddToListOpen] = useState(false)
 
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
@@ -70,6 +72,10 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
             </Button>
           </Link>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setAddToListOpen(true)}>
+              <ShoppingCartIcon className="h-4 w-4 mr-1" />
+              Add to list
+            </Button>
             <Button variant="outline" size="sm" onClick={() => window.print()}>
               <PrinterIcon className="h-4 w-4 mr-1" />
               Print
@@ -172,6 +178,14 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
           </a>
         )}
       </div>
+
+      <AddToListDialog
+        open={addToListOpen}
+        onOpenChange={setAddToListOpen}
+        recipeId={recipe.id}
+        recipeName={recipe.title}
+        ingredients={recipe.ingredients}
+      />
 
       {/* Delete confirmation */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
