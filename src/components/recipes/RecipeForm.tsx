@@ -38,10 +38,13 @@ interface RecipeFormProps {
     servings?: number | null
     sourceUrl?: string
   }
+  books?: { id: string; name: string }[]
+  initialBookId?: string | null
 }
 
-export function RecipeForm({ open, onOpenChange, onCreated, initialData }: RecipeFormProps) {
+export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, initialBookId }: RecipeFormProps) {
   const [title, setTitle] = useState(initialData?.title ?? '')
+  const [bookId, setBookId] = useState<string>(initialBookId ?? '')
   const [description, setDescription] = useState(initialData?.description ?? '')
   const [ingredients, setIngredients] = useState(
     initialData?.ingredients?.join('\n') ?? ''
@@ -105,6 +108,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData }: Recip
           cookTime: cookTime ? parseInt(cookTime) : null,
           servings: servings ? parseInt(servings) : null,
           sourceUrl: sourceUrl.trim() || null,
+          bookId: bookId || null,
         }),
       })
       const data = await res.json()
@@ -214,6 +218,23 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData }: Recip
                 <Label htmlFor="recipe-tags">Tags (comma separated)</Label>
                 <Input id="recipe-tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Italian, pasta, quick" />
               </div>
+
+              {books && books.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="recipe-book">Book</Label>
+                  <select
+                    id="recipe-book"
+                    value={bookId}
+                    onChange={(e) => setBookId(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <option value="">No book</option>
+                    {books.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="recipe-url">Source URL</Label>
