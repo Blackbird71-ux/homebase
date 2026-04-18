@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import type { SessionUser } from '@/types'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     Credentials({
       credentials: {
@@ -34,6 +35,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           familyId: user.familyId,
           timezone: user.family.timezone,
+          weekStartsOn: user.weekStartsOn,
         }
       },
     }),
@@ -45,6 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as SessionUser).role
         token.familyId = (user as SessionUser).familyId
         token.timezone = (user as SessionUser).timezone
+        token.weekStartsOn = (user as SessionUser).weekStartsOn
       }
       return token
     },
@@ -54,6 +57,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = token.role as string
         session.user.familyId = token.familyId as string
         session.user.timezone = token.timezone as string
+        session.user.weekStartsOn = token.weekStartsOn as number
       }
       return session
     },
