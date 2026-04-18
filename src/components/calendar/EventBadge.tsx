@@ -15,6 +15,14 @@ export function EventBadge({
   event: CalendarEvent
   onClick: (event: CalendarEvent) => void
 }) {
+  if (event.isBusy) {
+    return (
+      <div className="w-full text-left truncate text-xs px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground cursor-default select-none">
+        Busy
+      </div>
+    )
+  }
+
   const color = event.color ?? CATEGORY_COLORS[event.category ?? ''] ?? '#6366f1'
 
   return (
