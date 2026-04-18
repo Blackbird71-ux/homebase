@@ -1,6 +1,7 @@
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { maskPersonalEvent } from '@/lib/event-helpers'
 import type { CalendarEvent } from '@/types'
 
 export default async function CalendarPage() {
@@ -15,17 +16,22 @@ export default async function CalendarPage() {
     orderBy: { start: 'asc' },
   })
 
-  const calendarEvents: CalendarEvent[] = events.map(e => ({
-    id: e.id,
-    title: e.title,
-    description: e.description,
-    start: e.start.toISOString(),
-    end: e.end.toISOString(),
-    isAllDay: e.isAllDay,
-    category: e.category,
-    color: e.color,
-    createdBy: e.createdBy,
-  }))
+  const calendarEvents: CalendarEvent[] = events.map((e) => {
+    const masked = maskPersonalEvent(e, user.id)
+    return {
+      id: masked.id,
+      title: masked.title,
+      description: masked.description,
+      start: masked.start,
+      end: masked.end,
+      isAllDay: masked.isAllDay,
+      isPersonal: masked.isPersonal,
+      isBusy: masked.isBusy,
+      category: masked.category,
+      color: masked.color,
+      createdBy: masked.createdBy,
+    }
+  })
 
   return (
     <CalendarView

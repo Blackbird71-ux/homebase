@@ -26,6 +26,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
   const [isAllDay, setIsAllDay] = useState(false)
   const [category, setCategory] = useState('Other')
   const [description, setDescription] = useState('')
+  const [isPersonal, setIsPersonal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -37,6 +38,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
       setIsAllDay(event.isAllDay)
       setCategory(event.category ?? 'Other')
       setDescription(event.description ?? '')
+      setIsPersonal(event.isPersonal ?? false)
     } else {
       const d = defaultDate ?? new Date()
       setTitle('')
@@ -45,6 +47,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
       setIsAllDay(false)
       setCategory('Other')
       setDescription('')
+      setIsPersonal(false)
     }
     setError('')
   }, [event, defaultDate, open])
@@ -62,7 +65,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description, start: startDate, end: endDate, isAllDay, category }),
+      body: JSON.stringify({ title, description, start: startDate, end: endDate, isAllDay, category, isPersonal }),
     })
 
     setLoading(false)
@@ -126,6 +129,25 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
                 {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <span className="text-sm font-medium">Visibility</span>
+            <div className="flex rounded-md border border-border overflow-hidden text-sm">
+              <button
+                type="button"
+                onClick={() => setIsPersonal(false)}
+                className={`px-3 py-1 transition-colors ${!isPersonal ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+              >
+                Family
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPersonal(true)}
+                className={`px-3 py-1 transition-colors ${isPersonal ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+              >
+                Personal
+              </button>
+            </div>
           </div>
           <div className="space-y-1">
             <Label>Notes</Label>

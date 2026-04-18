@@ -55,6 +55,8 @@ export interface CalendarEvent {
   start: string
   end: string
   isAllDay: boolean
+  isPersonal: boolean
+  isBusy: boolean
   category: string | null
   color: string | null
   createdBy: string

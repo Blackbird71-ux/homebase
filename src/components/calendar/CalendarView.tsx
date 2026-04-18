@@ -42,6 +42,7 @@ export function CalendarView({ initialEvents, weekStartsOn }: CalendarViewProps)
   }
 
   function openEdit(event: CalendarEvent) {
+    if (event.isBusy) return
     setSelectedEvent(event)
     setDefaultDate(undefined)
     setModalOpen(true)
