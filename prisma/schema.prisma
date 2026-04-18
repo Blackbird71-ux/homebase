@@ -16,6 +16,7 @@ model Family {
   events               Event[]
   lists                List[]
   recipes              Recipe[]
+  recipeBooks          RecipeBook[]
   mealPlans            MealPlan[]
   coziImports          CoziImport[]
   inviteCodes          InviteCode[]
@@ -105,11 +106,13 @@ model Recipe {
   cookTime     Int?
   servings     Int?
   tags         String?
+  bookId       String?
+  book         RecipeBook? @relation(fields: [bookId], references: [id], onDelete: SetNull)
   createdBy    String
   familyId     String
-  family       Family     @relation(fields: [familyId], references: [id])
+  family       Family      @relation(fields: [familyId], references: [id])
   mealPlans    MealPlan[]
-  createdAt    DateTime   @default(now())
+  createdAt    DateTime    @default(now())
 }
 
 model MealPlan {
@@ -147,6 +150,17 @@ model IngredientCategory {
   updatedAt DateTime @updatedAt
 
   @@unique([familyId, key])
+}
+
+model RecipeBook {
+  id        String   @id @default(cuid())
+  name      String
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  recipes   Recipe[]
+  createdAt DateTime @default(now())
+
+  @@unique([familyId, name])
 }
 
 model GoogleCalendarSync {
