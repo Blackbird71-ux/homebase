@@ -71,27 +71,30 @@ model Event {
 }
 
 model List {
-  id        String     @id @default(cuid())
-  name      String
-  type      String
-  isActive  Boolean    @default(true)
-  items     ListItem[]
-  familyId  String
-  family    Family     @relation(fields: [familyId], references: [id])
-  createdAt DateTime   @default(now())
+  id            String     @id @default(cuid())
+  name          String
+  type          String
+  isActive      Boolean    @default(true)
+  categoryOrder String?
+  items         ListItem[]
+  familyId      String
+  family        Family     @relation(fields: [familyId], references: [id])
+  createdAt     DateTime   @default(now())
 }
 
 model ListItem {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   content     String
-  isCompleted Boolean  @default(false)
+  isCompleted Boolean   @default(false)
   category    String?
-  sortOrder   Int      @default(0)
+  sortOrder   Int       @default(0)
   dueDate     DateTime?
+  recipeId    String?
+  recipeName  String?
   createdBy   String
   listId      String
-  list        List     @relation(fields: [listId], references: [id])
-  createdAt   DateTime @default(now())
+  list        List      @relation(fields: [listId], references: [id])
+  createdAt   DateTime  @default(now())
 }
 
 model Recipe {
