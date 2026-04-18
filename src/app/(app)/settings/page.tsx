@@ -20,6 +20,8 @@ export default async function SettingsPage() {
         theme: true,
         fontSize: true,
         weekStartsOn: true,
+        googleConnected: true,
+        googleEmail: true,
         family: {
           select: {
             id: true,
@@ -77,6 +79,8 @@ export default async function SettingsPage() {
               isAdmin={user.role === 'admin'}
               initialUmamiScriptUrl={user.family.umamiScriptUrl}
               initialUmamiSiteId={user.family.umamiSiteId}
+              googleConnected={user.googleConnected}
+              googleEmail={user.googleEmail}
             />
           </TabsContent>
 

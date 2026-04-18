@@ -6,11 +6,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react'
+import { GoogleCalendarCard } from './GoogleCalendarCard'
 
 interface IntegrationsTabProps {
   isAdmin: boolean
   initialUmamiScriptUrl: string | null
   initialUmamiSiteId: string | null
+  googleConnected: boolean
+  googleEmail: string | null
 }
 
 type Status = { type: 'success' | 'error'; message: string } | null
@@ -22,7 +25,7 @@ interface ImportResult {
   error?: string
 }
 
-export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSiteId }: IntegrationsTabProps) {
+export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSiteId, googleConnected, googleEmail }: IntegrationsTabProps) {
   // Cozi import
   const [icsFile, setIcsFile] = useState<File | null>(null)
   const [importLoading, setImportLoading] = useState(false)
@@ -86,6 +89,7 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
 
   return (
     <div className="space-y-6">
+      <GoogleCalendarCard googleConnected={googleConnected} googleEmail={googleEmail} />
       {/* Cozi Import — admin only */}
       {isAdmin && (
       <Card>
