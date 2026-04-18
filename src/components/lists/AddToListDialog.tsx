@@ -9,12 +9,20 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 
 interface ShoppingListMeta {
   id: string
   name: string
-  type: string
+  type: 'SHOPPING' | 'TODO'
 }
 
 interface AddToListDialogProps {
@@ -47,11 +55,15 @@ export function AddToListDialog({
         const shopping = data.filter((l) => l.type === 'SHOPPING')
         setLists(shopping)
         if (shopping.length > 0) setSelectedListId(shopping[0].id)
-        setSelected(new Set(ingredients.map((_, i) => i)))
       })
       .catch(() => toast.error('Failed to load shopping lists.'))
       .finally(() => setFetching(false))
-  }, [open, ingredients])
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    setSelected(new Set(ingredients.map((_, i) => i)))
+  }, [open])
 
   function toggleIngredient(idx: number) {
     setSelected((prev) => {
@@ -84,7 +96,12 @@ export function AddToListDialog({
       )
       const failed = results.filter((r) => !r.ok).length
       if (failed > 0) {
-        toast.error(`${failed} item(s) failed to add.`)
+        const succeeded = toAdd.length - failed
+        if (succeeded > 0) {
+          toast.warning(`${succeeded} added, ${failed} failed.`)
+        } else {
+          toast.error(`Failed to add items to the shopping list.`)
+        }
       } else {
         toast.success(`${toAdd.length} ingredient(s) added to shopping list.`)
         onOpenChange(false)
@@ -109,21 +126,22 @@ export function AddToListDialog({
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Shopping list</label>
-              <select
-                value={selectedListId}
-                onChange={(e) => setSelectedListId(e.target.value)}
-                className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
-              >
-                {lists.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
+              <Label>Shopping list</Label>
+              <Select value={selectedListId} onValueChange={(v) => { if (v !== null) setSelectedListId(v) }}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {lists.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Ingredients</label>
+              <Label>Ingredients</Label>
               <div className="flex flex-col gap-1 max-h-60 overflow-y-auto border border-border rounded-md p-2">
                 {ingredients.map((ing, idx) => (
                   <label key={idx} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
