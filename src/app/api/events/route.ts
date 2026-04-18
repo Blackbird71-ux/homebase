@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
-import { validateEventDates } from '@/lib/event-helpers'
+import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
+import { pushEventToGoogle } from '@/lib/google-sync'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -19,18 +20,13 @@ export async function GET(req: Request) {
     orderBy: { start: 'asc' },
   })
 
-  return NextResponse.json(events.map(e => ({
-    ...e,
-    start: e.start.toISOString(),
-    end: e.end.toISOString(),
-    createdAt: e.createdAt.toISOString(),
-  })))
+  return NextResponse.json(events.map((e) => maskPersonalEvent(e, user.id)))
 }
 
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, description, start, end, isAllDay, category, color } = body
+  const { title, description, start, end, isAllDay, category, color, isPersonal } = body
 
   if (!title || !start || !end) {
     return NextResponse.json({ error: 'title, start, and end are required' }, { status: 400 })
@@ -48,6 +44,7 @@ export async function POST(req: Request) {
       start: new Date(start),
       end: new Date(end),
       isAllDay: isAllDay ?? false,
+      isPersonal: isPersonal ?? false,
       category: category ?? null,
       color: color ?? null,
       createdBy: user.id,
@@ -55,10 +52,7 @@ export async function POST(req: Request) {
     },
   })
 
-  return NextResponse.json({
-    ...event,
-    start: event.start.toISOString(),
-    end: event.end.toISOString(),
-    createdAt: event.createdAt.toISOString(),
-  }, { status: 201 })
+  void pushEventToGoogle(event.id, 'create')
+
+  return NextResponse.json(maskPersonalEvent(event, user.id), { status: 201 })
 }
