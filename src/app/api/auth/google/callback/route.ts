@@ -64,9 +64,8 @@ export async function GET(req: Request) {
     },
   })
 
-  const response = NextResponse.redirect(
-    new URL('/settings?google=connected', req.url)
-  )
+  const base = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? new URL(req.url).origin
+  const response = NextResponse.redirect(new URL('/settings?google=connected', base))
   response.cookies.delete('google_oauth_state')
   return response
 }

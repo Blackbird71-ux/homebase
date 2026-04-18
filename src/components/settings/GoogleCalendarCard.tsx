@@ -100,12 +100,13 @@ export function GoogleCalendarCard({ googleConnected, googleEmail }: GoogleCalen
               </div>
             </>
           ) : (
-            <Button asChild variant="outline">
-              <a href="/api/auth/google/connect">
-                <CalendarDays className="h-4 w-4 mr-2" />
-                Connect Google Calendar
-              </a>
-            </Button>
+            <a
+              href="/api/auth/google/connect"
+              className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground"
+            >
+              <CalendarDays className="h-4 w-4 mr-2" />
+              Connect Google Calendar
+            </a>
           )}
         </CardContent>
       </Card>
