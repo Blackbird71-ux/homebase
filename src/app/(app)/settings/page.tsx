@@ -5,6 +5,7 @@ import { AccountTab } from '@/components/settings/AccountTab'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab'
 import { DataTab } from '@/components/settings/DataTab'
+import { ImportTab } from '@/components/settings/ImportTab'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -60,6 +61,7 @@ export default async function SettingsPage() {
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
             <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="data">Data</TabsTrigger>
+            <TabsTrigger value="import">Import</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account">
@@ -92,6 +94,10 @@ export default async function SettingsPage() {
               }))}
               userEmail={user.email}
             />
+          </TabsContent>
+
+          <TabsContent value="import">
+            <ImportTab />
           </TabsContent>
         </Tabs>
       </div>
