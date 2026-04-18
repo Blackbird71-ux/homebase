@@ -69,6 +69,10 @@ export function AccountTab({ user }: AccountTabProps) {
   const [members, setMembers] = useState<FamilyMember[]>([])
   const [membersLoaded, setMembersLoaded] = useState(false)
   const [membersError, setMembersError] = useState<string | null>(null)
+  const [resetTarget, setResetTarget] = useState<FamilyMember | null>(null)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetSaving, setResetSaving] = useState(false)
+  const [resetStatus, setResetStatus] = useState<Status>(null)
 
   // Clipboard feedback
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
@@ -204,6 +208,35 @@ export function AccountTab({ user }: AccountTabProps) {
       }
     } catch {
       setMembersError('Network error loading members.')
+    }
+  }
+
+  async function resetMemberPassword() {
+    if (!resetTarget || !resetPassword) return
+    if (resetPassword.length < 8) {
+      setResetStatus({ type: 'error', message: 'Password must be at least 8 characters.' })
+      return
+    }
+    setResetSaving(true)
+    setResetStatus(null)
+    try {
+      const res = await fetch(`/api/family/members/${resetTarget.id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: resetPassword }),
+      })
+      if (res.ok) {
+        setResetStatus({ type: 'success', message: `Password reset for ${resetTarget.name}.` })
+        setResetPassword('')
+        setTimeout(() => { setResetTarget(null); setResetStatus(null) }, 2000)
+      } else {
+        const data = await res.json()
+        setResetStatus({ type: 'error', message: data.error ?? 'Failed to reset password.' })
+      }
+    } catch {
+      setResetStatus({ type: 'error', message: 'Network error.' })
+    } finally {
+      setResetSaving(false)
     }
   }
 
@@ -390,18 +423,57 @@ export function AccountTab({ user }: AccountTabProps) {
               </Button>
             )}
             {membersLoaded && members.length > 0 && (
-              <div className="border border-border rounded-md divide-y divide-border">
-                {members.map(member => (
-                  <div key={member.id} className="flex items-center justify-between px-3 py-2">
-                    <div>
-                      <p className="text-sm font-medium">{member.name}</p>
-                      <p className="text-xs text-muted-foreground">{member.email}</p>
+              <div className="space-y-2">
+                <div className="border border-border rounded-md divide-y divide-border">
+                  {members.map(member => (
+                    <div key={member.id}>
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">{member.name}</p>
+                          <p className="text-xs text-muted-foreground">{member.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${member.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                            {member.role}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7"
+                            onClick={() => {
+                              setResetTarget(resetTarget?.id === member.id ? null : member)
+                              setResetPassword('')
+                              setResetStatus(null)
+                            }}
+                          >
+                            Reset Password
+                          </Button>
+                        </div>
+                      </div>
+                      {resetTarget?.id === member.id && (
+                        <div className="px-3 pb-3 space-y-2 bg-muted/30">
+                          <p className="text-xs text-muted-foreground pt-2">Set a new password for {member.name}:</p>
+                          <div className="flex gap-2">
+                            <Input
+                              type="password"
+                              value={resetPassword}
+                              onChange={e => setResetPassword(e.target.value)}
+                              placeholder="New password (min 8 chars)"
+                              className="h-8 text-sm"
+                            />
+                            <Button size="sm" onClick={resetMemberPassword} disabled={resetSaving || !resetPassword}>
+                              {resetSaving ? 'Saving...' : 'Set'}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setResetTarget(null); setResetStatus(null) }}>
+                              Cancel
+                            </Button>
+                          </div>
+                          {resetStatus && <StatusMessage status={resetStatus} />}
+                        </div>
+                      )}
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${member.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                      {member.role}
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
