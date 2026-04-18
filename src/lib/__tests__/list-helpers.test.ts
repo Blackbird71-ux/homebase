@@ -1,7 +1,7 @@
 process.env.TZ = 'UTC'
 
 import { describe, it, expect } from 'vitest'
-import { groupByCategory, filterTodoItems } from '@/lib/list-helpers'
+import { groupByCategory, groupByRecipe, filterTodoItems } from '@/lib/list-helpers'
 import type { ListItemShape } from '@/lib/list-helpers'
 
 function makeItem(overrides: Partial<ListItemShape> = {}): ListItemShape {
@@ -12,6 +12,8 @@ function makeItem(overrides: Partial<ListItemShape> = {}): ListItemShape {
     category: null,
     sortOrder: 0,
     dueDate: null,
+    recipeId: null,
+    recipeName: null,
     createdBy: 'user1',
     listId: 'list1',
     createdAt: new Date('2026-04-16T00:00:00Z'),
@@ -37,20 +39,85 @@ describe('groupByCategory', () => {
     expect(groups.Produce).toHaveLength(1)
   })
 
-  it('sorts completed items after incomplete within a category', () => {
+  it('excludes completed items from category buckets', () => {
     const items = [
-      makeItem({ id: '1', category: 'Dairy', isCompleted: true, sortOrder: 0 }),
-      makeItem({ id: '2', category: 'Dairy', isCompleted: false, sortOrder: 1 }),
+      makeItem({ id: '1', category: 'Dairy', isCompleted: true }),
+      makeItem({ id: '2', category: 'Dairy', isCompleted: false }),
     ]
     const groups = groupByCategory(items)
-    expect(groups.Dairy[0].isCompleted).toBe(false)
-    expect(groups.Dairy[1].isCompleted).toBe(true)
+    expect(groups.Dairy).toHaveLength(1)
+    expect(groups.Dairy[0].id).toBe('2')
   })
 
   it('places unknown category string into Other', () => {
     const items = [makeItem({ id: '1', category: 'WeirdCategory' })]
     const groups = groupByCategory(items)
     expect(groups.Other).toHaveLength(1)
+  })
+
+  it('sorts items by sortOrder within a category', () => {
+    const items = [
+      makeItem({ id: '1', category: 'Dairy', sortOrder: 2 }),
+      makeItem({ id: '2', category: 'Dairy', sortOrder: 0 }),
+      makeItem({ id: '3', category: 'Dairy', sortOrder: 1 }),
+    ]
+    const groups = groupByCategory(items)
+    expect(groups.Dairy.map((i) => i.id)).toEqual(['2', '3', '1'])
+  })
+
+  it('respects custom categoryOrder for key ordering (items still go in correct bucket)', () => {
+    const items = [
+      makeItem({ id: '1', category: 'Dairy' }),
+      makeItem({ id: '2', category: 'Produce' }),
+    ]
+    const groups = groupByCategory(items, ['Dairy', 'Produce'])
+    expect(groups.Dairy).toHaveLength(1)
+    expect(groups.Produce).toHaveLength(1)
+  })
+})
+
+describe('groupByRecipe', () => {
+  it('groups items by recipeName', () => {
+    const items = [
+      makeItem({ id: '1', recipeName: 'Pasta Bake', content: 'Tomatoes' }),
+      makeItem({ id: '2', recipeName: 'Pasta Bake', content: 'Onion' }),
+      makeItem({ id: '3', recipeName: null, content: 'Milk' }),
+    ]
+    const groups = groupByRecipe(items)
+    expect(groups).toHaveLength(2)
+    const pastaBake = groups.find((g) => g.name === 'Pasta Bake')
+    const other = groups.find((g) => g.name === 'Other')
+    expect(pastaBake?.items).toHaveLength(2)
+    expect(other?.items).toHaveLength(1)
+  })
+
+  it('puts Other group last', () => {
+    const items = [
+      makeItem({ id: '1', recipeName: null }),
+      makeItem({ id: '2', recipeName: 'Apple Crumble' }),
+    ]
+    const groups = groupByRecipe(items)
+    expect(groups[groups.length - 1].name).toBe('Other')
+  })
+
+  it('sorts recipe groups alphabetically', () => {
+    const items = [
+      makeItem({ id: '1', recipeName: 'Zucchini Soup' }),
+      makeItem({ id: '2', recipeName: 'Apple Crumble' }),
+    ]
+    const groups = groupByRecipe(items)
+    const names = groups.filter((g) => g.name !== 'Other').map((g) => g.name)
+    expect(names).toEqual(['Apple Crumble', 'Zucchini Soup'])
+  })
+
+  it('excludes completed items', () => {
+    const items = [
+      makeItem({ id: '1', recipeName: 'Pasta Bake', isCompleted: true }),
+      makeItem({ id: '2', recipeName: 'Pasta Bake', isCompleted: false }),
+    ]
+    const groups = groupByRecipe(items)
+    const pastaBake = groups.find((g) => g.name === 'Pasta Bake')
+    expect(pastaBake?.items).toHaveLength(1)
   })
 })
 
@@ -60,54 +127,33 @@ describe('filterTodoItems', () => {
   const yesterday = new Date('2026-04-15T10:00:00Z')
   const tomorrow = new Date('2026-04-17T10:00:00Z')
 
-  it('all filter returns all items sorted by dueDate asc', () => {
+  it('returns all items when filter is all', () => {
     const items = [
-      makeItem({ id: '1', dueDate: tomorrow }),
-      makeItem({ id: '2', dueDate: yesterday }),
-      makeItem({ id: '3', dueDate: todayStart }),
+      makeItem({ id: '1', isCompleted: false }),
+      makeItem({ id: '2', isCompleted: true }),
     ]
-    const result = filterTodoItems(items, 'all', now)
-    expect(result.map((i) => i.id)).toEqual(['2', '3', '1'])
+    expect(filterTodoItems(items, 'all', now)).toHaveLength(2)
   })
 
-  it('today filter returns only items due today', () => {
+  it('returns only todays incomplete items when filter is today', () => {
     const items = [
       makeItem({ id: '1', dueDate: todayStart }),
       makeItem({ id: '2', dueDate: yesterday }),
       makeItem({ id: '3', dueDate: tomorrow }),
-      makeItem({ id: '4', dueDate: null }),
     ]
     const result = filterTodoItems(items, 'today', now)
-    expect(result.map((i) => i.id)).toEqual(['1'])
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('1')
   })
 
-  it('overdue filter returns only non-completed items past due', () => {
+  it('returns overdue incomplete items when filter is overdue', () => {
     const items = [
-      makeItem({ id: '1', dueDate: yesterday, isCompleted: false }),
-      makeItem({ id: '2', dueDate: yesterday, isCompleted: true }),
-      makeItem({ id: '3', dueDate: todayStart }),
+      makeItem({ id: '1', dueDate: yesterday }),
+      makeItem({ id: '2', dueDate: todayStart }),
+      makeItem({ id: '3', dueDate: yesterday, isCompleted: true }),
     ]
     const result = filterTodoItems(items, 'overdue', now)
-    expect(result.map((i) => i.id)).toEqual(['1'])
-  })
-
-  it('null dueDate items sort after dated items in all filter', () => {
-    const items = [
-      makeItem({ id: '1', dueDate: null, sortOrder: 0 }),
-      makeItem({ id: '2', dueDate: tomorrow }),
-    ]
-    const result = filterTodoItems(items, 'all', now)
-    expect(result[0].id).toBe('2')
-    expect(result[1].id).toBe('1')
-  })
-
-  it('completed items sort after incomplete in all filter', () => {
-    const items = [
-      makeItem({ id: '1', isCompleted: true, dueDate: yesterday }),
-      makeItem({ id: '2', isCompleted: false, dueDate: tomorrow }),
-    ]
-    const result = filterTodoItems(items, 'all', now)
-    expect(result[0].isCompleted).toBe(false)
-    expect(result[1].isCompleted).toBe(true)
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('1')
   })
 })

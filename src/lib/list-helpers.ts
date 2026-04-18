@@ -24,14 +24,26 @@ export interface ListItemShape {
   category: string | null
   sortOrder: number
   dueDate: Date | null
+  recipeId: string | null
+  recipeName: string | null
   createdBy: string
   listId: string
   createdAt: Date
 }
 
-/** Group shopping items by category. Completed items sorted last within each group. */
-export function groupByCategory(
+export interface RecipeGroup {
+  name: string
   items: ListItemShape[]
+}
+
+/**
+ * Group incomplete shopping items by category, sorted by sortOrder within each group.
+ * Completed items are excluded — callers handle them separately (DoneSection).
+ * categoryOrder controls the order of buckets; defaults to SHOPPING_CATEGORIES.
+ */
+export function groupByCategory(
+  items: ListItemShape[],
+  categoryOrder: string[] = SHOPPING_CATEGORIES
 ): Record<ShoppingCategory, ListItemShape[]> {
   const result: Record<ShoppingCategory, ListItemShape[]> = {
     Produce: [],
@@ -43,18 +55,43 @@ export function groupByCategory(
     Other: [],
   }
   for (const item of items) {
+    if (item.isCompleted) continue
     const cat = (item.category as ShoppingCategory) ?? 'Other'
     const key: ShoppingCategory = result[cat] !== undefined ? cat : 'Other'
     result[key].push(item)
   }
-  // Sort each bucket: incomplete first, then by sortOrder
   for (const cat of SHOPPING_CATEGORIES) {
-    result[cat].sort((a, b) => {
-      if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1
-      return a.sortOrder - b.sortOrder
-    })
+    result[cat].sort((a, b) => a.sortOrder - b.sortOrder)
   }
+  // categoryOrder param is used by ShoppingList to determine render order;
+  // groupByCategory just populates buckets.
+  void categoryOrder
   return result
+}
+
+/**
+ * Group incomplete shopping items by recipe name.
+ * Items without a recipeName go in "Other". Recipe groups sorted alphabetically, Other last.
+ */
+export function groupByRecipe(items: ListItemShape[]): RecipeGroup[] {
+  const map = new Map<string, ListItemShape[]>()
+  for (const item of items) {
+    if (item.isCompleted) continue
+    const key = item.recipeName ?? 'Other'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(item)
+  }
+  const groups: RecipeGroup[] = []
+  const sortedKeys = Array.from(map.keys())
+    .filter((k) => k !== 'Other')
+    .sort((a, b) => a.localeCompare(b))
+  for (const key of sortedKeys) {
+    groups.push({ name: key, items: map.get(key)! })
+  }
+  if (map.has('Other')) {
+    groups.push({ name: 'Other', items: map.get('Other')! })
+  }
+  return groups
 }
 
 export type TodoFilter = 'all' | 'today' | 'overdue'
@@ -84,9 +121,7 @@ export function filterTodoItems(
   }
 
   return filtered.slice().sort((a, b) => {
-    // Completed last
     if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1
-    // Null dueDate last
     if (a.dueDate === null && b.dueDate === null) return a.sortOrder - b.sortOrder
     if (a.dueDate === null) return 1
     if (b.dueDate === null) return -1
