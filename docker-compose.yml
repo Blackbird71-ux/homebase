@@ -1,20 +1,22 @@
-version: "3.8"
 services:
-  homebase:
+  homebase-app:
     build: .
     image: homebase:latest
+    container_name: homebase-app
+    restart: unless-stopped
+    env_file: .env.local
     ports:
       - "3001:3000"
     volumes:
-      - ./data:/data
+      - /volume1/docker/homebase/Data:/data
+      - /volume1/docker/homebase/cloudflared:/etc/cloudflared
     environment:
       - DATABASE_URL=file:/data/homebase.db
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      - NEXTAUTH_URL=${NEXTAUTH_URL}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - NODE_ENV=production
+    networks:
+      - homebase-network
+
+networks:
+  homebase-network:
+    driver: bridge
+    name: homebase-network
