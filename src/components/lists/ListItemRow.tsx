@@ -8,6 +8,7 @@ interface ListItemRowProps {
   content: string
   isCompleted: boolean
   dueDate?: string | null
+  recipeName?: string | null
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
 }
@@ -17,6 +18,7 @@ export function ListItemRow({
   content,
   isCompleted,
   dueDate,
+  recipeName,
   onToggle,
   onDelete,
 }: ListItemRowProps) {
@@ -28,7 +30,7 @@ export function ListItemRow({
 
   return (
     <div
-      className={`flex items-center gap-3 py-2 px-1 rounded-md group ${
+      className={`flex items-center gap-2 py-2 px-1 rounded-md group ${
         isCompleted ? 'opacity-50' : ''
       }`}
     >
@@ -44,6 +46,11 @@ export function ListItemRow({
       >
         {content}
       </span>
+      {!isCompleted && recipeName && (
+        <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+          {recipeName}
+        </span>
+      )}
       {dueDateObj && (
         <span
           className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${
