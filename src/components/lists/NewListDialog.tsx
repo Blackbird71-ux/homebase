@@ -78,9 +78,11 @@ export function NewListDialog({ open, onOpenChange, onCreated }: NewListDialogPr
                 </label>
               ))}
             </div>
-            {type === 'SHOPPING' && (
-              <p className="text-xs text-muted-foreground">Shopping lists appear on the home dashboard.</p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              {type === 'SHOPPING'
+                ? 'Shopping lists appear on the home dashboard.'
+                : 'Todo lists are private task lists — they do not appear on the home dashboard.'}
+            </p>
           </fieldset>
           <DialogFooter>
             <Button type="submit" disabled={loading || !name.trim()}>
