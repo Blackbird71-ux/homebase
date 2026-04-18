@@ -25,3 +25,19 @@ export async function PATCH(
   })
   return NextResponse.json(updated)
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await requireSession()
+  const { id } = await params
+
+  const existing = await prisma.list.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  await prisma.list.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}

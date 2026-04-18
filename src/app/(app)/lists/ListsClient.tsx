@@ -65,6 +65,17 @@ export function ListsClient({ initialLists }: ListsClientProps) {
     setActiveListId(list.id)
   }
 
+  async function handleDeleteList(id: string) {
+    const list = lists.find((l) => l.id === id)
+    if (!list) return
+    if (!confirm(`Delete "${list.name}"? This cannot be undone.`)) return
+    const res = await fetch(`/api/lists/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setLists((prev) => prev.filter((l) => l.id !== id))
+      if (activeListId === id) setActiveListId(lists.find((l) => l.id !== id)?.id ?? null)
+    }
+  }
+
   const listsMeta = lists.map((l) => ({
     id: l.id,
     name: l.name,
@@ -81,6 +92,7 @@ export function ListsClient({ initialLists }: ListsClientProps) {
           activeListId={activeListId}
           onSelect={setActiveListId}
           onNewList={() => setDialogOpen(true)}
+          onDeleteList={handleDeleteList}
         />
       </aside>
 

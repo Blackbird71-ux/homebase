@@ -78,6 +78,9 @@ export function NewListDialog({ open, onOpenChange, onCreated }: NewListDialogPr
                 </label>
               ))}
             </div>
+            {type === 'SHOPPING' && (
+              <p className="text-xs text-muted-foreground">Shopping lists appear on the home dashboard.</p>
+            )}
           </fieldset>
           <DialogFooter>
             <Button type="submit" disabled={loading || !name.trim()}>

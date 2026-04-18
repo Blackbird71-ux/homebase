@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ClockIcon, UsersIcon } from 'lucide-react'
+import { ClockIcon, UsersIcon, Trash2Icon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface RecipeCardProps {
@@ -10,6 +10,7 @@ interface RecipeCardProps {
   prepTime: number | null
   cookTime: number | null
   servings: number | null
+  onDelete?: (id: string) => void
 }
 
 export function RecipeCard({
@@ -20,11 +21,13 @@ export function RecipeCard({
   prepTime,
   cookTime,
   servings,
+  onDelete,
 }: RecipeCardProps) {
   const totalTime = (prepTime ?? 0) + (cookTime ?? 0)
 
   return (
-    <Link href={`/recipes/${id}`} className="block h-full">
+    <div className="relative group h-full">
+      <Link href={`/recipes/${id}`} className="block h-full">
       <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
         <CardHeader className="pb-2">
           <CardTitle className="text-base line-clamp-2">{title}</CardTitle>
@@ -62,5 +65,15 @@ export function RecipeCard({
         </CardContent>
       </Card>
     </Link>
+    {onDelete && (
+      <button
+        onClick={(e) => { e.preventDefault(); onDelete(id) }}
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 rounded-md bg-background/80 hover:bg-destructive/10 hover:text-destructive transition-all"
+        title="Delete recipe"
+      >
+        <Trash2Icon className="h-3.5 w-3.5" />
+      </button>
+    )}
+    </div>
   )
 }

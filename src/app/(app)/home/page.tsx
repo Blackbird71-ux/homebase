@@ -21,6 +21,7 @@ async function getDashboardData(familyId: string): Promise<DashboardData> {
     }),
     prisma.list.findMany({
       where: { familyId, type: 'SHOPPING', isActive: true },
+      orderBy: { createdAt: 'desc' },
       include: {
         items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
         _count: { select: { items: { where: { isCompleted: false } } } },

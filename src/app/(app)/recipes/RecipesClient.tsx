@@ -77,6 +77,21 @@ export function RecipesClient({ initialRecipes, initialBooks }: RecipesClientPro
     if (activeBookId === bookId) setActiveBookId(null)
   }
 
+  async function handleDeleteRecipe(id: string) {
+    const recipe = recipes.find((r) => r.id === id)
+    if (!recipe) return
+    if (!confirm(`Delete "${recipe.title}"? This cannot be undone.`)) return
+    const res = await fetch(`/api/recipes/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setRecipes((prev) => prev.filter((r) => r.id !== id))
+      if (recipe.bookId) {
+        setBooks((prev) =>
+          prev.map((b) => b.id === recipe.bookId ? { ...b, recipeCount: Math.max(0, b.recipeCount - 1) } : b)
+        )
+      }
+    }
+  }
+
   function handleImported() {
     window.location.reload()
   }
@@ -153,7 +168,7 @@ export function RecipesClient({ initialRecipes, initialBooks }: RecipesClientPro
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {visibleRecipes.map(({ bookId: _bookId, createdAt: _createdAt, ...cardProps }) => (
-              <RecipeCard key={cardProps.id} {...cardProps} />
+              <RecipeCard key={cardProps.id} {...cardProps} onDelete={handleDeleteRecipe} />
             ))}
           </div>
         )}
