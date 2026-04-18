@@ -26,6 +26,7 @@ interface SerializedList {
   name: string
   type: string
   isActive: boolean
+  categoryOrder: string | null
   createdAt: string
   familyId: string
   items: SerializedItem[]
@@ -58,6 +59,7 @@ export function ListsClient({ initialLists }: ListsClientProps) {
     const newList: SerializedList = {
       ...list,
       isActive: true,
+      categoryOrder: null,
       createdAt: new Date().toISOString(),
       familyId,
       items: [],
@@ -87,7 +89,6 @@ export function ListsClient({ initialLists }: ListsClientProps) {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Sidebar */}
       <aside className="w-[200px] shrink-0 border-r border-border overflow-y-auto">
         <ListSelector
           lists={listsMeta}
@@ -98,7 +99,6 @@ export function ListsClient({ initialLists }: ListsClientProps) {
         />
       </aside>
 
-      {/* Content */}
       <main className="flex-1 overflow-y-auto p-6">
         {activeList === null ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -111,6 +111,9 @@ export function ListsClient({ initialLists }: ListsClientProps) {
               key={activeList.id}
               listId={activeList.id}
               initialItems={activeList.items.map(toListItemShape)}
+              initialCategoryOrder={
+                activeList.categoryOrder ? JSON.parse(activeList.categoryOrder) : null
+              }
             />
           </>
         ) : (
