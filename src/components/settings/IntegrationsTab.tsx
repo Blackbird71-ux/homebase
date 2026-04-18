@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react'
 import { GoogleCalendarCard } from './GoogleCalendarCard'
+import { TunnelCard } from './TunnelCard'
 
 interface IntegrationsTabProps {
   isAdmin: boolean
@@ -90,6 +91,7 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
   return (
     <div className="space-y-6">
       <GoogleCalendarCard googleConnected={googleConnected} googleEmail={googleEmail} />
+      {isAdmin && <TunnelCard />}
       {/* Cozi Import — admin only */}
       {isAdmin && (
       <Card>
