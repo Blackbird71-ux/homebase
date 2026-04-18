@@ -16,11 +16,13 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const search = searchParams.get('search') ?? ''
   const tags = searchParams.get('tags') ?? ''
+  const bookId = searchParams.get('bookId')
 
   const recipes = await prisma.recipe.findMany({
     where: {
       familyId: user.familyId,
       ...(search && { title: { contains: search } }),
+      ...(bookId !== null && { bookId: bookId === 'null' ? null : bookId }),
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -49,7 +51,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl } = body
+  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, bookId } = body
 
   if (!title || !Array.isArray(ingredients) || !Array.isArray(instructions)) {
     return NextResponse.json(
@@ -69,6 +71,7 @@ export async function POST(req: Request) {
       cookTime: cookTime ?? null,
       servings: servings ?? null,
       sourceUrl: sourceUrl ?? null,
+      bookId: bookId ?? null,
       createdBy: user.id,
       familyId: user.familyId,
     },
