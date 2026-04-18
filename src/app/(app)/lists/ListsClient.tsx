@@ -14,6 +14,8 @@ interface SerializedItem {
   category: string | null
   sortOrder: number
   dueDate: string | null
+  recipeId: string | null
+  recipeName: string | null
   createdBy: string
   listId: string
   createdAt: string
