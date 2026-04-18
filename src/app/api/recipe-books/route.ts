@@ -1,0 +1,27 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth-helpers'
+
+export async function GET() {
+  const user = await requireSession()
+  const books = await prisma.recipeBook.findMany({
+    where: { familyId: user.familyId },
+    orderBy: { name: 'asc' },
+    include: { _count: { select: { recipes: true } } },
+  })
+  return NextResponse.json(
+    books.map((b) => ({ id: b.id, name: b.name, recipeCount: b._count.recipes }))
+  )
+}
+
+export async function POST(req: Request) {
+  const user = await requireSession()
+  const { name } = await req.json()
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return NextResponse.json({ error: 'name is required' }, { status: 400 })
+  }
+  const book = await prisma.recipeBook.create({
+    data: { name: name.trim(), familyId: user.familyId },
+  })
+  return NextResponse.json({ id: book.id, name: book.name }, { status: 201 })
+}
