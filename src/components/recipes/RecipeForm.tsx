@@ -25,6 +25,7 @@ interface RecipeFormProps {
     prepTime: number | null
     cookTime: number | null
     servings: number | null
+    bookId: string | null
     createdAt: string
   }) => void
   initialData?: {
