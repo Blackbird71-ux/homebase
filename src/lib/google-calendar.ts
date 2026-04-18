@@ -88,5 +88,6 @@ export async function deleteGoogleEvent(accessToken: string, googleEventId: stri
       headers: { Authorization: `Bearer ${accessToken}` },
     }
   )
-  if (!res.ok) throw new Error(`Google Calendar API error: ${res.status}`)
+  // 404 means the event was already deleted from Google — treat as success
+  if (!res.ok && res.status !== 404) throw new Error(`Google Calendar API error: ${res.status}`)
 }

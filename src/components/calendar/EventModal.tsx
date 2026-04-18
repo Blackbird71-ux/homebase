@@ -60,7 +60,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
     const method = event ? 'PUT' : 'POST'
     const url = event ? `/api/events/${event.id}` : '/api/events'
     const startDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(start).toISOString()
-    const endDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(end).toISOString()
+    const endDate = isAllDay ? new Date(end.split('T')[0]).toISOString() : new Date(end).toISOString()
 
     const res = await fetch(url, {
       method,

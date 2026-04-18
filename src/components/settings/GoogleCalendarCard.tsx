@@ -35,7 +35,7 @@ export function GoogleCalendarCard({ googleConnected, googleEmail }: GoogleCalen
       if (!res.ok) {
         toast.error(data.error ?? 'Sync failed. Please try again.')
       } else {
-        toast.success(`${data.synced} event${data.synced !== 1 ? 's' : ''} synced to Google Calendar`)
+        toast.success(`${data.synced} event${data.synced !== 1 ? 's' : ''} pushed to Google Calendar${data.skipped ? ` (${data.skipped} already synced)` : ''}`)
       }
     } catch {
       toast.error('Sync failed. Please try again.')
@@ -89,7 +89,7 @@ export function GoogleCalendarCard({ googleConnected, googleEmail }: GoogleCalen
               </div>
               <div className="flex gap-2">
                 <Button onClick={handleSync} disabled={syncing} variant="outline">
-                  {syncing ? 'Syncing…' : 'Sync next 12 months'}
+                  {syncing ? 'Syncing…' : 'Sync unsynced events'}
                 </Button>
                 <Button
                   variant="outline"

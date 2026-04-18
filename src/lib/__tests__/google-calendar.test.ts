@@ -114,7 +114,12 @@ describe('deleteGoogleEvent', () => {
   })
 
   it('throws on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 403 })
     await expect(deleteGoogleEvent('tok', 'gid-2')).rejects.toThrow()
+  })
+
+  it('treats 404 as success (event already deleted on Google)', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
+    await expect(deleteGoogleEvent('tok', 'gid-2')).resolves.not.toThrow()
   })
 })
