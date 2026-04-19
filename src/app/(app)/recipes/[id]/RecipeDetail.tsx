@@ -25,6 +25,7 @@ interface RecipeDetailProps {
     prepTime: number | null
     cookTime: number | null
     servings: number | null
+    image: string | null
     sourceUrl: string | null
     createdBy: string
     createdAt: string
@@ -137,6 +138,16 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
             </div>
           )}
         </div>
+
+        {/* Recipe image */}
+        {recipe.image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={recipe.image}
+            alt={recipe.title}
+            className="w-full rounded-lg object-cover max-h-72"
+          />
+        )}
 
         {/* Ingredients */}
         <section>

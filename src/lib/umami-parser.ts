@@ -59,9 +59,11 @@ export function parseUmamiTags(keywords: string, recipeName: string, bookName: s
 }
 
 export function parseUmamiRecipe(json: UmamiJson, bookName: string): ParsedRecipe {
+  const rawUrl = json.url ?? null
+  const sourceUrl = rawUrl && !rawUrl.includes('umami.recipes') ? rawUrl : null
   return {
     title: json.name,
-    sourceUrl: json.url ?? null,
+    sourceUrl,
     image: json.image?.[0] ?? null,
     description: json.description ?? null,
     ingredients: json.recipeIngredient ?? [],

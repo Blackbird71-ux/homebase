@@ -47,7 +47,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, bookId } = body
+  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId } = body
 
   const existing = await prisma.recipe.findFirst({
     where: { id, familyId: user.familyId },
@@ -66,6 +66,7 @@ export async function PUT(
       ...(cookTime !== undefined && { cookTime }),
       ...(servings !== undefined && { servings }),
       ...(sourceUrl !== undefined && { sourceUrl }),
+      ...(image !== undefined && { image: image ?? null }),
       ...('bookId' in body && { bookId: bookId ?? null }),
     },
   })

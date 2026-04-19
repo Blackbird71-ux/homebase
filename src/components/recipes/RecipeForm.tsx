@@ -38,6 +38,7 @@ interface RecipeFormProps {
     cookTime?: number | null
     servings?: number | null
     sourceUrl?: string
+    image?: string | null
   }
   books?: { id: string; name: string }[]
   initialBookId?: string | null
@@ -58,6 +59,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
   const [cookTime, setCookTime] = useState(String(initialData?.cookTime ?? ''))
   const [servings, setServings] = useState(String(initialData?.servings ?? ''))
   const [sourceUrl, setSourceUrl] = useState(initialData?.sourceUrl ?? '')
+  const [imageUrl, setImageUrl] = useState(initialData?.image ?? '')
   const [scrapeUrl, setScrapeUrl] = useState('')
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
@@ -109,6 +111,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
           cookTime: cookTime ? parseInt(cookTime) : null,
           servings: servings ? parseInt(servings) : null,
           sourceUrl: sourceUrl.trim() || null,
+          image: imageUrl.trim() || null,
           bookId: bookId || null,
         }),
       })
@@ -240,6 +243,15 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="recipe-url">Source URL</Label>
                 <Input id="recipe-url" type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="recipe-image">Image URL</Label>
+                <Input id="recipe-image" type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." />
+                {imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imageUrl} alt="Preview" className="rounded-md object-cover h-32 w-full mt-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                )}
               </div>
 
               {saveError && (

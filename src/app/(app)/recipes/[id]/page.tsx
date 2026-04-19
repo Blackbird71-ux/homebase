@@ -26,6 +26,7 @@ export default async function RecipeDetailPage({
     prepTime: recipe.prepTime,
     cookTime: recipe.cookTime,
     servings: recipe.servings,
+    image: recipe.image,
     sourceUrl: recipe.sourceUrl,
     createdBy: recipe.createdBy,
     createdAt: recipe.createdAt.toISOString(),

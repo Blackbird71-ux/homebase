@@ -86,9 +86,14 @@ describe('parseUmamiRecipe', () => {
   it('maps title, sourceUrl, image, description', () => {
     const result = parseUmamiRecipe(umamiJson, 'Soups')
     expect(result.title).toBe('Pumpkin Soup')
-    expect(result.sourceUrl).toBe('https://www.umami.recipes/recipe/abc123')
+    expect(result.sourceUrl).toBeNull()
     expect(result.image).toBe('https://www.umami.recipes/api/image/abc123?w=2048')
     expect(result.description).toBe('A warming autumn soup')
+  })
+
+  it('preserves external source URL', () => {
+    const result = parseUmamiRecipe({ ...umamiJson, url: 'https://www.example.com/recipe/soup' }, 'Soups')
+    expect(result.sourceUrl).toBe('https://www.example.com/recipe/soup')
   })
 
   it('maps prepTime and cookTime to minutes', () => {
