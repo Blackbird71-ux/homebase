@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, bookId } = body
+  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId } = body
 
   if (!title || !Array.isArray(ingredients) || !Array.isArray(instructions)) {
     return NextResponse.json(
@@ -71,6 +71,7 @@ export async function POST(req: Request) {
       cookTime: cookTime ?? null,
       servings: servings ?? null,
       sourceUrl: sourceUrl ?? null,
+      image: image ?? null,
       bookId: bookId ?? null,
       createdBy: user.id,
       familyId: user.familyId,

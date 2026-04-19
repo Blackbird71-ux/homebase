@@ -17,6 +17,7 @@ async function getData(familyId: string) {
         servings: true,
         bookId: true,
         createdAt: true,
+        image: true,
       },
     }),
     prisma.recipeBook.findMany({
@@ -37,6 +38,7 @@ async function getData(familyId: string) {
       servings: r.servings,
       bookId: r.bookId,
       createdAt: r.createdAt.toISOString(),
+      image: r.image,
     })),
     books: bookRows.map((b) => ({
       id: b.id,

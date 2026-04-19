@@ -20,6 +20,7 @@ interface RecipeSummary {
   servings: number | null
   bookId: string | null
   createdAt: string
+  image: string | null
 }
 
 interface RecipesClientProps {

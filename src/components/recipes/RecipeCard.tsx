@@ -10,6 +10,7 @@ interface RecipeCardProps {
   prepTime: number | null
   cookTime: number | null
   servings: number | null
+  image: string | null
   onDelete?: (id: string) => void
 }
 
@@ -21,6 +22,7 @@ export function RecipeCard({
   prepTime,
   cookTime,
   servings,
+  image,
   onDelete,
 }: RecipeCardProps) {
   const totalTime = (prepTime ?? 0) + (cookTime ?? 0)
@@ -28,7 +30,15 @@ export function RecipeCard({
   return (
     <div className="relative group h-full">
       <Link href={`/recipes/${id}`} className="block h-full">
-      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
+        {image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt={title}
+            className="w-full h-32 object-cover"
+          />
+        )}
         <CardHeader className="pb-2">
           <CardTitle className="text-base line-clamp-2">{title}</CardTitle>
         </CardHeader>
