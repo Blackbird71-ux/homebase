@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       // compatible with the vi.fn() mock pattern used in tests.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const zip = (AdmZip as any)(buffer)
-      const entries = zip.getEntries().filter((e) => e.entryName.endsWith('.json'))
+      const entries = zip.getEntries().filter((e: any) => e.entryName.endsWith('.json'))
 
       let book = await prisma.recipeBook.findFirst({
         where: { familyId: user.familyId, name: bookName },
