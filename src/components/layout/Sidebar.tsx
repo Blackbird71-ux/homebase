@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
-  Settings, LogOut,
+  Settings, LogOut, StickyNote,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/lists', label: 'Lists', icon: CheckSquare },
   { href: '/recipes', label: 'Recipes', icon: ChefHat },
   { href: '/meal-plan', label: 'Meal Plan', icon: CalendarDays },
+  { href: '/notes', label: 'Notes', icon: StickyNote },
 ]
 
 // Exported separately so it can be used inside the Sheet on mobile

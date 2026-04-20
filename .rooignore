@@ -1,0 +1,62 @@
+# Ignore ALL markdown files first
+*.md
+
+# EXCEPT your specific Roo Code instruction files
+!.roo/prompts/**/*.md
+!.roomodes
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build outputs
+dist/
+build/
+out/
+target/
+*.min.js
+*.min.css
+
+# Generated files
+*.log
+*.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Large binaries
+*.jpg
+*.png
+*.gif
+*.mp4
+*.zip
+*.tar.gz

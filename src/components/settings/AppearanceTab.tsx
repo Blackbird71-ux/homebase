@@ -12,6 +12,7 @@ interface AppearanceTabProps {
   initialTheme: string
   initialFontSize: string
   initialWeekStartsOn: number
+  initialDoneItemColor: string
 }
 
 type Status = { type: 'success' | 'error'; message: string } | null
@@ -24,6 +25,9 @@ const themeOptions = [
   { value: 'midnight', label: 'Midnight', icon: Moon, swatch: 'bg-[#0b0e14]' },
   { value: 'apple-grey', label: 'Apple', icon: Sun, swatch: 'bg-[#f2f2f7]' },
   { value: 'glass-dark', label: 'Glass', icon: Moon, swatch: 'bg-black' },
+  { value: 'sunset', label: 'Sunset', icon: Sun, swatch: 'bg-gradient-to-br from-orange-100 to-pink-100' },
+  { value: 'ocean', label: 'Ocean', icon: Sun, swatch: 'bg-gradient-to-br from-blue-50 to-cyan-50' },
+  { value: 'forest', label: 'Forest', icon: Sun, swatch: 'bg-gradient-to-br from-green-50 to-emerald-50' },
 ] as const
 
 const fontSizeOptions = [
@@ -37,11 +41,23 @@ const weekStartOptions = [
   { value: 1, label: 'Monday' },
 ] as const
 
-export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStartsOn }: AppearanceTabProps) {
+const colorOptions = [
+  { value: 'RED', label: 'Red', swatch: 'bg-red-500' },
+  { value: 'GREEN', label: 'Green', swatch: 'bg-green-500' },
+  { value: 'BLUE', label: 'Blue', swatch: 'bg-blue-500' },
+  { value: 'YELLOW', label: 'Yellow', swatch: 'bg-yellow-500' },
+  { value: 'PURPLE', label: 'Purple', swatch: 'bg-purple-500' },
+  { value: 'PINK', label: 'Pink', swatch: 'bg-pink-500' },
+  { value: 'ORANGE', label: 'Orange', swatch: 'bg-orange-500' },
+  { value: 'GRAY', label: 'Gray', swatch: 'bg-gray-500' },
+] as const
+
+export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStartsOn, initialDoneItemColor }: AppearanceTabProps) {
   const { setTheme } = useTheme()
   const [theme, setLocalTheme] = useState(initialTheme)
   const [fontSize, setFontSize] = useState(initialFontSize)
   const [weekStartsOn, setWeekStartsOn] = useState(initialWeekStartsOn)
+  const [doneItemColor, setDoneItemColor] = useState(initialDoneItemColor)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<Status>(null)
 
@@ -52,7 +68,7 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
       const res = await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme, fontSize, weekStartsOn }),
+        body: JSON.stringify({ theme, fontSize, weekStartsOn, doneItemColor }),
       })
       if (res.ok) {
         // Apply theme immediately via next-themes
@@ -152,6 +168,35 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
                 )}
               >
                 <span className="text-sm">{label}</span>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Done Item Color */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Done Item Color</CardTitle>
+          <CardDescription>Choose the color for completed items in shopping and todo lists.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-4 gap-2">
+            {colorOptions.map(({ value, label, swatch }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={doneItemColor === value}
+                onClick={() => setDoneItemColor(value)}
+                className={cn(
+                  'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors',
+                  doneItemColor === value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-muted-foreground/30'
+                )}
+              >
+                <div className={`w-6 h-6 rounded-full ${swatch} shrink-0`} />
+                <span className="text-xs font-medium">{label}</span>
               </button>
             ))}
           </div>

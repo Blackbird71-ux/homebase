@@ -3,9 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AccountTab } from '@/components/settings/AccountTab'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
+import { AdvancedThemingTab } from '@/components/settings/AdvancedThemingTab'
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab'
 import { DataTab } from '@/components/settings/DataTab'
 import { ImportTab } from '@/components/settings/ImportTab'
+import { TagManager } from '@/components/tags/TagManager'
+import { CategoryManager } from '@/components/categories/CategoryManager'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -21,6 +24,8 @@ export default async function SettingsPage() {
         theme: true,
         fontSize: true,
         weekStartsOn: true,
+        doneItemColor: true,
+        uiPreferences: true,
         googleConnected: true,
         googleEmail: true,
         family: {
@@ -56,16 +61,25 @@ export default async function SettingsPage() {
 
       <div className="flex-1 p-6">
         <Tabs defaultValue="account" className="w-full max-w-2xl">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex flex-wrap">
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
+            <TabsTrigger value="theming">Advanced Theming</TabsTrigger>
             <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="data">Data</TabsTrigger>
             <TabsTrigger value="import">Import</TabsTrigger>
+            <TabsTrigger value="tags">Tags</TabsTrigger>
+            <TabsTrigger value="categories">Categories</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account">
-            <AccountTab user={user} />
+            <AccountTab user={{
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              family: user.family,
+            }} />
           </TabsContent>
 
           <TabsContent value="appearance">
@@ -73,7 +87,14 @@ export default async function SettingsPage() {
                 initialTheme={user.theme}
                 initialFontSize={user.fontSize}
                 initialWeekStartsOn={user.weekStartsOn}
+                initialDoneItemColor={user.doneItemColor || 'RED'}
               />
+          </TabsContent>
+
+          <TabsContent value="theming">
+            <AdvancedThemingTab
+              initialCustomTheme={user.uiPreferences ? JSON.parse(user.uiPreferences).customTheme || null : null}
+            />
           </TabsContent>
 
           <TabsContent value="integrations">
@@ -98,6 +119,14 @@ export default async function SettingsPage() {
 
           <TabsContent value="import">
             <ImportTab />
+          </TabsContent>
+
+          <TabsContent value="tags">
+            <TagManager />
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <CategoryManager />
           </TabsContent>
         </Tabs>
       </div>

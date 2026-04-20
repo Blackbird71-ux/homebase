@@ -11,6 +11,128 @@ function safeParseArray(json: string): string[] {
   }
 }
 
+// Helper function to process tags input (supports both old and new formats)
+async function processTagsInput(tagsInput: any, familyId: string, userId: string) {
+  if (!tagsInput) return []
+
+  // Handle string format (backward compatibility)
+  if (typeof tagsInput === 'string') {
+    return tagsInput.split(',').map((t: string) => t.trim()).filter(Boolean)
+  }
+
+  // Handle array format
+  if (Array.isArray(tagsInput)) {
+    const tagIds: string[] = []
+    const tagNames: string[] = []
+    
+    // Separate IDs and names
+    tagsInput.forEach((tag) => {
+      if (typeof tag === 'string') {
+        if (tag.match(/^[0-9a-f-]+$/i)) {
+          // Looks like an ID
+          tagIds.push(tag)
+        } else {
+          tagNames.push(tag.trim())
+        }
+      } else if (tag && typeof tag === 'object' && tag.id) {
+        tagIds.push(tag.id)
+      }
+    })
+
+    // Find existing tags by ID
+    const existingTags = tagIds.length > 0
+      ? await (prisma as any).tag.findMany({
+          where: {
+            id: { in: tagIds },
+            familyId,
+          },
+        })
+      : []
+
+    // Create new tags for names that don't exist
+    const newTagPromises = tagNames.map(async (name) => {
+      const existing = await (prisma as any).tag.findFirst({
+        where: {
+          name,
+          familyId,
+        },
+      })
+      
+      if (existing) return existing.id
+      
+      const newTag = await (prisma as any).tag.create({
+        data: {
+          name,
+          familyId,
+        },
+      })
+      return newTag.id
+    })
+
+    const newTagIds = await Promise.all(newTagPromises)
+    
+    return [...existingTags.map((t: any) => t.id), ...newTagIds]
+  }
+
+  return []
+}
+
+// Helper function to create recipe with tags
+async function createRecipeWithTags(data: any, tagIds: string[]) {
+  const recipe = await prisma.recipe.create({
+    data: {
+      ...data,
+      // Keep legacy tags field for backward compatibility
+      tags: tagIds.length > 0 ? 'legacy-tags' : null,
+    },
+  })
+
+  // Create recipe-tag relationships
+  if (tagIds.length > 0) {
+    await (prisma as any).recipeTag.createMany({
+      data: tagIds.map((tagId) => ({
+        recipeId: recipe.id,
+        tagId,
+      })),
+      skipDuplicates: true,
+    })
+  }
+
+  return recipe
+}
+
+// Helper function to get recipe with tags
+async function getRecipeWithTags(id: string, familyId: string) {
+  const recipe = await (prisma as any).recipe.findFirst({
+    where: { id, familyId },
+    include: {
+      recipeTags: {
+        include: {
+          tag: true,
+        },
+      },
+    },
+  })
+
+  if (!recipe) return null
+
+  const legacyTags = recipe.tags ? recipe.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []
+  const newTags = recipe.recipeTags?.map((rt: any) => ({
+    id: rt.tag.id,
+    name: rt.tag.name,
+  })) || []
+
+  return {
+    ...recipe,
+    ingredients: safeParseArray(recipe.ingredients),
+    instructions: safeParseArray(recipe.instructions),
+    // Include both formats during transition
+    tags: [...newTags.map((t: any) => t.name), ...legacyTags.filter((t: string) => t !== 'legacy-tags')],
+    tagObjects: newTags,
+    createdAt: recipe.createdAt.toISOString(),
+  }
+}
+
 export async function GET(req: Request) {
   const user = await requireSession()
   const { searchParams } = new URL(req.url)
@@ -18,33 +140,53 @@ export async function GET(req: Request) {
   const tags = searchParams.get('tags') ?? ''
   const bookId = searchParams.get('bookId')
 
-  const recipes = await prisma.recipe.findMany({
+  const recipes = await (prisma as any).recipe.findMany({
     where: {
       familyId: user.familyId,
       ...(search && { title: { contains: search } }),
       ...(bookId !== null && { bookId: bookId === 'null' ? null : bookId }),
     },
     orderBy: { createdAt: 'desc' },
+    include: {
+      recipeTags: {
+        include: {
+          tag: true,
+        },
+      },
+    },
   })
 
-  // Filter by tag client-side (SQLite LIKE on comma-sep is messy)
-  // TODO: migrate tags to a junction table for indexed lookup if collection grows large
+  // Filter by tag client-side (support both old and new systems during transition)
   const tagList = tags ? tags.split(',').map((t) => t.trim().toLowerCase()) : []
   const filtered = tagList.length
-    ? recipes.filter((r) => {
-        const recipeTags = (r.tags ?? '').split(',').map((t) => t.trim().toLowerCase())
-        return tagList.some((t) => recipeTags.includes(t))
+    ? recipes.filter((r: any) => {
+        // Check new tag system
+        const newTagNames = (r as any).recipeTags?.map((rt: any) => rt.tag.name.toLowerCase()) || []
+        // Check legacy tag system
+        const legacyTags = (r.tags ?? '').split(',').map((t: string) => t.trim().toLowerCase())
+        const allTags = [...newTagNames, ...legacyTags.filter((t: string) => t !== 'legacy-tags')]
+        return tagList.some((t) => allTags.includes(t))
       })
     : recipes
 
   return NextResponse.json(
-    filtered.map((r) => ({
-      ...r,
-      ingredients: safeParseArray(r.ingredients),
-      instructions: safeParseArray(r.instructions),
-      tags: r.tags ? r.tags.split(',').map((t) => t.trim()) : [],
-      createdAt: r.createdAt.toISOString(),
-    }))
+    filtered.map((r: any) => {
+      const legacyTags = r.tags ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []
+      const newTags = (r as any).recipeTags?.map((rt: any) => ({
+        id: rt.tag.id,
+        name: rt.tag.name,
+      })) || []
+
+      return {
+        ...r,
+        ingredients: safeParseArray(r.ingredients),
+        instructions: safeParseArray(r.instructions),
+        // Include both formats during transition
+        tags: [...newTags.map((t: any) => t.name), ...legacyTags.filter((t: string) => t !== 'legacy-tags')],
+        tagObjects: newTags,
+        createdAt: r.createdAt.toISOString(),
+      }
+    })
   )
 }
 
@@ -60,32 +202,26 @@ export async function POST(req: Request) {
     )
   }
 
-  const recipe = await prisma.recipe.create({
-    data: {
-      title,
-      description: description ?? null,
-      ingredients: JSON.stringify(ingredients),
-      instructions: JSON.stringify(instructions),
-      tags: Array.isArray(tags) ? tags.join(',') : (tags ?? null),
-      prepTime: prepTime ?? null,
-      cookTime: cookTime ?? null,
-      servings: servings ?? null,
-      sourceUrl: sourceUrl ?? null,
-      image: image ?? null,
-      bookId: bookId ?? null,
-      createdBy: user.id,
-      familyId: user.familyId,
-    },
-  })
+  // Process tags input
+  const tagIds = await processTagsInput(tags, user.familyId, user.id)
 
-  return NextResponse.json(
-    {
-      ...recipe,
-      ingredients: JSON.parse(recipe.ingredients) as string[],
-      instructions: JSON.parse(recipe.instructions) as string[],
-      tags: recipe.tags ? recipe.tags.split(',').map((t) => t.trim()) : [],
-      createdAt: recipe.createdAt.toISOString(),
-    },
-    { status: 201 }
-  )
+  const recipe = await createRecipeWithTags({
+    title,
+    description: description ?? null,
+    ingredients: JSON.stringify(ingredients),
+    instructions: JSON.stringify(instructions),
+    prepTime: prepTime ?? null,
+    cookTime: cookTime ?? null,
+    servings: servings ?? null,
+    sourceUrl: sourceUrl ?? null,
+    image: image ?? null,
+    bookId: bookId ?? null,
+    createdBy: user.id,
+    familyId: user.familyId,
+  }, tagIds)
+
+  // Get the full recipe with tags for response
+  const fullRecipe = await getRecipeWithTags(recipe.id, user.familyId)
+
+  return NextResponse.json(fullRecipe, { status: 201 })
 }

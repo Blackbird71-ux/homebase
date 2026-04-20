@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { MEAL_TYPES } from '@/lib/meal-types'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -44,9 +45,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'date and mealType are required' }, { status: 400 })
   }
 
-  const VALID_MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const
-  if (!VALID_MEAL_TYPES.includes(mealType as (typeof VALID_MEAL_TYPES)[number])) {
-    return NextResponse.json({ error: 'mealType must be one of: breakfast, lunch, dinner, snack' }, { status: 400 })
+  const validMealTypeIds = MEAL_TYPES.map(m => m.id)
+  if (!validMealTypeIds.includes(mealType)) {
+    return NextResponse.json({ error: `mealType must be one of: ${validMealTypeIds.join(', ')}` }, { status: 400 })
   }
 
   const dateObj = new Date(date)

@@ -51,6 +51,7 @@ export async function GET(req: Request) {
   const recipes = entries.map((e) => ({
     date: e.date.toISOString().slice(0, 10),
     title: e.recipe!.title,
+    mealType: e.mealType,
     ingredients: safeParseArray(e.recipe!.ingredients).map((text) => {
       const key = normalizeIngredient(text)
       const learnedCat = learnedMap.get(key)

@@ -6,11 +6,12 @@ import type { ListItemShape } from '@/lib/list-helpers'
 interface DoneSectionProps {
   items: ListItemShape[]
   listId: string
+  doneItemColor?: string
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
 }
 
-export function DoneSection({ items, onToggle, onDelete }: DoneSectionProps) {
+export function DoneSection({ items, doneItemColor, onToggle, onDelete }: DoneSectionProps) {
   if (items.length === 0) return null
 
   return (
@@ -26,6 +27,7 @@ export function DoneSection({ items, onToggle, onDelete }: DoneSectionProps) {
             content={item.content}
             isCompleted={item.isCompleted}
             recipeName={item.recipeName}
+            doneItemColor={doneItemColor}
             onToggle={onToggle}
             onDelete={onDelete}
           />

@@ -1,0 +1,10 @@
+{
+  "modes": [
+    {
+      "slug": "code",
+      "name": "Code",
+      "roleDefinition": "You are a senior software engineer...",
+      "customInstructions": "Follow the rules in .roo/prompts/modes/code.md"
+    }
+  ]
+}

@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { MealSlotCell } from './MealSlotCell'
+import { DailyMealColumn } from './DailyMealColumn'
 import { AssignMealModal } from './AssignMealModal'
 import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { Button } from '@/components/ui/button'
 import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
 import { toast } from 'sonner'
+import { DEFAULT_MEAL_TYPE, type MealType } from '@/lib/meal-types'
 
 interface MealPlanEntry {
   id: string
@@ -57,7 +58,7 @@ export function MealPlanGrid({
   const [entries, setEntries] = useState<MealPlanEntry[]>(initialEntries)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [selectedMealType] = useState('dinner')
+  const [selectedMealType, setSelectedMealType] = useState(DEFAULT_MEAL_TYPE)
   const [loading, setLoading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
 
@@ -100,8 +101,9 @@ export function MealPlanGrid({
       .finally(() => setLoading(false))
   }
 
-  function openModal(date: string) {
+  function openModal(date: string, mealType: MealType = DEFAULT_MEAL_TYPE) {
     setSelectedDate(date)
+    setSelectedMealType(mealType)
     setModalOpen(true)
   }
 
@@ -182,45 +184,22 @@ export function MealPlanGrid({
 
       {/* Grid — scrolls horizontally on mobile */}
       <div className="overflow-x-auto flex-1">
-      <div className="grid grid-cols-7 gap-2 min-w-[640px]">
-        {/* Day headers */}
-        {days.map((day) => {
-          const ymd = toYMD(day)
-          return (
-            <div key={ymd} className="flex flex-col items-center gap-1">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                {day.toLocaleDateString(undefined, { weekday: 'short' })}
-              </p>
-              <p
-                className={`text-sm font-semibold h-7 w-7 flex items-center justify-center rounded-full ${
-                  ymd === today ? 'bg-primary text-primary-foreground' : ''
-                }`}
-              >
-                {day.getDate()}
-              </p>
-            </div>
-          )
-        })}
-
-        {/* Meal cells */}
-        {days.map((day) => {
-          const ymd = toYMD(day)
-          const entry = entries.find(
-            (e) => e.date.slice(0, 10) === ymd && e.mealType === 'dinner'
-          )
-          return (
-            <MealSlotCell
-              key={ymd}
-              date={ymd}
-              mealPlanId={entry?.id ?? null}
-              recipeName={entry?.recipe?.title ?? null}
-              note={entry?.note ?? null}
-              onClick={() => openModal(ymd)}
-              onClear={() => entry && handleClear(entry.id)}
-            />
-          )
-        })}
-      </div>
+        <div className="grid grid-cols-7 gap-4 min-w-[960px]">
+          {days.map((day) => {
+            const ymd = toYMD(day)
+            const dayEntries = entries.filter((e) => e.date.slice(0, 10) === ymd)
+            return (
+              <DailyMealColumn
+                key={ymd}
+                date={ymd}
+                entries={dayEntries}
+                isToday={ymd === today}
+                onMealClick={openModal}
+                onMealClear={handleClear}
+              />
+            )
+          })}
+        </div>
       </div>
 
       {selectedDate && (

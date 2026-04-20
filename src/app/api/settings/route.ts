@@ -16,6 +16,8 @@ export async function GET() {
       theme: true,
       fontSize: true,
       weekStartsOn: true,
+      doneItemColor: true,
+      uiPreferences: true,
       family: {
         select: {
           id: true,
@@ -28,16 +30,23 @@ export async function GET() {
   })
 
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(user)
+  
+  // Parse uiPreferences JSON if it exists
+  const parsedUser = {
+    ...user,
+    uiPreferences: user.uiPreferences ? JSON.parse(user.uiPreferences) : null,
+  }
+  
+  return NextResponse.json(parsedUser)
 }
 
 export async function PATCH(req: Request) {
   const session = await requireSession()
   const body = await req.json()
 
-  const { theme, fontSize, weekStartsOn, name, currentPassword, newPassword } = body
+  const { theme, fontSize, weekStartsOn, doneItemColor, name, currentPassword, newPassword, uiPreferences } = body
 
-  if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark'].includes(theme)) {
+  if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark', 'sunset', 'ocean', 'forest'].includes(theme)) {
     return NextResponse.json({ error: 'Invalid theme value' }, { status: 400 })
   }
   if (fontSize !== undefined && !['sm', 'base', 'lg'].includes(fontSize)) {
@@ -46,13 +55,58 @@ export async function PATCH(req: Request) {
   if (weekStartsOn !== undefined && ![0, 1].includes(weekStartsOn)) {
     return NextResponse.json({ error: 'Invalid weekStartsOn value' }, { status: 400 })
   }
+  
+  // Validate doneItemColor - allow hex codes (#RRGGBB) or named colors
+  if (doneItemColor !== undefined) {
+    const colorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$|^[A-Za-z]+$/
+    if (typeof doneItemColor !== 'string' || !colorRegex.test(doneItemColor)) {
+      return NextResponse.json(
+        { error: 'Invalid color value. Use hex code (#RRGGBB) or named color' },
+        { status: 400 }
+      )
+    }
+  }
+
+  // Validate uiPreferences if provided
+  if (uiPreferences !== undefined) {
+    try {
+      // Try to parse if it's a string
+      const parsed = typeof uiPreferences === 'string' ? JSON.parse(uiPreferences) : uiPreferences
+      
+      // Validate custom theme colors if present
+      if (parsed.customTheme) {
+        const customTheme = parsed.customTheme
+        const colorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$|^[A-Za-z]+$|^oklch\([^)]+\)$|^rgb\([^)]+\)$|^hsl\([^)]+\)$|^$/
+        
+        for (const [key, value] of Object.entries(customTheme)) {
+          if (value && typeof value === 'string' && value.trim() !== '') {
+            if (!colorRegex.test(value)) {
+              return NextResponse.json(
+                { error: `Invalid color value for ${key}. Use hex, rgb, hsl, oklch, or named color` },
+                { status: 400 }
+              )
+            }
+          }
+        }
+      }
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid uiPreferences JSON format' },
+        { status: 400 }
+      )
+    }
+  }
 
   const updateData: Record<string, unknown> = {}
   if (theme !== undefined) updateData.theme = theme
   if (fontSize !== undefined) updateData.fontSize = fontSize
   if (weekStartsOn !== undefined) updateData.weekStartsOn = weekStartsOn
+  if (doneItemColor !== undefined) updateData.doneItemColor = doneItemColor
   if (name !== undefined && typeof name === 'string' && name.trim().length > 0) {
     updateData.name = name.trim()
+  }
+  if (uiPreferences !== undefined) {
+    updateData.uiPreferences = typeof uiPreferences === 'string' ? uiPreferences : JSON.stringify(uiPreferences)
   }
 
   if (currentPassword !== undefined || newPassword !== undefined) {
@@ -93,10 +147,18 @@ export async function PATCH(req: Request) {
       theme: true,
       fontSize: true,
       weekStartsOn: true,
+      doneItemColor: true,
+      uiPreferences: true,
     },
   })
 
-  return NextResponse.json(updated)
+  // Parse uiPreferences in response
+  const parsedUpdated = {
+    ...updated,
+    uiPreferences: updated.uiPreferences ? JSON.parse(updated.uiPreferences) : null,
+  }
+
+  return NextResponse.json(parsedUpdated)
 }
 
 export async function DELETE() {

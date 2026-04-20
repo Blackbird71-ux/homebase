@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon } from 'lucide-react'
 import { AddToListDialog } from '@/components/lists/AddToListDialog'
+import { RecipeForm } from '@/components/recipes/RecipeForm'
 import Link from 'next/link'
 import {
   Dialog,
@@ -40,6 +41,7 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [addToListOpen, setAddToListOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
@@ -83,12 +85,10 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
             </Button>
             {canEdit && (
               <>
-                <Link href={`/recipes/${recipe.id}/edit`}>
-                  <Button variant="outline" size="sm">
-                    <PencilIcon className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                </Link>
+                <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
+                  <PencilIcon className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -220,6 +220,29 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Recipe Dialog */}
+      <RecipeForm
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onCreated={() => {}} // Not used in edit mode, but required by interface
+        editMode={{ recipeId: recipe.id }}
+        initialData={{
+          title: recipe.title,
+          description: recipe.description || '',
+          ingredients: recipe.ingredients,
+          instructions: recipe.instructions,
+          tags: recipe.tags,
+          prepTime: recipe.prepTime || undefined,
+          cookTime: recipe.cookTime || undefined,
+          servings: recipe.servings || undefined,
+          sourceUrl: recipe.sourceUrl || '',
+          image: recipe.image || ''
+        }}
+        onUpdated={() => {
+          router.refresh() // Refresh page data after edit
+        }}
+      />
     </>
   )
 }

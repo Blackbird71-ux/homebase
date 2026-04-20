@@ -9,7 +9,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { UploadIcon, FileArchiveIcon, CheckCircleIcon, AlertCircleIcon } from 'lucide-react'
+import { UploadIcon, FileArchiveIcon, CheckCircleIcon, AlertCircleIcon, TagIcon } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface BookResult {
   name: string
@@ -27,6 +28,7 @@ interface ImportModalProps {
 type Status = 'idle' | 'importing' | 'done'
 
 export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps) {
+  const router = useRouter()
   const [files, setFiles] = useState<File[]>([])
   const [status, setStatus] = useState<Status>('idle')
   const [results, setResults] = useState<BookResult[]>([])
@@ -127,25 +129,53 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
         )}
 
         {status === 'done' && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 font-medium">
-              <CheckCircleIcon className="h-4 w-4" />
-              {totalImported} recipe{totalImported !== 1 ? 's' : ''} imported
-              {totalSkipped > 0 && `, ${totalSkipped} skipped`}
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 font-medium">
+                <CheckCircleIcon className="h-4 w-4" />
+                {totalImported} recipe{totalImported !== 1 ? 's' : ''} imported
+                {totalSkipped > 0 && `, ${totalSkipped} skipped`}
+              </div>
+              <div className="divide-y divide-border rounded-lg border border-border overflow-hidden text-sm">
+                {results.map((r) => (
+                  <div key={r.name} className="flex items-center justify-between px-3 py-2">
+                    <span className="font-medium">{r.name}</span>
+                    {r.error ? (
+                      <span className="text-destructive text-xs">{r.error}</span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">
+                        {r.imported} in · {r.skipped} skipped
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="divide-y divide-border rounded-lg border border-border overflow-hidden text-sm">
-              {results.map((r) => (
-                <div key={r.name} className="flex items-center justify-between px-3 py-2">
-                  <span className="font-medium">{r.name}</span>
-                  {r.error ? (
-                    <span className="text-destructive text-xs">{r.error}</span>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">
-                      {r.imported} in · {r.skipped} skipped
-                    </span>
-                  )}
+
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-start gap-2">
+                <TagIcon className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                    Review ingredient categories
+                  </h4>
+                  <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+                    Imported ingredients may be assigned to "Other" category.
+                    You can review and assign proper categories for better shopping list organization.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 text-xs h-7"
+                    onClick={() => {
+                      handleClose()
+                      router.push('/settings/categories')
+                    }}
+                  >
+                    Review categories
+                  </Button>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         )}

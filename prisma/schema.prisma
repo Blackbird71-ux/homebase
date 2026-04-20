@@ -21,6 +21,8 @@ model Family {
   coziImports          CoziImport[]
   inviteCodes          InviteCode[]
   ingredientCategories IngredientCategory[]
+  tags                 Tag[]
+  notes                Note[]
 }
 
 model User {
@@ -34,6 +36,7 @@ model User {
   theme               String                @default("dark")
   fontSize            String                @default("base")
   weekStartsOn        Int                   @default(0)
+  doneItemColor       String                @default("RED")
   uiPreferences       String?
   googleConnected     Boolean               @default(false)
   googleEmail         String?
@@ -115,6 +118,7 @@ model Recipe {
   familyId     String
   family       Family      @relation(fields: [familyId], references: [id])
   mealPlans    MealPlan[]
+  recipeTags   RecipeTag[]
   createdAt    DateTime    @default(now())
 }
 
@@ -149,6 +153,8 @@ model IngredientCategory {
   family    Family   @relation(fields: [familyId], references: [id])
   key       String
   category  String
+  sortOrder Int      @default(0)
+  isCustom  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -166,6 +172,28 @@ model RecipeBook {
   @@unique([familyId, name])
 }
 
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  recipes   RecipeTag[]
+  createdAt DateTime @default(now())
+
+  @@unique([familyId, name])
+}
+
+model RecipeTag {
+  recipeId  String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, tagId])
+}
+
 model GoogleCalendarSync {
   id            String   @id @default(cuid())
   eventId       String
@@ -177,4 +205,17 @@ model GoogleCalendarSync {
   user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  category  String?
+  tags      String?  // JSON array of tags
+  createdBy String
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

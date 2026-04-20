@@ -5,6 +5,7 @@ import { RecipeCard } from '@/components/recipes/RecipeCard'
 import { RecipeForm } from '@/components/recipes/RecipeForm'
 import { RecipeBookSidebar } from '@/components/recipes/RecipeBookSidebar'
 import { ImportModal } from '@/components/recipes/ImportModal'
+import { TagCloud } from '@/components/tags/TagCloud'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PlusIcon, SearchIcon, UploadIcon } from 'lucide-react'
@@ -140,26 +141,40 @@ export function RecipesClient({ initialRecipes, initialBooks }: RecipesClientPro
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
-          <div className="relative flex-1 min-w-[180px]">
-            <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search recipes..."
-              className="pl-8"
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-2 items-center">
+            <div className="relative flex-1 min-w-[180px]">
+              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search recipes..."
+                className="pl-8"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium">Filter by tags</h3>
+              {activeTag && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTag(null)}
+                  className="h-6 text-xs"
+                >
+                  Clear filter
+                </Button>
+              )}
+            </div>
+            <TagCloud
+              selectedTag={activeTag}
+              onTagClick={setActiveTag}
+              maxTags={15}
+              showCounts={true}
             />
           </div>
-          {allTags.map((tag) => (
-            <Button
-              key={tag}
-              variant={activeTag === tag ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-            >
-              {tag}
-            </Button>
-          ))}
         </div>
 
         {visibleRecipes.length === 0 ? (

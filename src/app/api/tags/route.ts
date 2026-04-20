@@ -1,0 +1,80 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth-helpers'
+
+export async function GET(req: Request) {
+  const user = await requireSession()
+  const { searchParams } = new URL(req.url)
+  const search = searchParams.get('search') ?? ''
+  const includeCounts = searchParams.get('includeCounts') === 'true'
+
+  const tags = await (prisma as any).tag.findMany({
+    where: {
+      familyId: user.familyId,
+      ...(search && { name: { contains: search, mode: 'insensitive' } }),
+    },
+    orderBy: { createdAt: 'desc' },
+    include: includeCounts
+      ? {
+          _count: {
+            select: { recipes: true },
+          },
+        }
+      : undefined,
+  })
+
+  const response = tags.map((tag: any) => ({
+    id: tag.id,
+    name: tag.name,
+    createdAt: tag.createdAt.toISOString(),
+    ...(includeCounts && { recipeCount: tag._count?.recipes || 0 }),
+  }))
+
+  return NextResponse.json(response)
+}
+
+export async function POST(req: Request) {
+  const user = await requireSession()
+  const body = await req.json()
+  const { name } = body
+
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return NextResponse.json(
+      { error: 'Tag name is required and must be a non-empty string' },
+      { status: 400 }
+    )
+  }
+
+  const trimmedName = name.trim()
+
+  // Check if tag already exists for this family
+  const existingTag = await (prisma as any).tag.findFirst({
+    where: {
+      familyId: user.familyId,
+      name: trimmedName,
+    },
+  })
+
+  if (existingTag) {
+    return NextResponse.json(
+      { error: 'A tag with this name already exists for your family' },
+      { status: 409 }
+    )
+  }
+
+  const tag = await (prisma as any).tag.create({
+    data: {
+      name: trimmedName,
+      familyId: user.familyId,
+    },
+  })
+
+  return NextResponse.json(
+    {
+      id: tag.id,
+      name: tag.name,
+      createdAt: tag.createdAt.toISOString(),
+    },
+    { status: 201 }
+  )
+}

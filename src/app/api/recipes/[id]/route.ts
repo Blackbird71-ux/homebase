@@ -11,19 +11,120 @@ function safeParseArray(json: string): string[] {
   }
 }
 
-function serializeRecipe(r: {
-  id: string; title: string; description: string | null
-  ingredients: string; instructions: string; image: string | null
-  sourceUrl: string | null; prepTime: number | null; cookTime: number | null
-  servings: number | null; tags: string | null; createdBy: string
-  familyId: string; createdAt: Date
-}) {
+// Helper function to process tags input (supports both old and new formats)
+async function processTagsInput(tagsInput: any, familyId: string, userId: string) {
+  if (!tagsInput) return []
+
+  // Handle string format (backward compatibility)
+  if (typeof tagsInput === 'string') {
+    return tagsInput.split(',').map((t: string) => t.trim()).filter(Boolean)
+  }
+
+  // Handle array format
+  if (Array.isArray(tagsInput)) {
+    const tagIds: string[] = []
+    const tagNames: string[] = []
+    
+    // Separate IDs and names
+    tagsInput.forEach((tag) => {
+      if (typeof tag === 'string') {
+        if (tag.match(/^[0-9a-f-]+$/i)) {
+          // Looks like an ID
+          tagIds.push(tag)
+        } else {
+          tagNames.push(tag.trim())
+        }
+      } else if (tag && typeof tag === 'object' && tag.id) {
+        tagIds.push(tag.id)
+      }
+    })
+
+    // Find existing tags by ID
+    const existingTags = tagIds.length > 0
+      ? await (prisma as any).tag.findMany({
+          where: {
+            id: { in: tagIds },
+            familyId,
+          },
+        })
+      : []
+
+    // Create new tags for names that don't exist
+    const newTagPromises = tagNames.map(async (name) => {
+      const existing = await (prisma as any).tag.findFirst({
+        where: {
+          name,
+          familyId,
+        },
+      })
+      
+      if (existing) return existing.id
+      
+      const newTag = await (prisma as any).tag.create({
+        data: {
+          name,
+          familyId,
+        },
+      })
+      return newTag.id
+    })
+
+    const newTagIds = await Promise.all(newTagPromises)
+    
+    return [...existingTags.map((t: any) => t.id), ...newTagIds]
+  }
+
+  return []
+}
+
+// Helper function to update recipe tags
+async function updateRecipeTags(recipeId: string, tagIds: string[]) {
+  // Delete existing recipe-tag relationships
+  await (prisma as any).recipeTag.deleteMany({
+    where: { recipeId },
+  })
+
+  // Create new relationships
+  if (tagIds.length > 0) {
+    await (prisma as any).recipeTag.createMany({
+      data: tagIds.map((tagId) => ({
+        recipeId,
+        tagId,
+      })),
+      skipDuplicates: true,
+    })
+  }
+}
+
+// Helper function to get recipe with tags
+async function getRecipeWithTags(id: string, familyId: string) {
+  const recipe = await (prisma as any).recipe.findFirst({
+    where: { id, familyId },
+    include: {
+      recipeTags: {
+        include: {
+          tag: true,
+        },
+      },
+    },
+  })
+
+  if (!recipe) return null
+
+  const legacyTags = recipe.tags ? recipe.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []
+  const newTags = recipe.recipeTags?.map((rt: any) => ({
+    id: rt.tag.id,
+    name: rt.tag.name,
+  })) || []
+
   return {
-    ...r,
-    ingredients: safeParseArray(r.ingredients),
-    instructions: safeParseArray(r.instructions),
-    tags: r.tags ? r.tags.split(',').map((t) => t.trim()) : [],
-    createdAt: r.createdAt.toISOString(),
+    ...recipe,
+    ingredients: safeParseArray(recipe.ingredients),
+    instructions: safeParseArray(recipe.instructions),
+    // Include both formats during transition
+    tags: [...newTags.map((t: any) => t.name), ...legacyTags.filter((t: string) => t !== 'legacy-tags')],
+    tagObjects: newTags,
+    createdAt: recipe.createdAt.toISOString(),
   }
 }
 
@@ -33,11 +134,11 @@ export async function GET(
 ) {
   const user = await requireSession()
   const { id } = await params
-  const recipe = await prisma.recipe.findFirst({
-    where: { id, familyId: user.familyId },
-  })
+  
+  const recipe = await getRecipeWithTags(id, user.familyId)
   if (!recipe) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(serializeRecipe(recipe))
+  
+  return NextResponse.json(recipe)
 }
 
 export async function PUT(
@@ -54,6 +155,12 @@ export async function PUT(
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // Process tags if provided
+  if (tags !== undefined) {
+    const tagIds = await processTagsInput(tags, user.familyId, user.id)
+    await updateRecipeTags(id, tagIds)
+  }
+
   const updated = await prisma.recipe.update({
     where: { id },
     data: {
@@ -61,7 +168,8 @@ export async function PUT(
       ...(description !== undefined && { description }),
       ...(ingredients !== undefined && { ingredients: JSON.stringify(ingredients) }),
       ...(instructions !== undefined && { instructions: JSON.stringify(instructions) }),
-      ...(tags !== undefined && { tags: Array.isArray(tags) ? tags.join(',') : tags }),
+      // Keep legacy tags field for backward compatibility (set to 'legacy-tags' if using new system)
+      ...(tags !== undefined && { tags: 'legacy-tags' }),
       ...(prepTime !== undefined && { prepTime }),
       ...(cookTime !== undefined && { cookTime }),
       ...(servings !== undefined && { servings }),
@@ -71,7 +179,9 @@ export async function PUT(
     },
   })
 
-  return NextResponse.json(serializeRecipe(updated))
+  // Get the full recipe with tags for response
+  const fullRecipe = await getRecipeWithTags(id, user.familyId)
+  return NextResponse.json(fullRecipe)
 }
 
 export async function DELETE(
@@ -84,6 +194,8 @@ export async function DELETE(
     where: { id, familyId: user.familyId },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  
+  // Delete recipe (cascade will delete recipe-tag relationships)
   await prisma.recipe.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }

@@ -12,12 +12,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { TagSelector } from '@/components/tags/TagSelector'
 import { LinkIcon } from 'lucide-react'
 
 interface RecipeFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (newRecipe: {
+    id: string
+    title: string
+    description: string | null
+    tags: string[]
+    prepTime: number | null
+    cookTime: number | null
+    servings: number | null
+    bookId: string | null
+    createdAt: string
+    image: string | null
+  }) => void
+  onUpdated?: (updatedRecipe: {
     id: string
     title: string
     description: string | null
@@ -43,9 +56,12 @@ interface RecipeFormProps {
   }
   books?: { id: string; name: string }[]
   initialBookId?: string | null
+  editMode?: {
+    recipeId: string
+  }
 }
 
-export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, initialBookId }: RecipeFormProps) {
+export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialData, books, initialBookId, editMode }: RecipeFormProps) {
   const [title, setTitle] = useState(initialData?.title ?? '')
   const [bookId, setBookId] = useState<string>(initialBookId ?? '')
   const [description, setDescription] = useState(initialData?.description ?? '')
@@ -55,7 +71,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
   const [instructions, setInstructions] = useState(
     initialData?.instructions?.join('\n') ?? ''
   )
-  const [tags, setTags] = useState(initialData?.tags?.join(', ') ?? '')
+  const [tags, setTags] = useState<string[]>(initialData?.tags ?? [])
   const [prepTime, setPrepTime] = useState(String(initialData?.prepTime ?? ''))
   const [cookTime, setCookTime] = useState(String(initialData?.cookTime ?? ''))
   const [servings, setServings] = useState(String(initialData?.servings ?? ''))
@@ -87,6 +103,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
       setDescription(data.description ?? '')
       setIngredients((data.ingredients ?? []).join('\n'))
       setInstructions((data.instructions ?? []).join('\n'))
+      setTags(data.tags ?? [])
       setSourceUrl(scrapeUrl.trim())
     } finally {
       setScraping(false)
@@ -99,15 +116,18 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
     setSaving(true)
     setSaveError('')
     try {
-      const res = await fetch('/api/recipes', {
-        method: 'POST',
+      const url = editMode ? `/api/recipes/${editMode.recipeId}` : '/api/recipes'
+      const method = editMode ? 'PUT' : 'POST'
+      
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || null,
           ingredients: ingredients.split('\n').map((s) => s.trim()).filter(Boolean),
           instructions: instructions.split('\n').map((s) => s.trim()).filter(Boolean),
-          tags: tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+          tags: tags,
           prepTime: prepTime ? parseInt(prepTime) : null,
           cookTime: cookTime ? parseInt(cookTime) : null,
           servings: servings ? parseInt(servings) : null,
@@ -118,7 +138,11 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
       })
       const data = await res.json()
       if (res.ok) {
-        onCreated(data)
+        if (editMode && onUpdated) {
+          onUpdated(data)
+        } else if (!editMode) {
+          onCreated(data)
+        }
         onOpenChange(false)
       } else {
         setSaveError(data.error ?? 'Failed to save recipe')
@@ -132,7 +156,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add recipe</DialogTitle>
+          <DialogTitle>{editMode ? 'Edit recipe' : 'Add recipe'}</DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="manual">
           <TabsList>
@@ -219,10 +243,12 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="recipe-tags">Tags (comma separated)</Label>
-                <Input id="recipe-tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Italian, pasta, quick" />
-              </div>
+              <TagSelector
+                value={tags}
+                onChange={setTags}
+                placeholder="Add tags like Italian, pasta, quick"
+                disabled={saving}
+              />
 
               {books && books.length > 0 && (
                 <div className="flex flex-col gap-1.5">
@@ -260,7 +286,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, initialData, books, 
               )}
               <DialogFooter>
                 <Button type="submit" disabled={saving || !title.trim()}>
-                  {saving ? 'Saving...' : 'Save recipe'}
+                  {saving ? 'Saving...' : editMode ? 'Update recipe' : 'Save recipe'}
                 </Button>
               </DialogFooter>
             </form>

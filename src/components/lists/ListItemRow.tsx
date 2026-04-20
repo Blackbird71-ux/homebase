@@ -9,6 +9,7 @@ interface ListItemRowProps {
   isCompleted: boolean
   dueDate?: string | null
   recipeName?: string | null
+  doneItemColor?: string
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
 }
@@ -19,6 +20,7 @@ export function ListItemRow({
   isCompleted,
   dueDate,
   recipeName,
+  doneItemColor = 'RED',
   onToggle,
   onDelete,
 }: ListItemRowProps) {
@@ -27,6 +29,32 @@ export function ListItemRow({
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const isOverdue =
     dueDateObj !== null && !isCompleted && dueDateObj < todayStart
+
+  // Convert color string to CSS value
+  const getColorValue = (color: string) => {
+    const namedColors: Record<string, string> = {
+      RED: '#ef4444',
+      GREEN: '#22c55e',
+      BLUE: '#3b82f6',
+      YELLOW: '#eab308',
+      PURPLE: '#a855f7',
+      PINK: '#ec4899',
+      ORANGE: '#f97316',
+      GRAY: '#6b7280',
+      BLACK: '#000000',
+      WHITE: '#ffffff',
+    }
+    
+    const upperColor = color.toUpperCase()
+    if (namedColors[upperColor]) {
+      return namedColors[upperColor]
+    }
+    
+    // If it's already a hex code or valid CSS color, return as-is
+    return color
+  }
+  
+  const doneColor = getColorValue(doneItemColor)
 
   return (
     <div
@@ -42,7 +70,8 @@ export function ListItemRow({
         aria-label={`Mark "${content}" ${isCompleted ? 'incomplete' : 'complete'}`}
       />
       <span
-        className={`flex-1 text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`}
+        className={`flex-1 text-sm ${isCompleted ? 'line-through' : ''}`}
+        style={isCompleted ? { color: doneColor } : undefined}
       >
         {content}
       </span>

@@ -62,6 +62,67 @@ export interface CalendarEvent {
   createdBy: string
 }
 
+// Custom theme color definitions
+export interface CustomThemeColors {
+  // Sidebar
+  sidebar?: string
+  sidebarForeground?: string
+  sidebarPrimary?: string
+  sidebarPrimaryForeground?: string
+  sidebarAccent?: string
+  sidebarAccentForeground?: string
+  sidebarBorder?: string
+  sidebarRing?: string
+  
+  // Calendar
+  calendarBackground?: string
+  calendarEvent?: string
+  calendarEventHover?: string
+  calendarText?: string
+  calendarBorder?: string
+  
+  // Cards
+  card?: string
+  cardForeground?: string
+  cardBorder?: string
+  cardHover?: string
+  
+  // Text
+  textPrimary?: string
+  textSecondary?: string
+  textMuted?: string
+  textAccent?: string
+  
+  // Buttons
+  buttonPrimary?: string
+  buttonPrimaryForeground?: string
+  buttonSecondary?: string
+  buttonSecondaryForeground?: string
+  buttonAccent?: string
+  buttonAccentForeground?: string
+  
+  // General
+  background?: string
+  foreground?: string
+  primary?: string
+  primaryForeground?: string
+  secondary?: string
+  secondaryForeground?: string
+  accent?: string
+  accentForeground?: string
+  muted?: string
+  mutedForeground?: string
+  border?: string
+  input?: string
+  ring?: string
+  destructive?: string
+}
+
+export interface UIPreferences {
+  customTheme?: CustomThemeColors
+  // other UI preferences can be added here
+}
+
 // Extend NextAuth session types
 // Note: next-auth v5 beta augmentation — kept for reference
 // The actual augmentation is in src/auth.ts once next-auth is configured

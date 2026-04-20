@@ -26,6 +26,7 @@ interface PreviewIngredient {
 interface PreviewRecipe {
   date: string
   title: string
+  mealType: string
   ingredients: PreviewIngredient[]
 }
 
@@ -157,10 +158,15 @@ export function ExportGroceriesModal({
           <>
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 min-h-0">
               {recipes.map((recipe) => (
-                <div key={recipe.title + recipe.date}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">
-                    {recipe.title}
-                  </p>
+                <div key={recipe.title + recipe.date + recipe.mealType}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                      {recipe.title}
+                    </p>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      {recipe.mealType}
+                    </span>
+                  </div>
                   <div className="space-y-1">
                     {recipe.ingredients.map((ing) => {
                       const cat = getCategory(ing)
