@@ -317,6 +317,7 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
       <RecipeForm
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
+        editMode={{ recipeId: recipe.id }}
         initialData={{
           title: recipe.title,
           description: recipe.description || '',
