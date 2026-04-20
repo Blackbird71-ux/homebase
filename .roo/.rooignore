@@ -5,11 +5,6 @@
 !.roo/prompts/**/*.md
 !.roomodes
 
-# EXCEPT project documentation files
-!README.md
-!PROJECT_SUMMARY.md
-!docs/**/*.md
-
 # Environment & Secrets
 .env
 .env.*

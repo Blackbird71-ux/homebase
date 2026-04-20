@@ -13,8 +13,23 @@ export default async function RecipeDetailPage({
 
   const recipe = await prisma.recipe.findFirst({
     where: { id, familyId: user.familyId },
+    include: {
+      recipeTags: {
+        include: {
+          tag: true
+        }
+      }
+    },
   })
   if (!recipe) notFound()
+
+  // Get tags from relational tags first, fall back to comma-separated string
+  let tags: string[] = []
+  if (recipe.recipeTags && recipe.recipeTags.length > 0) {
+    tags = recipe.recipeTags.map((rt: any) => rt.tag.name)
+  } else if (recipe.tags) {
+    tags = recipe.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
+  }
 
   const serialized = {
     id: recipe.id,
@@ -22,7 +37,7 @@ export default async function RecipeDetailPage({
     description: recipe.description,
     ingredients: JSON.parse(recipe.ingredients) as string[],
     instructions: JSON.parse(recipe.instructions) as string[],
-    tags: recipe.tags ? recipe.tags.split(',').map((t) => t.trim()) : [],
+    tags,
     prepTime: recipe.prepTime,
     cookTime: recipe.cookTime,
     servings: recipe.servings,

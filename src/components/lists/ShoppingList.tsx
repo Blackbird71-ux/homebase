@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef, useCallback } from 'react'
+import { useState, useTransition, useRef, useCallback, useEffect } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { groupByCategory, groupByRecipe, SHOPPING_CATEGORIES } from '@/lib/list-helpers'
+import { groupByCategory, groupByRecipe, DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ListItemShape, ShoppingCategory } from '@/lib/list-helpers'
 import { CategoryGroup } from './CategoryGroup'
 import { DoneSection } from './DoneSection'
@@ -37,15 +37,50 @@ type ViewMode = 'aisle' | 'recipe'
 export function ShoppingList({ listId, initialItems, initialCategoryOrder }: ShoppingListProps) {
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [viewMode, setViewMode] = useState<ViewMode>('aisle')
+  const [categories, setCategories] = useState<string[]>(DEFAULT_SHOPPING_CATEGORIES)
   const [categoryOrder, setCategoryOrder] = useState<string[]>(
-    initialCategoryOrder ?? [...SHOPPING_CATEGORIES]
+    initialCategoryOrder ?? [...DEFAULT_SHOPPING_CATEGORIES]
   )
   const [newContent, setNewContent] = useState('')
   const [newCategory, setNewCategory] = useState<ShoppingCategory>('Other')
   const [, startTransition] = useTransition()
+  const [loadingCategories, setLoadingCategories] = useState(true)
 
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fetch dynamic categories on mount
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const response = await fetch('/api/ingredient-categories')
+        if (response.ok) {
+          const data = await response.json()
+          const categoryNames = data.categories.map((cat: any) => cat.name)
+          // Always include 'Other' category if not present
+          if (!categoryNames.includes('Other')) {
+            categoryNames.push('Other')
+          }
+          setCategories(categoryNames)
+          
+          // Update category order to include new categories
+          const currentOrder = [...categoryOrder]
+          const newCategories = categoryNames.filter((cat: string) => !currentOrder.includes(cat))
+          if (newCategories.length > 0) {
+            const updatedOrder = [...currentOrder, ...newCategories]
+            setCategoryOrder(updatedOrder)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch categories:', error)
+        toast.error('Failed to load categories')
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+
+    fetchCategories()
+  }, [categoryOrder])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -173,11 +208,11 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   }
 
   const completedItems = items.filter((i) => i.isCompleted)
-  const grouped = groupByCategory(items)
+  const grouped = groupByCategory(items, categoryOrder)
   const recipeGroups = groupByRecipe(items)
 
   const activeCategoryOrder = categoryOrder.filter(
-    (c) => SHOPPING_CATEGORIES.includes(c as ShoppingCategory)
+    (c) => categories.includes(c)
   )
 
   return (
@@ -218,10 +253,15 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
           value={newCategory}
           onChange={(e) => setNewCategory(e.target.value as ShoppingCategory)}
           className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+          disabled={loadingCategories}
         >
-          {SHOPPING_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
+          {loadingCategories ? (
+            <option value="Other">Loading categories...</option>
+          ) : (
+            categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))
+          )}
         </select>
         <Button type="submit" size="sm">
           <PlusIcon className="h-4 w-4" />
@@ -252,7 +292,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
           >
             <div className="flex flex-col gap-4">
               {activeCategoryOrder.map((cat) => {
-                const catItems = grouped[cat as ShoppingCategory] ?? []
+                const catItems = grouped[cat] ?? []
                 if (catItems.length === 0) return null
                 return (
                   <CategoryGroup

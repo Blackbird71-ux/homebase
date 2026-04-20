@@ -1,13 +1,6 @@
-export type ShoppingCategory =
-  | 'Produce'
-  | 'Dairy'
-  | 'Meat'
-  | 'Bakery'
-  | 'Frozen'
-  | 'Household'
-  | 'Other'
+export type ShoppingCategory = string
 
-export const SHOPPING_CATEGORIES: ShoppingCategory[] = [
+export const DEFAULT_SHOPPING_CATEGORIES: string[] = [
   'Produce',
   'Dairy',
   'Meat',
@@ -16,6 +9,9 @@ export const SHOPPING_CATEGORIES: ShoppingCategory[] = [
   'Household',
   'Other',
 ]
+
+// For backward compatibility
+export const SHOPPING_CATEGORIES = DEFAULT_SHOPPING_CATEGORIES
 
 export interface ListItemShape {
   id: string
@@ -39,33 +35,38 @@ export interface RecipeGroup {
 /**
  * Group incomplete shopping items by category, sorted by sortOrder within each group.
  * Completed items are excluded — callers handle them separately (DoneSection).
- * categoryOrder controls the order of buckets; defaults to SHOPPING_CATEGORIES.
+ * categoryOrder controls the order of buckets; defaults to DEFAULT_SHOPPING_CATEGORIES.
  */
 export function groupByCategory(
   items: ListItemShape[],
-  categoryOrder: string[] = SHOPPING_CATEGORIES
-): Record<ShoppingCategory, ListItemShape[]> {
-  const result: Record<ShoppingCategory, ListItemShape[]> = {
-    Produce: [],
-    Dairy: [],
-    Meat: [],
-    Bakery: [],
-    Frozen: [],
-    Household: [],
-    Other: [],
+  categoryOrder: string[] = DEFAULT_SHOPPING_CATEGORIES
+): Record<string, ListItemShape[]> {
+  // Initialize result with all categories from categoryOrder
+  const result: Record<string, ListItemShape[]> = {}
+  for (const cat of categoryOrder) {
+    result[cat] = []
   }
+  
+  // Ensure 'Other' category exists
+  if (!result['Other']) {
+    result['Other'] = []
+  }
+  
   for (const item of items) {
     if (item.isCompleted) continue
-    const cat = (item.category as ShoppingCategory) ?? 'Other'
-    const key: ShoppingCategory = result[cat] !== undefined ? cat : 'Other'
+    const cat = item.category ?? 'Other'
+    const key = result[cat] !== undefined ? cat : 'Other'
+    if (!result[key]) {
+      result[key] = []
+    }
     result[key].push(item)
   }
-  for (const cat of SHOPPING_CATEGORIES) {
+  
+  // Sort items within each category
+  for (const cat of Object.keys(result)) {
     result[cat].sort((a, b) => a.sortOrder - b.sortOrder)
   }
-  // categoryOrder param is used by ShoppingList to determine render order;
-  // groupByCategory just populates buckets.
-  void categoryOrder
+  
   return result
 }
 

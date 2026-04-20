@@ -29,6 +29,7 @@ export interface UpcomingEvent {
 
 export interface TonightsDinner {
   mealPlanId: string
+  recipeId: string | null
   recipeName: string | null
   note: string | null
 }

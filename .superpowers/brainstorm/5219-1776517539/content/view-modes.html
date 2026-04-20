@@ -1,0 +1,61 @@
+<h2>View modes</h2>
+<p class="subtitle">The list currently groups by aisle/category. Should there be a way to switch to a "By Recipe" view?</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:12px;padding:10px 14px;text-align:left">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <span style="padding:3px 10px;border-radius:20px;background:#3b5bdb;color:#fff;font-size:11px">By Aisle</span>
+          <span style="padding:3px 10px;border-radius:20px;background:#f1f3f5;color:#555;font-size:11px">By Recipe</span>
+        </div>
+        <div style="color:#888;font-size:10px;font-weight:600;text-transform:uppercase;margin-bottom:3px">Produce</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">🍅 Tomatoes <span style="font-size:10px;background:#e8f0fe;color:#3b5bdb;padding:1px 5px;border-radius:10px">Pasta Bake</span></div>
+        <div style="margin-bottom:2px">🥦 Broccoli</div>
+        <div style="color:#888;font-size:10px;font-weight:600;text-transform:uppercase;margin:7px 0 3px">Dairy</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">🧀 Parmesan <span style="font-size:10px;background:#e8f0fe;color:#3b5bdb;padding:1px 5px;border-radius:10px">Pasta Bake</span></div>
+        <div>🥛 Milk</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Toggle tabs</h3>
+      <p>Two tabs at the top: By Aisle and By Recipe. Switch anytime. Pill badges still show in aisle view.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:12px;padding:10px 14px;text-align:left">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <span style="padding:3px 10px;border-radius:20px;background:#f1f3f5;color:#555;font-size:11px">By Aisle</span>
+          <span style="padding:3px 10px;border-radius:20px;background:#3b5bdb;color:#fff;font-size:11px">By Recipe</span>
+        </div>
+        <div style="color:#888;font-size:10px;font-weight:600;text-transform:uppercase;margin-bottom:3px">🍝 Pasta Bake</div>
+        <div style="margin-bottom:2px">🍅 Tomatoes</div>
+        <div style="margin-bottom:2px">🧅 Onion</div>
+        <div style="margin-bottom:2px">🧀 Parmesan</div>
+        <div style="color:#888;font-size:10px;font-weight:600;text-transform:uppercase;margin:7px 0 3px">Other</div>
+        <div style="margin-bottom:2px">🥦 Broccoli</div>
+        <div>🥛 Milk</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Toggle tabs (By Recipe view)</h3>
+      <p>In recipe view, items group under their recipe. Items not from a recipe go in "Other".</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:12px;padding:10px 14px;text-align:left;display:flex;align-items:center;justify-content:center;min-height:120px;color:#aaa;font-style:italic">
+        No view toggle —<br>aisle grouping only
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Aisle only</h3>
+      <p>Skip the view toggle. Just show recipe pill badges in the existing aisle view. Simpler.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">Note: A and B are the same feature shown in each tab. Click whichever illustrates your preference, then reply in the terminal.</p>

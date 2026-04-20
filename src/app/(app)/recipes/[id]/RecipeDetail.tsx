@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon } from 'lucide-react'
+import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon, CopyIcon, ChefHatIcon } from 'lucide-react'
 import { AddToListDialog } from '@/components/lists/AddToListDialog'
 import { RecipeForm } from '@/components/recipes/RecipeForm'
 import Link from 'next/link'
@@ -42,9 +42,34 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
   const [deleteError, setDeleteError] = useState('')
   const [addToListOpen, setAddToListOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+  const [cookingMode, setCookingMode] = useState(false)
+  const [completedSteps, setCompletedSteps] = useState<boolean[]>([])
 
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
+
+  async function handleDuplicate() {
+    setDuplicating(true)
+    try {
+      const res = await fetch(`/api/recipes/${recipe.id}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (res.ok) {
+        const newRecipe = await res.json()
+        router.push(`/recipes/${newRecipe.id}`)
+        router.refresh()
+      } else {
+        const data = await res.json()
+        alert(data.error ?? 'Failed to duplicate recipe')
+      }
+    } catch {
+      alert('Network error')
+    } finally {
+      setDuplicating(false)
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true)
@@ -65,7 +90,7 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
   return (
     <>
       <style>{`@media print { .no-print { display: none !important; } }`}</style>
-      <div className="max-w-2xl mx-auto p-6 flex flex-col gap-6">
+      <div className="max-w-2xl mx-auto p-6 flex flex-col gap-6 overflow-y-auto">
         {/* Back + Actions */}
         <div className="flex items-center justify-between no-print">
           <Link href="/recipes">
@@ -83,11 +108,34 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
               <PrinterIcon className="h-4 w-4 mr-1" />
               Print
             </Button>
+            <Button
+              variant={cookingMode ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setCookingMode(!cookingMode)
+                if (!cookingMode) {
+                  // Initialize completed steps array
+                  setCompletedSteps(new Array(recipe.instructions.length).fill(false))
+                }
+              }}
+            >
+              <ChefHatIcon className="h-4 w-4 mr-1" />
+              {cookingMode ? 'Exit Cooking Mode' : 'Start Cooking'}
+            </Button>
             {canEdit && (
               <>
                 <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
                   <PencilIcon className="h-4 w-4 mr-1" />
                   Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDuplicate}
+                  disabled={duplicating}
+                >
+                  <CopyIcon className="h-4 w-4 mr-1" />
+                  {duplicating ? 'Duplicating...' : 'Duplicate'}
                 </Button>
                 <Button
                   variant="destructive"
@@ -120,11 +168,13 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
               </span>
             )}
             {totalTime > 0 && (
-              <span className="font-medium text-foreground">Total: {totalTime} min</span>
+              <span className="flex items-center gap-1">
+                <ClockIcon className="h-4 w-4" /> Total: {totalTime} min
+              </span>
             )}
             {recipe.servings != null && (
               <span className="flex items-center gap-1">
-                <UsersIcon className="h-4 w-4" /> {recipe.servings} servings
+                <UsersIcon className="h-4 w-4" /> Serves: {recipe.servings}
               </span>
             )}
           </div>
@@ -152,11 +202,11 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
         {/* Ingredients */}
         <section>
           <h2 className="text-lg font-semibold mb-3">Ingredients</h2>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="space-y-1">
             {recipe.ingredients.map((ing, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
-                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                {ing}
+              <li key={i} className="flex items-start gap-2">
+                <span className="text-muted-foreground text-sm mt-0.5">•</span>
+                <span>{ing}</span>
               </li>
             ))}
           </ul>
@@ -167,26 +217,72 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
           <h2 className="text-lg font-semibold mb-3">Instructions</h2>
           <ol className="flex flex-col gap-4">
             {recipe.instructions.map((step, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold shrink-0">
-                  {i + 1}
+              <li key={i} className="flex gap-3">
+                {cookingMode ? (
+                  <button
+                    onClick={() => {
+                      const newCompleted = [...completedSteps]
+                      newCompleted[i] = !newCompleted[i]
+                      setCompletedSteps(newCompleted)
+                    }}
+                    className={`flex items-center justify-center h-6 w-6 rounded-full shrink-0 ${
+                      completedSteps[i]
+                        ? 'bg-green-500 text-white'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {completedSteps[i] ? '✓' : i + 1}
+                  </button>
+                ) : (
+                  <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-medium shrink-0">
+                    {i + 1}
+                  </span>
+                )}
+                <span className={cookingMode && completedSteps[i] ? 'line-through text-muted-foreground' : ''}>
+                  {step}
                 </span>
-                <span className="mt-0.5">{step}</span>
               </li>
             ))}
           </ol>
+          {cookingMode && (
+            <div className="mt-4 p-3 bg-muted rounded-lg">
+              <p className="text-sm font-medium">Cooking Mode Active</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {completedSteps.filter(Boolean).length} of {recipe.instructions.length} steps completed
+              </p>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(false))}
+                >
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(true))}
+                >
+                  Mark All Complete
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
 
+        {/* Source link */}
         {recipe.sourceUrl && (
-          <a
-            href={recipe.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground no-print"
-          >
-            <ExternalLinkIcon className="h-3 w-3" />
-            Original source
-          </a>
+          <div className="pt-4 border-t">
+            <a
+              href={recipe.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLinkIcon className="h-3 w-3" />
+              View original recipe
+            </a>
+          </div>
         )}
       </div>
 
@@ -198,18 +294,15 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
         ingredients={recipe.ingredients}
       />
 
-      {/* Delete confirmation */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete recipe?</DialogTitle>
+            <DialogTitle>Delete Recipe</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This will permanently delete &ldquo;{recipe.title}&rdquo;. This cannot be undone.
+            Are you sure you want to delete "{recipe.title}"? This action cannot be undone.
           </p>
-          {deleteError && (
-            <p className="text-sm text-destructive">{deleteError}</p>
-          )}
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
@@ -221,26 +314,27 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
         </DialogContent>
       </Dialog>
 
-      {/* Edit Recipe Dialog */}
       <RecipeForm
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
-        onCreated={() => {}} // Not used in edit mode, but required by interface
-        editMode={{ recipeId: recipe.id }}
         initialData={{
           title: recipe.title,
           description: recipe.description || '',
           ingredients: recipe.ingredients,
           instructions: recipe.instructions,
           tags: recipe.tags,
-          prepTime: recipe.prepTime || undefined,
-          cookTime: recipe.cookTime || undefined,
-          servings: recipe.servings || undefined,
+          prepTime: recipe.prepTime,
+          cookTime: recipe.cookTime,
+          servings: recipe.servings,
+          image: recipe.image || '',
           sourceUrl: recipe.sourceUrl || '',
-          image: recipe.image || ''
+        }}
+        onCreated={() => {
+          // This won't be called when editing, but required by interface
         }}
         onUpdated={() => {
-          router.refresh() // Refresh page data after edit
+          setEditDialogOpen(false)
+          router.refresh()
         }}
       />
     </>

@@ -17,7 +17,7 @@ async function getDashboardData(familyId: string): Promise<DashboardData> {
     }),
     prisma.mealPlan.findFirst({
       where: { familyId, date: { gte: todayStart, lt: todayEnd }, mealType: 'dinner' },
-      include: { recipe: { select: { title: true } } },
+      include: { recipe: { select: { id: true, title: true } } },
     }),
     prisma.list.findMany({
       where: { familyId, type: 'SHOPPING', isActive: true },
@@ -46,6 +46,7 @@ async function getDashboardData(familyId: string): Promise<DashboardData> {
     })),
     tonightsDinner: tonightsMeal ? {
       mealPlanId: tonightsMeal.id,
+      recipeId: tonightsMeal.recipe?.id ?? null,
       recipeName: tonightsMeal.recipe?.title ?? null,
       note: tonightsMeal.note,
     } : null,

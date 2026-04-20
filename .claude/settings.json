@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Bash(bash \"C:/Users/liddlem/.claude/plugins/superpowers/skills/brainstorming/scripts/start-server.sh\" --project-dir \"c:/Users/liddlem/Downloads/Claude Apps/HomeBase/homebase\")",
+      "Bash(npm list *)",
+      "Read(//c/Users/liddlem/.config/superpowers/worktrees/homebase/feature-shopping-list-ux/**)",
+      "Bash(npm test *)",
+      "Bash(node -c \"src/app/api/lists/[id]/items/route.ts\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\liddlem\\.config\\superpowers\\worktrees\\homebase\\feature-shopping-list-ux\\prisma",
+      "C:\\Users\\liddlem\\.config\\superpowers\\worktrees\\homebase\\feature-shopping-list-ux\\src\\app\\(app)\\lists",
+      "C:\\Users\\liddlem\\.config\\superpowers\\worktrees\\homebase\\feature-shopping-list-ux\\src\\components\\lists",
+      "C:\\Users\\liddlem\\.config\\superpowers\\worktrees\\homebase\\feature-shopping-list-ux\\src\\app\\(app)\\recipes\\[id]"
+    ]
+  }
+}
