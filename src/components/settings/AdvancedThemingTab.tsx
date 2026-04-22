@@ -215,10 +215,9 @@ export function AdvancedThemingTab({ initialCustomTheme }: AdvancedThemingTabPro
 
       if (res.ok) {
         setStatus({ type: 'success', message: 'Custom theme saved successfully.' })
-        // Refresh the page to apply changes
-        setTimeout(() => {
-          window.location.reload()
-        }, 1500)
+        setHasChanges(false)
+        // Notify ThemeProvider to re-fetch — no full page reload needed
+        window.dispatchEvent(new Event('advanced-theme-updated'))
       } else {
         const data = await res.json()
         setStatus({ type: 'error', message: data.error ?? 'Failed to save custom theme.' })
@@ -267,7 +266,7 @@ export function AdvancedThemingTab({ initialCustomTheme }: AdvancedThemingTabPro
             <CardDescription>{group.description}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {group.colors.map(({ key, label }) => (
                 <div key={key} className="space-y-2">
                   <label className="text-sm font-medium">

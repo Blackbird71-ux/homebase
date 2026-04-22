@@ -5,10 +5,18 @@ import { DailyMealColumn } from './DailyMealColumn'
 import { AssignMealModal } from './AssignMealModal'
 import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { Button } from '@/components/ui/button'
-import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { DEFAULT_MEAL_TYPE, type MealType } from '@/lib/meal-types'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface MealPlanEntry {
   id: string
@@ -61,6 +69,8 @@ export function MealPlanGrid({
   const [selectedMealType, setSelectedMealType] = useState(DEFAULT_MEAL_TYPE)
   const [loading, setLoading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   const days = getWeekDays(weekStart)
 
@@ -69,13 +79,29 @@ export function MealPlanGrid({
     next.setDate(next.getDate() + direction * 7)
     setWeekStart(next)
 
-    const from = toYMD(next)
-    const toDate = new Date(next)
-    toDate.setDate(toDate.getDate() + 6)
-    const to = toYMD(toDate)
+    // Convert local dates to UTC for API query
+    const fromLocal = new Date(next)
+    fromLocal.setHours(0, 0, 0, 0)
+    const fromUTC = new Date(Date.UTC(
+      fromLocal.getFullYear(),
+      fromLocal.getMonth(),
+      fromLocal.getDate()
+    ))
+    const from = fromUTC.toISOString().slice(0, 10)
+
+    const toDateLocal = new Date(next)
+    toDateLocal.setDate(toDateLocal.getDate() + 6)
+    toDateLocal.setHours(23, 59, 59, 999)
+    const toUTC = new Date(Date.UTC(
+      toDateLocal.getFullYear(),
+      toDateLocal.getMonth(),
+      toDateLocal.getDate(),
+      23, 59, 59, 999
+    ))
+    const to = toUTC.toISOString().slice(0, 10)
 
     setLoading(true)
-    fetch(`/api/meal-plan?from=${from}T00:00:00Z&to=${to}T23:59:59Z`)
+    fetch(`/api/meal-plan?from=${from}&to=${to}`)
       .then((r) => r.json())
       .then((data: MealPlanEntry[]) => setEntries(data))
       .catch(() => toast.error('Failed to load meal plan'))
@@ -88,13 +114,30 @@ export function MealPlanGrid({
     const localToday = new Date(todayStr + 'T00:00:00')
     const todayWeekStart = startOfWeek(localToday, weekStartsOn)
     setWeekStart(todayWeekStart)
-    const from = toYMD(todayWeekStart)
-    const toDate = new Date(todayWeekStart)
-    toDate.setDate(toDate.getDate() + 6)
-    const to = toYMD(toDate)
+    
+    // Convert local dates to UTC for API query
+    const fromLocal = new Date(todayWeekStart)
+    fromLocal.setHours(0, 0, 0, 0)
+    const fromUTC = new Date(Date.UTC(
+      fromLocal.getFullYear(),
+      fromLocal.getMonth(),
+      fromLocal.getDate()
+    ))
+    const from = fromUTC.toISOString().slice(0, 10)
+    
+    const toDateLocal = new Date(todayWeekStart)
+    toDateLocal.setDate(toDateLocal.getDate() + 6)
+    toDateLocal.setHours(23, 59, 59, 999)
+    const toUTC = new Date(Date.UTC(
+      toDateLocal.getFullYear(),
+      toDateLocal.getMonth(),
+      toDateLocal.getDate(),
+      23, 59, 59, 999
+    ))
+    const to = toUTC.toISOString().slice(0, 10)
 
     setLoading(true)
-    fetch(`/api/meal-plan?from=${from}T00:00:00Z&to=${to}T23:59:59Z`)
+    fetch(`/api/meal-plan?from=${from}&to=${to}`)
       .then((r) => r.json())
       .then((data: MealPlanEntry[]) => setEntries(data))
       .catch(() => toast.error('Failed to load meal plan'))
@@ -109,25 +152,33 @@ export function MealPlanGrid({
 
   async function handleAssign(data: { recipeId?: string; note?: string }): Promise<void> {
     if (!selectedDate) return
-    const res = await fetch('/api/meal-plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date: selectedDate + 'T00:00:00Z',
-        mealType: selectedMealType,
-        ...data,
-      }),
-    })
-    if (res.ok) {
-      const entry: MealPlanEntry = await res.json()
-      setEntries((prev) => {
-        const filtered = prev.filter(
-          (e) => !(e.date.slice(0, 10) === selectedDate && e.mealType === selectedMealType)
-        )
-        return [...filtered, entry]
+    try {
+      const res = await fetch('/api/meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate + 'T00:00:00Z',
+          mealType: selectedMealType,
+          ...data,
+        }),
       })
-    } else {
-      toast.error('Failed to save meal. Please try again.')
+      
+      if (res.ok) {
+        const entry: MealPlanEntry = await res.json()
+        setEntries((prev) => {
+          const filtered = prev.filter(
+            (e) => !(e.date.slice(0, 10) === selectedDate && e.mealType === selectedMealType)
+          )
+          return [...filtered, entry]
+        })
+      } else {
+        const errorText = await res.text()
+        console.error('Meal plan save failed:', res.status, errorText)
+        toast.error(`Failed to save meal (${res.status}). Please try again.`)
+      }
+    } catch (error) {
+      console.error('Meal plan save error:', error)
+      toast.error('Network error saving meal. Please try again.')
     }
   }
 
@@ -140,13 +191,64 @@ export function MealPlanGrid({
     }
   }
 
+  async function handleClearWeek() {
+    setClearing(true)
+    try {
+      // Convert local dates to UTC for API query (same as navWeek)
+      const fromLocal = new Date(weekStart)
+      fromLocal.setHours(0, 0, 0, 0)
+      const fromUTC = new Date(Date.UTC(
+        fromLocal.getFullYear(),
+        fromLocal.getMonth(),
+        fromLocal.getDate()
+      ))
+      const from = fromUTC.toISOString().slice(0, 10)
+      
+      const toDateLocal = new Date(weekStart)
+      toDateLocal.setDate(toDateLocal.getDate() + 6)
+      toDateLocal.setHours(23, 59, 59, 999)
+      const toUTC = new Date(Date.UTC(
+        toDateLocal.getFullYear(),
+        toDateLocal.getMonth(),
+        toDateLocal.getDate(),
+        23, 59, 59, 999
+      ))
+      const to = toUTC.toISOString().slice(0, 10)
+
+      const res = await fetch(`/api/meal-plan/bulk?from=${from}&to=${to}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        // Clear all entries for the current week
+        setEntries((prev) => prev.filter((e) => {
+          const entryDateStr = e.date.slice(0, 10) // YYYY-MM-DD
+          // Keep entries that are NOT in the cleared date range
+          return entryDateStr < from || entryDateStr > to
+        }))
+        toast.success(`Cleared ${data.deletedCount || 0} meal plan entries`)
+        setClearDialogOpen(false)
+      } else {
+        const error = await res.text()
+        console.error('Failed to clear week:', res.status, error)
+        toast.error('Failed to clear week. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error clearing week:', error)
+      toast.error('Network error. Please try again.')
+    } finally {
+      setClearing(false)
+    }
+  }
+
   const today = todayStringInTz(timezone)
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 h-full overflow-hidden">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between">
         <h1 className="text-xl font-semibold">Meal Plan</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
@@ -156,6 +258,16 @@ export function MealPlanGrid({
             Groceries
           </Button>
           <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setClearDialogOpen(true)}
+            disabled={clearing || loading}
+            className="text-destructive border-destructive hover:bg-destructive/10"
+          >
+            <Trash2Icon className="h-4 w-4 mr-1" />
+            Clear Week
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -217,6 +329,38 @@ export function MealPlanGrid({
         weekFrom={toYMD(weekStart)}
         weekTo={toYMD(days[days.length - 1])}
       />
+
+      {/* Clear Week Confirmation Dialog */}
+      <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Clear This Week?</DialogTitle>
+            <DialogDescription>
+              This will remove all meal plans for the week of{' '}
+              {weekStart.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} through{' '}
+              {days[days.length - 1].toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}.
+              <br />
+              <span className="font-semibold">This action cannot be undone.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setClearDialogOpen(false)}
+              disabled={clearing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleClearWeek}
+              disabled={clearing}
+            >
+              {clearing ? 'Clearing...' : 'Clear Week'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

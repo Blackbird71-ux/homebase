@@ -14,11 +14,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No files provided' }, { status: 400 })
   }
 
-  const results: Array<{ name: string; imported: number; skipped: number; error?: string }> = []
+  const results: Array<{ name: string; imported: number; updated: number; skipped: number; error?: string }> = []
 
   for (const file of files) {
     const bookName = file.name.replace(/\.zip$/i, '')
     let imported = 0
+    let updated = 0
     let skipped = 0
 
     try {
@@ -38,49 +39,97 @@ export async function POST(req: Request) {
         })
       }
 
-      const existingRows = await prisma.recipe.findMany({
-        where: { familyId: user.familyId, bookId: book.id },
-        select: { title: true },
-      })
-      const existingTitles = new Set(existingRows.map((r) => r.title.toLowerCase()))
-
       for (const entry of entries) {
         try {
           const json = JSON.parse(entry.getData().toString('utf8')) as UmamiJson
           const parsed = parseUmamiRecipe(json, bookName)
 
-          if (existingTitles.has(parsed.title.toLowerCase())) {
-            skipped++
-            continue
-          }
-          existingTitles.add(parsed.title.toLowerCase())
-
-          await prisma.recipe.create({
-            data: {
-              title: parsed.title,
-              description: parsed.description,
-              ingredients: JSON.stringify(parsed.ingredients),
-              instructions: JSON.stringify(parsed.instructions),
-              image: parsed.image,
-              sourceUrl: parsed.sourceUrl,
-              prepTime: parsed.prepTime,
-              cookTime: parsed.cookTime,
-              servings: parsed.servings,
-              tags: parsed.tags.join(',') || null,
-              bookId: book.id,
+          // Try to find existing recipe by title in this book
+          const existingRecipe = await prisma.recipe.findFirst({
+            where: {
               familyId: user.familyId,
-              createdBy: user.id,
+              bookId: book.id,
+              title: parsed.title,
             },
           })
-          imported++
+
+          const recipeData = {
+            title: parsed.title,
+            description: parsed.description,
+            ingredients: JSON.stringify(parsed.ingredients),
+            instructions: JSON.stringify(parsed.instructions),
+            image: parsed.image,
+            sourceUrl: parsed.sourceUrl,
+            prepTime: parsed.prepTime,
+            cookTime: parsed.cookTime,
+            servings: parsed.servings,
+            tags: parsed.tags.join(',') || null,
+            calories: parsed.calories,
+            fatContent: parsed.fatContent,
+            proteinContent: parsed.proteinContent,
+            carbContent: parsed.carbContent,
+            sodiumContent: parsed.sodiumContent,
+            bookId: book.id,
+            familyId: user.familyId,
+            createdBy: user.id,
+          }
+
+          if (existingRecipe) {
+            // Update existing recipe - only update fields that are null/empty in DB but have values in import
+            const updateData: any = {}
+            
+            // Check each field and only update if:
+            // 1. The import has a value
+            // 2. The existing field is null/empty (or we want to overwrite)
+            const fieldsToUpdate = [
+              'description', 'ingredients', 'instructions', 'image', 'sourceUrl',
+              'prepTime', 'cookTime', 'servings', 'tags', 'calories',
+              'fatContent', 'proteinContent', 'carbContent', 'sodiumContent'
+            ]
+            
+            for (const field of fieldsToUpdate) {
+              const importValue = recipeData[field as keyof typeof recipeData]
+              const existingValue = existingRecipe[field as keyof typeof existingRecipe]
+              
+              // Only update if import has value AND (existing is null/empty OR we want to force update)
+              if (importValue !== null && importValue !== undefined && importValue !== '') {
+                // For string fields, also check if empty
+                if (typeof importValue === 'string' && importValue.trim() === '') {
+                  continue
+                }
+                // Update if existing is null/empty/0
+                if (existingValue === null || existingValue === undefined ||
+                    existingValue === '' || existingValue === 0) {
+                  updateData[field] = importValue
+                }
+              }
+            }
+            
+            // Only update if there are fields to update
+            if (Object.keys(updateData).length > 0) {
+              await prisma.recipe.update({
+                where: { id: existingRecipe.id },
+                data: updateData,
+              })
+              updated++
+            } else {
+              skipped++ // No new data to update
+            }
+          } else {
+            // Create new recipe
+            await prisma.recipe.create({
+              data: recipeData,
+            })
+            imported++
+          }
         } catch {
           skipped++
         }
       }
 
-      results.push({ name: bookName, imported, skipped })
+      results.push({ name: bookName, imported, updated, skipped })
     } catch (err) {
-      results.push({ name: bookName, imported: 0, skipped: 0, error: String(err) })
+      results.push({ name: bookName, imported: 0, updated: 0, skipped: 0, error: String(err) })
     }
   }
 

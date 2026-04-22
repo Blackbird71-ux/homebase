@@ -365,3 +365,30 @@
   --sidebar-ring: oklch(0.55 0.15 140);
   --color-sidebar: oklch(0.95 0.05 140);
 }
+
+/* ── Custom scrollbar styling (cross-browser: Chrome, Edge, Firefox) ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 40%, transparent);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 40%, transparent) transparent;
+}
+
+/* Edge / IE - autohiding scrollbar */
+body {
+  -ms-overflow-style: -ms-autohiding-scrollbar;
+}

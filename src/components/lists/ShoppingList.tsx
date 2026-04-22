@@ -22,6 +22,7 @@ import { PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { groupByCategory, groupByRecipe, DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ListItemShape, ShoppingCategory } from '@/lib/list-helpers'
+import { autoGuessCategory } from '@/lib/ingredient-helpers'
 import { CategoryGroup } from './CategoryGroup'
 import { DoneSection } from './DoneSection'
 import { ListItemRow } from './ListItemRow'
@@ -45,9 +46,20 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [newCategory, setNewCategory] = useState<ShoppingCategory>('Other')
   const [, startTransition] = useTransition()
   const [loadingCategories, setLoadingCategories] = useState(true)
+  const [availableCategories, setAvailableCategories] = useState<Array<{id: string, name: string}>>([])
 
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Auto-detect category when newContent changes
+  useEffect(() => {
+    if (newContent.trim()) {
+      const detected = autoGuessCategory(newContent.trim())
+      if (detected && detected !== newCategory) {
+        setNewCategory(detected)
+      }
+    }
+  }, [newContent])
 
   // Fetch dynamic categories on mount
   useEffect(() => {
@@ -56,20 +68,19 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         const response = await fetch('/api/ingredient-categories')
         if (response.ok) {
           const data = await response.json()
-          const categoryNames = data.categories.map((cat: any) => cat.name)
+          const categoryNames = (data as any[]).map((cat: any) => cat.category)
           // Always include 'Other' category if not present
           if (!categoryNames.includes('Other')) {
             categoryNames.push('Other')
           }
           setCategories(categoryNames)
-          
+          setAvailableCategories(data)
+
           // Update category order to include new categories
-          const currentOrder = [...categoryOrder]
-          const newCategories = categoryNames.filter((cat: string) => !currentOrder.includes(cat))
-          if (newCategories.length > 0) {
-            const updatedOrder = [...currentOrder, ...newCategories]
-            setCategoryOrder(updatedOrder)
-          }
+          setCategoryOrder((currentOrder) => {
+            const newCategories = categoryNames.filter((cat: string) => !currentOrder.includes(cat))
+            return newCategories.length > 0 ? [...currentOrder, ...newCategories] : currentOrder
+          })
         }
       } catch (error) {
         console.error('Failed to fetch categories:', error)
@@ -80,7 +91,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     }
 
     fetchCategories()
-  }, [categoryOrder])
+  }, [])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -151,10 +162,15 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
     if (!newContent.trim()) return
+    
+    // Auto-detect category based on ingredient name
+    const detectedCategory = autoGuessCategory(newContent.trim())
+    const categoryToUse = detectedCategory || newCategory
+    
     const res = await fetch(`/api/lists/${listId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: newContent.trim(), category: newCategory }),
+      body: JSON.stringify({ content: newContent.trim(), category: categoryToUse }),
     })
     if (res.ok) {
       const item = await res.json()
@@ -169,6 +185,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         },
       ])
       setNewContent('')
+      // Reset to 'Other' for next item
+      setNewCategory('Other')
     } else {
       toast.error('Failed to save. Please try again.')
     }
@@ -209,7 +227,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
 
   const completedItems = items.filter((i) => i.isCompleted)
   const grouped = groupByCategory(items, categoryOrder)
-  const recipeGroups = groupByRecipe(items)
+  const recipeGroups = groupByRecipe(items.filter((i) => !i.isCompleted))
 
   const activeCategoryOrder = categoryOrder.filter(
     (c) => categories.includes(c)

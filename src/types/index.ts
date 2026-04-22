@@ -31,6 +31,7 @@ export interface TonightsDinner {
   mealPlanId: string
   recipeId: string | null
   recipeName: string | null
+  recipeImage: string | null
   note: string | null
 }
 

@@ -47,7 +47,7 @@ export function MealSlotCell({
         <Button
           variant="ghost"
           size="icon-xs"
-          className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
           onClick={(e) => {
             e.stopPropagation()
             onClear()

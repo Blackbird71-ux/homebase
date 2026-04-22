@@ -136,7 +136,7 @@ export function ExportGroceriesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col gap-0 p-0">
+      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <DialogTitle>Add to Groceries</DialogTitle>
           {status !== 'loading' && (

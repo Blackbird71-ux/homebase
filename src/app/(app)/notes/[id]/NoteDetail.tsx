@@ -87,10 +87,10 @@ export function NoteDetail({ note }: NoteDetailProps) {
   const isRecentlyUpdated = new Date(note.updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full overflow-y-auto p-4 md:p-6 gap-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+        <div className="flex items-center gap-4 flex-wrap">
           <Button
             variant="outline"
             size="icon"
@@ -139,7 +139,7 @@ export function NoteDetail({ note }: NoteDetailProps) {
       </div>
 
       {/* Metadata */}
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-4 shrink-0">
         {note.category && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-md">
             <FolderIcon className="h-4 w-4" />
@@ -163,7 +163,7 @@ export function NoteDetail({ note }: NoteDetailProps) {
       </div>
 
       {/* Content */}
-      <Card>
+      <Card className="flex-1 min-h-0 overflow-y-auto">
         <CardHeader>
           <CardTitle>Content</CardTitle>
         </CardHeader>
@@ -177,7 +177,7 @@ export function NoteDetail({ note }: NoteDetailProps) {
 
       {/* Editor Dialog */}
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Note</DialogTitle>
           </DialogHeader>

@@ -39,7 +39,15 @@ export function CategoryManager() {
       const res = await fetch('/api/ingredient-categories')
       if (!res.ok) throw new Error('Failed to fetch categories')
       const data = await res.json()
-      setCategories(data)
+      // Map API response to component interface
+      const mappedData = data.map((cat: any) => ({
+        id: cat.id,
+        name: cat.category,  // API returns "category" field
+        isSystem: !cat.isCustom,  // API returns "isCustom" field
+        sortOrder: cat.sortOrder,
+        ingredientCount: 0  // Default value, not provided by API
+      }))
+      setCategories(mappedData)
     } catch (error) {
       toast.error('Failed to load categories')
       console.error(error)
@@ -56,16 +64,26 @@ export function CategoryManager() {
 
     setSubmitting(true)
     try {
+      const trimmed = newCategoryName.trim()
+      const key = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
       const res = await fetch('/api/ingredient-categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCategoryName.trim() }),
+        body: JSON.stringify({ key, category: trimmed }),
       })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to create category')
       }
-      const newCategory = await res.json()
+      const apiResponse = await res.json()
+      // Map API response to component interface
+      const newCategory = {
+        id: apiResponse.id,
+        name: apiResponse.category,
+        isSystem: !apiResponse.isCustom,
+        sortOrder: apiResponse.sortOrder,
+        ingredientCount: 0
+      }
       setCategories([...categories, newCategory])
       setNewCategoryName('')
       setCreateOpen(false)
@@ -88,13 +106,21 @@ export function CategoryManager() {
       const res = await fetch(`/api/ingredient-categories/${selectedCategory.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editCategoryName.trim() }),
+        body: JSON.stringify({ category: editCategoryName.trim() }),
       })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to update category')
       }
-      const updatedCategory = await res.json()
+      const apiResponse = await res.json()
+      // Map API response to component interface
+      const updatedCategory = {
+        id: apiResponse.id,
+        name: apiResponse.category,
+        isSystem: !apiResponse.isCustom,
+        sortOrder: apiResponse.sortOrder,
+        ingredientCount: selectedCategory.ingredientCount // Keep existing count
+      }
       setCategories(categories.map(cat => cat.id === selectedCategory.id ? updatedCategory : cat))
       setEditOpen(false)
       setSelectedCategory(null)

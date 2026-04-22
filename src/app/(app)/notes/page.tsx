@@ -2,6 +2,15 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { NotesClient } from './NotesClient'
 
+function parseTags(tags: string | null): string[] {
+  if (!tags) return []
+  try {
+    return JSON.parse(tags) as string[]
+  } catch {
+    return []
+  }
+}
+
 async function getData(familyId: string) {
   const notes = await prisma.note.findMany({
     where: { familyId },
@@ -27,7 +36,14 @@ async function getData(familyId: string) {
       title: note.title,
       content: note.content,
       category: note.category,
-      tags: note.tags ? JSON.parse(note.tags) as string[] : [],
+      tags: (() => {
+        if (!note.tags) return []
+        try {
+          return JSON.parse(note.tags) as string[]
+        } catch {
+          return []
+        }
+      })(),
       createdBy: note.createdBy,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),

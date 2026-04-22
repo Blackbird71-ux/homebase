@@ -78,7 +78,7 @@ export function RecipeCard({
     {onDelete && (
       <button
         onClick={(e) => { e.preventDefault(); onDelete(id) }}
-        className="absolute top-2 right-2 p-1.5 rounded-md bg-background/80 text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors"
+        className="absolute top-2 right-2 p-1.5 rounded-md bg-background/80 text-muted-foreground/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-colors"
         title="Delete recipe"
       >
         <Trash2Icon className="h-3.5 w-3.5" />

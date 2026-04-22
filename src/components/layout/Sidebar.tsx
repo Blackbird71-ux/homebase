@@ -23,7 +23,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
 
   return (
-    <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-sidebar)' }}>
+    <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--sidebar)' }}>
       {/* Logo */}
       <div className="px-4 py-5 border-b border-border">
         <span className="text-sm font-bold tracking-widest text-muted-foreground uppercase">

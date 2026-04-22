@@ -11,6 +11,19 @@ export const KEYWORD_MAP: Record<ShoppingCategory, string[]> = {
   Other:     [],
 }
 
+export interface CategoryGuess {
+  category: string
+  confidence: number
+  matchedKeyword?: string
+}
+
+export interface CategoryWithKeywords {
+  id: string
+  name: string
+  keywords: string[]
+  isCustom: boolean
+}
+
 // Strips leading quantity + unit or bare number, then lowercases.
 // "500g beef mince" → "beef mince"
 // "2 cloves garlic" → "garlic"
@@ -39,4 +52,58 @@ export function autoGuessCategory(key: string): ShoppingCategory {
     if (KEYWORD_MAP[cat].some((kw) => lower.includes(kw))) return cat
   }
   return 'Other'
+}
+
+export function guessCategoryWithKeywords(
+  ingredientText: string,
+  categories: CategoryWithKeywords[]
+): CategoryGuess | null {
+  const normalized = normalizeIngredient(ingredientText)
+  const lower = normalized.toLowerCase()
+  
+  let bestMatch: CategoryGuess | null = null
+  
+  for (const category of categories) {
+    for (const keyword of category.keywords) {
+      if (lower.includes(keyword.toLowerCase())) {
+        // Calculate confidence based on keyword length match
+        const confidence = keyword.length / Math.max(keyword.length, normalized.length)
+        
+        if (!bestMatch || confidence > bestMatch.confidence) {
+          bestMatch = {
+            category: category.name,
+            confidence,
+            matchedKeyword: keyword
+          }
+        }
+      }
+    }
+  }
+  
+  return bestMatch
+}
+
+export function getDefaultCategories(): CategoryWithKeywords[] {
+  return SHOPPING_CATEGORIES.map((cat, index) => ({
+    id: `default-${cat.toLowerCase()}`,
+    name: cat,
+    keywords: KEYWORD_MAP[cat as ShoppingCategory] || [],
+    isCustom: false,
+    sortOrder: index
+  }))
+}
+
+export function autoGuessCategoryWithFallback(
+  ingredientText: string,
+  categories?: CategoryWithKeywords[]
+): string {
+  if (categories && categories.length > 0) {
+    const guess = guessCategoryWithKeywords(ingredientText, categories)
+    if (guess) {
+      return guess.category
+    }
+  }
+  
+  // Fallback to hardcoded categories
+  return autoGuessCategory(ingredientText)
 }

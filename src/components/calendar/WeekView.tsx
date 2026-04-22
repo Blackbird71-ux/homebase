@@ -2,7 +2,7 @@
 
 import {
   startOfWeek, endOfWeek, eachDayOfInterval,
-  isToday, isSameDay, format
+  isToday, isSameDay, format, startOfDay, endOfDay
 } from 'date-fns'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
@@ -37,7 +37,13 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
       </div>
       <div className="grid grid-cols-7 border-b border-border shrink-0 min-h-[2rem]">
         {days.map(day => {
-          const allDay = events.filter(e => e.isAllDay && isSameDay(new Date(e.start), day))
+          const dayStart = startOfDay(day)
+          const allDay = events.filter(e => {
+            if (!e.isAllDay) return false
+            const eventStart = startOfDay(new Date(e.start))
+            const eventEnd = startOfDay(new Date(e.end))
+            return dayStart >= eventStart && dayStart <= eventEnd
+          })
           return (
             <div key={day.toISOString()} className="p-1 border-r border-border flex flex-col gap-0.5">
               {allDay.map(e => <EventBadge key={e.id} event={e} onClick={onEventClick} />)}
@@ -48,8 +54,14 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
       <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-7 h-full">
           {days.map(day => {
+            const dayStart = startOfDay(day)
             const timed = events
-              .filter(e => !e.isAllDay && isSameDay(new Date(e.start), day))
+              .filter(e => {
+                if (e.isAllDay) return false
+                const eventStart = startOfDay(new Date(e.start))
+                const eventEnd = startOfDay(new Date(e.end))
+                return dayStart >= eventStart && dayStart <= eventEnd
+              })
               .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
             return (
               <div key={day.toISOString()} className="border-r border-border p-1 flex flex-col gap-1">

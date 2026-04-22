@@ -184,9 +184,9 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
   const hasActiveFilters = search || (categoryFilter && categoryFilter !== 'all') || tagFilter
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full overflow-y-auto p-4 md:p-6 gap-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl font-bold">Notes</h1>
           <p className="text-muted-foreground">
@@ -204,7 +204,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
       </div>
 
       {/* Filters */}
-      <div className="space-y-4">
+      <div className="space-y-4 shrink-0">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -301,13 +301,13 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
 
       {/* Notes Grid */}
       {filteredNotes.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg">
+        <div className="text-center py-12 border rounded-lg shrink-0">
           <p className="text-muted-foreground">
             {notes.length === 0 ? 'No notes yet. Create your first note!' : 'No notes match your filters.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 content-start">
           {filteredNotes.map((note) => (
             <NoteCard
               key={note.id}
@@ -326,7 +326,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
         }
         setEditorOpen(open)
       }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingNote ? 'Edit Note' : 'Create New Note'}

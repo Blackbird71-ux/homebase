@@ -16,6 +16,13 @@ function toYMD(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
+function toYMDLocal(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default async function MealPlanPage() {
   const user = await requireSession()
   const todayStr = todayStringInTz(user.timezone)
@@ -25,10 +32,18 @@ export default async function MealPlanPage() {
   weekEnd.setDate(weekEnd.getDate() + 6)
   weekEnd.setHours(23, 59, 59, 999)
 
+  // Convert to UTC for database query (database stores dates normalized to UTC)
+  const weekStartUTC = new Date(
+    Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate())
+  )
+  const weekEndUTC = new Date(
+    Date.UTC(weekEnd.getUTCFullYear(), weekEnd.getUTCMonth(), weekEnd.getUTCDate(), 23, 59, 59, 999)
+  )
+
   const entries = await prisma.mealPlan.findMany({
     where: {
       familyId: user.familyId,
-      date: { gte: weekStart, lte: weekEnd },
+      date: { gte: weekStartUTC, lte: weekEndUTC },
     },
     include: { recipe: { select: { id: true, title: true } } },
     orderBy: { date: 'asc' },
@@ -47,7 +62,7 @@ export default async function MealPlanPage() {
   return (
     <MealPlanGrid
       weekStartsOn={user.weekStartsOn}
-      initialWeekStart={toYMD(weekStart)}
+      initialWeekStart={toYMDLocal(weekStart)}
       initialEntries={serialized}
       timezone={user.timezone}
     />

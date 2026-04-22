@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 
+function parseTags(tags: string | null): string[] {
+  if (!tags) return []
+  try {
+    return JSON.parse(tags) as string[]
+  } catch {
+    return []
+  }
+}
+
 export async function GET(req: Request) {
   const user = await requireSession()
   const { searchParams } = new URL(req.url)
@@ -53,7 +62,7 @@ export async function GET(req: Request) {
       title: note.title,
       content: note.content,
       category: note.category,
-      tags: note.tags ? JSON.parse(note.tags) as string[] : [],
+      tags: parseTags(note.tags),
       createdBy: note.createdBy,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),
@@ -89,7 +98,7 @@ export async function POST(req: Request) {
     title: note.title,
     content: note.content,
     category: note.category,
-    tags: note.tags ? JSON.parse(note.tags) as string[] : [],
+    tags: parseTags(note.tags),
     createdBy: note.createdBy,
     createdAt: note.createdAt.toISOString(),
     updatedAt: note.updatedAt.toISOString(),

@@ -11,118 +11,122 @@ interface AdvancedThemeProviderProps {
 }
 
 // CSS variable mappings for custom theme colors
-const CSS_VARIABLE_MAPPINGS: Record<keyof CustomThemeColors, string> = {
-  // Sidebar
-  sidebar: '--sidebar',
-  sidebarForeground: '--sidebar-foreground',
-  sidebarPrimary: '--sidebar-primary',
-  sidebarPrimaryForeground: '--sidebar-primary-foreground',
-  sidebarAccent: '--sidebar-accent',
-  sidebarAccentForeground: '--sidebar-accent-foreground',
-  sidebarBorder: '--sidebar-border',
-  sidebarRing: '--sidebar-ring',
+const CSS_VARIABLE_MAPPINGS: Record<keyof CustomThemeColors, string[]> = {
+  // Sidebar - map to both --sidebar and --color-sidebar for Tailwind compatibility
+  sidebar: ['--sidebar', '--color-sidebar'],
+  sidebarForeground: ['--sidebar-foreground', '--color-sidebar-foreground'],
+  sidebarPrimary: ['--sidebar-primary', '--color-sidebar-primary'],
+  sidebarPrimaryForeground: ['--sidebar-primary-foreground', '--color-sidebar-primary-foreground'],
+  sidebarAccent: ['--sidebar-accent', '--color-sidebar-accent'],
+  sidebarAccentForeground: ['--sidebar-accent-foreground', '--color-sidebar-accent-foreground'],
+  sidebarBorder: ['--sidebar-border', '--color-sidebar-border'],
+  sidebarRing: ['--sidebar-ring', '--color-sidebar-ring'],
   
   // Calendar
-  calendarBackground: '--calendar-background',
-  calendarEvent: '--calendar-event',
-  calendarEventHover: '--calendar-event-hover',
-  calendarText: '--calendar-text',
-  calendarBorder: '--calendar-border',
+  calendarBackground: ['--calendar-background'],
+  calendarEvent: ['--calendar-event'],
+  calendarEventHover: ['--calendar-event-hover'],
+  calendarText: ['--calendar-text'],
+  calendarBorder: ['--calendar-border'],
   
   // Cards
-  card: '--card',
-  cardForeground: '--card-foreground',
-  cardBorder: '--card-border',
-  cardHover: '--card-hover',
+  card: ['--card', '--color-card'],
+  cardForeground: ['--card-foreground', '--color-card-foreground'],
+  cardBorder: ['--card-border', '--color-card-border'],
+  cardHover: ['--card-hover'],
   
   // Text
-  textPrimary: '--text-primary',
-  textSecondary: '--text-secondary',
-  textMuted: '--text-muted',
-  textAccent: '--text-accent',
+  textPrimary: ['--text-primary'],
+  textSecondary: ['--text-secondary'],
+  textMuted: ['--text-muted'],
+  textAccent: ['--text-accent'],
   
   // Buttons
-  buttonPrimary: '--button-primary',
-  buttonPrimaryForeground: '--button-primary-foreground',
-  buttonSecondary: '--button-secondary',
-  buttonSecondaryForeground: '--button-secondary-foreground',
-  buttonAccent: '--button-accent',
-  buttonAccentForeground: '--button-accent-foreground',
+  buttonPrimary: ['--button-primary'],
+  buttonPrimaryForeground: ['--button-primary-foreground'],
+  buttonSecondary: ['--button-secondary'],
+  buttonSecondaryForeground: ['--button-secondary-foreground'],
+  buttonAccent: ['--button-accent'],
+  buttonAccentForeground: ['--button-accent-foreground'],
   
-  // General
-  background: '--background',
-  foreground: '--foreground',
-  primary: '--primary',
-  primaryForeground: '--primary-foreground',
-  secondary: '--secondary',
-  secondaryForeground: '--secondary-foreground',
-  accent: '--accent',
-  accentForeground: '--accent-foreground',
-  muted: '--muted',
-  mutedForeground: '--muted-foreground',
-  border: '--border',
-  input: '--input',
-  ring: '--ring',
-  destructive: '--destructive',
+  // General - map to both base variables and --color-* for Tailwind
+  background: ['--background', '--color-background'],
+  foreground: ['--foreground', '--color-foreground'],
+  primary: ['--primary', '--color-primary'],
+  primaryForeground: ['--primary-foreground', '--color-primary-foreground'],
+  secondary: ['--secondary', '--color-secondary'],
+  secondaryForeground: ['--secondary-foreground', '--color-secondary-foreground'],
+  accent: ['--accent', '--color-accent'],
+  accentForeground: ['--accent-foreground', '--color-accent-foreground'],
+  muted: ['--muted', '--color-muted'],
+  mutedForeground: ['--muted-foreground', '--color-muted-foreground'],
+  border: ['--border', '--color-border'],
+  input: ['--input', '--color-input'],
+  ring: ['--ring', '--color-ring'],
+  destructive: ['--destructive', '--color-destructive'],
+}
+
+/**
+ * Build a <style> block that sets all custom theme variables at :root with
+ * !important so they win over Tailwind v4's @theme inline resolved values,
+ * which are static at build-time and cannot be overridden via
+ * documentElement.style.setProperty alone.
+ */
+function buildStyleContent(customTheme: CustomThemeColors | null | undefined): string {
+  if (!customTheme || Object.keys(customTheme).length === 0) return ''
+
+  const declarations = Object.entries(customTheme)
+    .filter(([, value]) => value && value.trim() !== '')
+    .flatMap(([key, value]) => {
+      const cssVars = CSS_VARIABLE_MAPPINGS[key as keyof CustomThemeColors]
+      if (!cssVars) return []
+      return cssVars.map(cssVar => `  ${cssVar}: ${value} !important;`)
+    })
+    .filter(Boolean)
+    .join('\n')
+
+  if (!declarations) return ''
+  
+  // Set variables for :root and all theme classes to ensure they work in all theme modes
+  // List all theme classes from ThemeProvider
+  const themeClasses = [
+    ':root', // default/light theme
+    '.dark',
+    '.midnight',
+    '.glass-dark',
+    '.modern',
+    '.apple-grey',
+    '.sunset',
+    '.ocean',
+    '.forest'
+  ]
+  
+  const themeBlocks = themeClasses.map(theme => `${theme} {\n${declarations}\n}`).join('\n\n')
+  
+  return themeBlocks
 }
 
 export function AdvancedThemeProvider({ children, customTheme }: AdvancedThemeProviderProps) {
   const { theme, systemTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [styleContent, setStyleContent] = useState('')
 
-  // Apply custom theme colors as CSS variables
-  useEffect(() => {
-    if (!customTheme || Object.keys(customTheme).length === 0) {
-      // Clear any previously set custom variables
-      Object.values(CSS_VARIABLE_MAPPINGS).forEach(variable => {
-        document.documentElement.style.removeProperty(variable)
-      })
-      return
-    }
-
-    // Apply each custom color as a CSS variable
-    Object.entries(customTheme).forEach(([key, value]) => {
-      const cssVariable = CSS_VARIABLE_MAPPINGS[key as keyof CustomThemeColors]
-      if (cssVariable && value) {
-        document.documentElement.style.setProperty(cssVariable, value)
-      }
-    })
-
-    // Return cleanup function to remove custom variables
-    return () => {
-      Object.entries(customTheme).forEach(([key]) => {
-        const cssVariable = CSS_VARIABLE_MAPPINGS[key as keyof CustomThemeColors]
-        if (cssVariable) {
-          document.documentElement.style.removeProperty(cssVariable)
-        }
-      })
-    }
-  }, [customTheme])
-
-  // Wait for component to mount to avoid hydration mismatch
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Apply theme-specific overrides
+  // Rebuild the injected style block whenever theme or custom colors change
   useEffect(() => {
     if (!mounted) return
+    setStyleContent(buildStyleContent(customTheme))
+  }, [customTheme, theme, systemTheme, mounted])
 
-    // Reset all custom variables first
-    Object.values(CSS_VARIABLE_MAPPINGS).forEach(variable => {
-      document.documentElement.style.removeProperty(variable)
-    })
-
-    // Re-apply custom theme if it exists
-    if (customTheme && Object.keys(customTheme).length > 0) {
-      Object.entries(customTheme).forEach(([key, value]) => {
-        const cssVariable = CSS_VARIABLE_MAPPINGS[key as keyof CustomThemeColors]
-        if (cssVariable && value) {
-          document.documentElement.style.setProperty(cssVariable, value)
-        }
-      })
-    }
-  }, [theme, systemTheme, mounted, customTheme])
-
-  return <>{children}</>
+  return (
+    <>
+      {mounted && styleContent && (
+        <style id="advanced-theme-vars" dangerouslySetInnerHTML={{ __html: styleContent }} />
+      )}
+      {children}
+    </>
+  )
 }

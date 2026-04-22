@@ -1,0 +1,7 @@
+tunnel: 755af6fc-be0e-4b29-9be9-77a6ae05b96b
+credentials-file: /etc/cloudflared/755af6fc-be0e-4b29-9be9-77a6ae05b96b.json
+
+ingress:
+  - hostname: homebase.liddleapps.com
+    service: http://localhost:3000
+  - service: http_status:404

@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
-import { SHOPPING_CATEGORIES } from '@/lib/list-helpers'
-
-const VALID_CATEGORIES = new Set(SHOPPING_CATEGORIES)
 
 interface ExportItem {
   text: string
@@ -25,9 +22,7 @@ export async function POST(req: Request) {
   if (items.some(i => !i.text?.trim() || !i.key?.trim() || !i.category?.trim())) {
     return NextResponse.json({ error: 'each item must have text, key, and category' }, { status: 400 })
   }
-  if (items.some(i => !VALID_CATEGORIES.has(i.category as never))) {
-    return NextResponse.json({ error: 'invalid category value' }, { status: 400 })
-  }
+  // No longer validating against hardcoded categories - any category is allowed
 
   await Promise.all(
     items.map((item) =>

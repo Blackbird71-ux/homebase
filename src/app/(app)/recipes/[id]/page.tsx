@@ -11,16 +11,23 @@ export default async function RecipeDetailPage({
   const user = await requireSession()
   const { id } = await params
 
-  const recipe = await prisma.recipe.findFirst({
-    where: { id, familyId: user.familyId },
-    include: {
-      recipeTags: {
-        include: {
-          tag: true
+  const [recipe, bookRows] = await Promise.all([
+    prisma.recipe.findFirst({
+      where: { id, familyId: user.familyId },
+      include: {
+        recipeTags: {
+          include: {
+            tag: true
+          }
         }
-      }
-    },
-  })
+      },
+    }),
+    prisma.recipeBook.findMany({
+      where: { familyId: user.familyId },
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { recipes: true } } },
+    }),
+  ])
   if (!recipe) notFound()
 
   // Get tags from relational tags first, fall back to comma-separated string
@@ -45,7 +52,14 @@ export default async function RecipeDetailPage({
     sourceUrl: recipe.sourceUrl,
     createdBy: recipe.createdBy,
     createdAt: recipe.createdAt.toISOString(),
+    bookId: recipe.bookId,
   }
 
-  return <RecipeDetail recipe={serialized} currentUserId={user.id} isAdmin={user.role === 'admin'} />
+  const books = bookRows.map((b) => ({
+    id: b.id,
+    name: b.name,
+    recipeCount: b._count.recipes,
+  }))
+
+  return <RecipeDetail recipe={serialized} books={books} currentUserId={user.id} isAdmin={user.role === 'admin'} />
 }

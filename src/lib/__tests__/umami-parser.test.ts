@@ -44,23 +44,23 @@ describe('parseServings', () => {
 
 describe('parseUmamiTags', () => {
   it('removes recipe name (first keyword) and book name', () => {
-    expect(parseUmamiTags('Mushroom Pasta, Vegetarian, RECIPES', 'Mushroom Pasta', 'RECIPES')).toEqual(['Vegetarian'])
+    expect(parseUmamiTags('Mushroom Pasta, Vegetarian, RECIPES', undefined, 'Mushroom Pasta', 'RECIPES')).toEqual(['Vegetarian'])
   })
 
   it('returns empty array when only recipe name and book name', () => {
-    expect(parseUmamiTags('Chicken Soup, Soups', 'Chicken Soup', 'Soups')).toEqual([])
+    expect(parseUmamiTags('Chicken Soup, Soups', undefined, 'Chicken Soup', 'Soups')).toEqual([])
   })
 
   it('returns empty array for empty keywords', () => {
-    expect(parseUmamiTags('', 'anything', 'book')).toEqual([])
+    expect(parseUmamiTags('', undefined, 'anything', 'book')).toEqual([])
   })
 
   it('trims whitespace from tags', () => {
-    expect(parseUmamiTags('My Recipe,  Italian , Pasta', 'My Recipe', 'Other')).toEqual(['Italian', 'Pasta'])
+    expect(parseUmamiTags('My Recipe,  Italian , Pasta', undefined, 'My Recipe', 'Other')).toEqual(['Italian', 'Pasta'])
   })
 
   it('deduplicates tags', () => {
-    expect(parseUmamiTags('Recipe, Keto, Keto', 'Recipe', 'Book')).toEqual(['Keto'])
+    expect(parseUmamiTags('Recipe, Keto, Keto', undefined, 'Recipe', 'Book')).toEqual(['Keto'])
   })
 })
 

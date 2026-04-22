@@ -25,6 +25,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
   const [end, setEnd] = useState('')
   const [isAllDay, setIsAllDay] = useState(false)
   const [category, setCategory] = useState('Other')
+  const [color, setColor] = useState('')
   const [description, setDescription] = useState('')
   const [isPersonal, setIsPersonal] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -37,6 +38,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
       setEnd(format(new Date(event.end), "yyyy-MM-dd'T'HH:mm"))
       setIsAllDay(event.isAllDay)
       setCategory(event.category ?? 'Other')
+      setColor(event.color ?? '')
       setDescription(event.description ?? '')
       setIsPersonal(event.isPersonal ?? false)
     } else {
@@ -46,6 +48,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
       setEnd(format(d, "yyyy-MM-dd'T'10:00"))
       setIsAllDay(false)
       setCategory('Other')
+      setColor('')
       setDescription('')
       setIsPersonal(false)
     }
@@ -65,7 +68,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description, start: startDate, end: endDate, isAllDay, category, isPersonal }),
+      body: JSON.stringify({ title, description, start: startDate, end: endDate, isAllDay, category, color: color || null, isPersonal }),
     })
 
     setLoading(false)
@@ -89,7 +92,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
 
   return (
     <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{event ? 'Edit Event' : 'New Event'}</DialogTitle>
         </DialogHeader>
@@ -129,6 +132,45 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
                 {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Color (optional)</Label>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {['#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#6366f1', '#ec4899', '#6b7280'].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    className={`w-8 h-8 rounded-full border-2 ${color === c ? 'border-foreground' : 'border-transparent'}`}
+                    style={{ backgroundColor: c }}
+                    title={c}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setColor('')}
+                  className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${color === '' ? 'border-foreground' : 'border-border'}`}
+                  title="Default color"
+                >
+                  <span className="text-xs text-muted-foreground">D</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={color || '#6366f1'}
+                  onChange={(e) => setColor(e.target.value)}
+                  className="w-12 h-10 p-1"
+                />
+                <Input
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  placeholder="#hex or leave empty for default"
+                  className="flex-1"
+                />
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-3 pt-1">
             <span className="text-sm font-medium">Visibility</span>

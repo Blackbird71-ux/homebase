@@ -1,9 +1,10 @@
 // src/components/ui/color-picker.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Input } from './input'
 import { cn } from '@/lib/utils'
+import { Palette } from 'lucide-react'
 
 interface ColorPickerProps {
   value: string
@@ -12,26 +13,9 @@ interface ColorPickerProps {
   disabled?: boolean
 }
 
-const PRESET_COLORS = [
-  '#3b82f6', // blue-500
-  '#ef4444', // red-500
-  '#10b981', // emerald-500
-  '#f59e0b', // amber-500
-  '#8b5cf6', // violet-500
-  '#ec4899', // pink-500
-  '#06b6d4', // cyan-500
-  '#84cc16', // lime-500
-  '#f97316', // orange-500
-  '#6366f1', // indigo-500
-  '#14b8a6', // teal-500
-  '#a855f7', // purple-500
-  '#64748b', // slate-500
-  '#000000', // black
-  '#ffffff', // white
-]
-
 export function ColorPicker({ value, onChange, className, disabled }: ColorPickerProps) {
   const [color, setColor] = useState(value || '#3b82f6')
+  const colorInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (value !== color) {
@@ -45,6 +29,18 @@ export function ColorPicker({ value, onChange, className, disabled }: ColorPicke
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newColor = e.target.value
+    setColor(newColor)
+    onChange(newColor)
+  }
+
+  const handleColorPickerClick = () => {
+    if (colorInputRef.current) {
+      colorInputRef.current.click()
+    }
+  }
+
+  const handleNativeColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newColor = e.target.value
     setColor(newColor)
     onChange(newColor)
@@ -65,22 +61,26 @@ export function ColorPicker({ value, onChange, className, disabled }: ColorPicke
           className="w-32"
           disabled={disabled}
         />
-      </div>
-      <div className="grid grid-cols-5 gap-1">
-        {PRESET_COLORS.map((presetColor) => (
-          <button
-            key={presetColor}
-            type="button"
-            className="w-6 h-6 rounded border border-border hover:scale-110 transition-transform"
-            style={{ backgroundColor: presetColor }}
-            onClick={() => handleColorChange(presetColor)}
-            aria-label={`Select color ${presetColor}`}
-            disabled={disabled}
-          />
-        ))}
+        <button
+          type="button"
+          onClick={handleColorPickerClick}
+          className="p-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+          disabled={disabled}
+          aria-label="Open color picker"
+        >
+          <Palette className="h-4 w-4" />
+        </button>
+        <input
+          ref={colorInputRef}
+          type="color"
+          value={color}
+          onChange={handleNativeColorChange}
+          className="sr-only"
+          aria-hidden="true"
+        />
       </div>
       <div className="text-xs text-muted-foreground">
-        Enter hex color code (e.g., #3b82f6) or click a preset
+        Enter hex color code (e.g., #3b82f6) or use the color picker
       </div>
     </div>
   )

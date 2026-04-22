@@ -111,9 +111,14 @@ export function ListsClient({ initialLists }: ListsClientProps) {
               key={activeList.id}
               listId={activeList.id}
               initialItems={activeList.items.map(toListItemShape)}
-              initialCategoryOrder={
-                activeList.categoryOrder ? JSON.parse(activeList.categoryOrder) : null
-              }
+              initialCategoryOrder={(() => {
+                if (!activeList.categoryOrder) return null
+                try {
+                  return JSON.parse(activeList.categoryOrder)
+                } catch {
+                  return null
+                }
+              })()}
             />
           </>
         ) : (

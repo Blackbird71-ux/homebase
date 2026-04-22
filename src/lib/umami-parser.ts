@@ -7,8 +7,16 @@ export interface UmamiJson {
   cookTime?: string
   recipeYield?: string
   keywords?: string
+  recipeCategory?: string
   recipeIngredient?: string[]
   recipeInstructions?: { '@type': string; text: string }[]
+  nutrition?: {
+    calories?: string
+    fatContent?: string
+    proteinContent?: string
+    carbohydrateContent?: string
+    sodiumContent?: string
+  }
 }
 
 export interface ParsedRecipe {
@@ -22,6 +30,11 @@ export interface ParsedRecipe {
   cookTime: number | null
   servings: number | null
   tags: string[]
+  calories: string | null
+  fatContent: string | null
+  proteinContent: string | null
+  carbContent: string | null
+  sodiumContent: string | null
 }
 
 export function parseIso8601Duration(s: string): number | null {
@@ -40,13 +53,18 @@ export function parseServings(s: string): number | null {
   return isNaN(n) ? null : n
 }
 
-export function parseUmamiTags(keywords: string, recipeName: string, bookName: string): string[] {
-  if (!keywords) return []
+export function parseUmamiTags(keywords: string, recipeCategory: string | undefined, recipeName: string, bookName: string): string[] {
   const seen = new Set<string>()
   const result: string[] = []
   const lowerRecipe = recipeName.toLowerCase()
   const lowerBook = bookName.toLowerCase()
-  for (const raw of keywords.split(',')) {
+
+  const allKeywords = [
+    ...(keywords ? keywords.split(',') : []),
+    ...(recipeCategory ? [recipeCategory] : []),
+  ]
+
+  for (const raw of allKeywords) {
     const tag = raw.trim()
     if (!tag) continue
     const lower = tag.toLowerCase()
@@ -71,6 +89,11 @@ export function parseUmamiRecipe(json: UmamiJson, bookName: string): ParsedRecip
     prepTime: parseIso8601Duration(json.prepTime ?? ''),
     cookTime: parseIso8601Duration(json.cookTime ?? ''),
     servings: parseServings(json.recipeYield ?? ''),
-    tags: parseUmamiTags(json.keywords ?? '', json.name, bookName),
+    tags: parseUmamiTags(json.keywords ?? '', json.recipeCategory, json.name, bookName),
+    calories: json.nutrition?.calories ?? null,
+    fatContent: json.nutrition?.fatContent ?? null,
+    proteinContent: json.nutrition?.proteinContent ?? null,
+    carbContent: json.nutrition?.carbohydrateContent ?? null,
+    sodiumContent: json.nutrition?.sodiumContent ?? null,
   }
 }

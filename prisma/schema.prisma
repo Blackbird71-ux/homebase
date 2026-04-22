@@ -112,6 +112,11 @@ model Recipe {
   cookTime     Int?
   servings     Int?
   tags         String?
+  calories     String?
+  fatContent   String?
+  proteinContent String?
+  carbContent  String?
+  sodiumContent String?
   bookId       String?
   book         RecipeBook? @relation(fields: [bookId], references: [id], onDelete: SetNull)
   createdBy    String

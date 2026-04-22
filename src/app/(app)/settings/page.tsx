@@ -60,7 +60,7 @@ export default async function SettingsPage() {
       </div>
 
       <div className="flex-1 p-6">
-        <Tabs defaultValue="account" className="w-full max-w-2xl">
+        <Tabs defaultValue="account" className="w-full">
           <TabsList className="mb-6 flex flex-wrap">
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
@@ -93,7 +93,17 @@ export default async function SettingsPage() {
 
           <TabsContent value="theming">
             <AdvancedThemingTab
-              initialCustomTheme={user.uiPreferences ? JSON.parse(user.uiPreferences).customTheme || null : null}
+              initialCustomTheme={(() => {
+                if (!user.uiPreferences) return null
+                try {
+                  const parsed = typeof user.uiPreferences === 'string'
+                    ? JSON.parse(user.uiPreferences)
+                    : user.uiPreferences
+                  return parsed.customTheme || null
+                } catch {
+                  return null
+                }
+              })()}
             />
           </TabsContent>
 

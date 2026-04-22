@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon, CopyIcon, ChefHatIcon } from 'lucide-react'
@@ -30,12 +30,14 @@ interface RecipeDetailProps {
     sourceUrl: string | null
     createdBy: string
     createdAt: string
+    bookId: string | null
   }
+  books: { id: string; name: string; recipeCount: number }[]
   currentUserId: string
   isAdmin: boolean
 }
 
-export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailProps) {
+export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDetailProps) {
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -45,6 +47,7 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
   const [duplicating, setDuplicating] = useState(false)
   const [cookingMode, setCookingMode] = useState(false)
   const [completedSteps, setCompletedSteps] = useState<boolean[]>([])
+  const [completedIngredients, setCompletedIngredients] = useState<boolean[]>([])
 
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
@@ -90,16 +93,16 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
   return (
     <>
       <style>{`@media print { .no-print { display: none !important; } }`}</style>
-      <div className="max-w-2xl mx-auto p-6 flex flex-col gap-6 overflow-y-auto">
-        {/* Back + Actions */}
-        <div className="flex items-center justify-between no-print">
+      <div className="flex flex-col gap-6 overflow-y-auto h-full min-h-0 p-4 md:p-6">
+        {/* Back + Actions - Sticky header */}
+        <div className="flex items-center justify-between no-print sticky top-0 bg-background z-10 py-2 -mx-4 md:-mx-6 px-4 md:px-6 border-b border-border">
           <Link href="/recipes">
             <Button variant="ghost" size="sm">
               <ArrowLeftIcon className="h-4 w-4 mr-1" />
               Recipes
             </Button>
           </Link>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             <Button variant="outline" size="sm" onClick={() => setAddToListOpen(true)}>
               <ShoppingCartIcon className="h-4 w-4 mr-1" />
               Add to list
@@ -108,48 +111,48 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
               <PrinterIcon className="h-4 w-4 mr-1" />
               Print
             </Button>
+              <Button
+                variant={cookingMode ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setCookingMode(!cookingMode)
+                  if (!cookingMode) {
+                    // Initialize completed steps and ingredients arrays
+                    setCompletedSteps(new Array(recipe.instructions.length).fill(false))
+                    setCompletedIngredients(new Array(recipe.ingredients.length).fill(false))
+                  }
+                }}
+              >
+                <ChefHatIcon className="h-4 w-4 mr-1" />
+                {cookingMode ? 'Exit Cooking Mode' : 'Start Cooking'}
+              </Button>
             <Button
-              variant={cookingMode ? "secondary" : "outline"}
+              variant="outline"
               size="sm"
-              onClick={() => {
-                setCookingMode(!cookingMode)
-                if (!cookingMode) {
-                  // Initialize completed steps array
-                  setCompletedSteps(new Array(recipe.instructions.length).fill(false))
-                }
-              }}
+              onClick={handleDuplicate}
+              disabled={duplicating}
             >
-              <ChefHatIcon className="h-4 w-4 mr-1" />
-              {cookingMode ? 'Exit Cooking Mode' : 'Start Cooking'}
+              <CopyIcon className="h-4 w-4 mr-1" />
+              {duplicating ? 'Duplicating...' : 'Duplicate'}
             </Button>
-            {canEdit && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
-                  <PencilIcon className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDuplicate}
-                  disabled={duplicating}
-                >
-                  <CopyIcon className="h-4 w-4 mr-1" />
-                  {duplicating ? 'Duplicating...' : 'Duplicate'}
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setDeleteDialogOpen(true)}
-                >
-                  <Trash2Icon className="h-4 w-4 mr-1" />
-                  Delete
-                </Button>
-              </>
-            )}
+            <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
+              <PencilIcon className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2Icon className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
           </div>
         </div>
 
+        {/* Content area - max width for readability */}
+        <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
+          
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold mb-2">{recipe.title}</h1>
@@ -205,8 +208,27 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
           <ul className="space-y-1">
             {recipe.ingredients.map((ing, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className="text-muted-foreground text-sm mt-0.5">•</span>
-                <span>{ing}</span>
+                {cookingMode ? (
+                  <button
+                    onClick={() => {
+                      const newCompleted = [...completedIngredients]
+                      newCompleted[i] = !newCompleted[i]
+                      setCompletedIngredients(newCompleted)
+                    }}
+                    className={`flex items-center justify-center h-5 w-5 rounded-full shrink-0 mt-0.5 ${
+                      completedIngredients[i]
+                        ? 'bg-green-500 text-white'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {completedIngredients[i] ? '✓' : '•'}
+                  </button>
+                ) : (
+                  <span className="text-muted-foreground text-sm mt-0.5">•</span>
+                )}
+                <span className={cookingMode && completedIngredients[i] ? 'line-through text-muted-foreground' : ''}>
+                  {ing}
+                </span>
               </li>
             ))}
           </ul>
@@ -248,23 +270,41 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
             <div className="mt-4 p-3 bg-muted rounded-lg">
               <p className="text-sm font-medium">Cooking Mode Active</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {completedSteps.filter(Boolean).length} of {recipe.instructions.length} steps completed
+                {completedIngredients.filter(Boolean).length} of {recipe.ingredients.length} ingredients prepared • {completedSteps.filter(Boolean).length} of {recipe.instructions.length} steps completed
               </p>
-              <div className="flex gap-2 mt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(false))}
-                >
-                  Reset
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(true))}
-                >
-                  Mark All Complete
-                </Button>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCompletedIngredients(new Array(recipe.ingredients.length).fill(false))}
+                  >
+                    Reset Ingredients
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCompletedIngredients(new Array(recipe.ingredients.length).fill(true))}
+                  >
+                    Mark All Ingredients Complete
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(false))}
+                  >
+                    Reset Steps
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(true))}
+                  >
+                    Mark All Steps Complete
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -284,6 +324,7 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
             </a>
           </div>
         )}
+      </div>
       </div>
 
       <AddToListDialog
@@ -330,6 +371,8 @@ export function RecipeDetail({ recipe, currentUserId, isAdmin }: RecipeDetailPro
           image: recipe.image || '',
           sourceUrl: recipe.sourceUrl || '',
         }}
+        books={books.map(b => ({ id: b.id, name: b.name }))}
+        initialBookId={recipe.bookId}
         onCreated={() => {
           // This won't be called when editing, but required by interface
         }}

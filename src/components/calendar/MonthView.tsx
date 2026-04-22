@@ -2,7 +2,8 @@
 
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, isSameMonth, isToday, isSameDay, format
+  eachDayOfInterval, isSameMonth, isToday, isSameDay, format,
+  isWithinInterval, startOfDay, endOfDay
 } from 'date-fns'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
@@ -38,7 +39,17 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
       </div>
       <div className="flex-1 grid grid-cols-7 grid-rows-6">
         {days.map(day => {
-          const dayEvents = events.filter(e => isSameDay(new Date(e.start), day))
+          const dayStart = startOfDay(day)
+          const dayEnd = endOfDay(day)
+          
+          const dayEvents = events.filter(e => {
+            const eventStart = startOfDay(new Date(e.start))
+            const eventEnd = startOfDay(new Date(e.end))
+            
+            // Check if day is within event range (inclusive)
+            return dayStart >= eventStart && dayStart <= eventEnd
+          })
+          
           const inMonth = isSameMonth(day, currentDate)
           const today = isToday(day)
 

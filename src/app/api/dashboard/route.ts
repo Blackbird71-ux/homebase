@@ -23,7 +23,7 @@ export async function GET() {
         date: { gte: todayStart, lt: todayEnd },
         mealType: 'dinner',
       },
-      include: { recipe: { select: { id: true, title: true } } },
+      include: { recipe: { select: { id: true, title: true, image: true } } },
     }),
     prisma.list.findMany({
       where: { familyId: user.familyId, type: 'SHOPPING', isActive: true },
@@ -68,6 +68,7 @@ export async function GET() {
           mealPlanId: tonightsMeal.id,
           recipeId: tonightsMeal.recipe?.id ?? null,
           recipeName: tonightsMeal.recipe?.title ?? null,
+          recipeImage: tonightsMeal.recipe?.image ?? null,
           note: tonightsMeal.note,
         }
       : null,

@@ -6,7 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { AlertTriangle, Download } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface CoziImport {
   id: string
@@ -23,6 +32,7 @@ interface DataTabProps {
 export function DataTab({ coziImports, userEmail }: DataTabProps) {
   const router = useRouter()
   const [exporting, setExporting] = useState(false)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -43,7 +53,7 @@ export function DataTab({ coziImports, userEmail }: DataTabProps) {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch {
-      // silently fail — user sees no download
+      toast.error('Export failed. Please try again.')
     } finally {
       setExporting(false)
     }
@@ -144,7 +154,7 @@ export function DataTab({ coziImports, userEmail }: DataTabProps) {
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() => setDeleteOpen(true)}
+                onClick={() => setShowConfirmDialog(true)}
               >
                 Delete My Account
               </Button>
@@ -190,6 +200,47 @@ export function DataTab({ coziImports, userEmail }: DataTabProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Are you sure?
+            </DialogTitle>
+            <DialogDescription>
+              You are about to delete your account. This action will:
+              <ul className="list-disc pl-5 mt-2 space-y-1">
+                <li>Permanently remove your account from the family</li>
+                <li>Delete all your personal data</li>
+                <li>Remove your access to Homebase</li>
+                <li>Cannot be undone</li>
+              </ul>
+              <p className="mt-3 font-medium">
+                If you are the only admin, you must promote another member first.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setShowConfirmDialog(false)
+                setDeleteOpen(true)
+              }}
+            >
+              Continue to Confirmation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
