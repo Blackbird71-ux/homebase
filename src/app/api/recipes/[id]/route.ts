@@ -219,8 +219,8 @@ export async function PUT(
       ...(description !== undefined && { description }),
       ...(ingredients !== undefined && { ingredients: safeStringify(ingredients) }),
       ...(instructions !== undefined && { instructions: safeStringify(instructions) }),
-      // Keep legacy tags field for backward compatibility (set to 'legacy-tags' if using new system)
-      ...(tags !== undefined && { tags: 'legacy-tags' }),
+      // Keep legacy tags field for backward compatibility (set to 'legacy-tags' if using new system, null if no tags)
+      ...(tags !== undefined && { tags: tags && tags.length > 0 ? 'legacy-tags' : null }),
       ...(prepTime !== undefined && { prepTime }),
       ...(cookTime !== undefined && { cookTime }),
       ...(servings !== undefined && { servings }),

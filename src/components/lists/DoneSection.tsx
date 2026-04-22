@@ -9,9 +9,18 @@ interface DoneSectionProps {
   doneItemColor?: string
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
+  availableCategories?: string[]
+  onCategoryChange?: (id: string, newCategory: string) => void
 }
 
-export function DoneSection({ items, doneItemColor, onToggle, onDelete }: DoneSectionProps) {
+export function DoneSection({ 
+  items, 
+  doneItemColor, 
+  onToggle, 
+  onDelete,
+  availableCategories = [],
+  onCategoryChange,
+}: DoneSectionProps) {
   if (items.length === 0) return null
 
   return (
@@ -28,8 +37,11 @@ export function DoneSection({ items, doneItemColor, onToggle, onDelete }: DoneSe
             isCompleted={item.isCompleted}
             recipeName={item.recipeName}
             doneItemColor={doneItemColor}
+            category={item.category || undefined}
+            availableCategories={availableCategories}
             onToggle={onToggle}
             onDelete={onDelete}
+            onCategoryChange={onCategoryChange}
           />
         ))}
       </div>

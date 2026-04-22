@@ -1,4 +1,4 @@
-'use client'
+'us thee client'
 
 import { GripVerticalIcon } from 'lucide-react'
 import {
@@ -15,9 +15,18 @@ interface SortableItemProps {
   showDragHandle: boolean
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
+  availableCategories?: string[]
+  onCategoryChange?: (id: string, newCategory: string) => void
 }
 
-function SortableItem({ item, showDragHandle, onToggle, onDelete }: SortableItemProps) {
+function SortableItem({ 
+  item, 
+  showDragHandle, 
+  onToggle, 
+  onDelete,
+  availableCategories = [],
+  onCategoryChange,
+}: SortableItemProps) {
   const {
     attributes,
     listeners,
@@ -54,8 +63,11 @@ function SortableItem({ item, showDragHandle, onToggle, onDelete }: SortableItem
           content={item.content}
           isCompleted={item.isCompleted}
           recipeName={item.recipeName}
+          category={item.category || undefined}
+          availableCategories={availableCategories}
           onToggle={onToggle}
           onDelete={onDelete}
+          onCategoryChange={onCategoryChange}
         />
       </div>
     </div>
@@ -68,6 +80,8 @@ interface CategoryGroupProps {
   showDragHandle: boolean
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
+  availableCategories?: string[]
+  onCategoryChange?: (id: string, newCategory: string) => void
 }
 
 export function CategoryGroup({
@@ -76,6 +90,8 @@ export function CategoryGroup({
   showDragHandle,
   onToggle,
   onDelete,
+  availableCategories = [],
+  onCategoryChange,
 }: CategoryGroupProps) {
   const {
     attributes,
@@ -124,6 +140,8 @@ export function CategoryGroup({
               showDragHandle={showDragHandle}
               onToggle={onToggle}
               onDelete={onDelete}
+              availableCategories={availableCategories}
+              onCategoryChange={onCategoryChange}
             />
           ))}
         </div>

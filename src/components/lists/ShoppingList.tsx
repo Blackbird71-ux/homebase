@@ -216,6 +216,23 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     }
   }
 
+  async function changeItemCategory(id: string, newCategory: string) {
+    const res = await fetch(`/api/lists/${listId}/items/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: newCategory }),
+    })
+    if (res.ok) {
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, category: newCategory } : i))
+      )
+      toast.success('Category updated')
+    } else {
+      toast.error('Failed to update category')
+      throw new Error('Failed to update category')
+    }
+  }
+
   async function clearCompleted() {
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
@@ -320,6 +337,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
                     showDragHandle={true}
                     onToggle={toggleItem}
                     onDelete={deleteItem}
+                    availableCategories={categories}
+                    onCategoryChange={changeItemCategory}
                   />
                 )
               })}
@@ -330,6 +349,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             listId={listId}
             onToggle={toggleItem}
             onDelete={deleteItem}
+            availableCategories={categories}
+            onCategoryChange={changeItemCategory}
           />
         </DndContext>
       ) : (
@@ -347,8 +368,11 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
                     content={item.content}
                     isCompleted={item.isCompleted}
                     recipeName={item.recipeName}
+                    category={item.category || undefined}
+                    availableCategories={categories}
                     onToggle={toggleItem}
                     onDelete={deleteItem}
+                    onCategoryChange={changeItemCategory}
                   />
                 ))}
               </div>
@@ -359,6 +383,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             listId={listId}
             onToggle={toggleItem}
             onDelete={deleteItem}
+            availableCategories={categories}
+            onCategoryChange={changeItemCategory}
           />
         </div>
       )}

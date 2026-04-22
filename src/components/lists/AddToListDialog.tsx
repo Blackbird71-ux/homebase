@@ -62,7 +62,20 @@ export function AddToListDialog({
 
   useEffect(() => {
     if (!open) return
-    setSelected(new Set(ingredients.map((_, i) => i)))
+    // Filter out all-caps section headers (like "DRESSING", "SAUCE", etc.)
+    const validIndices = ingredients
+      .map((ing, idx) => ({ ing, idx }))
+      .filter(({ ing }) => {
+        // Check if line is ALL CAPS (section header)
+        const trimmed = ing.trim()
+        if (!trimmed) return false
+        // If it contains any lowercase letters, it's a real ingredient
+        // If it has NO lowercase letters, it's a section header
+        return /[a-z]/.test(trimmed)
+      })
+      .map(({ idx }) => idx)
+    
+    setSelected(new Set(validIndices))
   }, [open])
 
   function toggleIngredient(idx: number) {
@@ -79,7 +92,21 @@ export function AddToListDialog({
     if (!selectedListId || selected.size === 0) return
     setLoading(true)
     try {
-      const toAdd = ingredients.filter((_, i) => selected.has(i))
+      // Filter out all-caps section headers before adding
+      const toAdd = ingredients
+        .filter((_, i) => selected.has(i))
+        .filter(ing => {
+          // Skip all-caps section headers (no lowercase letters)
+          const trimmed = ing.trim()
+          if (!trimmed) return false
+          return /[a-z]/.test(trimmed)
+        })
+      
+      if (toAdd.length === 0) {
+        toast.info('No valid ingredients to add (all were section headers).')
+        return
+      }
+      
       const results = await Promise.all(
         toAdd.map((content) =>
           fetch(`/api/lists/${selectedListId}/items`, {

@@ -36,16 +36,33 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
   }, [])
 
   useEffect(() => {
-    if (inputValue.trim()) {
-      fetchSuggestions(inputValue)
+    // Fetch all tags when component mounts or when input is empty
+    if (!inputValue.trim()) {
+      fetchAllTags()
     } else {
-      setSuggestions([])
+      fetchSuggestions(inputValue)
     }
   }, [inputValue])
 
+  async function fetchAllTags() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/tags')
+      if (!res.ok) throw new Error('Failed to fetch tags')
+      const data = await res.json()
+      // Filter out tags that are already selected
+      setSuggestions(data.filter((tag: Tag) => !value.includes(tag.name)))
+    } catch (error) {
+      console.error('Failed to fetch tags:', error)
+      setSuggestions([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function fetchSuggestions(query: string) {
     if (!query.trim()) {
-      setSuggestions([])
+      fetchAllTags()
       return
     }
 
@@ -88,8 +105,8 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
   }
 
   function handleInputFocus() {
-    if (inputValue.trim()) {
-      setShowSuggestions(true)
+    setShowSuggestions(true)
+  }
     }
   }
 

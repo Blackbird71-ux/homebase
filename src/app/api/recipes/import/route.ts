@@ -91,16 +91,22 @@ export async function POST(req: Request) {
               const importValue = recipeData[field as keyof typeof recipeData]
               const existingValue = existingRecipe[field as keyof typeof existingRecipe]
               
-              // Only update if import has value AND (existing is null/empty OR we want to force update)
+              // Only update if import has value
               if (importValue !== null && importValue !== undefined && importValue !== '') {
                 // For string fields, also check if empty
                 if (typeof importValue === 'string' && importValue.trim() === '') {
                   continue
                 }
-                // Update if existing is null/empty/0
-                if (existingValue === null || existingValue === undefined ||
-                    existingValue === '' || existingValue === 0) {
+                // Always update prepTime, cookTime, and servings if import has values
+                // (even if existing has values, to fix previously missing data)
+                if (field === 'prepTime' || field === 'cookTime' || field === 'servings') {
                   updateData[field] = importValue
+                } else {
+                  // For other fields, only update if existing is null/empty/0
+                  if (existingValue === null || existingValue === undefined ||
+                      existingValue === '' || existingValue === 0) {
+                    updateData[field] = importValue
+                  }
                 }
               }
             }

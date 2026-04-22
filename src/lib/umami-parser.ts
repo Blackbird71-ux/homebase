@@ -53,6 +53,33 @@ export function parseServings(s: string): number | null {
   return isNaN(n) ? null : n
 }
 
+export function cleanText(text: string | null | undefined): string | null {
+  if (!text) return null
+  
+  // Simple cleanup for common issues in Umami imports
+  let cleaned = text
+  
+  // Fix " with or without spaces
+  cleaned = cleaned.replace(/&quot\s*;/g, '"')
+  // Fix & with or without spaces
+  cleaned = cleaned.replace(/&amp\s*;/g, '&')
+  // Fix < with or without spaces
+  cleaned = cleaned.replace(/&lt\s*;/g, '<')
+  // Fix > with or without spaces
+  cleaned = cleaned.replace(/&gt\s*;/g, '>')
+  // Fix &nbsp; with or without spaces
+  cleaned = cleaned.replace(/&nbsp\s*;/g, ' ')
+  // Fix &#39; with or without spaces
+  cleaned = cleaned.replace(/&#39\s*;/g, "'")
+  // Fix ' with or without spaces
+  cleaned = cleaned.replace(/&apos\s*;/g, "'")
+  
+  // Remove extra whitespace
+  cleaned = cleaned.replace(/\s+/g, ' ').trim()
+  
+  return cleaned
+}
+
 export function parseUmamiTags(keywords: string, recipeCategory: string | undefined, recipeName: string, bookName: string): string[] {
   const seen = new Set<string>()
   const result: string[] = []
@@ -65,7 +92,7 @@ export function parseUmamiTags(keywords: string, recipeCategory: string | undefi
   ]
 
   for (const raw of allKeywords) {
-    const tag = raw.trim()
+    const tag = cleanText(raw)?.trim()
     if (!tag) continue
     const lower = tag.toLowerCase()
     if (lower === lowerRecipe || lower === lowerBook) continue
@@ -79,13 +106,24 @@ export function parseUmamiTags(keywords: string, recipeCategory: string | undefi
 export function parseUmamiRecipe(json: UmamiJson, bookName: string): ParsedRecipe {
   const rawUrl = json.url ?? null
   const sourceUrl = rawUrl && !rawUrl.includes('umami.recipes') ? rawUrl : null
+  
+  // Clean text fields to remove HTML entities and garbage
+  const title = cleanText(json.name) || json.name
+  const description = cleanText(json.description) || json.description || null
+  
+  // Clean ingredients
+  const ingredients = (json.recipeIngredient ?? []).map(ing => cleanText(ing) || ing)
+  
+  // Clean instructions
+  const instructions = (json.recipeInstructions ?? []).map(s => cleanText(s.text) || s.text)
+  
   return {
-    title: json.name,
+    title,
     sourceUrl,
     image: json.image?.[0] ?? null,
-    description: json.description ?? null,
-    ingredients: json.recipeIngredient ?? [],
-    instructions: (json.recipeInstructions ?? []).map((s) => s.text),
+    description,
+    ingredients,
+    instructions,
     prepTime: parseIso8601Duration(json.prepTime ?? ''),
     cookTime: parseIso8601Duration(json.cookTime ?? ''),
     servings: parseServings(json.recipeYield ?? ''),
