@@ -26,6 +26,13 @@ interface MealPlanEntry {
   recipe: { id: string; title: string } | null
   note: string | null
   familyId: string
+  recipes: Array<{
+    id: string
+    recipeId: string
+    order: number
+    courseType: string | null
+    recipe: { id: string; title: string }
+  }>
 }
 
 interface MealPlanGridProps {
@@ -150,7 +157,7 @@ export function MealPlanGrid({
     setModalOpen(true)
   }
 
-  async function handleAssign(data: { recipeId?: string; note?: string }): Promise<void> {
+  async function handleAssign(data: { recipeIds?: string[]; note?: string }): Promise<void> {
     if (!selectedDate) return
     try {
       const res = await fetch('/api/meal-plan', {
@@ -320,6 +327,19 @@ export function MealPlanGrid({
           onOpenChange={setModalOpen}
           date={selectedDate}
           mealType={selectedMealType}
+          existingRecipes={(() => {
+            // Find existing entry for this date and meal type
+            const existingEntry = entries.find(
+              (e) => e.date.slice(0, 10) === selectedDate && e.mealType === selectedMealType
+            )
+            return existingEntry?.recipes?.map(r => ({
+              id: r.id,
+              recipeId: r.recipeId,
+              recipeName: r.recipe.title,
+              order: r.order,
+              courseType: r.courseType ?? undefined,
+            })) || []
+          })()}
           onAssign={handleAssign}
         />
       )}

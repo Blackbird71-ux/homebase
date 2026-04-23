@@ -9,6 +9,7 @@ import { DataTab } from '@/components/settings/DataTab'
 import { ImportTab } from '@/components/settings/ImportTab'
 import { TagManager } from '@/components/tags/TagManager'
 import { CategoryManager } from '@/components/categories/CategoryManager'
+import { IngredientMappingsTab } from '@/components/settings/IngredientMappingsTab'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -70,6 +71,7 @@ export default async function SettingsPage() {
             <TabsTrigger value="import">Import</TabsTrigger>
             <TabsTrigger value="tags">Tags</TabsTrigger>
             <TabsTrigger value="categories">Categories</TabsTrigger>
+            <TabsTrigger value="ingredient-mappings">Ingredient Mappings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account">
@@ -137,6 +139,10 @@ export default async function SettingsPage() {
 
           <TabsContent value="categories">
             <CategoryManager />
+          </TabsContent>
+
+          <TabsContent value="ingredient-mappings">
+            <IngredientMappingsTab />
           </TabsContent>
         </Tabs>
       </div>

@@ -107,8 +107,6 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
   function handleInputFocus() {
     setShowSuggestions(true)
   }
-    }
-  }
 
   return (
     <div className="space-y-2" ref={containerRef}>

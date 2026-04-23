@@ -45,7 +45,16 @@ export default async function MealPlanPage() {
       familyId: user.familyId,
       date: { gte: weekStartUTC, lte: weekEndUTC },
     },
-    include: { recipe: { select: { id: true, title: true } } },
+    include: {
+      recipes: {
+        include: {
+          recipe: { select: { id: true, title: true } },
+        },
+        orderBy: { order: 'asc' },
+      },
+      // Keep recipe for backward compatibility during transition
+      recipe: { select: { id: true, title: true } },
+    },
     orderBy: { date: 'asc' },
   })
 
@@ -57,6 +66,24 @@ export default async function MealPlanPage() {
     recipe: e.recipe,
     note: e.note,
     familyId: e.familyId,
+    // For backward compatibility, if there are no recipes but there's a recipeId, include it
+    recipes: e.recipes.length > 0 
+      ? e.recipes.map(r => ({
+          id: r.id,
+          recipeId: r.recipeId,
+          order: r.order,
+          courseType: r.courseType,
+          recipe: r.recipe,
+        }))
+      : e.recipeId && e.recipe
+        ? [{
+            id: 'legacy',
+            recipeId: e.recipeId,
+            order: 0,
+            courseType: null,
+            recipe: e.recipe,
+          }]
+        : [],
   }))
 
   return (

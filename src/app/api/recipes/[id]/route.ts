@@ -23,24 +23,40 @@ async function processTagsInput(tagsInput: any, familyId: string, userId: string
     // Convert tag names to tag IDs
     const tagIds: string[] = []
     for (const name of tagNames) {
-      const existing = await prisma.tag.findFirst({
-        where: {
-          name,
-          familyId,
-        },
-      })
-
-      if (existing) {
-        tagIds.push(existing.id)
-      } else {
-        // Create new tag
-        const newTag = await prisma.tag.create({
-          data: {
+      try {
+        const existing = await prisma.tag.findFirst({
+          where: {
             name,
             familyId,
           },
         })
-        tagIds.push(newTag.id)
+
+        if (existing) {
+          tagIds.push(existing.id)
+        } else {
+          // Create new tag
+          const newTag = await prisma.tag.create({
+            data: {
+              name,
+              familyId,
+            },
+          })
+          tagIds.push(newTag.id)
+        }
+      } catch (error) {
+        console.error(`Error processing tag "${name}":`, error)
+        // Try to find the tag again in case of race condition
+        const existingAfterError = await prisma.tag.findFirst({
+          where: {
+            name,
+            familyId,
+          },
+        })
+        if (existingAfterError) {
+          tagIds.push(existingAfterError.id)
+        } else {
+          console.error(`Failed to process tag "${name}"`)
+        }
       }
     }
     return tagIds
@@ -77,22 +93,39 @@ async function processTagsInput(tagsInput: any, familyId: string, userId: string
 
     // Create new tags for names that don't exist
     const newTagPromises = tagNames.map(async (name) => {
-      const existing = await prisma.tag.findFirst({
-        where: {
-          name,
-          familyId,
-        },
-      })
+      try {
+        const existing = await prisma.tag.findFirst({
+          where: {
+            name,
+            familyId,
+          },
+        })
 
-      if (existing) return existing.id
+        if (existing) return existing.id
 
-      const newTag = await prisma.tag.create({
-        data: {
-          name,
-          familyId,
-        },
-      })
-      return newTag.id
+        const newTag = await prisma.tag.create({
+          data: {
+            name,
+            familyId,
+          },
+        })
+        return newTag.id
+      } catch (error) {
+        console.error(`Error creating tag "${name}":`, error)
+        // Try to find the tag again in case of race condition
+        const existingAfterError = await prisma.tag.findFirst({
+          where: {
+            name,
+            familyId,
+          },
+        })
+        if (existingAfterError) {
+          return existingAfterError.id
+        } else {
+          console.error(`Failed to create tag "${name}"`)
+          throw error // Re-throw to fail the update
+        }
+      }
     })
 
     const newTagIds = await Promise.all(newTagPromises)

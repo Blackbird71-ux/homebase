@@ -34,13 +34,29 @@ export async function GET(
   const recipeTags = await (prisma as any).recipeTag.findMany({
     where: { tagId: id },
     include: {
-      recipe: true,
+      recipe: {
+        include: {
+          recipeTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   })
 
   const recipes = recipeTags.map((rt: any) => {
     const recipe = rt.recipe
+    // Get tags from relational tags first, fall back to comma-separated string
+    let tags: string[] = []
+    if (recipe.recipeTags && recipe.recipeTags.length > 0) {
+      tags = recipe.recipeTags.map((rt: any) => rt.tag.name)
+    } else if (recipe.tags && recipe.tags !== 'legacy-tags') {
+      tags = recipe.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
+    }
+    
     return {
       id: recipe.id,
       title: recipe.title,
@@ -51,7 +67,7 @@ export async function GET(
       servings: recipe.servings,
       ingredients: safeParseArray(recipe.ingredients),
       instructions: safeParseArray(recipe.instructions),
-      tags: recipe.tags ? recipe.tags.split(',').map((t: string) => t.trim()) : [],
+      tags,
       createdAt: recipe.createdAt.toISOString(),
     }
   })

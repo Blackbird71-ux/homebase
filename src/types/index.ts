@@ -35,6 +35,31 @@ export interface TonightsDinner {
   note: string | null
 }
 
+export interface MealPlanRecipe {
+  id: string
+  recipeId: string
+  order: number
+  courseType: string | null
+  recipe: {
+    id: string
+    title: string
+  }
+}
+
+export interface MealPlan {
+  id: string
+  date: string
+  mealType: string
+  note: string | null
+  familyId: string
+  recipeId: string | null
+  recipe: {
+    id: string
+    title: string
+  } | null
+  recipes: MealPlanRecipe[]
+}
+
 export interface ShoppingListSummary {
   listId: string
   listName: string
@@ -62,6 +87,12 @@ export interface CalendarEvent {
   category: string | null
   color: string | null
   createdBy: string
+  // Recurrence fields
+  recurrenceRule?: string | null
+  recurrenceEndDate?: string | null
+  recurrenceExceptions?: string | null
+  seriesId?: string | null
+  isRecurring?: boolean
 }
 
 // Custom theme color definitions

@@ -34,7 +34,7 @@ export default async function RecipeDetailPage({
   let tags: string[] = []
   if (recipe.recipeTags && recipe.recipeTags.length > 0) {
     tags = recipe.recipeTags.map((rt: any) => rt.tag.name)
-  } else if (recipe.tags) {
+  } else if (recipe.tags && recipe.tags !== 'legacy-tags') {
     tags = recipe.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
   }
 

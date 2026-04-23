@@ -7,7 +7,14 @@ import { getMealTypeColor } from '@/lib/meal-types'
 interface MealSlotCellProps {
   date: string // ISO date string YYYY-MM-DD
   mealPlanId: string | null
-  recipeName: string | null
+  recipeName: string | null // For backward compatibility
+  recipes?: Array<{
+    id: string
+    recipeId: string
+    recipeName: string
+    courseType?: string
+    order: number
+  }>
   note: string | null
   mealType?: string
   onClick: () => void
@@ -17,15 +24,68 @@ interface MealSlotCellProps {
 export function MealSlotCell({
   mealPlanId,
   recipeName,
+  recipes,
   note,
   mealType = 'dinner',
   onClick,
   onClear,
 }: MealSlotCellProps) {
-  const content = recipeName ?? note
+  // Use recipes if available, otherwise fall back to recipeName for backward compatibility
+  const hasRecipes = recipes && recipes.length > 0
+  const hasRecipeName = recipeName && recipeName.trim() !== ''
+  const hasNote = note && note.trim() !== ''
+  
+  // Determine what to display
+  let displayContent: React.ReactNode = null
+  
+  if (hasRecipes) {
+    // Display multiple recipes
+    displayContent = (
+      <div className="space-y-0.5">
+        {recipes
+          .sort((a, b) => a.order - b.order)
+          .map((recipe) => (
+            <div key={recipe.id} className="flex items-start gap-1">
+              {recipe.courseType && (
+                <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                  {recipe.courseType}:
+                </span>
+              )}
+              <span className="text-xs font-medium line-clamp-1">
+                {recipe.recipeName}
+              </span>
+            </div>
+          ))}
+        {hasNote && (
+          <div className="text-[10px] text-muted-foreground italic line-clamp-1">
+            {note}
+          </div>
+        )}
+      </div>
+    )
+  } else if (hasRecipeName) {
+    // Backward compatibility: single recipe
+    displayContent = (
+      <div className="space-y-0.5">
+        <p className="text-xs font-medium line-clamp-2">{recipeName}</p>
+        {hasNote && (
+          <div className="text-[10px] text-muted-foreground italic line-clamp-1">
+            {note}
+          </div>
+        )}
+      </div>
+    )
+  } else if (hasNote) {
+    // Just a note
+    displayContent = (
+      <p className="text-xs font-medium line-clamp-3 italic">{note}</p>
+    )
+  }
+  
   const mealColor = getMealTypeColor(mealType)
+  const hasContent = hasRecipes || hasRecipeName || hasNote
 
-  if (!content) {
+  if (!hasContent) {
     return (
       <button
         onClick={onClick}
@@ -42,7 +102,9 @@ export function MealSlotCell({
       className={`group relative w-full h-16 rounded-lg border border-border bg-card px-2 py-1 flex items-start justify-between gap-1 cursor-pointer hover:border-primary/50 transition-colors ${mealColor}`}
       onClick={onClick}
     >
-      <p className="text-xs font-medium line-clamp-3 flex-1">{content}</p>
+      <div className="flex-1 overflow-hidden">
+        {displayContent}
+      </div>
       {mealPlanId && (
         <Button
           variant="ghost"

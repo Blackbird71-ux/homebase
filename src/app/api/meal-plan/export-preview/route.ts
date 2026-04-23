@@ -32,15 +32,42 @@ export async function GET(req: Request) {
     where: {
       familyId: user.familyId,
       date: { gte: fromDate, lte: toDate },
-      recipeId: { not: null },
+      OR: [
+        { recipeId: { not: null } },
+        { recipes: { some: {} } }, // Include entries with recipes in join table
+      ],
     },
-    include: { recipe: true },
+    include: { 
+      recipe: true,
+      recipes: {
+        include: { recipe: true },
+        orderBy: { order: 'asc' },
+      },
+    },
     orderBy: { date: 'asc' },
   })
 
-  const allKeys = entries.flatMap((e) =>
-    safeParseArray(e.recipe!.ingredients).map((text) => normalizeIngredient(text))
-  )
+  // Collect ingredients from all recipes (primary recipe + join table recipes)
+  const allKeys = entries.flatMap((e) => {
+    const recipeIngredients: string[] = []
+    
+    // Include primary recipe if exists
+    if (e.recipe) {
+      recipeIngredients.push(...safeParseArray(e.recipe.ingredients))
+    }
+    
+    // Include all recipes from join table
+    const mealPlanRecipes = e.recipes as any[]
+    if (mealPlanRecipes && mealPlanRecipes.length > 0) {
+      mealPlanRecipes.forEach((mealPlanRecipe: { recipe?: { ingredients: string } }) => {
+        if (mealPlanRecipe.recipe) {
+          recipeIngredients.push(...safeParseArray(mealPlanRecipe.recipe.ingredients))
+        }
+      })
+    }
+    
+    return recipeIngredients.map((text) => normalizeIngredient(text))
+  })
   const uniqueKeys = [...new Set(allKeys)]
 
   const learned = await prisma.ingredientCategory.findMany({
@@ -48,21 +75,55 @@ export async function GET(req: Request) {
   })
   const learnedMap = new Map(learned.map((l) => [l.key, l.category]))
 
-  const recipes = entries.map((e) => ({
-    date: e.date.toISOString().slice(0, 10),
-    title: e.recipe!.title,
-    mealType: e.mealType,
-    ingredients: safeParseArray(e.recipe!.ingredients).map((text) => {
-      const key = normalizeIngredient(text)
-      const learnedCat = learnedMap.get(key)
-      return {
-        text,
-        key,
-        category: learnedCat ?? autoGuessCategory(key),
-        source: learnedCat ? 'learned' : 'guessed',
-      }
-    }),
-  }))
+  // Generate recipe previews for all recipes (primary + join table)
+  const recipes = entries.flatMap((e) => {
+    const recipePreviews = []
+    
+    // Include primary recipe if exists
+    if (e.recipe) {
+      recipePreviews.push({
+        date: e.date.toISOString().slice(0, 10),
+        title: e.recipe.title,
+        mealType: e.mealType,
+        ingredients: safeParseArray(e.recipe.ingredients).map((text) => {
+          const key = normalizeIngredient(text)
+          const learnedCat = learnedMap.get(key)
+          return {
+            text,
+            key,
+            category: learnedCat ?? autoGuessCategory(key),
+            source: learnedCat ? 'learned' : 'guessed',
+          }
+        }),
+      })
+    }
+    
+    // Include all recipes from join table
+    const mealPlanRecipes2 = e.recipes as any[]
+    if (mealPlanRecipes2 && mealPlanRecipes2.length > 0) {
+      mealPlanRecipes2.forEach((mealPlanRecipe: { recipe?: { title: string; ingredients: string } }) => {
+        if (mealPlanRecipe.recipe) {
+          recipePreviews.push({
+            date: e.date.toISOString().slice(0, 10),
+            title: mealPlanRecipe.recipe.title,
+            mealType: e.mealType,
+            ingredients: safeParseArray(mealPlanRecipe.recipe.ingredients).map((text) => {
+              const key = normalizeIngredient(text)
+              const learnedCat = learnedMap.get(key)
+              return {
+                text,
+                key,
+                category: learnedCat ?? autoGuessCategory(key),
+                source: learnedCat ? 'learned' : 'guessed',
+              }
+            }),
+          })
+        }
+      })
+    }
+    
+    return recipePreviews
+  })
 
   const groceriesList = await prisma.list.findFirst({
     where: { familyId: user.familyId, name: 'Groceries', type: 'SHOPPING', isActive: true },

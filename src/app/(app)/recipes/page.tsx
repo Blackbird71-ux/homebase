@@ -18,6 +18,15 @@ async function getData(familyId: string) {
         bookId: true,
         createdAt: true,
         image: true,
+        recipeTags: {
+          select: {
+            tag: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
       },
     }),
     prisma.recipeBook.findMany({
@@ -28,18 +37,28 @@ async function getData(familyId: string) {
   ])
 
   return {
-    recipes: recipeRows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      description: r.description,
-      tags: r.tags ? r.tags.split(',').map((t) => t.trim()) : [],
-      prepTime: r.prepTime,
-      cookTime: r.cookTime,
-      servings: r.servings,
-      bookId: r.bookId,
-      createdAt: r.createdAt.toISOString(),
-      image: r.image,
-    })),
+    recipes: recipeRows.map((r) => {
+      // Get tags from relational tags first, fall back to comma-separated string
+      let tags: string[] = []
+      if (r.recipeTags && r.recipeTags.length > 0) {
+        tags = r.recipeTags.map((rt) => rt.tag.name)
+      } else if (r.tags && r.tags !== 'legacy-tags') {
+        tags = r.tags.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
+      }
+      
+      return {
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        tags,
+        prepTime: r.prepTime,
+        cookTime: r.cookTime,
+        servings: r.servings,
+        bookId: r.bookId,
+        createdAt: r.createdAt.toISOString(),
+        image: r.image,
+      }
+    }),
     books: bookRows.map((b) => ({
       id: b.id,
       name: b.name,

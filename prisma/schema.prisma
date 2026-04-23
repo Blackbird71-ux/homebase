@@ -21,6 +21,7 @@ model Family {
   coziImports          CoziImport[]
   inviteCodes          InviteCode[]
   ingredientCategories IngredientCategory[]
+  ingredientMappings   IngredientMapping[]
   tags                 Tag[]
   notes                Note[]
 }
@@ -71,6 +72,13 @@ model Event {
   family               Family                 @relation(fields: [familyId], references: [id])
   googleCalendarSyncs  GoogleCalendarSync[]
   createdAt            DateTime               @default(now())
+  
+  // Recurrence fields
+  recurrenceRule       String?                // RRULE string (e.g., "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
+  recurrenceEndDate    DateTime?              // When recurrence ends
+  recurrenceExceptions String?                // JSON array of exception dates
+  seriesId             String?                // ID linking events in a series
+  isRecurring          Boolean                @default(false)
 }
 
 model List {
@@ -123,6 +131,7 @@ model Recipe {
   familyId     String
   family       Family      @relation(fields: [familyId], references: [id])
   mealPlans    MealPlan[]
+  mealPlanRecipes MealPlanRecipe[]
   recipeTags   RecipeTag[]
   createdAt    DateTime    @default(now())
 }
@@ -136,8 +145,23 @@ model MealPlan {
   note      String?
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
+  recipes   MealPlanRecipe[]
 
   @@unique([familyId, date, mealType])
+}
+
+model MealPlanRecipe {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  recipeId   String
+  recipe     Recipe   @relation(fields: [recipeId], references: [id])
+  order      Int      @default(0)
+  courseType String?
+  createdAt  DateTime @default(now())
+
+  @@unique([mealPlanId, recipeId])
+  @@index([mealPlanId, order])
 }
 
 model CoziImport {
@@ -164,6 +188,18 @@ model IngredientCategory {
   updatedAt DateTime @updatedAt
 
   @@unique([familyId, key])
+}
+
+model IngredientMapping {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  ingredient String  // The ingredient text to match (e.g., "Bacon")
+  category  String   // The category to assign (e.g., "Deli")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([familyId, ingredient])
 }
 
 model RecipeBook {

@@ -12,6 +12,13 @@ interface MealPlanEntry {
   recipe: { id: string; title: string } | null
   note: string | null
   familyId: string
+  recipes: Array<{
+    id: string
+    recipeId: string
+    order: number
+    courseType: string | null
+    recipe: { id: string; title: string }
+  }>
 }
 
 interface DailyMealColumnProps {
@@ -67,6 +74,13 @@ export function DailyMealColumn({
                 date={date}
                 mealPlanId={entry?.id ?? null}
                 recipeName={entry?.recipe?.title ?? null}
+                recipes={entry?.recipes?.map(r => ({
+                  id: r.id,
+                  recipeId: r.recipeId,
+                  recipeName: r.recipe.title,
+                  courseType: r.courseType ?? undefined,
+                  order: r.order,
+                }))}
                 note={entry?.note ?? null}
                 onClick={() => onMealClick(date, mealType.id)}
                 onClear={() => entry && onMealClear(entry.id)}

@@ -77,6 +77,9 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
   const [servings, setServings] = useState(String(initialData?.servings ?? ''))
   const [sourceUrl, setSourceUrl] = useState(initialData?.sourceUrl ?? '')
   const [imageUrl, setImageUrl] = useState(initialData?.image ?? '')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image ?? null)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [scrapeUrl, setScrapeUrl] = useState('')
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
@@ -115,7 +118,35 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
     if (!title.trim()) return
     setSaving(true)
     setSaveError('')
+    
     try {
+      let finalImageUrl = imageUrl.trim() || null
+      
+      // Upload image file if present
+      if (imageFile && editMode?.recipeId) {
+        setUploadingImage(true)
+        try {
+          const formData = new FormData()
+          formData.append('image', imageFile)
+          formData.append('recipeId', editMode.recipeId)
+          
+          const uploadRes = await fetch('/api/recipes/upload', {
+            method: 'POST',
+            body: formData,
+          })
+          
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json()
+            finalImageUrl = uploadData.imageUrl
+          } else {
+            const errorData = await uploadRes.json()
+            throw new Error(errorData.error || 'Failed to upload image')
+          }
+        } finally {
+          setUploadingImage(false)
+        }
+      }
+      
       const url = editMode ? `/api/recipes/${editMode.recipeId}` : '/api/recipes'
       const method = editMode ? 'PUT' : 'POST'
       
@@ -132,7 +163,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
           cookTime: cookTime ? parseInt(cookTime) : null,
           servings: servings ? parseInt(servings) : null,
           sourceUrl: sourceUrl.trim() || null,
-          image: imageUrl.trim() || null,
+          image: finalImageUrl,
           bookId: bookId || null,
         }),
       })
@@ -147,6 +178,8 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
       } else {
         setSaveError(data.error ?? 'Failed to save recipe')
       }
+    } catch (error: any) {
+      setSaveError(error.message || 'Failed to save recipe')
     } finally {
       setSaving(false)
     }
@@ -273,11 +306,62 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="recipe-image">Image URL</Label>
-                <Input id="recipe-image" type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." />
-                {imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={imageUrl} alt="Preview" className="rounded-md object-cover h-32 w-full mt-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                <Label htmlFor="recipe-image">Recipe Image</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    id="recipe-image" 
+                    type="url" 
+                    value={imageUrl} 
+                    onChange={(e) => {
+                      setImageUrl(e.target.value)
+                      setImagePreview(e.target.value)
+                      setImageFile(null)
+                    }} 
+                    placeholder="https://..." 
+                    className="flex-1"
+                  />
+                  <div className="relative">
+                    <Input
+                      id="image-upload"
+                      type="file"
+                      accept="image/*"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setImageFile(file)
+                          setImageUrl('')
+                          setImagePreview(URL.createObjectURL(file))
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="pointer-events-none"
+                    >
+                      Upload
+                    </Button>
+                  </div>
+                </div>
+                
+                {(imagePreview || imageUrl) && (
+                  <div className="mt-2">
+                    <p className="text-sm text-muted-foreground mb-1">Preview:</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={imagePreview || imageUrl} 
+                      alt="Preview" 
+                      className="rounded-md object-cover h-32 w-full" 
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} 
+                    />
+                  </div>
+                )}
+                
+                {imageFile && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Selected: {imageFile.name} ({(imageFile.size / 1024).toFixed(1)} KB)
+                  </p>
                 )}
               </div>
 

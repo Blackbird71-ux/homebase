@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { autoGuessCategory } from '@/lib/ingredient-helpers'
 
 interface ShoppingListMeta {
   id: string
@@ -108,18 +109,19 @@ export function AddToListDialog({
       }
       
       const results = await Promise.all(
-        toAdd.map((content) =>
-          fetch(`/api/lists/${selectedListId}/items`, {
+        toAdd.map((content) => {
+          const category = autoGuessCategory(content)
+          return fetch(`/api/lists/${selectedListId}/items`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               content,
-              category: 'Other',
+              category,
               recipeId,
               recipeName,
             }),
           })
-        )
+        })
       )
       const failed = results.filter((r) => !r.ok).length
       if (failed > 0) {

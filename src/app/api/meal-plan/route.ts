@@ -24,7 +24,16 @@ export async function GET(req: Request) {
       familyId: user.familyId,
       date: { gte: fromDate, lte: toDate },
     },
-    include: { recipe: { select: { id: true, title: true } } },
+    include: {
+      recipes: {
+        include: {
+          recipe: { select: { id: true, title: true } },
+        },
+        orderBy: { order: 'asc' },
+      },
+      // Keep recipe for backward compatibility during transition
+      recipe: { select: { id: true, title: true } },
+    },
     orderBy: { date: 'asc' },
   })
 
@@ -32,6 +41,24 @@ export async function GET(req: Request) {
     plans.map((p) => ({
       ...p,
       date: p.date.toISOString(),
+      // For backward compatibility, if there are no recipes but there's a recipeId, include it
+      recipes: p.recipes.length > 0 
+        ? p.recipes.map(r => ({
+            id: r.id,
+            recipeId: r.recipeId,
+            order: r.order,
+            courseType: r.courseType,
+            recipe: r.recipe,
+          }))
+        : p.recipeId 
+          ? [{
+              id: 'legacy',
+              recipeId: p.recipeId,
+              order: 0,
+              courseType: null,
+              recipe: p.recipe,
+            }]
+          : [],
     }))
   )
 }
@@ -39,7 +66,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { date, mealType, recipeId, note } = body
+  const { date, mealType, recipeIds, note } = body
 
   if (!date || !mealType) {
     return NextResponse.json({ error: 'date and mealType are required' }, { status: 400 })
@@ -59,6 +86,21 @@ export async function POST(req: Request) {
     Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate())
   )
 
+  // Handle recipeIds - can be undefined, null, string, or array
+  const recipeIdArray = Array.isArray(recipeIds) 
+    ? recipeIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+    : typeof recipeIds === 'string' && recipeIds.trim() !== ''
+      ? [recipeIds]
+      : []
+
+  // For backward compatibility, also accept recipeId (singular)
+  const legacyRecipeId = body.recipeId
+  const finalRecipeIds = recipeIdArray.length > 0 
+    ? recipeIdArray 
+    : legacyRecipeId && typeof legacyRecipeId === 'string' && legacyRecipeId.trim() !== ''
+      ? [legacyRecipeId]
+      : []
+
   const plan = await prisma.mealPlan.upsert({
     where: {
       familyId_date_mealType: {
@@ -70,16 +112,74 @@ export async function POST(req: Request) {
     create: {
       date: normalized,
       mealType,
-      recipeId: recipeId ?? null,
       note: note ?? null,
       familyId: user.familyId,
+      // For backward compatibility, keep recipeId if there's exactly one recipe
+      recipeId: finalRecipeIds.length === 1 ? finalRecipeIds[0] : null,
     },
     update: {
-      recipeId: recipeId ?? null,
       note: note ?? null,
+      // For backward compatibility, keep recipeId if there's exactly one recipe
+      recipeId: finalRecipeIds.length === 1 ? finalRecipeIds[0] : null,
     },
-    include: { recipe: { select: { id: true, title: true } } },
+    include: {
+      recipes: {
+        include: {
+          recipe: { select: { id: true, title: true } },
+        },
+        orderBy: { order: 'asc' },
+      },
+      recipe: { select: { id: true, title: true } },
+    },
   })
 
-  return NextResponse.json({ ...plan, date: plan.date.toISOString() }, { status: 201 })
+  // Delete existing MealPlanRecipe records and create new ones
+  if (plan.id) {
+    await prisma.mealPlanRecipe.deleteMany({
+      where: { mealPlanId: plan.id },
+    })
+
+    if (finalRecipeIds.length > 0) {
+      await prisma.mealPlanRecipe.createMany({
+        data: finalRecipeIds.map((recipeId, index) => ({
+          mealPlanId: plan.id,
+          recipeId,
+          order: index,
+        })),
+      })
+    }
+  }
+
+  // Fetch the updated plan with recipes
+  const updatedPlan = await prisma.mealPlan.findUnique({
+    where: { id: plan.id },
+    include: {
+      recipes: {
+        include: {
+          recipe: { select: { id: true, title: true } },
+        },
+        orderBy: { order: 'asc' },
+      },
+      recipe: { select: { id: true, title: true } },
+    },
+  })
+
+  if (!updatedPlan) {
+    return NextResponse.json({ error: 'Failed to create meal plan' }, { status: 500 })
+  }
+
+  return NextResponse.json(
+    {
+      ...updatedPlan,
+      date: updatedPlan.date.toISOString(),
+      recipes: updatedPlan.recipes.map(r => ({
+        id: r.id,
+        recipeId: r.recipeId,
+        order: r.order,
+        courseType: r.courseType,
+        recipe: r.recipe,
+      })),
+    },
+    { status: 201 }
+  )
 }

@@ -18,12 +18,21 @@ interface Recipe {
   title: string
 }
 
+interface SelectedRecipe {
+  id: string
+  recipeId: string
+  recipeName: string
+  order: number
+  courseType?: string
+}
+
 interface AssignMealModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   date: string // YYYY-MM-DD
   mealType: string
-  onAssign: (data: { recipeId?: string; note?: string }) => Promise<void>
+  existingRecipes?: SelectedRecipe[]
+  onAssign: (data: { recipeIds?: string[]; note?: string }) => void
 }
 
 export function AssignMealModal({
@@ -31,12 +40,23 @@ export function AssignMealModal({
   onOpenChange,
   date,
   mealType,
+  existingRecipes = [],
   onAssign,
 }: AssignMealModalProps) {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [search, setSearch] = useState('')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [selectedRecipeIds, setSelectedRecipeIds] = useState<string[]>([])
+  
+  // Initialize selected recipes from existingRecipes
+  useEffect(() => {
+    if (open && existingRecipes.length > 0) {
+      setSelectedRecipeIds(existingRecipes.map(r => r.recipeId))
+    } else if (open) {
+      setSelectedRecipeIds([])
+    }
+  }, [open, existingRecipes])
 
   useEffect(() => {
     if (!open) return
@@ -53,12 +73,23 @@ export function AssignMealModal({
     r.title.toLowerCase().includes(search.toLowerCase())
   )
 
-  async function assignRecipe(recipeId: string) {
+  function toggleRecipe(recipeId: string) {
+    setSelectedRecipeIds(prev => {
+      if (prev.includes(recipeId)) {
+        return prev.filter(id => id !== recipeId)
+      } else {
+        return [...prev, recipeId]
+      }
+    })
+  }
+
+  async function saveRecipes() {
     setSaving(true)
     try {
-      await onAssign({ recipeId })
+      await onAssign({ recipeIds: selectedRecipeIds })
       onOpenChange(false)
       setSearch('')
+      setSelectedRecipeIds([])
     } finally {
       setSaving(false)
     }
@@ -69,9 +100,11 @@ export function AssignMealModal({
     if (!note.trim()) return
     setSaving(true)
     try {
-      await onAssign({ note: note.trim() })
+      // When saving a note, clear any selected recipes
+      await onAssign({ note: note.trim(), recipeIds: [] })
       onOpenChange(false)
       setNote('')
+      setSelectedRecipeIds([])
     } finally {
       setSaving(false)
     }
@@ -108,6 +141,34 @@ export function AssignMealModal({
                 className="pl-8"
               />
             </div>
+            
+            {/* Selected recipes summary */}
+            {selectedRecipeIds.length > 0 && (
+              <div className="bg-muted/50 rounded-md p-2">
+                <p className="text-xs font-medium mb-1">Selected recipes ({selectedRecipeIds.length}):</p>
+                <div className="flex flex-wrap gap-1">
+                  {selectedRecipeIds.map(recipeId => {
+                    const recipe = recipes.find(r => r.id === recipeId)
+                    return recipe ? (
+                      <span 
+                        key={recipeId}
+                        className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-1 rounded"
+                      >
+                        {recipe.title}
+                        <button
+                          type="button"
+                          onClick={() => toggleRecipe(recipeId)}
+                          className="text-primary/70 hover:text-primary"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ) : null
+                  })}
+                </div>
+              </div>
+            )}
+            
             <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
               {filtered.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
@@ -117,14 +178,27 @@ export function AssignMealModal({
               {filtered.map((r) => (
                 <button
                   key={r.id}
-                  onClick={() => assignRecipe(r.id)}
+                  type="button"
+                  onClick={() => toggleRecipe(r.id)}
                   disabled={saving}
-                  className="text-left px-3 py-2 rounded-md text-sm hover:bg-muted transition-colors"
+                  className={`text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                    selectedRecipeIds.includes(r.id)
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-muted'
+                  }`}
                 >
                   {r.title}
                 </button>
               ))}
             </div>
+            
+            <Button 
+              onClick={saveRecipes} 
+              disabled={saving}
+              className="mt-2"
+            >
+              {saving ? 'Saving...' : `Save ${selectedRecipeIds.length > 0 ? `(${selectedRecipeIds.length} recipes)` : 'meal'}`}
+            </Button>
           </TabsContent>
 
           <TabsContent value="note" className="mt-3">

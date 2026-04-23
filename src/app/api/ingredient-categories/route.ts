@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
+import { KEYWORD_MAP } from '@/lib/ingredient-helpers'
 
 export async function GET() {
   const user = await requireSession()
   
-  const categories = await (prisma as any).ingredientCategory.findMany({
+  // Check if family has any ingredient categories
+  const existingCategories = await (prisma as any).ingredientCategory.findMany({
     where: { familyId: user.familyId },
     orderBy: [
       { sortOrder: 'asc' },
@@ -13,8 +16,74 @@ export async function GET() {
     ],
   })
 
+  // If no categories exist, create default ones
+  if (existingCategories.length === 0) {
+    console.log('No ingredient categories found for family, creating default categories and keyword mappings')
+    
+    const createdCategories = []
+    
+    // First, create system categories
+    for (let i = 0; i < DEFAULT_SHOPPING_CATEGORIES.length; i++) {
+      const categoryName = DEFAULT_SHOPPING_CATEGORIES[i]
+      try {
+        // Create system category
+        const systemCategory = await (prisma as any).ingredientCategory.create({
+          data: {
+            key: `system_${categoryName.toLowerCase()}`,
+            category: categoryName,
+            sortOrder: i * 10, // Space them out for reordering
+            isCustom: false,
+            familyId: user.familyId,
+          },
+        })
+        createdCategories.push(systemCategory)
+        
+        // Create keyword mappings for this category if it exists in KEYWORD_MAP
+        if (KEYWORD_MAP[categoryName as keyof typeof KEYWORD_MAP]) {
+          const keywords = KEYWORD_MAP[categoryName as keyof typeof KEYWORD_MAP]
+          for (const keyword of keywords) {
+            try {
+              await (prisma as any).ingredientCategory.create({
+                data: {
+                  key: keyword.toLowerCase(),
+                  category: categoryName,
+                  sortOrder: i * 10,
+                  isCustom: false,
+                  familyId: user.familyId,
+                },
+              })
+              // Don't add keyword mappings to the main categories list
+            } catch (error) {
+              console.error(`Failed to create keyword mapping ${keyword} -> ${categoryName}:`, error)
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to create default category ${categoryName}:`, error)
+      }
+    }
+    
+    // Return only the system categories (not keyword mappings)
+    return NextResponse.json(
+      createdCategories.map((cat: any) => ({
+        id: cat.id,
+        key: cat.key,
+        category: cat.category,
+        sortOrder: cat.sortOrder,
+        isCustom: cat.isCustom,
+        createdAt: cat.createdAt.toISOString(),
+        updatedAt: cat.updatedAt.toISOString(),
+      }))
+    )
+  }
+
+  // Filter out keyword mappings (only return categories that start with 'system_' or are custom)
+  const categoriesOnly = existingCategories.filter((cat: any) => 
+    cat.key.startsWith('system_') || cat.isCustom
+  )
+
   return NextResponse.json(
-    categories.map((cat: any) => ({
+    categoriesOnly.map((cat: any) => ({
       id: cat.id,
       key: cat.key,
       category: cat.category,
