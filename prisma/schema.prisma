@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Family {
@@ -25,6 +24,7 @@ model Family {
   ingredientMappings   IngredientMapping[]
   tags                 Tag[]
   notes                Note[]
+  eventCategories      EventCategory[]
 }
 
 model User {
@@ -247,6 +247,20 @@ model GoogleCalendarSync {
   user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId])
+}
+
+model EventCategory {
+  id        String   @id @default(cuid())
+  name      String
+  color     String?
+  isSystem  Boolean  @default(false)
+  sortOrder Int      @default(0)
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([familyId, name])
+  @@index([familyId])
 }
 
 model Note {

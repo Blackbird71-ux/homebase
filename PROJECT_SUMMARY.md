@@ -18,7 +18,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Event creation, editing, and deletion
 - Google Calendar synchronization
 - Personal vs family event distinction
-- Color-coded event categories
+- Color-coded event categories (editable names and colors, even for system defaults)
 - All-day events support
 
 #### 3. **Meal Planning System**

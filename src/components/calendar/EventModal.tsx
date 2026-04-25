@@ -9,7 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns'
 import type { CalendarEvent } from '@/types'
 
-const CATEGORIES = ['Medical', 'School', 'Social', 'Work', 'Other']
+interface CategoryOption {
+  id: string
+  name: string
+  color: string | null
+}
+
+const REPEAT_OPTIONS = [
+  { value: '', label: 'Does not repeat' },
+  { value: 'FREQ=DAILY', label: 'Daily' },
+  { value: 'FREQ=WEEKLY', label: 'Weekly' },
+  { value: 'FREQ=MONTHLY', label: 'Monthly' },
+  { value: 'FREQ=YEARLY', label: 'Yearly' },
+]
 
 interface EventModalProps {
   event?: CalendarEvent | null
@@ -28,8 +40,22 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
   const [color, setColor] = useState('')
   const [description, setDescription] = useState('')
   const [isPersonal, setIsPersonal] = useState(false)
+  const [recurrenceRule, setRecurrenceRule] = useState('')
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
+  const [categories, setCategories] = useState<CategoryOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+
+  // Load event categories when modal opens
+  useEffect(() => {
+    if (open) {
+      fetch('/api/event-categories')
+        .then(res => res.json())
+        .then(data => setCategories(data))
+        .catch(() => {})
+    }
+  }, [open])
 
   useEffect(() => {
     if (event) {
@@ -41,6 +67,8 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
       setColor(event.color ?? '')
       setDescription(event.description ?? '')
       setIsPersonal(event.isPersonal ?? false)
+      setRecurrenceRule(event.recurrenceRule ?? '')
+      setRecurrenceEndDate(event.recurrenceEndDate ? format(new Date(event.recurrenceEndDate), "yyyy-MM-dd") : '')
     } else {
       const d = defaultDate ?? new Date()
       setTitle('')
@@ -51,9 +79,12 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
       setColor('')
       setDescription('')
       setIsPersonal(false)
+      setRecurrenceRule('')
+      setRecurrenceEndDate('')
     }
     setError('')
   }, [event, defaultDate, open])
+
 
   async function handleSave() {
     if (!title.trim()) { setError('Title is required'); return }
@@ -65,10 +96,34 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
     const startDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(start).toISOString()
     const endDate = isAllDay ? new Date(end.split('T')[0]).toISOString() : new Date(end).toISOString()
 
+    const body: Record<string, unknown> = {
+      title,
+      description,
+      start: startDate,
+      end: endDate,
+      isAllDay,
+      category,
+      color: color || null,
+      isPersonal,
+    }
+
+    // Only send recurrence fields if a rule is selected
+    if (recurrenceRule) {
+      body.recurrenceRule = recurrenceRule
+      body.isRecurring = true
+      if (recurrenceEndDate) {
+        body.recurrenceEndDate = new Date(recurrenceEndDate + 'T23:59:59').toISOString()
+      }
+    } else {
+      body.recurrenceRule = null
+      body.isRecurring = false
+      body.recurrenceEndDate = null
+    }
+
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description, start: startDate, end: endDate, isAllDay, category, color: color || null, isPersonal }),
+      body: JSON.stringify(body),
     })
 
     setLoading(false)
@@ -129,7 +184,16 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
             <Select value={category} onValueChange={v => setCategory(v ?? 'Other')}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {categories.map(cat => (
+                  <SelectItem key={cat.id} value={cat.name}>
+                    <span className="flex items-center gap-2">
+                      {cat.color && (
+                        <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: cat.color }} />
+                      )}
+                      {cat.name}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -191,6 +255,28 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
               </button>
             </div>
           </div>
+          {/* Recurrence / Repeat */}
+          <div className="space-y-1">
+            <Label>Repeat</Label>
+            <Select value={recurrenceRule} onValueChange={v => setRecurrenceRule(v ?? '')}>
+              <SelectTrigger><SelectValue placeholder="Does not repeat" /></SelectTrigger>
+              <SelectContent>
+                {REPEAT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {recurrenceRule && (
+            <div className="space-y-1">
+              <Label>End repeat (optional)</Label>
+              <Input
+                type="date"
+                value={recurrenceEndDate}
+                onChange={e => setRecurrenceEndDate(e.target.value)}
+                placeholder="No end date"
+              />
+              <p className="text-xs text-muted-foreground">Leave empty to repeat indefinitely</p>
+            </div>
+          )}
           <div className="space-y-1">
             <Label>Notes</Label>
             <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional notes" />

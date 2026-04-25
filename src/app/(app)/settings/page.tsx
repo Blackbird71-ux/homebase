@@ -10,6 +10,8 @@ import { ImportTab } from '@/components/settings/ImportTab'
 import { TagManager } from '@/components/tags/TagManager'
 import { CategoryManager } from '@/components/categories/CategoryManager'
 import { IngredientMappingsTab } from '@/components/settings/IngredientMappingsTab'
+import { EventCategoryManager } from '@/components/calendar/EventCategoryManager'
+
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -71,7 +73,9 @@ export default async function SettingsPage() {
             <TabsTrigger value="import">Import</TabsTrigger>
             <TabsTrigger value="tags">Tags</TabsTrigger>
             <TabsTrigger value="categories">Categories</TabsTrigger>
+            <TabsTrigger value="event-categories">Event Categories</TabsTrigger>
             <TabsTrigger value="ingredient-mappings">Ingredient Mappings</TabsTrigger>
+
           </TabsList>
 
           <TabsContent value="account">
@@ -141,9 +145,14 @@ export default async function SettingsPage() {
             <CategoryManager />
           </TabsContent>
 
+          <TabsContent value="event-categories">
+            <EventCategoryManager />
+          </TabsContent>
+
           <TabsContent value="ingredient-mappings">
             <IngredientMappingsTab />
           </TabsContent>
+
         </Tabs>
       </div>
     </div>
