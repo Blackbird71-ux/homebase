@@ -195,17 +195,19 @@ npx prisma db seed
 ## 📖 **Documentation**
 
 ### **Detailed Documentation**
-- **[Project Summary](docs/PROJECT_SUMMARY.md)** - Comprehensive implementation details
-- **[API Documentation](docs/API.md)** - API endpoint reference
-- **[User Guide](docs/USER_GUIDE.md)** - Application usage instructions
-- **[Development Guide](docs/DEVELOPMENT.md)** - Development setup and guidelines
+- **[Design Spec](docs/superpowers/specs/2026-04-16-homebase-design.md)** - Architecture and design specification
+- **[Phase 1 Plan](docs/superpowers/plans/2026-04-16-homebase-phase1.md)** - Core implementation plan
+- **[Phase 2 Plan](docs/superpowers/plans/2026-04-16-homebase-phase2.md)** - Content modules implementation plan
+- **[Phase 3 Plan](docs/superpowers/plans/2026-04-16-homebase-phase3.md)** - Polish and settings implementation plan
+- **[Deployment Guide](DEPLOY.md)** - Deployment reference for NAS and Cloudflare tunnel
+- **[Build Guide](Homebase%20build%20guide.md)** - Project specification and build instructions
 
 ### **Feature Guides**
-- [Meal Planning Guide](docs/MEAL_PLANNING.md)
-- [Shopping List Guide](docs/SHOPPING_LIST.md)
-- [Recipe Management Guide](docs/RECIPES.md)
-- [Notes System Guide](docs/NOTES.md)
-- [Theming Guide](docs/THEMING.md)
+- [Meal Planning](src/app/(app)/meal-plan/) - Meal planner module
+- [Shopping Lists](src/app/(app)/lists/) - Shopping and todo lists
+- [Recipe Management](src/app/(app)/recipes/) - Recipe management
+- [Notes System](src/app/(app)/notes/) - Family notes
+- [Settings](src/app/(app)/settings/) - Application settings and configuration
 
 ## 🤝 **Contributing**
 
@@ -242,6 +244,6 @@ For questions about usage or development, please check the documentation first o
 
 ---
 
-**Last Updated**: April 20, 2026  
+**Last Updated**: April 25, 2026  
 **Version**: 2.0.0  
 **Status**: ✅ **Production Ready**

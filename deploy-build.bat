@@ -1,6 +1,6 @@
 @echo off
 echo === Building Homebase Docker image ===
-cd /d "C:\Users\liddlem\Downloads\Claude Apps\HomeBase\homebase"
+cd /d "C:\Appdev\HomeBase"
 
 docker-compose down
 docker image rm homebase:latest -f

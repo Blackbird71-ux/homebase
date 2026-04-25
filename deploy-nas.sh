@@ -34,6 +34,8 @@ docker run -d \
   --env-file /volume1/docker/homebase/.env.local \
   -e DATABASE_URL=file:/data/homebase.db \
   -e NODE_ENV=production \
+  -e AUTH_URL=https://homebase.liddleapps.com \
+  -e NEXTAUTH_URL=https://homebase.liddleapps.com \
   homebase:latest
 
 echo "=== Waiting for app to start ==="
