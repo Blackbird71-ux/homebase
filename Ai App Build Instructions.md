@@ -29,6 +29,9 @@ we use the build file dockerfile, docker-compose.yml and docker-entrypoint.sh as
 
 
 \### General
+
+\- Keep it all as simple and focussed as possible while acheiving the objective do not overthink and go down a rabbit hole.
+
 \- Work carefully and thoroughly with \*\*no regressions\*\*.
 
 \- \*\*Only modify files directly related to the task.\*\* Do not refactor unrelated code.
