@@ -47,3 +47,6 @@ next-env.d.ts
 # tool artifacts
 .cline/
 dist/
+
+# docker build artifacts
+homebase.tar
