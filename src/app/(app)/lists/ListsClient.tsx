@@ -43,14 +43,24 @@ function toListItemShape(item: SerializedItem): ListItemShape {
 
 interface ListsClientProps {
   initialLists: SerializedList[]
+  defaultListId?: string | null
 }
 
-export function ListsClient({ initialLists }: ListsClientProps) {
+export function ListsClient({ initialLists, defaultListId: initialDefaultListId }: ListsClientProps) {
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
-  const [activeListId, setActiveListId] = useState<string | null>(
-    initialLists[0]?.id ?? null
-  )
+  const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
+
+  // Determine initial active list: prefer defaultListId, fall back to first list
+  const initialActiveId = (() => {
+    if (initialDefaultListId && initialLists.some((l) => l.id === initialDefaultListId)) {
+      return initialDefaultListId
+    }
+    return initialLists[0]?.id ?? null
+  })()
+  const [activeListId, setActiveListId] = useState<string | null>(initialActiveId)
+
   const [dialogOpen, setDialogOpen] = useState(false)
+
 
   const activeList = lists.find((l) => l.id === activeListId) ?? null
 
@@ -80,6 +90,20 @@ export function ListsClient({ initialLists }: ListsClientProps) {
     }
   }
 
+  async function handleSetDefault(listId: string) {
+    // Save the preference to the server
+    const res = await fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uiPreferences: { defaultListId: listId || null },
+      }),
+    })
+    if (res.ok) {
+      setDefaultListId(listId || null)
+    }
+  }
+
   const listsMeta = lists.map((l) => ({
     id: l.id,
     name: l.name,
@@ -88,15 +112,19 @@ export function ListsClient({ initialLists }: ListsClientProps) {
   }))
 
   return (
+
     <div className="flex h-full overflow-hidden">
       <aside className="w-[200px] shrink-0 border-r border-border overflow-y-auto">
         <ListSelector
           lists={listsMeta}
           activeListId={activeListId}
+          defaultListId={defaultListId}
           onSelect={setActiveListId}
           onNewList={() => setDialogOpen(true)}
           onDeleteList={handleDeleteList}
+          onSetDefault={handleSetDefault}
         />
+
       </aside>
 
       <main className="flex-1 overflow-y-auto p-6">

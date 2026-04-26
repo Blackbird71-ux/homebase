@@ -1,0 +1,6 @@
+- [x] Analyze codebase structure and existing preferences system
+- [x] Update lists/page.tsx to read defaultListId from user's uiPreferences
+- [x] Update ListsClient.tsx to accept defaultListId prop and use it for initial active list
+- [x] Update ListSelector.tsx with star icon for setting/removing default list
+- [x] Update settings API route to merge uiPreferences instead of replacing
+- [x] Verify TypeScript compilation passes

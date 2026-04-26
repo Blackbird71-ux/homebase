@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { PlusIcon, StarIcon, Trash2Icon } from 'lucide-react'
 
 interface ListMeta {
   id: string
@@ -13,22 +13,27 @@ interface ListMeta {
 interface ListSelectorProps {
   lists: ListMeta[]
   activeListId: string | null
+  defaultListId: string | null
   onSelect: (id: string) => void
   onNewList: () => void
   onDeleteList?: (id: string) => void
+  onSetDefault?: (id: string) => void
 }
 
 export function ListSelector({
   lists,
   activeListId,
+  defaultListId,
   onSelect,
   onNewList,
   onDeleteList,
+  onSetDefault,
 }: ListSelectorProps) {
   const shopping = lists.filter((l) => l.type === 'SHOPPING')
   const todo = lists.filter((l) => l.type === 'TODO')
 
   function renderList(list: ListMeta) {
+    const isDefault = defaultListId === list.id
     return (
       <div key={list.id} className="group flex items-center gap-1 px-1">
         <button
@@ -42,15 +47,30 @@ export function ListSelector({
           <span className="truncate block">{list.name}</span>
           <span className="text-xs opacity-70">{list._count.items} items</span>
         </button>
-        {onDeleteList && (
-          <button
-            onClick={() => onDeleteList(list.id)}
-            className="p-1 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
-            title="Delete list"
-          >
-            <Trash2Icon className="h-3 w-3" />
-          </button>
-        )}
+        <div className="flex items-center gap-0.5">
+          {onSetDefault && (
+            <button
+              onClick={() => onSetDefault(isDefault ? '' : list.id)}
+              className={`p-1 rounded transition-colors shrink-0 ${
+                isDefault
+                  ? 'text-yellow-500 hover:text-yellow-600'
+                  : 'text-muted-foreground/30 hover:text-muted-foreground/60'
+              }`}
+              title={isDefault ? 'Remove as default' : 'Set as default list'}
+            >
+              <StarIcon className={`h-3 w-3 ${isDefault ? 'fill-yellow-500' : ''}`} />
+            </button>
+          )}
+          {onDeleteList && (
+            <button
+              onClick={() => onDeleteList(list.id)}
+              className="p-1 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+              title="Delete list"
+            >
+              <Trash2Icon className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       </div>
     )
   }

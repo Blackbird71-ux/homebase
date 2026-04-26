@@ -42,8 +42,9 @@ model User {
   theme         String   @default("modern") // light, dark, sepia
   fontSize      String   @default("base")
   weekStartsOn  Int      @default(0) // 0 for Sunday
-  defaultListId String?
-  uiPreferences Json?    // For specific toggles (showWeather, showCalendarPreview)
+  doneItemColor String   @default("RED")
+  uiPreferences Json?    // JSON object: customTheme, defaultListId, etc.
+
 }
 
 model Event {

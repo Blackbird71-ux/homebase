@@ -14,8 +14,25 @@ async function getLists(familyId: string) {
 }
 
 export default async function ListsPage() {
-  const user = await requireSession()
-  const lists = await getLists(user.familyId)
+  const session = await requireSession()
+  const [user, lists] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.id },
+      select: { uiPreferences: true },
+    }),
+    getLists(session.familyId),
+  ])
+
+  // Parse defaultListId from uiPreferences
+  let defaultListId: string | null = null
+  if (user?.uiPreferences) {
+    try {
+      const prefs = JSON.parse(user.uiPreferences)
+      defaultListId = prefs.defaultListId ?? null
+    } catch {
+      // ignore parse errors
+    }
+  }
 
   // Serialize dates for client
   type RawList = Awaited<ReturnType<typeof getLists>>[number]
@@ -31,5 +48,5 @@ export default async function ListsPage() {
     })),
   }))
 
-  return <ListsClient initialLists={serialized} />
+  return <ListsClient initialLists={serialized} defaultListId={defaultListId} />
 }

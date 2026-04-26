@@ -106,8 +106,24 @@ export async function PATCH(req: Request) {
     updateData.name = name.trim()
   }
   if (uiPreferences !== undefined) {
-    updateData.uiPreferences = typeof uiPreferences === 'string' ? uiPreferences : JSON.stringify(uiPreferences)
+    // Merge with existing uiPreferences so we don't lose other settings (e.g. customTheme)
+    const existingUser = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { uiPreferences: true },
+    })
+    let merged = {}
+    if (existingUser?.uiPreferences) {
+      try {
+        merged = JSON.parse(existingUser.uiPreferences)
+      } catch {
+        // ignore parse errors
+      }
+    }
+    const incoming = typeof uiPreferences === 'string' ? JSON.parse(uiPreferences) : uiPreferences
+    merged = { ...merged, ...incoming }
+    updateData.uiPreferences = JSON.stringify(merged)
   }
+
 
   if (currentPassword !== undefined || newPassword !== undefined) {
     if (!currentPassword || !newPassword) {
