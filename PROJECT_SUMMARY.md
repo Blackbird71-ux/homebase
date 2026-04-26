@@ -236,10 +236,12 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 
 ### Commit History Summary
 - **Phase 7 Commit**: Complete implementation of tags, categories, notes, and UI enhancements
+- **Recurring Events Fix**: Fixed recurring event expansion in calendar views, edit/delete for recurring instances, and seriesId preservation in CalendarEvent mapping
 - **Previous Phases**: Recipe images, deployment scripts, bug fixes, and core feature development
 
 ### Project Status
 ✅ **Phase 7 Complete**: All features implemented and tested
+✅ **Recurring Events**: Create, edit, delete recurring events with daily/weekly/monthly/yearly options
 ✅ **TypeScript Validation**: No type errors
 ✅ **Build Success**: Production build compiles successfully
 ✅ **Git Status**: All changes committed with descriptive messages
