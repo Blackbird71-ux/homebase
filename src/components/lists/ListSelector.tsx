@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { PlusIcon, StarIcon, Trash2Icon } from 'lucide-react'
+import { PlusIcon, StarIcon, Trash2Icon, PencilIcon, CheckIcon, XIcon } from 'lucide-react'
 
 interface ListMeta {
   id: string
@@ -20,6 +21,113 @@ interface ListSelectorProps {
   onSetDefault?: (id: string) => void
 }
 
+function EditableListName({
+  list,
+  activeListId,
+  onSelect,
+  onNameChanged,
+}: {
+  list: ListMeta
+  activeListId: string | null
+  onSelect: (id: string) => void
+  onNameChanged: (id: string, newName: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(list.name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [editing])
+
+  // Keep local name in sync when list prop changes (e.g. after rename from another session)
+  useEffect(() => {
+    if (!editing) setName(list.name)
+  }, [list.name, editing])
+
+  async function handleSave() {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed === list.name) {
+      setName(list.name)
+      setEditing(false)
+      return
+    }
+    const res = await fetch(`/api/lists/${list.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed }),
+    })
+    if (res.ok) {
+      onNameChanged(list.id, trimmed)
+      setEditing(false)
+    } else {
+      setName(list.name)
+      setEditing(false)
+    }
+  }
+
+  function handleCancel() {
+    setName(list.name)
+    setEditing(false)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSave()
+    } else if (e.key === 'Escape') {
+      handleCancel()
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="flex-1 px-1 py-0.5 text-sm bg-background border border-input rounded"
+          maxLength={100}
+        />
+        <button
+          onClick={handleSave}
+          className="p-0.5 rounded text-green-600 hover:bg-green-100 transition-colors shrink-0"
+          title="Save"
+        >
+          <CheckIcon className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={handleCancel}
+          className="p-0.5 rounded text-muted-foreground hover:bg-muted transition-colors shrink-0"
+          title="Cancel"
+        >
+          <XIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => onSelect(list.id)}
+      className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
+        activeListId === list.id
+          ? 'bg-primary text-primary-foreground'
+          : 'hover:bg-muted'
+      }`}
+    >
+      <span className="truncate block">{list.name}</span>
+      <span className="text-xs opacity-70">{list._count.items} items</span>
+    </button>
+  )
+}
+
 export function ListSelector({
   lists,
   activeListId,
@@ -29,24 +137,24 @@ export function ListSelector({
   onDeleteList,
   onSetDefault,
 }: ListSelectorProps) {
-  const shopping = lists.filter((l) => l.type === 'SHOPPING')
-  const todo = lists.filter((l) => l.type === 'TODO')
+  const [localLists, setLocalLists] = useState(lists)
+  const shopping = localLists.filter((l) => l.type === 'SHOPPING')
+  const todo = localLists.filter((l) => l.type === 'TODO')
+
+  // Sync local state when parent lists change
+  useEffect(() => {
+    setLocalLists(lists)
+  }, [lists])
+
+  function handleNameChanged(id: string, newName: string) {
+    setLocalLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))
+  }
 
   function renderList(list: ListMeta) {
     const isDefault = defaultListId === list.id
     return (
       <div key={list.id} className="group flex items-center gap-1 px-1">
-        <button
-          onClick={() => onSelect(list.id)}
-          className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
-            activeListId === list.id
-              ? 'bg-primary text-primary-foreground'
-              : 'hover:bg-muted'
-          }`}
-        >
-          <span className="truncate block">{list.name}</span>
-          <span className="text-xs opacity-70">{list._count.items} items</span>
-        </button>
+        <EditableListName list={list} activeListId={activeListId} onSelect={onSelect} onNameChanged={handleNameChanged} />
         <div className="flex items-center gap-0.5">
           {onSetDefault && (
             <button
