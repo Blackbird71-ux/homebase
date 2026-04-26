@@ -67,6 +67,10 @@ export default async function CalendarPage() {
       category: masked.category,
       color: masked.color,
       createdBy: masked.createdBy,
+      // Preserve recurring event fields so the UI can edit/delete the series
+      seriesId: (e as Record<string, unknown>).seriesId as string | undefined,
+      isRecurringInstance: (e as Record<string, unknown>).isRecurringInstance as boolean | undefined,
+      recurrenceRule: (e as Record<string, unknown>).recurrenceRule as string | null | undefined,
     }
   })
 

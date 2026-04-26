@@ -93,6 +93,7 @@ export interface CalendarEvent {
   recurrenceExceptions?: string | null
   seriesId?: string | null
   isRecurring?: boolean
+  isRecurringInstance?: boolean
 }
 
 // Custom theme color definitions
