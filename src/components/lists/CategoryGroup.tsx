@@ -1,4 +1,4 @@
-'us thee client'
+'use client'
 
 import { GripVerticalIcon } from 'lucide-react'
 import {
@@ -17,6 +17,7 @@ interface SortableItemProps {
   onDelete: (id: string) => void
   availableCategories?: string[]
   onCategoryChange?: (id: string, newCategory: string) => void
+  onEdit?: (id: string) => void
 }
 
 function SortableItem({ 
@@ -26,6 +27,7 @@ function SortableItem({
   onDelete,
   availableCategories = [],
   onCategoryChange,
+  onEdit,
 }: SortableItemProps) {
   const {
     attributes,
@@ -68,6 +70,7 @@ function SortableItem({
           onToggle={onToggle}
           onDelete={onDelete}
           onCategoryChange={onCategoryChange}
+          onEdit={onEdit}
         />
       </div>
     </div>
@@ -82,6 +85,7 @@ interface CategoryGroupProps {
   onDelete: (id: string) => void
   availableCategories?: string[]
   onCategoryChange?: (id: string, newCategory: string) => void
+  onEdit?: (id: string) => void
 }
 
 export function CategoryGroup({
@@ -92,6 +96,7 @@ export function CategoryGroup({
   onDelete,
   availableCategories = [],
   onCategoryChange,
+  onEdit,
 }: CategoryGroupProps) {
   const {
     attributes,
@@ -142,6 +147,7 @@ export function CategoryGroup({
               onDelete={onDelete}
               availableCategories={availableCategories}
               onCategoryChange={onCategoryChange}
+              onEdit={onEdit}
             />
           ))}
         </div>

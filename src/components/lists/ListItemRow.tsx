@@ -24,6 +24,7 @@ interface ListItemRowProps {
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
   onCategoryChange?: (id: string, newCategory: string) => void
+  onEdit?: (id: string) => void
 }
 
 export function ListItemRow({
@@ -38,6 +39,7 @@ export function ListItemRow({
   onToggle,
   onDelete,
   onCategoryChange,
+  onEdit,
 }: ListItemRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState(category || 'Other')
@@ -112,12 +114,16 @@ export function ListItemRow({
         aria-label={`Mark "${content}" ${isCompleted ? 'incomplete' : 'complete'}`}
         disabled={isEditing}
       />
-      <span
-        className={`flex-1 text-sm ${isCompleted ? 'line-through' : ''}`}
+      <button
+        onClick={() => !isCompleted && onEdit?.(id)}
+        className={`flex-1 text-sm text-left ${isCompleted ? 'line-through' : ''} ${!isCompleted && onEdit ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1' : ''}`}
         style={isCompleted ? { color: doneColor } : undefined}
+        disabled={isCompleted}
+        aria-label={`Edit "${content}"`}
+        type="button"
       >
         {content}
-      </span>
+      </button>
       
       {!isCompleted && isEditing && onCategoryChange && (
         <div className="flex items-center gap-1 shrink-0">

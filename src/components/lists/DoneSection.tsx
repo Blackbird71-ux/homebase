@@ -11,6 +11,7 @@ interface DoneSectionProps {
   onDelete: (id: string) => void
   availableCategories?: string[]
   onCategoryChange?: (id: string, newCategory: string) => void
+  onEdit?: (id: string) => void
 }
 
 export function DoneSection({ 
@@ -20,6 +21,7 @@ export function DoneSection({
   onDelete,
   availableCategories = [],
   onCategoryChange,
+  onEdit,
 }: DoneSectionProps) {
   if (items.length === 0) return null
 
@@ -42,6 +44,7 @@ export function DoneSection({
             onToggle={onToggle}
             onDelete={onDelete}
             onCategoryChange={onCategoryChange}
+            onEdit={onEdit}
           />
         ))}
       </div>

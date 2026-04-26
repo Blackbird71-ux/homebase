@@ -26,6 +26,7 @@ import { autoGuessCategory } from '@/lib/ingredient-helpers'
 import { CategoryGroup } from './CategoryGroup'
 import { DoneSection } from './DoneSection'
 import { ListItemRow } from './ListItemRow'
+import { EditItemDialog } from './EditItemDialog'
 
 interface ShoppingListProps {
   listId: string
@@ -47,6 +48,9 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [, startTransition] = useTransition()
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [availableCategories, setAvailableCategories] = useState<Array<{id: string, name: string}>>([])
+  const [editItemId, setEditItemId] = useState<string | null>(null)
+  const [editItemContent, setEditItemContent] = useState('')
+  const [editItemCategory, setEditItemCategory] = useState<string | null>(null)
 
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -233,6 +237,21 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     }
   }
 
+  function handleEditItem(id: string) {
+    const item = items.find((i) => i.id === id)
+    if (item) {
+      setEditItemId(id)
+      setEditItemContent(item.content)
+      setEditItemCategory(item.category || null)
+    }
+  }
+
+  function handleItemSaved(id: string, content: string, category: string | null) {
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, content, category } : i))
+    )
+  }
+
   async function clearCompleted() {
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
@@ -339,6 +358,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
                     onDelete={deleteItem}
                     availableCategories={categories}
                     onCategoryChange={changeItemCategory}
+                    onEdit={handleEditItem}
                   />
                 )
               })}
@@ -351,6 +371,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             onDelete={deleteItem}
             availableCategories={categories}
             onCategoryChange={changeItemCategory}
+            onEdit={handleEditItem}
           />
         </DndContext>
       ) : (
@@ -373,6 +394,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
                     onToggle={toggleItem}
                     onDelete={deleteItem}
                     onCategoryChange={changeItemCategory}
+                    onEdit={handleEditItem}
                   />
                 ))}
               </div>
@@ -385,9 +407,23 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             onDelete={deleteItem}
             availableCategories={categories}
             onCategoryChange={changeItemCategory}
+            onEdit={handleEditItem}
           />
         </div>
       )}
+
+      <EditItemDialog
+        open={editItemId !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditItemId(null)
+        }}
+        itemId={editItemId ?? ''}
+        initialContent={editItemContent}
+        initialCategory={editItemCategory}
+        availableCategories={categories}
+        listId={listId}
+        onSaved={handleItemSaved}
+      />
     </div>
   )
 }

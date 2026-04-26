@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ListItemRow } from './ListItemRow'
+import { EditItemDialog } from './EditItemDialog'
 import { filterTodoItems } from '@/lib/list-helpers'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
 import { PlusIcon } from 'lucide-react'
@@ -20,6 +21,10 @@ export function TodoList({ listId, initialItems }: TodoListProps) {
   const [newContent, setNewContent] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
   const [, startTransition] = useTransition()
+  const [editItemId, setEditItemId] = useState<string | null>(null)
+  const [editItemContent, setEditItemContent] = useState('')
+  const [editItemCategory, setEditItemCategory] = useState<string | null>(null)
+  const availableCategories: string[] = []
 
   const filtered = filterTodoItems(items, filter)
 
@@ -62,6 +67,21 @@ export function TodoList({ listId, initialItems }: TodoListProps) {
         toast.error('Failed to save. Please try again.')
       }
     })
+  }
+
+  function handleEditItem(id: string) {
+    const item = items.find((i) => i.id === id)
+    if (item) {
+      setEditItemId(id)
+      setEditItemContent(item.content)
+      setEditItemCategory(item.category || null)
+    }
+  }
+
+  function handleItemSaved(id: string, content: string, category: string | null) {
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, content, category } : i))
+    )
   }
 
   async function deleteItem(id: string) {
@@ -128,9 +148,23 @@ export function TodoList({ listId, initialItems }: TodoListProps) {
             dueDate={item.dueDate?.toISOString() ?? null}
             onToggle={toggleItem}
             onDelete={deleteItem}
+            onEdit={handleEditItem}
           />
         ))}
       </div>
+
+      <EditItemDialog
+        open={editItemId !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditItemId(null)
+        }}
+        itemId={editItemId ?? ''}
+        initialContent={editItemContent}
+        initialCategory={editItemCategory}
+        availableCategories={availableCategories}
+        listId={listId}
+        onSaved={handleItemSaved}
+      />
     </div>
   )
 }
