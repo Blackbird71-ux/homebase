@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { getLocalImageUrl } from '@/lib/image-cache'
 
 function safeParseArray(json: string): string[] {
   try {
@@ -61,7 +62,7 @@ export async function GET(
       id: recipe.id,
       title: recipe.title,
       description: recipe.description,
-      image: recipe.image,
+      image: getLocalImageUrl(recipe.image),
       prepTime: recipe.prepTime,
       cookTime: recipe.cookTime,
       servings: recipe.servings,

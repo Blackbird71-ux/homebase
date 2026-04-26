@@ -1,6 +1,7 @@
 import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { getLocalImageUrl } from '@/lib/image-cache'
 import type { DashboardData } from '@/types'
 
 async function getDashboardData(familyId: string, timezone: string): Promise<DashboardData> {
@@ -54,7 +55,7 @@ async function getDashboardData(familyId: string, timezone: string): Promise<Das
       mealPlanId: tonightsMeal.id,
       recipeId: tonightsMeal.recipe?.id ?? null,
       recipeName: tonightsMeal.recipe?.title ?? null,
-      recipeImage: tonightsMeal.recipe?.image ?? null,
+      recipeImage: getLocalImageUrl(tonightsMeal.recipe?.image ?? null),
       note: tonightsMeal.note,
     } : null,
     shoppingList: shoppingLists[0] ? {

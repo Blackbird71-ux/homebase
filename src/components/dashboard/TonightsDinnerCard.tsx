@@ -14,12 +14,12 @@ export function TonightsDinnerCard({ dinner }: { dinner: TonightsDinner | null }
             <UtensilsCrossed className="h-4 w-4" /> Tonight's Dinner
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col">
+        <CardContent className="flex-1 flex flex-col min-h-0">
           {dinner ? (
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-h-0">
               {dinner.recipeImage ? (
-                <div className="mb-3">
-                  <div className="relative aspect-video rounded-md overflow-hidden bg-muted">
+                <div className="mb-2 shrink-0">
+                  <div className="relative aspect-video rounded-md overflow-hidden bg-muted max-h-24">
                     <img 
                       src={dinner.recipeImage} 
                       alt={dinner.recipeName || dinner.note || 'Meal planned'}
@@ -28,7 +28,7 @@ export function TonightsDinnerCard({ dinner }: { dinner: TonightsDinner | null }
                   </div>
                 </div>
               ) : null}
-              <p className="text-sm font-medium">{dinner.recipeName ?? dinner.note ?? 'Meal planned'}</p>
+              <p className="text-sm font-medium truncate">{dinner.recipeName ?? dinner.note ?? 'Meal planned'}</p>
               {dinner.recipeId && (
                 <p className="text-xs text-muted-foreground mt-1">Click to view recipe</p>
               )}

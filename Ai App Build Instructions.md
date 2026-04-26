@@ -46,6 +46,9 @@ we use the build file dockerfile, docker-compose.yml and docker-entrypoint.sh as
 
 \- Before adding a new dependency, check if an existing library already covers the need.
 
+\- Remember that we build on windows but deploy docker container on synology NAS, so migrations etc need to be done in docker, docker-compose.yml and docker-entrypoint.sh or entrypoint.sh whichever the project uses.  
+   All these files need to be updated as required and the user prompted to copy them over to the NAS.
+
 
 \### Performance \& Quality
 \- Avoid blocking the main thread; use async/await, lazy loading, or workers where appropriate.

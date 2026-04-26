@@ -14,13 +14,13 @@ function formatEventDate(iso: string): string {
 export function UpcomingEventsCard({ events }: { events: UpcomingEvent[] }) {
   return (
     <Link href="/calendar" className="block h-full">
-      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer flex flex-col">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
             <Calendar className="h-4 w-4" /> Upcoming
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="flex-1 space-y-2 min-h-0">
           {events.length === 0 ? (
             <p className="text-sm text-muted-foreground">No upcoming events</p>
           ) : (

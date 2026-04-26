@@ -1,5 +1,6 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { getLocalImageUrl } from '@/lib/image-cache'
 import { notFound } from 'next/navigation'
 import { RecipeDetail } from './RecipeDetail'
 
@@ -48,7 +49,7 @@ export default async function RecipeDetailPage({
     prepTime: recipe.prepTime,
     cookTime: recipe.cookTime,
     servings: recipe.servings,
-    image: recipe.image,
+    image: getLocalImageUrl(recipe.image),
     sourceUrl: recipe.sourceUrl,
     createdBy: recipe.createdBy,
     createdAt: recipe.createdAt.toISOString(),

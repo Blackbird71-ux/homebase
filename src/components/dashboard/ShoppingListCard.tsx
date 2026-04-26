@@ -6,18 +6,18 @@ import Link from 'next/link'
 export function ShoppingListCard({ list }: { list: ShoppingListSummary | null }) {
   return (
     <Link href="/lists" className="block h-full">
-      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer flex flex-col">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
             <ShoppingCart className="h-4 w-4" /> Shopping
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1">
+        <CardContent className="flex-1 space-y-1 min-h-0">
           {list ? (
             <>
               <p className="text-sm font-medium">{list.pendingItems} items</p>
               {list.firstItems.map((item, i) => (
-                <p key={i} className="text-xs text-muted-foreground">{item}</p>
+                <p key={i} className="text-xs text-muted-foreground truncate">{item}</p>
               ))}
               {list.pendingItems > list.firstItems.length && (
                 <p className="text-xs text-muted-foreground">+{list.pendingItems - list.firstItems.length} more</p>

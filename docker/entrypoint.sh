@@ -10,6 +10,7 @@ echo "Database path: $DATABASE_URL"
 echo "Setting up /data directory permissions..."
 mkdir -p /data
 mkdir -p /data/uploads  # Create uploads directory for recipe images
+mkdir -p /data/images   # Create images cache directory for external recipe images
 chown -R nextjs:nodejs /data 2>/dev/null || true
 chmod -R 755 /data 2>/dev/null || true
 

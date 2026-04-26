@@ -3,6 +3,7 @@ import AdmZip from 'adm-zip'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { parseUmamiRecipe, type UmamiJson } from '@/lib/umami-parser'
+import { cacheImage, getLocalImageUrl } from '@/lib/image-cache'
 
 export async function POST(req: Request) {
   const user = await requireSession()
@@ -43,6 +44,14 @@ export async function POST(req: Request) {
         try {
           const json = JSON.parse(entry.getData().toString('utf8')) as UmamiJson
           const parsed = parseUmamiRecipe(json, bookName)
+
+          // Cache external image locally for faster loading
+          if (parsed.image) {
+            const cachedPath = await cacheImage(parsed.image)
+            if (cachedPath) {
+              parsed.image = `/api/images/${cachedPath}`
+            }
+          }
 
           // Try to find existing recipe by title in this book
           const existingRecipe = await prisma.recipe.findFirst({

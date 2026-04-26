@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { getLocalImageUrl } from '@/lib/image-cache'
 
 function safeParseArray(json: string): string[] {
   try {
@@ -124,6 +125,7 @@ async function getRecipeWithTags(id: string, familyId: string) {
 
   return {
     ...recipe,
+    image: getLocalImageUrl(recipe.image),
     ingredients: safeParseArray(recipe.ingredients),
     instructions: safeParseArray(recipe.instructions),
     // Include both formats during transition
@@ -179,6 +181,7 @@ export async function GET(req: Request) {
 
       return {
         ...r,
+        image: getLocalImageUrl(r.image),
         ingredients: safeParseArray(r.ingredients),
         instructions: safeParseArray(r.instructions),
         // Include both formats during transition

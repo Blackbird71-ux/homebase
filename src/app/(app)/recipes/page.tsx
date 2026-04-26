@@ -1,5 +1,6 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { getLocalImageUrl } from '@/lib/image-cache'
 import { RecipesClient } from './RecipesClient'
 
 async function getData(familyId: string) {
@@ -56,7 +57,7 @@ async function getData(familyId: string) {
         servings: r.servings,
         bookId: r.bookId,
         createdAt: r.createdAt.toISOString(),
-        image: r.image,
+        image: getLocalImageUrl(r.image),
       }
     }),
     books: bookRows.map((b) => ({

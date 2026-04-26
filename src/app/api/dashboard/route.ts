@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
 import type { DashboardData } from '@/types'
 
@@ -68,7 +69,7 @@ export async function GET() {
           mealPlanId: tonightsMeal.id,
           recipeId: tonightsMeal.recipe?.id ?? null,
           recipeName: tonightsMeal.recipe?.title ?? null,
-          recipeImage: tonightsMeal.recipe?.image ?? null,
+          recipeImage: getLocalImageUrl(tonightsMeal.recipe?.image ?? null),
           note: tonightsMeal.note,
         }
       : null,

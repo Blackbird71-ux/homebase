@@ -9,6 +9,7 @@ services:
       - "3001:3000"
     volumes:
       - /volume1/docker/homebase/Data:/data
+      - /volume1/homebase/Data/images:/data/images
       - /volume1/docker/homebase/cloudflared:/etc/cloudflared
     environment:
       - DATABASE_URL=file:/data/homebase.db
