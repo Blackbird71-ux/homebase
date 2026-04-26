@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   other: {
     'theme-color': '#000000',
-    'apple-mobile-web-app-capable': 'yes',
+    'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'default',
     'apple-mobile-web-app-title': 'Homebase',
   },

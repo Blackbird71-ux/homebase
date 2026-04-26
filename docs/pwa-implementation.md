@@ -31,7 +31,7 @@ Added to the exported `metadata` object:
 - `manifest: '/manifest.webmanifest'` — links the web app manifest
 - `theme-color: '#000000'` — sets the browser theme color
 - Apple-specific meta tags for iOS home screen support:
-  - `apple-mobile-web-app-capable: 'yes'`
+  - `mobile-web-app-capable: 'yes'` (replaces deprecated `apple-mobile-web-app-capable`)
   - `apple-mobile-web-app-status-bar-style: 'default'`
   - `apple-mobile-web-app-title: 'Homebase'`
 
