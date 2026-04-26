@@ -47,6 +47,12 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
   const cachePath = getCachePath(imageUrl)
   if (!cachePath) return null
 
+  // Skip URLs that are known to block server-side fetches
+  if (isUncacheableUrl(imageUrl)) {
+    console.log(`[ImageCache] Skipping uncacheable URL: ${imageUrl}`)
+    return null
+  }
+
   // Already cached
   if (isCached(cachePath)) return cachePath
 
@@ -80,6 +86,25 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
 }
 
 /**
+ * Returns true if the URL is known to be a server-side-gated image endpoint
+ * that cannot be fetched by the container (e.g. Next.js Image Optimization routes).
+ * These must be served directly from the browser, not proxied.
+ */
+function isUncacheableUrl(imageUrl: string): boolean {
+  try {
+    const u = new URL(imageUrl)
+    // Next.js image optimization endpoints (/_next/image or /api/image)
+    // and similar CDN-gated paths are session-dependent and block server fetches.
+    return (
+      u.pathname.startsWith('/_next/image') ||
+      u.pathname.includes('/api/image/')
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
  * Get the local URL path for serving a cached image.
  * If the image is already a local path, returns it as-is.
  * If it's an external URL, returns the proxy path that will serve from cache.
@@ -104,7 +129,14 @@ export function getLocalImageUrl(imageUrl: string | null | undefined): string | 
     return null
   }
 
-  // External URL - always return proxy path so the request goes through our server
+  // External URL - check if it's cacheable by the server
+  // Some URLs (Next.js image optimization, auth-gated CDNs) cannot be fetched
+  // server-side. Return the original URL so the browser fetches it directly.
+  if (isUncacheableUrl(imageUrl)) {
+    return imageUrl
+  }
+
+  // Always return proxy path so the request goes through our server
   // The /api/images/ route will proxy from the original URL and cache on-the-fly
   const cachePath = getCachePath(imageUrl)
   if (!cachePath) return imageUrl

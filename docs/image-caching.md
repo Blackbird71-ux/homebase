@@ -2,14 +2,21 @@
 
 ## Overview
 
-Recipe images from external URLs are cached locally to speed up loading times. The system uses a **proxy-and-cache** approach:
+Recipe images from external URLs are cached locally where possible to speed up loading times. The system uses a **proxy-and-cache** approach with intelligent fallback for URLs that cannot be server-fetched:
 
-1. **Always** serves images through `/api/images/` so requests go through our server
-2. If a cached copy exists in `/data/images/`, serves from disk (fast)
-3. If not cached, fetches from the original URL, saves to `/data/images/`, and serves it
-4. Subsequent requests serve the cached file directly
+1. **Cacheable external URLs** are served through `/api/images/` — the server fetches, caches to `/data/images/`, and serves from disk on subsequent requests
+2. **Uncacheable URLs** (e.g. Next.js Image Optimization endpoints like Umami's `/api/image/` paths) are passed directly to the browser, which fetches them with its own session/cookies
+3. If a cached copy already exists in `/data/images/`, it is served immediately from disk
+4. If a server-side fetch fails for any reason, the route issues a **302 redirect** to the original URL so the browser can fetch it directly — images always display, never break
 
-This eliminates repeated network requests to external image hosts and builds the cache naturally as users browse recipes.
+## Uncacheable URLs
+
+Some image sources cannot be fetched server-side because they require browser session cookies or actively block non-browser requests. The known patterns are:
+
+- `/_next/image` — Next.js Image Optimization API (used by Umami Recipes and other Next.js apps)
+- `/api/image/` — Application image proxy endpoints (same issue)
+
+For these URLs, `getLocalImageUrl()` returns the original URL unchanged and `cacheImage()` skips them immediately. The browser fetches them directly and they display normally — they just aren't cached on disk.
 
 ## How It Works
 
@@ -18,29 +25,31 @@ This eliminates repeated network requests to external image hosts and builds the
 `src/app/api/images/[...path]/route.ts` handles image serving:
 
 - **URL format**: `/api/images/<md5-hash>.<ext>?url=<original-url>`
-- On first request, it fetches the image from the original URL (passed as `?url=` query param), saves it to `/data/images/<hash>.<ext>`, and serves it
-- Subsequent requests serve the cached file directly from disk
-- Proper `Content-Type` headers are set based on file extension
-- Cache-Control is set to `public, max-age=31536000, immutable` for cached images
+- If cached locally: serves from disk with `Cache-Control: immutable`
+- If not cached: fetches from the original URL with browser-like headers, writes to disk, serves the response
+- If the upstream fetch fails (non-2xx or network error): issues a **302 redirect** to the original URL — images still display via the browser
+- Security: blocks `..` traversal and multi-segment paths
 
 ### URL Conversion Utility
 
 `src/lib/image-cache.ts` provides `getLocalImageUrl()`:
 
 - Takes an external image URL (or null)
-- Returns `/api/images/<hash>.<ext>?url=<encoded-original>` for external URLs
-- If the URL is already a local path (starts with `/`), returns it as-is
-- If the URL is a bare filename (legacy data), checks if it exists in `/data/uploads/`
-- If the URL is null/empty, returns null
+- **Uncacheable URLs** (Next.js image opt / `/api/image/` paths): returned as-is for direct browser fetch
+- **Cacheable external URLs**: returns `/api/images/<hash>.<ext>?url=<encoded-original>`
+- Already a local path (starts with `/`): returned as-is
+- Bare filename (legacy data): checks `/data/uploads/`, returns `/uploads/<filename>` or null
+- null/empty: returns null
 
 ### Cache Population
 
 The cache builds naturally as users browse recipes:
 
-1. **First view**: Image URL is converted to `/api/images/hash.jpg?url=https://...` → server fetches from source, caches it, serves it
-2. **Subsequent views**: Image URL is converted to `/api/images/hash.jpg?url=https://...` → server finds cached file on disk, serves it directly
+1. **First view of a cacheable image**: URL is converted to `/api/images/hash.jpg?url=https://...` → server fetches from source, caches it, serves it
+2. **Subsequent views**: server finds cached file on disk, serves it directly (no external request)
+3. **Uncacheable images**: browser fetches directly every time (no disk cache, but no broken images either)
 
-During **import**, images are cached eagerly using `cacheImage()` and stored with the `/api/images/` path directly in the database.
+During **import**, `cacheImage()` attempts eager caching — it silently skips uncacheable URLs and continues.
 
 ### Usage in Code
 

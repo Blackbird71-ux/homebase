@@ -61,11 +61,17 @@ export async function GET(
       signal: AbortSignal.timeout(15_000),
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; HomebaseBot/1.0; +https://homebase.family)',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': new URL(originalUrl).origin + '/',
       },
     })
 
     if (!response.ok) {
-      return new NextResponse('Failed to fetch image', { status: 502 })
+      // Upstream rejected server-side fetch (auth-gated, CDN block, etc.)
+      // Redirect the browser to fetch it directly — it will work from the user's session.
+      console.warn(`[ImageCache] Upstream returned ${response.status} for ${originalUrl} — redirecting to source`)
+      return NextResponse.redirect(originalUrl, { status: 302 })
     }
 
     const buffer = Buffer.from(await response.arrayBuffer())
@@ -91,8 +97,10 @@ export async function GET(
         'X-Content-Type-Options': 'nosniff',
       },
     })
-  } catch {
-    return new NextResponse('Failed to fetch image', { status: 502 })
+  } catch (err) {
+    // Network-level failure (timeout, DNS, etc.) — redirect browser to try directly
+    console.warn(`[ImageCache] Fetch error for ${originalUrl}:`, err instanceof Error ? err.message : err)
+    return NextResponse.redirect(originalUrl, { status: 302 })
   }
 }
 
