@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
 import { pushEventToGoogle } from '@/lib/google-sync'
+import { generateRecurrenceInstances } from '@/lib/recurrence'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -10,9 +11,17 @@ export async function GET(req: Request) {
   const from = searchParams.get('from')
   const to = searchParams.get('to')
 
+  const rangeStart = from ? new Date(from) : null
+  const rangeEnd = to ? new Date(to) : null
+
+  // Fetch all events for the family (we need recurring events even if outside range to expand them)
   const where: Record<string, unknown> = { familyId: user.familyId }
-  if (from && to) {
-    where.start = { gte: new Date(from), lte: new Date(to) }
+  if (rangeStart && rangeEnd) {
+    // For recurring events, we need to fetch events that start before the range too
+    where.OR = [
+      { start: { gte: rangeStart, lte: rangeEnd } },
+      { isRecurring: true },
+    ]
   }
 
   const events = await prisma.event.findMany({
@@ -20,7 +29,38 @@ export async function GET(req: Request) {
     orderBy: { start: 'asc' },
   })
 
-  return NextResponse.json(events.map((e) => maskPersonalEvent(e, user.id)))
+  // Expand recurring events into individual instances
+  const expandedEvents = events.flatMap((event) => {
+    if (event.isRecurring && event.recurrenceRule && rangeStart && rangeEnd) {
+      const instances = generateRecurrenceInstances(
+        event.start,
+        event.end,
+        event.recurrenceRule,
+        event.recurrenceEndDate,
+        rangeStart,
+        rangeEnd
+      )
+
+      // Map instances to event-like objects
+      // Keep recurrenceRule on instances so the UI knows it's part of a series
+      const expanded = instances.map((instance, index) => ({
+        ...event,
+        id: `${event.id}_recur_${index}`,
+        start: instance.start,
+        end: instance.end,
+        isRecurring: false, // Don't show recurring icon on instances
+        isRecurringInstance: true,
+        seriesId: event.id,
+      }))
+
+      // Only return the expanded instances - NOT the original event
+      // The original can be edited/deleted via seriesId on any instance
+      return expanded
+    }
+    return [event]
+  })
+
+  return NextResponse.json(expandedEvents.map((e) => maskPersonalEvent(e, user.id)))
 }
 
 export async function POST(req: Request) {
