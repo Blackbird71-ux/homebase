@@ -86,8 +86,14 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
 export function getLocalImageUrl(imageUrl: string | null | undefined): string | null {
   if (!imageUrl) return null
 
-  // Already a local path
+  // Already a local path (starts with /)
   if (imageUrl.startsWith('/')) return imageUrl
+
+  // Bare filename (no path, no protocol) - treat as local upload
+  // This handles legacy data where images were stored as just "filename.jpg"
+  if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+    return `/uploads/${imageUrl}`
+  }
 
   // External URL - return proxy path
   const cachePath = getCachePath(imageUrl)
