@@ -19,6 +19,7 @@ interface ListSelectorProps {
   onNewList: () => void
   onDeleteList?: (id: string) => void
   onSetDefault?: (id: string) => void
+  onRename?: (id: string, newName: string) => void
 }
 
 function EditableListName({
@@ -140,18 +141,13 @@ export function ListSelector({
   onNewList,
   onDeleteList,
   onSetDefault,
+  onRename,
 }: ListSelectorProps) {
-  const [localLists, setLocalLists] = useState(lists)
-  const shopping = localLists.filter((l) => l.type === 'SHOPPING')
-  const todo = localLists.filter((l) => l.type === 'TODO')
-
-  // Sync local state when parent lists change
-  useEffect(() => {
-    setLocalLists(lists)
-  }, [lists])
+  const shopping = lists.filter((l) => l.type === 'SHOPPING')
+  const todo = lists.filter((l) => l.type === 'TODO')
 
   function handleNameChanged(id: string, newName: string) {
-    setLocalLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))
+    onRename?.(id, newName)
   }
 
   function renderList(list: ListMeta) {

@@ -123,6 +123,9 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
           onNewList={() => setDialogOpen(true)}
           onDeleteList={handleDeleteList}
           onSetDefault={handleSetDefault}
+          onRename={(id, newName) => {
+            setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))
+          }}
         />
 
       </aside>
