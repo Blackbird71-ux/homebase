@@ -12,6 +12,13 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Homebase',
   description: 'Your family hub',
+  manifest: '/manifest.webmanifest',
+  other: {
+    'theme-color': '#000000',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'default',
+    'apple-mobile-web-app-title': 'Homebase',
+  },
 }
 
 const fontSizeClassMap: Record<string, string> = {
