@@ -114,17 +114,26 @@ function EditableListName({
   }
 
   return (
-    <button
-      onClick={() => onSelect(list.id)}
-      className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
-        activeListId === list.id
-          ? 'bg-primary text-primary-foreground'
-          : 'hover:bg-muted'
-      }`}
-    >
-      <span className="truncate block">{list.name}</span>
-      <span className="text-xs opacity-70">{list._count.items} items</span>
-    </button>
+    <div className="flex-1 flex items-center gap-1 group/name">
+      <button
+        onClick={() => onSelect(list.id)}
+        className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
+          activeListId === list.id
+            ? 'bg-primary text-primary-foreground'
+            : 'hover:bg-muted'
+        }`}
+      >
+        <span className="truncate block">{list.name}</span>
+        <span className="text-xs opacity-70">{list._count.items} items</span>
+      </button>
+      <button
+        onClick={() => setEditing(true)}
+        className="p-1 rounded text-muted-foreground/40 hover:text-muted-foreground/70 hover:bg-muted transition-colors shrink-0 opacity-0 group-hover/name:opacity-100 focus-visible:opacity-100"
+        title="Rename list"
+      >
+        <PencilIcon className="h-3 w-3" />
+      </button>
+    </div>
   )
 }
 
