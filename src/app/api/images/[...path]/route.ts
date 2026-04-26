@@ -1,20 +1,20 @@
 import { NextResponse } from 'next/server'
-import { readFile, mkdir } from 'fs/promises'
+import { readFile, mkdir, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import crypto from 'crypto'
 
 const IMAGES_DIR = join(process.cwd(), 'data', 'images')
 
 /**
- * GET /api/images/:cachePath
+ * GET /api/images/:cachePath?url=<originalUrl>
  *
- * Serves cached recipe images from the local filesystem.
- * If the image doesn't exist locally, it returns a 404.
- * Images are cached during import or on first access via the image-cache utility.
+ * Serves recipe images from the local filesystem cache.
+ * If the image isn't cached yet, it fetches it from the original URL,
+ * caches it locally, and serves it. This builds the cache naturally
+ * as users browse recipes.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const { path } = await params
@@ -27,16 +27,54 @@ export async function GET(
 
   const filepath = join(IMAGES_DIR, cachePath)
 
-  if (!existsSync(filepath)) {
+  // If cached locally, serve from disk
+  if (existsSync(filepath)) {
+    try {
+      const buffer = await readFile(filepath)
+      const ext = cachePath.split('.').pop()?.toLowerCase()
+      return new NextResponse(buffer, {
+        headers: {
+          'Content-Type': getContentType(ext),
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      })
+    } catch {
+      return new NextResponse('Not found', { status: 404 })
+    }
+  }
+
+  // Not cached - try to fetch from original URL (passed as query param)
+  const { searchParams } = new URL(req.url)
+  const originalUrl = searchParams.get('url')
+
+  if (!originalUrl) {
     return new NextResponse('Not found', { status: 404 })
   }
 
   try {
-    const buffer = await readFile(filepath)
+    const response = await fetch(originalUrl, {
+      signal: AbortSignal.timeout(15_000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; HomebaseBot/1.0; +https://homebase.family)',
+      },
+    })
 
-    // Determine content type from extension
-    const ext = cachePath.split('.').pop()?.toLowerCase()
-    const contentType = getContentType(ext)
+    if (!response.ok) {
+      return new NextResponse('Failed to fetch image', { status: 502 })
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer())
+
+    // Cache locally for next time (fire and forget)
+    mkdir(IMAGES_DIR, { recursive: true })
+      .then(() => writeFile(filepath, buffer))
+      .catch(() => {
+        /* cache write failed silently */
+      })
+
+    // Determine content type from response or extension
+    const contentType = response.headers.get('content-type') || getContentType(cachePath.split('.').pop()?.toLowerCase())
 
     return new NextResponse(buffer, {
       headers: {
@@ -46,7 +84,7 @@ export async function GET(
       },
     })
   } catch {
-    return new NextResponse('Not found', { status: 404 })
+    return new NextResponse('Failed to fetch image', { status: 502 })
   }
 }
 

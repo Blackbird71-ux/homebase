@@ -104,22 +104,14 @@ export function getLocalImageUrl(imageUrl: string | null | undefined): string | 
     return null
   }
 
-  // External URL - return proxy path if cached, otherwise return original URL
+  // External URL - always return proxy path so the request goes through our server
+  // The /api/images/ route will proxy from the original URL and cache on-the-fly
   const cachePath = getCachePath(imageUrl)
   if (!cachePath) return imageUrl
 
-  // Only return the proxy path if the file is actually cached on disk
-  if (isCached(cachePath)) {
-    return `/api/images/${cachePath}`
-  }
-
-  // Not cached yet - fire off background caching and return original URL
-  // This way the image loads immediately from the source, and next time from cache
-  cacheImage(imageUrl).catch(() => {
-    // Background caching failed silently - image will still load from original URL
-  })
-
-  return imageUrl
+  // Pass the original URL as a query param so the route can fetch it if not cached
+  const encodedUrl = encodeURIComponent(imageUrl)
+  return `/api/images/${cachePath}?url=${encodedUrl}`
 }
 
 /**
