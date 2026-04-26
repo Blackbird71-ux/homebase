@@ -7,6 +7,9 @@ services:
     env_file: .env.local
     ports:
       - "3001:3000"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - /volume1/docker/homebase/Data:/data
       - /volume1/docker/homebase/cloudflared:/etc/cloudflared
