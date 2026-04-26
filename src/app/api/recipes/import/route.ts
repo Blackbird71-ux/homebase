@@ -50,6 +50,9 @@ export async function POST(req: Request) {
             const cachedPath = await cacheImage(parsed.image)
             if (cachedPath) {
               parsed.image = `/api/images/${cachedPath}`
+            } else {
+              // Couldn't cache the image - set to null so we don't store a broken URL
+              parsed.image = null
             }
           }
 

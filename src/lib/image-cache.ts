@@ -104,11 +104,17 @@ export function getLocalImageUrl(imageUrl: string | null | undefined): string | 
     return null
   }
 
-  // External URL - return proxy path
+  // External URL - return proxy path if cached, otherwise return null
   const cachePath = getCachePath(imageUrl)
-  if (!cachePath) return imageUrl
+  if (!cachePath) return null
 
-  return `/api/images/${cachePath}`
+  // Only return the proxy path if the file is actually cached on disk
+  if (isCached(cachePath)) {
+    return `/api/images/${cachePath}`
+  }
+
+  // Not cached - can't serve it
+  return null
 }
 
 /**
