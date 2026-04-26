@@ -18,7 +18,7 @@ docker network create homebase-network 2>/dev/null || true
 
 echo "=== Setting data directory permissions ==="
 mkdir -p /volume1/docker/homebase/Data
-mkdir -p /volume1/homebase/Data/images
+mkdir -p /volume1/docker/homebase/Data/images
 mkdir -p /volume1/docker/homebase/cloudflared
 chown -R 1001:1001 /volume1/docker/homebase/Data
 chmod 755 /volume1/docker/homebase/Data
@@ -31,7 +31,6 @@ docker run -d \
   --network homebase-network \
   -p 3001:3000 \
   -v /volume1/docker/homebase/Data:/data \
-  -v /volume1/homebase/Data/images:/data/images \
   -v /volume1/docker/homebase/cloudflared:/etc/cloudflared \
   --env-file /volume1/docker/homebase/.env.local \
   -e DATABASE_URL=file:/data/homebase.db \
