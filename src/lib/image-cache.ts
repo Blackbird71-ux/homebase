@@ -3,80 +3,76 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import crypto from 'crypto'
 
-const IMAGES_DIR = join(process.cwd(), 'data', 'images')
-const UPLOADS_DIR = join(process.cwd(), 'data', 'uploads')
+// Use absolute /data path so it resolves correctly inside the Docker container.
+// process.cwd() in a Next.js standalone build is /app, not /data.
+// In local dev, set DATA_DIR=./data in .env.local.
+const DATA_DIR = process.env.DATA_DIR ?? '/data'
+const IMAGES_DIR = join(DATA_DIR, 'images')
+const UPLOADS_DIR = join(DATA_DIR, 'uploads')
 
 /**
- * Get the local cache path for an external image URL.
- * Returns null if the image is not an external URL (e.g. already a local path).
+ * Get the deterministic cache filename for an external image URL.
+ * Returns null if the URL is already local or not http/https.
  */
 export function getCachePath(imageUrl: string | null | undefined): string | null {
   if (!imageUrl) return null
-
-  // If it's already a local path (starts with /uploads or /images), don't cache
   if (imageUrl.startsWith('/')) return null
-
-  // Must be an external URL (http/https)
   if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) return null
 
-  // Generate a deterministic filename from the URL
   const hash = crypto.createHash('md5').update(imageUrl).digest('hex')
   const ext = getExtension(imageUrl)
   return `${hash}${ext}`
 }
 
-/**
- * Get the full filesystem path for a cached image.
- */
 export function getCacheFilePath(cachePath: string): string {
   return join(IMAGES_DIR, cachePath)
 }
 
-/**
- * Check if an image is already cached locally.
- */
 export function isCached(cachePath: string): boolean {
   return existsSync(getCacheFilePath(cachePath))
 }
 
 /**
- * Download and cache an external image.
- * Returns the local cache path on success, or null on failure.
+ * Returns true for URLs that block server-side fetches (e.g. Next.js image
+ * optimization endpoints). These must be fetched directly by the browser.
+ */
+function isUncacheableUrl(imageUrl: string): boolean {
+  try {
+    const { pathname } = new URL(imageUrl)
+    return pathname.startsWith('/_next/image') || pathname.includes('/api/image/')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Download and cache an external image server-side.
+ * Returns the local cache path on success, null on failure.
  */
 export async function cacheImage(imageUrl: string): Promise<string | null> {
   const cachePath = getCachePath(imageUrl)
   if (!cachePath) return null
-
-  // Skip URLs that are known to block server-side fetches
   if (isUncacheableUrl(imageUrl)) {
     console.log(`[ImageCache] Skipping uncacheable URL: ${imageUrl}`)
     return null
   }
-
-  // Already cached
   if (isCached(cachePath)) return cachePath
 
   try {
-    // Ensure images directory exists
     await mkdir(IMAGES_DIR, { recursive: true })
-
-    // Download the image
     const response = await fetch(imageUrl, {
       signal: AbortSignal.timeout(15_000),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; HomebaseBot/1.0; +https://homebase.family)',
+        'User-Agent': 'Mozilla/5.0 (compatible; HomebaseBot/1.0)',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       },
     })
-
     if (!response.ok) {
       console.warn(`[ImageCache] Failed to download ${imageUrl}: ${response.status}`)
       return null
     }
-
     const buffer = Buffer.from(await response.arrayBuffer())
-    const filepath = getCacheFilePath(cachePath)
-    await writeFile(filepath, buffer)
-
+    await writeFile(getCacheFilePath(cachePath), buffer)
     console.log(`[ImageCache] Cached ${imageUrl} -> ${cachePath}`)
     return cachePath
   } catch (err) {
@@ -86,78 +82,42 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
 }
 
 /**
- * Returns true if the URL is known to be a server-side-gated image endpoint
- * that cannot be fetched by the container (e.g. Next.js Image Optimization routes).
- * These must be served directly from the browser, not proxied.
- */
-function isUncacheableUrl(imageUrl: string): boolean {
-  try {
-    const u = new URL(imageUrl)
-    // Next.js image optimization endpoints (/_next/image or /api/image)
-    // and similar CDN-gated paths are session-dependent and block server fetches.
-    return (
-      u.pathname.startsWith('/_next/image') ||
-      u.pathname.includes('/api/image/')
-    )
-  } catch {
-    return false
-  }
-}
-
-/**
- * Get the local URL path for serving a cached image.
- * If the image is already a local path, returns it as-is.
- * If it's an external URL, returns the proxy path that will serve from cache.
+ * Convert a raw image URL (from the DB) to the URL that should be used in the UI.
+ * External URLs are routed through /api/images/ which caches on first request.
  */
 export function getLocalImageUrl(imageUrl: string | null | undefined): string | null {
   if (!imageUrl) return null
 
-  // Already a local path (starts with /)
+  // Already a local path
   if (imageUrl.startsWith('/')) return imageUrl
 
-  // Bare filename (no path, no protocol) - treat as local upload
-  // This handles legacy data where images were stored as just "filename.jpg"
+  // Bare filename — legacy uploads stored without path prefix
   if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-    // Check if the file actually exists in the uploads directory
-    // If not, return null to avoid broken image links
     const uploadPath = join(UPLOADS_DIR, imageUrl)
-    if (existsSync(uploadPath)) {
-      return `/uploads/${imageUrl}`
-    }
-    // File doesn't exist - can't serve it
+    if (existsSync(uploadPath)) return `/uploads/${imageUrl}`
     console.warn(`[ImageCache] Upload file not found: ${imageUrl}`)
     return null
   }
 
-  // External URL - check if it's cacheable by the server
-  // Some URLs (Next.js image optimization, auth-gated CDNs) cannot be fetched
-  // server-side. Return the original URL so the browser fetches it directly.
+  // Uncacheable URLs — serve from disk if already warmed, otherwise let browser fetch directly
   if (isUncacheableUrl(imageUrl)) {
+    const cachePath = getCachePath(imageUrl)
+    if (cachePath && isCached(cachePath)) return `/api/images/${cachePath}`
     return imageUrl
   }
 
-  // Always return proxy path so the request goes through our server
-  // The /api/images/ route will proxy from the original URL and cache on-the-fly
+  // External URL — route through our proxy so it gets cached on first hit
   const cachePath = getCachePath(imageUrl)
   if (!cachePath) return imageUrl
-
-  // Pass the original URL as a query param so the route can fetch it if not cached
-  const encodedUrl = encodeURIComponent(imageUrl)
-  return `/api/images/${cachePath}?url=${encodedUrl}`
+  return `/api/images/${cachePath}?url=${encodeURIComponent(imageUrl)}`
 }
 
-/**
- * Get the file extension from a URL, defaulting to .jpg
- */
 function getExtension(url: string): string {
   try {
-    const pathname = new URL(url).pathname
-    const ext = pathname.split('.').pop()?.toLowerCase()
+    const ext = new URL(url).pathname.split('.').pop()?.toLowerCase()
     if (ext && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif'].includes(ext)) {
       return `.${ext}`
     }
-  } catch {
-    // Invalid URL
-  }
+  } catch { /* invalid URL */ }
   return '.jpg'
 }

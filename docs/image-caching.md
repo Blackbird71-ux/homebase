@@ -2,116 +2,131 @@
 
 ## Overview
 
-Recipe images from external URLs are cached locally where possible to speed up loading times. The system uses a **proxy-and-cache** approach with intelligent fallback for URLs that cannot be server-fetched:
+Recipe images from external URLs are cached locally to speed up loading and reduce external dependencies. The system uses a **proxy-and-cache** approach with intelligent fallback:
 
-1. **Cacheable external URLs** are served through `/api/images/` — the server fetches, caches to `/data/images/`, and serves from disk on subsequent requests
-2. **Uncacheable URLs** (e.g. Next.js Image Optimization endpoints like Umami's `/api/image/` paths) are passed directly to the browser, which fetches them with its own session/cookies
-3. If a cached copy already exists in `/data/images/`, it is served immediately from disk
-4. If a server-side fetch fails for any reason, the route issues a **302 redirect** to the original URL so the browser can fetch it directly — images always display, never break
+1. **Cacheable external URLs** — server fetches on first request, caches to `/data/images/`, serves from disk thereafter
+2. **Uncacheable URLs** (e.g. Umami's `/api/image/` endpoints) — if already warmed to disk, served from cache; otherwise browser fetches them directly
+3. **Fetch failures** — the server issues a 302 redirect to the original URL so the browser can fetch it directly; images always display, never break
 
 ## Uncacheable URLs
 
-Some image sources cannot be fetched server-side because they require browser session cookies or actively block non-browser requests. The known patterns are:
+Some image sources cannot be fetched server-side because they use Next.js image optimization or application proxy endpoints that may block non-browser requests. The known patterns are:
 
-- `/_next/image` — Next.js Image Optimization API (used by Umami Recipes and other Next.js apps)
-- `/api/image/` — Application image proxy endpoints (same issue)
+- `/_next/image` — Next.js Image Optimization API
+- `/api/image/` — Application image proxy endpoints (used by Umami Recipes)
 
-For these URLs, `getLocalImageUrl()` returns the original URL unchanged and `cacheImage()` skips them immediately. The browser fetches them directly and they display normally — they just aren't cached on disk.
+These URLs are not proxied through `/api/images/`. Instead:
+- If the file has been written to disk (e.g. via the warm script), `getLocalImageUrl()` returns the cached `/api/images/<hash>.jpg` path
+- If not yet on disk, the original URL is returned and the browser fetches it directly
+
+## Warming the Cache (Umami Images)
+
+Because uncacheable images aren't automatically fetched server-side during import, a separate warm script is provided.
+
+### Prerequisites
+
+- The `/data/images/` folder mounted as a Windows network share (e.g. `\\Sovereign-Main\docker\homebase\Data\images`)
+- PowerShell (built into Windows)
+
+### Run the warm script
+
+```powershell
+.\scripts\warm-image-cache.ps1 -ImagesDir "\\Sovereign-Main\docker\homebase\Data\images"
+```
+
+Optional: override the server URL (default is `https://homebase.liddleapps.com`):
+
+```powershell
+.\scripts\warm-image-cache.ps1 -ImagesDir "\\Sovereign-Main\docker\homebase\Data\images" -BaseUrl "https://homebase.liddleapps.com"
+```
+
+If PowerShell blocks the script:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+### What the script does
+
+1. Calls `GET /api/images/uncached` to get all recipe image URLs that are external and not yet on disk
+2. Fetches each image from your local machine (where the image host is publicly accessible)
+3. Writes files directly to the network share using the MD5-hash filename the server expects
+
+Re-run the script any time new recipes are imported. Already-cached images are skipped automatically.
+
+### After warming
+
+On the next page load, `getLocalImageUrl()` detects the files on disk and switches those recipes to serve from `/api/images/<hash>.jpg` — no further external requests.
 
 ## How It Works
 
 ### Server-Side Image Route
 
-`src/app/api/images/[...path]/route.ts` handles image serving:
+`src/app/api/images/[...path]/route.ts` — handles all image serving:
 
 - **URL format**: `/api/images/<md5-hash>.<ext>?url=<original-url>`
-- If cached locally: serves from disk with `Cache-Control: immutable`
-- If not cached: fetches from the original URL with browser-like headers, writes to disk, serves the response
-- If the upstream fetch fails (non-2xx or network error): issues a **302 redirect** to the original URL — images still display via the browser
+- Cached on disk → served immediately with `Cache-Control: immutable`
+- Not cached → fetches from `?url=` with browser-like headers, writes to disk, serves response
+- Fetch fails (non-2xx or network error) → 302 redirect to original URL so browser can fetch directly
 - Security: blocks `..` traversal and multi-segment paths
 
 ### URL Conversion Utility
 
-`src/lib/image-cache.ts` provides `getLocalImageUrl()`:
+`src/lib/image-cache.ts` — converts raw DB image URLs to the URL the UI should use:
 
-- Takes an external image URL (or null)
-- **Uncacheable URLs** (Next.js image opt / `/api/image/` paths): returned as-is for direct browser fetch
-- **Cacheable external URLs**: returns `/api/images/<hash>.<ext>?url=<encoded-original>`
-- Already a local path (starts with `/`): returned as-is
-- Bare filename (legacy data): checks `/data/uploads/`, returns `/uploads/<filename>` or null
-- null/empty: returns null
+| Input | Output |
+|-------|--------|
+| `null` / empty | `null` |
+| Already a local path (`/...`) | returned as-is |
+| Bare filename (legacy upload) | `/uploads/<filename>` if file exists, else `null` |
+| Uncacheable external URL, file on disk | `/api/images/<hash>.<ext>` (served from cache) |
+| Uncacheable external URL, not on disk | original URL (browser fetches directly) |
+| Other external URL | `/api/images/<hash>.<ext>?url=<encoded>` (proxy + cache on first hit) |
+
+Key functions:
+
+- `getLocalImageUrl(url)` — used everywhere before sending image URLs to the client
+- `cacheImage(url)` — eagerly downloads and caches an image server-side (skips uncacheable URLs)
+- `getCachePath(url)` — returns the deterministic `<md5>.<ext>` filename for a URL
+- `isCached(cachePath)` — checks if the file exists on disk
+
+### Uncached Image List Endpoint
+
+`GET /api/images/uncached` — returns all recipe image URLs that are external HTTP(S) and not yet cached on disk. No auth required (image URLs are not sensitive). Used by the warm script.
 
 ### Cache Population
 
-The cache builds naturally as users browse recipes:
-
-1. **First view of a cacheable image**: URL is converted to `/api/images/hash.jpg?url=https://...` → server fetches from source, caches it, serves it
-2. **Subsequent views**: server finds cached file on disk, serves it directly (no external request)
-3. **Uncacheable images**: browser fetches directly every time (no disk cache, but no broken images either)
-
-During **import**, `cacheImage()` attempts eager caching — it silently skips uncacheable URLs and continues.
+- **Import**: `cacheImage()` is called for each imported recipe image. Cacheable URLs are downloaded immediately; uncacheable URLs are skipped (original URL stored in DB).
+- **Browsing**: cacheable images not yet on disk are fetched and cached on first page view via the proxy route.
+- **Warming**: run `warm-image-cache.ps1` to populate uncacheable images from your local machine.
 
 ### Usage in Code
 
-All recipe image URLs are converted at the data layer before being sent to the client:
+All image URLs are converted at the data layer before being sent to the client:
 
-- **Server Components** (recipes page, recipe detail page, home page): Use `getLocalImageUrl()` when serializing recipe data
-- **API Routes** (recipes, tags, dashboard): Use `getLocalImageUrl()` when returning JSON responses
-- **Client Components**: Receive already-converted URLs and render them directly with `<img>` tags
+- **Server components** and **API routes**: call `getLocalImageUrl()` when serializing recipe data
+- **Client components**: receive already-converted URLs and render with `<img>` tags directly
 
-## Files Modified
+## Environment
 
-| File | Change |
-|------|--------|
-| `src/lib/image-cache.ts` | **NEW** - URL conversion and caching utility |
-| `src/app/api/images/[...path]/route.ts` | **NEW** - Image proxy/serving API route with on-the-fly caching |
-| `src/app/(app)/recipes/page.tsx` | Added `getLocalImageUrl` import and conversion |
-| `src/app/(app)/recipes/[id]/page.tsx` | Added `getLocalImageUrl` import and conversion |
-| `src/app/(app)/home/page.tsx` | Added `getLocalImageUrl` import and conversion |
-| `src/app/api/recipes/route.ts` | Added `getLocalImageUrl` import and conversion |
-| `src/app/api/recipes/[id]/route.ts` | Added `getLocalImageUrl` import and conversion |
-| `src/app/api/dashboard/route.ts` | Added `getLocalImageUrl` import and conversion |
-| `src/app/api/tags/[id]/recipes/route.ts` | Added `getLocalImageUrl` import and conversion |
-| `src/app/api/recipes/import/route.ts` | Uses `cacheImage()` to eagerly cache during import |
-| `docker/entrypoint.sh` | Already creates `/data/images` directory |
-| `docker-compose.yml` | Added volume mount for images directory |
-| `deploy-nas.sh` | Added volume mount and directory creation for images |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATA_DIR` | `/data` | Root data directory. Override to `./data` for local dev. |
 
-## Docker Configuration
+Set in `.env.local` for local development:
 
-### Volume Mount
-
-The images directory is mounted from the NAS:
-
-```yaml
-volumes:
-  - /volume1/homebase/Data/images:/data/images
+```
+DATA_DIR=./data
 ```
 
-### Directory Creation
+## File Locations
 
-The entrypoint script (`docker/entrypoint.sh`) already creates the `/data/images` directory on startup:
-
-```sh
-mkdir -p /data/images
-chown -R nextjs:nodejs /data
-```
-
-## Cache Location
-
-- **Inside container**: `/data/images/`
-- **On NAS**: `/volume1/homebase/Data/images/`
-- **Local dev**: `data/images/` (relative to project root)
+| Context | Path |
+|---------|------|
+| Inside container | `/data/images/` |
+| On NAS (network share) | `\\Sovereign-Main\docker\homebase\Data\images` |
+| Local dev | `./data/images/` |
 
 ## Image Storage Format
 
-- Cached images are stored with their original extension: `<md5-hash>.<ext>`
-- The hash is computed from the original URL to ensure uniqueness
-- Original filenames are preserved for uploaded images (served via `/uploads/` path)
-
-## Performance Benefits
-
-- External images are fetched only once per unique URL
-- Subsequent loads serve from local filesystem (no network latency)
-- Images are served directly by Next.js without external dependencies
-- Cache builds naturally as users browse - no upfront batch operation needed
+Files are stored as `<md5-hash-of-original-url>.<ext>` — the extension comes from the original URL's path (defaults to `.jpg` if none detected). The hash is deterministic so the same URL always maps to the same filename.

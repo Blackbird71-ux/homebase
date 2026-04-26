@@ -3,44 +3,38 @@ import { readFile, mkdir, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { join } from 'path'
 
-const IMAGES_DIR = join(process.cwd(), 'data', 'images')
+// Use absolute /data path — process.cwd() in the standalone build is /app, not /data
+const IMAGES_DIR = join(process.env.DATA_DIR ?? '/data', 'images')
 
 /**
  * GET /api/images/:cachePath?url=<originalUrl>
  *
  * Serves recipe images from the local filesystem cache.
- * If the image isn't cached yet, it fetches it from the original URL,
- * caches it locally, and serves it. This builds the cache naturally
- * as users browse recipes.
+ * On first request, fetches from the original URL, caches to disk, and serves.
+ * Subsequent requests are served directly from disk.
  */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const { path } = await params
-  // The [...path] catch-all will have exactly one segment (the filename).
-  // Rejoin just to be safe, but a real filename never contains slashes.
   const cachePath = path.join('/')
 
-  // Security: prevent directory traversal.
-  // Note: we allow '/' because path.join('/') on a single-segment array is fine;
-  // we only block '..' sequences and multiple nested slashes (e.g. "../../etc").
+  // Security: only allow single-segment md5-style filenames
   if (cachePath.includes('..') || path.length > 1) {
     return new NextResponse('Forbidden', { status: 403 })
   }
 
   const filepath = join(IMAGES_DIR, cachePath)
 
-  // If cached locally, serve from disk
+  // Serve from disk cache if available
   if (existsSync(filepath)) {
     try {
       const buffer = await readFile(filepath)
-      const ext = cachePath.split('.').pop()?.toLowerCase()
       return new NextResponse(buffer, {
         headers: {
-          'Content-Type': getContentType(ext),
+          'Content-Type': getContentType(cachePath.split('.').pop()?.toLowerCase()),
           'Cache-Control': 'public, max-age=31536000, immutable',
-          'X-Content-Type-Options': 'nosniff',
         },
       })
     } catch {
@@ -48,10 +42,8 @@ export async function GET(
     }
   }
 
-  // Not cached - try to fetch from original URL (passed as query param)
-  const { searchParams } = new URL(req.url)
-  const originalUrl = searchParams.get('url')
-
+  // Not cached yet — fetch from original URL
+  const originalUrl = new URL(req.url).searchParams.get('url')
   if (!originalUrl) {
     return new NextResponse('Not found', { status: 404 })
   }
@@ -60,41 +52,36 @@ export async function GET(
     const response = await fetch(originalUrl, {
       signal: AbortSignal.timeout(15_000),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; HomebaseBot/1.0; +https://homebase.family)',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Referer': new URL(originalUrl).origin + '/',
+        'User-Agent': 'Mozilla/5.0 (compatible; HomebaseBot/1.0)',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       },
     })
 
     if (!response.ok) {
       // Upstream rejected server-side fetch (auth-gated, CDN block, etc.)
-      // Redirect the browser to fetch it directly — it will work from the user's session.
-      console.warn(`[ImageCache] Upstream returned ${response.status} for ${originalUrl} — redirecting to source`)
+      // Redirect the browser to fetch it directly — images still display.
+      console.warn(`[ImageCache] Upstream ${response.status} for ${originalUrl} — redirecting to source`)
       return NextResponse.redirect(originalUrl, { status: 302 })
     }
 
     const buffer = Buffer.from(await response.arrayBuffer())
+    const contentType = response.headers.get('content-type') || getContentType(cachePath.split('.').pop()?.toLowerCase())
 
-    // Cache locally for next time (fire and forget — errors are non-fatal)
+    // Write to cache (fire and forget — non-fatal)
     ;(async () => {
       try {
         await mkdir(IMAGES_DIR, { recursive: true })
         await writeFile(filepath, buffer)
-        console.log(`[ImageCache] Cached image -> ${cachePath}`)
+        console.log(`[ImageCache] Cached -> ${cachePath}`)
       } catch (err) {
-        console.warn(`[ImageCache] Failed to write cache file ${cachePath}:`, err instanceof Error ? err.message : err)
+        console.warn(`[ImageCache] Write failed for ${cachePath}:`, err instanceof Error ? err.message : err)
       }
     })()
-
-    // Determine content type from response or extension
-    const contentType = response.headers.get('content-type') || getContentType(cachePath.split('.').pop()?.toLowerCase())
 
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=31536000, immutable',
-        'X-Content-Type-Options': 'nosniff',
       },
     })
   } catch (err) {
@@ -106,20 +93,12 @@ export async function GET(
 
 function getContentType(ext: string | undefined): string {
   switch (ext) {
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg'
-    case 'png':
-      return 'image/png'
-    case 'gif':
-      return 'image/gif'
-    case 'webp':
-      return 'image/webp'
-    case 'svg':
-      return 'image/svg+xml'
-    case 'avif':
-      return 'image/avif'
-    default:
-      return 'image/jpeg'
+    case 'jpg': case 'jpeg': return 'image/jpeg'
+    case 'png': return 'image/png'
+    case 'gif': return 'image/gif'
+    case 'webp': return 'image/webp'
+    case 'svg': return 'image/svg+xml'
+    case 'avif': return 'image/avif'
+    default: return 'image/jpeg'
   }
 }
