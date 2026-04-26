@@ -1,9 +1,10 @@
 import { writeFile, mkdir } from 'fs/promises'
-import { existsSync, createReadStream } from 'fs'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import crypto from 'crypto'
 
 const IMAGES_DIR = join(process.cwd(), 'data', 'images')
+const UPLOADS_DIR = join(process.cwd(), 'data', 'uploads')
 
 /**
  * Get the local cache path for an external image URL.
@@ -92,7 +93,15 @@ export function getLocalImageUrl(imageUrl: string | null | undefined): string | 
   // Bare filename (no path, no protocol) - treat as local upload
   // This handles legacy data where images were stored as just "filename.jpg"
   if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-    return `/uploads/${imageUrl}`
+    // Check if the file actually exists in the uploads directory
+    // If not, return null to avoid broken image links
+    const uploadPath = join(UPLOADS_DIR, imageUrl)
+    if (existsSync(uploadPath)) {
+      return `/uploads/${imageUrl}`
+    }
+    // File doesn't exist - can't serve it
+    console.warn(`[ImageCache] Upload file not found: ${imageUrl}`)
+    return null
   }
 
   // External URL - return proxy path
