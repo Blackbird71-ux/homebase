@@ -18,10 +18,14 @@ export async function GET(
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const { path } = await params
+  // The [...path] catch-all will have exactly one segment (the filename).
+  // Rejoin just to be safe, but a real filename never contains slashes.
   const cachePath = path.join('/')
 
-  // Security: prevent directory traversal
-  if (cachePath.includes('..') || cachePath.includes('/')) {
+  // Security: prevent directory traversal.
+  // Note: we allow '/' because path.join('/') on a single-segment array is fine;
+  // we only block '..' sequences and multiple nested slashes (e.g. "../../etc").
+  if (cachePath.includes('..') || path.length > 1) {
     return new NextResponse('Forbidden', { status: 403 })
   }
 
@@ -66,12 +70,16 @@ export async function GET(
 
     const buffer = Buffer.from(await response.arrayBuffer())
 
-    // Cache locally for next time (fire and forget)
-    mkdir(IMAGES_DIR, { recursive: true })
-      .then(() => writeFile(filepath, buffer))
-      .catch(() => {
-        /* cache write failed silently */
-      })
+    // Cache locally for next time (fire and forget — errors are non-fatal)
+    ;(async () => {
+      try {
+        await mkdir(IMAGES_DIR, { recursive: true })
+        await writeFile(filepath, buffer)
+        console.log(`[ImageCache] Cached image -> ${cachePath}`)
+      } catch (err) {
+        console.warn(`[ImageCache] Failed to write cache file ${cachePath}:`, err instanceof Error ? err.message : err)
+      }
+    })()
 
     // Determine content type from response or extension
     const contentType = response.headers.get('content-type') || getContentType(cachePath.split('.').pop()?.toLowerCase())
