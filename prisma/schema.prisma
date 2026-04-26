@@ -88,6 +88,7 @@ model List {
   type          String
   isActive      Boolean    @default(true)
   categoryOrder String?
+  sortOrder     Int        @default(0)
   items         ListItem[]
   familyId      String
   family        Family     @relation(fields: [familyId], references: [id])

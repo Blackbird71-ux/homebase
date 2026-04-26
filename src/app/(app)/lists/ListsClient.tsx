@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { ListSelector } from '@/components/lists/ListSelector'
 import { ShoppingList } from '@/components/lists/ShoppingList'
 import { TodoList } from '@/components/lists/TodoList'
 import { NewListDialog } from '@/components/lists/NewListDialog'
 import type { ListItemShape } from '@/lib/list-helpers'
+import { toast } from 'sonner'
 
 interface SerializedItem {
   id: string
@@ -27,6 +28,7 @@ interface SerializedList {
   type: string
   isActive: boolean
   categoryOrder: string | null
+  sortOrder: number
   createdAt: string
   familyId: string
   items: SerializedItem[]
@@ -66,10 +68,12 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
 
   function handleCreated(list: { id: string; name: string; type: string }) {
     const familyId = initialLists[0]?.familyId ?? ''
+    const maxSortOrder = lists.reduce((max, l) => Math.max(max, l.sortOrder), 0)
     const newList: SerializedList = {
       ...list,
       isActive: true,
       categoryOrder: null,
+      sortOrder: maxSortOrder + 1,
       createdAt: new Date().toISOString(),
       familyId,
       items: [],
@@ -104,6 +108,33 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
     }
   }
 
+  const handleReorder = useCallback(async (orderedIds: string[]) => {
+    // Update local state immediately
+    setLists((prev) => {
+      const listMap = new Map(prev.map((l) => [l.id, l]))
+      const updates = orderedIds.map((id, idx) => {
+        const list = listMap.get(id)
+        return list ? { ...list, sortOrder: idx } : list
+      }).filter(Boolean) as SerializedList[]
+      
+      // Merge with any lists not in the orderedIds (shouldn't happen, but be safe)
+      const reorderedIds = new Set(orderedIds)
+      const remaining = prev.filter((l) => !reorderedIds.has(l.id))
+      return [...updates, ...remaining]
+    })
+
+    // Persist to server
+    const items = orderedIds.map((id, idx) => ({ id, sortOrder: idx }))
+    const res = await fetch('/api/lists/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    })
+    if (!res.ok) {
+      toast.error('Failed to save list order')
+    }
+  }, [])
+
   const listsMeta = lists.map((l) => ({
     id: l.id,
     name: l.name,
@@ -126,6 +157,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
           onRename={(id, newName) => {
             setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))
           }}
+          onReorder={handleReorder}
         />
 
       </aside>

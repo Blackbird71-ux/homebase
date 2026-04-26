@@ -6,7 +6,7 @@ export async function GET() {
   const user = await requireSession()
   const lists = await prisma.list.findMany({
     where: { familyId: user.familyId, isActive: true },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { sortOrder: 'asc' },
     include: {
       _count: { select: { items: { where: { isCompleted: false } } } },
     },

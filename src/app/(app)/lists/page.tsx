@@ -5,7 +5,7 @@ import { ListsClient } from './ListsClient'
 async function getLists(familyId: string) {
   return prisma.list.findMany({
     where: { familyId, isActive: true },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { sortOrder: 'asc' },
     include: {
       items: { orderBy: { sortOrder: 'asc' } },
       _count: { select: { items: { where: { isCompleted: false } } } },
