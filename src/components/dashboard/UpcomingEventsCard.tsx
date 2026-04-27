@@ -1,17 +1,43 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar } from 'lucide-react'
-import { format, isToday, isTomorrow } from 'date-fns'
+import { format } from 'date-fns'
 import type { UpcomingEvent } from '@/types'
 import Link from 'next/link'
 
-function formatEventDate(iso: string): string {
+/**
+ * Compare a UTC date to "today" in the given timezone.
+ * Returns 'today', 'tomorrow', or a formatted date string.
+ */
+function formatEventDate(iso: string, timezone: string): string {
   const d = new Date(iso)
-  if (isToday(d)) return `Today ${format(d, 'h:mm a')}`
-  if (isTomorrow(d)) return `Tomorrow ${format(d, 'h:mm a')}`
+  // Get the date parts in the target timezone
+  const eventDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d)
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date())
+  // Compute tomorrow's date string
+  const todayParts = todayStr.split('-').map(Number)
+  const tomorrow = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2] + 1))
+  const tomorrowStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(tomorrow)
+
+  if (eventDateStr === todayStr) {
+    return `Today ${format(d, 'h:mm a')}`
+  }
+  if (eventDateStr === tomorrowStr) {
+    return `Tomorrow ${format(d, 'h:mm a')}`
+  }
   return format(d, 'EEE d MMM h:mm a')
 }
 
-export function UpcomingEventsCard({ events }: { events: UpcomingEvent[] }) {
+export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent[]; timezone?: string }) {
+  const tz = timezone ?? 'UTC'
   return (
     <Link href="/calendar" className="block h-full">
       <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer flex flex-col">
@@ -30,7 +56,7 @@ export function UpcomingEventsCard({ events }: { events: UpcomingEvent[] }) {
                 <div>
                   <p className="text-sm font-medium leading-tight">{e.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {e.isAllDay ? format(new Date(e.start), 'EEE d MMM') + ' · All day' : formatEventDate(e.start)}
+                    {e.isAllDay ? format(new Date(e.start), 'EEE d MMM') + ' · All day' : formatEventDate(e.start, tz)}
                   </p>
                 </div>
               </div>

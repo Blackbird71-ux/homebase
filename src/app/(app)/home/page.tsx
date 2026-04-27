@@ -2,18 +2,33 @@ import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
+import { todayBoundsInTz } from '@/lib/timezone'
 import type { DashboardData } from '@/types'
 
+/**
+ * Normalize a date string to midnight UTC for meal plan queries.
+ * This matches the normalization used in the meal plan API (POST /api/meal-plan).
+ * Meal plans are stored at midnight UTC of the date they were created for.
+ */
+function normalizeToUtcMidnight(dateStr: string): Date {
+  const d = new Date(dateStr + 'T00:00:00Z')
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+}
+
 async function getDashboardData(familyId: string, timezone: string, preferredListId?: string | null): Promise<DashboardData> {
-  // Compute today's date in the family's timezone
+  // Get today's boundaries in the family's timezone
+  const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
+  const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  // For meal plan queries, we need to match the storage normalization used by the meal plan API.
+  // Meal plans are stored at midnight UTC of the date they were created for.
+  // So we compute what "today" is in the family's timezone, then normalize to midnight UTC.
   const todayStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone,
     year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(new Date())
-  const [year, month, day] = todayStr.split('-').map(Number)
-  const todayStart = new Date(Date.UTC(year, month - 1, day))
-  const todayEnd = new Date(Date.UTC(year, month - 1, day + 1))
-  const weekEnd = new Date(Date.UTC(year, month - 1, day + 7))
+  const mealPlanTodayStart = normalizeToUtcMidnight(todayStr)
+  const mealPlanTodayEnd = new Date(mealPlanTodayStart.getTime() + 24 * 60 * 60 * 1000)
 
   // Build shopping list query - use preferred list if set, otherwise fall back to first active
   const shoppingListWhere: Record<string, unknown> = { familyId, type: 'SHOPPING', isActive: true }
@@ -28,7 +43,7 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
       take: 5,
     }),
     prisma.mealPlan.findFirst({
-      where: { familyId, date: { gte: todayStart, lt: todayEnd }, mealType: 'dinner' },
+      where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd }, mealType: 'dinner' },
       include: { recipe: { select: { id: true, title: true, image: true } } },
     }),
     prisma.list.findMany({
@@ -108,7 +123,7 @@ export default async function HomePage() {
     <div className="flex flex-col h-full p-6 overflow-hidden">
       <h1 className="text-xl font-semibold mb-4 shrink-0">Home</h1>
       <div className="flex-1 overflow-hidden">
-        <DashboardGrid data={data} />
+        <DashboardGrid data={data} timezone={timezone} />
       </div>
     </div>
   )

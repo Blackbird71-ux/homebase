@@ -110,8 +110,8 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
 
       // Only send start/end dates if this is NOT a recurring instance
       // (recurring instances are virtual - editing them should update the original event's metadata, not its dates)
-      const e = event as unknown as Record<string, unknown>
-      if (!e.seriesId) {
+      const isRecurringInstance = !!(event && (event as unknown as Record<string, unknown>).seriesId)
+      if (!isRecurringInstance) {
         const startDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(start).toISOString()
         const endDate = isAllDay ? new Date(end.split('T')[0]).toISOString() : new Date(end).toISOString()
         body.start = startDate
@@ -159,17 +159,17 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
   // Get the actual event ID - if this is a recurring instance, use the seriesId
   function getEventId() {
     if (!event) return null
-    const e = event as unknown as Record<string, unknown>
-    return (e.seriesId as string) || event.id
+    const seriesId = (event as unknown as Record<string, unknown>).seriesId as string | undefined
+    return seriesId || event.id
   }
 
   // Check if this event is part of a recurring series
   function isRecurringEvent() {
     if (!event) return false
-    const e = event as unknown as Record<string, unknown>
+    const seriesId = (event as unknown as Record<string, unknown>).seriesId as string | undefined
     // The original recurring event has recurrenceRule set
     // Recurring instances have seriesId set
-    return !!(event.recurrenceRule || e.seriesId)
+    return !!(event.recurrenceRule || seriesId)
   }
 
   async function handleDelete() {
