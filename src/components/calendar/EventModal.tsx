@@ -288,7 +288,7 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
               {isAllDay && (
                 <div className="space-y-1">
                   <Label>Date</Label>
-                  <Input type="date" value={start.split('T')[0]} onChange={e => setStart(e.target.value + 'T00:00')} />
+                  <Input type="date" value={start.split('T')[0]} onChange={e => { setStart(e.target.value + 'T00:00'); setEnd(e.target.value + 'T23:59') }} />
                 </div>
               )}
               <div className="space-y-1">

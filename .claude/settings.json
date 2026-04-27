@@ -6,7 +6,9 @@
       "Bash(npm list *)",
       "Read(//c/Users/liddlem/.config/superpowers/worktrees/homebase/feature-shopping-list-ux/**)",
       "Bash(npm test *)",
-      "Bash(node -c \"src/app/api/lists/[id]/items/route.ts\")"
+      "Bash(node -c \"src/app/api/lists/[id]/items/route.ts\")",
+      "Bash(git show *)",
+      "Bash(npx tsc *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\liddlem\\.config\\superpowers\\worktrees\\homebase\\feature-shopping-list-ux\\prisma",

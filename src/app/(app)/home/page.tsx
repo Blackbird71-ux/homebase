@@ -30,12 +30,6 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
   const mealPlanTodayStart = normalizeToUtcMidnight(todayStr)
   const mealPlanTodayEnd = new Date(mealPlanTodayStart.getTime() + 24 * 60 * 60 * 1000)
 
-  // Build shopping list query - use preferred list if set, otherwise fall back to first active
-  const shoppingListWhere: Record<string, unknown> = { familyId, type: 'SHOPPING', isActive: true }
-  if (preferredListId) {
-    shoppingListWhere.id = preferredListId
-  }
-
   const [upcomingEvents, tonightsMeal, shoppingLists, todoLists] = await Promise.all([
     prisma.event.findMany({
       where: { familyId, start: { gte: todayStart } },
@@ -46,14 +40,15 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
       where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd }, mealType: 'dinner' },
       include: { recipe: { select: { id: true, title: true, image: true } } },
     }),
+    // Fetch up to 5 active shopping lists so we can fall back if the preferred one is gone
     prisma.list.findMany({
-      where: shoppingListWhere,
+      where: { familyId, type: 'SHOPPING', isActive: true },
       orderBy: { createdAt: 'desc' },
       include: {
         items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
         _count: { select: { items: { where: { isCompleted: false } } } },
       },
-      take: 1,
+      take: 5,
     }),
     prisma.list.findMany({
       where: { familyId, type: 'TODO', isActive: true },
@@ -78,12 +73,17 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
       recipeImage: getLocalImageUrl(tonightsMeal.recipe?.image ?? null),
       note: tonightsMeal.note,
     } : null,
-    shoppingList: shoppingLists[0] ? {
-      listId: shoppingLists[0].id, listName: shoppingLists[0].name,
-      totalItems: shoppingLists[0]._count.items,
-      pendingItems: shoppingLists[0]._count.items,
-      firstItems: shoppingLists[0].items.map(i => i.content),
-    } : null,
+    shoppingList: (() => {
+      const chosen = preferredListId
+        ? (shoppingLists.find(l => l.id === preferredListId) ?? shoppingLists[0])
+        : shoppingLists[0]
+      return chosen ? {
+        listId: chosen.id, listName: chosen.name,
+        totalItems: chosen._count.items,
+        pendingItems: chosen._count.items,
+        firstItems: chosen.items.map(i => i.content),
+      } : null
+    })(),
     todoSummary: todoLists[0] ? {
       listId: todoLists[0].id, listName: todoLists[0].name,
       dueTodayCount: todoLists[0]._count.items,

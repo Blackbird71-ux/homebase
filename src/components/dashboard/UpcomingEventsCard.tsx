@@ -56,7 +56,9 @@ export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent
                 <div>
                   <p className="text-sm font-medium leading-tight">{e.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {e.isAllDay ? format(new Date(e.start), 'EEE d MMM') + ' · All day' : formatEventDate(e.start, tz)}
+                    {e.isAllDay
+                      ? new Intl.DateTimeFormat('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz }).format(new Date(e.start)) + ' · All day'
+                      : formatEventDate(e.start, tz)}
                   </p>
                 </div>
               </div>
