@@ -2,6 +2,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AccountTab } from '@/components/settings/AccountTab'
+import { SUPPORTED_TIMEZONES } from '@/app/api/settings/family/route'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
 import { AdvancedThemingTab } from '@/components/settings/AdvancedThemingTab'
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab'
@@ -35,6 +36,7 @@ export default async function SettingsPage() {
           select: {
             id: true,
             name: true,
+            timezone: true,
             umamiScriptUrl: true,
             umamiSiteId: true,
           },
@@ -79,13 +81,16 @@ export default async function SettingsPage() {
           </TabsList>
 
           <TabsContent value="account">
-            <AccountTab user={{
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              family: user.family,
-            }} />
+            <AccountTab
+              user={{
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                family: user.family,
+              }}
+              supportedTimezones={[...SUPPORTED_TIMEZONES]}
+            />
           </TabsContent>
 
           <TabsContent value="appearance">

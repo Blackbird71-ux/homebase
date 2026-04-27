@@ -94,17 +94,12 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
 
 export default async function HomePage() {
   const user = await requireSession()
-  const [family, fullUser] = await Promise.all([
-    prisma.family.findUnique({
-      where: { id: user.familyId },
-      select: { timezone: true },
-    }),
-    prisma.user.findUnique({
-      where: { id: user.id },
-      select: { uiPreferences: true },
-    }),
-  ])
-  const timezone = family?.timezone ?? 'UTC'
+  const timezone = user.timezone
+
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { uiPreferences: true },
+  })
 
   // Parse preferred dashboard shopping list from uiPreferences
   let preferredListId: string | null = null

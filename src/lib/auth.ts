@@ -41,13 +41,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
         token.role = (user as SessionUser).role
         token.familyId = (user as SessionUser).familyId
         token.timezone = (user as SessionUser).timezone
         token.weekStartsOn = (user as SessionUser).weekStartsOn
+      }
+      // Called by session.update() on the client — re-read mutable fields from DB
+      // so timezone/weekStartsOn changes take effect without requiring sign-out.
+      if (trigger === 'update') {
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { weekStartsOn: true, family: { select: { timezone: true } } },
+        })
+        if (fresh) {
+          token.timezone = fresh.family.timezone
+          token.weekStartsOn = fresh.weekStartsOn
+        }
       }
       return token
     },

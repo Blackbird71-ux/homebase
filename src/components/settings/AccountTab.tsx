@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,14 +34,17 @@ interface AccountTabProps {
     family: {
       id: string
       name: string
+      timezone: string
     }
   }
+  supportedTimezones: string[]
 }
 
 type Status = { type: 'success' | 'error'; message: string } | null
 
-export function AccountTab({ user }: AccountTabProps) {
+export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
   const isAdmin = user.role === 'admin'
+  const { update: updateSession } = useSession()
 
   // Profile
   const [name, setName] = useState(user.name)
@@ -58,6 +62,11 @@ export function AccountTab({ user }: AccountTabProps) {
   const [familyName, setFamilyName] = useState(user.family.name)
   const [familyNameStatus, setFamilyNameStatus] = useState<Status>(null)
   const [familyNameSaving, setFamilyNameSaving] = useState(false)
+
+  // Timezone (admin only)
+  const [timezone, setTimezone] = useState(user.family.timezone)
+  const [timezoneStatus, setTimezoneStatus] = useState<Status>(null)
+  const [timezoneSaving, setTimezoneSaving] = useState(false)
 
   // Invite codes (admin only)
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([])
@@ -157,6 +166,29 @@ export function AccountTab({ user }: AccountTabProps) {
       setFamilyNameStatus({ type: 'error', message: 'Network error.' })
     } finally {
       setFamilyNameSaving(false)
+    }
+  }
+
+  async function saveTimezone() {
+    setTimezoneSaving(true)
+    setTimezoneStatus(null)
+    try {
+      const res = await fetch('/api/settings/family', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone }),
+      })
+      if (res.ok) {
+        await updateSession()
+        setTimezoneStatus({ type: 'success', message: 'Timezone updated. All date/time displays will use the new timezone.' })
+      } else {
+        const data = await res.json()
+        setTimezoneStatus({ type: 'error', message: data.error ?? 'Failed to update timezone.' })
+      }
+    } catch {
+      setTimezoneStatus({ type: 'error', message: 'Network error.' })
+    } finally {
+      setTimezoneSaving(false)
     }
   }
 
@@ -346,6 +378,43 @@ export function AccountTab({ user }: AccountTabProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Timezone — admin editable, others read-only */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Timezone</CardTitle>
+          <CardDescription>
+            {isAdmin
+              ? 'Admin only — sets the timezone used for all dates and times across the app.'
+              : 'The timezone used for all dates and times in the app.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isAdmin ? (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="timezone">Timezone</Label>
+                <select
+                  id="timezone"
+                  value={timezone}
+                  onChange={e => setTimezone(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                >
+                  {supportedTimezones.map(tz => (
+                    <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+                  ))}
+                </select>
+              </div>
+              <Button onClick={saveTimezone} disabled={timezoneSaving}>
+                {timezoneSaving ? 'Saving...' : 'Save Timezone'}
+              </Button>
+              {timezoneStatus && <StatusMessage status={timezoneStatus} />}
+            </>
+          ) : (
+            <p className="text-sm">{user.family.timezone.replace(/_/g, ' ')}</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Admin: Invite Codes */}
       {isAdmin && (
