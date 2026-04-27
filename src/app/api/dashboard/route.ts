@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
-import type { DashboardData } from '@/types'
+import type { DashboardData, TodaysMeal } from '@/types'
 
 export async function GET() {
   const user = await requireSession()
@@ -12,17 +12,16 @@ export async function GET() {
   const now = new Date()
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-  const [upcomingEvents, tonightsMeal, shoppingLists, todoLists] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, shoppingLists, todoLists] = await Promise.all([
     prisma.event.findMany({
       where: { familyId: user.familyId, start: { gte: now } },
       orderBy: { start: 'asc' },
       take: 5,
     }),
-    prisma.mealPlan.findFirst({
+    prisma.mealPlan.findMany({
       where: {
         familyId: user.familyId,
         date: { gte: todayStart, lt: todayEnd },
-        mealType: 'dinner',
       },
       include: { recipe: { select: { id: true, title: true, image: true } } },
     }),
@@ -54,6 +53,21 @@ export async function GET() {
     }),
   ])
 
+  const mealByType = (type: string): TodaysMeal | null => {
+    const m = todayMealPlans.find(p => p.mealType === type)
+    if (!m) return null
+    return {
+      mealPlanId: m.id,
+      mealType: m.mealType,
+      recipeId: m.recipe?.id ?? null,
+      recipeName: m.recipe?.title ?? null,
+      recipeImage: getLocalImageUrl(m.recipe?.image ?? null),
+      note: m.note,
+    }
+  }
+
+  const dinnerMeal = mealByType('dinner')
+
   const data: DashboardData = {
     upcomingEvents: upcomingEvents.map(e => ({
       id: e.id,
@@ -64,15 +78,13 @@ export async function GET() {
       category: e.category,
       color: e.color,
     })),
-    tonightsDinner: tonightsMeal
-      ? {
-          mealPlanId: tonightsMeal.id,
-          recipeId: tonightsMeal.recipe?.id ?? null,
-          recipeName: tonightsMeal.recipe?.title ?? null,
-          recipeImage: getLocalImageUrl(tonightsMeal.recipe?.image ?? null),
-          note: tonightsMeal.note,
-        }
-      : null,
+    tonightsDinner: dinnerMeal,
+    todaysMeals: {
+      breakfast: mealByType('breakfast'),
+      lunch: mealByType('lunch'),
+      dinner: dinnerMeal,
+      snacks: mealByType('snacks'),
+    },
     shoppingList: shoppingLists[0]
       ? {
           listId: shoppingLists[0].id,
