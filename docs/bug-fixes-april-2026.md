@@ -49,12 +49,21 @@
 - `FREQ=MONTHLY;INTERVAL=3` (Quarterly)
 - `FREQ=MONTHLY;INTERVAL=6` (Bi-annually)
 
+### Bug 8: Ingredient mapping category dropdown only shows hardcoded categories, not custom ones
+**Root Cause:** `IngredientMappingsTab` used a hardcoded `CATEGORIES` constant (`['Meat', 'Dairy', 'Produce', 'Bakery', 'Frozen', 'Household', 'Other']`) for the category dropdown when adding a new mapping. It never fetched from `/api/ingredient-categories`, so any custom categories a family had created were absent from the list.
+
+**Fix:** Removed the hardcoded constant. On mount, the component now fetches `/api/ingredient-categories` in parallel with loading existing mappings, and populates the dropdown from the API response (which returns both system categories and custom ones). The default selected category is initialised to the first item returned rather than the hardcoded `'Other'`.
+
+**Files modified:**
+- `src/components/settings/IngredientMappingsTab.tsx` - Replaced static `CATEGORIES` array with dynamic fetch from `/api/ingredient-categories`
+
 ## Files Modified
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
 3. `src/components/dashboard/UpcomingEventsCard.tsx` - Timezone-aware date display
 4. `src/components/calendar/EventModal.tsx` - Fixed null-safety in event save flow
 5. `src/components/settings/AppearanceTab.tsx` - Added dashboard shopping list selector
+6. `src/components/settings/IngredientMappingsTab.tsx` - Dynamic category dropdown from API
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -64,3 +73,4 @@
 5. **Event editing:** Edit an existing event, verify changes are saved
 6. **Event categories:** Go to Settings > Event Categories, create/edit/delete categories
 7. **Repeat options:** Create an event with fortnightly, quarterly, or bi-annually repeat
+8. **Ingredient mappings:** Go to Settings > Ingredient Mappings, verify the category dropdown includes custom categories

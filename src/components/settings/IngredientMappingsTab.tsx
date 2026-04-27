@@ -15,19 +15,37 @@ interface IngredientMapping {
   category: string
 }
 
-const CATEGORIES = [
-  'Meat', 'Dairy', 'Produce', 'Bakery', 'Frozen', 'Household', 'Other'
-]
+interface IngredientCategory {
+  id: string
+  key: string
+  category: string
+  sortOrder: number
+  isCustom: boolean
+}
 
 export function IngredientMappingsTab() {
   const [mappings, setMappings] = useState<IngredientMapping[]>([])
+  const [categories, setCategories] = useState<IngredientCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [newMapping, setNewMapping] = useState({ ingredient: '', category: 'Other' })
+  const [newMapping, setNewMapping] = useState({ ingredient: '', category: '' })
 
   useEffect(() => {
-    loadMappings()
+    Promise.all([loadMappings(), loadCategories()])
   }, [])
+
+  async function loadCategories() {
+    try {
+      const res = await fetch('/api/ingredient-categories')
+      if (res.ok) {
+        const data: IngredientCategory[] = await res.json()
+        setCategories(data)
+        setNewMapping(prev => ({ ...prev, category: prev.category || data[0]?.category || '' }))
+      }
+    } catch {
+      toast.error('Failed to load categories')
+    }
+  }
 
   async function loadMappings() {
     try {
@@ -61,7 +79,7 @@ export function IngredientMappingsTab() {
       if (res.ok) {
         const saved = await res.json()
         setMappings([...mappings, saved])
-        setNewMapping({ ingredient: '', category: 'Other' })
+        setNewMapping({ ingredient: '', category: categories[0]?.category || '' })
         toast.success('Mapping added')
       } else {
         const error = await res.json()
@@ -137,9 +155,9 @@ export function IngredientMappingsTab() {
                     <SelectValue>{newMapping.category}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.category}>
+                        {cat.category}
                       </SelectItem>
                     ))}
                   </SelectContent>
