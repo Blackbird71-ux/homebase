@@ -8,7 +8,8 @@
       "Bash(npm test *)",
       "Bash(node -c \"src/app/api/lists/[id]/items/route.ts\")",
       "Bash(git show *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\liddlem\\.config\\superpowers\\worktrees\\homebase\\feature-shopping-list-ux\\prisma",
