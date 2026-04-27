@@ -38,7 +38,13 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
     }),
     prisma.mealPlan.findMany({
       where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd } },
-      include: { recipe: { select: { id: true, title: true, image: true } } },
+      include: {
+        recipe: { select: { id: true, title: true, image: true } },
+        recipes: {
+          include: { recipe: { select: { id: true, title: true, image: true } } },
+          orderBy: { order: 'asc' },
+        },
+      },
     }),
     // Fetch up to 5 active shopping lists so we can fall back if the preferred one is gone
     prisma.list.findMany({
@@ -60,16 +66,28 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
     }),
   ])
 
-  // Map each meal type from today's meal plans
+  // Map each meal type from today's meal plans.
+  // Prefer the MealPlanRecipe junction table (recipes[]) which is the current storage;
+  // fall back to the legacy recipeId/recipe field for older records.
   const mealByType = (type: string): TodaysMeal | null => {
     const m = todayMealPlans.find(p => p.mealType === type)
     if (!m) return null
+
+    // Resolve recipe from junction table first, then legacy field
+    const primaryRecipe = m.recipes?.[0]?.recipe ?? m.recipe ?? null
+    const primaryRecipeImage = m.recipes?.[0]?.recipe?.image ?? m.recipe?.image ?? null
+
+    // Build a display name: join multiple recipes with ' & ', or fall back to note
+    const recipeNames = (m.recipes && m.recipes.length > 0)
+      ? m.recipes.map(r => r.recipe?.title).filter(Boolean).join(' & ')
+      : (m.recipe?.title ?? null)
+
     return {
       mealPlanId: m.id,
       mealType: m.mealType,
-      recipeId: m.recipe?.id ?? null,
-      recipeName: m.recipe?.title ?? null,
-      recipeImage: getLocalImageUrl(m.recipe?.image ?? null),
+      recipeId: primaryRecipe?.id ?? null,
+      recipeName: recipeNames || m.note || null,
+      recipeImage: getLocalImageUrl(primaryRecipeImage ?? null),
       note: m.note,
     }
   }
