@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -44,7 +44,7 @@ type Status = { type: 'success' | 'error'; message: string } | null
 
 export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
   const isAdmin = user.role === 'admin'
-  const { update: updateSession } = useSession()
+  const router = useRouter()
 
   // Profile
   const [name, setName] = useState(user.name)
@@ -179,8 +179,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         body: JSON.stringify({ timezone }),
       })
       if (res.ok) {
-        await updateSession()
-        setTimezoneStatus({ type: 'success', message: 'Timezone updated. All date/time displays will use the new timezone.' })
+        router.refresh()
+        setTimezoneStatus({ type: 'success', message: 'Timezone updated. All date/time displays now use the new timezone.' })
       } else {
         const data = await res.json()
         setTimezoneStatus({ type: 'error', message: data.error ?? 'Failed to update timezone.' })
