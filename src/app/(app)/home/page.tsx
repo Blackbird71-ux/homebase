@@ -4,8 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import type { DashboardData } from '@/types'
 
-async function getDashboardData(familyId: string, timezone: string): Promise<DashboardData> {
-  const now = new Date()
+async function getDashboardData(familyId: string, timezone: string, preferredListId?: string | null): Promise<DashboardData> {
   // Compute today's date in the family's timezone
   const todayStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone,
@@ -16,9 +15,15 @@ async function getDashboardData(familyId: string, timezone: string): Promise<Das
   const todayEnd = new Date(Date.UTC(year, month - 1, day + 1))
   const weekEnd = new Date(Date.UTC(year, month - 1, day + 7))
 
+  // Build shopping list query - use preferred list if set, otherwise fall back to first active
+  const shoppingListWhere: Record<string, unknown> = { familyId, type: 'SHOPPING', isActive: true }
+  if (preferredListId) {
+    shoppingListWhere.id = preferredListId
+  }
+
   const [upcomingEvents, tonightsMeal, shoppingLists, todoLists] = await Promise.all([
     prisma.event.findMany({
-      where: { familyId, start: { gte: now } },
+      where: { familyId, start: { gte: todayStart } },
       orderBy: { start: 'asc' },
       take: 5,
     }),
@@ -27,7 +32,7 @@ async function getDashboardData(familyId: string, timezone: string): Promise<Das
       include: { recipe: { select: { id: true, title: true, image: true } } },
     }),
     prisma.list.findMany({
-      where: { familyId, type: 'SHOPPING', isActive: true },
+      where: shoppingListWhere,
       orderBy: { createdAt: 'desc' },
       include: {
         items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
@@ -74,12 +79,30 @@ async function getDashboardData(familyId: string, timezone: string): Promise<Das
 
 export default async function HomePage() {
   const user = await requireSession()
-  const family = await prisma.family.findUnique({
-    where: { id: user.familyId },
-    select: { timezone: true },
-  })
+  const [family, fullUser] = await Promise.all([
+    prisma.family.findUnique({
+      where: { id: user.familyId },
+      select: { timezone: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { uiPreferences: true },
+    }),
+  ])
   const timezone = family?.timezone ?? 'UTC'
-  const data = await getDashboardData(user.familyId, timezone)
+
+  // Parse preferred dashboard shopping list from uiPreferences
+  let preferredListId: string | null = null
+  if (fullUser?.uiPreferences) {
+    try {
+      const prefs = JSON.parse(fullUser.uiPreferences)
+      preferredListId = prefs.dashboardShoppingListId ?? null
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  const data = await getDashboardData(user.familyId, timezone, preferredListId)
 
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">

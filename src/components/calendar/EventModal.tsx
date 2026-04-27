@@ -19,7 +19,10 @@ const REPEAT_OPTIONS = [
   { value: '', label: 'Does not repeat' },
   { value: 'FREQ=DAILY', label: 'Daily' },
   { value: 'FREQ=WEEKLY', label: 'Weekly' },
+  { value: 'FREQ=WEEKLY;INTERVAL=2', label: 'Fortnightly' },
   { value: 'FREQ=MONTHLY', label: 'Monthly' },
+  { value: 'FREQ=MONTHLY;INTERVAL=3', label: 'Quarterly' },
+  { value: 'FREQ=MONTHLY;INTERVAL=6', label: 'Bi-annually' },
   { value: 'FREQ=YEARLY', label: 'Yearly' },
 ]
 
@@ -91,56 +94,62 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
     setLoading(true)
     setError('')
 
-    // If this is a recurring instance, save to the original event (seriesId)
-    const eventId = getEventId()
-    const method = event ? 'PUT' : 'POST'
-    const url = event ? `/api/events/${eventId}` : '/api/events'
+    try {
+      // If this is a recurring instance, save to the original event (seriesId)
+      const eventId = getEventId()
+      const method = event ? 'PUT' : 'POST'
+      const url = event ? `/api/events/${eventId}` : '/api/events'
 
-    const body: Record<string, unknown> = {
-      title,
-      description,
-      category,
-      color: color || null,
-      isPersonal,
-    }
-
-    // Only send start/end dates if this is NOT a recurring instance
-    // (recurring instances are virtual - editing them should update the original event's metadata, not its dates)
-    const e = event as unknown as Record<string, unknown>
-    if (!e.seriesId) {
-      const startDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(start).toISOString()
-      const endDate = isAllDay ? new Date(end.split('T')[0]).toISOString() : new Date(end).toISOString()
-      body.start = startDate
-      body.end = endDate
-      body.isAllDay = isAllDay
-    }
-
-    // Only send recurrence fields if a rule is selected
-    if (recurrenceRule) {
-      body.recurrenceRule = recurrenceRule
-      body.isRecurring = true
-      if (recurrenceEndDate) {
-        body.recurrenceEndDate = new Date(recurrenceEndDate + 'T23:59:59').toISOString()
+      const body: Record<string, unknown> = {
+        title,
+        description,
+        category,
+        color: color || null,
+        isPersonal,
       }
-    } else {
-      body.recurrenceRule = null
-      body.isRecurring = false
-      body.recurrenceEndDate = null
-    }
 
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+      // Only send start/end dates if this is NOT a recurring instance
+      // (recurring instances are virtual - editing them should update the original event's metadata, not its dates)
+      const e = event as unknown as Record<string, unknown>
+      if (!e.seriesId) {
+        const startDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(start).toISOString()
+        const endDate = isAllDay ? new Date(end.split('T')[0]).toISOString() : new Date(end).toISOString()
+        body.start = startDate
+        body.end = endDate
+        body.isAllDay = isAllDay
+      }
 
-    setLoading(false)
-    if (!res.ok) {
-      const data = await res.json()
-      setError(data.error ?? 'Failed to save event')
-    } else {
-      onSave()
-      onClose()
+      // Only send recurrence fields if a rule is selected
+      if (recurrenceRule) {
+        body.recurrenceRule = recurrenceRule
+        body.isRecurring = true
+        if (recurrenceEndDate) {
+          body.recurrenceEndDate = new Date(recurrenceEndDate + 'T23:59:59').toISOString()
+        }
+      } else {
+        body.recurrenceRule = null
+        body.isRecurring = false
+        body.recurrenceEndDate = null
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      setLoading(false)
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Failed to save event')
+      } else {
+        onSave()
+        onClose()
+      }
+    } catch (err) {
+      setLoading(false)
+      setError('Network error: Could not save event')
+      console.error('Event save error:', err)
     }
   }
 
@@ -167,25 +176,36 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
     if (!event) return
     setLoading(true)
 
-    if (isRecurringEvent() && !showDeleteConfirm) {
-      // Show confirmation dialog first
-      setShowDeleteConfirm(true)
+    try {
+      if (isRecurringEvent() && !showDeleteConfirm) {
+        // Show confirmation dialog first
+        setShowDeleteConfirm(true)
+        setLoading(false)
+        return
+      }
+
+      const eventId = getEventId()
+      if (!eventId) return
+
+      const url = deleteAll && isRecurringEvent()
+        ? `/api/events/${eventId}?all=true`
+        : `/api/events/${eventId}`
+      const res = await fetch(url, { method: 'DELETE' })
       setLoading(false)
-      return
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Failed to delete event')
+        return
+      }
+      setShowDeleteConfirm(false)
+      setDeleteAll(false)
+      onSave()
+      onClose()
+    } catch (err) {
+      setLoading(false)
+      setError('Network error: Could not delete event')
+      console.error('Event delete error:', err)
     }
-
-    const eventId = getEventId()
-    if (!eventId) return
-
-    const url = deleteAll && isRecurringEvent()
-      ? `/api/events/${eventId}?all=true`
-      : `/api/events/${eventId}`
-    await fetch(url, { method: 'DELETE' })
-    setLoading(false)
-    setShowDeleteConfirm(false)
-    setDeleteAll(false)
-    onSave()
-    onClose()
   }
 
   return (

@@ -1,12 +1,20 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await requireSession()
+  const { searchParams } = new URL(req.url)
+  const type = searchParams.get('type')
+
+  const where: Record<string, unknown> = { familyId: user.familyId, isActive: true }
+  if (type === 'SHOPPING' || type === 'TODO') {
+    where.type = type
+  }
+
   const lists = await prisma.list.findMany({
-    where: { familyId: user.familyId, isActive: true },
-    orderBy: { sortOrder: 'asc' },
+    where,
+    orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { items: { where: { isCompleted: false } } } },
     },

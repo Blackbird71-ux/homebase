@@ -1,11 +1,12 @@
 // src/components/settings/AppearanceTab.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle, AlertCircle, Sun, Moon, Monitor } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AppearanceTabProps {
@@ -52,6 +53,11 @@ const colorOptions = [
   { value: 'GRAY', label: 'Gray', swatch: 'bg-gray-500' },
 ] as const
 
+interface ShoppingListOption {
+  id: string
+  name: string
+}
+
 export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStartsOn, initialDoneItemColor }: AppearanceTabProps) {
   const { setTheme } = useTheme()
   const [theme, setLocalTheme] = useState(initialTheme)
@@ -61,19 +67,60 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<Status>(null)
 
+  // Dashboard shopping list preference
+  const [shoppingLists, setShoppingLists] = useState<ShoppingListOption[]>([])
+  const [dashboardShoppingListId, setDashboardShoppingListId] = useState<string>('')
+  const [loadingLists, setLoadingLists] = useState(true)
+
+  // Load shopping lists and current preference
+  useEffect(() => {
+    async function load() {
+      try {
+        const [listsRes, settingsRes] = await Promise.all([
+          fetch('/api/lists?type=SHOPPING'),
+          fetch('/api/settings'),
+        ])
+        if (listsRes.ok) {
+          const lists = await listsRes.json()
+          setShoppingLists(lists)
+        }
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json()
+          const prefs = settings.uiPreferences
+          if (prefs?.dashboardShoppingListId) {
+            setDashboardShoppingListId(prefs.dashboardShoppingListId)
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingLists(false)
+      }
+    }
+    load()
+  }, [])
+
   async function save() {
     setSaving(true)
     setStatus(null)
     try {
+      const body: Record<string, unknown> = { theme, fontSize, weekStartsOn, doneItemColor }
+
+      // Include dashboard shopping list preference in uiPreferences
+      if (dashboardShoppingListId) {
+        body.uiPreferences = { dashboardShoppingListId }
+      } else {
+        body.uiPreferences = { dashboardShoppingListId: null }
+      }
+
       const res = await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme, fontSize, weekStartsOn, doneItemColor }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         // Apply theme immediately via next-themes
         setTheme(theme)
-        // Font size change requires a page reload to re-apply the html class from server
         setStatus({ type: 'success', message: 'Appearance settings saved. Reload the page to apply font size changes.' })
       } else {
         const data = await res.json()
@@ -200,6 +247,43 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
               </button>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Dashboard Shopping List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Dashboard Shopping List</CardTitle>
+          <CardDescription>
+            Choose which shopping list to display on the Home dashboard. By default, the most recently created active list is shown.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingLists ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading shopping lists...
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Select value={dashboardShoppingListId} onValueChange={(v: string | null) => setDashboardShoppingListId(v ?? '')}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Auto (most recent active list)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Auto (most recent active list)</SelectItem>
+                  {shoppingLists.map((list) => (
+                    <SelectItem key={list.id} value={list.id}>
+                      {list.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select a specific shopping list to always show on the dashboard, or leave as "Auto" to use the most recent active list.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
