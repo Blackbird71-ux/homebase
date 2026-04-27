@@ -45,6 +45,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   )
   const [newContent, setNewContent] = useState('')
   const [newCategory, setNewCategory] = useState<ShoppingCategory>('Other')
+  const [categoryManuallySet, setCategoryManuallySet] = useState(false)
   const [, startTransition] = useTransition()
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [availableCategories, setAvailableCategories] = useState<Array<{id: string, name: string}>>([])
@@ -55,15 +56,15 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Auto-detect category when newContent changes
+  // Auto-detect category when newContent changes, but not if user manually picked one
   useEffect(() => {
-    if (newContent.trim()) {
+    if (!categoryManuallySet && newContent.trim()) {
       const detected = autoGuessCategory(newContent.trim())
       if (detected && detected !== newCategory) {
         setNewCategory(detected)
       }
     }
-  }, [newContent])
+  }, [newContent, categoryManuallySet])
 
   // Fetch dynamic categories on mount
   useEffect(() => {
@@ -166,15 +167,11 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
     if (!newContent.trim()) return
-    
-    // Auto-detect category based on ingredient name
-    const detectedCategory = autoGuessCategory(newContent.trim())
-    const categoryToUse = detectedCategory || newCategory
-    
+
     const res = await fetch(`/api/lists/${listId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: newContent.trim(), category: categoryToUse }),
+      body: JSON.stringify({ content: newContent.trim(), category: newCategory }),
     })
     if (res.ok) {
       const item = await res.json()
@@ -189,8 +186,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         },
       ])
       setNewContent('')
-      // Reset to 'Other' for next item
       setNewCategory('Other')
+      setCategoryManuallySet(false)
     } else {
       toast.error('Failed to save. Please try again.')
     }
@@ -305,7 +302,10 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         />
         <select
           value={newCategory}
-          onChange={(e) => setNewCategory(e.target.value as ShoppingCategory)}
+          onChange={(e) => {
+            setNewCategory(e.target.value as ShoppingCategory)
+            setCategoryManuallySet(true)
+          }}
           className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
           disabled={loadingCategories}
         >
