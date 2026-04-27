@@ -3,7 +3,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
-import type { DashboardData } from '@/types'
+import type { DashboardData, TodaysMeal } from '@/types'
 
 /**
  * Normalize a date string to midnight UTC for meal plan queries.
@@ -30,14 +30,14 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
   const mealPlanTodayStart = normalizeToUtcMidnight(todayStr)
   const mealPlanTodayEnd = new Date(mealPlanTodayStart.getTime() + 24 * 60 * 60 * 1000)
 
-  const [upcomingEvents, tonightsMeal, shoppingLists, todoLists] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, shoppingLists, todoLists] = await Promise.all([
     prisma.event.findMany({
       where: { familyId, start: { gte: todayStart } },
       orderBy: { start: 'asc' },
       take: 5,
     }),
-    prisma.mealPlan.findFirst({
-      where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd }, mealType: 'dinner' },
+    prisma.mealPlan.findMany({
+      where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd } },
       include: { recipe: { select: { id: true, title: true, image: true } } },
     }),
     // Fetch up to 5 active shopping lists so we can fall back if the preferred one is gone
@@ -60,19 +60,35 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
     }),
   ])
 
+  // Map each meal type from today's meal plans
+  const mealByType = (type: string): TodaysMeal | null => {
+    const m = todayMealPlans.find(p => p.mealType === type)
+    if (!m) return null
+    return {
+      mealPlanId: m.id,
+      mealType: m.mealType,
+      recipeId: m.recipe?.id ?? null,
+      recipeName: m.recipe?.title ?? null,
+      recipeImage: getLocalImageUrl(m.recipe?.image ?? null),
+      note: m.note,
+    }
+  }
+
+  const dinnerMeal = mealByType('dinner')
+
   return {
     upcomingEvents: upcomingEvents.map(e => ({
       id: e.id, title: e.title,
       start: e.start.toISOString(), end: e.end.toISOString(),
       isAllDay: e.isAllDay, category: e.category, color: e.color,
     })),
-    tonightsDinner: tonightsMeal ? {
-      mealPlanId: tonightsMeal.id,
-      recipeId: tonightsMeal.recipe?.id ?? null,
-      recipeName: tonightsMeal.recipe?.title ?? null,
-      recipeImage: getLocalImageUrl(tonightsMeal.recipe?.image ?? null),
-      note: tonightsMeal.note,
-    } : null,
+    tonightsDinner: dinnerMeal,
+    todaysMeals: {
+      breakfast: mealByType('breakfast'),
+      lunch: mealByType('lunch'),
+      dinner: dinnerMeal,
+      snacks: mealByType('snacks'),
+    },
     shoppingList: (() => {
       const chosen = preferredListId
         ? (shoppingLists.find(l => l.id === preferredListId) ?? shoppingLists[0])

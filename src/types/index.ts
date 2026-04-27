@@ -13,6 +13,7 @@ export interface SessionUser {
 export interface DashboardData {
   upcomingEvents: UpcomingEvent[]
   tonightsDinner: TonightsDinner | null
+  todaysMeals: TodaysMeals
   shoppingList: ShoppingListSummary | null
   todoSummary: TodoSummary | null
 }
@@ -33,6 +34,22 @@ export interface TonightsDinner {
   recipeName: string | null
   recipeImage: string | null
   note: string | null
+}
+
+export interface TodaysMeal {
+  mealPlanId: string
+  mealType: string
+  recipeId: string | null
+  recipeName: string | null
+  recipeImage: string | null
+  note: string | null
+}
+
+export interface TodaysMeals {
+  breakfast: TodaysMeal | null
+  lunch: TodaysMeal | null
+  dinner: TodaysMeal | null
+  snacks: TodaysMeal | null
 }
 
 export interface MealPlanRecipe {
