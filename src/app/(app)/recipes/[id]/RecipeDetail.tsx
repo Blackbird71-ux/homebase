@@ -53,6 +53,13 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
 
+  function formatTime(minutes: number): string {
+    if (minutes < 60) return `${minutes} min`
+    const h = Math.floor(minutes / 60)
+    const m = minutes % 60
+    return m > 0 ? `${h} hr ${m} min` : `${h} hr`
+  }
+
   async function handleDuplicate() {
     setDuplicating(true)
     try {
@@ -163,17 +170,17 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
           <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
             {recipe.prepTime != null && (
               <span className="flex items-center gap-1">
-                <ClockIcon className="h-4 w-4" /> Prep: {recipe.prepTime} min
+                <ClockIcon className="h-4 w-4" /> Prep: {formatTime(recipe.prepTime!)}
               </span>
             )}
             {recipe.cookTime != null && (
               <span className="flex items-center gap-1">
-                <ClockIcon className="h-4 w-4" /> Cook: {recipe.cookTime} min
+                <ClockIcon className="h-4 w-4" /> Cook: {formatTime(recipe.cookTime!)}
               </span>
             )}
             {totalTime > 0 && (
               <span className="flex items-center gap-1">
-                <ClockIcon className="h-4 w-4" /> Total: {totalTime} min
+                <ClockIcon className="h-4 w-4" /> Total: {formatTime(totalTime)}
               </span>
             )}
             {recipe.servings != null && (

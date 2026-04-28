@@ -27,6 +27,13 @@ export function RecipeCard({
 }: RecipeCardProps) {
   const totalTime = (prepTime ?? 0) + (cookTime ?? 0)
 
+  function formatTime(minutes: number): string {
+    if (minutes < 60) return `${minutes} min`
+    const h = Math.floor(minutes / 60)
+    const m = minutes % 60
+    return m > 0 ? `${h} hr ${m} min` : `${h} hr`
+  }
+
   return (
     <div className="relative group h-full">
       <Link href={`/recipes/${id}`} className="block h-full">
@@ -50,7 +57,7 @@ export function RecipeCard({
             {totalTime > 0 && (
               <span className="flex items-center gap-1">
                 <ClockIcon className="h-3 w-3" />
-                {totalTime} min
+                {formatTime(totalTime)}
               </span>
             )}
             {servings != null && (

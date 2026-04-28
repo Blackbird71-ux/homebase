@@ -58,16 +58,17 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
         },
       },
     }),
-    // Fetch up to 5 active shopping lists so we can fall back if the preferred one is gone
-    prisma.list.findMany({
-      where: { familyId, type: 'SHOPPING', isActive: true },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
-        _count: { select: { items: { where: { isCompleted: false } } } },
-      },
-      take: 5,
-    }),
+    // Fetch only the user's preferred shopping list (no family-wide fallback)
+    preferredListId
+      ? prisma.list.findMany({
+          where: { id: preferredListId, familyId, type: 'SHOPPING', isActive: true },
+          include: {
+            items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
+            _count: { select: { items: { where: { isCompleted: false } } } },
+          },
+          take: 1,
+        })
+      : Promise.resolve([]),
     prisma.list.findMany({
       where: { familyId, type: 'TODO', isActive: true },
       include: {
@@ -126,9 +127,7 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
       snacks: mealByType(tomorrowMealPlans, 'snacks'),
     },
     shoppingList: (() => {
-      const chosen = preferredListId
-        ? (shoppingLists.find(l => l.id === preferredListId) ?? shoppingLists[0])
-        : shoppingLists[0]
+      const chosen = shoppingLists[0] ?? null
       return chosen ? {
         listId: chosen.id, listName: chosen.name,
         totalItems: chosen._count.items,
