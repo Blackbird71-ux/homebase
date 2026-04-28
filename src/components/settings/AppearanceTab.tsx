@@ -268,7 +268,11 @@ export function AppearanceTab({ initialTheme, initialFontSize, initialWeekStarts
             <div className="space-y-2">
               <Select value={dashboardShoppingListId} onValueChange={(v: string | null) => setDashboardShoppingListId(v ?? '')}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Auto (most recent active list)" />
+                  <SelectValue placeholder="Auto (most recent active list)">
+                    {dashboardShoppingListId
+                      ? (shoppingLists.find((l) => l.id === dashboardShoppingListId)?.name ?? dashboardShoppingListId)
+                      : 'Auto (most recent active list)'}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Auto (most recent active list)</SelectItem>
