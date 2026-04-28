@@ -57,6 +57,22 @@
 **Files modified:**
 - `src/components/settings/IngredientMappingsTab.tsx` - Replaced static `CATEGORIES` array with dynamic fetch from `/api/ingredient-categories`
 
+### Bug 9: Cannot edit and save a recipe — image URL validation blocks form
+**Root Cause:** The recipe image input used `type="url"`, which triggers browser-native URL validation. When a recipe has an image stored as a local upload path (e.g. `/uploads/recipes/abc123.jpg`), that path fails browser URL validation and the browser blocks form submission, scrolling to the image field and showing "Please enter a URL."
+
+**Fix:** Changed the image input to `type="text"`. The field is optional and already handles both absolute URLs and local paths at the API level — browser URL validation was just incorrect here.
+
+**Files modified:**
+- `src/components/recipes/RecipeForm.tsx` - Changed image input `type` from `"url"` to `"text"`
+
+### Bug 10: Tick-to-complete checkbox not visible on list items
+**Root Cause:** The checkbox existed in `ListItemRow` but was styled as `h-4 w-4` (16×16px) with a `rounded border-border` class that made the native browser checkbox visually indistinct against the list background.
+
+**Fix:** Increased checkbox size to `h-5 w-5` (20×20px) and removed the `rounded border-border` classes that were conflicting with the browser's native checkbox rendering. The checkbox is now clearly visible at the left edge of each list item.
+
+**Files modified:**
+- `src/components/lists/ListItemRow.tsx` - Resized checkbox from `h-4 w-4` to `h-5 w-5`, removed conflicting border classes
+
 ## Files Modified
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop

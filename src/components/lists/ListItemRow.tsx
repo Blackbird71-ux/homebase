@@ -110,7 +110,7 @@ export function ListItemRow({
         type="checkbox"
         checked={isCompleted}
         onChange={(e) => onToggle(id, e.target.checked)}
-        className="h-4 w-4 rounded border-border accent-primary cursor-pointer shrink-0"
+        className="h-5 w-5 cursor-pointer shrink-0 accent-primary"
         aria-label={`Mark "${content}" ${isCompleted ? 'incomplete' : 'complete'}`}
         disabled={isEditing}
       />

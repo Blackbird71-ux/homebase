@@ -308,10 +308,10 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="recipe-image">Recipe Image</Label>
                 <div className="flex gap-2">
-                  <Input 
-                    id="recipe-image" 
-                    type="url" 
-                    value={imageUrl} 
+                  <Input
+                    id="recipe-image"
+                    type="text"
+                    value={imageUrl}
                     onChange={(e) => {
                       setImageUrl(e.target.value)
                       setImagePreview(e.target.value)
