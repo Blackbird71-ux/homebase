@@ -211,7 +211,7 @@ export async function PUT(
 
     const body = await req.json()
 
-    const { title, description, notes, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId } = body
+    const { title, description, notes, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId, calories, fatContent, proteinContent, carbContent, sodiumContent } = body
 
     const existing = await prisma.recipe.findFirst({
       where: { id, familyId: user.familyId },
@@ -262,6 +262,11 @@ export async function PUT(
       ...(servings !== undefined && { servings }),
       ...(sourceUrl !== undefined && { sourceUrl }),
       ...(image !== undefined && { image: image ?? null }),
+      ...(calories !== undefined && { calories: calories ?? null }),
+      ...(fatContent !== undefined && { fatContent: fatContent ?? null }),
+      ...(proteinContent !== undefined && { proteinContent: proteinContent ?? null }),
+      ...(carbContent !== undefined && { carbContent: carbContent ?? null }),
+      ...(sodiumContent !== undefined && { sodiumContent: sodiumContent ?? null }),
     }
 
     // Handle bookId specially - only update if key exists in body

@@ -55,6 +55,11 @@ export default async function RecipeDetailPage({
     createdBy: recipe.createdBy,
     createdAt: recipe.createdAt.toISOString(),
     bookId: recipe.bookId,
+    calories: recipe.calories,
+    fatContent: recipe.fatContent,
+    proteinContent: recipe.proteinContent,
+    carbContent: recipe.carbContent,
+    sodiumContent: recipe.sodiumContent,
   }
 
   const books = bookRows.map((b) => ({

@@ -22,6 +22,7 @@ interface RecipeSummary {
   bookId: string | null
   createdAt: string
   image: string | null
+  calories: string | null
 }
 
 interface RecipesClientProps {

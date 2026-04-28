@@ -19,6 +19,7 @@ async function getData(familyId: string, userId: string) {
         bookId: true,
         createdAt: true,
         image: true,
+        calories: true,
         recipeTags: {
           select: {
             tag: {
@@ -68,6 +69,7 @@ async function getData(familyId: string, userId: string) {
         bookId: r.bookId,
         createdAt: r.createdAt.toISOString(),
         image: getLocalImageUrl(r.image),
+        calories: r.calories,
       }
     }),
     books: bookRows.map((b) => ({

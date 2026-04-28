@@ -3,6 +3,8 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
+import { mergeDashboardCards, type DashboardCardConfig } from '@/lib/dashboard-cards'
+import { HomeClient } from './HomeClient'
 import type { DashboardData, TodaysMeal } from '@/types'
 
 /**
@@ -15,7 +17,7 @@ function normalizeToUtcMidnight(dateStr: string): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-async function getDashboardData(familyId: string, timezone: string, preferredListId?: string | null): Promise<DashboardData> {
+async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[]): Promise<DashboardData> {
   // Get today's boundaries in the family's timezone
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -32,36 +34,52 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
   const mealPlanTomorrowStart = new Date(mealPlanTodayStart.getTime() + 24 * 60 * 60 * 1000)
   const mealPlanTomorrowEnd = new Date(mealPlanTomorrowStart.getTime() + 24 * 60 * 60 * 1000)
 
+  // Determine which cards are visible to conditionally fetch data
+  const visibleCardIds = new Set(cards.filter((c) => c.visible).map((c) => c.id))
+  const needsEvents = visibleCardIds.has('upcoming-events')
+  const needsMeals = visibleCardIds.has('todays-meals') || visibleCardIds.has('tomorrows-meals')
+  const needsShopping = visibleCardIds.has('shopping-list')
+  const needsTodo = visibleCardIds.has('todo-summary')
+
+  // Get preferred shopping list ID from uiPreferences
+  // We need to re-fetch it here since we don't have it in scope
+  // Actually, we'll pass it from the parent
+
   const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists] = await Promise.all([
-    prisma.event.findMany({
-      where: { familyId, start: { gte: todayStart } },
-      orderBy: { start: 'asc' },
-      take: 5,
-    }),
-    prisma.mealPlan.findMany({
-      where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd } },
-      include: {
-        recipe: { select: { id: true, title: true, image: true, description: true } },
-        recipes: {
-          include: { recipe: { select: { id: true, title: true, image: true, description: true } } },
-          orderBy: { order: 'asc' },
-        },
-      },
-    }),
-    prisma.mealPlan.findMany({
-      where: { familyId, date: { gte: mealPlanTomorrowStart, lt: mealPlanTomorrowEnd } },
-      include: {
-        recipe: { select: { id: true, title: true, image: true, description: true } },
-        recipes: {
-          include: { recipe: { select: { id: true, title: true, image: true, description: true } } },
-          orderBy: { order: 'asc' },
-        },
-      },
-    }),
-    // Fetch only the user's preferred shopping list (no family-wide fallback)
-    preferredListId
+    needsEvents
+      ? prisma.event.findMany({
+          where: { familyId, start: { gte: todayStart } },
+          orderBy: { start: 'asc' },
+          take: 5,
+        })
+      : Promise.resolve([]),
+    needsMeals
+      ? prisma.mealPlan.findMany({
+          where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd } },
+          include: {
+            recipe: { select: { id: true, title: true, image: true, description: true } },
+            recipes: {
+              include: { recipe: { select: { id: true, title: true, image: true, description: true } } },
+              orderBy: { order: 'asc' },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    needsMeals
+      ? prisma.mealPlan.findMany({
+          where: { familyId, date: { gte: mealPlanTomorrowStart, lt: mealPlanTomorrowEnd } },
+          include: {
+            recipe: { select: { id: true, title: true, image: true, description: true } },
+            recipes: {
+              include: { recipe: { select: { id: true, title: true, image: true, description: true } } },
+              orderBy: { order: 'asc' },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    needsShopping
       ? prisma.list.findMany({
-          where: { id: preferredListId, familyId, type: 'SHOPPING', isActive: true },
+          where: { familyId, type: 'SHOPPING', isActive: true },
           include: {
             items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
             _count: { select: { items: { where: { isCompleted: false } } } },
@@ -69,14 +87,16 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
           take: 1,
         })
       : Promise.resolve([]),
-    prisma.list.findMany({
-      where: { familyId, type: 'TODO', isActive: true },
-      include: {
-        items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true } },
-        _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
-      },
-      take: 1,
-    }),
+    needsTodo
+      ? prisma.list.findMany({
+          where: { familyId, type: 'TODO', isActive: true },
+          include: {
+            items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true } },
+            _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
+          },
+          take: 1,
+        })
+      : Promise.resolve([]),
   ])
 
   // Map each meal type from a set of meal plans.
@@ -152,25 +172,25 @@ export default async function HomePage() {
     select: { uiPreferences: true },
   })
 
-  // Parse preferred dashboard shopping list from uiPreferences
-  let preferredListId: string | null = null
+  // Parse dashboardCards from uiPreferences
+  let dashboardCards: DashboardCardConfig[] | null = null
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
-      preferredListId = prefs.dashboardShoppingListId ?? null
+      dashboardCards = prefs.dashboardCards ?? null
     } catch {
       // ignore parse errors
     }
   }
 
-  const data = await getDashboardData(user.familyId, timezone, preferredListId)
+  const cards = mergeDashboardCards(dashboardCards)
+  const data = await getDashboardData(user.familyId, timezone, cards)
 
   return (
-    <div className="flex flex-col h-full p-6 overflow-hidden">
-      <h1 className="text-xl font-semibold mb-4 shrink-0">Home</h1>
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <DashboardGrid data={data} timezone={timezone} />
-      </div>
-    </div>
+    <HomeClient
+      data={data}
+      timezone={timezone}
+      initialCards={cards}
+    />
   )
 }

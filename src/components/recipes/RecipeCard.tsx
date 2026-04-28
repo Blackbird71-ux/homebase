@@ -11,6 +11,7 @@ interface RecipeCardProps {
   cookTime: number | null
   servings: number | null
   image: string | null
+  calories?: string | null
   onDelete?: (id: string) => void
 }
 
@@ -23,6 +24,7 @@ export function RecipeCard({
   cookTime,
   servings,
   image,
+  calories,
   onDelete,
 }: RecipeCardProps) {
   const totalTime = (prepTime ?? 0) + (cookTime ?? 0)
@@ -65,6 +67,9 @@ export function RecipeCard({
                 <UsersIcon className="h-3 w-3" />
                 {servings}
               </span>
+            )}
+            {calories && (
+              <span className="text-xs text-muted-foreground/60">🔥 {calories}</span>
             )}
           </div>
           {tags.length > 0 && (

@@ -282,16 +282,19 @@ Schema migration — **run `docker-compose down && docker-compose up -d --build`
 
 #### No schema changes required.
 
-#### Files to modify
+#### Files modified
 
 | File | Change |
 |---|---|
-| `src/components/recipes/RecipeDetail.tsx` | Add `<NutritionPanel>` component below the Notes section |
+| `src/components/recipes/RecipeDetail.tsx` | Added `<NutritionPanel>` component below the Notes section |
 | `src/components/recipes/NutritionPanel.tsx` | New — displays the 5 nutrients in a styled panel |
-| `src/components/recipes/RecipeCard.tsx` | Add optional calorie badge if `calories` is set |
-| `src/components/recipes/RecipeForm.tsx` | Add/verify nutrition input fields in the form |
-| `src/app/(app)/recipes/[id]/page.tsx` | Confirm nutrition fields are included in the recipe query |
-| `src/app/api/recipes/[id]/route.ts` | Confirm nutrition fields are returned (likely already are) |
+| `src/components/recipes/RecipeCard.tsx` | Added optional calorie badge if `calories` is set |
+| `src/components/recipes/RecipeForm.tsx` | Added collapsible "Nutritional information (optional)" section with 5 text inputs |
+| `src/app/(app)/recipes/[id]/page.tsx` | Confirmed nutrition fields are included in the recipe query |
+| `src/app/api/recipes/[id]/route.ts` | Confirmed nutrition fields are returned in GET and handled in PUT |
+| `src/app/api/recipes/route.ts` | Added nutrition fields to POST create handler |
+| `src/app/(app)/recipes/RecipesClient.tsx` | Added `calories` to recipe queries for card display |
+| `src/app/(app)/recipes/page.tsx` | Added `calories` to recipe data fetching |
 
 #### NutritionPanel component design
 
@@ -376,17 +379,16 @@ Add to the existing JSON object (no migration needed):
 }
 ```
 
-#### Files to create / modify
+#### Files created / modified
 
 | File | Change |
 |---|---|
-| `src/lib/dashboard-cards.ts` | New — `DASHBOARD_CARDS` registry and helper to merge with user prefs |
-| `src/components/dashboard/DashboardGrid.tsx` | Read card order/visibility from props instead of hardcoded list |
-| `src/components/dashboard/DashboardCustomiser.tsx` | New — drag-and-drop card visibility/order UI |
-| `src/app/(app)/home/page.tsx` | Parse `dashboardCards` from `uiPreferences`; pass to `DashboardGrid` |
-| `src/app/api/settings/dashboard/route.ts` | New — PATCH endpoint to save `dashboardCards` to `uiPreferences` |
-| `src/components/settings/AppearanceTab.tsx` | Add "Dashboard cards" section linking to customiser |
-| `src/types/index.ts` | Add `DashboardCardConfig` type |
+| `src/lib/dashboard-cards.ts` | New — `DASHBOARD_CARDS` registry and `mergeDashboardCards()` helper |
+| `src/components/dashboard/DashboardGrid.tsx` | Reads card order/visibility from `cards` prop instead of hardcoded list |
+| `src/components/dashboard/DashboardCustomiser.tsx` | New — drag-and-drop card visibility/order dialog using `@dnd-kit` |
+| `src/app/(app)/home/page.tsx` | Parses `dashboardCards` from `uiPreferences`; conditionally fetches data for visible cards only |
+| `src/app/(app)/home/HomeClient.tsx` | New — client wrapper with "Customise" button and state management |
+| `src/types/index.ts` | `DashboardCardConfig` type defined in `src/lib/dashboard-cards.ts` |
 
 #### Implementation notes
 

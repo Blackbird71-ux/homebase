@@ -29,6 +29,7 @@ interface RecipeFormProps {
     bookId: string | null
     createdAt: string
     image: string | null
+    calories: string | null
   }) => void
   onUpdated?: (updatedRecipe: {
     id: string
@@ -41,6 +42,7 @@ interface RecipeFormProps {
     bookId: string | null
     createdAt: string
     image: string | null
+    calories: string | null
   }) => void
   initialData?: {
     title?: string
@@ -54,6 +56,11 @@ interface RecipeFormProps {
     servings?: number | null
     sourceUrl?: string
     image?: string | null
+    calories?: string
+    fatContent?: string
+    proteinContent?: string
+    carbContent?: string
+    sodiumContent?: string
   }
   books?: { id: string; name: string }[]
   initialBookId?: string | null
@@ -82,6 +89,14 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image ?? null)
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [calories, setCalories] = useState(initialData?.calories ?? '')
+  const [fatContent, setFatContent] = useState(initialData?.fatContent ?? '')
+  const [proteinContent, setProteinContent] = useState(initialData?.proteinContent ?? '')
+  const [carbContent, setCarbContent] = useState(initialData?.carbContent ?? '')
+  const [sodiumContent, setSodiumContent] = useState(initialData?.sodiumContent ?? '')
+  const [showNutrition, setShowNutrition] = useState(
+    !!(initialData?.calories || initialData?.fatContent || initialData?.proteinContent || initialData?.carbContent || initialData?.sodiumContent)
+  )
   const [scrapeUrl, setScrapeUrl] = useState('')
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
@@ -168,6 +183,11 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
           sourceUrl: sourceUrl.trim() || null,
           image: finalImageUrl,
           bookId: bookId || null,
+          calories: calories.trim() || null,
+          fatContent: fatContent.trim() || null,
+          proteinContent: proteinContent.trim() || null,
+          carbContent: carbContent.trim() || null,
+          sodiumContent: sodiumContent.trim() || null,
         }),
       })
       const data = await res.json()
@@ -377,6 +397,42 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
                   <p className="text-sm text-muted-foreground mt-1">
                     Selected: {imageFile.name} ({(imageFile.size / 1024).toFixed(1)} KB)
                   </p>
+                )}
+              </div>
+
+              {/* Nutritional information (optional) */}
+              <div className="border-t pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowNutrition(!showNutrition)}
+                  className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <span className={`transition-transform ${showNutrition ? 'rotate-90' : ''}`}>▶</span>
+                  Nutritional information (optional)
+                </button>
+                {showNutrition && (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="recipe-calories">Calories</Label>
+                      <Input id="recipe-calories" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="e.g. 320 kcal" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="recipe-fat">Fat</Label>
+                      <Input id="recipe-fat" value={fatContent} onChange={(e) => setFatContent(e.target.value)} placeholder="e.g. 12g" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="recipe-protein">Protein</Label>
+                      <Input id="recipe-protein" value={proteinContent} onChange={(e) => setProteinContent(e.target.value)} placeholder="e.g. 25g" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="recipe-carbs">Carbs</Label>
+                      <Input id="recipe-carbs" value={carbContent} onChange={(e) => setCarbContent(e.target.value)} placeholder="e.g. 45g" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="recipe-sodium">Sodium</Label>
+                      <Input id="recipe-sodium" value={sodiumContent} onChange={(e) => setSodiumContent(e.target.value)} placeholder="e.g. 400mg" />
+                    </div>
+                  </div>
                 )}
               </div>
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon, CopyIcon, ChefHatIcon } from 'lucide-react'
 import { AddToListDialog } from '@/components/lists/AddToListDialog'
 import { RecipeForm } from '@/components/recipes/RecipeForm'
+import { NutritionPanel } from '@/components/recipes/NutritionPanel'
 import Link from 'next/link'
 import {
   Dialog,
@@ -32,6 +33,11 @@ interface RecipeDetailProps {
     createdBy: string
     createdAt: string
     bookId: string | null
+    calories: string | null
+    fatContent: string | null
+    proteinContent: string | null
+    carbContent: string | null
+    sodiumContent: string | null
   }
   books: { id: string; name: string; recipeCount: number }[]
   currentUserId: string
@@ -328,6 +334,16 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
           </section>
         )}
 
+        {/* Nutrition */}
+        <NutritionPanel
+          calories={recipe.calories}
+          fatContent={recipe.fatContent}
+          proteinContent={recipe.proteinContent}
+          carbContent={recipe.carbContent}
+          sodiumContent={recipe.sodiumContent}
+          servings={recipe.servings}
+        />
+
         {/* Source link */}
         {recipe.sourceUrl && (
           <div className="pt-4 border-t">
@@ -389,6 +405,11 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
           servings: recipe.servings,
           image: recipe.image || '',
           sourceUrl: recipe.sourceUrl || '',
+          calories: recipe.calories || '',
+          fatContent: recipe.fatContent || '',
+          proteinContent: recipe.proteinContent || '',
+          carbContent: recipe.carbContent || '',
+          sodiumContent: recipe.sodiumContent || '',
         }}
         books={books.map(b => ({ id: b.id, name: b.name }))}
         initialBookId={recipe.bookId}
