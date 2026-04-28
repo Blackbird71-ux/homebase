@@ -65,6 +65,14 @@
 **Files modified:**
 - `src/components/recipes/RecipeForm.tsx` - Changed image input `type` from `"url"` to `"text"`
 
+### Bug 9b: Source URL field also blocks recipe save with URL validation
+**Root Cause:** The same `type="url"` issue applied to the Source URL field. Scraped recipes store their origin URL in this field; if the stored value didn't satisfy browser URL validation (e.g. missing protocol), the form was blocked on that field.
+
+**Fix:** Changed the Source URL input to `type="text"` to match the image field fix.
+
+**Files modified:**
+- `src/components/recipes/RecipeForm.tsx` - Changed source URL input `type` from `"url"` to `"text"`
+
 ### Bug 10: Tick-to-complete checkbox not visible on list items
 **Root Cause:** The checkbox existed in `ListItemRow` but was styled as `h-4 w-4` (16×16px) with a `rounded border-border` class that made the native browser checkbox visually indistinct against the list background.
 
