@@ -1,4 +1,4 @@
-# Feature Summary: Meals Description, Tomorrow's Meals, List Lock, Shopping Favourite
+# Feature Summary: Meals Description, Tomorrow's Meals, List Lock, Shopping Favourite, Recipe Notes
 **Date:** 2026-04-28
 
 ## What was implemented
@@ -26,17 +26,27 @@
 - When a user clears the star, the home dashboard reverts to auto (most recent active list).
 - **Files:** `src/app/(app)/lists/ListsClient.tsx`
 
+### 5. Recipe notes
+- New `notes String?` field on `Recipe` (migration: `20260428081221_add_recipe_notes`).
+- A "Notes" textarea appears in the recipe form (below Description), with placeholder text for substitutions, tips, and variations.
+- Notes are displayed on the recipe detail page in a shaded block between the Instructions section and the source link.
+- Notes are preserved when duplicating a recipe (the duplicate API copies all fields).
+- **Files:** `prisma/schema.prisma`, `src/components/recipes/RecipeForm.tsx`, `src/app/(app)/recipes/[id]/RecipeDetail.tsx`, `src/app/(app)/recipes/[id]/page.tsx`, `src/app/api/recipes/[id]/route.ts`, `src/app/api/recipes/route.ts`
+
 ## How to test
 1. Go to **Home** — confirm recipe descriptions appear under each planned meal, and Tomorrow's Meals card is visible.
-2. Go to **Lists** — hover a list item and click the lock icon (open padlock). Confirm the delete button disappears and the lock icon turns yellow.  Click again to unlock.
+2. Go to **Lists** — hover a list item and click the lock icon (open padlock). Confirm the delete button disappears and the lock icon turns yellow. Click again to unlock.
 3. Star a shopping list in the Lists sidebar — go to Home and confirm that shopping list is now shown on the dashboard.
 4. Log in as a different family member — confirm they see their own starred shopping list, not yours.
+5. Edit any recipe — confirm the Notes textarea appears below Description. Save, then view the recipe to see the Notes section.
 
 ## NAS deployment
 - Run `docker-compose down && docker-compose up -d --build` on the NAS after copying updated files.
-- The migration SQL is at `prisma/migrations/20260428080051_add_list_item_lock/migration.sql` and will run automatically via `docker-entrypoint.sh` if it calls `prisma migrate deploy`.
-- Verify `docker-entrypoint.sh` includes `npx prisma migrate deploy` before starting the app.
+- Both migrations will run automatically on container start via `prisma migrate deploy` in `docker/entrypoint.sh`:
+  - `20260428080051_add_list_item_lock` — adds `isLocked` to `ListItem`
+  - `20260428081221_add_recipe_notes` — adds `notes` to `Recipe`
+- No manual SQL or schema changes needed on the NAS.
 
 ## Known limitations
-- Recipe description is only shown for the primary (first) recipe when a meal has multiple recipes assigned.
-- The `dashboardShoppingListId` set via AppearanceTab settings and the star in the Lists page are both stored in the same preference key — starring a shopping list in Lists will override a selection made in AppearanceTab settings, and vice versa.
+- Recipe description on the Home dashboard is only shown for the primary (first) recipe when a meal has multiple recipes assigned.
+- The `dashboardShoppingListId` set via Appearance settings and the star button in the Lists page share the same preference key — starring a list in the Lists page will override any prior selection made in Appearance settings, and vice versa.

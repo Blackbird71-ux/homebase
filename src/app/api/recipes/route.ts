@@ -196,7 +196,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, description, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId } = body
+  const { title, description, notes, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId } = body
 
   if (!title || !Array.isArray(ingredients) || !Array.isArray(instructions)) {
     return NextResponse.json(
@@ -211,6 +211,7 @@ export async function POST(req: Request) {
   const recipe = await createRecipeWithTags({
     title,
     description: description ?? null,
+    notes: notes ?? null,
     ingredients: JSON.stringify(ingredients),
     instructions: JSON.stringify(instructions),
     prepTime: prepTime ?? null,

@@ -43,6 +43,7 @@ export default async function RecipeDetailPage({
     id: recipe.id,
     title: recipe.title,
     description: recipe.description,
+    notes: recipe.notes,
     ingredients: JSON.parse(recipe.ingredients) as string[],
     instructions: JSON.parse(recipe.instructions) as string[],
     tags,

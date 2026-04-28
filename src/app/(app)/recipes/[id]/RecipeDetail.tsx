@@ -20,6 +20,7 @@ interface RecipeDetailProps {
     id: string
     title: string
     description: string | null
+    notes: string | null
     ingredients: string[]
     instructions: string[]
     tags: string[]
@@ -310,6 +311,16 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
           )}
         </section>
 
+        {/* Notes */}
+        {recipe.notes && (
+          <section className="pt-4 border-t">
+            <h2 className="text-lg font-semibold mb-2">Notes</h2>
+            <div className="rounded-lg bg-muted/50 border border-border px-4 py-3">
+              <p className="text-sm whitespace-pre-wrap text-foreground/80">{recipe.notes}</p>
+            </div>
+          </section>
+        )}
+
         {/* Source link */}
         {recipe.sourceUrl && (
           <div className="pt-4 border-t">
@@ -362,6 +373,7 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
         initialData={{
           title: recipe.title,
           description: recipe.description || '',
+          notes: recipe.notes || '',
           ingredients: recipe.ingredients,
           instructions: recipe.instructions,
           tags: recipe.tags,

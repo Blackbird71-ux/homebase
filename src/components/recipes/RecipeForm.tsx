@@ -45,6 +45,7 @@ interface RecipeFormProps {
   initialData?: {
     title?: string
     description?: string
+    notes?: string
     ingredients?: string[]
     instructions?: string[]
     tags?: string[]
@@ -65,6 +66,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
   const [title, setTitle] = useState(initialData?.title ?? '')
   const [bookId, setBookId] = useState<string>(initialBookId ?? '')
   const [description, setDescription] = useState(initialData?.description ?? '')
+  const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [ingredients, setIngredients] = useState(
     initialData?.ingredients?.join('\n') ?? ''
   )
@@ -156,6 +158,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || null,
+          notes: notes.trim() || null,
           ingredients: ingredients.split('\n').map((s) => s.trim()).filter(Boolean),
           instructions: instructions.split('\n').map((s) => s.trim()).filter(Boolean),
           tags: tags,
@@ -235,6 +238,18 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="recipe-desc">Description</Label>
                 <Input id="recipe-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="recipe-notes">Notes</Label>
+                <textarea
+                  id="recipe-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  className="flex min-h-[80px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  placeholder="Substitutions, tips, variations, family tweaks..."
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">

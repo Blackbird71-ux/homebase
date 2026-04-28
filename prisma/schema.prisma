@@ -115,6 +115,7 @@ model Recipe {
   id           String     @id @default(cuid())
   title        String
   description  String?
+  notes        String?
   ingredients  String
   instructions String
   image        String?
