@@ -27,7 +27,7 @@
 | Weekly family summary | Digest view on Home — this week's events, meals, and pending to-dos at a glance | Medium | ✅ Done |
 | Chore / task roster | Assign recurring chores to family members with rotation schedule and completion tracking | Medium | ✅ Done |
 | Household contacts | Family address book for doctors, schools, tradespeople, emergency services | Low | ✅ Done |
-| Document vault | Store household documents (insurance, warranties, passports) with expiry reminders | High | |
+| Document vault | Store household documents (insurance, warranties, passports) with expiry reminders | High | ✅ Done |
 | Budgeting module | Track household spending by category; complements shopping lists and recipe cost data | High | |
 | Push notifications | VAPID + service worker already in place — add subscription store and preferences UI | Medium | ✅ Done |
 
@@ -56,7 +56,7 @@
 | Feature | Description | Effort | Status |
 |---|---|---|---|
 | Background sync (offline PWA) | Queue mutations offline and replay on reconnect using existing service worker | High | |
-| Family activity log | Lightweight audit trail of changes with undo support | Medium | |
+| Family activity log | Lightweight audit trail of changes with undo support | Medium | ✅ Done |
 | Automated DB backups | Cron job in Docker to snapshot SQLite to NAS volume with restore UI in Settings | Low | ✅ Done |
 
 ---
@@ -408,14 +408,8 @@ No schema migration (uses existing `uiPreferences` JSON field). New API route on
 
 The following features were identified but are lower priority or higher effort. Kept here for future planning.
 
-### Document vault
-Store files (insurance, warranties, passports) with expiry dates linked to calendar reminders. Requires file upload infrastructure — significantly more complex than other features given the Docker/NAS deployment. High effort.
-
 ### Budgeting module
 Track spending by category. Would benefit from shopping list price estimates being built first. High effort but high value.
-
-### Family activity log
-A lightweight `AuditLog` model capturing who changed what. Useful for larger families. Add as a background concern — write-only on mutations, viewable in Settings. Medium effort.
 
 ### Offline PWA (background sync)
 Extend the service worker to queue list mutations (check item, add item) when offline and replay on reconnect using the Background Sync API. High effort — requires careful conflict resolution.

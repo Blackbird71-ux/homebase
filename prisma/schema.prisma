@@ -29,6 +29,8 @@ model Family {
   mealPlanTemplates    MealPlanTemplate[]
   chores               Chore[]
   householdContacts    HouseholdContact[]
+  auditLogs            AuditLog[]
+  documents            Document[]
 }
 
 model User {
@@ -52,6 +54,7 @@ model User {
   choreAssignments    Chore[]               @relation("ChoreAssignee")
   choreCompletions    ChoreCompletion[]
   pushSubscriptions   PushSubscription[]
+  documents           Document[]
   createdAt           DateTime              @default(now())
 }
 
@@ -384,6 +387,46 @@ model PushSubscription {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  userId    String
+  userName  String
+  action    String   // create | update | delete | undo
+  entity    String   // event | list | listItem | recipe | chore | contact | note | document
+  entityId  String
+  summary   String   // Human-readable description of what changed
+  details   String?  // JSON snapshot of the change (before/after)
+  createdAt DateTime @default(now())
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@index([entity, entityId])
+  @@index([familyId])
+}
+
+model Document {
+  id            String    @id @default(cuid())
+  familyId      String
+  family        Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  title         String
+  category      String    @default("other")  // insurance | warranty | passport | id | medical | financial | legal | tax | education | vehicle | property | other
+  fileName      String
+  fileSize      Int       @default(0)
+  mimeType      String    @default("application/octet-stream")
+  notes         String?
+  expiryDate    DateTime?
+  remindBefore  Int       @default(30)  // Days before expiry to show reminder
+  uploadedById  String
+  uploadedBy    User      @relation(fields: [uploadedById], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, category])
+  @@index([familyId, expiryDate])
 }
 
 model ChoreCompletion {
