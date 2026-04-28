@@ -12,6 +12,7 @@ model Family {
   timezone             String                @default("Australia/Sydney")
   umamiScriptUrl       String?
   umamiSiteId          String?
+  birthdays            String?               // JSON array: [{name, type, date}]
   users                User[]
   events               Event[]
   lists                List[]

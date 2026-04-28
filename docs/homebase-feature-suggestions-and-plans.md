@@ -33,23 +33,23 @@
 
 ### Enhancements to Existing Features
 
-| Feature | Description | Effort |
-|---|---|---|
-| Meal plan templates | Save a week's meal plan as a named template and re-apply in future weeks | Medium |
-| Recipe scaling | Multiply/halve ingredient quantities when viewing a recipe | Low |
-| Shopping list price estimates | Optional unit price field on ListItem for estimating shop cost | Low |
-| Recipe nutritional display | Nutrition data (calories, fat, protein, carbs, sodium) already in schema — needs a display panel | **Very Low** |
-| Event attendance / RSVP | Mark which family members are attending an event | Low |
-| Shopping list subtotals by category | Item counts and optional price subtotals per category group | Low |
+| Feature | Description | Effort | Status |
+|---|---|---|---|
+| Meal plan templates | Save a week's meal plan as a named template and re-apply in future weeks | Medium | ✅ Done |
+| Recipe scaling | Multiply/halve ingredient quantities when viewing a recipe | Low | ✅ Done |
+| Shopping list price estimates | Optional unit price field on ListItem for estimating shop cost | Low | ✅ Done |
+| Recipe nutritional display | Nutrition data (calories, fat, protein, carbs, sodium) already in schema — needs a display panel | **Very Low** | ✅ Done |
+| Event attendance / RSVP | Mark which family members are attending an event | Low | ✅ Done |
+| Shopping list subtotals by category | Item counts and optional price subtotals per category group | Low | ✅ Done |
 
 ### UX & Quality of Life
 
-| Feature | Description | Effort |
-|---|---|---|
-| Mobile responsiveness | Bottom tab bar, single-column optimised views for lists and meal planner | Medium |
-| Dashboard customisation | Show/hide and reorder Home cards per user via existing `uiPreferences` JSON | Low |
-| Quick-add from anywhere | Floating action button or Cmd+K palette to add events/items without navigating | Medium |
-| Birthdays & anniversaries | Dedicated recurring event type with calendar banner and Home dashboard reminder | Low |
+| Feature | Description | Effort | Status |
+|---|---|---|---|
+| Mobile responsiveness | Bottom tab bar, single-column optimised views for lists and meal planner | Medium | ✅ Done |
+| Dashboard customisation | Show/hide and reorder Home cards per user via existing `uiPreferences` JSON | Low | ✅ Done |
+| Quick-add from anywhere | Floating action button or Cmd+K palette to add events/items without navigating | Medium | ✅ Done |
+| Birthdays & anniversaries | Dedicated recurring event type with calendar banner and Home dashboard reminder | Low | ✅ Done |
 
 ### Infrastructure & Developer Experience
 
@@ -417,17 +417,8 @@ No schema migration (uses existing `uiPreferences` JSON field). New API route on
 
 The following features were identified but are lower priority or higher effort. Kept here for future planning.
 
-### Quick-add command palette (Cmd+K)
-A floating modal triggered by keyboard shortcut or FAB button. Lets users add an event, list item, or note from anywhere in the app without navigating. Would use a shared context/modal at the root layout level. Medium effort.
-
-### Meal plan templates
-Save a named weekly meal plan template and re-apply it to future weeks. Requires a new `MealPlanTemplate` and `MealPlanTemplateSlot` model. Medium effort — good candidate for Phase 8.
-
-### Recipe scaling
-Adjust serving count on the recipe detail page and have all ingredient quantities scale proportionally. Requires parsing the `ingredients` JSON into numeric quantities — the main complexity is the varied formats coming from URL imports. Low-medium effort.
-
-### Shopping list price estimates
-Add an optional `unitPrice` (Float?) and `quantity` (Int?) to `ListItem`. Show a subtotal per category and a grand total. Integrates naturally with the budget module if that's built. Low effort for the list side, medium for the budget view.
+### Weekly family summary
+Digest view on Home — this week's events, meals, and pending to-dos at a glance. Medium effort.
 
 ### Chore / task roster
 A new module for recurring household tasks assigned to family members. Could share the `List`/`ListItem` infrastructure with a `assignedTo` user field and a `rotationSchedule` string. Medium effort.

@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Menu, X } from 'lucide-react'
 import { Sidebar, SidebarContent } from './Sidebar'
+import { MobileNav } from './MobileNav'
+import { QuickAdd } from './QuickAdd'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false)
@@ -47,11 +49,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
 
-        {/* Page content */}
-        <div className="flex-1 overflow-hidden">
+        {/* Page content — add bottom padding on mobile for the tab bar */}
+        <div className="flex-1 overflow-hidden pb-14 md:pb-0">
           {children}
         </div>
+
+        {/* Bottom tab bar on mobile */}
+        <MobileNav />
       </main>
+
+      {/* Quick-add command palette (available everywhere) */}
+      <QuickAdd />
     </div>
   )
 }

@@ -392,3 +392,8 @@
 body {
   -ms-overflow-style: -ms-autohiding-scrollbar;
 }
+
+/* Safe area inset for iOS notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
