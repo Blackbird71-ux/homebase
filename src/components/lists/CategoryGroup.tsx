@@ -1,6 +1,6 @@
 'use client'
 
-import { GripVerticalIcon } from 'lucide-react'
+import { GripVerticalIcon, DollarSignIcon } from 'lucide-react'
 import {
   SortableContext,
   useSortable,
@@ -120,6 +120,18 @@ export function CategoryGroup({
     opacity: isDragging ? 0.5 : 1,
   }
 
+  // Calculate subtotals
+  const itemCount = items.length
+  const priceSubtotal = items.reduce((sum, item) => {
+    if (item.unitPrice != null && item.quantity != null) {
+      return sum + item.unitPrice * item.quantity
+    }
+    if (item.unitPrice != null) {
+      return sum + item.unitPrice
+    }
+    return sum
+  }, 0)
+
   return (
     <div ref={setNodeRef} style={style}>
       <div className="flex items-center gap-1 mb-1">
@@ -138,6 +150,15 @@ export function CategoryGroup({
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           {category}
         </p>
+        <span className="text-[10px] text-muted-foreground ml-1">
+          ({itemCount} item{itemCount !== 1 ? 's' : ''})
+        </span>
+        {priceSubtotal > 0 && (
+          <span className="text-[10px] text-muted-foreground ml-auto flex items-center gap-0.5">
+            <DollarSignIcon className="h-2.5 w-2.5" />
+            {priceSubtotal.toFixed(2)}
+          </span>
+        )}
       </div>
       <SortableContext
         items={items.map((i) => i.id)}

@@ -25,6 +25,7 @@ model Family {
   tags                 Tag[]
   notes                Note[]
   eventCategories      EventCategory[]
+  mealPlanTemplates    MealPlanTemplate[]
 }
 
 model User {
@@ -44,6 +45,7 @@ model User {
   googleEmail         String?
   googleRefreshToken  String?
   googleCalendarSyncs GoogleCalendarSync[]
+  eventAttendees      EventAttendee[]
   createdAt           DateTime              @default(now())
 }
 
@@ -72,6 +74,7 @@ model Event {
   familyId             String
   family               Family                 @relation(fields: [familyId], references: [id])
   googleCalendarSyncs  GoogleCalendarSync[]
+  attendees            EventAttendee[]
   createdAt            DateTime               @default(now())
   
   // Recurrence fields
@@ -80,6 +83,21 @@ model Event {
   recurrenceExceptions String?                // JSON array of exception dates
   seriesId             String?                // ID linking events in a series
   isRecurring          Boolean                @default(false)
+}
+
+model EventAttendee {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  status    String   @default("invited")  // going | maybe | declined | invited
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
 }
 
 model List {
@@ -105,6 +123,8 @@ model ListItem {
   dueDate     DateTime?
   recipeId    String?
   recipeName  String?
+  unitPrice   Float?
+  quantity    Int?
   createdBy   String
   listId      String
   list        List      @relation(fields: [listId], references: [id])
@@ -136,6 +156,7 @@ model Recipe {
   family       Family      @relation(fields: [familyId], references: [id])
   mealPlans    MealPlan[]
   mealPlanRecipes MealPlanRecipe[]
+  mealPlanTemplateSlots MealPlanTemplateSlot[]
   recipeTags   RecipeTag[]
   createdAt    DateTime    @default(now())
 }
@@ -152,6 +173,34 @@ model MealPlan {
   recipes   MealPlanRecipe[]
 
   @@unique([familyId, date, mealType])
+}
+
+model MealPlanTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  slots     MealPlanTemplateSlot[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([familyId, name])
+  @@index([familyId])
+}
+
+model MealPlanTemplateSlot {
+  id        String   @id @default(cuid())
+  templateId String
+  template  MealPlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  dayOffset Int               // 0=Sunday, 1=Monday, etc.
+  mealType  String            // breakfast, lunch, dinner, snacks
+  recipeId  String?
+  recipe    Recipe?           @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  note      String?
+  createdAt DateTime          @default(now())
+
+  @@unique([templateId, dayOffset, mealType])
+  @@index([templateId])
 }
 
 model MealPlanRecipe {

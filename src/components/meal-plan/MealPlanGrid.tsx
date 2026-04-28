@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { DailyMealColumn } from './DailyMealColumn'
 import { AssignMealModal } from './AssignMealModal'
 import { ExportGroceriesModal } from './ExportGroceriesModal'
+import { SaveTemplateDialog } from './SaveTemplateDialog'
+import { ApplyTemplateDialog } from './ApplyTemplateDialog'
 import { Button } from '@/components/ui/button'
-import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { DEFAULT_MEAL_TYPE, type MealType } from '@/lib/meal-types'
@@ -81,6 +83,8 @@ export function MealPlanGrid({
   const [exportOpen, setExportOpen] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+  const [applyTemplateOpen, setApplyTemplateOpen] = useState(false)
 
   const days = getWeekDays(weekStart)
 
@@ -262,6 +266,22 @@ export function MealPlanGrid({
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setSaveTemplateOpen(true)}
+          >
+            <SaveIcon className="h-4 w-4 mr-1" />
+            Save Template
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setApplyTemplateOpen(true)}
+          >
+            <FileTextIcon className="h-4 w-4 mr-1" />
+            Apply Template
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setExportOpen(true)}
           >
             <ShoppingCartIcon className="h-4 w-4 mr-1" />
@@ -384,6 +404,46 @@ export function MealPlanGrid({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SaveTemplateDialog
+        open={saveTemplateOpen}
+        onOpenChange={setSaveTemplateOpen}
+        weekStart={toYMD(weekStart)}
+      />
+      <ApplyTemplateDialog
+        open={applyTemplateOpen}
+        onOpenChange={setApplyTemplateOpen}
+        weekStart={toYMD(weekStart)}
+        onApplied={() => {
+          // Refresh the current week
+          const fromLocal = new Date(weekStart)
+          fromLocal.setHours(0, 0, 0, 0)
+          const fromUTC = new Date(Date.UTC(
+            fromLocal.getFullYear(),
+            fromLocal.getMonth(),
+            fromLocal.getDate()
+          ))
+          const from = fromUTC.toISOString().slice(0, 10)
+          
+          const toDateLocal = new Date(weekStart)
+          toDateLocal.setDate(toDateLocal.getDate() + 6)
+          toDateLocal.setHours(23, 59, 59, 999)
+          const toUTC = new Date(Date.UTC(
+            toDateLocal.getFullYear(),
+            toDateLocal.getMonth(),
+            toDateLocal.getDate(),
+            23, 59, 59, 999
+          ))
+          const to = toUTC.toISOString().slice(0, 10)
+
+          setLoading(true)
+          fetch(`/api/meal-plan?from=${from}&to=${to}`)
+            .then((r) => r.json())
+            .then((data: MealPlanEntry[]) => setEntries(data))
+            .catch(() => toast.error('Failed to load meal plan'))
+            .finally(() => setLoading(false))
+        }}
+      />
     </div>
   )
 }

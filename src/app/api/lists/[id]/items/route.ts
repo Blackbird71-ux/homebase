@@ -26,7 +26,7 @@ export async function POST(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { content, category, dueDate, sortOrder, recipeId, recipeName } = body
+  const { content, category, dueDate, sortOrder, recipeId, recipeName, unitPrice, quantity } = body
 
   if (!content) {
     return NextResponse.json({ error: 'content is required' }, { status: 400 })
@@ -50,6 +50,8 @@ export async function POST(
       sortOrder: sortOrder ?? 0,
       recipeId: recipeId ?? null,
       recipeName: recipeName ?? null,
+      unitPrice: unitPrice ?? null,
+      quantity: quantity ?? null,
       createdBy: user.id,
       listId: id,
     },

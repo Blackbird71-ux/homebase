@@ -18,6 +18,8 @@ function makeItem(overrides: Partial<ListItemShape> = {}): ListItemShape {
     createdBy: 'user1',
     listId: 'list1',
     createdAt: new Date('2026-04-16T00:00:00Z'),
+    unitPrice: null,
+    quantity: null,
     ...overrides,
   }
 }

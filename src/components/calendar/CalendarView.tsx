@@ -12,9 +12,10 @@ import type { CalendarEvent } from '@/types'
 interface CalendarViewProps {
   initialEvents: CalendarEvent[]
   weekStartsOn: 0 | 1
+  currentUserId: string
 }
 
-export function CalendarView({ initialEvents, weekStartsOn }: CalendarViewProps) {
+export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: CalendarViewProps) {
   const [view, setView] = useState<'month' | 'week'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
@@ -154,6 +155,7 @@ export function CalendarView({ initialEvents, weekStartsOn }: CalendarViewProps)
         event={selectedEvent}
         defaultDate={defaultDate}
         open={modalOpen}
+        currentUserId={currentUserId}
         onClose={() => {
           setModalOpen(false)
           // Clear selected event after a short delay to ensure modal animation completes

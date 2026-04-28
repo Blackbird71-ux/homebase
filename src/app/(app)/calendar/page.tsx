@@ -78,6 +78,7 @@ export default async function CalendarPage() {
     <CalendarView
       initialEvents={calendarEvents}
       weekStartsOn={user.weekStartsOn as 0 | 1}
+      currentUserId={user.id}
     />
   )
 }

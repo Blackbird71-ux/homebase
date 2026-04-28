@@ -26,6 +26,8 @@ export interface ListItemShape {
   createdBy: string
   listId: string
   createdAt: Date
+  unitPrice: number | null
+  quantity: number | null
 }
 
 export interface RecipeGroup {

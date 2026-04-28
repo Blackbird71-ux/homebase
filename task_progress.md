@@ -1,44 +1,38 @@
-# Bug Fix Progress
+# Implementation Progress
 
-## Bugs Fixed
+## Features Implemented
 
-### Bug 1: Calendar events for tomorrow show on home tab for today (UTC issue)
-- [x] Analyze root cause
-- [x] Fix home page upcoming events query to use timezone-aware date boundaries
+### 1. Meal Plan Templates (Save/Apply weekly templates)
+- [x] Schema: MealPlanTemplate + MealPlanTemplateSlot models
+- [x] Migration applied
+- [x] API: GET /api/meal-plan/templates - list templates
+- [x] API: POST /api/meal-plan/templates - create template from week
+- [x] API: GET /api/meal-plan/templates/[id] - get template with slots
+- [x] API: DELETE /api/meal-plan/templates/[id] - delete template
+- [x] API: POST /api/meal-plan/templates/[id] - apply template to week
+- [x] UI: Save Template button + dialog in MealPlanGrid
+- [x] UI: Apply Template button + template selector in MealPlanGrid
 
-### Bug 2: Meal planned but not showing on tonight's dinner
-- [x] Analyze root cause
-- [x] Fix meal plan query to use timezone-aware date boundaries
+### 2. Recipe Scaling (Multiply/halve ingredient quantities)
+- [x] UI: Scale buttons (0.5x, 1x, 1.5x, 2x, 3x) in RecipeDetail
+- [x] Logic: Parse ingredient quantities and scale them
 
-### Bug 3: Shopping panel shows Bunnings list but should be selectable
-- [x] Analyze root cause
-- [x] Add user preference for dashboard shopping list selection
-- [x] Update dashboard API to respect the preference
-- [x] Add UI in settings to select which list shows on dashboard
+### 3. Shopping List Price Estimates
+- [x] Schema: unitPrice + quantity fields on ListItem
+- [x] UI: Unit price & quantity fields in EditItemDialog
+- [x] UI: Price subtotals per category in CategoryGroup
+- [x] API: unitPrice/quantity handled in POST and PATCH routes
 
-### Bug 4: Calendar cannot add/change/update events
-- [x] Analyze root cause
-- [x] Fix event creation/update flow (null-safety on seriesId access)
+### 4. Recipe Nutritional Display
+- [x] NutritionPanel component with calories, fat, protein, carbs, sodium
+- [x] Integrated in RecipeDetail
 
-### Bug 5: Calendar add new stuck at saving
-- [x] Analyze root cause
-- [x] Fix loading state issue in EventModal (same null-safety fix as Bug 4)
+### 5. Event Attendance / RSVP
+- [x] Schema: EventAttendee model
+- [x] API: POST /api/events/[id]/attendees - set attendance
+- [x] API: GET /api/events/[id]/attendees - get attendees
+- [x] UI: RSVP controls (Going/Maybe/No) in EventModal via EventAttendeePanel
 
-### Bug 6: Cannot change or update categories in settings
-- [x] Analyze root cause
-- [x] Confirmed API was correct; DialogTrigger render prop pattern is correct for @base-ui/react
-
-### Bug 7: New events need fortnightly, quarterly, and bi-annually options
-- [x] Analyze root cause
-- [x] Already implemented in REPEAT_OPTIONS array
-
-## Additional Fixes (post-review)
-
-### Bug 8: All-day event end date not synced when date changes
-- [x] Fix EventModal: all-day date input onChange now updates both start and end
-
-### Bug 9: All-day events on home dashboard show UTC date not family timezone
-- [x] Fix UpcomingEventsCard: all-day events now use Intl.DateTimeFormat with family timezone
-
-### Bug 10: Home page shows no shopping list when preferred list is deleted/inactive
-- [x] Fix home/page.tsx: fetches top 5 active lists and falls back to first if preferred not found
+### 6. Shopping List Subtotals by Category
+- [x] UI: Item counts per category in CategoryGroup
+- [x] UI: Price subtotals per category (when unitPrice is set)

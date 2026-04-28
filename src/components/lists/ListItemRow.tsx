@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Trash2Icon, EditIcon, LockIcon, LockOpenIcon } from 'lucide-react'
+import { Trash2Icon, EditIcon, LockIcon, LockOpenIcon, DollarSignIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,

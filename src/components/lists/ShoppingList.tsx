@@ -46,6 +46,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [newContent, setNewContent] = useState('')
   const [newCategory, setNewCategory] = useState<ShoppingCategory>('Other')
   const [categoryManuallySet, setCategoryManuallySet] = useState(false)
+  const [newUnitPrice, setNewUnitPrice] = useState('')
+  const [newQuantity, setNewQuantity] = useState('')
   const [, startTransition] = useTransition()
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [availableCategories, setAvailableCategories] = useState<Array<{id: string, name: string}>>([])
@@ -514,6 +516,14 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         listId={listId}
         onSaved={handleItemSaved}
         onCategoryAdded={handleAddShoppingCategory}
+        initialUnitPrice={(() => {
+          const item = items.find((i) => i.id === editItemId)
+          return item?.unitPrice ?? null
+        })()}
+        initialQuantity={(() => {
+          const item = items.find((i) => i.id === editItemId)
+          return item?.quantity ?? null
+        })()}
       />
     </div>
   )

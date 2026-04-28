@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { format } from 'date-fns'
 import type { CalendarEvent } from '@/types'
+import { EventAttendeePanel } from './EventAttendeePanel'
 
 interface CategoryOption {
   id: string
@@ -30,11 +31,12 @@ interface EventModalProps {
   event?: CalendarEvent | null
   defaultDate?: Date
   open: boolean
+  currentUserId: string
   onClose: () => void
   onSave: () => void
 }
 
-export function EventModal({ event, defaultDate, open, onClose, onSave }: EventModalProps) {
+export function EventModal({ event, defaultDate, open, currentUserId, onClose, onSave }: EventModalProps) {
   const [title, setTitle] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -394,6 +396,9 @@ export function EventModal({ event, defaultDate, open, onClose, onSave }: EventM
                 <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional notes" />
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
+              {event && (
+                <EventAttendeePanel eventId={getEventId() ?? event.id} currentUserId={currentUserId} />
+              )}
             </div>
             <DialogFooter className="gap-2">
               {event && (

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon, CopyIcon, ChefHatIcon } from 'lucide-react'
+import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon, CopyIcon, ChefHatIcon, PlusIcon, MinusIcon } from 'lucide-react'
 import { AddToListDialog } from '@/components/lists/AddToListDialog'
 import { RecipeForm } from '@/components/recipes/RecipeForm'
 import { NutritionPanel } from '@/components/recipes/NutritionPanel'
@@ -56,8 +56,47 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
   const [completedSteps, setCompletedSteps] = useState<boolean[]>([])
   const [completedIngredients, setCompletedIngredients] = useState<boolean[]>([])
 
+  const [scaleFactor, setScaleFactor] = useState(1)
+
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
+
+  // Parse and scale ingredient quantities
+  function scaleIngredient(ingredient: string, factor: number): string {
+    if (factor === 1) return ingredient
+    // Match patterns like "1 cup", "2 1/2 tbsp", "1/2 tsp", "3 cups", etc.
+    return ingredient.replace(
+      /(\d+)(?:\s*(\d+)\/(\d+))?|\d+\/\d+/g,
+      (match, whole, num, den) => {
+        let value: number
+        if (whole !== undefined && num !== undefined && den !== undefined) {
+          // Mixed number like "2 1/2"
+          value = parseInt(whole) + parseInt(num) / parseInt(den)
+        } else if (match.includes('/')) {
+          // Simple fraction like "1/2"
+          const [n, d] = match.split('/').map(Number)
+          value = n / d
+        } else {
+          // Simple whole number
+          value = parseInt(match)
+        }
+        const scaled = value * factor
+        // Format the result nicely
+        if (Number.isInteger(scaled)) return scaled.toString()
+        // Check for common fractions
+        const rounded = Math.round(scaled * 8) / 8
+        if (rounded === Math.floor(rounded)) return rounded.toString()
+        // Return as decimal with 1-2 decimal places
+        return parseFloat(scaled.toFixed(2)).toString()
+      }
+    )
+  }
+
+  const scaledIngredients = useMemo(() => {
+    return recipe.ingredients.map((ing) => scaleIngredient(ing, scaleFactor))
+  }, [recipe.ingredients, scaleFactor])
+
+  const scaleOptions = [0.5, 1, 1.5, 2, 3]
 
   function formatTime(minutes: number): string {
     if (minutes < 60) return `${minutes} min`
@@ -218,9 +257,26 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
 
         {/* Ingredients */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Ingredients</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">Ingredients</h2>
+            <div className="flex items-center gap-1 no-print">
+              <span className="text-xs text-muted-foreground mr-1">Scale:</span>
+              {scaleOptions.map((factor) => (
+                <Button
+                  key={factor}
+                  variant={scaleFactor === factor ? "secondary" : "ghost"}
+                  size="icon-xs"
+                  onClick={() => setScaleFactor(factor)}
+                  className="h-7 w-7 text-xs"
+                  aria-label={`Scale to ${factor}x`}
+                >
+                  {factor === 1 ? '1x' : factor === 0.5 ? '½' : factor === 1.5 ? '1½' : `${factor}x`}
+                </Button>
+              ))}
+            </div>
+          </div>
           <ul className="space-y-1">
-            {recipe.ingredients.map((ing, i) => (
+            {scaledIngredients.map((ing, i) => (
               <li key={i} className="flex items-start gap-2">
                 {cookingMode ? (
                   <button

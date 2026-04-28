@@ -21,6 +21,8 @@ interface SerializedItem {
   createdBy: string
   listId: string
   createdAt: string
+  unitPrice: number | null
+  quantity: number | null
 }
 
 interface SerializedList {
