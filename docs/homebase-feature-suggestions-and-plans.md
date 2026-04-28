@@ -22,14 +22,14 @@
 
 ### New Features
 
-| Feature | Description | Effort |
-|---|---|---|
-| Weekly family summary | Digest view on Home — this week's events, meals, and pending to-dos at a glance | Medium |
-| Chore / task roster | Assign recurring chores to family members with rotation schedule and completion tracking | Medium |
-| Household contacts | Family address book for doctors, schools, tradespeople, emergency services | Low |
-| Document vault | Store household documents (insurance, warranties, passports) with expiry reminders | High |
-| Budgeting module | Track household spending by category; complements shopping lists and recipe cost data | High |
-| Push notifications | VAPID + service worker already in place — add subscription store and preferences UI | Medium |
+| Feature | Description | Effort | Status |
+|---|---|---|---|
+| Weekly family summary | Digest view on Home — this week's events, meals, and pending to-dos at a glance | Medium | ✅ Done |
+| Chore / task roster | Assign recurring chores to family members with rotation schedule and completion tracking | Medium | ✅ Done |
+| Household contacts | Family address book for doctors, schools, tradespeople, emergency services | Low | ✅ Done |
+| Document vault | Store household documents (insurance, warranties, passports) with expiry reminders | High | |
+| Budgeting module | Track household spending by category; complements shopping lists and recipe cost data | High | |
+| Push notifications | VAPID + service worker already in place — add subscription store and preferences UI | Medium | ✅ Done |
 
 ### Enhancements to Existing Features
 
@@ -53,11 +53,11 @@
 
 ### Infrastructure & Developer Experience
 
-| Feature | Description | Effort |
-|---|---|---|
-| Background sync (offline PWA) | Queue mutations offline and replay on reconnect using existing service worker | High |
-| Family activity log | Lightweight audit trail of changes with undo support | Medium |
-| Automated DB backups | Cron job in Docker to snapshot SQLite to NAS volume with restore UI in Settings | Low |
+| Feature | Description | Effort | Status |
+|---|---|---|---|
+| Background sync (offline PWA) | Queue mutations offline and replay on reconnect using existing service worker | High | |
+| Family activity log | Lightweight audit trail of changes with undo support | Medium | |
+| Automated DB backups | Cron job in Docker to snapshot SQLite to NAS volume with restore UI in Settings | Low | ✅ Done |
 
 ---
 
@@ -417,29 +417,14 @@ No schema migration (uses existing `uiPreferences` JSON field). New API route on
 
 The following features were identified but are lower priority or higher effort. Kept here for future planning.
 
-### Weekly family summary
-Digest view on Home — this week's events, meals, and pending to-dos at a glance. Medium effort.
-
-### Chore / task roster
-A new module for recurring household tasks assigned to family members. Could share the `List`/`ListItem` infrastructure with a `assignedTo` user field and a `rotationSchedule` string. Medium effort.
-
-### Household contacts
-A simple `Contact` model (name, phone, email, category, notes) scoped to `familyId`. Very low effort — mostly CRUD UI.
-
 ### Document vault
 Store files (insurance, warranties, passports) with expiry dates linked to calendar reminders. Requires file upload infrastructure — significantly more complex than other features given the Docker/NAS deployment. High effort.
 
 ### Budgeting module
 Track spending by category. Would benefit from shopping list price estimates being built first. High effort but high value.
 
-### Push notifications
-VAPID key generation, `PushSubscription` model in Prisma, subscription management UI in Settings, and server-side notification dispatch. The PWA service worker is already in place. Medium effort.
-
 ### Family activity log
 A lightweight `AuditLog` model capturing who changed what. Useful for larger families. Add as a background concern — write-only on mutations, viewable in Settings. Medium effort.
-
-### Automated DB backups
-A cron job in Docker that copies `homebase.db` to a timestamped file on a mounted NAS volume. Add a restore UI in Settings (list snapshots, one-click restore). Low effort — mostly shell scripting and a simple settings page.
 
 ### Offline PWA (background sync)
 Extend the service worker to queue list mutations (check item, add item) when offline and replay on reconnect using the Background Sync API. High effort — requires careful conflict resolution.

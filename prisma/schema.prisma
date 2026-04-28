@@ -27,6 +27,8 @@ model Family {
   notes                Note[]
   eventCategories      EventCategory[]
   mealPlanTemplates    MealPlanTemplate[]
+  chores               Chore[]
+  householdContacts    HouseholdContact[]
 }
 
 model User {
@@ -47,6 +49,9 @@ model User {
   googleRefreshToken  String?
   googleCalendarSyncs GoogleCalendarSync[]
   eventAttendees      EventAttendee[]
+  choreAssignments    Chore[]               @relation("ChoreAssignee")
+  choreCompletions    ChoreCompletion[]
+  pushSubscriptions   PushSubscription[]
   createdAt           DateTime              @default(now())
 }
 
@@ -327,4 +332,70 @@ model Note {
   family    Family   @relation(fields: [familyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Chore {
+  id               String             @id @default(cuid())
+  title            String
+  description      String?
+  frequency        String             @default("weekly")  // daily | weekly | biweekly | monthly
+  dayOfWeek        Int?               // 0=Sunday, 1=Monday, etc. (for weekly)
+  dayOfMonth       Int?               // 1-31 (for monthly)
+  rotationInterval Int                @default(1)  // rotate every N intervals
+  currentAssigneeId String?
+  currentAssignee  User?              @relation("ChoreAssignee", fields: [currentAssigneeId], references: [id], onDelete: SetNull)
+  familyId         String
+  family           Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  isActive         Boolean            @default(true)
+  completions      ChoreCompletion[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([familyId])
+  @@index([currentAssigneeId])
+}
+
+model HouseholdContact {
+  id        String   @id @default(cuid())
+  name      String
+  category  String   @default("other")  // doctor | school | tradesperson | emergency | other
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([familyId])
+  @@index([category])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ChoreCompletion {
+  id            String   @id @default(cuid())
+  choreId       String
+  chore         Chore    @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  completedById String
+  completedBy   User     @relation(fields: [completedById], references: [id], onDelete: Cascade)
+  completedAt   DateTime @default(now())
+  note          String?
+
+  @@index([choreId])
+  @@index([completedById])
+  @@index([completedAt])
 }

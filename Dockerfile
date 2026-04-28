@@ -22,7 +22,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
-RUN apk add --no-cache su-exec
+RUN apk add --no-cache su-exec dcron sqlite
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
@@ -33,8 +33,10 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/node_modules ./node_modules
 COPY docker/entrypoint.sh ./entrypoint.sh
+COPY scripts/backup-db.sh ./scripts/backup-db.sh
+COPY scripts/restore-db.sh ./scripts/restore-db.sh
 
-RUN chmod +x ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh ./scripts/backup-db.sh ./scripts/restore-db.sh
 RUN mkdir -p /data && chown nextjs:nodejs /data
 
 EXPOSE 3000

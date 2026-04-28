@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
-  Settings, LogOut, StickyNote,
+  Settings, LogOut, StickyNote, ListChecks, BookUser,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -13,6 +13,8 @@ const navItems = [
   { href: '/home', label: 'Home', icon: Home },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/lists', label: 'Lists', icon: CheckSquare },
+  { href: '/chores', label: 'Chores', icon: ListChecks },
+  { href: '/contacts', label: 'Contacts', icon: BookUser },
   { href: '/recipes', label: 'Recipes', icon: ChefHat },
   { href: '/meal-plan', label: 'Meal Plan', icon: CalendarDays },
   { href: '/notes', label: 'Notes', icon: StickyNote },

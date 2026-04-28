@@ -12,7 +12,7 @@ import { TagManager } from '@/components/tags/TagManager'
 import { CategoryManager } from '@/components/categories/CategoryManager'
 import { IngredientMappingsTab } from '@/components/settings/IngredientMappingsTab'
 import { EventCategoryManager } from '@/components/calendar/EventCategoryManager'
-
+import { NotificationSettings } from '@/components/settings/NotificationSettings'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -77,7 +77,7 @@ export default async function SettingsPage() {
             <TabsTrigger value="categories">Categories</TabsTrigger>
             <TabsTrigger value="event-categories">Event Categories</TabsTrigger>
             <TabsTrigger value="ingredient-mappings">Ingredient Mappings</TabsTrigger>
-
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account">
@@ -156,6 +156,10 @@ export default async function SettingsPage() {
 
           <TabsContent value="ingredient-mappings">
             <IngredientMappingsTab />
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <NotificationSettings />
           </TabsContent>
 
         </Tabs>

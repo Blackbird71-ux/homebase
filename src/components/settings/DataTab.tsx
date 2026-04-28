@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { AlertTriangle, Download } from 'lucide-react'
+import { AlertTriangle, Download, Database, RotateCcw, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface CoziImport {
@@ -27,6 +27,132 @@ interface CoziImport {
 interface DataTabProps {
   coziImports: CoziImport[]
   userEmail: string
+}
+
+function DatabaseBackupsSection() {
+  const [backups, setBackups] = useState<{ filename: string; size: number; createdAt: string }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [restoring, setRestoring] = useState<string | null>(null)
+
+  async function loadBackups() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/backups')
+      if (res.ok) {
+        const data = await res.json()
+        setBackups(data.backups ?? [])
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadBackups() }, [])
+
+  async function createBackup() {
+    setCreating(true)
+    try {
+      const res = await fetch('/api/backups/create', { method: 'POST' })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('Backup created successfully')
+      loadBackups()
+    } catch {
+      toast.error('Failed to create backup')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function restoreBackup(filename: string) {
+    if (!confirm(`Restore backup "${filename}"? This will replace the current database. The app will restart.`)) return
+    setRestoring(filename)
+    try {
+      const res = await fetch('/api/backups/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('Database restored. The app will restart shortly.')
+      setTimeout(() => window.location.reload(), 3000)
+    } catch {
+      toast.error('Failed to restore backup')
+    } finally {
+      setRestoring(null)
+    }
+  }
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Database className="h-4 w-4" />
+          Database Backups
+        </CardTitle>
+        <CardDescription>
+          Automated daily backups are stored on the NAS volume. You can also create manual backups and restore from previous backups.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Daily backup runs at 3:00 AM (container time). Last 30 backups are retained.
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={loadBackups} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button size="sm" onClick={createBackup} disabled={creating}>
+              <Database className="h-3.5 w-3.5 mr-1" />
+              {creating ? 'Creating...' : 'Backup Now'}
+            </Button>
+          </div>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading backups...</p>
+        ) : backups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No backups found. The first automated backup will run tonight at 3:00 AM.</p>
+        ) : (
+          <div className="border border-border rounded-md divide-y divide-border max-h-60 overflow-y-auto">
+            {backups.map((backup) => (
+              <div key={backup.filename} className="flex items-center justify-between px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate">{backup.filename}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {new Date(backup.createdAt).toLocaleDateString('en-AU', {
+                      year: 'numeric', month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })} &middot; {formatSize(backup.size)}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground hover:text-destructive shrink-0 ml-2"
+                  onClick={() => restoreBackup(backup.filename)}
+                  disabled={restoring === backup.filename}
+                >
+                  <RotateCcw className={`h-3 w-3 mr-1 ${restoring === backup.filename ? 'animate-spin' : ''}`} />
+                  {restoring === backup.filename ? 'Restoring...' : 'Restore'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 export function DataTab({ coziImports, userEmail }: DataTabProps) {
@@ -130,6 +256,9 @@ export function DataTab({ coziImports, userEmail }: DataTabProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Database Backups */}
+      <DatabaseBackupsSection />
 
       {/* Danger Zone */}
       <Card className="border-destructive/30">

@@ -6,6 +6,7 @@ import { UpcomingEventsCard } from './UpcomingEventsCard'
 import { TodaysMealsCard } from './TonightsDinnerCard'
 import { ShoppingListCard } from './ShoppingListCard'
 import { TodoCard } from './TodoCard'
+import { WeeklySummaryCard } from './WeeklySummaryCard'
 
 interface DashboardGridProps {
   data: DashboardData
@@ -23,6 +24,13 @@ export function DashboardGrid({ data, timezone, cards }: DashboardGridProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4">
       {visibleCards.map((card) => {
         switch (card.id) {
+          case 'weekly-summary':
+            return (
+              <WeeklySummaryCard
+                key={card.id}
+                data={data.weeklySummary}
+              />
+            )
           case 'upcoming-events':
             return (
               <UpcomingEventsCard

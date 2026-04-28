@@ -11,6 +11,7 @@ echo "Setting up /data directory permissions..."
 mkdir -p /data
 mkdir -p /data/uploads  # Create uploads directory for recipe images
 mkdir -p /data/images   # Create images cache directory for external recipe images
+mkdir -p /data/backups  # Create backups directory for automated DB backups
 chown -R nextjs:nodejs /data 2>/dev/null || true
 chmod -R 755 /data 2>/dev/null || true
 
@@ -66,6 +67,14 @@ else
   echo "✗ Warning: Could not verify database connection"
 fi
 
+
+# Set up cron job for automated database backups (runs daily at 3:00 AM)
+echo "Setting up automated database backup cron job..."
+mkdir -p /data/backups
+chown nextjs:nodejs /data/backups
+echo "0 3 * * * /app/scripts/backup-db.sh /data/backups >> /data/backups/cron.log 2>&1" > /etc/crontabs/root
+crond -b -l 2
+echo "✓ Cron daemon started (daily backup at 3:00 AM)"
 
 # Drop privileges to nextjs user for security
 echo "Dropping privileges to nextjs user..."

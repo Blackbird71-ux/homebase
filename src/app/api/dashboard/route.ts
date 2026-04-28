@@ -34,7 +34,19 @@ export async function GET() {
     },
   }
 
-  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists] = await Promise.all([
+  const weekStart = new Date(todayStart.getTime())
+  const weekEndDate = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  const [
+    upcomingEvents,
+    todayMealPlans,
+    tomorrowMealPlans,
+    shoppingLists,
+    todoLists,
+    weekEvents,
+    weekMeals,
+    weekTodos,
+  ] = await Promise.all([
     prisma.event.findMany({
       where: { familyId: user.familyId, start: { gte: now } },
       orderBy: { start: 'asc' },
@@ -64,6 +76,33 @@ export async function GET() {
       },
       take: 1,
     }),
+    // Weekly summary: events this week
+    prisma.event.findMany({
+      where: { familyId: user.familyId, start: { gte: weekStart, lt: weekEndDate } },
+      orderBy: { start: 'asc' },
+      take: 5,
+      select: { id: true, title: true, start: true, color: true },
+    }),
+    // Weekly summary: meals this week
+    prisma.mealPlan.findMany({
+      where: { familyId: user.familyId, date: { gte: weekStart, lt: weekEndDate } },
+      include: {
+        recipe: { select: { title: true } },
+        recipes: { include: { recipe: { select: { title: true } } } },
+      },
+      orderBy: { date: 'asc' },
+    }),
+    // Weekly summary: pending todos this week
+    prisma.listItem.findMany({
+      where: {
+        list: { familyId: user.familyId, type: 'TODO', isActive: true },
+        isCompleted: false,
+        dueDate: { gte: weekStart, lt: weekEndDate },
+      },
+      orderBy: { dueDate: 'asc' },
+      take: 5,
+      select: { content: true },
+    }),
   ])
 
   function mealByType(plans: typeof todayMealPlans, type: string): TodaysMeal | null {
@@ -88,7 +127,28 @@ export async function GET() {
 
   const dinnerMeal = mealByType(todayMealPlans, 'dinner')
 
+  // Build weekly summary
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const weeklySummary = {
+    weekLabel: `${weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} - ${new Date(weekEndDate.getTime() - 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+    eventCount: weekEvents.length,
+    mealCount: weekMeals.length,
+    pendingTodoCount: weekTodos.length,
+    topEvents: weekEvents.map(e => ({
+      id: e.id,
+      title: e.title,
+      start: e.start.toISOString(),
+      color: e.color,
+    })),
+    topMeals: weekMeals.map(m => ({
+      day: dayNames[m.date.getDay()],
+      meal: m.recipes?.[0]?.recipe?.title ?? m.recipe?.title ?? m.note ?? m.mealType,
+    })),
+    topTodos: weekTodos.map(t => t.content),
+  }
+
   const data: DashboardData = {
+    weeklySummary,
     upcomingEvents: upcomingEvents.map(e => ({
       id: e.id,
       title: e.title,

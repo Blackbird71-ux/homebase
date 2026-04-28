@@ -11,12 +11,23 @@ export interface SessionUser {
 }
 
 export interface DashboardData {
+  weeklySummary: WeeklySummaryData | null
   upcomingEvents: UpcomingEvent[]
   tonightsDinner: TonightsDinner | null
   todaysMeals: TodaysMeals
   tomorrowsMeals: TodaysMeals
   shoppingList: ShoppingListSummary | null
   todoSummary: TodoSummary | null
+}
+
+export interface WeeklySummaryData {
+  weekLabel: string
+  eventCount: number
+  mealCount: number
+  pendingTodoCount: number
+  topEvents: { id: string; title: string; start: string; color: string | null }[]
+  topMeals: { day: string; meal: string }[]
+  topTodos: string[]
 }
 
 export interface UpcomingEvent {
