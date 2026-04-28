@@ -212,9 +212,10 @@ model CoziImport {
 
 ### 6.2 Lists
 - Two types: **Shopping** and **Todo**
-- Multiple lists supported (e.g. "Weekly Shop", "Costco Run")
-- Shopping list: items grouped by category (Dairy, Produce, Meat, etc.), tap to mark complete
-- Todo list: ordered items, due dates optional, tap to mark complete
+- Multiple lists supported (e.g. "Weekly Shop", "Costco Run", "Camping Checklist")
+- Shopping list: items grouped by grocery category (Dairy, Produce, Meat, etc.), tap to mark complete; auto-detects category from ingredient name; completed items collected in a collapsible "Done" section with a clear button
+- Todo list: items with optional due dates; filter by All / Due today / Overdue; tap checkbox to mark complete; completed items move to a "Done" section at the bottom (visible in "All" filter only)
+- Todo list **custom categories**: user can define per-list categories (e.g. "Personal Care", "Shelter", "Cooking" for a camping checklist) — completely independent of grocery categories; category chips shown above the item list with × to remove; category selector appears on the add-item form when categories are defined; item category assignable/editable via the edit dialog
 - Active shopping list item count shown on Home dashboard
 
 ### 6.3 Recipes
