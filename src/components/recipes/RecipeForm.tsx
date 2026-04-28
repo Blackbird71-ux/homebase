@@ -302,7 +302,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="recipe-url">Source URL</Label>
-                <Input id="recipe-url" type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
+                <Input id="recipe-url" type="text" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
               </div>
 
               <div className="flex flex-col gap-1.5">
