@@ -84,6 +84,13 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [open, shortcutKey])
 
+  // Sidebar Quick Add button fires this event to open the dialog
+  useEffect(() => {
+    function handleSidebarOpen() { setOpen(true) }
+    window.addEventListener('homebase:quickadd', handleSidebarOpen)
+    return () => window.removeEventListener('homebase:quickadd', handleSidebarOpen)
+  }, [])
+
   useEffect(() => {
     if (mode && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100)
@@ -239,18 +246,6 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
         aria-label="Open menu"
       >
         <Plus className="h-6 w-6" />
-      </button>
-
-      {/* ── Desktop quick-add button ────────────────────────────────────────── */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="hidden md:flex fixed bottom-4 left-3 z-50 items-center gap-2 px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors border border-border bg-background/80 backdrop-blur-sm"
-        aria-label="Quick add"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Quick Add
-        <kbd className="ml-1 px-1 py-0.5 rounded bg-muted text-[10px] font-mono">⌘K</kbd>
       </button>
 
       {/* ── Mobile bottom sheet ─────────────────────────────────────────────── */}
