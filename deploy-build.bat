@@ -2,6 +2,10 @@
 echo === Building Homebase Docker image ===
 cd /d "C:\Appdev\HomeBase"
 
+:: Clean up stale artifacts to keep build lean
+if exist homebase.tar del homebase.tar
+if exist ".next\standalone\homebase.tar" del ".next\standalone\homebase.tar"
+
 docker-compose down
 docker image rm homebase:latest -f
 docker-compose up -d --build --force-recreate
