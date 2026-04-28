@@ -174,36 +174,38 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
   return (
     <div className="flex flex-col gap-4">
       {/* Add item form */}
-      <form onSubmit={addItem} className="flex gap-2">
+      <form onSubmit={addItem} className="flex flex-col sm:flex-row gap-2">
         <Input
           value={newContent}
           onChange={(e) => setNewContent(e.target.value)}
           placeholder="Add task..."
           className="flex-1"
         />
-        {categories.length > 0 && (
-          <select
-            value={newItemCategory}
-            onChange={(e) => setNewItemCategory(e.target.value)}
-            className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
-            aria-label="Category"
-          >
-            <option value="">No category</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        )}
-        <input
-          type="date"
-          value={newDueDate}
-          onChange={(e) => setNewDueDate(e.target.value)}
-          className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
-          aria-label="Due date"
-        />
-        <Button type="submit" size="sm">
-          <PlusIcon className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-2">
+          {categories.length > 0 && (
+            <select
+              value={newItemCategory}
+              onChange={(e) => setNewItemCategory(e.target.value)}
+              className="flex-1 sm:flex-none h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
+              aria-label="Category"
+            >
+              <option value="">No category</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )}
+          <input
+            type="date"
+            value={newDueDate}
+            onChange={(e) => setNewDueDate(e.target.value)}
+            className="flex-1 sm:flex-none h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
+            aria-label="Due date"
+          />
+          <Button type="submit" size="sm" className="shrink-0">
+            <PlusIcon className="h-4 w-4" />
+          </Button>
+        </div>
       </form>
 
       {/* Filters */}

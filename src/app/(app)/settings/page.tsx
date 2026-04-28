@@ -59,26 +59,29 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="p-6 pb-0">
+      <div className="p-4 md:p-6 pb-0">
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground mt-1">Manage your account and family preferences.</p>
       </div>
 
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-4 md:p-6">
         <Tabs defaultValue="account" className="w-full">
-          <TabsList className="mb-6 flex flex-wrap">
-            <TabsTrigger value="account">Account</TabsTrigger>
-            <TabsTrigger value="appearance">Appearance</TabsTrigger>
-            <TabsTrigger value="theming">Advanced Theming</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
-            <TabsTrigger value="data">Data</TabsTrigger>
-            <TabsTrigger value="import">Import</TabsTrigger>
-            <TabsTrigger value="tags">Tags</TabsTrigger>
-            <TabsTrigger value="categories">Categories</TabsTrigger>
-            <TabsTrigger value="event-categories">Event Categories</TabsTrigger>
-            <TabsTrigger value="ingredient-mappings">Ingredient Mappings</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          </TabsList>
+          {/* Scrollable tab bar — 11 tabs would wrap on mobile without this */}
+          <div className="mb-6 overflow-x-auto">
+            <TabsList className="w-max min-w-full">
+              <TabsTrigger value="account">Account</TabsTrigger>
+              <TabsTrigger value="appearance">Appearance</TabsTrigger>
+              <TabsTrigger value="theming">Advanced Theming</TabsTrigger>
+              <TabsTrigger value="integrations">Integrations</TabsTrigger>
+              <TabsTrigger value="data">Data</TabsTrigger>
+              <TabsTrigger value="import">Import</TabsTrigger>
+              <TabsTrigger value="tags">Tags</TabsTrigger>
+              <TabsTrigger value="categories">Categories</TabsTrigger>
+              <TabsTrigger value="event-categories">Event Categories</TabsTrigger>
+              <TabsTrigger value="ingredient-mappings">Ingredient Mappings</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="account">
             <AccountTab

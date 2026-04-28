@@ -7,7 +7,7 @@ import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { SaveTemplateDialog } from './SaveTemplateDialog'
 import { ApplyTemplateDialog } from './ApplyTemplateDialog'
 import { Button } from '@/components/ui/button'
-import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon, MoreHorizontalIcon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { DEFAULT_MEAL_TYPE, type MealType } from '@/lib/meal-types'
@@ -85,6 +85,7 @@ export function MealPlanGrid({
   const [clearing, setClearing] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
 
   const days = getWeekDays(weekStart)
 
@@ -260,72 +261,98 @@ export function MealPlanGrid({
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 h-full overflow-hidden">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between">
-        <h1 className="text-xl font-semibold">Meal Plan</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSaveTemplateOpen(true)}
-          >
-            <SaveIcon className="h-4 w-4 mr-1" />
-            Save Template
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setApplyTemplateOpen(true)}
-          >
-            <FileTextIcon className="h-4 w-4 mr-1" />
-            Apply Template
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setExportOpen(true)}
-          >
-            <ShoppingCartIcon className="h-4 w-4 mr-1" />
-            Groceries
-          </Button>
-          <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setClearDialogOpen(true)}
-            disabled={clearing || loading}
-            className="text-destructive border-destructive hover:bg-destructive/10"
-          >
-            <Trash2Icon className="h-4 w-4 mr-1" />
-            Clear Week
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => navWeek(-1)}
-            disabled={loading}
-            aria-label="Previous week"
-          >
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold shrink-0">Meal Plan</h1>
+
+        {/* ── Mobile header: nav arrows + Today + overflow menu ── */}
+        <div className="flex md:hidden items-center gap-1.5">
+          <Button variant="ghost" size="icon-sm" onClick={() => navWeek(-1)} disabled={loading} aria-label="Previous week">
             <ChevronLeftIcon className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => navWeek(1)}
-            disabled={loading}
-            aria-label="Next week"
-          >
+          <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => navWeek(1)} disabled={loading} aria-label="Next week">
+            <ChevronRightIcon className="h-4 w-4" />
+          </Button>
+          <div className="relative">
+            <Button variant="outline" size="sm" onClick={() => setMoreMenuOpen((v) => !v)} aria-label="More options">
+              <MoreHorizontalIcon className="h-4 w-4" />
+            </Button>
+            {moreMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMoreMenuOpen(false)} aria-hidden="true" />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-background border border-border rounded-lg shadow-lg py-1 min-w-[168px]">
+                  <button type="button" onClick={() => { setSaveTemplateOpen(true); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-accent text-left">
+                    <SaveIcon className="h-3.5 w-3.5 shrink-0" /> Save Template
+                  </button>
+                  <button type="button" onClick={() => { setApplyTemplateOpen(true); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-accent text-left">
+                    <FileTextIcon className="h-3.5 w-3.5 shrink-0" /> Apply Template
+                  </button>
+                  <button type="button" onClick={() => { setExportOpen(true); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-accent text-left">
+                    <ShoppingCartIcon className="h-3.5 w-3.5 shrink-0" /> Groceries
+                  </button>
+                  <div className="border-t border-border my-1" />
+                  <button type="button" onClick={() => { setClearDialogOpen(true); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 text-left" disabled={clearing || loading}>
+                    <Trash2Icon className="h-3.5 w-3.5 shrink-0" /> Clear Week
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Desktop header: all buttons in a row ── */}
+        <div className="hidden md:flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setSaveTemplateOpen(true)}>
+            <SaveIcon className="h-4 w-4 mr-1" /> Save Template
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setApplyTemplateOpen(true)}>
+            <FileTextIcon className="h-4 w-4 mr-1" /> Apply Template
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+            <ShoppingCartIcon className="h-4 w-4 mr-1" /> Groceries
+          </Button>
+          <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
+          <Button variant="outline" size="sm" onClick={() => setClearDialogOpen(true)} disabled={clearing || loading} className="text-destructive border-destructive hover:bg-destructive/10">
+            <Trash2Icon className="h-4 w-4 mr-1" /> Clear Week
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => navWeek(-1)} disabled={loading} aria-label="Previous week">
+            <ChevronLeftIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => navWeek(1)} disabled={loading} aria-label="Next week">
             <ChevronRightIcon className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {/* Week label */}
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground -mt-2">
         {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
       </p>
 
-      {/* Grid — scrolls horizontally on mobile */}
-      <div className="overflow-x-auto flex-1">
+      {/* ── Mobile: stacked day cards (one per day, full width) ── */}
+      <div className="md:hidden flex-1 overflow-y-auto flex flex-col gap-3 pb-2">
+        {days.map((day) => {
+          const ymd = toYMD(day)
+          const dayEntries = entries.filter((e) => e.date.slice(0, 10) === ymd)
+          return (
+            <div
+              key={ymd}
+              className={`rounded-xl border p-3 ${ymd === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}
+            >
+              <DailyMealColumn
+                date={ymd}
+                entries={dayEntries}
+                isToday={ymd === today}
+                onMealClick={openModal}
+                onMealClear={handleClear}
+              />
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── Desktop: 7-column weekly grid ── */}
+      <div className="hidden md:block overflow-x-auto flex-1">
         <div className="grid grid-cols-7 gap-4 min-w-[960px]">
           {days.map((day) => {
             const ymd = toYMD(day)

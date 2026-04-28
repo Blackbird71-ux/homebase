@@ -100,7 +100,7 @@ export function ListItemRow({
 
   return (
     <div
-      className={`flex items-center gap-2 py-2 px-1 rounded-md group ${
+      className={`flex items-center gap-2 py-2.5 px-1 rounded-md group ${
         isCompleted ? 'opacity-50' : ''
       }`}
     >
@@ -188,7 +188,7 @@ export function ListItemRow({
           className={`shrink-0 ${
             isLocked
               ? 'opacity-100 text-yellow-500 hover:text-yellow-600'
-              : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-yellow-500'
+              : 'md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-yellow-500'
           }`}
           aria-label={isLocked ? 'Unlock item' : 'Lock item'}
           title={isLocked ? 'Unlock item' : 'Lock item (prevents deletion)'}
@@ -205,7 +205,7 @@ export function ListItemRow({
           variant="ghost"
           size="icon-sm"
           onClick={() => setIsEditing(true)}
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-primary"
+          className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-primary"
           aria-label="Edit category"
         >
           <EditIcon className="h-3 w-3" />
@@ -218,7 +218,7 @@ export function ListItemRow({
           variant="ghost"
           size="icon-sm"
           onClick={() => onDelete(id)}
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
+          className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
           aria-label="Delete item"
           disabled={isEditing}
         >
