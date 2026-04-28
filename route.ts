@@ -1,4 +1,4 @@
-haveimport { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { execSync } from 'child_process'
 
