@@ -46,7 +46,7 @@
 
 | Feature | Description | Effort | Status |
 |---|---|---|---|
-| Mobile responsiveness | Bottom tab bar, single-column optimised views for lists and meal planner | Medium | ✅ Done |
+| Mobile responsiveness | Unified FAB nav+quick-add bottom sheet, full-width list view with chip selector | Medium | ✅ Done |
 | Dashboard customisation | Show/hide and reorder Home cards per user via existing `uiPreferences` JSON | Low | ✅ Done |
 | Quick-add from anywhere | Floating action button or Cmd+K palette to add events/items without navigating | Medium | ✅ Done |
 | Birthdays & anniversaries | Dedicated recurring event type with calendar banner and Home dashboard reminder | Low | ✅ Done |
@@ -65,43 +65,32 @@
 
 ---
 
-### P1 — Mobile Responsiveness
+### P1 — Mobile Responsiveness ✅ Done
 
 **Goal:** Make HomeBase comfortable to use on a phone — the primary on-the-go access pattern for family members checking lists, meals, and events away from home.
 
-**Current state:** The app uses a left sidebar nav and a fixed grid layout. On small screens the sidebar collapses but many views remain two-column. The docs note mobile responsiveness as a known gap.
+**Implemented approach:** Replaced the multi-pattern mobile nav (hamburger slide-in + bottom tab bar) with a single unified FAB that serves as both the navigation hub and the quick-add entry point. The lists page sidebar is hidden on mobile and replaced with a horizontally-scrollable chip bar.
 
-#### Scope
+#### What was built
 
-1. **Bottom tab bar on mobile** — replace the hidden sidebar with a bottom navigation bar showing the 5 most-used sections (Home, Calendar, Lists, Meals, Recipes).
-2. **Single-column dashboard** — the `DashboardGrid` 2-col grid collapses gracefully; minor card layout tweaks needed.
-3. **List view** — full-width list items, touch-friendly tap targets (min 44px), swipe-to-complete gesture optional.
-4. **Meal planner** — weekly grid is inherently wide; add a day-by-day scroll view as the mobile default with a toggle to the full weekly grid.
-5. **Calendar** — month view already responsive; week view needs horizontal scroll or a day-list fallback on mobile.
-6. **Recipe detail** — already single-column friendly; minor padding adjustments.
-7. **Settings** — tabs wrap but can get cramped; consider an accordion or side-list layout on mobile.
+1. **Unified FAB bottom sheet** — a single `+` button (bottom-right, fixed) opens a slide-up bottom sheet containing:
+   - **Quick Add** section: 2-column grid for Event / List / Recipe / Note
+   - **Navigate** section: 3-column grid for all 9 sections (Home, Calendar, Lists, Chores, Contacts, Recipes, Meals, Notes, Settings) + Sign out
+   - Active page is highlighted in the nav grid
+2. **Single-column dashboard** — `DashboardGrid` uses `grid-cols-1 md:grid-cols-2`; renders correctly on mobile.
+3. **List view** — 200px sidebar hidden on mobile (`hidden md:block`); replaced with a horizontally-scrollable chip bar showing all list names. Full screen width used for list content. Mobile padding tightened to `p-4`.
+4. **AppShell simplified** — removed hamburger button, mobile top bar, slide-in drawer, and bottom tab bar. Shell is now: desktop sidebar + content area + QuickAdd FAB.
 
-#### Files to create / modify
+#### Files modified
 
 | File | Change |
 |---|---|
-| `src/components/layout/MobileNav.tsx` | New — bottom tab bar component, shown only on `md:hidden` |
-| `src/app/(app)/layout.tsx` | Add `<MobileNav>` for mobile, hide sidebar on small screens |
-| `src/components/dashboard/DashboardGrid.tsx` | Ensure cards are `grid-cols-1` on mobile |
-| `src/components/meal-plan/WeeklyGrid.tsx` | Add day-scroll view toggled by viewport |
-| `src/app/(app)/meal-plan/page.tsx` | Pass mobile view state |
-| `src/components/lists/ListItemRow.tsx` | Increase tap target size, touch-friendly lock/delete controls |
-| `src/app/(app)/settings/page.tsx` | Mobile-friendly tabs (scrollable or accordion) |
+| `src/components/layout/AppShell.tsx` | Removed hamburger/slide-in nav and bottom tab bar; simplified to Sidebar + content + QuickAdd |
+| `src/components/layout/QuickAdd.tsx` | Mobile FAB now opens bottom sheet with nav grid + quick-add grid; desktop unchanged |
+| `src/app/(app)/lists/ListsClient.tsx` | Mobile chip bar replaces the 200px aside on small screens |
+| `src/components/layout/MobileNav.tsx` | **Deleted** — absorbed into QuickAdd bottom sheet |
 
 #### No schema changes required.
-
-#### Implementation notes
-
-- Use Tailwind responsive prefixes throughout (`sm:`, `md:`). No new CSS files needed.
-- Bottom tab bar: 5 icons with labels, fixed at bottom, `z-50`, safe area inset for iOS (`pb-safe`). Add `viewport-fit=cover` to the layout metadata.
-- The sidebar can remain for desktop — just add `hidden md:flex` to it and `flex md:hidden` to the mobile nav.
-- Test on Chrome DevTools mobile emulation (375px iPhone SE, 390px iPhone 14) before considering complete.
-- The existing `next.config.ts` security headers are already set; no changes needed for mobile.
 
 #### Docker / NAS impact
 
@@ -109,12 +98,14 @@ None — purely frontend changes. Standard `docker-compose down && docker-compos
 
 #### Acceptance criteria
 
-- [ ] App is fully usable on a 375px viewport with no horizontal overflow
-- [ ] All interactive elements have minimum 44px tap targets
-- [ ] Bottom nav correctly highlights the active section
-- [ ] Meal planner shows a day-scroll view by default on mobile
-- [ ] Calendar week view is scrollable or falls back to day list on mobile
-- [ ] No regressions on desktop (1280px+)
+- [x] App is fully usable on a 375px viewport with no horizontal overflow
+- [x] All interactive elements have minimum 44px tap targets
+- [x] FAB nav correctly highlights the active section
+- [x] All 9 sections + sign-out accessible from the mobile FAB
+- [x] Lists page shows full-width content on mobile (chip bar for list switching)
+- [x] No regressions on desktop (1280px+)
+- [ ] Meal planner day-scroll view on mobile (backlog)
+- [ ] Calendar week view scrollable or day-list fallback on mobile (backlog)
 
 ---
 

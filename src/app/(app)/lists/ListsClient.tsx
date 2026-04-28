@@ -150,8 +150,35 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
 
   return (
 
-    <div className="flex h-full overflow-hidden">
-      <aside className="w-[200px] shrink-0 border-r border-border overflow-y-auto">
+    <div className="flex h-full overflow-hidden flex-col md:flex-row">
+      {/* Mobile: horizontal scroll chip bar — replaces the sidebar */}
+      <div className="md:hidden flex items-center gap-2 px-3 py-2 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
+        {listsMeta.map((list) => (
+          <button
+            key={list.id}
+            type="button"
+            onClick={() => setActiveListId(list.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0 ${
+              activeListId === list.id
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            {list.name}
+            <span className="text-xs opacity-70">({list._count.items})</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm whitespace-nowrap shrink-0 border border-dashed border-border text-muted-foreground hover:bg-muted transition-colors"
+        >
+          + New
+        </button>
+      </div>
+
+      {/* Desktop: sidebar list selector */}
+      <aside className="hidden md:block w-[200px] shrink-0 border-r border-border overflow-y-auto">
         <ListSelector
           lists={listsMeta}
           activeListId={activeListId}
@@ -165,10 +192,9 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
           }}
           onReorder={handleReorder}
         />
-
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
         {activeList === null ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <p className="text-sm">No lists yet. Create one to get started.</p>
