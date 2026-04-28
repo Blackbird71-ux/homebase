@@ -17,7 +17,7 @@ function normalizeToUtcMidnight(dateStr: string): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[]): Promise<DashboardData> {
+async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null): Promise<DashboardData> {
   // Get today's boundaries in the family's timezone
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -40,10 +40,6 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const needsMeals = visibleCardIds.has('todays-meals') || visibleCardIds.has('tomorrows-meals')
   const needsShopping = visibleCardIds.has('shopping-list')
   const needsTodo = visibleCardIds.has('todo-summary')
-
-  // Get preferred shopping list ID from uiPreferences
-  // We need to re-fetch it here since we don't have it in scope
-  // Actually, we'll pass it from the parent
 
   const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists] = await Promise.all([
     needsEvents
@@ -79,12 +75,18 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       : Promise.resolve([]),
     needsShopping
       ? prisma.list.findMany({
-          where: { familyId, type: 'SHOPPING', isActive: true },
+          where: {
+            familyId,
+            type: 'SHOPPING',
+            isActive: true,
+            ...(dashboardShoppingListId ? { id: dashboardShoppingListId } : {}),
+          },
           include: {
             items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
             _count: { select: { items: { where: { isCompleted: false } } } },
           },
-          take: 1,
+          // If a specific list is chosen, fetch that one; otherwise fall back to most recent
+          ...(dashboardShoppingListId ? {} : { take: 1, orderBy: { createdAt: 'desc' } }),
         })
       : Promise.resolve([]),
     needsTodo
@@ -172,19 +174,21 @@ export default async function HomePage() {
     select: { uiPreferences: true },
   })
 
-  // Parse dashboardCards from uiPreferences
+  // Parse dashboardCards and dashboardShoppingListId from uiPreferences
   let dashboardCards: DashboardCardConfig[] | null = null
+  let dashboardShoppingListId: string | null = null
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
       dashboardCards = prefs.dashboardCards ?? null
+      dashboardShoppingListId = prefs.dashboardShoppingListId ?? null
     } catch {
       // ignore parse errors
     }
   }
 
   const cards = mergeDashboardCards(dashboardCards)
-  const data = await getDashboardData(user.familyId, timezone, cards)
+  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId)
 
   return (
     <HomeClient

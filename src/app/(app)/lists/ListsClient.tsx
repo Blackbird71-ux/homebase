@@ -99,10 +99,9 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
 
   async function handleSetDefault(listId: string) {
     const list = listId ? lists.find((l) => l.id === listId) : null
-    // For shopping lists, also update the home dashboard preference so the
-    // starred list shows on the home page (per-user, not per-family)
     const uiPrefs: Record<string, string | null> = { defaultListId: listId || null }
-    if (!listId || list?.type === 'SHOPPING') {
+    // Only update the dashboard shopping list preference when favoriting/unfavoriting a SHOPPING list
+    if (list?.type === 'SHOPPING') {
       uiPrefs.dashboardShoppingListId = listId || null
     }
     const res = await fetch('/api/settings', {

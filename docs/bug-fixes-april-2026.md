@@ -30,6 +30,22 @@
 - `src/app/(app)/home/page.tsx` - Reads `dashboardShoppingListId` from `uiPreferences`
 - `src/app/api/settings/route.ts` - Already supports `uiPreferences` merging
 
+### Bug 11: Dashboard ignoring appearance shopping list setting
+**Root Cause:** The `getDashboardData` function in `home/page.tsx` was always fetching the first active shopping list (`take: 1` with no ordering), completely ignoring the `dashboardShoppingListId` from `uiPreferences`. The comment in the code even acknowledged this: "We need to re-fetch it here since we don't have it in scope."
+
+**Fix:** Added `dashboardShoppingListId` parameter to `getDashboardData`. When a specific list is chosen, the query filters by that list's ID. When no list is chosen (auto mode), it falls back to the most recently created active list (`orderBy: { createdAt: 'desc' }`). The `HomePage` function now parses `dashboardShoppingListId` from `uiPreferences` and passes it through.
+
+**Files modified:**
+- `src/app/(app)/home/page.tsx` - Added `dashboardShoppingListId` parameter to `getDashboardData`, uses it in the shopping list query, parses it from `uiPreferences` in `HomePage`
+
+### Bug 12: Favorite button on TODO list clears dashboard shopping list preference
+**Root Cause:** In `ListsClient.tsx`, the `handleSetDefault` function had a buggy condition `if (!listId || list?.type === 'SHOPPING')` that would set `dashboardShoppingListId` to `null` whenever you favorited a TODO list. The `!listId` check was intended to handle the "un-favorite" case (when `listId` is empty string `''`), but it also triggered when `listId` was a valid TODO list ID (since `!listId` is false for non-empty strings, but the `||` meant the condition was always true when un-favoriting any list type).
+
+**Fix:** Changed the condition to `if (list?.type === 'SHOPPING')` so it only touches `dashboardShoppingListId` when actually favoriting or unfavoriting a SHOPPING list. TODO list favorites no longer interfere with the dashboard shopping list preference.
+
+**Files modified:**
+- `src/app/(app)/lists/ListsClient.tsx` - Fixed condition in `handleSetDefault`
+
 ### Bug 4 & 5: Calendar cannot add/change events, stuck at saving
 **Root Cause:** The `EventModal` had a null-safety bug. When creating a new event (`event` is null), the code cast `event as unknown as Record<string, unknown>` and accessed `.seriesId` on the result. Since `null` cast to `Record<string, unknown>` is still `null` at runtime, this threw `Cannot read properties of null`, which was caught by the try/catch and displayed as "Network error: Could not save event".
 
@@ -82,19 +98,22 @@
 - `src/components/lists/ListItemRow.tsx` - Resized checkbox from `h-4 w-4` to `h-5 w-5`, removed conflicting border classes
 
 ## Files Modified
-1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid
+1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
 3. `src/components/dashboard/UpcomingEventsCard.tsx` - Timezone-aware date display
 4. `src/components/calendar/EventModal.tsx` - Fixed null-safety in event save flow
 5. `src/components/settings/AppearanceTab.tsx` - Added dashboard shopping list selector
 6. `src/components/settings/IngredientMappingsTab.tsx` - Dynamic category dropdown from API
+7. `src/app/(app)/lists/ListsClient.tsx` - Fixed favorite button not interfering with dashboard shopping list preference
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
 2. **Event display:** Create an event for tomorrow, verify it shows as "Tomorrow" on the home page
-3. **Shopping list:** Go to Settings > Appearance, select a specific shopping list for the dashboard
+3. **Shopping list:** Go to Settings > Appearance, select a specific shopping list for the dashboard, verify it shows on the home page
 4. **Event creation:** Create a new event, verify it saves without errors
 5. **Event editing:** Edit an existing event, verify changes are saved
 6. **Event categories:** Go to Settings > Event Categories, create/edit/delete categories
 7. **Repeat options:** Create an event with fortnightly, quarterly, or bi-annually repeat
 8. **Ingredient mappings:** Go to Settings > Ingredient Mappings, verify the category dropdown includes custom categories
+9. **Favorite list:** Star a shopping list in Lists, verify it shows as default and appears on the dashboard
+10. **Favorite TODO list:** Star a TODO list, verify it doesn't clear the dashboard shopping list preference
