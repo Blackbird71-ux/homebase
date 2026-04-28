@@ -115,6 +115,19 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
     }
   }
 
+  async function toggleLock(id: string, isLocked: boolean) {
+    const res = await fetch(`/api/lists/${listId}/items/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isLocked }),
+    })
+    if (res.ok) {
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isLocked } : i)))
+    } else {
+      toast.error('Failed to update item.')
+    }
+  }
+
   async function saveCategoryOrder(cats: string[]) {
     const res = await fetch(`/api/lists/${listId}/category-order`, {
       method: 'PATCH',
@@ -279,9 +292,11 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
                         id={item.id}
                         content={item.content}
                         isCompleted={item.isCompleted}
+                        isLocked={item.isLocked}
                         dueDate={item.dueDate?.toISOString() ?? null}
                         onToggle={toggleItem}
                         onDelete={deleteItem}
+                        onToggleLock={toggleLock}
                         onEdit={handleEditItem}
                       />
                     ))}
@@ -304,9 +319,11 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
                 id={item.id}
                 content={item.content}
                 isCompleted={item.isCompleted}
+                isLocked={item.isLocked}
                 dueDate={item.dueDate?.toISOString() ?? null}
                 onToggle={toggleItem}
                 onDelete={deleteItem}
+                onToggleLock={toggleLock}
                 onEdit={handleEditItem}
               />
             ))}
@@ -319,6 +336,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
             listId={listId}
             onToggle={toggleItem}
             onDelete={deleteItem}
+            onToggleLock={toggleLock}
             onEdit={handleEditItem}
           />
         )}

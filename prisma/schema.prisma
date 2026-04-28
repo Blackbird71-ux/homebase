@@ -99,6 +99,7 @@ model ListItem {
   id          String    @id @default(cuid())
   content     String
   isCompleted Boolean   @default(false)
+  isLocked    Boolean   @default(false)
   category    String?
   sortOrder   Int       @default(0)
   dueDate     DateTime?

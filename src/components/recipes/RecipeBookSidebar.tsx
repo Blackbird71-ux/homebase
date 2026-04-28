@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { PlusIcon, StarIcon, Trash2Icon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface RecipeBook {
@@ -18,6 +18,8 @@ interface RecipeBookSidebarProps {
   onSelect: (bookId: string | null) => void
   onBookCreated: (book: RecipeBook) => void
   onBookDeleted: (bookId: string) => void
+  favoriteBookId?: string | null
+  onSetFavorite?: (bookId: string | null) => void
   mobile?: boolean
 }
 
@@ -27,6 +29,8 @@ export function RecipeBookSidebar({
   onSelect,
   onBookCreated,
   onBookDeleted,
+  favoriteBookId,
+  onSetFavorite,
   mobile = false,
 }: RecipeBookSidebarProps) {
   const [creating, setCreating] = useState(false)
@@ -79,6 +83,9 @@ export function RecipeBookSidebar({
             onClick={() => onSelect(book.id)}
             className="shrink-0"
           >
+            {favoriteBookId === book.id && (
+              <StarIcon className="h-3 w-3 mr-1 fill-current opacity-75" />
+            )}
             {book.name}
             <span className="ml-1 text-xs opacity-60">{book.recipeCount}</span>
           </Button>
@@ -120,6 +127,23 @@ export function RecipeBookSidebar({
               {book.recipeCount}
             </span>
           </button>
+          {onSetFavorite && (
+            <button
+              onClick={() => onSetFavorite(favoriteBookId === book.id ? null : book.id)}
+              className={cn(
+                'p-1 rounded transition-all',
+                favoriteBookId === book.id
+                  ? 'text-amber-400 hover:text-amber-300'
+                  : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-amber-400'
+              )}
+              title={favoriteBookId === book.id ? 'Remove default' : 'Set as default'}
+            >
+              <StarIcon
+                className="h-3 w-3"
+                fill={favoriteBookId === book.id ? 'currentColor' : 'none'}
+              />
+            </button>
+          )}
           <button
             onClick={() => handleDelete(book)}
             className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"

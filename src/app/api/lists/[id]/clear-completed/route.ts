@@ -15,7 +15,7 @@ export async function POST(
   if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const { count } = await prisma.listItem.deleteMany({
-    where: { listId: id, isCompleted: true },
+    where: { listId: id, isCompleted: true, isLocked: false },
   })
   return NextResponse.json({ deleted: count })
 }

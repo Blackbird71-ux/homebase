@@ -27,12 +27,14 @@ interface RecipeSummary {
 interface RecipesClientProps {
   initialRecipes: RecipeSummary[]
   initialBooks: RecipeBook[]
+  initialFavoriteBookId?: string | null
 }
 
-export function RecipesClient({ initialRecipes, initialBooks }: RecipesClientProps) {
+export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBookId }: RecipesClientProps) {
   const [recipes, setRecipes] = useState(initialRecipes)
   const [books, setBooks] = useState(initialBooks)
-  const [activeBookId, setActiveBookId] = useState<string | null>(null)
+  const [activeBookId, setActiveBookId] = useState<string | null>(initialFavoriteBookId ?? null)
+  const [favoriteBookId, setFavoriteBookId] = useState<string | null>(initialFavoriteBookId ?? null)
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
@@ -77,6 +79,16 @@ export function RecipesClient({ initialRecipes, initialBooks }: RecipesClientPro
     setBooks((prev) => prev.filter((b) => b.id !== bookId))
     setRecipes((prev) => prev.map((r) => r.bookId === bookId ? { ...r, bookId: null } : r))
     if (activeBookId === bookId) setActiveBookId(null)
+    if (favoriteBookId === bookId) handleSetFavorite(null)
+  }
+
+  async function handleSetFavorite(bookId: string | null) {
+    setFavoriteBookId(bookId)
+    await fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uiPreferences: { favoriteRecipeBookId: bookId } }),
+    })
   }
 
   async function handleDeleteRecipe(id: string) {
@@ -108,6 +120,8 @@ export function RecipesClient({ initialRecipes, initialBooks }: RecipesClientPro
           onSelect={(id) => { setActiveBookId(id); setActiveTag(null) }}
           onBookCreated={handleBookCreated}
           onBookDeleted={handleBookDeleted}
+          favoriteBookId={favoriteBookId}
+          onSetFavorite={handleSetFavorite}
         />
       </div>
 
@@ -121,6 +135,8 @@ export function RecipesClient({ initialRecipes, initialBooks }: RecipesClientPro
             onSelect={(id) => { setActiveBookId(id); setActiveTag(null) }}
             onBookCreated={handleBookCreated}
             onBookDeleted={handleBookDeleted}
+            favoriteBookId={favoriteBookId}
+            onSetFavorite={handleSetFavorite}
             mobile
           />
         </div>

@@ -14,6 +14,7 @@ export interface DashboardData {
   upcomingEvents: UpcomingEvent[]
   tonightsDinner: TonightsDinner | null
   todaysMeals: TodaysMeals
+  tomorrowsMeals: TodaysMeals
   shoppingList: ShoppingListSummary | null
   todoSummary: TodoSummary | null
 }
@@ -42,6 +43,7 @@ export interface TodaysMeal {
   recipeId: string | null
   recipeName: string | null
   recipeImage: string | null
+  recipeDescription: string | null
   note: string | null
 }
 

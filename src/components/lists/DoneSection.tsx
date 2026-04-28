@@ -9,16 +9,18 @@ interface DoneSectionProps {
   doneItemColor?: string
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
+  onToggleLock?: (id: string, isLocked: boolean) => void
   availableCategories?: string[]
   onCategoryChange?: (id: string, newCategory: string) => void
   onEdit?: (id: string) => void
 }
 
-export function DoneSection({ 
-  items, 
-  doneItemColor, 
-  onToggle, 
+export function DoneSection({
+  items,
+  doneItemColor,
+  onToggle,
   onDelete,
+  onToggleLock,
   availableCategories = [],
   onCategoryChange,
   onEdit,
@@ -37,12 +39,14 @@ export function DoneSection({
             id={item.id}
             content={item.content}
             isCompleted={item.isCompleted}
+            isLocked={item.isLocked}
             recipeName={item.recipeName}
             doneItemColor={doneItemColor}
             category={item.category || undefined}
             availableCategories={availableCategories}
             onToggle={onToggle}
             onDelete={onDelete}
+            onToggleLock={onToggleLock}
             onCategoryChange={onCategoryChange}
             onEdit={onEdit}
           />

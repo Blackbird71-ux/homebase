@@ -220,6 +220,19 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     }
   }
 
+  async function toggleLock(id: string, isLocked: boolean) {
+    const res = await fetch(`/api/lists/${listId}/items/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isLocked }),
+    })
+    if (res.ok) {
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isLocked } : i)))
+    } else {
+      toast.error('Failed to update item.')
+    }
+  }
+
   async function changeItemCategory(id: string, newCategory: string) {
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
@@ -289,7 +302,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   async function clearCompleted() {
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
-      setItems((prev) => prev.filter((i) => !i.isCompleted))
+      // Keep locked completed items; the server only deletes unlocked ones
+      setItems((prev) => prev.filter((i) => !(i.isCompleted && !i.isLocked)))
     } else {
       toast.error('Failed to save. Please try again.')
     }
@@ -427,6 +441,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
                     showDragHandle={true}
                     onToggle={toggleItem}
                     onDelete={deleteItem}
+                    onToggleLock={toggleLock}
                     availableCategories={categories}
                     onCategoryChange={changeItemCategory}
                     onEdit={handleEditItem}
@@ -440,6 +455,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             listId={listId}
             onToggle={toggleItem}
             onDelete={deleteItem}
+            onToggleLock={toggleLock}
             availableCategories={categories}
             onCategoryChange={changeItemCategory}
             onEdit={handleEditItem}
@@ -459,11 +475,13 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
                     id={item.id}
                     content={item.content}
                     isCompleted={item.isCompleted}
+                    isLocked={item.isLocked}
                     recipeName={item.recipeName}
                     category={item.category || undefined}
                     availableCategories={categories}
                     onToggle={toggleItem}
                     onDelete={deleteItem}
+                    onToggleLock={toggleLock}
                     onCategoryChange={changeItemCategory}
                     onEdit={handleEditItem}
                   />
@@ -476,6 +494,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             listId={listId}
             onToggle={toggleItem}
             onDelete={deleteItem}
+            onToggleLock={toggleLock}
             availableCategories={categories}
             onCategoryChange={changeItemCategory}
             onEdit={handleEditItem}

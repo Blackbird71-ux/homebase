@@ -13,31 +13,39 @@ const MEAL_CONFIG = [
 function MealRow({ meal, label, Icon }: { meal: TodaysMeal | null; label: string; Icon: React.ElementType }) {
   const content = meal?.recipeName ?? meal?.note ?? null
   const href = meal?.recipeId ? `/recipes/${meal.recipeId}` : '/meal-plan'
+  const description = meal?.recipeDescription ?? null
 
   return (
-    <div className="flex items-center gap-2 py-1.5 min-w-0">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
-      {content ? (
-        <Link href={href} className="text-xs font-medium truncate hover:underline hover:text-primary transition-colors">
-          {content}
-        </Link>
-      ) : (
-        <span className="text-xs text-muted-foreground/50 italic truncate">Not planned</span>
-      )}
+    <div className="py-1.5 min-w-0">
+      <div className="flex items-center gap-2">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
+        <div className="flex-1 min-w-0">
+          {content ? (
+            <Link href={href} className="text-xs font-medium truncate block hover:underline hover:text-primary transition-colors">
+              {content}
+            </Link>
+          ) : (
+            <span className="text-xs text-muted-foreground/50 italic truncate block">Not planned</span>
+          )}
+          {content && description && (
+            <p className="text-xs text-muted-foreground/60 truncate">{description}</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
-export function TodaysMealsCard({ meals }: { meals: TodaysMeals }) {
+export function TodaysMealsCard({ meals, title = "Today's Meals" }: { meals: TodaysMeals; title?: string }) {
   const hasAny = MEAL_CONFIG.some(({ key }) => meals[key] !== null)
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="flex flex-col">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
           <Link href="/meal-plan" className="flex items-center gap-2 hover:text-foreground transition-colors w-full">
-            <Utensils className="h-4 w-4" /> Today's Meals
+            <Utensils className="h-4 w-4" /> {title}
           </Link>
         </CardTitle>
       </CardHeader>
@@ -50,7 +58,7 @@ export function TodaysMealsCard({ meals }: { meals: TodaysMeals }) {
           </div>
         ) : (
           <Link href="/meal-plan" className="text-sm text-muted-foreground text-center hover:text-foreground transition-colors">
-            Nothing planned for today
+            Nothing planned
           </Link>
         )}
       </CardContent>

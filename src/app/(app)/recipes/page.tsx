@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { RecipesClient } from './RecipesClient'
 
-async function getData(familyId: string) {
-  const [recipeRows, bookRows] = await Promise.all([
+async function getData(familyId: string, userId: string) {
+  const [recipeRows, bookRows, dbUser] = await Promise.all([
     prisma.recipe.findMany({
       where: { familyId },
       orderBy: { createdAt: 'desc' },
@@ -35,9 +35,19 @@ async function getData(familyId: string) {
       orderBy: { name: 'asc' },
       include: { _count: { select: { recipes: true } } },
     }),
+    prisma.user.findUnique({ where: { id: userId }, select: { uiPreferences: true } }),
   ])
 
+  let favoriteRecipeBookId: string | null = null
+  if (dbUser?.uiPreferences) {
+    try {
+      const prefs = JSON.parse(dbUser.uiPreferences)
+      favoriteRecipeBookId = prefs.favoriteRecipeBookId ?? null
+    } catch { /* ignore */ }
+  }
+
   return {
+    favoriteRecipeBookId,
     recipes: recipeRows.map((r) => {
       // Get tags from relational tags first, fall back to comma-separated string
       let tags: string[] = []
@@ -70,6 +80,12 @@ async function getData(familyId: string) {
 
 export default async function RecipesPage() {
   const user = await requireSession()
-  const { recipes, books } = await getData(user.familyId)
-  return <RecipesClient initialRecipes={recipes} initialBooks={books} />
+  const { recipes, books, favoriteRecipeBookId } = await getData(user.familyId, user.id)
+  return (
+    <RecipesClient
+      initialRecipes={recipes}
+      initialBooks={books}
+      initialFavoriteBookId={favoriteRecipeBookId}
+    />
+  )
 }

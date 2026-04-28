@@ -29,8 +29,10 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
   }).format(new Date())
   const mealPlanTodayStart = normalizeToUtcMidnight(todayStr)
   const mealPlanTodayEnd = new Date(mealPlanTodayStart.getTime() + 24 * 60 * 60 * 1000)
+  const mealPlanTomorrowStart = new Date(mealPlanTodayStart.getTime() + 24 * 60 * 60 * 1000)
+  const mealPlanTomorrowEnd = new Date(mealPlanTomorrowStart.getTime() + 24 * 60 * 60 * 1000)
 
-  const [upcomingEvents, todayMealPlans, shoppingLists, todoLists] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists] = await Promise.all([
     prisma.event.findMany({
       where: { familyId, start: { gte: todayStart } },
       orderBy: { start: 'asc' },
@@ -39,9 +41,19 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
     prisma.mealPlan.findMany({
       where: { familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd } },
       include: {
-        recipe: { select: { id: true, title: true, image: true } },
+        recipe: { select: { id: true, title: true, image: true, description: true } },
         recipes: {
-          include: { recipe: { select: { id: true, title: true, image: true } } },
+          include: { recipe: { select: { id: true, title: true, image: true, description: true } } },
+          orderBy: { order: 'asc' },
+        },
+      },
+    }),
+    prisma.mealPlan.findMany({
+      where: { familyId, date: { gte: mealPlanTomorrowStart, lt: mealPlanTomorrowEnd } },
+      include: {
+        recipe: { select: { id: true, title: true, image: true, description: true } },
+        recipes: {
+          include: { recipe: { select: { id: true, title: true, image: true, description: true } } },
           orderBy: { order: 'asc' },
         },
       },
@@ -66,18 +78,17 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
     }),
   ])
 
-  // Map each meal type from today's meal plans.
+  // Map each meal type from a set of meal plans.
   // Prefer the MealPlanRecipe junction table (recipes[]) which is the current storage;
   // fall back to the legacy recipeId/recipe field for older records.
-  const mealByType = (type: string): TodaysMeal | null => {
-    const m = todayMealPlans.find(p => p.mealType === type)
+  function mealByType(plans: typeof todayMealPlans, type: string): TodaysMeal | null {
+    const m = plans.find(p => p.mealType === type)
     if (!m) return null
 
-    // Resolve recipe from junction table first, then legacy field
     const primaryRecipe = m.recipes?.[0]?.recipe ?? m.recipe ?? null
     const primaryRecipeImage = m.recipes?.[0]?.recipe?.image ?? m.recipe?.image ?? null
+    const primaryDescription = m.recipes?.[0]?.recipe?.description ?? m.recipe?.description ?? null
 
-    // Build a display name: join multiple recipes with ' & ', or fall back to note
     const recipeNames = (m.recipes && m.recipes.length > 0)
       ? m.recipes.map(r => r.recipe?.title).filter(Boolean).join(' & ')
       : (m.recipe?.title ?? null)
@@ -88,11 +99,12 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
       recipeId: primaryRecipe?.id ?? null,
       recipeName: recipeNames || m.note || null,
       recipeImage: getLocalImageUrl(primaryRecipeImage ?? null),
+      recipeDescription: primaryDescription,
       note: m.note,
     }
   }
 
-  const dinnerMeal = mealByType('dinner')
+  const dinnerMeal = mealByType(todayMealPlans, 'dinner')
 
   return {
     upcomingEvents: upcomingEvents.map(e => ({
@@ -102,10 +114,16 @@ async function getDashboardData(familyId: string, timezone: string, preferredLis
     })),
     tonightsDinner: dinnerMeal,
     todaysMeals: {
-      breakfast: mealByType('breakfast'),
-      lunch: mealByType('lunch'),
+      breakfast: mealByType(todayMealPlans, 'breakfast'),
+      lunch: mealByType(todayMealPlans, 'lunch'),
       dinner: dinnerMeal,
-      snacks: mealByType('snacks'),
+      snacks: mealByType(todayMealPlans, 'snacks'),
+    },
+    tomorrowsMeals: {
+      breakfast: mealByType(tomorrowMealPlans, 'breakfast'),
+      lunch: mealByType(tomorrowMealPlans, 'lunch'),
+      dinner: mealByType(tomorrowMealPlans, 'dinner'),
+      snacks: mealByType(tomorrowMealPlans, 'snacks'),
     },
     shoppingList: (() => {
       const chosen = preferredListId
@@ -151,7 +169,7 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">
       <h1 className="text-xl font-semibold mb-4 shrink-0">Home</h1>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <DashboardGrid data={data} timezone={timezone} />
       </div>
     </div>

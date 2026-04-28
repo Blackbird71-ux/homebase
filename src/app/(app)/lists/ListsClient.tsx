@@ -12,6 +12,7 @@ interface SerializedItem {
   id: string
   content: string
   isCompleted: boolean
+  isLocked: boolean
   category: string | null
   sortOrder: number
   dueDate: string | null
@@ -95,13 +96,17 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
   }
 
   async function handleSetDefault(listId: string) {
-    // Save the preference to the server
+    const list = listId ? lists.find((l) => l.id === listId) : null
+    // For shopping lists, also update the home dashboard preference so the
+    // starred list shows on the home page (per-user, not per-family)
+    const uiPrefs: Record<string, string | null> = { defaultListId: listId || null }
+    if (!listId || list?.type === 'SHOPPING') {
+      uiPrefs.dashboardShoppingListId = listId || null
+    }
     const res = await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        uiPreferences: { defaultListId: listId || null },
-      }),
+      body: JSON.stringify({ uiPreferences: uiPrefs }),
     })
     if (res.ok) {
       setDefaultListId(listId || null)

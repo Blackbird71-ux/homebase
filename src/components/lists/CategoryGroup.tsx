@@ -15,16 +15,18 @@ interface SortableItemProps {
   showDragHandle: boolean
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
+  onToggleLock?: (id: string, isLocked: boolean) => void
   availableCategories?: string[]
   onCategoryChange?: (id: string, newCategory: string) => void
   onEdit?: (id: string) => void
 }
 
-function SortableItem({ 
-  item, 
-  showDragHandle, 
-  onToggle, 
+function SortableItem({
+  item,
+  showDragHandle,
+  onToggle,
   onDelete,
+  onToggleLock,
   availableCategories = [],
   onCategoryChange,
   onEdit,
@@ -64,11 +66,13 @@ function SortableItem({
           id={item.id}
           content={item.content}
           isCompleted={item.isCompleted}
+          isLocked={item.isLocked}
           recipeName={item.recipeName}
           category={item.category || undefined}
           availableCategories={availableCategories}
           onToggle={onToggle}
           onDelete={onDelete}
+          onToggleLock={onToggleLock}
           onCategoryChange={onCategoryChange}
           onEdit={onEdit}
         />
@@ -83,6 +87,7 @@ interface CategoryGroupProps {
   showDragHandle: boolean
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
+  onToggleLock?: (id: string, isLocked: boolean) => void
   availableCategories?: string[]
   onCategoryChange?: (id: string, newCategory: string) => void
   onEdit?: (id: string) => void
@@ -94,6 +99,7 @@ export function CategoryGroup({
   showDragHandle,
   onToggle,
   onDelete,
+  onToggleLock,
   availableCategories = [],
   onCategoryChange,
   onEdit,
@@ -145,6 +151,7 @@ export function CategoryGroup({
               showDragHandle={showDragHandle}
               onToggle={onToggle}
               onDelete={onDelete}
+              onToggleLock={onToggleLock}
               availableCategories={availableCategories}
               onCategoryChange={onCategoryChange}
               onEdit={onEdit}

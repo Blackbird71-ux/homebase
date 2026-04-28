@@ -17,6 +17,7 @@ export interface ListItemShape {
   id: string
   content: string
   isCompleted: boolean
+  isLocked: boolean
   category: string | null
   sortOrder: number
   dueDate: Date | null

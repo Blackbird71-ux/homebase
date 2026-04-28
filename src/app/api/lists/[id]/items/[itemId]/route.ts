@@ -9,7 +9,7 @@ export async function PATCH(
   const user = await requireSession()
   const { id, itemId } = await params
   const body = await req.json()
-  const { content, isCompleted, category, sortOrder, dueDate } = body
+  const { content, isCompleted, category, sortOrder, dueDate, isLocked } = body
 
   const list = await prisma.list.findFirst({
     where: { id, familyId: user.familyId },
@@ -31,6 +31,7 @@ export async function PATCH(
     data: {
       ...(content !== undefined && { content }),
       ...(isCompleted !== undefined && { isCompleted }),
+      ...(isLocked !== undefined && { isLocked }),
       ...(category !== undefined && { category }),
       ...(sortOrder !== undefined && { sortOrder }),
       ...(dueDate !== undefined && { dueDate: parsed }),
@@ -55,6 +56,7 @@ export async function DELETE(
     where: { id: itemId, listId: id },
   })
   if (!existing) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+  if (existing.isLocked) return NextResponse.json({ error: 'Item is locked' }, { status: 403 })
 
   await prisma.listItem.delete({ where: { id: itemId } })
   return NextResponse.json({ success: true })

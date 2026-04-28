@@ -9,6 +9,7 @@ function makeItem(overrides: Partial<ListItemShape> = {}): ListItemShape {
     id: 'item1',
     content: 'Milk',
     isCompleted: false,
+    isLocked: false,
     category: null,
     sortOrder: 0,
     dueDate: null,
