@@ -141,6 +141,14 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
     saveCategoryOrder(updated)
   }
 
+  async function handleEditDialogCategoryAdded(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || categories.includes(trimmed)) return
+    const updated = [...categories, trimmed]
+    setCategories(updated)
+    await saveCategoryOrder(updated)
+  }
+
   // For the edit dialog: user categories + 'Other' as "no category" fallback
   const editDialogCategories = categories.length > 0 ? [...categories, 'Other'] : []
 
@@ -327,6 +335,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
         availableCategories={editDialogCategories}
         listId={listId}
         onSaved={handleItemSaved}
+        onCategoryAdded={editDialogCategories.length > 0 ? handleEditDialogCategoryAdded : undefined}
       />
     </div>
   )

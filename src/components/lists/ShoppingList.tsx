@@ -52,6 +52,9 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [editItemId, setEditItemId] = useState<string | null>(null)
   const [editItemContent, setEditItemContent] = useState('')
   const [editItemCategory, setEditItemCategory] = useState<string | null>(null)
+  const [addingCategoryInline, setAddingCategoryInline] = useState(false)
+  const [inlineCatName, setInlineCatName] = useState('')
+  const [isSavingCat, setIsSavingCat] = useState(false)
 
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -249,6 +252,40 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     )
   }
 
+  async function handleAddShoppingCategory(name: string) {
+    const key = `custom_${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}_${Date.now()}`
+    const res = await fetch('/api/ingredient-categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, category: name }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || 'Failed to create category')
+    }
+    const newCat = await res.json()
+    setCategories((prev) => [...prev, name])
+    setAvailableCategories((prev) => [...prev, { id: newCat.id, name }])
+    setCategoryOrder((prev) => [...prev, name])
+  }
+
+  async function handleCreateInlineCategory() {
+    const trimmed = inlineCatName.trim()
+    if (!trimmed || categories.includes(trimmed)) return
+    setIsSavingCat(true)
+    try {
+      await handleAddShoppingCategory(trimmed)
+      setNewCategory(trimmed as ShoppingCategory)
+      setCategoryManuallySet(true)
+      setInlineCatName('')
+      setAddingCategoryInline(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create category')
+    } finally {
+      setIsSavingCat(false)
+    }
+  }
+
   async function clearCompleted() {
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
@@ -293,34 +330,68 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
       </div>
 
       {/* Add item form */}
-      <form onSubmit={addItem} className="flex gap-2">
-        <Input
-          value={newContent}
-          onChange={(e) => setNewContent(e.target.value)}
-          placeholder="Add item..."
-          className="flex-1"
-        />
-        <select
-          value={newCategory}
-          onChange={(e) => {
-            setNewCategory(e.target.value as ShoppingCategory)
-            setCategoryManuallySet(true)
-          }}
-          className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
-          disabled={loadingCategories}
-        >
-          {loadingCategories ? (
-            <option value="Other">Loading categories...</option>
-          ) : (
-            categories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))
-          )}
-        </select>
-        <Button type="submit" size="sm">
-          <PlusIcon className="h-4 w-4" />
-        </Button>
-      </form>
+      <div className="flex flex-col gap-2">
+        <form onSubmit={addItem} className="flex gap-2">
+          <Input
+            value={newContent}
+            onChange={(e) => setNewContent(e.target.value)}
+            placeholder="Add item..."
+            className="flex-1"
+          />
+          <select
+            value={addingCategoryInline ? '__adding__' : newCategory}
+            onChange={(e) => {
+              if (e.target.value === '__new__') {
+                setAddingCategoryInline(true)
+                setInlineCatName('')
+              } else {
+                setNewCategory(e.target.value as ShoppingCategory)
+                setCategoryManuallySet(true)
+              }
+            }}
+            className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+            disabled={loadingCategories || addingCategoryInline}
+          >
+            {loadingCategories ? (
+              <option value="Other">Loading categories...</option>
+            ) : addingCategoryInline ? (
+              <option value="__adding__">New category...</option>
+            ) : (
+              <>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                <option value="__new__">+ New category...</option>
+              </>
+            )}
+          </select>
+          <Button type="submit" size="sm">
+            <PlusIcon className="h-4 w-4" />
+          </Button>
+        </form>
+        {addingCategoryInline && (
+          <div className="flex gap-2">
+            <Input
+              value={inlineCatName}
+              onChange={(e) => setInlineCatName(e.target.value)}
+              placeholder="Category name"
+              className="flex-1 h-8 text-sm"
+              autoFocus
+              disabled={isSavingCat}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); handleCreateInlineCategory() }
+                if (e.key === 'Escape') { setAddingCategoryInline(false); setInlineCatName('') }
+              }}
+            />
+            <Button type="button" size="sm" onClick={handleCreateInlineCategory} disabled={isSavingCat || !inlineCatName.trim()}>
+              {isSavingCat ? 'Adding...' : 'Add'}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingCategoryInline(false); setInlineCatName('') }} disabled={isSavingCat}>
+              Cancel
+            </Button>
+          </div>
+        )}
+      </div>
 
       {completedItems.length > 0 && (
         <Button
@@ -423,6 +494,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         availableCategories={categories}
         listId={listId}
         onSaved={handleItemSaved}
+        onCategoryAdded={handleAddShoppingCategory}
       />
     </div>
   )

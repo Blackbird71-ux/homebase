@@ -29,6 +29,7 @@ interface EditItemDialogProps {
   availableCategories: string[]
   listId: string
   onSaved: (id: string, content: string, category: string | null) => void
+  onCategoryAdded?: (name: string) => Promise<void>
 }
 
 export function EditItemDialog({
@@ -40,18 +41,42 @@ export function EditItemDialog({
   availableCategories,
   listId,
   onSaved,
+  onCategoryAdded,
 }: EditItemDialogProps) {
   const [content, setContent] = useState(initialContent)
   const [category, setCategory] = useState(initialCategory || 'Other')
   const [isSaving, setIsSaving] = useState(false)
+  const [localCategories, setLocalCategories] = useState(availableCategories)
+  const [showNewCatInput, setShowNewCatInput] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [isAddingCat, setIsAddingCat] = useState(false)
 
-  // Reset form when dialog opens with new item
   useEffect(() => {
     if (open) {
       setContent(initialContent)
       setCategory(initialCategory || 'Other')
+      setLocalCategories(availableCategories)
+      setShowNewCatInput(false)
+      setNewCatName('')
     }
-  }, [open, initialContent, initialCategory])
+  }, [open, initialContent, initialCategory, availableCategories])
+
+  async function handleAddCategory() {
+    const trimmed = newCatName.trim()
+    if (!trimmed || localCategories.includes(trimmed)) return
+    setIsAddingCat(true)
+    try {
+      if (onCategoryAdded) await onCategoryAdded(trimmed)
+      setLocalCategories((prev) => [...prev, trimmed])
+      setCategory(trimmed)
+      setShowNewCatInput(false)
+      setNewCatName('')
+    } catch {
+      toast.error('Failed to create category')
+    } finally {
+      setIsAddingCat(false)
+    }
+  }
 
   async function handleSave() {
     if (!content.trim()) {
@@ -112,25 +137,58 @@ export function EditItemDialog({
               disabled={isSaving}
             />
           </div>
-          {availableCategories.length > 0 && (
+          {localCategories.length > 0 && (
             <div className="flex flex-col gap-2">
               <Label htmlFor="edit-item-category">Category</Label>
               <Select
                 value={category}
-                onValueChange={(value) => value && setCategory(value)}
+                onValueChange={(value) => {
+                  if (value === '__new_category__') {
+                    setShowNewCatInput(true)
+                    return
+                  }
+                  if (value) setCategory(value)
+                }}
                 disabled={isSaving}
               >
                 <SelectTrigger className="w-full" id="edit-item-category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableCategories.map((cat) => (
+                  {localCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
                     </SelectItem>
                   ))}
+                  {onCategoryAdded && (
+                    <SelectItem value="__new_category__" className="text-muted-foreground italic">
+                      + New category...
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
+              {showNewCatInput && (
+                <div className="flex gap-2">
+                  <Input
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    placeholder="Category name"
+                    className="flex-1"
+                    autoFocus
+                    disabled={isAddingCat}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleAddCategory() }
+                      if (e.key === 'Escape') { setShowNewCatInput(false); setNewCatName('') }
+                    }}
+                  />
+                  <Button type="button" size="sm" onClick={handleAddCategory} disabled={isAddingCat || !newCatName.trim()}>
+                    Add
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => { setShowNewCatInput(false); setNewCatName('') }} disabled={isAddingCat}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
