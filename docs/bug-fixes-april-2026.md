@@ -290,6 +290,26 @@
 
 ---
 
+### Bug 21: 'legacy-tags' filter pill still appearing after migration; tag input invisible when recipe already has tags
+
+**Root Cause:** Two separate issues remained after Bug 20's fix:
+
+1. The `GET /api/tags` route had no filter excluding the `'legacy-tags'` Tag record from results. The phantom Tag record (created by the migration bug) was still in the database and was returned alongside real tags. `TagCloud` displayed it as a filter pill with a count of 39 because the string-count loop in the same route was counting every recipe where `recipe.tags = 'legacy-tags'` (the sentinel) as a vote for the tag.
+
+2. `TagSelector` had two compounding UX bugs that made adding tags feel impossible:
+   - The `placeholder` prop was only shown when `value.length === 0`. Once a recipe already had at least one tag, the input field appeared to be blank empty space — no hint that you could type there to add more tags.
+   - The suggestion dropdown used `position: absolute` inside a Dialog that has `overflow-y-auto`. The dropdown was clipped by the dialog's scroll container and didn't appear, so clicking in the tag area produced no visible feedback.
+
+**Fix:**
+- `GET /api/tags`: Added `name: { not: 'legacy-tags' }` to the Prisma where clause so the phantom record is never returned. Added a `continue` guard in the string-count loop so the sentinel value doesn't inflate counts.
+- `TagSelector`: Changed placeholder to always show (`'Add more tags...'` when tags already exist). Replaced the `position: absolute` dropdown with a `createPortal`-rendered `position: fixed` overlay that escapes the dialog's overflow context entirely. Added a `dropdownRef` to the portaled div so the click-outside handler correctly ignores clicks inside the dropdown (preventing it from closing before `onClick` fires). Added `onMouseDown={e.preventDefault()}` on suggestion buttons for the same reason.
+
+**Files modified:**
+- `src/app/api/tags/route.ts` — exclude 'legacy-tags' from tag query and string-count loop
+- `src/components/tags/TagSelector.tsx` — always-visible placeholder, portal-rendered dropdown
+
+---
+
 ## Files Modified (all sessions)
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
@@ -325,6 +345,8 @@
 32. `src/app/(app)/recipes/page.tsx` - Filter 'legacy-tags' from relational tags in list
 33. `src/app/api/tags/legacy-count/route.ts` - Exclude sentinel from legacy count
 34. `src/components/tags/TagSelector.tsx` - Show dropdown when user has typed input
+35. `src/app/api/tags/route.ts` - Exclude 'legacy-tags' from GET results and string-count loop
+36. `src/components/tags/TagSelector.tsx` - Always-visible placeholder; portal-rendered dropdown to escape dialog overflow
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -351,3 +373,5 @@
 22. **Ingredient mappings cross-user:** Log in as a second family member; open meal plan and export groceries — verify custom ingredient mappings (e.g. bacon → Deli) apply correctly for all family members
 23. **Tag migration cleanup:** Go to Settings → Tags, click Migrate — verify no recipes show a 'legacy-tags' chip afterwards; verify the legacy count shows 0
 24. **Add new tag to recipe:** Edit a recipe, type a brand-new tag name that doesn't exist yet — verify the "Create" button appears in the dropdown; click it and verify the tag is saved with the recipe
+25. **Tag filter pill gone:** On the recipes page, verify no 'legacy-tags' pill appears in the tag filter cloud
+26. **Add tag to recipe with existing tags:** Edit a recipe that already has tags — verify the input area shows 'Add more tags...' placeholder, the dropdown appears above the dialog, and clicking a suggestion or pressing Enter successfully adds the tag

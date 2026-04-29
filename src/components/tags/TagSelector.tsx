@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -23,11 +24,21 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
   const [suggestions, setSuggestions] = useState<Tag[]>([])
   const [loading, setLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [mounted, setMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const insideContainer = containerRef.current?.contains(target)
+      const insideDropdown = dropdownRef.current?.contains(target)
+      if (!insideContainer && !insideDropdown) {
         setShowSuggestions(false)
       }
     }
@@ -36,7 +47,6 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
   }, [])
 
   useEffect(() => {
-    // Fetch all tags when component mounts or when input is empty
     if (!inputValue.trim()) {
       fetchAllTags()
     } else {
@@ -44,13 +54,23 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
     }
   }, [inputValue])
 
+  function updateDropdownPosition() {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+  }
+
+  useEffect(() => {
+    if (showSuggestions) updateDropdownPosition()
+  }, [showSuggestions, suggestions, loading, inputValue])
+
   async function fetchAllTags() {
     setLoading(true)
     try {
       const res = await fetch('/api/tags')
       if (!res.ok) throw new Error('Failed to fetch tags')
       const data = await res.json()
-      // Filter out tags that are already selected
       setSuggestions(data.filter((tag: Tag) => !value.includes(tag.name)))
     } catch (error) {
       console.error('Failed to fetch tags:', error)
@@ -65,13 +85,11 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
       fetchAllTags()
       return
     }
-
     setLoading(true)
     try {
       const res = await fetch(`/api/tags?search=${encodeURIComponent(query)}`)
       if (!res.ok) throw new Error('Failed to fetch tags')
       const data = await res.json()
-      // Filter out tags that are already selected
       setSuggestions(data.filter((tag: Tag) => !value.includes(tag.name)))
     } catch (error) {
       console.error('Failed to fetch tag suggestions:', error)
@@ -84,7 +102,6 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
   function handleAddTag(tagName: string) {
     const trimmed = tagName.trim()
     if (!trimmed || value.includes(trimmed)) return
-    
     onChange([...value, trimmed])
     setInputValue('')
     setShowSuggestions(false)
@@ -99,14 +116,18 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
       e.preventDefault()
       handleAddTag(inputValue)
     } else if (e.key === 'Backspace' && !inputValue && value.length > 0) {
-      // Remove last tag on backspace when input is empty
       handleRemoveTag(value[value.length - 1])
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false)
     }
   }
 
   function handleInputFocus() {
     setShowSuggestions(true)
+    updateDropdownPosition()
   }
+
+  const showDropdown = showSuggestions && (suggestions.length > 0 || loading || !!inputValue.trim())
 
   return (
     <div className="space-y-2" ref={containerRef}>
@@ -130,51 +151,65 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
             </Button>
           </div>
         ))}
-        <div className="relative flex-1 min-w-[120px]">
+        <div className="flex-1 min-w-[120px]">
           <Input
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleInputKeyDown}
             onFocus={handleInputFocus}
-            placeholder={value.length === 0 ? placeholder : ''}
+            placeholder={value.length === 0 ? placeholder : 'Add more tags...'}
             disabled={disabled}
             className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-auto"
           />
-          {showSuggestions && (suggestions.length > 0 || loading || !!inputValue.trim()) && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
-              {loading ? (
-                <div className="flex items-center justify-center p-4">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </div>
-              ) : (
-                suggestions.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
-                    onClick={() => handleAddTag(tag.name)}
-                  >
-                    {tag.name}
-                  </button>
-                ))
-              )}
-              {inputValue.trim() && !suggestions.some(t => t.name.toLowerCase() === inputValue.trim().toLowerCase()) && (
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center gap-2"
-                  onClick={() => handleAddTag(inputValue)}
-                >
-                  <PlusIcon className="h-3.5 w-3.5" />
-                  Create "{inputValue.trim()}"
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Type and press Enter to add tags. Click existing tags to remove them.
+        Type and press Enter to add a tag, or pick from the list.
       </p>
+
+      {mounted && showDropdown && dropdownRect && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'fixed',
+            top: dropdownRect.top,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            zIndex: 9999,
+          }}
+          className="bg-popover border rounded-md shadow-lg max-h-60 overflow-y-auto"
+        >
+          {loading ? (
+            <div className="flex items-center justify-center p-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : (
+            suggestions.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleAddTag(tag.name)}
+              >
+                {tag.name}
+              </button>
+            ))
+          )}
+          {inputValue.trim() && !suggestions.some(t => t.name.toLowerCase() === inputValue.trim().toLowerCase()) && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center gap-2"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleAddTag(inputValue)}
+            >
+              <PlusIcon className="h-3.5 w-3.5" />
+              Create "{inputValue.trim()}"
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

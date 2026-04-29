@@ -11,7 +11,10 @@ export async function GET(req: Request) {
   const tags = await (prisma as any).tag.findMany({
     where: {
       familyId: user.familyId,
-      ...(search && { name: { contains: search, mode: 'insensitive' } }),
+      name: {
+        not: 'legacy-tags',
+        ...(search && { contains: search, mode: 'insensitive' }),
+      },
     },
     orderBy: { createdAt: 'desc' },
     include: includeCounts
@@ -46,6 +49,7 @@ export async function GET(req: Request) {
       const recipeTags = recipe.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
       
       for (const tagName of recipeTags) {
+        if (tagName === 'legacy-tags') continue
         tagNameToCountFromString[tagName] = (tagNameToCountFromString[tagName] || 0) + 1
       }
     }
