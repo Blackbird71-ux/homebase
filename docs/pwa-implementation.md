@@ -21,8 +21,8 @@ Service worker that handles:
 - **Basic offline caching**: Network-first strategy for navigation, cache-first for static assets
 - **Cache management**: Cleans up old caches on activation
 
-### `public/icon-192x192.png` and `public/icon-512x512.png`
-PWA icons copied from the project root (`icon-192.png` and `icon-512.png`) for use in the manifest and as notification icons.
+### `public/icon-192.png`, `public/icon-512.png`, `public/icon-192x192.png`, and `public/icon-512x512.png`
+PWA icons for use in the manifest and as notification icons. The `icon-192.png` and `icon-512.png` files serve as the primary icons (with `purpose: 'any'`), while the `-192x192` and `-512x512` variants are used as maskable icons. The old root-level duplicates (`/icon-192.png`, `/icon-512.png`) have been removed in favor of these `public/`-based versions.
 
 ## Files Modified
 
