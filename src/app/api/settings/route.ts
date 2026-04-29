@@ -15,6 +15,8 @@ export async function GET() {
       role: true,
       theme: true,
       fontSize: true,
+      lineHeight: true,
+      fontWeight: true,
       weekStartsOn: true,
       doneItemColor: true,
       uiPreferences: true,
@@ -44,13 +46,19 @@ export async function PATCH(req: Request) {
   const session = await requireSession()
   const body = await req.json()
 
-  const { theme, fontSize, weekStartsOn, doneItemColor, name, currentPassword, newPassword, uiPreferences } = body
+  const { theme, fontSize, lineHeight, fontWeight, weekStartsOn, doneItemColor, name, currentPassword, newPassword, uiPreferences } = body
 
-  if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark', 'sunset', 'ocean', 'forest'].includes(theme)) {
+  if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark', 'sunset', 'ocean', 'forest', 'high-contrast', 'high-contrast-dark'].includes(theme)) {
     return NextResponse.json({ error: 'Invalid theme value' }, { status: 400 })
   }
-  if (fontSize !== undefined && !['sm', 'base', 'lg'].includes(fontSize)) {
+  if (fontSize !== undefined && !['sm', 'base', 'lg', 'xl'].includes(fontSize)) {
     return NextResponse.json({ error: 'Invalid fontSize value' }, { status: 400 })
+  }
+  if (lineHeight !== undefined && !['normal', 'relaxed', 'spacious'].includes(lineHeight)) {
+    return NextResponse.json({ error: 'Invalid lineHeight value' }, { status: 400 })
+  }
+  if (fontWeight !== undefined && !['normal', 'medium'].includes(fontWeight)) {
+    return NextResponse.json({ error: 'Invalid fontWeight value' }, { status: 400 })
   }
   if (weekStartsOn !== undefined && ![0, 1].includes(weekStartsOn)) {
     return NextResponse.json({ error: 'Invalid weekStartsOn value' }, { status: 400 })
@@ -100,6 +108,8 @@ export async function PATCH(req: Request) {
   const updateData: Record<string, unknown> = {}
   if (theme !== undefined) updateData.theme = theme
   if (fontSize !== undefined) updateData.fontSize = fontSize
+  if (lineHeight !== undefined) updateData.lineHeight = lineHeight
+  if (fontWeight !== undefined) updateData.fontWeight = fontWeight
   if (weekStartsOn !== undefined) updateData.weekStartsOn = weekStartsOn
   if (doneItemColor !== undefined) updateData.doneItemColor = doneItemColor
   if (name !== undefined && typeof name === 'string' && name.trim().length > 0) {
@@ -162,6 +172,8 @@ export async function PATCH(req: Request) {
       role: true,
       theme: true,
       fontSize: true,
+      lineHeight: true,
+      fontWeight: true,
       weekStartsOn: true,
       doneItemColor: true,
       uiPreferences: true,

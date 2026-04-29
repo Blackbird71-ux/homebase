@@ -2,15 +2,12 @@
 'use client'
 
 import { ThemeProvider as NextThemesProvider, useTheme } from 'next-themes'
-import { AdvancedThemeProvider } from './AdvancedThemeProvider'
-import { CustomThemeColors } from '@/types'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 // Sits inside NextThemesProvider so it can call useTheme() and sync the
 // per-user DB theme into next-themes (which otherwise only reads localStorage).
 function ThemeSyncer({ children }: { children: React.ReactNode }) {
   const { setTheme } = useTheme()
-  const [customTheme, setCustomTheme] = useState<CustomThemeColors | null>(null)
 
   async function fetchSettings() {
     try {
@@ -18,18 +15,11 @@ function ThemeSyncer({ children }: { children: React.ReactNode }) {
       if (!response.ok) return
       const data = await response.json()
 
-      // Sync base theme from DB → overrides whatever was in localStorage
       if (data.theme) setTheme(data.theme)
 
-      // Sync custom CSS-variable overrides
-      if (data.uiPreferences) {
-        const uiPrefs = typeof data.uiPreferences === 'string'
-          ? JSON.parse(data.uiPreferences)
-          : data.uiPreferences
-        setCustomTheme(uiPrefs?.customTheme ?? null)
-      } else {
-        setCustomTheme(null)
-      }
+      // Apply accessibility data attributes immediately without page reload
+      if (data.lineHeight) document.documentElement.dataset.lineHeight = data.lineHeight
+      if (data.fontWeight) document.documentElement.dataset.fontWeight = data.fontWeight
     } catch (error) {
       console.error('Failed to fetch settings:', error)
     }
@@ -38,17 +28,12 @@ function ThemeSyncer({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchSettings()
 
-    // Re-sync whenever AdvancedThemingTab fires this event after a save
-    window.addEventListener('advanced-theme-updated', fetchSettings)
-    return () => window.removeEventListener('advanced-theme-updated', fetchSettings)
+    window.addEventListener('appearance-updated', fetchSettings)
+    return () => window.removeEventListener('appearance-updated', fetchSettings)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return (
-    <AdvancedThemeProvider customTheme={customTheme}>
-      {children}
-    </AdvancedThemeProvider>
-  )
+  return <>{children}</>
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -58,7 +43,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       defaultTheme="dark"
       enableSystem
       disableTransitionOnChange
-      themes={['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark', 'sunset', 'ocean', 'forest']}
+      themes={['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark', 'sunset', 'ocean', 'forest', 'high-contrast', 'high-contrast-dark']}
     >
       <ThemeSyncer>
         {children}

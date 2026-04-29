@@ -4,7 +4,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AccountTab } from '@/components/settings/AccountTab'
 import { SUPPORTED_TIMEZONES } from '@/app/api/settings/family/route'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
-import { AdvancedThemingTab } from '@/components/settings/AdvancedThemingTab'
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab'
 import { DataTab } from '@/components/settings/DataTab'
 import { ImportTab } from '@/components/settings/ImportTab'
@@ -28,6 +27,8 @@ export default async function SettingsPage() {
         role: true,
         theme: true,
         fontSize: true,
+        lineHeight: true,
+        fontWeight: true,
         weekStartsOn: true,
         doneItemColor: true,
         uiPreferences: true,
@@ -72,7 +73,6 @@ export default async function SettingsPage() {
             <TabsList className="w-max min-w-full">
               <TabsTrigger value="account">Account</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="theming">Advanced Theming</TabsTrigger>
               <TabsTrigger value="integrations">Integrations</TabsTrigger>
               <TabsTrigger value="data">Data</TabsTrigger>
               <TabsTrigger value="import">Import</TabsTrigger>
@@ -100,26 +100,12 @@ export default async function SettingsPage() {
 
           <TabsContent value="appearance">
             <AppearanceTab
-                initialTheme={user.theme}
-                initialFontSize={user.fontSize}
-                initialWeekStartsOn={user.weekStartsOn}
-                initialDoneItemColor={user.doneItemColor || 'RED'}
-              />
-          </TabsContent>
-
-          <TabsContent value="theming">
-            <AdvancedThemingTab
-              initialCustomTheme={(() => {
-                if (!user.uiPreferences) return null
-                try {
-                  const parsed = typeof user.uiPreferences === 'string'
-                    ? JSON.parse(user.uiPreferences)
-                    : user.uiPreferences
-                  return parsed.customTheme || null
-                } catch {
-                  return null
-                }
-              })()}
+              initialTheme={user.theme}
+              initialFontSize={user.fontSize}
+              initialLineHeight={user.lineHeight}
+              initialFontWeight={user.fontWeight}
+              initialWeekStartsOn={user.weekStartsOn}
+              initialDoneItemColor={user.doneItemColor || 'RED'}
             />
           </TabsContent>
 

@@ -26,6 +26,7 @@ const fontSizeClassMap: Record<string, string> = {
   sm: 'text-sm',
   base: 'text-base',
   lg: 'text-lg',
+  xl: 'text-xl',
 }
 
 export default async function RootLayout({
@@ -34,6 +35,8 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   let fontSize = 'base'
+  let lineHeight = 'normal'
+  let fontWeight = 'normal'
   let umamiScriptUrl: string | null = null
   let umamiSiteId: string | null = null
 
@@ -44,6 +47,8 @@ export default async function RootLayout({
         where: { id: session.user.id as string },
         select: {
           fontSize: true,
+          lineHeight: true,
+          fontWeight: true,
           family: {
             select: {
               umamiScriptUrl: true,
@@ -53,6 +58,8 @@ export default async function RootLayout({
         },
       })
       if (user?.fontSize) fontSize = user.fontSize
+      if (user?.lineHeight) lineHeight = user.lineHeight
+      if (user?.fontWeight) fontWeight = user.fontWeight
       if (user?.family?.umamiScriptUrl) umamiScriptUrl = user.family.umamiScriptUrl
       if (user?.family?.umamiSiteId) umamiSiteId = user.family.umamiSiteId
     }
@@ -64,7 +71,13 @@ export default async function RootLayout({
   const showUmami = Boolean(umamiScriptUrl && umamiSiteId)
 
   return (
-    <html lang="en" className={`h-full ${fontSizeClass}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`h-full ${fontSizeClass}`}
+      data-line-height={lineHeight}
+      data-font-weight={fontWeight}
+      suppressHydrationWarning
+    >
       <body className={`${inter.className} h-full bg-background text-foreground overflow-hidden`}>
         <ThemeProvider>
           {children}

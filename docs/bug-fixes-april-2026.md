@@ -310,6 +310,19 @@
 
 ---
 
+### Enhancement 9: Tag selector replaced with modal picker
+
+**Change:** Clicking "Add tags..." (no tags) or "+ Add more tags..." (existing tags) in the recipe editor now opens a modal dialog instead of an inline autocomplete dropdown.
+
+The modal shows all existing tags as toggleable rows (highlighted when selected), a search input to filter them, a "Create" option when the typed text doesn't match any existing tag, and a live chip preview of the pending selection. Pressing Done commits the changes; pressing Escape or the × closes without applying.
+
+The previous inline text input + portal-rendered dropdown has been removed entirely. The tag chip area now shows a `+` button after any existing chips that triggers the modal in both the zero-tags and has-tags cases.
+
+**Files modified:**
+- `src/components/tags/TagSelector.tsx` — replaced inline input/dropdown with Dialog-based modal picker
+
+---
+
 ### Enhancement 8: Tighter mobile vertical padding on grocery list
 
 **Change:** Reduced vertical padding throughout the shopping list UI on mobile so more items are visible above the fold when shopping. Desktop and tablet (≥ sm breakpoint) are unchanged.
@@ -324,6 +337,44 @@
 - `src/components/lists/ListItemRow.tsx` — tighter item row vertical padding
 - `src/app/(app)/lists/ListsClient.tsx` — tighter container padding, chip-bar, and title margin on mobile
 - `src/components/lists/ShoppingList.tsx` — tighter gap between sections on mobile
+
+---
+
+## April 30 2026 — Accessibility & Theme Overhaul
+
+### Bug 22: Advanced theme editor settings never applied on screen
+
+**Root Cause:** The old `AdvancedThemeProvider` tried to override Tailwind v4 design tokens at runtime by injecting a `<style>` tag with `!important` CSS variable declarations. Tailwind v4's `@theme inline` resolves design tokens differently to v3 — `documentElement.style.setProperty` cannot override them, and the `<style>` tag injection was unreliable depending on cascade order. Additionally, `ColorPicker` showed a default blue swatch (`#3b82f6`) for unset fields but stored `''` internally — a visual disconnect that made users think they'd set a colour when they hadn't.
+
+**Fix:** Removed the CSS variable injection approach entirely. All theming now uses the same CSS-class-switching mechanism that dark/midnight/modern already use — proven reliable on Tailwind v4. Two new high-contrast themes are defined as full CSS class blocks in `globals.css`. Line spacing and font weight use CSS custom properties (`--line-height`, `--body-font-weight`) set via `data-*` attributes on `<html>`, applied at server render time in `layout.tsx` (no flash) and updated immediately in the browser after saving.
+
+**Files modified:**
+- `src/app/globals.css` — added `.high-contrast` and `.high-contrast-dark` theme classes; `[data-line-height]` and `[data-font-weight]` rules; CSS variables consumed by `body` in `@layer base`
+- `src/app/layout.tsx` — reads `lineHeight` and `fontWeight` from DB, applies as `data-line-height` / `data-font-weight` attributes on `<html>`; added `xl` to `fontSizeClassMap`
+- `src/components/providers/ThemeProvider.tsx` — `ThemeSyncer` now also syncs `lineHeight` / `fontWeight` data attributes after fetching settings; added `high-contrast` and `high-contrast-dark` to the `themes` list; removed `AdvancedThemeProvider` dependency
+- `src/components/settings/AppearanceTab.tsx` — new Line Spacing card (Normal/Relaxed/Spacious), new Text Weight card (Normal/Medium), Extra Large font size option, High Contrast and High Contrast Dark theme swatches; saves all fields in one request; applies data attributes immediately after save without page reload
+- `src/app/api/settings/route.ts` — accepts `lineHeight` and `fontWeight`; added `high-contrast`/`high-contrast-dark` to valid theme list; added `xl` to valid font sizes
+- `prisma/schema.prisma` — added `lineHeight String @default("normal")` and `fontWeight String @default("normal")` to `User`
+- `prisma/migrations/20260430000000_add_accessibility_settings/migration.sql` — new migration
+
+### Enhancement 10: Simplified Appearance settings — "Advanced Theming" tab removed
+
+**Change:** The separate "Advanced Theming" settings tab with 35 individual colour pickers has been removed. Everything is now consolidated in a single **Appearance** tab. The new controls are plain-English, touch-friendly cards that work reliably:
+
+| Control | Options |
+|---|---|
+| Theme | All original themes + High Contrast Light + High Contrast Dark |
+| Text Size | Small / Normal / Large / **Extra Large** (new) |
+| Line Spacing | Normal / Relaxed / Spacious (new) |
+| Text Weight | Normal / Medium (new) |
+| Week Starts On | Sunday / Monday |
+| Done Item Colour | 8 colour swatches |
+| Dashboard Shopping List | Auto / specific list |
+
+The High Contrast themes target WCAG AA contrast ratios — pure black/white backgrounds, dark/bright primary colours, and high-opacity borders. They are the recommended choice for users in bright environments or with reduced vision.
+
+**Files modified:**
+- `src/app/(app)/settings/page.tsx` — removed `AdvancedThemingTab` import and tab; added `lineHeight`/`fontWeight` to the Prisma select; passes new props to `AppearanceTab`
 
 ---
 
@@ -364,6 +415,7 @@
 34. `src/components/tags/TagSelector.tsx` - Show dropdown when user has typed input
 35. `src/app/api/tags/route.ts` - Exclude 'legacy-tags' from GET results and string-count loop
 36. `src/components/tags/TagSelector.tsx` - Always-visible placeholder; portal-rendered dropdown to escape dialog overflow
+37. `src/components/tags/TagSelector.tsx` - Replaced inline input/dropdown with modal tag picker (both empty and has-tags states)
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -392,3 +444,7 @@
 24. **Add new tag to recipe:** Edit a recipe, type a brand-new tag name that doesn't exist yet — verify the "Create" button appears in the dropdown; click it and verify the tag is saved with the recipe
 25. **Tag filter pill gone:** On the recipes page, verify no 'legacy-tags' pill appears in the tag filter cloud
 26. **Add tag to recipe with existing tags:** Edit a recipe that already has tags — verify the input area shows 'Add more tags...' placeholder, the dropdown appears above the dialog, and clicking a suggestion or pressing Enter successfully adds the tag
+27. **Tag modal — no tags:** Edit a recipe with no tags; click "Add tags..." — verify the modal opens, all tags are listed, clicking one highlights it, clicking Done saves it to the recipe
+28. **Tag modal — add more:** Edit a recipe with existing tags; click "+ Add more tags..." — verify the modal opens with current tags pre-selected, additional tags can be toggled, Done applies the full updated set
+29. **Tag modal — create new:** In the tag modal, type a name that doesn't exist; verify a "Create" row appears; click it and verify the new tag is added to pending and saved on Done
+30. **Tag modal — cancel:** Open the tag modal, select some tags, then press Escape or click ×; verify no changes are applied to the recipe

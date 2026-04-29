@@ -45,6 +45,8 @@ model User {
   fontSize            String                @default("base")
   weekStartsOn        Int                   @default(0)
   doneItemColor       String                @default("RED")
+  lineHeight          String                @default("normal")  // normal | relaxed | spacious
+  fontWeight          String                @default("normal")  // normal | medium
   uiPreferences       String?
   googleConnected     Boolean               @default(false)
   googleEmail         String?
