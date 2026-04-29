@@ -85,7 +85,16 @@ echo "✓ Cron daemon started (daily backup at 3:00 AM)"
 echo "Dropping privileges to nextjs user..."
 if [ -f /etc/cloudflared/config.yml ]; then
   echo "Starting Cloudflare tunnel..."
-  su-exec nextjs:nodejs cloudflared tunnel --no-autoupdate --config /etc/cloudflared/config.yml run &
+  # Bypass Docker's internal DNS (127.0.0.11) which cannot handle SRV record
+  # lookups and gets stuck after network drops — use 1.1.1.1 directly instead
+  printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
+  (
+    while true; do
+      su-exec nextjs:nodejs cloudflared tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+      echo "Cloudflare tunnel exited, restarting in 5 seconds..."
+      sleep 5
+    done
+  ) &
 fi
 
 echo "Starting Homebase..."
