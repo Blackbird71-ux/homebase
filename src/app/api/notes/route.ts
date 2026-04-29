@@ -75,9 +75,9 @@ export async function POST(req: Request) {
   const body = await req.json()
   const { title, content, category, tags } = body
 
-  if (!title || !content) {
+  if (!title) {
     return NextResponse.json(
-      { error: 'title and content are required' },
+      { error: 'title is required' },
       { status: 400 }
     )
   }
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
   const note = await prisma.note.create({
     data: {
       title,
-      content,
+      content: content || '',
       category: category || null,
       tags: tags ? JSON.stringify(tags) : null,
       createdBy: user.id,
