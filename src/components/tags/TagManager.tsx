@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2 } from 'lucide-react'
+import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowRightLeftIcon } from 'lucide-react'
 
 interface Tag {
   id: string
@@ -27,9 +27,12 @@ export function TagManager() {
   const [newTagName, setNewTagName] = useState('')
   const [editTagName, setEditTagName] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [legacyCount, setLegacyCount] = useState(0)
+  const [migrating, setMigrating] = useState(false)
 
   useEffect(() => {
     fetchTags()
+    fetchLegacyCount()
   }, [])
 
   async function fetchTags() {
@@ -44,6 +47,33 @@ export function TagManager() {
       console.error(error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchLegacyCount() {
+    try {
+      const res = await fetch('/api/tags/legacy-count')
+      if (!res.ok) return
+      const data = await res.json()
+      setLegacyCount(data.count)
+    } catch {
+      // non-critical
+    }
+  }
+
+  async function handleMigrateLegacy() {
+    setMigrating(true)
+    try {
+      const res = await fetch('/api/tags/migrate', { method: 'POST' })
+      if (!res.ok) throw new Error('Migration failed')
+      const data = await res.json()
+      toast.success(`Migrated ${data.migratedTags} tag links across ${data.updatedRecipes} recipes`)
+      setLegacyCount(0)
+      await fetchTags()
+    } catch (error: any) {
+      toast.error(error.message || 'Migration failed')
+    } finally {
+      setMigrating(false)
     }
   }
 
@@ -110,7 +140,7 @@ export function TagManager() {
 
     setSubmitting(true)
     try {
-      const res = await fetch(`/api/tags/${selectedTag.id}`, {
+      const res = await fetch(`/api/tags/${selectedTag.id}?action=delete`, {
         method: 'DELETE',
       })
       if (!res.ok) {
@@ -185,11 +215,36 @@ export function TagManager() {
         </Dialog>
       </div>
 
+      {/* Legacy tag migration banner */}
+      {legacyCount > 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <ArrowRightLeftIcon className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              {legacyCount} legacy tag{legacyCount !== 1 ? 's' : ''} found
+            </p>
+            <p className="text-xs text-amber-600/80 dark:text-amber-500/80 mt-0.5">
+              These tags are stored in an old format and can&apos;t be managed. Migrate them to make them fully editable and deleteable.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-500/40 text-amber-700 hover:bg-amber-500/10 shrink-0"
+            onClick={handleMigrateLegacy}
+            disabled={migrating}
+          >
+            {migrating && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Migrate
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>All Tags</CardTitle>
           <CardDescription>
-            Tags are shared across your family. Deleting a tag will remove it from recipes.
+            Tags are shared across your family. Deleting a tag will remove it from all recipes.
           </CardDescription>
           <div className="relative mt-4">
             <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -245,8 +300,7 @@ export function TagManager() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDeleteClick(tag)}
-                        disabled={tag.recipeCount > 0}
-                        title={tag.recipeCount > 0 ? 'Cannot delete tag that is in use' : 'Delete tag'}
+                        title="Delete tag"
                       >
                         <TrashIcon className="h-3.5 w-3.5" />
                       </Button>
@@ -297,11 +351,11 @@ export function TagManager() {
           <DialogHeader>
             <DialogTitle>Delete Tag</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the tag "{selectedTag?.name}"?
+              Are you sure you want to delete the tag &quot;{selectedTag?.name}&quot;?
               {selectedTag && selectedTag.recipeCount > 0 && (
                 <span className="text-destructive block mt-1">
                   This tag is used in {selectedTag.recipeCount} recipe{selectedTag.recipeCount !== 1 ? 's' : ''}.
-                  Deleting it will remove it from all recipes.
+                  Deleting it will remove it from all those recipes.
                 </span>
               )}
             </DialogDescription>

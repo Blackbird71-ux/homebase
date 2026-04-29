@@ -19,6 +19,7 @@ interface MealSlotCellProps {
   mealType?: string
   onClick: () => void
   onClear: () => void
+  naturalHeight?: boolean // mobile: remove fixed h-16 and line-clamp
 }
 
 export function MealSlotCell({
@@ -29,6 +30,7 @@ export function MealSlotCell({
   mealType = 'dinner',
   onClick,
   onClear,
+  naturalHeight = false,
 }: MealSlotCellProps) {
   // Use recipes if available, otherwise fall back to recipeName for backward compatibility
   const hasRecipes = recipes && recipes.length > 0
@@ -51,13 +53,13 @@ export function MealSlotCell({
                   {recipe.courseType}:
                 </span>
               )}
-              <span className="text-xs font-medium line-clamp-1">
+              <span className={`text-xs font-medium ${naturalHeight ? '' : 'line-clamp-1'}`}>
                 {recipe.recipeName}
               </span>
             </div>
           ))}
         {hasNote && (
-          <div className="text-[10px] text-muted-foreground italic line-clamp-1">
+          <div className={`text-[10px] text-muted-foreground italic ${naturalHeight ? '' : 'line-clamp-1'}`}>
             {note}
           </div>
         )}
@@ -67,9 +69,9 @@ export function MealSlotCell({
     // Backward compatibility: single recipe
     displayContent = (
       <div className="space-y-0.5">
-        <p className="text-xs font-medium line-clamp-2">{recipeName}</p>
+        <p className={`text-xs font-medium ${naturalHeight ? '' : 'line-clamp-2'}`}>{recipeName}</p>
         {hasNote && (
-          <div className="text-[10px] text-muted-foreground italic line-clamp-1">
+          <div className={`text-[10px] text-muted-foreground italic ${naturalHeight ? '' : 'line-clamp-1'}`}>
             {note}
           </div>
         )}
@@ -78,7 +80,7 @@ export function MealSlotCell({
   } else if (hasNote) {
     // Just a note
     displayContent = (
-      <p className="text-xs font-medium line-clamp-3 italic">{note}</p>
+      <p className={`text-xs font-medium italic ${naturalHeight ? '' : 'line-clamp-3'}`}>{note}</p>
     )
   }
   
@@ -99,7 +101,7 @@ export function MealSlotCell({
 
   return (
     <div
-      className={`group relative w-full h-16 rounded-lg border border-border bg-card px-2 py-1 flex items-start justify-between gap-1 cursor-pointer hover:border-primary/50 transition-colors ${mealColor}`}
+      className={`group relative w-full ${naturalHeight ? 'min-h-[2.5rem]' : 'h-16'} rounded-lg border border-border bg-card px-2 py-1.5 flex items-start justify-between gap-1 cursor-pointer hover:border-primary/50 transition-colors ${mealColor}`}
       onClick={onClick}
     >
       <div className="flex-1 overflow-hidden">

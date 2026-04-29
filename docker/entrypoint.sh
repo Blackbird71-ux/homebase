@@ -16,6 +16,10 @@ mkdir -p /data/backups  # Create backups directory for automated DB backups
 chown -R nextjs:nodejs /data 2>/dev/null || true
 chmod -R 755 /data 2>/dev/null || true
 
+# Symlink /app/data -> /data so process.cwd() + '/data/...' resolves correctly
+# (process.cwd() is /app in the standalone build, but the volume is mounted at /data)
+ln -sf /data /app/data 2>/dev/null || true
+
 # Fix permissions for Prisma client directory
 echo "Fixing Prisma client permissions..."
 if [ -d /app/node_modules/.prisma ]; then

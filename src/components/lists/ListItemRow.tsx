@@ -114,13 +114,16 @@ export function ListItemRow({
       />
       <button
         onClick={() => !isCompleted && !isLocked && onEdit?.(id)}
-        className={`flex-1 text-sm text-left ${isCompleted ? 'line-through' : ''} ${!isCompleted && !isLocked && onEdit ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1' : ''}`}
+        className={`flex-1 min-w-0 text-left ${!isCompleted && !isLocked && onEdit ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1' : ''}`}
         style={isCompleted ? { color: doneColor } : undefined}
         disabled={isCompleted || isLocked}
         aria-label={`Edit "${content}"`}
         type="button"
       >
-        {content}
+        <span className={`text-sm block ${isCompleted ? 'line-through' : ''}`}>{content}</span>
+        {!isCompleted && recipeName && (
+          <span className="text-xs text-primary block mt-0.5">{recipeName}</span>
+        )}
       </button>
 
       {!isCompleted && isEditing && onCategoryChange && (
@@ -162,11 +165,6 @@ export function ListItemRow({
         </div>
       )}
 
-      {!isCompleted && !isEditing && recipeName && (
-        <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
-          {recipeName}
-        </span>
-      )}
       {dueDateObj && !isEditing && (
         <span
           className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${

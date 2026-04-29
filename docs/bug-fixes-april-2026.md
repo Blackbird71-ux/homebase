@@ -97,7 +97,85 @@
 **Files modified:**
 - `src/components/lists/ListItemRow.tsx` - Resized checkbox from `h-4 w-4` to `h-5 w-5`, removed conflicting border classes
 
-## Files Modified
+---
+
+## April 29 2026 — Mobile UX Pass + Tag Migration
+
+### Bug 13: Chores crash on save — "Cannot read properties of undefined (reading '0')"
+**Root Cause:** `POST /api/chores` and `PATCH /api/chores/[id]` returned the chore record without including `completions` or `_count`. `ChoresClient.tsx` accessed `chore.completions[0]` unconditionally, crashing when the property was `undefined` on freshly created/edited chores.
+
+**Fix:** Added `completions` (latest 1, with `completedBy`) and `_count { completions }` to both the POST create and PATCH update includes — matching the existing GET response shape. Added `?.` optional chaining in `ChoresClient` as a safety fallback.
+
+**Files modified:**
+- `src/app/api/chores/route.ts` — POST include now returns completions + _count
+- `src/app/api/chores/[id]/route.ts` — PATCH include now returns completions + _count
+- `src/app/(app)/chores/ChoresClient.tsx` — defensive `?.` on completions access
+
+---
+
+### Bug 14: Shopping list grocery items wrap on mobile when a recipe badge is present
+**Root Cause:** The recipe badge (a `shrink-0` pill) was rendered inline in the same flex row as the ingredient text. On narrow screens, the text would wrap to fill available width, but the badge still occupied the trailing space — resulting in a two-line item that collapsed to one line when checked (because the badge was hidden on completed items).
+
+**Fix:** Moved the recipe name out of the flex row and into the content button as a secondary line (`text-xs text-primary block mt-0.5`), below the ingredient name. Removed the original inline pill span.
+
+**Files modified:**
+- `src/components/lists/ListItemRow.tsx` — recipe name is now a sub-line below the ingredient
+
+---
+
+### Enhancement 1: Shopping list category headings — bold and higher contrast
+**Change:** Category headings changed from `font-semibold text-muted-foreground` to `font-bold text-foreground`.
+
+**Files modified:**
+- `src/components/lists/CategoryGroup.tsx`
+
+---
+
+### Enhancement 2: Improved muted-foreground contrast across light themes
+**Change:** `--muted-foreground` increased from lightness `0.45–0.5` to `0.35–0.38` in all light themes (modern, apple-grey, sunset, ocean, forest). Makes secondary text clearly readable without impacting dark themes.
+
+**Files modified:**
+- `src/app/globals.css`
+
+---
+
+### Enhancement 3: Meal plan mobile layout — compact cards, full recipe names
+**Change:** Mobile meal plan now shows all 7 day-cards but only renders meal slots that have content. Empty meal types are hidden. An inline "+ Add meal" button expands to show meal type chips. Recipe names render at natural height (no `h-16` / `line-clamp-1` truncation).
+
+**Files modified:**
+- `src/components/meal-plan/DailyMealColumn.tsx` — added `compact` prop with mobile layout branch
+- `src/components/meal-plan/MealSlotCell.tsx` — added `naturalHeight` prop; removes fixed height and line-clamp
+- `src/components/meal-plan/MealPlanGrid.tsx` — passes `compact` to mobile DailyMealColumn
+
+---
+
+### Enhancement 4: Legacy tag migration + unrestricted tag deletion
+**Root Cause:** ~40 tags were stored as a comma-separated string in the `recipe.tags` field (legacy format). These contributed to recipe counts in the Tag Manager but couldn't be managed. Tags appeared to re-appear after deletion because the legacy string still counted toward `recipeCount`, and the delete button was disabled for any tag with `recipeCount > 0`.
+
+**Fix:**
+- New `GET /api/tags/legacy-count` — returns the number of unique tag names still in legacy string format.
+- New `POST /api/tags/migrate` — for each recipe with a legacy `tags` string: upserts Tag records, creates RecipeTag relationships, then clears the string. Returns `{ migratedTags, updatedRecipes }`.
+- `TagManager` shows an amber banner when legacy tags are detected, with a "Migrate" button.
+- Removed `disabled={tag.recipeCount > 0}` — any tag can now be deleted (with a confirmation showing affected recipe count). DELETE uses `?action=delete` (cascade) instead of the previous detach-only behaviour.
+
+**Files modified:**
+- `src/app/api/tags/legacy-count/route.ts` — new
+- `src/app/api/tags/migrate/route.ts` — new
+- `src/components/tags/TagManager.tsx` — migration banner, unrestricted delete
+
+---
+
+### Enhancement 5: Recipe image file upload during creation
+**Root Cause:** The file upload path in `RecipeForm.tsx` was guarded by `if (imageFile && editMode?.recipeId)` — skipping the upload for new recipes that don't yet have an ID. Users could select a file but it was silently ignored on create.
+
+**Fix:** After a new recipe is successfully created (POST returns `data.id`), if an `imageFile` is present, the file is uploaded via `POST /api/recipes/upload` using the new recipe ID. The returned `imageUrl` is patched onto `data.image` before calling `onCreated`.
+
+**Files modified:**
+- `src/components/recipes/RecipeForm.tsx` — post-create image upload step added
+
+---
+
+## Files Modified (all sessions)
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
 3. `src/components/dashboard/UpcomingEventsCard.tsx` - Timezone-aware date display
@@ -105,6 +183,19 @@
 5. `src/components/settings/AppearanceTab.tsx` - Added dashboard shopping list selector
 6. `src/components/settings/IngredientMappingsTab.tsx` - Dynamic category dropdown from API
 7. `src/app/(app)/lists/ListsClient.tsx` - Fixed favorite button not interfering with dashboard shopping list preference
+8. `src/app/api/chores/route.ts` - POST returns completions + _count
+9. `src/app/api/chores/[id]/route.ts` - PATCH returns completions + _count
+10. `src/app/(app)/chores/ChoresClient.tsx` - Defensive completions access
+11. `src/components/lists/ListItemRow.tsx` - Recipe name sub-line, checkbox size fix
+12. `src/components/lists/CategoryGroup.tsx` - Bold foreground category headings
+13. `src/app/globals.css` - Improved muted-foreground contrast across light themes
+14. `src/components/meal-plan/DailyMealColumn.tsx` - Compact mobile layout
+15. `src/components/meal-plan/MealSlotCell.tsx` - naturalHeight prop
+16. `src/components/meal-plan/MealPlanGrid.tsx` - Passes compact to mobile view
+17. `src/app/api/tags/legacy-count/route.ts` - New: count legacy string tags
+18. `src/app/api/tags/migrate/route.ts` - New: migrate legacy tags to Tag records
+19. `src/components/tags/TagManager.tsx` - Migration banner, unrestricted delete
+20. `src/components/recipes/RecipeForm.tsx` - Image upload works on create
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -117,3 +208,9 @@
 8. **Ingredient mappings:** Go to Settings > Ingredient Mappings, verify the category dropdown includes custom categories
 9. **Favorite list:** Star a shopping list in Lists, verify it shows as default and appears on the dashboard
 10. **Favorite TODO list:** Star a TODO list, verify it doesn't clear the dashboard shopping list preference
+11. **Chores:** Create a new chore — verify no crash. Edit an existing chore — verify no crash
+12. **Shopping list mobile:** Add an item sourced from a recipe; on mobile verify the recipe name wraps below the ingredient name
+13. **Meal plan mobile:** Open meal plan on a mobile viewport; verify only filled slots show, recipe names are untruncated, "+ Add meal" works
+14. **Legacy tags:** Go to Settings > Tags, verify amber migration banner if legacy tags exist; click Migrate and verify tags move to proper system
+15. **Tag deletion:** Delete a tag that is used in recipes — verify it is allowed with confirmation
+16. **Recipe image on create:** Create a new recipe, attach an image file (not URL), verify the image is saved and displayed

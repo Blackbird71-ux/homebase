@@ -29,6 +29,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
     include: {
       currentAssignee: { select: { id: true, name: true } },
+      completions: {
+        orderBy: { completedAt: 'desc' },
+        take: 1,
+        include: { completedBy: { select: { id: true, name: true } } },
+      },
+      _count: { select: { completions: true } },
     },
   })
 

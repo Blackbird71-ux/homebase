@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { MealSlotCell } from './MealSlotCell'
 import { MEAL_TYPES, type MealType } from '@/lib/meal-types'
 import { cn } from '@/lib/utils'
+import { PlusIcon } from 'lucide-react'
 
 interface MealPlanEntry {
   id: string
@@ -27,6 +29,7 @@ interface DailyMealColumnProps {
   isToday: boolean
   onMealClick: (date: string, mealType: MealType) => void
   onMealClear: (entryId: string) => void
+  compact?: boolean // mobile: hide empty slots, natural height
 }
 
 export function DailyMealColumn({
@@ -35,11 +38,117 @@ export function DailyMealColumn({
   isToday,
   onMealClick,
   onMealClear,
+  compact = false,
 }: DailyMealColumnProps) {
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+
   const getEntryForMealType = (mealType: string) => {
     return entries.find((e) => e.mealType === mealType)
   }
 
+  const filledMealTypes = MEAL_TYPES.filter((mt) => getEntryForMealType(mt.id))
+  const emptyMealTypes = MEAL_TYPES.filter((mt) => !getEntryForMealType(mt.id))
+
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-2">
+        {/* Day header — horizontal for compact */}
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            "text-sm h-7 w-7 flex items-center justify-center rounded-full shrink-0",
+            isToday ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground"
+          )}>
+            {new Date(date + 'T00:00:00').getDate()}
+          </div>
+          <p className={cn(
+            "text-sm font-medium",
+            isToday && "text-primary"
+          )}>
+            {new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' })}
+          </p>
+        </div>
+
+        {/* Filled meal slots with natural height */}
+        {filledMealTypes.length > 0 && (
+          <div className="flex flex-col gap-2 pl-1">
+            {filledMealTypes.map((mealType) => {
+              const entry = getEntryForMealType(mealType.id)!
+              const Icon = mealType.icon
+              return (
+                <div key={mealType.id} className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1">
+                    <Icon className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">{mealType.label}</span>
+                  </div>
+                  <MealSlotCell
+                    date={date}
+                    mealPlanId={entry.id}
+                    recipeName={entry.recipe?.title ?? null}
+                    recipes={entry.recipes?.map(r => ({
+                      id: r.id,
+                      recipeId: r.recipeId,
+                      recipeName: r.recipe.title,
+                      courseType: r.courseType ?? undefined,
+                      order: r.order,
+                    }))}
+                    note={entry.note}
+                    mealType={mealType.id}
+                    onClick={() => onMealClick(date, mealType.id)}
+                    onClear={() => onMealClear(entry.id)}
+                    naturalHeight
+                  />
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* No meals state + add button */}
+        {filledMealTypes.length === 0 && (
+          <p className="text-xs text-muted-foreground italic pl-1">No meals planned</p>
+        )}
+
+        {/* Add meal — shows meal type picker inline */}
+        {emptyMealTypes.length > 0 && (
+          <div className="pl-1 relative">
+            {addMenuOpen ? (
+              <div className="flex flex-wrap gap-1.5">
+                {emptyMealTypes.map((mt) => {
+                  const Icon = mt.icon
+                  return (
+                    <button
+                      key={mt.id}
+                      onClick={() => { setAddMenuOpen(false); onMealClick(date, mt.id) }}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                    >
+                      <Icon className="h-3 w-3" />
+                      {mt.label}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => setAddMenuOpen(false)}
+                  className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddMenuOpen(true)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                <PlusIcon className="h-3.5 w-3.5" />
+                Add meal
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Desktop layout (unchanged)
   return (
     <div className="flex flex-col gap-1">
       {/* Day header */}
@@ -63,7 +172,7 @@ export function DailyMealColumn({
         {MEAL_TYPES.map((mealType) => {
           const entry = getEntryForMealType(mealType.id)
           const Icon = mealType.icon
-          
+
           return (
             <div key={mealType.id} className="flex flex-col gap-1">
               <div className="flex items-center gap-1">

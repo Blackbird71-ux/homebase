@@ -345,6 +345,7 @@ export function MealPlanGrid({
                 isToday={ymd === today}
                 onMealClick={openModal}
                 onMealClear={handleClear}
+                compact
               />
             </div>
           )

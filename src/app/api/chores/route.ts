@@ -44,6 +44,12 @@ export async function POST(req: Request) {
     },
     include: {
       currentAssignee: { select: { id: true, name: true } },
+      completions: {
+        orderBy: { completedAt: 'desc' },
+        take: 1,
+        include: { completedBy: { select: { id: true, name: true } } },
+      },
+      _count: { select: { completions: true } },
     },
   })
 

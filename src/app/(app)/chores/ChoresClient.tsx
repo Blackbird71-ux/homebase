@@ -137,7 +137,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {chores.map((chore) => {
-            const lastCompleted = chore.completions[0]
+            const lastCompleted = chore.completions?.[0]
             const isOverdue = lastCompleted
               ? Date.now() - new Date(lastCompleted.completedAt).getTime() > 7 * 24 * 60 * 60 * 1000
               : true

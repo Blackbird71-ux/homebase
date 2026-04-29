@@ -192,6 +192,26 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
       })
       const data = await res.json()
       if (res.ok) {
+        // For new recipes, upload the image file now that we have the recipe ID
+        if (!editMode && imageFile && data.id) {
+          setUploadingImage(true)
+          try {
+            const formData = new FormData()
+            formData.append('image', imageFile)
+            formData.append('recipeId', data.id)
+            const uploadRes = await fetch('/api/recipes/upload', {
+              method: 'POST',
+              body: formData,
+            })
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json()
+              data.image = uploadData.imageUrl
+            }
+          } finally {
+            setUploadingImage(false)
+          }
+        }
+
         if (editMode && onUpdated) {
           onUpdated(data)
         } else if (!editMode) {

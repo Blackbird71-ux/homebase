@@ -147,7 +147,7 @@ export function CategoryGroup({
             <GripVerticalIcon className="h-3.5 w-3.5" />
           </button>
         )}
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        <p className="text-xs font-bold text-foreground uppercase tracking-wide">
           {category}
         </p>
         <span className="text-[10px] text-muted-foreground ml-1">
