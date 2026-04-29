@@ -36,6 +36,9 @@ export default async function ChoresPage() {
         <ChoresClient
           initialChores={chores.map((c) => ({
             ...c,
+            startDate: c.startDate?.toISOString() ?? null,
+            endDate: c.endDate?.toISOString() ?? null,
+            nextDueDate: c.nextDueDate?.toISOString() ?? null,
             createdAt: c.createdAt.toISOString(),
             updatedAt: c.updatedAt.toISOString(),
             completions: c.completions.map((comp) => ({

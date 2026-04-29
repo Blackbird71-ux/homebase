@@ -17,6 +17,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-better-sqlite3": "^7.7.0",
     "@prisma/client": "^7.7.0",
+    "@radix-ui/react-switch": "^1.2.6",
     "adm-zip": "^0.5.17",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.9.0",

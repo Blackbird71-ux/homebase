@@ -26,6 +26,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.rotationInterval !== undefined ? { rotationInterval: body.rotationInterval } : {}),
       ...(body.currentAssigneeId !== undefined ? { currentAssigneeId: body.currentAssigneeId } : {}),
       ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+      ...(body.startDate !== undefined ? { startDate: body.startDate ? new Date(body.startDate) : null } : {}),
+      ...(body.endDate !== undefined ? { endDate: body.endDate ? new Date(body.endDate) : null } : {}),
+      ...(body.nextDueDate !== undefined ? { nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : null } : {}),
+      ...(body.triggerOnComplete !== undefined ? { triggerOnComplete: body.triggerOnComplete } : {}),
+      ...(body.autoRotateOnComplete !== undefined ? { autoRotateOnComplete: body.autoRotateOnComplete } : {}),
     },
     include: {
       currentAssignee: { select: { id: true, name: true } },

@@ -31,6 +31,11 @@ interface Chore {
   currentAssigneeId: string | null
   currentAssignee: { id: string; name: string } | null
   isActive: boolean
+  startDate: string | null
+  endDate: string | null
+  nextDueDate: string | null
+  triggerOnComplete: boolean
+  autoRotateOnComplete: boolean
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string
@@ -52,6 +57,20 @@ const FREQUENCY_LABELS: Record<string, string> = {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+function isOverdue(nextDueDate: string | null): boolean {
+  if (!nextDueDate) return false
+  return new Date(nextDueDate) < new Date()
+}
+
 export function ChoresClient({ initialChores, members, currentUserId }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -65,11 +84,17 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
         body: JSON.stringify({}),
       })
       if (!res.ok) throw new Error('Failed to complete chore')
-      const completion = await res.json()
+      const data = await res.json()
+      // Update the chore with the new state from the server
       setChores((prev) =>
         prev.map((c) =>
           c.id === choreId
-            ? { ...c, completions: [completion, ...c.completions], _count: { completions: c._count.completions + 1 } }
+            ? {
+                ...c,
+                ...data.chore,
+                completions: [data.completion, ...c.completions],
+                _count: { completions: c._count.completions + 1 },
+              }
             : c
         )
       )
@@ -137,13 +162,11 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {chores.map((chore) => {
+            const overdue = isOverdue(chore.nextDueDate)
             const lastCompleted = chore.completions?.[0]
-            const isOverdue = lastCompleted
-              ? Date.now() - new Date(lastCompleted.completedAt).getTime() > 7 * 24 * 60 * 60 * 1000
-              : true
 
             return (
-              <Card key={chore.id} className={`flex flex-col ${isOverdue ? 'border-amber-500/30' : ''}`}>
+              <Card key={chore.id} className={`flex flex-col ${overdue ? 'border-amber-500/30' : ''}`}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
@@ -166,6 +189,20 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
                     <span>{getScheduleLabel(chore)}</span>
                     <span>{chore._count.completions} done</span>
                   </div>
+
+                  {/* Next due date */}
+                  {chore.nextDueDate && (
+                    <div className={`text-xs font-medium ${overdue ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                      {overdue ? '⚠ Overdue' : '📅 Next due'}: {formatDate(chore.nextDueDate)}
+                    </div>
+                  )}
+
+                  {/* End date */}
+                  {chore.endDate && (
+                    <div className="text-[10px] text-muted-foreground/60">
+                      Ends: {formatDate(chore.endDate)}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-border/50">
                     <div className="flex items-center gap-2 min-w-0">

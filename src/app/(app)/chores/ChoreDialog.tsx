@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 
 interface Member {
@@ -44,6 +45,11 @@ interface Chore {
   currentAssigneeId: string | null
   currentAssignee: { id: string; name: string } | null
   isActive: boolean
+  startDate: string | null
+  endDate: string | null
+  nextDueDate: string | null
+  triggerOnComplete: boolean
+  autoRotateOnComplete: boolean
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string
@@ -68,6 +74,12 @@ const DAY_OPTIONS = [
   { value: '6', label: 'Saturday' },
 ]
 
+function toDateInputValue(date: string | null): string {
+  if (!date) return ''
+  const d = new Date(date)
+  return d.toISOString().split('T')[0]
+}
+
 export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: ChoreDialogProps) {
   const [title, setTitle] = useState(chore?.title ?? '')
   const [description, setDescription] = useState(chore?.description ?? '')
@@ -76,6 +88,10 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [dayOfMonth, setDayOfMonth] = useState(chore?.dayOfMonth?.toString() ?? '')
   const [rotationInterval, setRotationInterval] = useState(chore?.rotationInterval?.toString() ?? '1')
   const [currentAssigneeId, setCurrentAssigneeId] = useState(chore?.currentAssigneeId ?? '')
+  const [startDate, setStartDate] = useState(toDateInputValue(chore?.startDate ?? null))
+  const [endDate, setEndDate] = useState(toDateInputValue(chore?.endDate ?? null))
+  const [triggerOnComplete, setTriggerOnComplete] = useState(chore?.triggerOnComplete ?? false)
+  const [autoRotateOnComplete, setAutoRotateOnComplete] = useState(chore?.autoRotateOnComplete ?? false)
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -86,7 +102,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
 
     setSaving(true)
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         title: title.trim(),
         description: description.trim() || null,
         frequency,
@@ -94,6 +110,20 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : null,
         rotationInterval: parseInt(rotationInterval) || 1,
         currentAssigneeId: currentAssigneeId || null,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        triggerOnComplete,
+        autoRotateOnComplete,
+      }
+
+      // For monthly chores, auto-set dayOfMonth from start date if not explicitly set
+      if (frequency === 'monthly' && !dayOfMonth && startDate) {
+        body.dayOfMonth = new Date(startDate).getDate()
+      }
+
+      // For weekly chores, auto-set dayOfWeek from start date if not explicitly set
+      if (frequency === 'weekly' && !dayOfWeek && startDate) {
+        body.dayOfWeek = new Date(startDate).getDay()
       }
 
       const url = chore ? `/api/chores/${chore.id}` : '/api/chores'
@@ -192,10 +222,30 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                 max={31}
                 value={dayOfMonth}
                 onChange={(e) => setDayOfMonth(e.target.value)}
-                placeholder="1-31"
+                placeholder="1-31 (auto from start date)"
               />
             </div>
           )}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="chore-start-date">Start date</Label>
+              <Input
+                id="chore-start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="chore-end-date">End date (optional)</Label>
+              <Input
+                id="chore-end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="chore-assignee">Assign to</Label>
             <Select value={currentAssigneeId} onValueChange={(v) => setCurrentAssigneeId(v ?? '')}>
@@ -209,6 +259,34 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-3 pt-2 border-t border-border/50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="chore-trigger">Next occurrence starts after completion</Label>
+                <p className="text-xs text-muted-foreground">
+                  When off, next due date is based on the schedule (e.g. every Monday)
+                </p>
+              </div>
+              <Switch
+                id="chore-trigger"
+                checked={triggerOnComplete}
+                onCheckedChange={setTriggerOnComplete}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="chore-auto-rotate">Auto-rotate assignee on completion</Label>
+                <p className="text-xs text-muted-foreground">
+                  Automatically assign to the next family member when completed
+                </p>
+              </div>
+              <Switch
+                id="chore-auto-rotate"
+                checked={autoRotateOnComplete}
+                onCheckedChange={setAutoRotateOnComplete}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>

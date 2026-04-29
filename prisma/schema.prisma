@@ -338,21 +338,26 @@ model Note {
 }
 
 model Chore {
-  id               String             @id @default(cuid())
-  title            String
-  description      String?
-  frequency        String             @default("weekly")  // daily | weekly | biweekly | monthly
-  dayOfWeek        Int?               // 0=Sunday, 1=Monday, etc. (for weekly)
-  dayOfMonth       Int?               // 1-31 (for monthly)
-  rotationInterval Int                @default(1)  // rotate every N intervals
-  currentAssigneeId String?
-  currentAssignee  User?              @relation("ChoreAssignee", fields: [currentAssigneeId], references: [id], onDelete: SetNull)
-  familyId         String
-  family           Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  isActive         Boolean            @default(true)
-  completions      ChoreCompletion[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                   String             @id @default(cuid())
+  title                String
+  description          String?
+  frequency            String             @default("weekly")  // daily | weekly | biweekly | monthly
+  dayOfWeek            Int?               // 0=Sunday, 1=Monday, etc. (for weekly)
+  dayOfMonth           Int?               // 1-31 (for monthly)
+  rotationInterval     Int                @default(1)  // rotate every N intervals
+  currentAssigneeId    String?
+  currentAssignee      User?              @relation("ChoreAssignee", fields: [currentAssigneeId], references: [id], onDelete: SetNull)
+  familyId             String
+  family               Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  isActive             Boolean            @default(true)
+  startDate            DateTime?          // When the chore should start (defaults to today)
+  endDate              DateTime?          // Stop recurring after this date
+  nextDueDate          DateTime?          // Calculated next due date (null = due now)
+  triggerOnComplete    Boolean            @default(false)  // Calculate next from completion date
+  autoRotateOnComplete Boolean            @default(false)  // Auto-rotate assignee on completion
+  completions          ChoreCompletion[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@index([familyId])
   @@index([currentAssigneeId])

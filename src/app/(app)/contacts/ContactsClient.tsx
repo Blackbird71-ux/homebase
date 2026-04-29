@@ -38,20 +38,37 @@ interface ContactsClientProps {
   initialContacts: Contact[]
 }
 
-const CATEGORIES = [
-  { value: 'emergency', label: '🚨 Emergency', color: 'text-red-500' },
-  { value: 'doctor', label: '🏥 Doctor', color: 'text-blue-500' },
-  { value: 'school', label: '📚 School', color: 'text-green-500' },
-  { value: 'tradesperson', label: '🔧 Tradesperson', color: 'text-amber-500' },
-  { value: 'other', label: '📋 Other', color: 'text-muted-foreground' },
+const BUILT_IN_CATEGORIES = [
+  { value: 'family',      label: '👨‍👩‍👧 Family',       color: 'text-pink-500' },
+  { value: 'emergency',   label: '🚨 Emergency',    color: 'text-red-500' },
+  { value: 'doctor',      label: '🏥 Doctor',        color: 'text-blue-500' },
+  { value: 'school',      label: '📚 School',        color: 'text-green-500' },
+  { value: 'tradesperson',label: '🔧 Tradesperson',  color: 'text-amber-500' },
+  { value: 'other',       label: '📋 Other',         color: 'text-muted-foreground' },
 ]
 
-const CATEGORY_ICONS: Record<string, string> = {
-  emergency: '🚨',
-  doctor: '🏥',
-  school: '📚',
-  tradesperson: '🔧',
-  other: '📋',
+const BUILT_IN_ICONS: Record<string, string> = {
+  family:      '👨‍👩‍👧',
+  emergency:   '🚨',
+  doctor:      '🏥',
+  school:      '📚',
+  tradesperson:'🔧',
+  other:       '📋',
+}
+
+function getCategoryLabel(value: string): string {
+  const found = BUILT_IN_CATEGORIES.find((c) => c.value === value)
+  if (found) return found.label
+  // Custom category: capitalise first letter
+  return '🏷️ ' + value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function getCategoryColor(value: string): string {
+  return BUILT_IN_CATEGORIES.find((c) => c.value === value)?.color ?? 'text-violet-500'
+}
+
+function getCategoryIcon(value: string): string {
+  return BUILT_IN_ICONS[value] ?? '🏷️'
 }
 
 export function ContactsClient({ initialContacts }: ContactsClientProps) {
@@ -62,16 +79,29 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
   // Form state
   const [name, setName] = useState('')
   const [category, setCategory] = useState('other')
+  const [customCategory, setCustomCategory] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [address, setAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Derive the full list of categories to show (built-ins + any custom ones already in use)
+  const customCatsInUse = [...new Set(
+    contacts
+      .map((c) => c.category)
+      .filter((v) => !BUILT_IN_CATEGORIES.some((b) => b.value === v))
+  )]
+
+  function resolvedCategory() {
+    return category === '__custom__' ? customCategory.trim().toLowerCase() : category
+  }
+
   function openNew() {
     setEditingContact(null)
     setName('')
     setCategory('other')
+    setCustomCategory('')
     setPhone('')
     setEmail('')
     setAddress('')
@@ -82,7 +112,14 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
   function openEdit(contact: Contact) {
     setEditingContact(contact)
     setName(contact.name)
-    setCategory(contact.category)
+    const isBuiltIn = BUILT_IN_CATEGORIES.some((b) => b.value === contact.category)
+    if (isBuiltIn) {
+      setCategory(contact.category)
+      setCustomCategory('')
+    } else {
+      setCategory('__custom__')
+      setCustomCategory(contact.category)
+    }
     setPhone(contact.phone ?? '')
     setEmail(contact.email ?? '')
     setAddress(contact.address ?? '')
@@ -95,12 +132,17 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
       toast.error('Name is required')
       return
     }
+    const finalCategory = resolvedCategory()
+    if (!finalCategory) {
+      toast.error('Please enter a category name')
+      return
+    }
 
     setSaving(true)
     try {
       const body = {
         name: name.trim(),
-        category,
+        category: finalCategory,
         phone: phone.trim() || null,
         email: email.trim() || null,
         address: address.trim() || null,
@@ -145,11 +187,19 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     }
   }
 
-  // Group contacts by category
-  const grouped = CATEGORIES.map((cat) => ({
-    ...cat,
-    contacts: contacts.filter((c) => c.category === cat.value),
-  })).filter((g) => g.contacts.length > 0)
+  // Group contacts by category — built-ins first (in order), then custom cats alphabetically
+  const allCategoryValues = [
+    ...BUILT_IN_CATEGORIES.map((c) => c.value),
+    ...customCatsInUse.sort(),
+  ]
+  const grouped = allCategoryValues
+    .map((val) => ({
+      value: val,
+      label: getCategoryLabel(val),
+      color: getCategoryColor(val),
+      contacts: contacts.filter((c) => c.category === val),
+    }))
+    .filter((g) => g.contacts.length > 0)
 
   return (
     <div className="space-y-6">
@@ -178,7 +228,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
                       <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                        <span>{CATEGORY_ICONS[contact.category] ?? '📋'}</span>
+                        <span>{getCategoryIcon(contact.category)}</span>
                         {contact.name}
                       </CardTitle>
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -241,16 +291,32 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="contact-category">Category</Label>
-              <Select value={category} onValueChange={(v) => v && setCategory(v)}>
+              <Select value={category} onValueChange={(v) => { if (v) setCategory(v) }}>
                 <SelectTrigger id="contact-category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((c) => (
+                  {BUILT_IN_CATEGORIES.map((c) => (
                     <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                   ))}
+                  {/* Custom categories already in use */}
+                  {customCatsInUse.map((val) => (
+                    <SelectItem key={val} value={val}>
+                      🏷️ {val.charAt(0).toUpperCase() + val.slice(1)}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__custom__">✏️ Custom…</SelectItem>
                 </SelectContent>
               </Select>
+              {category === '__custom__' && (
+                <Input
+                  autoFocus
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  placeholder="e.g. neighbour, vet, gym…"
+                  className="mt-2"
+                />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="contact-phone">Phone</Label>
@@ -280,3 +346,5 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     </div>
   )
 }
+
+

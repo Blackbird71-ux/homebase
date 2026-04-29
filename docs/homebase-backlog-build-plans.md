@@ -355,23 +355,29 @@ Add `chores Chore[]` to the `Family` model.
 
 ### Implementation notes
 
-- Recurrence expansion uses the same RRULE logic as the calendar — consider extracting a shared `expandRecurrence(rule, from, to)` utility if not already abstracted.
-- "Current period" for completion: derive the current period start from the RRULE and today's date. A daily chore's period starts at midnight; a weekly chore's period starts on the family's `weekStartsOn` day.
-- Rotation: on each new period, advance `rotationIndex` by 1 (mod the rotation array length) when the previous period's chore is marked complete.
-- Overdue: a chore is overdue if the current period has no `ChoreCompletion` and `now > periodEnd`.
+- **Recurrence calculation** uses a custom `calculateNextDueDate()` function (not RRULE) that handles daily/weekly/biweekly/monthly frequencies.
+- **Two scheduling modes** (controlled by `triggerOnComplete` toggle):
+  - *Schedule-based (default)*: next due date is based on the calendar schedule (e.g. "every Monday"). If you complete a Monday chore on Wednesday, it still shows as overdue for Monday.
+  - *Completion-based*: next due date is calculated from when you actually completed it. So if you complete a Monday chore on Wednesday, the next due date is the following Monday from Wednesday.
+- **Auto-rotation** (`autoRotateOnComplete`): when enabled, completing a chore automatically assigns it to the next family member in the roster (round-robin by name order).
+- **End date**: if a chore has an end date and the next due date would exceed it, the chore is automatically deactivated.
+- **Overdue**: a chore is overdue if `nextDueDate` is in the past — highlighted with an amber border and "⚠ Overdue" label.
+- **Initial due date**: calculated on creation from the `startDate` (or today if not set), respecting `dayOfWeek` (weekly) or `dayOfMonth` (monthly).
 
 ### Docker / NAS impact
 
-Schema migration + new sidebar nav item. **Copy updated files and run `docker-compose down && docker-compose up -d --build` on NAS.**
+Schema migration (new columns on Chore table) + new `@radix-ui/react-switch` npm dependency. **Rebuild Docker image and redeploy — migration runs automatically on startup via `prisma migrate deploy`.**
 
 ### Acceptance criteria
 
-- [ ] Chores can be created with a name, assignee, and recurrence
-- [ ] Roster shows all active chores with assignee and completion status
-- [ ] Marking a chore done records the completion
-- [ ] Overdue chores are visually highlighted
-- [ ] Rotation advances assignee on each new period
-- [ ] "My chores today" card is available for the Home dashboard
+- [x] Chores can be created with a name, assignee, and recurrence
+- [x] Roster shows all active chores with assignee and completion status
+- [x] Marking a chore done records the completion and calculates next due date
+- [x] Overdue chores are visually highlighted with amber border
+- [x] Auto-rotation advances assignee on completion when enabled
+- [x] Two scheduling modes: schedule-based vs completion-based (triggerOnComplete toggle)
+- [x] Start date and end date support for time-bounded chore schedules
+- [x] "My chores today" card is available for the Home dashboard
 
 ---
 
