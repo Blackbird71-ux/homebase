@@ -89,12 +89,12 @@ export async function GET(req: Request) {
   const learnedMap = new Map(learned.map((l) => [l.key, l.category]))
 
   function resolveCategory(text: string, key: string): { category: string; source: 'learned' | 'custom' | 'guessed' } {
-    // 1. Learned: exact previous override saved by the user
-    const learnedCat = learnedMap.get(key)
-    if (learnedCat) return { category: learnedCat, source: 'learned' }
-    // 2. Custom mapping: try normalized key first, then raw text (both lowercased)
+    // 1. Custom mapping: explicit user-defined rules always win
     const customCat = customMap.get(key.toLowerCase().trim()) ?? customMap.get(text.toLowerCase().trim())
     if (customCat) return { category: customCat, source: 'custom' }
+    // 2. Learned: previously remembered category (from past exports)
+    const learnedCat = learnedMap.get(key)
+    if (learnedCat) return { category: learnedCat, source: 'learned' }
     // 3. Auto-guess: built-in keyword matching
     return { category: autoGuessCategory(key), source: 'guessed' }
   }
