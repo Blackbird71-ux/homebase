@@ -100,7 +100,7 @@ export function ListItemRow({
 
   return (
     <div
-      className={`flex items-center gap-2 py-2.5 px-1 rounded-md group ${
+      className={`flex items-center gap-2 py-1.5 px-1 rounded-md group ${
         isCompleted ? 'opacity-50' : ''
       }`}
     >

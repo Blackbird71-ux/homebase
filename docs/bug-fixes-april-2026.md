@@ -310,6 +310,23 @@
 
 ---
 
+### Enhancement 8: Tighter mobile vertical padding on grocery list
+
+**Change:** Reduced vertical padding throughout the shopping list UI on mobile so more items are visible above the fold when shopping. Desktop and tablet (≥ sm breakpoint) are unchanged.
+
+- Item row padding: `py-2.5` → `py-1.5` (saves ~8px per row — the largest gain with many items)
+- Main content container: `p-3` → `p-2`
+- Mobile chip-bar nav strip: `px-3 py-2` → `px-2 py-1.5`
+- List title bottom margin: `mb-2` → `mb-1.5`
+- Gap between category sections: `gap-4` → `gap-2 sm:gap-4` (applies to aisle view, recipe view, and the outer ShoppingList wrapper)
+
+**Files modified:**
+- `src/components/lists/ListItemRow.tsx` — tighter item row vertical padding
+- `src/app/(app)/lists/ListsClient.tsx` — tighter container padding, chip-bar, and title margin on mobile
+- `src/components/lists/ShoppingList.tsx` — tighter gap between sections on mobile
+
+---
+
 ## Files Modified (all sessions)
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop

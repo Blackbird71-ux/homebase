@@ -152,7 +152,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
 
     <div className="flex h-full overflow-hidden flex-col md:flex-row">
       {/* Mobile: horizontal scroll chip bar — replaces the sidebar */}
-      <div className="md:hidden flex items-center gap-2 px-3 py-2 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
+      <div className="md:hidden flex items-center gap-2 px-2 py-1.5 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
         {listsMeta.map((list) => (
           <button
             key={list.id}
@@ -194,14 +194,14 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
         />
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+      <main className="flex-1 overflow-y-auto p-2 sm:p-4 md:p-6">
         {activeList === null ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <p className="text-sm">No lists yet. Create one to get started.</p>
           </div>
         ) : activeList.type === 'SHOPPING' ? (
           <>
-            <h1 className="text-base sm:text-xl font-semibold mb-2 sm:mb-4">{activeList.name}</h1>
+            <h1 className="text-base sm:text-xl font-semibold mb-1.5 sm:mb-4">{activeList.name}</h1>
             <ShoppingList
               key={activeList.id}
               listId={activeList.id}

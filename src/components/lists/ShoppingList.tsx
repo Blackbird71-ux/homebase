@@ -320,7 +320,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2 sm:gap-4">
       {/* View toggle */}
       <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
         <button
@@ -431,7 +431,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             items={activeCategoryOrder}
             strategy={verticalListSortingStrategy}
           >
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 sm:gap-4">
               {activeCategoryOrder.map((cat) => {
                 const catItems = grouped[cat] ?? []
                 if (catItems.length === 0) return null
@@ -464,7 +464,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
           />
         </DndContext>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 sm:gap-4">
           {recipeGroups.map((group) => (
             <div key={group.name}>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
