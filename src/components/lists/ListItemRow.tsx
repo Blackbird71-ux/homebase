@@ -186,7 +186,7 @@ export function ListItemRow({
           className={`shrink-0 ${
             isLocked
               ? 'opacity-100 text-yellow-500 hover:text-yellow-600'
-              : 'md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-yellow-500'
+              : 'hidden md:flex md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-yellow-500'
           }`}
           aria-label={isLocked ? 'Unlock item' : 'Lock item'}
           title={isLocked ? 'Unlock item' : 'Lock item (prevents deletion)'}
@@ -203,7 +203,7 @@ export function ListItemRow({
           variant="ghost"
           size="icon-sm"
           onClick={() => setIsEditing(true)}
-          className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-primary"
+          className="hidden md:flex md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-primary"
           aria-label="Edit category"
         >
           <EditIcon className="h-3 w-3" />

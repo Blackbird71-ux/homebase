@@ -347,45 +347,43 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
 
       {/* Add item form */}
       <div className="flex flex-col gap-2">
-        <form onSubmit={addItem} className="flex flex-col sm:flex-row gap-2">
+        <form onSubmit={addItem} className="flex gap-2 items-center">
           <Input
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
             placeholder="Add item..."
-            className="flex-1"
+            className="flex-1 min-w-0"
           />
-          <div className="flex gap-2">
-            <select
-              value={addingCategoryInline ? '__adding__' : newCategory}
-              onChange={(e) => {
-                if (e.target.value === '__new__') {
-                  setAddingCategoryInline(true)
-                  setInlineCatName('')
-                } else {
-                  setNewCategory(e.target.value as ShoppingCategory)
-                  setCategoryManuallySet(true)
-                }
-              }}
-              className="flex-1 sm:flex-none h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
-              disabled={loadingCategories || addingCategoryInline}
-            >
-              {loadingCategories ? (
-                <option value="Other">Loading categories...</option>
-              ) : addingCategoryInline ? (
-                <option value="__adding__">New category...</option>
-              ) : (
-                <>
-                  {categories.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                  <option value="__new__">+ New category...</option>
-                </>
-              )}
-            </select>
-            <Button type="submit" size="sm" className="shrink-0">
-              <PlusIcon className="h-4 w-4" />
-            </Button>
-          </div>
+          <select
+            value={addingCategoryInline ? '__adding__' : newCategory}
+            onChange={(e) => {
+              if (e.target.value === '__new__') {
+                setAddingCategoryInline(true)
+                setInlineCatName('')
+              } else {
+                setNewCategory(e.target.value as ShoppingCategory)
+                setCategoryManuallySet(true)
+              }
+            }}
+            className="w-24 sm:w-auto shrink-0 h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
+            disabled={loadingCategories || addingCategoryInline}
+          >
+            {loadingCategories ? (
+              <option value="Other">Loading...</option>
+            ) : addingCategoryInline ? (
+              <option value="__adding__">New cat...</option>
+            ) : (
+              <>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                <option value="__new__">+ New...</option>
+              </>
+            )}
+          </select>
+          <Button type="submit" size="sm" className="shrink-0">
+            <PlusIcon className="h-4 w-4" />
+          </Button>
         </form>
         {addingCategoryInline && (
           <div className="flex gap-2">
