@@ -214,6 +214,20 @@
 
 ---
 
+### Bug 16: Custom ingredient mappings silently overridden by stale learned entries
+**Root Cause:** Two compounding issues:
+1. **Priority order was wrong** — `resolveCategory` in `export-preview/route.ts` checked learned categories (`ingredientCategory` table) before custom mappings (`ingredientMapping` table). Every time "Add to Groceries" was clicked, the export-groceries route upserted every ingredient's category into the learned store. So a stale auto-guess (e.g., "rashes bacon" → "Meat") would permanently override any new custom mapping the user added in Settings.
+2. **Custom mapping lookup was exact match only** — A custom mapping for "rashes bacon" wouldn't match a recipe ingredient like "rashers bacon – diced" because the code did an exact Map lookup on the full ingredient text.
+
+**Fix:**
+1. Swapped priority order in `resolveCategory` to: **Custom mapping → Learned → Auto-guess**. Custom mappings (explicit user intent) now always take precedence over remembered auto-guesses.
+2. Added substring matching fallback: if the exact Map lookup fails, the code iterates all custom mappings and checks if the ingredient key contains the mapped ingredient text (using `String.includes()`). This means "rashes bacon" → "Deli" will correctly match "rashers bacon – diced".
+
+**Files modified:**
+- `src/app/api/meal-plan/export-preview/route.ts` — Fixed priority order and added substring matching for custom mappings
+
+---
+
 ## Files Modified (all sessions)
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
@@ -235,12 +249,13 @@
 18. `src/app/api/tags/migrate/route.ts` - New: migrate legacy tags to Tag records
 19. `src/components/tags/TagManager.tsx` - Migration banner, unrestricted delete
 20. `src/components/recipes/RecipeForm.tsx` - Image upload works on create
-21. `src/components/providers/ThemeProvider.tsx` - ThemeSyncer syncs DB theme on login
+21. `src/components/providers/ThemeProvider.tsx` - ThemeSyncer syncs DB theme on mount
 22. `src/components/lists/ShoppingList.tsx` - Single-row add form on mobile
 23. `src/components/lists/ListItemRow.tsx` - Lock/edit buttons hidden on mobile
 24. `src/app/(app)/lists/ListsClient.tsx` - Tighter title and padding on mobile
 25. `src/components/meal-plan/MealPlanGrid.tsx` - Vertical layout at all screen sizes (removed 7-column desktop grid)
 26. `src/components/meal-plan/DailyMealColumn.tsx` - Recipe-only filter in compact mode
+27. `src/app/api/meal-plan/export-preview/route.ts` - Fixed custom mapping priority and added substring matching
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
