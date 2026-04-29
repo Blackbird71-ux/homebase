@@ -329,8 +329,8 @@ export function MealPlanGrid({
         {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
       </p>
 
-      {/* ── Mobile: stacked day cards (one per day, full width) ── */}
-      <div className="md:hidden flex-1 overflow-y-auto flex flex-col gap-3 pb-2">
+      {/* ── Stacked day cards (one per day, full width) ── */}
+      <div className="flex-1 overflow-y-auto flex flex-col gap-3 pb-2">
         {days.map((day) => {
           const ymd = toYMD(day)
           const dayEntries = entries.filter((e) => e.date.slice(0, 10) === ymd)
@@ -350,26 +350,6 @@ export function MealPlanGrid({
             </div>
           )
         })}
-      </div>
-
-      {/* ── Desktop: 7-column weekly grid ── */}
-      <div className="hidden md:block overflow-x-auto flex-1">
-        <div className="grid grid-cols-7 gap-4 min-w-[960px]">
-          {days.map((day) => {
-            const ymd = toYMD(day)
-            const dayEntries = entries.filter((e) => e.date.slice(0, 10) === ymd)
-            return (
-              <DailyMealColumn
-                key={ymd}
-                date={ymd}
-                entries={dayEntries}
-                isToday={ymd === today}
-                onMealClick={openModal}
-                onMealClear={handleClear}
-              />
-            )
-          })}
-        </div>
       </div>
 
       {selectedDate && (

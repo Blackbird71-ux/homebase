@@ -204,6 +204,16 @@
 
 ---
 
+### Enhancement 7: Meal plan — vertical layout on all screen sizes, recipe-only display
+
+**Change:** The desktop 7-column horizontal grid has been replaced by the same vertical stacked card layout used on mobile, applied at all viewport sizes. Within each day card, only meal slots that have at least one recipe assigned are rendered — note-only and empty slots are hidden. The "+ Add meal" button remains so new meals can still be planned from this view.
+
+**Files modified:**
+- `src/components/meal-plan/MealPlanGrid.tsx` — removed `md:hidden` from stacked layout; removed the `hidden md:block` 7-column desktop grid section entirely
+- `src/components/meal-plan/DailyMealColumn.tsx` — added `recipeFilledMealTypes` filter; compact mode now only renders meal types where `entry.recipes.length > 0`
+
+---
+
 ## Files Modified (all sessions)
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
@@ -229,6 +239,8 @@
 22. `src/components/lists/ShoppingList.tsx` - Single-row add form on mobile
 23. `src/components/lists/ListItemRow.tsx` - Lock/edit buttons hidden on mobile
 24. `src/app/(app)/lists/ListsClient.tsx` - Tighter title and padding on mobile
+25. `src/components/meal-plan/MealPlanGrid.tsx` - Vertical layout at all screen sizes (removed 7-column desktop grid)
+26. `src/components/meal-plan/DailyMealColumn.tsx` - Recipe-only filter in compact mode
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -249,3 +261,4 @@
 16. **Recipe image on create:** Create a new recipe, attach an image file (not URL), verify the image is saved and displayed
 17. **Theme per user:** Log in as Michelle on a fresh browser; verify her saved theme (e.g. Modern) is applied without needing to visit Settings
 18. **Grocery list mobile:** Open the Groceries list on a phone; verify the add-item form is one row, items don't wrap, and at least 4–5 items are visible above the fold
+19. **Meal plan layout:** Open the meal plan on desktop; verify it shows the vertical stacked card layout (one card per day) instead of a 7-column grid; verify only meal slots with a recipe show inside each card

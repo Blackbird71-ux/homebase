@@ -48,6 +48,10 @@ export function DailyMealColumn({
 
   const filledMealTypes = MEAL_TYPES.filter((mt) => getEntryForMealType(mt.id))
   const emptyMealTypes = MEAL_TYPES.filter((mt) => !getEntryForMealType(mt.id))
+  const recipeFilledMealTypes = MEAL_TYPES.filter((mt) => {
+    const entry = getEntryForMealType(mt.id)
+    return entry && entry.recipes && entry.recipes.length > 0
+  })
 
   if (compact) {
     return (
@@ -68,10 +72,10 @@ export function DailyMealColumn({
           </p>
         </div>
 
-        {/* Filled meal slots with natural height */}
-        {filledMealTypes.length > 0 && (
+        {/* Filled meal slots with natural height — only those with a recipe */}
+        {recipeFilledMealTypes.length > 0 && (
           <div className="flex flex-col gap-2 pl-1">
-            {filledMealTypes.map((mealType) => {
+            {recipeFilledMealTypes.map((mealType) => {
               const entry = getEntryForMealType(mealType.id)!
               const Icon = mealType.icon
               return (
@@ -104,7 +108,7 @@ export function DailyMealColumn({
         )}
 
         {/* No meals state + add button */}
-        {filledMealTypes.length === 0 && (
+        {recipeFilledMealTypes.length === 0 && (
           <p className="text-xs text-muted-foreground italic pl-1">No meals planned</p>
         )}
 
