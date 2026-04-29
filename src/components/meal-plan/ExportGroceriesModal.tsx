@@ -20,7 +20,7 @@ interface PreviewIngredient {
   text: string
   key: string
   category: ShoppingCategory
-  source: 'learned' | 'guessed'
+  source: 'learned' | 'custom' | 'guessed'
 }
 
 interface PreviewRecipe {
@@ -215,6 +215,8 @@ export function ExportGroceriesModal({
                           const cat = getCategory(ing)
                           const isLearned =
                             !overrides.has(ing.key) && ing.source === 'learned'
+                          const isCustom =
+                            !overrides.has(ing.key) && ing.source === 'custom'
                           return (
                             <div
                               key={ing.key + ing.text}
@@ -231,6 +233,8 @@ export function ExportGroceriesModal({
                                   'h-6 rounded-full px-2 text-xs font-semibold border appearance-none cursor-pointer',
                                   isLearned
                                     ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                                    : isCustom
+                                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400'
                                     : 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
                                 )}
                               >
@@ -283,6 +287,10 @@ export function ExportGroceriesModal({
                   <span className="flex items-center gap-1">
                     <span className="inline-block w-2 h-2 rounded-full bg-emerald-500/70" />
                     Remembered
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-blue-500/70" />
+                    Custom
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="inline-block w-2 h-2 rounded-full bg-amber-500/70" />

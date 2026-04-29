@@ -30,12 +30,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'from and to must be valid ISO dates' }, { status: 400 })
   }
 
+  // For full-week export (no specific IDs), skip meals from past dates
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const effectiveFrom = (!mealPlanIds && fromDate < today) ? today : fromDate
+
   const entries = await prisma.mealPlan.findMany({
     where: mealPlanIds
       ? { familyId: user.familyId, id: { in: mealPlanIds } }
       : {
           familyId: user.familyId,
-          date: { gte: fromDate, lte: toDate },
+          date: { gte: effectiveFrom, lte: toDate },
           OR: [
             { recipeId: { not: null } },
             { recipes: { some: {} } },
@@ -50,6 +55,12 @@ export async function GET(req: Request) {
     },
     orderBy: { date: 'asc' },
   })
+
+  // Load custom ingredient mappings (user-defined overrides)
+  const customMappings = await prisma.ingredientMapping.findMany({
+    where: { familyId: user.familyId },
+  })
+  const customMap = new Map(customMappings.map((m) => [m.ingredient.toLowerCase().trim(), m.category]))
 
   // Collect ingredients from all recipes (primary recipe + join table recipes)
   const allKeys = entries.flatMap((e) => {
@@ -79,6 +90,17 @@ export async function GET(req: Request) {
   })
   const learnedMap = new Map(learned.map((l) => [l.key, l.category]))
 
+  function resolveCategory(text: string, key: string): { category: string; source: 'learned' | 'custom' | 'guessed' } {
+    // 1. Learned: exact previous override saved by the user
+    const learnedCat = learnedMap.get(key)
+    if (learnedCat) return { category: learnedCat, source: 'learned' }
+    // 2. Custom mapping: family-defined keyword→category rule
+    const customCat = customMap.get(key) ?? customMap.get(text.toLowerCase().trim())
+    if (customCat) return { category: customCat, source: 'custom' }
+    // 3. Auto-guess: built-in keyword matching
+    return { category: autoGuessCategory(key), source: 'guessed' }
+  }
+
   // Generate recipe previews for all recipes (primary + join table)
   const recipes = entries.flatMap((e) => {
     const recipePreviews = []
@@ -91,13 +113,8 @@ export async function GET(req: Request) {
         mealType: e.mealType,
         ingredients: safeParseArray(e.recipe.ingredients).map((text) => {
           const key = normalizeIngredient(text)
-          const learnedCat = learnedMap.get(key)
-          return {
-            text,
-            key,
-            category: learnedCat ?? autoGuessCategory(key),
-            source: learnedCat ? 'learned' : 'guessed',
-          }
+          const resolved = resolveCategory(text, key)
+          return { text, key, category: resolved.category, source: resolved.source }
         }),
       })
     }
@@ -113,13 +130,8 @@ export async function GET(req: Request) {
             mealType: e.mealType,
             ingredients: safeParseArray(mealPlanRecipe.recipe.ingredients).map((text) => {
               const key = normalizeIngredient(text)
-              const learnedCat = learnedMap.get(key)
-              return {
-                text,
-                key,
-                category: learnedCat ?? autoGuessCategory(key),
-                source: learnedCat ? 'learned' : 'guessed',
-              }
+              const resolved = resolveCategory(text, key)
+              return { text, key, category: resolved.category, source: resolved.source }
             }),
           })
         }

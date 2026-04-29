@@ -82,6 +82,8 @@ export function MealPlanGrid({
   const [loading, setLoading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportMealPlanIds, setExportMealPlanIds] = useState<string[] | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedMealIds, setSelectedMealIds] = useState<Set<string>>(new Set())
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
@@ -212,6 +214,28 @@ export function MealPlanGrid({
     setExportOpen(true)
   }
 
+  function toggleSelectMode() {
+    setSelectMode((v) => !v)
+    setSelectedMealIds(new Set())
+  }
+
+  function toggleMealSelection(entryId: string) {
+    setSelectedMealIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(entryId)) next.delete(entryId)
+      else next.add(entryId)
+      return next
+    })
+  }
+
+  function handleAddSelectedToGroceries() {
+    if (selectedMealIds.size === 0) return
+    setExportMealPlanIds([...selectedMealIds])
+    setExportOpen(true)
+    setSelectMode(false)
+    setSelectedMealIds(new Set())
+  }
+
   async function handleClearWeek() {
     setClearing(true)
     try {
@@ -294,7 +318,10 @@ export function MealPlanGrid({
                     <FileTextIcon className="h-3.5 w-3.5 shrink-0" /> Apply Template
                   </button>
                   <button type="button" onClick={() => { setExportOpen(true); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-accent text-left">
-                    <ShoppingCartIcon className="h-3.5 w-3.5 shrink-0" /> Groceries
+                    <ShoppingCartIcon className="h-3.5 w-3.5 shrink-0" /> Add All to Groceries
+                  </button>
+                  <button type="button" onClick={() => { toggleSelectMode(); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-accent text-left">
+                    <ShoppingCartIcon className="h-3.5 w-3.5 shrink-0" /> {selectMode ? 'Cancel Select' : 'Select Meals…'}
                   </button>
                   <div className="border-t border-border my-1" />
                   <button type="button" onClick={() => { setClearDialogOpen(true); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 text-left" disabled={clearing || loading}>
@@ -315,8 +342,22 @@ export function MealPlanGrid({
             <FileTextIcon className="h-4 w-4 mr-1" /> Apply Template
           </Button>
           <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
-            <ShoppingCartIcon className="h-4 w-4 mr-1" /> Groceries
+            <ShoppingCartIcon className="h-4 w-4 mr-1" /> Add All to Groceries
           </Button>
+          <Button
+            variant={selectMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={toggleSelectMode}
+          >
+            <ShoppingCartIcon className="h-4 w-4 mr-1" />
+            {selectMode ? 'Cancel' : 'Select Meals…'}
+          </Button>
+          {selectMode && selectedMealIds.size > 0 && (
+            <Button size="sm" onClick={handleAddSelectedToGroceries}>
+              <ShoppingCartIcon className="h-4 w-4 mr-1" />
+              Add {selectedMealIds.size} to Groceries
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
           <Button variant="outline" size="sm" onClick={() => setClearDialogOpen(true)} disabled={clearing || loading} className="text-destructive border-destructive hover:bg-destructive/10">
             <Trash2Icon className="h-4 w-4 mr-1" /> Clear Week
@@ -352,12 +393,29 @@ export function MealPlanGrid({
                 onMealClick={openModal}
                 onMealClear={handleClear}
                 onMealAddToGroceries={handleAddMealToGroceries}
+                selectMode={selectMode}
+                selectedMealIds={selectedMealIds}
+                onToggleMealSelect={toggleMealSelection}
                 compact
               />
             </div>
           )
         })}
       </div>
+
+      {/* Select mode floating bar (mobile) */}
+      {selectMode && (
+        <div className="md:hidden fixed bottom-20 left-4 right-4 z-30 flex items-center justify-between gap-2 bg-background border border-border rounded-xl px-4 py-3 shadow-lg">
+          <span className="text-sm text-muted-foreground">{selectedMealIds.size} meal{selectedMealIds.size !== 1 ? 's' : ''} selected</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={toggleSelectMode}>Cancel</Button>
+            <Button size="sm" disabled={selectedMealIds.size === 0} onClick={handleAddSelectedToGroceries}>
+              <ShoppingCartIcon className="h-4 w-4 mr-1" />
+              Add to Groceries
+            </Button>
+          </div>
+        </div>
+      )}
 
       {selectedDate && (
         <AssignMealModal

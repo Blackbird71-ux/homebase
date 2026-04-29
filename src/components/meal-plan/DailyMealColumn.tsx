@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { MealSlotCell } from './MealSlotCell'
 import { MEAL_TYPES, type MealType } from '@/lib/meal-types'
 import { cn } from '@/lib/utils'
-import { PlusIcon } from 'lucide-react'
+import { PlusIcon, CheckIcon } from 'lucide-react'
 
 interface MealPlanEntry {
   id: string
@@ -30,6 +30,9 @@ interface DailyMealColumnProps {
   onMealClick: (date: string, mealType: MealType) => void
   onMealClear: (entryId: string) => void
   onMealAddToGroceries: (entryId: string) => void
+  selectMode?: boolean
+  selectedMealIds?: Set<string>
+  onToggleMealSelect?: (entryId: string) => void
   compact?: boolean // mobile: hide empty slots, natural height
 }
 
@@ -40,6 +43,9 @@ export function DailyMealColumn({
   onMealClick,
   onMealClear,
   onMealAddToGroceries,
+  selectMode = false,
+  selectedMealIds = new Set(),
+  onToggleMealSelect,
   compact = false,
 }: DailyMealColumnProps) {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -79,9 +85,24 @@ export function DailyMealColumn({
             {recipeFilledMealTypes.map((mealType) => {
               const entry = getEntryForMealType(mealType.id)!
               const Icon = mealType.icon
+              const isSelected = selectedMealIds.has(entry.id)
               return (
                 <div key={mealType.id} className="flex flex-col gap-1">
                   <div className="flex items-center gap-1">
+                    {selectMode && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleMealSelect?.(entry.id)}
+                        className={cn(
+                          'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors mr-1',
+                          isSelected
+                            ? 'bg-primary border-primary text-primary-foreground'
+                            : 'border-muted-foreground/50'
+                        )}
+                      >
+                        {isSelected && <CheckIcon className="h-3 w-3" />}
+                      </button>
+                    )}
                     <Icon className="h-3 w-3 text-muted-foreground" />
                     <span className="text-xs text-muted-foreground">{mealType.label}</span>
                   </div>
@@ -99,9 +120,9 @@ export function DailyMealColumn({
                     }))}
                     note={entry.note}
                     mealType={mealType.id}
-                    onClick={() => onMealClick(date, mealType.id)}
-                    onClear={() => onMealClear(entry.id)}
-                    onAddToGroceries={() => onMealAddToGroceries(entry.id)}
+                    onClick={() => !selectMode && onMealClick(date, mealType.id)}
+                    onClear={() => !selectMode && onMealClear(entry.id)}
+                    onAddToGroceries={() => !selectMode && onMealAddToGroceries(entry.id)}
                     naturalHeight
                   />
                 </div>
