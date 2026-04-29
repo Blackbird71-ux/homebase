@@ -175,6 +175,35 @@
 
 ---
 
+### Bug 15: Family members on different devices get wrong theme (low contrast sidebar)
+
+**Root Cause:** `next-themes` persists the active theme in `localStorage`, which is per-browser/per-device. Mark's browser had `localStorage.theme = "modern"` from when he saved his settings, but Michelle's browser had no matching entry, so `next-themes` fell back to `defaultTheme="dark"`. The database stores each user's theme correctly but nothing ever read it back into `next-themes` on login.
+
+**Fix:** Introduced `ThemeSyncer` — a component that lives inside `NextThemesProvider` (giving it access to `useTheme()`) and fetches `/api/settings` on mount. It calls `setTheme(data.theme)` to push the user's DB-stored theme into `next-themes`, overriding whatever was in `localStorage`. This also updates `localStorage` so subsequent visits on the same device are instant. Custom CSS-variable overrides (advanced theming) are synced in the same fetch, replacing the old `fetchCustomTheme` in the outer `ThemeProvider`.
+
+**Files modified:**
+- `src/components/providers/ThemeProvider.tsx` — replaced `fetchCustomTheme` logic with `ThemeSyncer` child component that syncs both base theme and custom theme from DB on mount
+
+---
+
+### Enhancement 6: Grocery list mobile layout — more items visible above fold
+
+**Change:** Three compounding issues made the grocery list cramped on mobile: (1) the add-item form stacked into two rows (`flex-col`), eating significant vertical space; (2) lock and category-edit buttons were always visible on mobile (unlike desktop where they hide until hover), forcing item text to wrap; (3) the list title and page padding were desktop-sized on mobile.
+
+**Fix:**
+- Add-item form is now a single row at all viewport sizes. The category `<select>` has a compact fixed width (`w-24`) on mobile instead of stretching full-width on a second row.
+- Lock button (when unlocked) and category-edit button are hidden on mobile (`hidden md:flex`). The delete button stays always visible. Locked items still show their lock icon.
+- Shopping list title is `text-base` on mobile (down from `text-xl`), margin tightened to `mb-2`. Page padding reduced from `p-4` to `p-3` on mobile.
+
+**Net result:** ~3–4 more list items visible above the fold on a typical phone screen.
+
+**Files modified:**
+- `src/components/lists/ShoppingList.tsx` — single-row add form with compact category select
+- `src/components/lists/ListItemRow.tsx` — lock/edit buttons hidden on mobile
+- `src/app/(app)/lists/ListsClient.tsx` — smaller title and tighter padding on mobile
+
+---
+
 ## Files Modified (all sessions)
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
@@ -196,6 +225,10 @@
 18. `src/app/api/tags/migrate/route.ts` - New: migrate legacy tags to Tag records
 19. `src/components/tags/TagManager.tsx` - Migration banner, unrestricted delete
 20. `src/components/recipes/RecipeForm.tsx` - Image upload works on create
+21. `src/components/providers/ThemeProvider.tsx` - ThemeSyncer syncs DB theme on login
+22. `src/components/lists/ShoppingList.tsx` - Single-row add form on mobile
+23. `src/components/lists/ListItemRow.tsx` - Lock/edit buttons hidden on mobile
+24. `src/app/(app)/lists/ListsClient.tsx` - Tighter title and padding on mobile
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -214,3 +247,5 @@
 14. **Legacy tags:** Go to Settings > Tags, verify amber migration banner if legacy tags exist; click Migrate and verify tags move to proper system
 15. **Tag deletion:** Delete a tag that is used in recipes — verify it is allowed with confirmation
 16. **Recipe image on create:** Create a new recipe, attach an image file (not URL), verify the image is saved and displayed
+17. **Theme per user:** Log in as Michelle on a fresh browser; verify her saved theme (e.g. Modern) is applied without needing to visit Settings
+18. **Grocery list mobile:** Open the Groceries list on a phone; verify the add-item form is one row, items don't wrap, and at least 4–5 items are visible above the fold
