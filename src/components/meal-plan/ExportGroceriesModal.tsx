@@ -10,7 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { SHOPPING_CATEGORIES } from '@/lib/list-helpers'
+import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ShoppingCategory } from '@/lib/list-helpers'
 import { toast } from 'sonner'
 import { ShoppingCartIcon, CheckIcon } from 'lucide-react'
@@ -45,6 +45,12 @@ export interface ExportGroceriesModalProps {
 
 type Status = 'loading' | 'ready' | 'confirming' | 'saving'
 
+interface IngredientCategory {
+  id: string
+  category: string
+  isCustom: boolean
+}
+
 function recipeKey(r: PreviewRecipe) {
   return `${r.title}||${r.date}||${r.mealType}`
 }
@@ -62,12 +68,26 @@ export function ExportGroceriesModal({
   const [groceriesList, setGroceriesList] = useState<GroceriesList | null>(null)
   const [overrides, setOverrides] = useState<Map<string, ShoppingCategory>>(new Map())
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [allCategories, setAllCategories] = useState<string[]>(DEFAULT_SHOPPING_CATEGORIES)
 
   useEffect(() => {
     if (!open) return
     const controller = new AbortController()
     setStatus('loading')
     setOverrides(new Map())
+
+    // Load custom categories
+    fetch('/api/ingredient-categories', { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data: IngredientCategory[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          // Build ordered list: system defaults first, then custom ones not already in defaults
+          const names = data.map((c) => c.category)
+          const extras = names.filter((n) => !DEFAULT_SHOPPING_CATEGORIES.includes(n))
+          setAllCategories([...DEFAULT_SHOPPING_CATEGORIES, ...extras])
+        }
+      })
+      .catch(() => { /* keep defaults */ })
 
     const idsParam = mealPlanIds?.length ? `&mealPlanIds=${mealPlanIds.join(',')}` : ''
     fetch(
@@ -238,7 +258,7 @@ export function ExportGroceriesModal({
                                     : 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
                                 )}
                               >
-                                {SHOPPING_CATEGORIES.map((c) => (
+                                {allCategories.map((c) => (
                                   <option key={c} value={c}>
                                     {c}
                                   </option>

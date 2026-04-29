@@ -62,25 +62,23 @@ export async function GET(req: Request) {
   })
   const customMap = new Map(customMappings.map((m) => [m.ingredient.toLowerCase().trim(), m.category]))
 
-  // Collect ingredients from all recipes (primary recipe + join table recipes)
+  // Collect ingredients from all recipes.
+  // Prefer join-table recipes (e.recipes); only fall back to legacy e.recipe
+  // when the join table is empty, to avoid counting the same recipe twice.
   const allKeys = entries.flatMap((e) => {
     const recipeIngredients: string[] = []
-    
-    // Include primary recipe if exists
-    if (e.recipe) {
+    const mealPlanRecipes = e.recipes as any[]
+
+    if (mealPlanRecipes && mealPlanRecipes.length > 0) {
+      // Use join-table recipes only
+      mealPlanRecipes.forEach((mpr: { recipe?: { ingredients: string } }) => {
+        if (mpr.recipe) recipeIngredients.push(...safeParseArray(mpr.recipe.ingredients))
+      })
+    } else if (e.recipe) {
+      // Legacy: primary recipe FK only
       recipeIngredients.push(...safeParseArray(e.recipe.ingredients))
     }
-    
-    // Include all recipes from join table
-    const mealPlanRecipes = e.recipes as any[]
-    if (mealPlanRecipes && mealPlanRecipes.length > 0) {
-      mealPlanRecipes.forEach((mealPlanRecipe: { recipe?: { ingredients: string } }) => {
-        if (mealPlanRecipe.recipe) {
-          recipeIngredients.push(...safeParseArray(mealPlanRecipe.recipe.ingredients))
-        }
-      })
-    }
-    
+
     return recipeIngredients.map((text) => normalizeIngredient(text))
   })
   const uniqueKeys = [...new Set(allKeys)]
@@ -94,50 +92,41 @@ export async function GET(req: Request) {
     // 1. Learned: exact previous override saved by the user
     const learnedCat = learnedMap.get(key)
     if (learnedCat) return { category: learnedCat, source: 'learned' }
-    // 2. Custom mapping: family-defined keyword→category rule
-    const customCat = customMap.get(key) ?? customMap.get(text.toLowerCase().trim())
+    // 2. Custom mapping: try normalized key first, then raw text (both lowercased)
+    const customCat = customMap.get(key.toLowerCase().trim()) ?? customMap.get(text.toLowerCase().trim())
     if (customCat) return { category: customCat, source: 'custom' }
     // 3. Auto-guess: built-in keyword matching
     return { category: autoGuessCategory(key), source: 'guessed' }
   }
 
-  // Generate recipe previews for all recipes (primary + join table)
+  // Generate recipe previews — same dedup logic as ingredient collection above.
   const recipes = entries.flatMap((e) => {
-    const recipePreviews = []
-    
-    // Include primary recipe if exists
-    if (e.recipe) {
-      recipePreviews.push({
+    const recipePreviews: ReturnType<typeof makePreview>[] = []
+
+    function makePreview(title: string, ingredients: string) {
+      return {
         date: e.date.toISOString().slice(0, 10),
-        title: e.recipe.title,
+        title,
         mealType: e.mealType,
-        ingredients: safeParseArray(e.recipe.ingredients).map((text) => {
+        ingredients: safeParseArray(ingredients).map((text) => {
           const key = normalizeIngredient(text)
           const resolved = resolveCategory(text, key)
           return { text, key, category: resolved.category, source: resolved.source }
         }),
-      })
+      }
     }
-    
-    // Include all recipes from join table
+
     const mealPlanRecipes2 = e.recipes as any[]
     if (mealPlanRecipes2 && mealPlanRecipes2.length > 0) {
-      mealPlanRecipes2.forEach((mealPlanRecipe: { recipe?: { title: string; ingredients: string } }) => {
-        if (mealPlanRecipe.recipe) {
-          recipePreviews.push({
-            date: e.date.toISOString().slice(0, 10),
-            title: mealPlanRecipe.recipe.title,
-            mealType: e.mealType,
-            ingredients: safeParseArray(mealPlanRecipe.recipe.ingredients).map((text) => {
-              const key = normalizeIngredient(text)
-              const resolved = resolveCategory(text, key)
-              return { text, key, category: resolved.category, source: resolved.source }
-            }),
-          })
-        }
+      // Use join-table recipes only
+      mealPlanRecipes2.forEach((mpr: { recipe?: { title: string; ingredients: string } }) => {
+        if (mpr.recipe) recipePreviews.push(makePreview(mpr.recipe.title, mpr.recipe.ingredients))
       })
+    } else if (e.recipe) {
+      // Legacy fallback
+      recipePreviews.push(makePreview(e.recipe.title, e.recipe.ingredients))
     }
-    
+
     return recipePreviews
   })
 
