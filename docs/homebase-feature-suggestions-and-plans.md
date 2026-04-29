@@ -51,7 +51,7 @@
 | Quick-add from anywhere | Floating action button or Cmd+K palette to add events/items without navigating | Medium | ✅ Done |
 | Birthdays & anniversaries | Dedicated recurring event type with calendar banner and Home dashboard reminder | Low | ✅ Done |
 | Default recipe book | Set a favourite/default recipe book that auto-selects on the Recipes page, with star icon in sidebar | Low | ✅ Done |
-| Accessibility display settings | High-contrast themes (light/dark), extra-large text, line spacing, text weight — all in one Appearance tab | Low | ✅ Done |
+| Accessibility display settings | High-contrast themes (light/dark + HC Sunset/Ocean/Forest/Midnight colour variants), extra-large text, line spacing, text weight — all in one Appearance tab | Low | ✅ Done |
 
 ### Infrastructure & Developer Experience
 

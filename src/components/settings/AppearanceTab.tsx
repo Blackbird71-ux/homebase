@@ -31,8 +31,12 @@ const themeOptions = [
   { value: 'sunset',             label: 'Sunset',          icon: Sun,     swatch: 'bg-gradient-to-br from-orange-100 to-pink-100' },
   { value: 'ocean',              label: 'Ocean',           icon: Sun,     swatch: 'bg-gradient-to-br from-blue-50 to-cyan-50' },
   { value: 'forest',             label: 'Forest',          icon: Sun,     swatch: 'bg-gradient-to-br from-green-50 to-emerald-50' },
-  { value: 'high-contrast',      label: 'Hi-Contrast',     icon: Eye,     swatch: 'bg-white border-2 border-black' },
-  { value: 'high-contrast-dark', label: 'Hi-Contrast Dark',icon: Eye,     swatch: 'bg-black border border-white/60' },
+  { value: 'high-contrast',          label: 'Hi-Contrast',       icon: Eye,  swatch: 'bg-white border-2 border-black' },
+  { value: 'high-contrast-dark',     label: 'Hi-Contrast Dark',  icon: Eye,  swatch: 'bg-black border border-white/60' },
+  { value: 'high-contrast-sunset',   label: 'HC Sunset',         icon: Eye,  swatch: 'bg-amber-50 border-2 border-amber-900' },
+  { value: 'high-contrast-ocean',    label: 'HC Ocean',          icon: Eye,  swatch: 'bg-sky-50 border-2 border-sky-900' },
+  { value: 'high-contrast-forest',   label: 'HC Forest',         icon: Eye,  swatch: 'bg-emerald-50 border-2 border-emerald-900' },
+  { value: 'high-contrast-midnight', label: 'HC Midnight',       icon: Eye,  swatch: 'bg-[#070b18] border border-sky-300' },
 ] as const
 
 const fontSizeOptions = [
@@ -160,7 +164,7 @@ export function AppearanceTab({
     }
   }
 
-  const isHighContrast = theme === 'high-contrast' || theme === 'high-contrast-dark'
+  const isHighContrast = theme.startsWith('high-contrast')
 
   return (
     <div className="space-y-6">
@@ -170,7 +174,7 @@ export function AppearanceTab({
         <CardHeader>
           <CardTitle>Theme</CardTitle>
           <CardDescription>
-            Choose how Homebase looks. The two Hi-Contrast options maximise text visibility.
+            Choose how Homebase looks. Hi-Contrast themes maximise text visibility with solid borders.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -195,7 +199,7 @@ export function AppearanceTab({
           </div>
           {isHighContrast && (
             <p className="mt-3 text-sm text-muted-foreground">
-              High Contrast themes use black/white with strong borders — best for low-vision users or bright environments.
+              High Contrast themes use strongly contrasting colours with solid borders — best for low-vision users or bright environments.
             </p>
           )}
         </CardContent>
