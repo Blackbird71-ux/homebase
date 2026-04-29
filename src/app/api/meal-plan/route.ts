@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { MEAL_TYPES } from '@/lib/meal-types'
+import { getLocalImageUrl } from '@/lib/image-cache'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -27,12 +28,12 @@ export async function GET(req: Request) {
     include: {
       recipes: {
         include: {
-          recipe: { select: { id: true, title: true } },
+          recipe: { select: { id: true, title: true, image: true } },
         },
         orderBy: { order: 'asc' },
       },
       // Keep recipe for backward compatibility during transition
-      recipe: { select: { id: true, title: true } },
+      recipe: { select: { id: true, title: true, image: true } },
     },
     orderBy: { date: 'asc' },
   })
@@ -42,21 +43,21 @@ export async function GET(req: Request) {
       ...p,
       date: p.date.toISOString(),
       // For backward compatibility, if there are no recipes but there's a recipeId, include it
-      recipes: p.recipes.length > 0 
+      recipes: p.recipes.length > 0
         ? p.recipes.map(r => ({
             id: r.id,
             recipeId: r.recipeId,
             order: r.order,
             courseType: r.courseType,
-            recipe: r.recipe,
+            recipe: { id: r.recipe.id, title: r.recipe.title, image: getLocalImageUrl(r.recipe.image) },
           }))
-        : p.recipeId 
+        : p.recipeId
           ? [{
               id: 'legacy',
               recipeId: p.recipeId,
               order: 0,
               courseType: null,
-              recipe: p.recipe,
+              recipe: p.recipe ? { id: p.recipe.id, title: p.recipe.title, image: getLocalImageUrl(p.recipe.image) } : null,
             }]
           : [],
     }))
@@ -125,11 +126,11 @@ export async function POST(req: Request) {
     include: {
       recipes: {
         include: {
-          recipe: { select: { id: true, title: true } },
+          recipe: { select: { id: true, title: true, image: true } },
         },
         orderBy: { order: 'asc' },
       },
-      recipe: { select: { id: true, title: true } },
+      recipe: { select: { id: true, title: true, image: true } },
     },
   })
 
@@ -156,11 +157,11 @@ export async function POST(req: Request) {
     include: {
       recipes: {
         include: {
-          recipe: { select: { id: true, title: true } },
+          recipe: { select: { id: true, title: true, image: true } },
         },
         orderBy: { order: 'asc' },
       },
-      recipe: { select: { id: true, title: true } },
+      recipe: { select: { id: true, title: true, image: true } },
     },
   })
 
@@ -177,7 +178,7 @@ export async function POST(req: Request) {
         recipeId: r.recipeId,
         order: r.order,
         courseType: r.courseType,
-        recipe: r.recipe,
+        recipe: { id: r.recipe.id, title: r.recipe.title, image: getLocalImageUrl(r.recipe.image) },
       })),
     },
     { status: 201 }

@@ -2,6 +2,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { MealPlanGrid } from '@/components/meal-plan/MealPlanGrid'
 import { todayStringInTz } from '@/lib/timezone'
+import { getLocalImageUrl } from '@/lib/image-cache'
 
 function startOfWeek(date: Date, weekStartsOn: number): Date {
   const d = new Date(date)
@@ -48,12 +49,12 @@ export default async function MealPlanPage() {
     include: {
       recipes: {
         include: {
-          recipe: { select: { id: true, title: true } },
+          recipe: { select: { id: true, title: true, image: true } },
         },
         orderBy: { order: 'asc' },
       },
       // Keep recipe for backward compatibility during transition
-      recipe: { select: { id: true, title: true } },
+      recipe: { select: { id: true, title: true, image: true } },
     },
     orderBy: { date: 'asc' },
   })
@@ -67,13 +68,13 @@ export default async function MealPlanPage() {
     note: e.note,
     familyId: e.familyId,
     // For backward compatibility, if there are no recipes but there's a recipeId, include it
-    recipes: e.recipes.length > 0 
+    recipes: e.recipes.length > 0
       ? e.recipes.map(r => ({
           id: r.id,
           recipeId: r.recipeId,
           order: r.order,
           courseType: r.courseType,
-          recipe: r.recipe,
+          recipe: { id: r.recipe.id, title: r.recipe.title, image: getLocalImageUrl(r.recipe.image) },
         }))
       : e.recipeId && e.recipe
         ? [{
@@ -81,7 +82,7 @@ export default async function MealPlanPage() {
             recipeId: e.recipeId,
             order: 0,
             courseType: null,
-            recipe: e.recipe,
+            recipe: { id: e.recipe.id, title: e.recipe.title, image: getLocalImageUrl(e.recipe.image) },
           }]
         : [],
   }))

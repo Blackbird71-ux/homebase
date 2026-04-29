@@ -17,6 +17,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
+  const mealPlanIdsParam = searchParams.get('mealPlanIds')
+  const mealPlanIds = mealPlanIdsParam ? mealPlanIdsParam.split(',').filter(Boolean) : null
 
   if (!from || !to) {
     return NextResponse.json({ error: 'from and to are required' }, { status: 400 })
@@ -29,14 +31,16 @@ export async function GET(req: Request) {
   }
 
   const entries = await prisma.mealPlan.findMany({
-    where: {
-      familyId: user.familyId,
-      date: { gte: fromDate, lte: toDate },
-      OR: [
-        { recipeId: { not: null } },
-        { recipes: { some: {} } }, // Include entries with recipes in join table
-      ],
-    },
+    where: mealPlanIds
+      ? { familyId: user.familyId, id: { in: mealPlanIds } }
+      : {
+          familyId: user.familyId,
+          date: { gte: fromDate, lte: toDate },
+          OR: [
+            { recipeId: { not: null } },
+            { recipes: { some: {} } },
+          ],
+        },
     include: { 
       recipe: true,
       recipes: {

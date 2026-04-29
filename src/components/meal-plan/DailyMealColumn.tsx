@@ -11,7 +11,7 @@ interface MealPlanEntry {
   date: string // ISO string
   mealType: string
   recipeId: string | null
-  recipe: { id: string; title: string } | null
+  recipe: { id: string; title: string; image: string | null } | null
   note: string | null
   familyId: string
   recipes: Array<{
@@ -19,7 +19,7 @@ interface MealPlanEntry {
     recipeId: string
     order: number
     courseType: string | null
-    recipe: { id: string; title: string }
+    recipe: { id: string; title: string; image: string | null }
   }>
 }
 
@@ -29,6 +29,7 @@ interface DailyMealColumnProps {
   isToday: boolean
   onMealClick: (date: string, mealType: MealType) => void
   onMealClear: (entryId: string) => void
+  onMealAddToGroceries: (entryId: string) => void
   compact?: boolean // mobile: hide empty slots, natural height
 }
 
@@ -38,6 +39,7 @@ export function DailyMealColumn({
   isToday,
   onMealClick,
   onMealClear,
+  onMealAddToGroceries,
   compact = false,
 }: DailyMealColumnProps) {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -46,7 +48,6 @@ export function DailyMealColumn({
     return entries.find((e) => e.mealType === mealType)
   }
 
-  const filledMealTypes = MEAL_TYPES.filter((mt) => getEntryForMealType(mt.id))
   const emptyMealTypes = MEAL_TYPES.filter((mt) => !getEntryForMealType(mt.id))
   const recipeFilledMealTypes = MEAL_TYPES.filter((mt) => {
     const entry = getEntryForMealType(mt.id)
@@ -92,6 +93,7 @@ export function DailyMealColumn({
                       id: r.id,
                       recipeId: r.recipeId,
                       recipeName: r.recipe.title,
+                      imageUrl: r.recipe.image,
                       courseType: r.courseType ?? undefined,
                       order: r.order,
                     }))}
@@ -99,6 +101,7 @@ export function DailyMealColumn({
                     mealType={mealType.id}
                     onClick={() => onMealClick(date, mealType.id)}
                     onClear={() => onMealClear(entry.id)}
+                    onAddToGroceries={() => onMealAddToGroceries(entry.id)}
                     naturalHeight
                   />
                 </div>
@@ -152,7 +155,7 @@ export function DailyMealColumn({
     )
   }
 
-  // Desktop layout (unchanged)
+  // Desktop layout
   return (
     <div className="flex flex-col gap-1">
       {/* Day header */}
@@ -191,12 +194,15 @@ export function DailyMealColumn({
                   id: r.id,
                   recipeId: r.recipeId,
                   recipeName: r.recipe.title,
+                  imageUrl: r.recipe.image,
                   courseType: r.courseType ?? undefined,
                   order: r.order,
                 }))}
                 note={entry?.note ?? null}
+                mealType={mealType.id}
                 onClick={() => onMealClick(date, mealType.id)}
                 onClear={() => entry && onMealClear(entry.id)}
+                onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
               />
             </div>
           )

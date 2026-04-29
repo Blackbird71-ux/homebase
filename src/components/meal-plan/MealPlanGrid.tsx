@@ -25,7 +25,7 @@ interface MealPlanEntry {
   date: string // ISO string
   mealType: string
   recipeId: string | null
-  recipe: { id: string; title: string } | null
+  recipe: { id: string; title: string; image: string | null } | null
   note: string | null
   familyId: string
   recipes: Array<{
@@ -33,7 +33,7 @@ interface MealPlanEntry {
     recipeId: string
     order: number
     courseType: string | null
-    recipe: { id: string; title: string }
+    recipe: { id: string; title: string; image: string | null }
   }>
 }
 
@@ -81,6 +81,7 @@ export function MealPlanGrid({
   const [selectedMealType, setSelectedMealType] = useState(DEFAULT_MEAL_TYPE)
   const [loading, setLoading] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [exportMealPlanIds, setExportMealPlanIds] = useState<string[] | null>(null)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
@@ -204,6 +205,11 @@ export function MealPlanGrid({
     } else {
       toast.error('Failed to clear meal. Please try again.')
     }
+  }
+
+  function handleAddMealToGroceries(entryId: string) {
+    setExportMealPlanIds([entryId])
+    setExportOpen(true)
   }
 
   async function handleClearWeek() {
@@ -345,6 +351,7 @@ export function MealPlanGrid({
                 isToday={ymd === today}
                 onMealClick={openModal}
                 onMealClear={handleClear}
+                onMealAddToGroceries={handleAddMealToGroceries}
                 compact
               />
             </div>
@@ -376,9 +383,10 @@ export function MealPlanGrid({
       )}
       <ExportGroceriesModal
         open={exportOpen}
-        onOpenChange={setExportOpen}
+        onOpenChange={(open) => { setExportOpen(open); if (!open) setExportMealPlanIds(null) }}
         weekFrom={toYMD(weekStart)}
         weekTo={toYMD(days[days.length - 1])}
+        mealPlanIds={exportMealPlanIds ?? undefined}
       />
 
       {/* Clear Week Confirmation Dialog */}

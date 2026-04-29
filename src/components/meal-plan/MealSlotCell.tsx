@@ -1,6 +1,6 @@
 'use client'
 
-import { PlusIcon, XIcon } from 'lucide-react'
+import { PlusIcon, XIcon, ShoppingCartIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getMealTypeColor } from '@/lib/meal-types'
 
@@ -12,6 +12,7 @@ interface MealSlotCellProps {
     id: string
     recipeId: string
     recipeName: string
+    imageUrl?: string | null
     courseType?: string
     order: number
   }>
@@ -19,6 +20,7 @@ interface MealSlotCellProps {
   mealType?: string
   onClick: () => void
   onClear: () => void
+  onAddToGroceries?: () => void
   naturalHeight?: boolean // mobile: remove fixed h-16 and line-clamp
 }
 
@@ -30,34 +32,33 @@ export function MealSlotCell({
   mealType = 'dinner',
   onClick,
   onClear,
+  onAddToGroceries,
   naturalHeight = false,
 }: MealSlotCellProps) {
-  // Use recipes if available, otherwise fall back to recipeName for backward compatibility
   const hasRecipes = recipes && recipes.length > 0
   const hasRecipeName = recipeName && recipeName.trim() !== ''
   const hasNote = note && note.trim() !== ''
-  
-  // Determine what to display
+
+  const sortedRecipes = hasRecipes ? [...recipes].sort((a, b) => a.order - b.order) : []
+  const firstImage = sortedRecipes.find(r => r.imageUrl)?.imageUrl ?? null
+
   let displayContent: React.ReactNode = null
-  
+
   if (hasRecipes) {
-    // Display multiple recipes
     displayContent = (
       <div className="space-y-0.5">
-        {recipes
-          .sort((a, b) => a.order - b.order)
-          .map((recipe) => (
-            <div key={recipe.id} className="flex items-start gap-1">
-              {recipe.courseType && (
-                <span className="text-[10px] font-medium text-muted-foreground shrink-0">
-                  {recipe.courseType}:
-                </span>
-              )}
-              <span className={`text-xs font-medium ${naturalHeight ? '' : 'line-clamp-1'}`}>
-                {recipe.recipeName}
+        {sortedRecipes.map((recipe) => (
+          <div key={recipe.id} className="flex items-start gap-1">
+            {recipe.courseType && (
+              <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                {recipe.courseType}:
               </span>
-            </div>
-          ))}
+            )}
+            <span className={`text-xs font-medium ${naturalHeight ? '' : 'line-clamp-1'}`}>
+              {recipe.recipeName}
+            </span>
+          </div>
+        ))}
         {hasNote && (
           <div className={`text-[10px] text-muted-foreground italic ${naturalHeight ? '' : 'line-clamp-1'}`}>
             {note}
@@ -66,7 +67,6 @@ export function MealSlotCell({
       </div>
     )
   } else if (hasRecipeName) {
-    // Backward compatibility: single recipe
     displayContent = (
       <div className="space-y-0.5">
         <p className={`text-xs font-medium ${naturalHeight ? '' : 'line-clamp-2'}`}>{recipeName}</p>
@@ -78,14 +78,17 @@ export function MealSlotCell({
       </div>
     )
   } else if (hasNote) {
-    // Just a note
     displayContent = (
       <p className={`text-xs font-medium italic ${naturalHeight ? '' : 'line-clamp-3'}`}>{note}</p>
     )
   }
-  
+
   const mealColor = getMealTypeColor(mealType)
   const hasContent = hasRecipes || hasRecipeName || hasNote
+  // On mobile (naturalHeight), action buttons are always visible; on desktop, hover-only
+  const btnVisibility = naturalHeight
+    ? 'shrink-0 text-muted-foreground'
+    : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground'
 
   if (!hasContent) {
     return (
@@ -101,26 +104,55 @@ export function MealSlotCell({
 
   return (
     <div
-      className={`group relative w-full ${naturalHeight ? 'min-h-[2.5rem]' : 'h-16'} rounded-lg border border-border bg-card px-2 py-1.5 flex items-start justify-between gap-1 cursor-pointer hover:border-primary/50 transition-colors ${mealColor}`}
+      className={`group relative w-full ${naturalHeight ? 'min-h-[2.5rem]' : 'h-16'} rounded-lg border border-border bg-card px-2 py-1.5 flex items-start gap-1.5 cursor-pointer hover:border-primary/50 transition-colors ${mealColor}`}
       onClick={onClick}
     >
-      <div className="flex-1 overflow-hidden">
+      {/* Thumbnail — first recipe image */}
+      {firstImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={firstImage}
+          alt=""
+          className="h-7 w-7 rounded object-cover shrink-0 mt-0.5"
+        />
+      )}
+
+      {/* Recipe text */}
+      <div className="flex-1 overflow-hidden min-w-0">
         {displayContent}
       </div>
-      {mealPlanId && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
-          onClick={(e) => {
-            e.stopPropagation()
-            onClear()
-          }}
-          aria-label="Clear meal"
-        >
-          <XIcon className="h-3 w-3" />
-        </Button>
-      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-0.5 shrink-0">
+        {onAddToGroceries && hasRecipes && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={`${btnVisibility} hover:text-primary`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onAddToGroceries()
+            }}
+            aria-label="Add to groceries"
+          >
+            <ShoppingCartIcon className="h-3 w-3" />
+          </Button>
+        )}
+        {mealPlanId && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={`${btnVisibility} hover:text-destructive`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClear()
+            }}
+            aria-label="Clear meal"
+          >
+            <XIcon className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
