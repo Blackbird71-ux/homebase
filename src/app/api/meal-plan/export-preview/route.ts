@@ -90,7 +90,19 @@ export async function GET(req: Request) {
 
   function resolveCategory(text: string, key: string): { category: string; source: 'learned' | 'custom' | 'guessed' } {
     // 1. Custom mapping: explicit user-defined rules always win
-    const customCat = customMap.get(key.toLowerCase().trim()) ?? customMap.get(text.toLowerCase().trim())
+    // Try exact match first (fast path), then substring match (for when the recipe
+    // ingredient has extra words like "rashers bacon – diced" matching a "rashes bacon" mapping)
+    const lowerKey = key.toLowerCase().trim()
+    const lowerText = text.toLowerCase().trim()
+    let customCat = customMap.get(lowerKey) ?? customMap.get(lowerText)
+    if (!customCat) {
+      for (const [mappedIngredient, category] of customMap) {
+        if (lowerKey.includes(mappedIngredient) || lowerText.includes(mappedIngredient)) {
+          customCat = category
+          break
+        }
+      }
+    }
     if (customCat) return { category: customCat, source: 'custom' }
     // 2. Learned: previously remembered category (from past exports)
     const learnedCat = learnedMap.get(key)
