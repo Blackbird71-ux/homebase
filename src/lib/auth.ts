@@ -51,18 +51,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return token
     },
-    // Re-read timezone and weekStartsOn from DB on every auth() call so that
-    // admin changes to these fields take effect without requiring sign-out.
+    // Re-read mutable fields from DB on every auth() call so that
+    // admin changes take effect without requiring sign-out.
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string
         session.user.role = token.role as string
-        session.user.familyId = token.familyId as string
-        // Always fetch mutable family settings fresh from DB
+        // Always fetch mutable fields fresh from DB (familyId can change if a user is moved between families)
         const fresh = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { weekStartsOn: true, family: { select: { timezone: true } } },
+          select: { familyId: true, weekStartsOn: true, family: { select: { timezone: true } } },
         })
+        session.user.familyId = fresh?.familyId ?? (token.familyId as string)
         session.user.timezone = fresh?.family.timezone ?? (token.timezone as string)
         session.user.weekStartsOn = fresh?.weekStartsOn ?? (token.weekStartsOn as number)
       }

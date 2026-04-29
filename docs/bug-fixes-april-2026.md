@@ -228,6 +228,41 @@
 
 ---
 
+### Bug 17: "Add to Groceries" button cut off on mobile in export modal
+
+**Root Cause:** The `DialogFooter` in `ExportGroceriesModal` used `flex-row items-center` with no responsive breakpoint. On narrow screens the legend dots (Remembered / Custom / Auto-guessed) consumed the full width and the Cancel + Add to Groceries buttons overflowed off the right edge of the screen, making them unreachable.
+
+**Fix:** Changed footer to `flex-col sm:flex-row items-start sm:items-center gap-3`. On mobile the legend stacks above the buttons. The two buttons are wrapped in a `div` with `self-end sm:self-auto` so they right-align naturally on mobile without needing explicit margin overrides.
+
+**Files modified:**
+- `src/components/meal-plan/ExportGroceriesModal.tsx` — responsive footer layout
+
+---
+
+### Bug 18: Lock button hidden on mobile — cannot lock list items from phone
+
+**Root Cause:** Enhancement 6 hid the lock button on mobile (`hidden md:flex`) to reduce clutter and show more items above the fold. This had the unintended consequence of making it impossible to lock items from a phone — you could only unlock them (locked items always show their yellow icon regardless of screen size).
+
+**Fix:** Removed `hidden` from the unlocked lock button's class, changing it to `flex md:opacity-0 md:group-hover:opacity-100`. This matches the existing delete button behaviour: always visible on mobile, hover-to-reveal on desktop. The category-edit button remains desktop-only (`hidden md:flex`) as it is less frequently needed.
+
+**Files modified:**
+- `src/components/lists/ListItemRow.tsx` — lock button visible on mobile when unlocked
+
+---
+
+### Bug 19: Ingredient mappings not applying for family members with stale sessions
+
+**Root Cause:** `familyId` was stored in the JWT at login time and never refreshed — unlike `timezone` and `weekStartsOn` which are re-read from the DB on every `auth()` call. If a user's `familyId` was changed in the database (e.g. Michelle was moved from her own family into Mark's family by an admin), her active session still used the old `familyId`. All family-scoped queries — ingredient mappings, learned categories, lists, recipes — would continue to read from the wrong family until she logged out and back in.
+
+**Fix:** Added `familyId` to the fields re-fetched from the database in the session callback, matching the existing pattern for `timezone`. The stale JWT value is used as a fallback only if the DB lookup fails.
+
+> **Note:** If a family member's `familyId` differs in the database, they still need to log out and back in once for the session callback to pick up the new value. After that one re-login, sessions will always be current.
+
+**Files modified:**
+- `src/lib/auth.ts` — `familyId` now re-read from DB on every session call
+
+---
+
 ## Files Modified (all sessions)
 1. `src/app/(app)/home/page.tsx` - Fixed meal plan query normalization, passes timezone to DashboardGrid, respects dashboardShoppingListId
 2. `src/components/dashboard/DashboardGrid.tsx` - Added timezone prop
@@ -239,7 +274,7 @@
 8. `src/app/api/chores/route.ts` - POST returns completions + _count
 9. `src/app/api/chores/[id]/route.ts` - PATCH returns completions + _count
 10. `src/app/(app)/chores/ChoresClient.tsx` - Defensive completions access
-11. `src/components/lists/ListItemRow.tsx` - Recipe name sub-line, checkbox size fix
+11. `src/components/lists/ListItemRow.tsx` - Recipe name sub-line, checkbox size fix, lock button visible on mobile
 12. `src/components/lists/CategoryGroup.tsx` - Bold foreground category headings
 13. `src/app/globals.css` - Improved muted-foreground contrast across light themes
 14. `src/components/meal-plan/DailyMealColumn.tsx` - Compact mobile layout
@@ -251,11 +286,12 @@
 20. `src/components/recipes/RecipeForm.tsx` - Image upload works on create
 21. `src/components/providers/ThemeProvider.tsx` - ThemeSyncer syncs DB theme on mount
 22. `src/components/lists/ShoppingList.tsx` - Single-row add form on mobile
-23. `src/components/lists/ListItemRow.tsx` - Lock/edit buttons hidden on mobile
-24. `src/app/(app)/lists/ListsClient.tsx` - Tighter title and padding on mobile
-25. `src/components/meal-plan/MealPlanGrid.tsx` - Vertical layout at all screen sizes (removed 7-column desktop grid)
-26. `src/components/meal-plan/DailyMealColumn.tsx` - Recipe-only filter in compact mode
-27. `src/app/api/meal-plan/export-preview/route.ts` - Fixed custom mapping priority and added substring matching
+23. `src/app/(app)/lists/ListsClient.tsx` - Tighter title and padding on mobile
+24. `src/components/meal-plan/MealPlanGrid.tsx` - Vertical layout at all screen sizes (removed 7-column desktop grid)
+25. `src/components/meal-plan/DailyMealColumn.tsx` - Recipe-only filter in compact mode
+26. `src/app/api/meal-plan/export-preview/route.ts` - Fixed custom mapping priority and added substring matching
+27. `src/components/meal-plan/ExportGroceriesModal.tsx` - Responsive footer for mobile
+28. `src/lib/auth.ts` - familyId re-read from DB on every session call
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -277,3 +313,6 @@
 17. **Theme per user:** Log in as Michelle on a fresh browser; verify her saved theme (e.g. Modern) is applied without needing to visit Settings
 18. **Grocery list mobile:** Open the Groceries list on a phone; verify the add-item form is one row, items don't wrap, and at least 4–5 items are visible above the fold
 19. **Meal plan layout:** Open the meal plan on desktop; verify it shows the vertical stacked card layout (one card per day) instead of a 7-column grid; verify only meal slots with a recipe show inside each card
+20. **Add to Groceries mobile:** Open the meal plan on a phone, tap "Add to Groceries" — verify Cancel and Add to Groceries buttons are fully visible and tappable
+21. **Lock item on mobile:** Open a shopping list on a phone, hover/tap a list item — verify the lock icon is visible; tap it and verify the item becomes locked (yellow lock, delete button hidden)
+22. **Ingredient mappings cross-user:** Log in as a second family member; open meal plan and export groceries — verify custom ingredient mappings (e.g. bacon → Deli) apply correctly for all family members

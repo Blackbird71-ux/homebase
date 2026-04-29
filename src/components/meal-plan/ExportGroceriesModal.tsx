@@ -302,7 +302,7 @@ export function ExportGroceriesModal({
                 </div>
               </div>
             ) : (
-              <DialogFooter className="px-6 py-4 border-t border-border flex-row items-center">
+              <DialogFooter className="px-6 py-4 border-t border-border flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-3 text-xs text-muted-foreground flex-1">
                   <span className="flex items-center gap-1">
                     <span className="inline-block w-2 h-2 rounded-full bg-emerald-500/70" />
@@ -317,16 +317,18 @@ export function ExportGroceriesModal({
                     Auto-guessed
                   </span>
                 </div>
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAddToGroceries}
-                  disabled={status === 'saving' || selectedKeys.size === 0}
-                >
-                  <ShoppingCartIcon className="h-4 w-4 mr-1" />
-                  {status === 'saving' ? 'Saving…' : 'Add to Groceries'}
-                </Button>
+                <div className="flex gap-2 self-end sm:self-auto">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleAddToGroceries}
+                    disabled={status === 'saving' || selectedKeys.size === 0}
+                  >
+                    <ShoppingCartIcon className="h-4 w-4 mr-1" />
+                    {status === 'saving' ? 'Saving…' : 'Add to Groceries'}
+                  </Button>
+                </div>
               </DialogFooter>
             )}
           </>

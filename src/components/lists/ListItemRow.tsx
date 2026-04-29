@@ -186,7 +186,7 @@ export function ListItemRow({
           className={`shrink-0 ${
             isLocked
               ? 'opacity-100 text-yellow-500 hover:text-yellow-600'
-              : 'hidden md:flex md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-yellow-500'
+              : 'flex md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-yellow-500'
           }`}
           aria-label={isLocked ? 'Unlock item' : 'Lock item'}
           title={isLocked ? 'Unlock item' : 'Lock item (prevents deletion)'}
