@@ -45,11 +45,12 @@
 ### UX & Quality of Life
 
 | Feature | Description | Effort | Status |
-|---|---|---|---|
+|---|---|---|---|---|
 | Mobile responsiveness | Unified FAB nav+quick-add bottom sheet, full-width list view with chip selector | Medium | ✅ Done |
 | Dashboard customisation | Show/hide and reorder Home cards per user via existing `uiPreferences` JSON | Low | ✅ Done |
 | Quick-add from anywhere | Floating action button or Cmd+K palette to add events/items without navigating | Medium | ✅ Done |
 | Birthdays & anniversaries | Dedicated recurring event type with calendar banner and Home dashboard reminder | Low | ✅ Done |
+| Default recipe book | Set a favourite/default recipe book that auto-selects on the Recipes page, with star icon in sidebar | Low | ✅ Done |
 
 ### Infrastructure & Developer Experience
 
