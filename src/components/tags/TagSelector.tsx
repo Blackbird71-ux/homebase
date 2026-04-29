@@ -140,7 +140,7 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
             disabled={disabled}
             className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-auto"
           />
-          {showSuggestions && (suggestions.length > 0 || loading) && (
+          {showSuggestions && (suggestions.length > 0 || loading || !!inputValue.trim()) && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center p-4">

@@ -182,7 +182,7 @@ async function getRecipeWithTags(id: string, familyId: string) {
     ingredients: safeParseArray(recipe.ingredients),
     instructions: safeParseArray(recipe.instructions),
     // Include both formats during transition
-    tags: [...newTags.map((t: any) => t.name), ...legacyTags.filter((t: string) => t !== 'legacy-tags')],
+    tags: [...newTags.map((t: any) => t.name).filter((n: string) => n !== 'legacy-tags'), ...legacyTags.filter((t: string) => t !== 'legacy-tags')],
     tagObjects: newTags,
     createdAt: recipe.createdAt.toISOString(),
   }

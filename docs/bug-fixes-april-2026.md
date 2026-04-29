@@ -261,6 +261,33 @@
 **Files modified:**
 - `src/lib/auth.ts` — `familyId` now re-read from DB on every session call
 
+### Bug 20: Tag migration created phantom 'legacy-tags' tag on 39 recipes; new tags not addable in recipe form
+
+**Root Cause:** Three related bugs:
+
+1. The migration route (`POST /api/tags/migrate`) didn't skip the `'legacy-tags'` sentinel value. Every recipe created or updated with the new relational tag system stores `recipe.tags = 'legacy-tags'` as a sentinel in the string column. The migration treated this as a real tag name, created an actual `Tag` record named `'legacy-tags'`, and linked all 39 recipes that had the sentinel via RecipeTag relationships.
+
+2. All three read paths that combine relational and legacy tags (`getRecipeWithTags` in both API route files and `recipes/page.tsx`) filtered `'legacy-tags'` from the legacy *string* field only — not from relational tags. After the migration bug, the phantom tag appeared in every recipe through its newly-created RecipeTag row and was shown as a chip in the recipe card and edit form. Removing it in the edit form appeared to fail (it "came back") because the relational tag was re-read on every load.
+
+3. The `TagSelector` dropdown only rendered when `suggestions.length > 0 || loading`. If a user typed a brand-new tag name with no matching suggestions the dropdown (and its "Create" button) would hide, making adding new tags appear broken. The Enter key still worked but provided no visual feedback.
+
+**Fix:**
+- Migration route: Added sentinel skip (`recipe.tags === 'legacy-tags'`) so real-system recipes are not re-processed. Added a cleanup block at the top that finds and deletes the incorrectly-created `'legacy-tags'` Tag record and all its RecipeTag rows on the next migration run.
+- `getRecipeWithTags` (both route files): Now filters `'legacy-tags'` from relational tags as well as the legacy string field.
+- `recipes/page.tsx`: Same filter applied to the server-side recipe list query.
+- `legacy-count/route.ts`: Excludes the sentinel string from the count so it no longer inflates the migration banner.
+- `TagSelector.tsx`: Dropdown now renders when the user has typed input even if there are no matching suggestions, so the "Create" button is always reachable.
+
+> **Action required after deploy:** Go to Settings → Tags and click **Migrate legacy tags** once more. This triggers the cleanup block that removes the phantom `'legacy-tags'` Tag record and its 39 RecipeTag rows from the database.
+
+**Files modified:**
+- `src/app/api/tags/migrate/route.ts` — sentinel skip + cleanup block
+- `src/app/api/recipes/[id]/route.ts` — filter 'legacy-tags' from relational tags
+- `src/app/api/recipes/route.ts` — same fix in POST route helper
+- `src/app/(app)/recipes/page.tsx` — filter 'legacy-tags' from relational tags in list
+- `src/app/api/tags/legacy-count/route.ts` — exclude sentinel from count
+- `src/components/tags/TagSelector.tsx` — show dropdown when user has typed input
+
 ---
 
 ## Files Modified (all sessions)
@@ -292,6 +319,12 @@
 26. `src/app/api/meal-plan/export-preview/route.ts` - Fixed custom mapping priority and added substring matching
 27. `src/components/meal-plan/ExportGroceriesModal.tsx` - Responsive footer for mobile
 28. `src/lib/auth.ts` - familyId re-read from DB on every session call
+29. `src/app/api/tags/migrate/route.ts` - Sentinel skip + phantom tag cleanup
+30. `src/app/api/recipes/[id]/route.ts` - Filter 'legacy-tags' from relational tags
+31. `src/app/api/recipes/route.ts` - Same filter in POST route helper
+32. `src/app/(app)/recipes/page.tsx` - Filter 'legacy-tags' from relational tags in list
+33. `src/app/api/tags/legacy-count/route.ts` - Exclude sentinel from legacy count
+34. `src/components/tags/TagSelector.tsx` - Show dropdown when user has typed input
 
 ## Testing
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
@@ -316,3 +349,5 @@
 20. **Add to Groceries mobile:** Open the meal plan on a phone, tap "Add to Groceries" — verify Cancel and Add to Groceries buttons are fully visible and tappable
 21. **Lock item on mobile:** Open a shopping list on a phone, hover/tap a list item — verify the lock icon is visible; tap it and verify the item becomes locked (yellow lock, delete button hidden)
 22. **Ingredient mappings cross-user:** Log in as a second family member; open meal plan and export groceries — verify custom ingredient mappings (e.g. bacon → Deli) apply correctly for all family members
+23. **Tag migration cleanup:** Go to Settings → Tags, click Migrate — verify no recipes show a 'legacy-tags' chip afterwards; verify the legacy count shows 0
+24. **Add new tag to recipe:** Edit a recipe, type a brand-new tag name that doesn't exist yet — verify the "Create" button appears in the dropdown; click it and verify the tag is saved with the recipe

@@ -5,6 +5,16 @@ import { requireSession } from '@/lib/auth-helpers'
 export async function POST() {
   const user = await requireSession()
 
+  // Clean up incorrectly created 'legacy-tags' Tag record (created by prior migration bug
+  // that treated the sentinel string as a real tag name)
+  const sentinelTag = await (prisma as any).tag.findFirst({
+    where: { familyId: user.familyId, name: 'legacy-tags' },
+  })
+  if (sentinelTag) {
+    await (prisma as any).recipeTag.deleteMany({ where: { tagId: sentinelTag.id } })
+    await (prisma as any).tag.delete({ where: { id: sentinelTag.id } })
+  }
+
   const recipes = await (prisma as any).recipe.findMany({
     where: { familyId: user.familyId },
     select: { id: true, tags: true },
@@ -14,11 +24,12 @@ export async function POST() {
   let updatedRecipes = 0
 
   for (const recipe of recipes) {
-    if (!recipe.tags) continue
+    // Skip null and the sentinel value used by the new relational system
+    if (!recipe.tags || recipe.tags === 'legacy-tags') continue
     const names = recipe.tags
       .split(',')
       .map((t: string) => t.trim())
-      .filter((t: string) => t.length > 0)
+      .filter((t: string) => t.length > 0 && t !== 'legacy-tags')
 
     if (names.length === 0) continue
 

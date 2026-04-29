@@ -53,7 +53,7 @@ async function getData(familyId: string, userId: string) {
       // Get tags from relational tags first, fall back to comma-separated string
       let tags: string[] = []
       if (r.recipeTags && r.recipeTags.length > 0) {
-        tags = r.recipeTags.map((rt) => rt.tag.name)
+        tags = r.recipeTags.map((rt) => rt.tag.name).filter((n) => n !== 'legacy-tags')
       } else if (r.tags && r.tags !== 'legacy-tags') {
         tags = r.tags.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
       }
