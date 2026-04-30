@@ -22,6 +22,8 @@
 
 we use the build file dockerfile, docker-compose.yml and docker-entrypoint.sh as we build on windows and deploy on nas to these need to be included in planning, documentation and implementation.
 
+When updating/editing files update in the correct directory in C:\appdev\*appname* replace *appname* with working directory name.  do not use git for updates we will commit when task finished
+
 \---
 
 \## 🛠️ During Development

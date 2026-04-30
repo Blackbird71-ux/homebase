@@ -20,6 +20,7 @@ export async function GET(
       content: true,
       category: true,
       tags: true,
+      isPrivate: true,
       createdBy: true,
       createdAt: true,
       updatedAt: true,
@@ -33,11 +34,17 @@ export async function GET(
     )
   }
 
+  // Block access to other users' private notes
+  if (note.isPrivate && note.createdBy !== user.id) {
+    return NextResponse.json({ error: 'Note not found' }, { status: 404 })
+  }
+
   return NextResponse.json({
     id: note.id,
     title: note.title,
     content: note.content,
     category: note.category,
+    isPrivate: note.isPrivate,
     tags: note.tags ? JSON.parse(note.tags) as string[] : [],
     createdBy: note.createdBy,
     createdAt: note.createdAt.toISOString(),
@@ -52,7 +59,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { title, content, category, tags } = body
+  const { title, content, category, tags, isPrivate } = body
 
   if (!title || !content) {
     return NextResponse.json(
@@ -83,6 +90,7 @@ export async function PUT(
       content,
       category: category || null,
       tags: tags ? JSON.stringify(tags) : null,
+      isPrivate: isPrivate ?? existingNote.isPrivate,
       updatedAt: new Date(),
     },
   })
@@ -92,6 +100,7 @@ export async function PUT(
     title: note.title,
     content: note.content,
     category: note.category,
+    isPrivate: note.isPrivate,
     tags: note.tags ? JSON.parse(note.tags) as string[] : [],
     createdBy: note.createdBy,
     createdAt: note.createdAt.toISOString(),

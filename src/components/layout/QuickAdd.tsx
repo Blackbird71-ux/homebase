@@ -188,7 +188,7 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
           const res = await fetch('/api/recipes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: recipeTitle.trim() }),
+            body: JSON.stringify({ title: recipeTitle.trim(), ingredients: [], instructions: [] }),
           })
           if (!res.ok) throw new Error('Failed to create recipe')
           const recipe = await res.json()

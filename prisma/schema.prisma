@@ -332,6 +332,7 @@ model Note {
   content   String
   category  String?
   tags      String?  // JSON array of tags
+  isPrivate Boolean  @default(false)  // private = only visible to creator
   createdBy String
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])

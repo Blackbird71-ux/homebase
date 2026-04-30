@@ -34,6 +34,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentData[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -41,6 +42,7 @@ export default function DocumentsPage() {
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true)
+    setFetchError(false)
     try {
       const params = new URLSearchParams()
       if (categoryFilter !== 'all') params.set('category', categoryFilter)
@@ -51,7 +53,7 @@ export default function DocumentsPage() {
       const data = await res.json()
       setDocuments(data)
     } catch {
-      toast.error('Failed to load documents')
+      setFetchError(true)
     } finally {
       setLoading(false)
     }
@@ -147,6 +149,15 @@ export default function DocumentsPage() {
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-32 rounded-lg bg-muted animate-pulse" />
             ))}
+          </div>
+        ) : fetchError ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <AlertTriangle className="h-12 w-12 mb-3 text-destructive opacity-70" />
+            <p className="text-lg font-medium">Failed to load documents</p>
+            <p className="text-sm mt-1">There was a problem connecting to the server.</p>
+            <Button variant="outline" size="sm" className="mt-4" onClick={fetchDocuments}>
+              Try again
+            </Button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">

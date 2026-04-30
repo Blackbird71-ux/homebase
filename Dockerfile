@@ -1,42 +1,115 @@
-# Stage 1: Install dependencies
+# =============================================================================
+# HomeBase – Multi-stage Dockerfile
+#
+# Build stages:
+#   deps     – install npm dependencies (including native rebuilds)
+#   builder  – generate Prisma client + run Next.js build
+#   pruner   – strip dev dependencies to get a clean production node_modules
+#   runner   – minimal production image
+#
+# Migrations are intentionally NOT run here.
+# They run at container startup via entrypoint.sh so they execute against
+# the live /data volume on the Synology NAS (which isn't available at build time).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: deps – clean dependency install with native module rebuild
+# -----------------------------------------------------------------------------
 FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts && npm rebuild better-sqlite3
 
-# Stage 2: Build
+# -----------------------------------------------------------------------------
+# Stage 2: builder – generate Prisma client and compile Next.js
+# -----------------------------------------------------------------------------
 FROM node:22-alpine AS builder
 RUN apk add --no-cache python3 make g++
 WORKDIR /app
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
 ENV NEXT_TELEMETRY_DISABLED=1
+# Prisma needs a DATABASE_URL at generate/build time even though the real
+# database isn't available until the container starts on the NAS.
 ENV DATABASE_URL="file:/data/homebase.db"
+
+# Generate the Prisma client (baked into the image, no write access needed at runtime)
 RUN npx prisma generate
+
+# Build Next.js (standalone output – configured in next.config.ts)
 RUN npm run build
 
-# Stage 3: Run
+# -----------------------------------------------------------------------------
+# Stage 3: pruner – produce a clean production-only node_modules
+#
+# We can't just use the builder's node_modules because it contains all dev
+# dependencies. We also can't manually list every transitive dep of every
+# serverExternalPackage — that's fragile and breaks on version bumps.
+#
+# Instead: start fresh, install only production deps, rebuild native modules.
+# This gives us a correct, complete node_modules with no guesswork.
+# -----------------------------------------------------------------------------
+FROM node:22-alpine AS pruner
+RUN apk add --no-cache libc6-compat python3 make g++
+WORKDIR /app
+COPY package.json package-lock.json ./
+# --omit=dev skips devDependencies; --ignore-scripts + rebuild ensures
+# native modules (better-sqlite3) are compiled for the target platform.
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild better-sqlite3
+# Copy in the generated Prisma client so it's available in node_modules/.prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# -----------------------------------------------------------------------------
+# Stage 4: runner – lean production image
+# -----------------------------------------------------------------------------
 FROM node:22-alpine AS runner
 WORKDIR /app
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Runtime tools:
+#   su-exec  – drop privileges from root to nextjs after startup tasks
+#   dcron    – lightweight cron for scheduled DB backups
+#   sqlite   – sqlite3 CLI used by entrypoint to verify DB health
 COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 RUN apk add --no-cache su-exec dcron sqlite
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser  --system --uid 1001 nextjs
+
+# Next.js standalone output.
+# This includes server.js and a trimmed node_modules for bundled dependencies.
+# Packages in serverExternalPackages are excluded from this bundle — they are
+# served from the full node_modules we copy below instead.
+COPY --from=builder /app/public                                   ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone   ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static       ./.next/static
+
+# package.json is required by the Prisma CLI to locate prisma/schema.prisma
+COPY --from=builder /app/package.json ./package.json
+
+# Prisma schema + ALL migration files so `prisma migrate deploy` can run at startup
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/node_modules ./node_modules
-COPY docker/entrypoint.sh ./entrypoint.sh
-COPY scripts/backup-db.sh ./scripts/backup-db.sh
-COPY scripts/restore-db.sh ./scripts/restore-db.sh
 
-RUN chmod +x ./entrypoint.sh ./scripts/backup-db.sh ./scripts/restore-db.sh
+# Full production node_modules (from pruner stage).
+# This correctly covers all serverExternalPackages and their transitive deps
+# without needing to enumerate them manually.
+COPY --from=pruner /app/node_modules ./node_modules
+
+# Scripts
+COPY docker/entrypoint.sh         ./entrypoint.sh
+COPY scripts/backup-db.sh         ./scripts/backup-db.sh
+COPY scripts/restore-db.sh        ./scripts/restore-db.sh
+
+RUN chmod +x ./entrypoint.sh \
+              ./scripts/backup-db.sh \
+              ./scripts/restore-db.sh
+
+# /data is the persistent volume mount point on the NAS
 RUN mkdir -p /data && chown nextjs:nodejs /data
 
 EXPOSE 3000

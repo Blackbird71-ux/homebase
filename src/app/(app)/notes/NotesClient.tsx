@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PlusIcon, SearchIcon, FilterIcon, XIcon } from 'lucide-react'
+import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, NotepadTextIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Note {
@@ -16,6 +16,7 @@ interface Note {
   content: string
   category: string | null
   tags: string[]
+  isPrivate: boolean
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -24,13 +25,15 @@ interface Note {
 interface NotesClientProps {
   initialNotes: Note[]
   initialCategories: string[]
+  currentUserId: string
 }
 
-export function NotesClient({ initialNotes, initialCategories }: NotesClientProps) {
+export function NotesClient({ initialNotes, initialCategories, currentUserId }: NotesClientProps) {
   const [notes, setNotes] = useState(initialNotes)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string | null>('all')
   const [tagFilter, setTagFilter] = useState<string | null>('')
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'family' | 'private'>('all')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -44,7 +47,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
     return Array.from(tagSet).sort()
   }, [notes])
 
-  // Filter notes based on search, category, and tag
+  // Filter notes based on search, category, tag and visibility
   const filteredNotes = useMemo(() => {
     return notes.filter(note => {
       // Search filter
@@ -67,15 +70,20 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
         if (!note.tags.includes(tagFilter)) return false
       }
 
+      // Visibility filter
+      if (visibilityFilter === 'private' && !note.isPrivate) return false
+      if (visibilityFilter === 'family' && note.isPrivate) return false
+
       return true
     })
-  }, [notes, search, categoryFilter, tagFilter])
+  }, [notes, search, categoryFilter, tagFilter, visibilityFilter])
 
   const handleCreateNote = async (data: {
     title: string
     content: string
     category?: string | null
     tags?: string[]
+    isPrivate?: boolean
   }) => {
     setIsLoading(true)
     try {
@@ -90,7 +98,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
       }
 
       const newNote = await response.json()
-      setNotes([newNote, ...notes])
+      setNotes([{ ...newNote, isPrivate: newNote.isPrivate ?? false }, ...notes])
       setEditorOpen(false)
       toast.success('Note created successfully')
     } catch (error) {
@@ -106,6 +114,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
     content: string
     category?: string | null
     tags?: string[]
+    isPrivate?: boolean
   }) => {
     if (!editingNote) return
 
@@ -122,7 +131,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
       }
 
       const updatedNote = await response.json()
-      setNotes(notes.map(note => note.id === updatedNote.id ? updatedNote : note))
+      setNotes(notes.map(note => note.id === updatedNote.id ? { ...updatedNote, isPrivate: updatedNote.isPrivate ?? false } : note))
       setEditorOpen(false)
       setEditingNote(null)
       toast.success('Note updated successfully')
@@ -179,20 +188,31 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
     setSearch('')
     setCategoryFilter('all')
     setTagFilter('')
+    setVisibilityFilter('all')
   }
 
-  const hasActiveFilters = search || (categoryFilter && categoryFilter !== 'all') || tagFilter
+  const hasActiveFilters = search || (categoryFilter && categoryFilter !== 'all') || tagFilter || visibilityFilter !== 'all'
 
   return (
     <div className="flex flex-col h-full overflow-y-auto p-4 md:p-6 gap-6">
-      {/* Header */}
+      {/* Header with stats */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl font-bold">Notes</h1>
-          <p className="text-muted-foreground">
-            {filteredNotes.length} note{filteredNotes.length !== 1 ? 's' : ''}
-            {hasActiveFilters && ' (filtered)'}
-          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-muted-foreground">
+              {filteredNotes.length} note{filteredNotes.length !== 1 ? 's' : ''}
+              {hasActiveFilters && ' (filtered)'}
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+              <UsersIcon className="h-3 w-3" />
+              {notes.filter(n => !n.isPrivate).length} family
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <LockIcon className="h-3 w-3" />
+              {notes.filter(n => n.isPrivate && n.createdBy === currentUserId).length} private
+            </span>
+          </div>
         </div>
         <Button onClick={() => {
           setEditingNote(null)
@@ -218,7 +238,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
           
           <div className="flex gap-2">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[160px]">
                 <FilterIcon className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
@@ -234,7 +254,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
             </Select>
 
             <Select value={tagFilter} onValueChange={setTagFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder={tagFilter || "Filter by tag"} />
               </SelectTrigger>
               <SelectContent>
@@ -247,12 +267,52 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
               </SelectContent>
             </Select>
 
+            {/* Visibility quick-filter buttons */}
+            <div className="flex rounded-md border border-input overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setVisibilityFilter('all')}
+                className={`px-3 py-1.5 text-xs flex items-center gap-1 transition-colors ${
+                  visibilityFilter === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                }`}
+              >
+                <NotepadTextIcon className="h-3 w-3" /> All
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibilityFilter('family')}
+                className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-input transition-colors ${
+                  visibilityFilter === 'family' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                }`}
+              >
+                <UsersIcon className="h-3 w-3" /> Family
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibilityFilter('private')}
+                className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-input transition-colors ${
+                  visibilityFilter === 'private' ? 'bg-amber-500 text-white' : 'hover:bg-muted'
+                }`}
+              >
+                <LockIcon className="h-3 w-3" /> Private
+              </button>
+            </div>
+
             {hasActiveFilters && (
               <Button variant="outline" onClick={clearFilters}>
                 <XIcon className="h-4 w-4 mr-2" />
                 Clear
               </Button>
             )}
+          {visibilityFilter !== 'all' && (
+            <div className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded-full">
+              {visibilityFilter === 'private' ? <LockIcon className="h-3 w-3" /> : <UsersIcon className="h-3 w-3" />}
+              {visibilityFilter === 'private' ? 'Private only' : 'Family only'}
+              <button type="button" onClick={() => setVisibilityFilter('all')} className="ml-1 hover:text-destructive">
+                <XIcon className="h-3 w-3" />
+              </button>
+            </div>
+          )}
           </div>
         </div>
 
@@ -309,7 +369,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 content-start">
           {filteredNotes.map((note) => (
-            <NoteCard
+              <NoteCard
               key={note.id}
               {...note}
               onDelete={handleDeleteNote}
@@ -337,6 +397,7 @@ export function NotesClient({ initialNotes, initialCategories }: NotesClientProp
             initialContent={editingNote?.content || ''}
             initialCategory={editingNote?.category || null}
             initialTags={editingNote?.tags || []}
+            initialIsPrivate={editingNote?.isPrivate ?? false}
             categories={initialCategories}
             onSubmit={handleEditorSubmit}
             onCancel={() => {

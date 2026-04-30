@@ -21,11 +21,18 @@ export async function GET(req: Request) {
   const notes = await prisma.note.findMany({
     where: {
       familyId: user.familyId,
+      // Never return other users' private notes
+      OR: [
+        { isPrivate: false },
+        { isPrivate: true, createdBy: user.id },
+      ],
       ...(search && {
-        OR: [
-          { title: { contains: search } },
-          { content: { contains: search } },
-        ],
+        AND: [{
+          OR: [
+            { title: { contains: search } },
+            { content: { contains: search } },
+          ],
+        }],
       }),
       ...(category && { category }),
     },
@@ -36,6 +43,7 @@ export async function GET(req: Request) {
       content: true,
       category: true,
       tags: true,
+      isPrivate: true,
       createdBy: true,
       createdAt: true,
       updatedAt: true,
@@ -62,6 +70,7 @@ export async function GET(req: Request) {
       title: note.title,
       content: note.content,
       category: note.category,
+      isPrivate: note.isPrivate,
       tags: parseTags(note.tags),
       createdBy: note.createdBy,
       createdAt: note.createdAt.toISOString(),
@@ -73,7 +82,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, content, category, tags } = body
+  const { title, content, category, tags, isPrivate } = body
 
   if (!title) {
     return NextResponse.json(
@@ -88,6 +97,7 @@ export async function POST(req: Request) {
       content: content || '',
       category: category || null,
       tags: tags ? JSON.stringify(tags) : null,
+      isPrivate: isPrivate ?? false,
       createdBy: user.id,
       familyId: user.familyId,
     },
@@ -98,6 +108,7 @@ export async function POST(req: Request) {
     title: note.title,
     content: note.content,
     category: note.category,
+    isPrivate: note.isPrivate,
     tags: parseTags(note.tags),
     createdBy: note.createdBy,
     createdAt: note.createdAt.toISOString(),

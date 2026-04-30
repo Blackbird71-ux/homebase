@@ -1,23 +1,55 @@
+# =============================================================================
+# HomeBase – docker-compose.yml
+#
+# Usage:
+#   Build + start:  docker compose up -d --build
+#   Logs:           docker compose logs -f
+#   Stop:           docker compose down
+#
+# The application runs on the Synology NAS.
+# Persistent data (SQLite database, uploads, documents, backups) lives under
+# /volume1/docker/homebase/Data which is bind-mounted to /data inside the container.
+# Migrations run automatically at startup via entrypoint.sh.
+# =============================================================================
+
 services:
   homebase-app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: homebase:latest
     container_name: homebase-app
     restart: unless-stopped
+
     env_file: .env.local
+
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/homebase.db
+      - AUTH_URL=https://homebase.liddleapps.com
+      - NEXTAUTH_URL=https://homebase.liddleapps.com
+
     ports:
       - "3001:3000"
+
     dns:
       - 1.1.1.1
       - 8.8.8.8
+
     volumes:
+      # Persistent data volume on the NAS.
+      # Contains: homebase.db, uploads/, documents/, images/, backups/
       - /volume1/docker/homebase/Data:/data
+      # Cloudflare tunnel configuration
       - /volume1/docker/homebase/cloudflared:/etc/cloudflared
-    environment:
-      - DATABASE_URL=file:/data/homebase.db
-      - NODE_ENV=production
-      - AUTH_URL=https://homebase.liddleapps.com
-      - NEXTAUTH_URL=https://homebase.liddleapps.com
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # give migrations time to finish on first boot
+
     networks:
       - homebase-network
 

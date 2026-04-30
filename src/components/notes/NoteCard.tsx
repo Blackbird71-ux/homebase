@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon } from 'lucide-react'
+import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
@@ -10,6 +10,7 @@ interface NoteCardProps {
   content: string
   category: string | null
   tags: string[]
+  isPrivate?: boolean
   createdAt: string
   updatedAt: string
   onDelete?: (id: string) => void
@@ -22,6 +23,7 @@ export function NoteCard({
   content,
   category,
   tags,
+  isPrivate = false,
   createdAt,
   updatedAt,
   onDelete,
@@ -41,13 +43,24 @@ export function NoteCard({
       <Link href={`/notes/${id}`} className="block h-full">
         <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
           <CardHeader className="pb-2">
-            <div className="flex justify-between items-start">
-              <CardTitle className="text-base line-clamp-2">{title}</CardTitle>
-              {isRecentlyUpdated && (
-                <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-full">
-                  New
-                </span>
-              )}
+            <div className="flex justify-between items-start gap-2">
+              <CardTitle className="text-base line-clamp-2 flex-1">{title}</CardTitle>
+              <div className="flex items-center gap-1 shrink-0">
+                {isPrivate ? (
+                  <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
+                    <LockIcon className="h-2.5 w-2.5" /> Private
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                    <UsersIcon className="h-2.5 w-2.5" /> Family
+                  </span>
+                )}
+                {isRecentlyUpdated && (
+                  <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-full">
+                    New
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
               <div className="flex items-center gap-1">

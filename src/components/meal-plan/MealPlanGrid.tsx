@@ -68,6 +68,27 @@ function startOfWeek(date: Date, weekStartsOn: number): Date {
   return d
 }
 
+function weekDateRange(weekStart: Date): { from: string; to: string } {
+  const fromLocal = new Date(weekStart)
+  fromLocal.setHours(0, 0, 0, 0)
+  const from = new Date(Date.UTC(
+    fromLocal.getFullYear(),
+    fromLocal.getMonth(),
+    fromLocal.getDate()
+  )).toISOString().slice(0, 10)
+
+  const toDateLocal = new Date(weekStart)
+  toDateLocal.setDate(toDateLocal.getDate() + 6)
+  const to = new Date(Date.UTC(
+    toDateLocal.getFullYear(),
+    toDateLocal.getMonth(),
+    toDateLocal.getDate(),
+    23, 59, 59, 999
+  )).toISOString().slice(0, 10)
+
+  return { from, to }
+}
+
 export function MealPlanGrid({
   weekStartsOn,
   initialWeekStart,
@@ -97,27 +118,7 @@ export function MealPlanGrid({
     next.setDate(next.getDate() + direction * 7)
     setWeekStart(next)
 
-    // Convert local dates to UTC for API query
-    const fromLocal = new Date(next)
-    fromLocal.setHours(0, 0, 0, 0)
-    const fromUTC = new Date(Date.UTC(
-      fromLocal.getFullYear(),
-      fromLocal.getMonth(),
-      fromLocal.getDate()
-    ))
-    const from = fromUTC.toISOString().slice(0, 10)
-
-    const toDateLocal = new Date(next)
-    toDateLocal.setDate(toDateLocal.getDate() + 6)
-    toDateLocal.setHours(23, 59, 59, 999)
-    const toUTC = new Date(Date.UTC(
-      toDateLocal.getFullYear(),
-      toDateLocal.getMonth(),
-      toDateLocal.getDate(),
-      23, 59, 59, 999
-    ))
-    const to = toUTC.toISOString().slice(0, 10)
-
+    const { from, to } = weekDateRange(next)
     setLoading(true)
     fetch(`/api/meal-plan?from=${from}&to=${to}`)
       .then((r) => r.json())
@@ -133,27 +134,7 @@ export function MealPlanGrid({
     const todayWeekStart = startOfWeek(localToday, weekStartsOn)
     setWeekStart(todayWeekStart)
     
-    // Convert local dates to UTC for API query
-    const fromLocal = new Date(todayWeekStart)
-    fromLocal.setHours(0, 0, 0, 0)
-    const fromUTC = new Date(Date.UTC(
-      fromLocal.getFullYear(),
-      fromLocal.getMonth(),
-      fromLocal.getDate()
-    ))
-    const from = fromUTC.toISOString().slice(0, 10)
-    
-    const toDateLocal = new Date(todayWeekStart)
-    toDateLocal.setDate(toDateLocal.getDate() + 6)
-    toDateLocal.setHours(23, 59, 59, 999)
-    const toUTC = new Date(Date.UTC(
-      toDateLocal.getFullYear(),
-      toDateLocal.getMonth(),
-      toDateLocal.getDate(),
-      23, 59, 59, 999
-    ))
-    const to = toUTC.toISOString().slice(0, 10)
-
+    const { from, to } = weekDateRange(todayWeekStart)
     setLoading(true)
     fetch(`/api/meal-plan?from=${from}&to=${to}`)
       .then((r) => r.json())
@@ -239,27 +220,7 @@ export function MealPlanGrid({
   async function handleClearWeek() {
     setClearing(true)
     try {
-      // Convert local dates to UTC for API query (same as navWeek)
-      const fromLocal = new Date(weekStart)
-      fromLocal.setHours(0, 0, 0, 0)
-      const fromUTC = new Date(Date.UTC(
-        fromLocal.getFullYear(),
-        fromLocal.getMonth(),
-        fromLocal.getDate()
-      ))
-      const from = fromUTC.toISOString().slice(0, 10)
-      
-      const toDateLocal = new Date(weekStart)
-      toDateLocal.setDate(toDateLocal.getDate() + 6)
-      toDateLocal.setHours(23, 59, 59, 999)
-      const toUTC = new Date(Date.UTC(
-        toDateLocal.getFullYear(),
-        toDateLocal.getMonth(),
-        toDateLocal.getDate(),
-        23, 59, 59, 999
-      ))
-      const to = toUTC.toISOString().slice(0, 10)
-
+      const { from, to } = weekDateRange(weekStart)
       const res = await fetch(`/api/meal-plan/bulk?from=${from}&to=${to}`, {
         method: 'DELETE',
       })
@@ -489,27 +450,7 @@ export function MealPlanGrid({
         onOpenChange={setApplyTemplateOpen}
         weekStart={toYMD(weekStart)}
         onApplied={() => {
-          // Refresh the current week
-          const fromLocal = new Date(weekStart)
-          fromLocal.setHours(0, 0, 0, 0)
-          const fromUTC = new Date(Date.UTC(
-            fromLocal.getFullYear(),
-            fromLocal.getMonth(),
-            fromLocal.getDate()
-          ))
-          const from = fromUTC.toISOString().slice(0, 10)
-          
-          const toDateLocal = new Date(weekStart)
-          toDateLocal.setDate(toDateLocal.getDate() + 6)
-          toDateLocal.setHours(23, 59, 59, 999)
-          const toUTC = new Date(Date.UTC(
-            toDateLocal.getFullYear(),
-            toDateLocal.getMonth(),
-            toDateLocal.getDate(),
-            23, 59, 59, 999
-          ))
-          const to = toUTC.toISOString().slice(0, 10)
-
+          const { from, to } = weekDateRange(weekStart)
           setLoading(true)
           fetch(`/api/meal-plan?from=${from}&to=${to}`)
             .then((r) => r.json())

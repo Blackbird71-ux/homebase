@@ -1,51 +1,82 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BoldIcon, ItalicIcon, ListIcon, ListOrderedIcon, XIcon, TagIcon } from 'lucide-react'
+import {
+  BoldIcon, ItalicIcon, UnderlineIcon, StrikethroughIcon,
+  ListIcon, ListOrderedIcon, XIcon, TagIcon, LinkIcon,
+  AlignLeftIcon, AlignCenterIcon, AlignRightIcon, LockIcon, UsersIcon,
+  Heading1Icon, Heading2Icon, Heading3Icon, TypeIcon,
+} from 'lucide-react'
 
 interface NoteEditorProps {
   initialTitle?: string
   initialContent?: string
   initialCategory?: string | null
   initialTags?: string[]
+  initialIsPrivate?: boolean
   categories?: string[]
   onSubmit: (data: {
     title: string
     content: string
     category?: string | null
     tags?: string[]
+    isPrivate?: boolean
   }) => void
   onCancel?: () => void
   isLoading?: boolean
 }
+
+const FONT_SIZES = [
+  { label: 'Small', value: '0.875em' },
+  { label: 'Normal', value: '1em' },
+  { label: 'Large', value: '1.25em' },
+  { label: 'XL', value: '1.5em' },
+  { label: '2XL', value: '2em' },
+]
 
 export function NoteEditor({
   initialTitle = '',
   initialContent = '',
   initialCategory = null,
   initialTags = [],
+  initialIsPrivate = false,
   categories = [],
   onSubmit,
   onCancel,
   isLoading = false,
 }: NoteEditorProps) {
   const [title, setTitle] = useState(initialTitle)
-  const [content, setContent] = useState(initialContent)
   const [category, setCategory] = useState<string | null>(initialCategory)
   const [tags, setTags] = useState<string[]>(initialTags)
   const [newTag, setNewTag] = useState('')
+  const [isPrivate, setIsPrivate] = useState(initialIsPrivate)
+  const editorRef = useRef<HTMLDivElement>(null)
+
+  // Initialise editor content once on mount
+  useEffect(() => {
+    if (editorRef.current && initialContent) {
+      editorRef.current.innerHTML = initialContent
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const exec = useCallback((command: string, value?: string) => {
+    document.execCommand(command, false, value)
+    editorRef.current?.focus()
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const content = editorRef.current?.innerHTML ?? ''
     onSubmit({
       title,
       content,
       category: category || null,
       tags: tags.length > 0 ? tags : undefined,
+      isPrivate,
     })
   }
 
@@ -60,49 +91,46 @@ export function NoteEditor({
     setTags(tags.filter(tag => tag !== tagToRemove))
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
-      handleSubmit(e)
-    }
+  const insertLink = () => {
+    const url = prompt('Enter URL:', 'https://')
+    if (url) exec('createLink', url)
   }
 
-  const applyFormatting = (format: string) => {
-    const textarea = document.activeElement as HTMLTextAreaElement
-    if (!textarea || textarea.tagName !== 'TEXTAREA') return
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const selectedText = content.substring(start, end)
-    let newText = content
-    let replacement = ''
-
-    switch (format) {
-      case 'bold':
-        replacement = `<strong>${selectedText}</strong>`
-        break
-      case 'italic':
-        replacement = `<em>${selectedText}</em>`
-        break
-      case 'bullet':
-        replacement = `\n• ${selectedText}`
-        break
-      case 'numbered':
-        replacement = `\n1. ${selectedText}`
-        break
+  const setFontSize = (size: string) => {
+    // execCommand fontSize only accepts 1-7; use a span workaround
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+    if (!range.collapsed) {
+      const span = document.createElement('span')
+      span.style.fontSize = size
+      range.surroundContents(span)
+      sel.removeAllRanges()
     }
-
-    newText = content.substring(0, start) + replacement + content.substring(end)
-    setContent(newText)
-    
-    // Focus back on textarea and set cursor position
-    setTimeout(() => {
-      textarea.focus()
-      textarea.setSelectionRange(start + replacement.length, start + replacement.length)
-    }, 0)
+    editorRef.current?.focus()
   }
+
+  const ToolButton = ({
+    onClick, title: tip, active, children,
+  }: { onClick: () => void; title: string; active?: boolean; children: React.ReactNode }) => (
+    <button
+      type="button"
+      title={tip}
+      onMouseDown={(e) => { e.preventDefault(); onClick() }}
+      className={`h-7 w-7 flex items-center justify-center rounded text-sm transition-colors
+        ${ active
+          ? 'bg-primary text-primary-foreground'
+          : 'hover:bg-accent hover:text-accent-foreground text-muted-foreground'
+        } disabled:opacity-50`}
+      disabled={isLoading}
+    >
+      {children}
+    </button>
+  )
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" onKeyDown={handleKeyDown}>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Title */}
       <div className="space-y-2">
         <Label htmlFor="title">Title</Label>
         <Input
@@ -115,73 +143,126 @@ export function NoteEditor({
         />
       </div>
 
-      <div className="space-y-2">
+      {/* Rich Text Editor */}
+      <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label htmlFor="content">Content</Label>
-          <div className="flex gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => applyFormatting('bold')}
-              title="Bold (Ctrl+B)"
-            >
-              <BoldIcon className="h-3 w-3" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => applyFormatting('italic')}
-              title="Italic (Ctrl+I)"
-            >
-              <ItalicIcon className="h-3 w-3" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => applyFormatting('bullet')}
-              title="Bullet list"
-            >
-              <ListIcon className="h-3 w-3" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => applyFormatting('numbered')}
-              title="Numbered list"
-            >
-              <ListOrderedIcon className="h-3 w-3" />
-            </Button>
-          </div>
+          <Label>Content</Label>
         </div>
-        <textarea
-          id="content"
-          value={content}
-          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
-          placeholder="Note content (supports basic HTML formatting)"
-          rows={10}
-          required
-          disabled={isLoading}
-          className="w-full min-h-[200px] px-3 py-2 border border-input rounded-md bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-0.5 p-1.5 border border-input rounded-t-md bg-muted/40">
+          {/* Headings */}
+          <ToolButton onClick={() => exec('formatBlock', 'h1')} title="Heading 1">
+            <Heading1Icon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('formatBlock', 'h2')} title="Heading 2">
+            <Heading2Icon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('formatBlock', 'h3')} title="Heading 3">
+            <Heading3Icon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('formatBlock', 'p')} title="Normal text">
+            <TypeIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Font size */}
+          <select
+            onMouseDown={(e) => e.preventDefault()}
+            onChange={(e) => { if (e.target.value) setFontSize(e.target.value) }}
+            className="h-7 text-xs rounded border border-input bg-background px-1 text-muted-foreground cursor-pointer"
+            defaultValue=""
+            disabled={isLoading}
+            title="Font size"
+          >
+            <option value="" disabled>Size</option>
+            {FONT_SIZES.map(fs => (
+              <option key={fs.value} value={fs.value}>{fs.label}</option>
+            ))}
+          </select>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Inline styles */}
+          <ToolButton onClick={() => exec('bold')} title="Bold (Ctrl+B)">
+            <BoldIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('italic')} title="Italic (Ctrl+I)">
+            <ItalicIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('underline')} title="Underline (Ctrl+U)">
+            <UnderlineIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('strikeThrough')} title="Strikethrough">
+            <StrikethroughIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Alignment */}
+          <ToolButton onClick={() => exec('justifyLeft')} title="Align left">
+            <AlignLeftIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('justifyCenter')} title="Align centre">
+            <AlignCenterIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('justifyRight')} title="Align right">
+            <AlignRightIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Lists */}
+          <ToolButton onClick={() => exec('insertUnorderedList')} title="Bullet list">
+            <ListIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+          <ToolButton onClick={() => exec('insertOrderedList')} title="Numbered list">
+            <ListOrderedIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Link */}
+          <ToolButton onClick={insertLink} title="Insert link">
+            <LinkIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+        </div>
+
+        {/* Editor area */}
+        <div
+          ref={editorRef}
+          contentEditable={!isLoading}
+          suppressContentEditableWarning
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && e.ctrlKey) handleSubmit(e)
+          }}
+          className="min-h-[280px] max-h-[500px] overflow-y-auto px-4 py-3 border border-input border-t-0 rounded-b-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 prose prose-sm dark:prose-invert max-w-none"
+          data-placeholder="Start writing your note…"
+          style={{ whiteSpace: 'pre-wrap' } as React.CSSProperties}
         />
-        <p className="text-xs text-muted-foreground">
-          Supports basic HTML formatting
-        </p>
+        <style>{`
+          [contenteditable]:empty:before {
+            content: attr(data-placeholder);
+            color: hsl(var(--muted-foreground));
+            pointer-events: none;
+          }
+          [contenteditable] h1 { font-size: 1.75rem; font-weight: 700; margin: 0.5em 0; }
+          [contenteditable] h2 { font-size: 1.4rem;  font-weight: 600; margin: 0.5em 0; }
+          [contenteditable] h3 { font-size: 1.15rem; font-weight: 600; margin: 0.5em 0; }
+          [contenteditable] ul { list-style: disc;    padding-left: 1.5em; margin: 0.25em 0; }
+          [contenteditable] ol { list-style: decimal; padding-left: 1.5em; margin: 0.25em 0; }
+          [contenteditable] a  { color: hsl(var(--primary)); text-decoration: underline; }
+        `}</style>
       </div>
 
+      {/* Category + Tags + Visibility */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="category">Category</Label>
+          <Label>Category</Label>
           <Select
             value={category || ''}
-            onValueChange={(value: string | null) => setCategory(value || null)}
+            onValueChange={(value) => setCategory(value || null)}
             disabled={isLoading}
           >
             <SelectTrigger>
@@ -190,9 +271,7 @@ export function NoteEditor({
             <SelectContent>
               <SelectItem value="">No category</SelectItem>
               {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -205,41 +284,26 @@ export function NoteEditor({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="tags">Tags</Label>
+          <Label>Tags</Label>
           <div className="flex gap-2">
             <Input
-              id="tags"
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
               placeholder="Add a tag"
               disabled={isLoading}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  addTag()
-                }
+                if (e.key === 'Enter') { e.preventDefault(); addTag() }
               }}
             />
-            <Button type="button" onClick={addTag} disabled={isLoading}>
-              Add
-            </Button>
+            <Button type="button" onClick={addTag} disabled={isLoading}>Add</Button>
           </div>
-          
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {tags.map((tag) => (
-                <div
-                  key={tag}
-                  className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded-full"
-                >
+                <div key={tag} className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded-full">
                   <TagIcon className="h-3 w-3" />
                   {tag}
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    className="ml-1 hover:text-destructive"
-                    disabled={isLoading}
-                  >
+                  <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive" disabled={isLoading}>
                     <XIcon className="h-3 w-3" />
                   </button>
                 </div>
@@ -249,14 +313,51 @@ export function NoteEditor({
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 pt-4">
+      {/* Visibility toggle */}
+      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30">
+        <button
+          type="button"
+          onClick={() => setIsPrivate(!isPrivate)}
+          disabled={isLoading}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+            isPrivate ? 'bg-amber-500' : 'bg-primary'
+          }`}
+          aria-checked={!isPrivate}
+          role="switch"
+        >
+          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+            isPrivate ? 'translate-x-6' : 'translate-x-1'
+          }`} />
+        </button>
+        <div className="flex items-center gap-2">
+          {isPrivate ? (
+            <>
+              <LockIcon className="h-4 w-4 text-amber-500" />
+              <div>
+                <p className="text-sm font-medium">Private note</p>
+                <p className="text-xs text-muted-foreground">Only visible to you</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <UsersIcon className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Family note</p>
+                <p className="text-xs text-muted-foreground">Visible to all family members</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
         )}
         <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving...' : 'Save Note'}
+          {isLoading ? 'Saving…' : 'Save Note'}
         </Button>
       </div>
     </form>

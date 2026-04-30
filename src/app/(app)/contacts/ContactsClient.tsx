@@ -176,7 +176,8 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
     try {
       const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete')
@@ -240,7 +241,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
                           <PencilIcon className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDelete(contact.id)}
+                          onClick={() => handleDelete(contact.id, contact.name)}
                           className="text-muted-foreground/40 hover:text-destructive transition-colors p-1"
                           aria-label="Delete contact"
                         >

@@ -1,101 +1,171 @@
 #!/bin/sh
+# =============================================================================
+# HomeBase – container entrypoint
+#
+# Runs as root so it can:
+#   1. Create / fix ownership of the /data volume directories
+#   2. Back up the existing database before touching it
+#   3. Run `prisma migrate deploy` to apply any pending migrations
+#   4. Verify the database is healthy
+#   5. Start the cron daemon for scheduled backups
+#   6. Optionally start the Cloudflare tunnel
+#   7. Drop privileges to the `nextjs` user and exec the Next.js server
+# =============================================================================
 set -e
 
 export DATABASE_URL="${DATABASE_URL:-file:/data/homebase.db}"
+# Strip the "file:" prefix to get the raw filesystem path
+DB_PATH="${DATABASE_URL#file:}"
 
-echo "=== HomeBase Container Startup ==="
-echo "Database path: $DATABASE_URL"
+echo "========================================"
+echo "  HomeBase Container Startup"
+echo "========================================"
+echo "  DATABASE_URL : $DATABASE_URL"
+echo "  DB file path : $DB_PATH"
+echo "  Node version : $(node --version)"
+echo "  Working dir  : $(pwd)"
+echo "========================================"
 
-# Fix permissions for /data directory (running as root)
-echo "Setting up /data directory permissions..."
-mkdir -p /data
-mkdir -p /data/uploads      # Create uploads directory for recipe images
-mkdir -p /data/documents    # Create documents directory for document vault
-mkdir -p /data/images   # Create images cache directory for external recipe images
-mkdir -p /data/backups  # Create backups directory for automated DB backups
+# Fail fast with a clear message if critical files are missing
+echo ""
+echo ">> Preflight checks..."
+for f in server.js prisma/schema.prisma node_modules/.bin/prisma; do
+  if [ ! -e "$f" ]; then
+    echo "   ✗ FATAL: expected file not found: /app/$f"
+    echo "     The image may not have built correctly."
+    exit 1
+  fi
+done
+echo "   ✓ Critical files present"
+
+# ---------------------------------------------------------------------------
+# 1. Ensure /data directory structure exists and is owned by nextjs
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [1/6] Setting up /data directory structure..."
+mkdir -p /data/uploads    # recipe images uploaded by users
+mkdir -p /data/documents  # document vault files
+mkdir -p /data/images     # cached external recipe images
+mkdir -p /data/backups    # automated database backups
+
 chown -R nextjs:nodejs /data 2>/dev/null || true
 chmod -R 755 /data 2>/dev/null || true
 
-# Symlink /app/data -> /data so process.cwd() + '/data/...' resolves correctly
-# (process.cwd() is /app in the standalone build, but the volume is mounted at /data)
-ln -sf /data /app/data 2>/dev/null || true
+# Symlink /app/data -> /data so any code using process.cwd() + '/data/...'
+# resolves to the mounted volume regardless of the working directory.
+ln -sfn /data /app/data 2>/dev/null || true
 
-# Fix permissions for Prisma client directory
-echo "Fixing Prisma client permissions..."
-if [ -d /app/node_modules/.prisma ]; then
-  chown -R nextjs:nodejs /app/node_modules/.prisma 2>/dev/null || true
-  chmod -R 755 /app/node_modules/.prisma 2>/dev/null || true
-fi
+echo "   ✓ /data structure ready"
 
-# Check if database file exists and create backup
-if [ -f /data/homebase.db ]; then
-  BACKUP_FILE="/data/homebase.db.backup.$(date +%Y%m%d_%H%M%S)"
-  echo "Backing up existing database to: $BACKUP_FILE"
-  cp /data/homebase.db "$BACKUP_FILE"
-  
-  # Keep only last 5 backups
-  ls -t /data/homebase.db.backup.* 2>/dev/null | tail -n +6 | xargs -r rm -f
+# ---------------------------------------------------------------------------
+# 2. Pre-migration database backup
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [2/6] Pre-migration backup..."
+if [ -f "$DB_PATH" ]; then
+  BACKUP_FILE="/data/backups/homebase.db.pre-deploy.$(date +%Y%m%d_%H%M%S)"
+  cp "$DB_PATH" "$BACKUP_FILE"
+  echo "   ✓ Backed up existing database to: $BACKUP_FILE"
+
+  # Keep only the 10 most recent pre-deploy backups to avoid filling the volume
+  ls -t /data/backups/homebase.db.pre-deploy.* 2>/dev/null | tail -n +11 | xargs -r rm -f
+  echo "   ✓ Old pre-deploy backups pruned (keeping last 10)"
 else
-  echo "No existing database found at /data/homebase.db"
-  echo "A new database will be created after migrations"
+  echo "   - No existing database found; a fresh one will be created by migrations"
 fi
 
-# Check database file permissions
-if [ -f /data/homebase.db ]; then
-  echo "Database file permissions:"
-  ls -la /data/homebase.db
-fi
+# ---------------------------------------------------------------------------
+# 3. Run Prisma migrations
+#    `migrate deploy` applies any migrations that haven't been applied yet.
+#    It is safe to run on every startup – already-applied migrations are skipped.
+#    We do NOT use `db push` or `migrate dev`; they are development-only
+#    commands that can silently drop/recreate tables.
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [3/6] Running database migrations..."
+echo "   Schema  : $(pwd)/prisma/schema.prisma"
+echo "   Prisma  : $(node_modules/.bin/prisma --version 2>/dev/null | head -1 || echo 'unknown')"
 
-# Generate Prisma client first to avoid permission issues
-echo "Generating Prisma client..."
-npx prisma generate 2>/dev/null || echo "Note: Prisma client generation may have warnings"
-
-echo "Running database migrations..."
-if npx prisma migrate deploy; then
-  echo "✓ Database migrations completed successfully"
+if node_modules/.bin/prisma migrate deploy; then
+  echo "   ✓ Migrations completed successfully"
 else
-  echo "✗ Database migrations failed"
-  echo "Attempting alternative migration approach..."
-  npx prisma db push --accept-data-loss 2>/dev/null || {
-    echo "✗ Failed to create database"
-    echo "Trying to create database with SQLite directly..."
-    sqlite3 /data/homebase.db "VACUUM;" 2>/dev/null || true
-  }
+  echo "   ✗ ERROR: prisma migrate deploy failed"
+  echo ""
+  echo "   Possible causes:"
+  echo "     - The /data volume is not mounted or not writable"
+  echo "     - A migration SQL file has a syntax error"
+  echo "     - The database is locked by another process"
+  echo "     - prisma/schema.prisma or migrations/ missing from image"
+  echo ""
+  echo "   Listing /app/prisma contents:"
+  ls -la /app/prisma/ 2>/dev/null || echo "   (directory not found)"
+  echo "   Listing /data contents:"
+  ls -la /data/ 2>/dev/null || echo "   (directory not found)"
+  echo ""
+  echo "   The container will exit so the issue can be diagnosed."
+  echo "   Check logs with:  docker logs homebase-app"
+  exit 1
 fi
 
-
-# Verify database is accessible
-echo "Verifying database connection..."
-if echo "SELECT 1;" | npx prisma db execute --stdin >/dev/null 2>&1; then
-  echo "✓ Database connection verified"
+# ---------------------------------------------------------------------------
+# 4. Verify the database is healthy and reachable
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [4/6] Verifying database health..."
+if sqlite3 "$DB_PATH" "SELECT count(*) FROM sqlite_master WHERE type='table';" > /dev/null 2>&1; then
+  TABLE_COUNT=$(sqlite3 "$DB_PATH" "SELECT count(*) FROM sqlite_master WHERE type='table';")
+  echo "   ✓ Database is healthy ($TABLE_COUNT tables found)"
 else
-  echo "✗ Warning: Could not verify database connection"
+  echo "   ✗ WARNING: Could not query database at $DB_PATH"
+  echo "   The server will start anyway – it may recover on first request."
 fi
 
+# Ensure the DB file (and WAL/SHM if they exist) are owned by nextjs
+chown nextjs:nodejs "$DB_PATH" 2>/dev/null || true
+chown nextjs:nodejs "${DB_PATH}-wal" 2>/dev/null || true
+chown nextjs:nodejs "${DB_PATH}-shm" 2>/dev/null || true
 
-# Set up cron job for automated database backups (runs daily at 3:00 AM)
-echo "Setting up automated database backup cron job..."
-mkdir -p /data/backups
-chown nextjs:nodejs /data/backups
-echo "0 3 * * * /app/scripts/backup-db.sh /data/backups >> /data/backups/cron.log 2>&1" > /etc/crontabs/root
+# ---------------------------------------------------------------------------
+# 5. Set up daily backup cron job (runs at 03:00 every night)
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [5/6] Configuring scheduled backups..."
+echo "0 3 * * * su-exec nextjs:nodejs /app/scripts/backup-db.sh /data/backups >> /data/backups/cron.log 2>&1" \
+  > /etc/crontabs/root
 crond -b -l 2
-echo "✓ Cron daemon started (daily backup at 3:00 AM)"
+echo "   ✓ Cron daemon started (daily backup at 03:00)"
 
-# Drop privileges to nextjs user for security
-echo "Dropping privileges to nextjs user..."
+# ---------------------------------------------------------------------------
+# 6. Optional: Cloudflare tunnel
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [6/6] Starting services..."
 if [ -f /etc/cloudflared/config.yml ]; then
-  echo "Starting Cloudflare tunnel..."
-  # Bypass Docker's internal DNS (127.0.0.11) which cannot handle SRV record
-  # lookups and gets stuck after network drops — use 1.1.1.1 directly instead
+  echo "   Starting Cloudflare tunnel..."
+  # Use public DNS – Docker's internal resolver (127.0.0.11) can't handle
+  # SRV lookups needed by cloudflared and hangs after network interruptions.
   printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
+
   (
     while true; do
-      su-exec nextjs:nodejs cloudflared tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
-      echo "Cloudflare tunnel exited, restarting in 5 seconds..."
+      su-exec nextjs:nodejs cloudflared tunnel \
+        --no-autoupdate \
+        --config /etc/cloudflared/config.yml \
+        run
+      echo "   Cloudflare tunnel exited – restarting in 5 seconds..."
       sleep 5
     done
   ) &
+  echo "   ✓ Cloudflare tunnel started"
+else
+  echo "   - No Cloudflare config found; skipping tunnel"
 fi
 
-echo "Starting Homebase..."
-exec su-exec nextjs:nodejs node server.js
+# ---------------------------------------------------------------------------
+# Hand off to the Next.js server as the unprivileged nextjs user
+# ---------------------------------------------------------------------------
+echo ""
+echo "========================================"
+echo "  HomeBase is starting on port 3000"
+echo "========================================"
+exec su-exec nextjs:nodejs "$@"

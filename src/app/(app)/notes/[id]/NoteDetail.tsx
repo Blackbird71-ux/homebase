@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { NoteEditor } from '@/components/notes/NoteEditor'
-import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon } from 'lucide-react'
+import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 
@@ -17,6 +17,7 @@ interface NoteDetailProps {
     content: string
     category: string | null
     tags: string[]
+    isPrivate: boolean
     createdBy: string
     createdAt: string
     updatedAt: string
@@ -91,15 +92,26 @@ export function NoteDetail({ note }: NoteDetailProps) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-4 flex-wrap">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push('/notes')}
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{note.title}</h1>
+        <Button
+        variant="outline"
+        size="icon"
+        onClick={() => router.push('/notes')}
+        >
+        <ArrowLeftIcon className="h-4 w-4" />
+        </Button>
+        <div>
+        <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{note.title}</h1>
+              {note.isPrivate ? (
+                <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
+                  <LockIcon className="h-3 w-3" /> Private
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                  <UsersIcon className="h-3 w-3" /> Family
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
               <div className="flex items-center gap-1">
                 <CalendarIcon className="h-3 w-3" />
@@ -186,6 +198,7 @@ export function NoteDetail({ note }: NoteDetailProps) {
             initialContent={note.content}
             initialCategory={note.category}
             initialTags={note.tags}
+            initialIsPrivate={note.isPrivate}
             categories={note.category ? [note.category] : []}
             onSubmit={handleUpdate}
             onCancel={() => setIsEditing(false)}

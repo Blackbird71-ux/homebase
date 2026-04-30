@@ -18,7 +18,7 @@ function normalizeToUtcMidnight(dateStr: string): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null): Promise<DashboardData> {
+async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0): Promise<DashboardData> {
   // Get today's boundaries in the family's timezone
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -44,8 +44,8 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
 
   // Compute week boundaries for weekly summary
   const nowInTz = new Date(new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()))
-  const weekStart = startOfWeek(nowInTz, { weekStartsOn: 0 })
-  const weekEndDate = endOfWeek(nowInTz, { weekStartsOn: 0 })
+  const weekStart = startOfWeek(nowInTz, { weekStartsOn })
+  const weekEndDate = endOfWeek(nowInTz, { weekStartsOn })
   const weekLabel = `${format(weekStart, 'd MMM')} – ${format(weekEndDate, 'd MMM')}`
 
   // Normalize week boundaries to UTC midnight for DB queries
@@ -255,7 +255,7 @@ export default async function HomePage() {
   }
 
   const cards = mergeDashboardCards(dashboardCards)
-  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId)
+  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1)
 
   return (
     <HomeClient
