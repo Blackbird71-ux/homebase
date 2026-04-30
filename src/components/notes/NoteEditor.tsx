@@ -62,6 +62,7 @@ export function NoteEditor({
   const textColorInputRef = useRef<HTMLInputElement>(null)
   const highlightColorInputRef = useRef<HTMLInputElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
+  const savedEditableRef = useRef<HTMLDivElement | null>(null)
 
   // Initialise editor content once on mount
   useEffect(() => {
@@ -74,8 +75,15 @@ export function NoteEditor({
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const exec = useCallback((command: string, value?: string) => {
+    const active = document.activeElement
     document.execCommand(command, false, value)
-    editorRef.current?.focus()
+    // Re-focus whichever editable was active (e.preventDefault() on toolbar buttons
+    // keeps focus in place, but some commands or prompts can blur it)
+    if (active === titleRef.current || active === editorRef.current) {
+      ;(active as HTMLDivElement).focus()
+    } else {
+      editorRef.current?.focus()
+    }
   }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -131,10 +139,15 @@ export function NoteEditor({
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0) {
       savedRangeRef.current = sel.getRangeAt(0).cloneRange()
+      // Track which editable had focus so we can re-focus it before execCommand
+      savedEditableRef.current =
+        document.activeElement === titleRef.current ? titleRef.current : editorRef.current
     }
   }
 
   const restoreSelection = () => {
+    // Must focus the owning editable first — execCommand requires an active editable
+    savedEditableRef.current?.focus()
     const sel = window.getSelection()
     if (sel && savedRangeRef.current) {
       sel.removeAllRanges()
