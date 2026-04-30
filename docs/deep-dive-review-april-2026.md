@@ -456,7 +456,7 @@ Based on the backlog docs (`homebase-backlog-build-plans.md` and `homebase-featu
 - **Page:** `src/app/(app)/notes/page.tsx` — fetches notes with categories, passes `currentUserId`
 - **Client:** `NotesClient.tsx` — search, category/tag/visibility filter, CRUD with editor dialog, private/family badge
 - **Detail:** `src/app/(app)/notes/[id]/NoteDetail.tsx` — full note view with edit/delete, privacy badge
-- **Editor:** `src/components/notes/NoteEditor.tsx` — rich-text WYSIWYG (bold, italic, underline, strikethrough, H1–H3, ordered/unordered lists, alignment, font size, links), tag input, private/family toggle
+- **Editor:** `src/components/notes/NoteEditor.tsx` — rich-text WYSIWYG (bold, italic, underline, strikethrough, H1–H3, ordered/unordered lists, alignment, font size, links, text colour, highlight colour, clear formatting), tag input, private/family toggle
 - **Card:** `src/components/notes/NoteCard.tsx` — displays privacy badge (Private / Family)
 - **API GET:** `/api/notes` — fetches with search/category/tag/visibility filtering, `isPrivate` respected
 - **API POST:** `/api/notes` — creates note with `isPrivate` support

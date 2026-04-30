@@ -10,6 +10,7 @@ import {
   ListIcon, ListOrderedIcon, XIcon, TagIcon, LinkIcon,
   AlignLeftIcon, AlignCenterIcon, AlignRightIcon, LockIcon, UsersIcon,
   Heading1Icon, Heading2Icon, Heading3Icon, TypeIcon,
+  BaselineIcon, HighlighterIcon, RemoveFormattingIcon,
 } from 'lucide-react'
 
 interface NoteEditorProps {
@@ -54,7 +55,13 @@ export function NoteEditor({
   const [tags, setTags] = useState<string[]>(initialTags)
   const [newTag, setNewTag] = useState('')
   const [isPrivate, setIsPrivate] = useState(initialIsPrivate)
+  const [textColor, setTextColor] = useState('#e11d48')
+  const [highlightColor, setHighlightColor] = useState('#fef08a')
+  const [fontSizeKey, setFontSizeKey] = useState(0)
   const editorRef = useRef<HTMLDivElement>(null)
+  const textColorInputRef = useRef<HTMLInputElement>(null)
+  const highlightColorInputRef = useRef<HTMLInputElement>(null)
+  const savedRangeRef = useRef<Range | null>(null)
 
   // Initialise editor content once on mount
   useEffect(() => {
@@ -108,6 +115,37 @@ export function NoteEditor({
       sel.removeAllRanges()
     }
     editorRef.current?.focus()
+    // Reset dropdown to placeholder
+    setFontSizeKey(k => k + 1)
+  }
+
+  const saveSelection = () => {
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange()
+    }
+  }
+
+  const restoreSelection = () => {
+    const sel = window.getSelection()
+    if (sel && savedRangeRef.current) {
+      sel.removeAllRanges()
+      sel.addRange(savedRangeRef.current)
+    }
+  }
+
+  const applyTextColor = (color: string) => {
+    setTextColor(color)
+    restoreSelection()
+    document.execCommand('foreColor', false, color)
+    editorRef.current?.focus()
+  }
+
+  const applyHighlightColor = (color: string) => {
+    setHighlightColor(color)
+    restoreSelection()
+    document.execCommand('hiliteColor', false, color)
+    editorRef.current?.focus()
   }
 
   const ToolButton = ({
@@ -126,6 +164,39 @@ export function NoteEditor({
     >
       {children}
     </button>
+  )
+
+  // Color picker button: shows icon + swatch of last-used color.
+  // Saves selection on mousedown so the color picker can restore it on change.
+  const ColorButton = ({
+    inputRef, color, title: tip, onColorChange, children,
+  }: {
+    inputRef: React.RefObject<HTMLInputElement | null>
+    color: string
+    title: string
+    onColorChange: (c: string) => void
+    children: React.ReactNode
+  }) => (
+    <div className="relative">
+      <button
+        type="button"
+        title={tip}
+        onMouseDown={(e) => { e.preventDefault(); saveSelection(); inputRef.current?.click() }}
+        className="h-7 w-7 flex flex-col items-center justify-center gap-0 rounded transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground disabled:opacity-50"
+        disabled={isLoading}
+      >
+        {children}
+        <span className="block h-[3px] w-4 rounded-full mt-0.5" style={{ backgroundColor: color }} />
+      </button>
+      <input
+        ref={inputRef}
+        type="color"
+        value={color}
+        onChange={(e) => onColorChange(e.target.value)}
+        className="absolute opacity-0 w-0 h-0 pointer-events-none"
+        tabIndex={-1}
+      />
+    </div>
   )
 
   return (
@@ -169,6 +240,7 @@ export function NoteEditor({
 
           {/* Font size */}
           <select
+            key={fontSizeKey}
             onMouseDown={(e) => e.preventDefault()}
             onChange={(e) => { if (e.target.value) setFontSize(e.target.value) }}
             className="h-7 text-xs rounded border border-input bg-background px-1 text-muted-foreground cursor-pointer"
@@ -226,6 +298,35 @@ export function NoteEditor({
           {/* Link */}
           <ToolButton onClick={insertLink} title="Insert link">
             <LinkIcon className="h-3.5 w-3.5" />
+          </ToolButton>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Text colour */}
+          <ColorButton
+            inputRef={textColorInputRef}
+            color={textColor}
+            title="Text colour"
+            onColorChange={applyTextColor}
+          >
+            <BaselineIcon className="h-3.5 w-3.5" />
+          </ColorButton>
+
+          {/* Highlight */}
+          <ColorButton
+            inputRef={highlightColorInputRef}
+            color={highlightColor}
+            title="Highlight colour"
+            onColorChange={applyHighlightColor}
+          >
+            <HighlighterIcon className="h-3.5 w-3.5" />
+          </ColorButton>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Clear formatting */}
+          <ToolButton onClick={() => exec('removeFormat')} title="Clear formatting">
+            <RemoveFormattingIcon className="h-3.5 w-3.5" />
           </ToolButton>
         </div>
 
