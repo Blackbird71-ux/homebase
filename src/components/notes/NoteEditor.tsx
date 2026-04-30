@@ -210,7 +210,7 @@ export function NoteEditor({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Title */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         <Label onClick={() => titleRef.current?.focus()}>Title</Label>
         <div
           ref={titleRef}
@@ -221,8 +221,59 @@ export function NoteEditor({
             if (e.key === 'Enter') e.preventDefault()
             if (e.key === 'Enter' && e.ctrlKey) handleSubmit(e)
           }}
-          className="w-full min-h-[2.25rem] rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full min-h-[2.25rem] rounded-t-md border border-input border-b-0 bg-background px-3 py-2 text-sm font-semibold ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         />
+        {/* Title formatting strip */}
+        <div className="flex items-center gap-0.5 px-1.5 py-1 border border-input rounded-b-md bg-muted/40">
+          {(['bold', 'italic'] as const).map((cmd) => {
+            const Icon = cmd === 'bold' ? BoldIcon : ItalicIcon
+            return (
+              <button
+                key={cmd}
+                type="button"
+                title={cmd === 'bold' ? 'Bold (Ctrl+B)' : 'Italic (Ctrl+I)'}
+                onMouseDown={(e) => { e.preventDefault(); exec(cmd) }}
+                className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground disabled:opacity-50"
+                disabled={isLoading}
+              >
+                <Icon className="h-3 w-3" />
+              </button>
+            )
+          })}
+          <div className="w-px h-4 bg-border mx-0.5" />
+          {/* Text colour — triggers the same hidden input as the main toolbar */}
+          <button
+            type="button"
+            title="Text colour"
+            onMouseDown={(e) => { e.preventDefault(); saveSelection(); textColorInputRef.current?.click() }}
+            className="h-6 w-6 flex flex-col items-center justify-center rounded transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground disabled:opacity-50"
+            disabled={isLoading}
+          >
+            <BaselineIcon className="h-3 w-3" />
+            <span className="block h-[2px] w-3 rounded-full" style={{ backgroundColor: textColor }} />
+          </button>
+          {/* Highlight — same */}
+          <button
+            type="button"
+            title="Highlight colour"
+            onMouseDown={(e) => { e.preventDefault(); saveSelection(); highlightColorInputRef.current?.click() }}
+            className="h-6 w-6 flex flex-col items-center justify-center rounded transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground disabled:opacity-50"
+            disabled={isLoading}
+          >
+            <HighlighterIcon className="h-3 w-3" />
+            <span className="block h-[2px] w-3 rounded-full" style={{ backgroundColor: highlightColor }} />
+          </button>
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <button
+            type="button"
+            title="Clear title formatting"
+            onMouseDown={(e) => { e.preventDefault(); exec('removeFormat') }}
+            className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground disabled:opacity-50"
+            disabled={isLoading}
+          >
+            <RemoveFormattingIcon className="h-3 w-3" />
+          </button>
+        </div>
       </div>
 
       {/* Rich Text Editor */}
