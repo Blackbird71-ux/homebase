@@ -32,11 +32,6 @@ export function NoteCard({
   const formattedDate = format(new Date(updatedAt), 'MMM d, yyyy')
   const isRecentlyUpdated = new Date(updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
 
-  // Strip HTML tags for preview
-  const plainContent = content.replace(/<[^>]*>/g, '')
-  const previewContent = plainContent.length > 150 
-    ? plainContent.substring(0, 150) + '...' 
-    : plainContent
 
   return (
     <div className="relative group h-full">
@@ -44,7 +39,10 @@ export function NoteCard({
         <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-start gap-2">
-              <CardTitle className="text-base line-clamp-2 flex-1">{title}</CardTitle>
+              <CardTitle
+                className="text-base line-clamp-2 flex-1 [&_*]:leading-snug"
+                dangerouslySetInnerHTML={{ __html: title }}
+              />
               <div className="flex items-center gap-1 shrink-0">
                 {isPrivate ? (
                   <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
@@ -76,7 +74,14 @@ export function NoteCard({
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground line-clamp-3">{previewContent}</p>
+            {content ? (
+              <div
+                className="text-sm text-muted-foreground line-clamp-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_*]:!my-0 [&_ul]:pl-4 [&_ol]:pl-4"
+                dangerouslySetInnerHTML={{ __html: content }}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No content</p>
+            )}
             
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1">

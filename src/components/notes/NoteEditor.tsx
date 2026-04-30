@@ -50,7 +50,6 @@ export function NoteEditor({
   onCancel,
   isLoading = false,
 }: NoteEditorProps) {
-  const [title, setTitle] = useState(initialTitle)
   const [category, setCategory] = useState<string | null>(initialCategory)
   const [tags, setTags] = useState<string[]>(initialTags)
   const [newTag, setNewTag] = useState('')
@@ -58,6 +57,7 @@ export function NoteEditor({
   const [textColor, setTextColor] = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
   const [fontSizeKey, setFontSizeKey] = useState(0)
+  const titleRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const textColorInputRef = useRef<HTMLInputElement>(null)
   const highlightColorInputRef = useRef<HTMLInputElement>(null)
@@ -65,6 +65,9 @@ export function NoteEditor({
 
   // Initialise editor content once on mount
   useEffect(() => {
+    if (titleRef.current && initialTitle) {
+      titleRef.current.innerHTML = initialTitle
+    }
     if (editorRef.current && initialContent) {
       editorRef.current.innerHTML = initialContent
     }
@@ -77,9 +80,14 @@ export function NoteEditor({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const titleHtml = titleRef.current?.innerHTML ?? ''
+    if (!titleHtml.replace(/<[^>]*>/g, '').trim()) {
+      titleRef.current?.focus()
+      return
+    }
     const content = editorRef.current?.innerHTML ?? ''
     onSubmit({
-      title,
+      title: titleHtml,
       content,
       category: category || null,
       tags: tags.length > 0 ? tags : undefined,
@@ -203,14 +211,17 @@ export function NoteEditor({
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Title */}
       <div className="space-y-2">
-        <Label htmlFor="title">Title</Label>
-        <Input
-          id="title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Note title"
-          required
-          disabled={isLoading}
+        <Label onClick={() => titleRef.current?.focus()}>Title</Label>
+        <div
+          ref={titleRef}
+          contentEditable={!isLoading}
+          suppressContentEditableWarning
+          data-placeholder="Note title…"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.preventDefault()
+            if (e.key === 'Enter' && e.ctrlKey) handleSubmit(e)
+          }}
+          className="w-full min-h-[2.25rem] rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 

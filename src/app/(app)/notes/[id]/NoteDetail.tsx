@@ -101,7 +101,10 @@ export function NoteDetail({ note }: NoteDetailProps) {
         </Button>
         <div>
         <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{note.title}</h1>
+              <h1
+                className="text-2xl font-bold"
+                dangerouslySetInnerHTML={{ __html: note.title }}
+              />
               {note.isPrivate ? (
                 <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
                   <LockIcon className="h-3 w-3" /> Private
@@ -189,7 +192,7 @@ export function NoteDetail({ note }: NoteDetailProps) {
 
       {/* Editor Dialog */}
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Note</DialogTitle>
           </DialogHeader>

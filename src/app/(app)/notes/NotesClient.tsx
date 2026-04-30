@@ -50,12 +50,13 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
   // Filter notes based on search, category, tag and visibility
   const filteredNotes = useMemo(() => {
     return notes.filter(note => {
-      // Search filter
+      // Search filter (strip HTML from title/content before matching)
       if (search) {
         const searchLower = search.toLowerCase()
-        const matchesSearch = 
-          note.title.toLowerCase().includes(searchLower) ||
-          note.content.toLowerCase().includes(searchLower)
+        const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '')
+        const matchesSearch =
+          stripHtml(note.title).toLowerCase().includes(searchLower) ||
+          stripHtml(note.content).toLowerCase().includes(searchLower)
         if (!matchesSearch) return false
       }
 
@@ -386,7 +387,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
         }
         setEditorOpen(open)
       }}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingNote ? 'Edit Note' : 'Create New Note'}
