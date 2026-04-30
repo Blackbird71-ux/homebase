@@ -4,8 +4,7 @@
 # Build stages:
 #   deps     – install npm dependencies (including native rebuilds)
 #   builder  – generate Prisma client + run Next.js build
-#   pruner   – strip dev dependencies to get a clean production node_modules
-#   runner   – minimal production image
+#   runner   – production image
 #
 # Migrations are intentionally NOT run here.
 # They run at container startup via entrypoint.sh so they execute against
@@ -43,27 +42,11 @@ RUN npx prisma generate
 RUN npm run build
 
 # -----------------------------------------------------------------------------
-# Stage 3: pruner – produce a clean production-only node_modules
+# Stage 3: runner – production image
 #
-# We can't just use the builder's node_modules because it contains all dev
-# dependencies. We also can't manually list every transitive dep of every
-# serverExternalPackage — that's fragile and breaks on version bumps.
-#
-# Instead: start fresh, install only production deps, rebuild native modules.
-# This gives us a correct, complete node_modules with no guesswork.
-# -----------------------------------------------------------------------------
-FROM node:22-alpine AS pruner
-RUN apk add --no-cache libc6-compat python3 make g++
-WORKDIR /app
-COPY package.json package-lock.json ./
-# --omit=dev skips devDependencies; --ignore-scripts + rebuild ensures
-# native modules (better-sqlite3) are compiled for the target platform.
-RUN npm ci --omit=dev --ignore-scripts && npm rebuild better-sqlite3
-# Copy in the generated Prisma client so it's available in node_modules/.prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-
-# -----------------------------------------------------------------------------
-# Stage 4: runner – lean production image
+# We use node_modules from the builder stage (full install, includes the prisma
+# CLI which is a devDependency but needed at runtime for `migrate deploy`).
+# The total image / tar is ~300 MB which is acceptable for a home-server deploy.
 # -----------------------------------------------------------------------------
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -95,10 +78,9 @@ COPY --from=builder /app/package.json ./package.json
 # Prisma schema + ALL migration files so `prisma migrate deploy` can run at startup
 COPY --from=builder /app/prisma ./prisma
 
-# Full production node_modules (from pruner stage).
-# This correctly covers all serverExternalPackages and their transitive deps
-# without needing to enumerate them manually.
-COPY --from=pruner /app/node_modules ./node_modules
+# Full node_modules from builder — includes the prisma CLI (devDep) needed for
+# `migrate deploy` at startup, plus all serverExternalPackages and their deps.
+COPY --from=builder /app/node_modules ./node_modules
 
 # Scripts
 COPY docker/entrypoint.sh         ./entrypoint.sh
