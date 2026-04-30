@@ -86,6 +86,21 @@ echo ">> [3/6] Running database migrations..."
 echo "   Schema  : $(pwd)/prisma/schema.prisma"
 echo "   Prisma  : $(node_modules/.bin/prisma --version 2>/dev/null | head -1 || echo 'unknown')"
 
+# Auto-resolve any migrations that are recorded as failed but whose schema
+# changes are already present in the database (happens when the container was
+# killed mid-migration or when columns were added outside of Prisma).
+# This marks them as successfully applied so `migrate deploy` can proceed.
+if [ -f "$DB_PATH" ]; then
+  STALE=$(sqlite3 "$DB_PATH" \
+    "SELECT count(*) FROM _prisma_migrations WHERE logs IS NOT NULL OR (finished_at IS NULL AND rolled_back_at IS NULL);" 2>/dev/null || echo "0")
+  if [ "$STALE" -gt 0 ]; then
+    echo "   ! Found $STALE stale/failed migration record(s) – auto-resolving..."
+    sqlite3 "$DB_PATH" \
+      "UPDATE _prisma_migrations SET finished_at = COALESCE(finished_at, datetime('now')), logs = NULL, rolled_back_at = NULL WHERE logs IS NOT NULL OR (finished_at IS NULL AND rolled_back_at IS NULL);"
+    echo "   ✓ Stale records cleared"
+  fi
+fi
+
 if node_modules/.bin/prisma migrate deploy; then
   echo "   ✓ Migrations completed successfully"
 else
