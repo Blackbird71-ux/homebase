@@ -456,13 +456,14 @@ Based on the backlog docs (`homebase-backlog-build-plans.md` and `homebase-featu
 - **Page:** `src/app/(app)/notes/page.tsx` — fetches notes with categories, passes `currentUserId`
 - **Client:** `NotesClient.tsx` — search, category/tag/visibility filter, CRUD with editor dialog, private/family badge
 - **Detail:** `src/app/(app)/notes/[id]/NoteDetail.tsx` — full note view with edit/delete, privacy badge
-- **Editor:** `src/components/notes/NoteEditor.tsx` — rich-text WYSIWYG (bold, italic, underline, strikethrough, H1–H3, ordered/unordered lists, alignment, font size, links, text colour, highlight colour, clear formatting), tag input, private/family toggle
-- **Card:** `src/components/notes/NoteCard.tsx` — displays privacy badge (Private / Family)
+- **Editor:** `src/components/notes/NoteEditor.tsx` — rich-text WYSIWYG; title and body are both contentEditable so the single toolbar (bold, italic, underline, strikethrough, H1–H3, ordered/unordered lists, alignment, font size, links, text colour, highlight colour, clear formatting) applies to whichever field has focus; tag input, private/family toggle; dialog is full-width on mobile and `max-w-2xl` on sm+
+- **Card:** `src/components/notes/NoteCard.tsx` — renders title and content as HTML so inline colours, highlights, and formatting are visible in the list view; heading sizes are capped to `text-sm` in the preview to avoid layout overflow
+- **Client:** `NotesClient.tsx` — search strips HTML before matching so colour codes and tag names don't pollute results; editor dialog responsive width
 - **API GET:** `/api/notes` — fetches with search/category/tag/visibility filtering, `isPrivate` respected
 - **API POST:** `/api/notes` — creates note with `isPrivate` support
 - **API:** `/api/notes/[id]` — PUT/DELETE with `isPrivate` support
 - **Schema:** `Note.isPrivate Boolean @default(false)` — migration `20260430000001_add_note_privacy`
-- **Status:** ✅ Fully wired — richtext editor + note privacy added April 2026
+- **Status:** ✅ Fully wired — richtext editor + note privacy added April 2026; HTML title/content preview + responsive dialog added April 2026
 
 ### Documents
 - **Page:** `src/app/(app)/documents/page.tsx` — client-side fetch with filters
