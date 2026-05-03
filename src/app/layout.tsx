@@ -82,6 +82,17 @@ export default async function RootLayout({
         <ThemeProvider>
           {children}
         </ThemeProvider>
+        {/* Register service worker as early as possible after page is interactive.
+            afterInteractive fires before React useEffect, reducing the window
+            where navigations can bypass the SW. skipWaiting + clients.claim()
+            in sw.js ensures it takes control of this tab immediately. */}
+        <Script id="sw-register" strategy="afterInteractive">{`
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function(err) {
+              console.error('[SW] Registration failed:', err)
+            })
+          }
+        `}</Script>
         {showUmami && (
           <Script
             src={umamiScriptUrl!}

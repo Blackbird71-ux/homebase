@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useRef, useCallback, useEffect } from 'react'
+import { enqueueMutation, getAllMutations, removeMutation } from '@/lib/offline-queue'
 import {
   DndContext,
   closestCenter,
@@ -61,6 +62,131 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // ── Offline sync ────────────────────────────────────────────────────────────
+
+  /** Register a Background Sync tag so the SW can replay the queue when connectivity returns. */
+  async function registerBackgroundSync() {
+    if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return
+    try {
+      const reg = await navigator.serviceWorker.ready
+      await (reg as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync.register('homebase-list-sync')
+    } catch {
+      // Not supported or permission denied — the online/visibilitychange fallback covers this
+    }
+  }
+
+  /** Broadcast current queue length so OfflineBanner can show the pending count. */
+  const broadcastQueueCount = useCallback(async () => {
+    try {
+      const all = await getAllMutations()
+      const count = all.filter((m) => m.listId === listId).length
+      window.dispatchEvent(
+        new CustomEvent('offline-queue-update', { detail: { count } })
+      )
+    } catch {
+      // IndexedDB unavailable — ignore
+    }
+  }, [listId])
+
+  /**
+   * Replay any queued mutations for this list then refetch items from the
+   * server. Called both from the `online` window event (iOS/Safari) and from
+   * SW postMessages (Chrome/Android Background Sync).
+   */
+  const flushQueueAndRefetch = useCallback(async () => {
+    let mutations: Awaited<ReturnType<typeof getAllMutations>>
+    try {
+      mutations = await getAllMutations()
+    } catch {
+      return
+    }
+
+    const mine = mutations
+      .filter((m) => m.listId === listId)
+      .sort((a, b) => a.queuedAt - b.queuedAt)
+
+    if (mine.length === 0) return
+
+    for (const mutation of mine) {
+      try {
+        const res = await fetch(mutation.endpoint, {
+          method: mutation.method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mutation.body),
+        })
+        if (res.ok || res.status === 404) {
+          await removeMutation(mutation.id)
+        }
+      } catch {
+        // Still offline — stop and try again next time
+        break
+      }
+    }
+
+    // Refetch the authoritative list from the server to replace temp IDs
+    try {
+      const res = await fetch(`/api/lists/${listId}/items`)
+      if (res.ok) {
+        const serverItems = await res.json()
+        setItems(
+          serverItems.map((i: Record<string, unknown>) => ({
+            ...i,
+            dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
+            createdAt: new Date(i.createdAt as string),
+            recipeId: (i.recipeId as string | null) ?? null,
+            recipeName: (i.recipeName as string | null) ?? null,
+          }))
+        )
+      }
+    } catch {
+      // Network gone again — leave optimistic state as-is
+    }
+
+    await broadcastQueueCount()
+  }, [listId, broadcastQueueCount])
+
+  // Flush on coming back online (iOS / Safari fallback path)
+  useEffect(() => {
+    window.addEventListener('online', flushQueueAndRefetch)
+    return () => window.removeEventListener('online', flushQueueAndRefetch)
+  }, [flushQueueAndRefetch])
+
+  // Listen for SYNC_REQUESTED from the service worker Background Sync (Chrome/Android).
+  // The SW fires this after a sync event — we then do the actual replay and refetch.
+  // Also catches the case where the SW synced while the tab was backgrounded:
+  // visibilitychange fires when the user returns to the tab.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+
+    function handleSWMessage(event: MessageEvent) {
+      if (event.data?.type === 'SYNC_REQUESTED') {
+        flushQueueAndRefetch()
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', handleSWMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage)
+  }, [flushQueueAndRefetch])
+
+  // When the user returns to the tab (from background or another app), flush any
+  // mutations that may have been queued while offline. Handles the gap between the
+  // SW Background Sync firing with no open clients and the user re-opening the tab.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        flushQueueAndRefetch()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [flushQueueAndRefetch])
+
+  // Broadcast initial queue count on mount
+  useEffect(() => {
+    broadcastQueueCount()
+  }, [broadcastQueueCount])
+
+  // ────────────────────────────────────────────────────────────────────────────
+
   // Auto-detect category when newContent changes, but not if user manually picked one
   useEffect(() => {
     if (!categoryManuallySet && newContent.trim()) {
@@ -78,7 +204,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         const response = await fetch('/api/ingredient-categories')
         if (response.ok) {
           const data = await response.json()
-          const categoryNames = (data as any[]).map((cat: any) => cat.category)
+          const categoryNames = (data as Array<{ category: string }>).map((cat) => cat.category)
           // Always include 'Other' category if not present
           if (!categoryNames.includes('Other')) {
             categoryNames.push('Other')
@@ -173,10 +299,52 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     e.preventDefault()
     if (!newContent.trim()) return
 
+    const body = { content: newContent.trim(), category: newCategory }
+
+    if (!navigator.onLine) {
+      // Offline path — optimistic add with a temporary ID
+      const tempId = `tmp_${crypto.randomUUID()}`
+      const optimisticItem: ListItemShape = {
+        id: tempId,
+        content: body.content,
+        category: body.category,
+        isCompleted: false,
+        isLocked: false,
+        sortOrder: 0,
+        dueDate: null,
+        recipeId: null,
+        recipeName: null,
+        createdBy: '',
+        listId,
+        createdAt: new Date(),
+        unitPrice: null,
+        quantity: null,
+      }
+      setItems((prev) => [...prev, optimisticItem])
+      setNewContent('')
+      setNewCategory('Other')
+      setCategoryManuallySet(false)
+
+      await enqueueMutation({
+        id: crypto.randomUUID(),
+        endpoint: `/api/lists/${listId}/items`,
+        method: 'POST',
+        body,
+        tempId,
+        listId,
+        queuedAt: Date.now(),
+      })
+
+      await registerBackgroundSync()
+      await broadcastQueueCount()
+      return
+    }
+
+    // Online path — existing behaviour unchanged
     const res = await fetch(`/api/lists/${listId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: newContent.trim(), category: newCategory }),
+      body: JSON.stringify(body),
     })
     if (res.ok) {
       const item = await res.json()
@@ -199,15 +367,39 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   }
 
   async function toggleItem(id: string, isCompleted: boolean) {
+    // Optimistic update regardless of connectivity
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isCompleted } : i)))
+
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      // Offline, or item was added offline and hasn't been synced yet —
+      // queue the toggle (for tmp_ items the sync will apply completion
+      // to the real item after the POST is replayed first)
+      if (!id.startsWith('tmp_')) {
+        await enqueueMutation({
+          id: crypto.randomUUID(),
+          endpoint: `/api/lists/${listId}/items/${id}`,
+          method: 'PATCH',
+          body: { isCompleted },
+          listId,
+          queuedAt: Date.now(),
+        })
+
+        await registerBackgroundSync()
+        await broadcastQueueCount()
+      }
+      return
+    }
+
+    // Online path — send to server
     startTransition(async () => {
       const res = await fetch(`/api/lists/${listId}/items/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isCompleted }),
       })
-      if (res.ok) {
-        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isCompleted } : i)))
-      } else {
+      if (!res.ok) {
+        // Revert optimistic update
+        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isCompleted: !isCompleted } : i)))
         toast.error('Failed to save. Please try again.')
       }
     })

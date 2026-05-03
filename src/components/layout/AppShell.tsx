@@ -1,17 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { QuickAdd } from './QuickAdd'
+import { OfflineBanner } from './OfflineBanner'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-
-  // Restore collapse preference on mount
-  useEffect(() => {
-    const stored = localStorage.getItem('sidebar-collapsed')
-    if (stored === 'true') setSidebarCollapsed(true)
-  }, [])
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('sidebar-collapsed') === 'true'
+  })
 
   function toggleSidebar() {
     setSidebarCollapsed((prev) => {
@@ -23,6 +21,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
+      <OfflineBanner />
       <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
       <main className="flex-1 overflow-hidden flex flex-col min-w-0">
