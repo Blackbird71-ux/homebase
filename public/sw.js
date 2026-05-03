@@ -1,4 +1,4 @@
-// Homebase Service Worker — v4
+// Homebase Service Worker — v5
 //
 // Lessons applied from Memories offline implementation:
 //   - Two-cache architecture (shell + api) — simpler than three caches
@@ -13,8 +13,8 @@
 //   - Background Sync delegates to clients via postMessage — avoids duplicating
 //     IndexedDB logic in SW context
 
-const SHELL_CACHE = 'homebase-shell-v4';
-const API_CACHE   = 'homebase-api-v4';
+const SHELL_CACHE = 'homebase-shell-v5';
+const API_CACHE   = 'homebase-api-v5';
 const ALL_CACHES  = [SHELL_CACHE, API_CACHE];
 
 const SYNC_TAG = 'homebase-list-sync';
@@ -33,6 +33,7 @@ const WARM_PAGES = [
   '/lists',
   '/calendar',
   '/notes',
+  '/contacts',
 ];
 
 // API GET paths cached with stale-while-revalidate
@@ -41,9 +42,9 @@ const API_CACHE_PATTERNS = [
   /^\/api\/meal-plan($|\?|\/)/,
   /^\/api\/recipes($|\?|\/)/,
   /^\/api\/lists($|\?|\/)/,
-  /^\/api\/events($|\?|\/)/,
-  /^\/api\/event-categories($|\?|\/)/,
-  /^\/api\/notes($|\?|\/)/,
+  /^\/api\/events($|\?|\/)/,          // CalendarView fetches this client-side when navigating months
+  /^\/api\/event-categories($|\?|\/)/, // EventModal fetches this client-side
+  /^\/api\/ingredient-categories($|\?|\/)/, // ShoppingList fetches this on mount
 ];
 
 // ── Install ────────────────────────────────────────────────────────────────────
@@ -71,13 +72,28 @@ self.addEventListener('activate', (event) => {
 
 // Silently fetch and cache key pages so they're available offline
 // even if the user hasn't navigated to them yet in this session.
+// We fetch twice per page:
+//   1. Full HTML → SHELL_CACHE (serves navigate requests offline)
+//   2. RSC payload → API_CACHE under ?__rsc_cache key (serves client-side
+//      navigation offline — without this, Next.js receives HTML in place of
+//      an RSC response, fails to parse it, and shows a broken partial page)
 async function warmNavCache() {
-  const cache = await caches.open(SHELL_CACHE);
+  const shellCache = await caches.open(SHELL_CACHE);
+  const apiCache   = await caches.open(API_CACHE);
   for (const url of WARM_PAGES) {
+    // Full HTML
     try {
       const res = await fetch(url, { credentials: 'include' });
-      if (res.ok) await cache.put(url, res);
-    } catch {} // offline at activate time — skip, will cache on first visit
+      if (res.ok) await shellCache.put(url, res).catch(() => {});
+    } catch {}
+    // RSC payload — RSC: 1 tells Next.js to return the component payload
+    try {
+      const res = await fetch(url, { credentials: 'include', headers: { 'RSC': '1' } });
+      if (res.ok) {
+        const rscKey = new Request(self.location.origin + url + '?__rsc_cache');
+        await apiCache.put(rscKey, res).catch(() => {});
+      }
+    } catch {}
   }
 }
 

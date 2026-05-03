@@ -218,9 +218,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             return newCategories.length > 0 ? [...currentOrder, ...newCategories] : currentOrder
           })
         }
-      } catch (error) {
-        console.error('Failed to fetch categories:', error)
-        toast.error('Failed to load categories')
+      } catch {
+        // Offline or network error — default categories already in state, no toast needed
       } finally {
         setLoadingCategories(false)
       }
