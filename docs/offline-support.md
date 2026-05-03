@@ -14,7 +14,7 @@ Homebase works offline for the most common mobile use cases: checking items off 
 1. **Never cache RSC prefetch requests** (`Next-Router-Prefetch: 1`) — caching them causes stale payloads on real navigations, requiring a double-refresh to recover
 2. **RSC responses stored under a `?__rsc_cache` key** — avoids URL collisions with full HTML cached for the same pathname
 3. **Detect RSC fetches via `Next-Router-State-Tree` header** in addition to `RSC: 1`
-4. **`warmNavCache()` on SW activation** — `/meal-plan`, `/recipes`, `/lists` are cached immediately so they work offline even before the user visits them in the current session
+4. **`warmNavCache()` on SW activation** — `/meal-plan`, `/recipes`, `/lists`, `/calendar`, `/notes` are cached immediately so they work offline even before the user visits them in the current session
 5. **`credentials: 'include'` on warm fetches** — required for auth-protected routes
 6. **`.catch(() => {})` on every `cache.put()`** — storage quota errors must not crash the fetch handler
 7. **Background Sync delegates to clients** via `SYNC_REQUESTED` postMessage — avoids duplicating IndexedDB logic in the SW; client handles the actual replay and state update
@@ -30,12 +30,12 @@ Homebase works offline for the most common mobile use cases: checking items off 
 
 | Cache | Contents | Strategy |
 |---|---|---|
-| `homebase-shell-v2` | Page HTML, static assets (JS/CSS/images/fonts) | Network-first for navigation; cache-first for static |
-| `homebase-api-v2` | API JSON responses + RSC payloads | Stale-while-revalidate for API; network-first for RSC |
+| `homebase-shell-v4` | Page HTML, static assets (JS/CSS/images/fonts) | Network-first for navigation; cache-first for static |
+| `homebase-api-v4` | API JSON responses + RSC payloads | Stale-while-revalidate for API; network-first for RSC |
 
 ### Fetch handler routing (top-to-bottom)
 
-1. **API cache patterns** (`/api/meal-plan*`, `/api/recipes*`) — stale-while-revalidate
+1. **API cache patterns** (`/api/meal-plan*`, `/api/recipes*`, `/api/lists*`, `/api/events*`, `/api/event-categories*`, `/api/notes*`) — stale-while-revalidate
 2. **RSC fetches** (not prefetches) — network-first, stored under `?__rsc_cache` key
 3. **Full navigation** (`mode: navigate`) — network-first, cached on success
 4. **Static assets** — cache-first
@@ -67,17 +67,21 @@ After any sync: items are refetched from `GET /api/lists/[id]/items` to replace 
 |---|---|
 | Shopping list — add item | Instant optimistic insert; syncs on reconnect |
 | Shopping list — toggle complete | Instant optimistic update; syncs on reconnect |
+| All lists — viewing | All lists and their items shown from cache |
 | Meal plan viewing | Last-visited week shown from cache |
 | Meal plan other weeks | Only works if that week was visited while online |
 | Recipe list | Full list shown from cache |
 | Recipe detail | Any recipe detail page previously opened is available |
+| Calendar | Events and categories shown from cache |
+| Notes | All notes shown from cache |
 
 ## What does NOT work offline
 
 - Editing meal plan entries (fails with existing toast error)
 - Editing / deleting recipes
 - Shopping list delete, reorder, category change, lock
-- All other sections (calendar, notes, chores, contacts)
+- Calendar / notes mutations (add, edit, delete)
+- Chores, contacts, documents sections
 - Navigating to a meal plan week never loaded while online → shows cached fallback or offline.html
 
 ---
@@ -124,7 +128,7 @@ Ensure `/sw.js` headers remain `no-cache` (already set in `next.config.ts`) so b
 
 ## Testing checklist
 
-1. Chrome DevTools → Application → Service Workers — confirm `homebase-shell-v2` active, no errors
+1. Chrome DevTools → Application → Service Workers — confirm `homebase-shell-v4` active, no errors
 2. Visit `/meal-plan` and a few recipe pages while online
 3. DevTools → Network → Offline
 4. Click Meal Plan in sidebar — loads from RSC cache (no network)

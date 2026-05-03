@@ -1,4 +1,4 @@
-// Homebase Service Worker — v2
+// Homebase Service Worker — v4
 //
 // Lessons applied from Memories offline implementation:
 //   - Two-cache architecture (shell + api) — simpler than three caches
@@ -13,8 +13,8 @@
 //   - Background Sync delegates to clients via postMessage — avoids duplicating
 //     IndexedDB logic in SW context
 
-const SHELL_CACHE = 'homebase-shell-v2';
-const API_CACHE   = 'homebase-api-v2';
+const SHELL_CACHE = 'homebase-shell-v4';
+const API_CACHE   = 'homebase-api-v4';
 const ALL_CACHES  = [SHELL_CACHE, API_CACHE];
 
 const SYNC_TAG = 'homebase-list-sync';
@@ -31,6 +31,8 @@ const WARM_PAGES = [
   '/meal-plan',
   '/recipes',
   '/lists',
+  '/calendar',
+  '/notes',
 ];
 
 // API GET paths cached with stale-while-revalidate
@@ -38,6 +40,10 @@ const WARM_PAGES = [
 const API_CACHE_PATTERNS = [
   /^\/api\/meal-plan($|\?|\/)/,
   /^\/api\/recipes($|\?|\/)/,
+  /^\/api\/lists($|\?|\/)/,
+  /^\/api\/events($|\?|\/)/,
+  /^\/api\/event-categories($|\?|\/)/,
+  /^\/api\/notes($|\?|\/)/,
 ];
 
 // ── Install ────────────────────────────────────────────────────────────────────
