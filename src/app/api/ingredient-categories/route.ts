@@ -71,6 +71,7 @@ export async function GET() {
         category: cat.category,
         sortOrder: cat.sortOrder,
         isCustom: cat.isCustom,
+        aisle: cat.aisle,
         createdAt: cat.createdAt.toISOString(),
         updatedAt: cat.updatedAt.toISOString(),
       }))
@@ -89,6 +90,7 @@ export async function GET() {
       category: cat.category,
       sortOrder: cat.sortOrder,
       isCustom: cat.isCustom,
+      aisle: cat.aisle,
       createdAt: cat.createdAt.toISOString(),
       updatedAt: cat.updatedAt.toISOString(),
     }))

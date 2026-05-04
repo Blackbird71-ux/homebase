@@ -57,7 +57,14 @@
 
 | Feature | Description | Effort | Status |
 |---|---|---|---|
-| Background sync (offline PWA) | Queue mutations offline and replay on reconnect using existing service worker | High | |
+| Background sync (offline PWA) | Queue mutations offline and replay on reconnect using existing service worker | High | ✅ Done |
+| Shopping list templates | Save a list as a reusable template; clone to create new lists | Low | ✅ Done |
+| Shopping list aisle sorting | Aisle numbers on ingredient categories; sort shopping list by aisle for efficient store navigation | Low | ✅ Done |
+| Shopping list barcode scanner | Scan barcodes with device camera to auto-fill item names | Low | ✅ Done |
+| Shopping list real-time presence | See who else is viewing/editing the same shopping list | Low | ✅ Done |
+| Recipe cook mode | Full-screen cooking mode with wake lock, step-by-step check-off, and ingredient scaling | Medium | ✅ Done |
+| Recipe meal prep timers | Multi-timer system for recipe steps with audio alarm | Low | ✅ Done |
+| Missing items view | Diff view when adding meal plan ingredients to shopping list | Low | ✅ Done |
 | Family activity log | Lightweight audit trail of changes with undo support | Medium | ✅ Done |
 | Automated DB backups | Cron job in Docker to snapshot SQLite to NAS volume with restore UI in Settings | Low | ✅ Done |
 
@@ -413,8 +420,12 @@ The following features were identified but are lower priority or higher effort. 
 ### Budgeting module
 Track spending by category. Would benefit from shopping list price estimates being built first. High effort but high value.
 
-### Offline PWA (background sync)
-Extend the service worker to queue list mutations (check item, add item) when offline and replay on reconnect using the Background Sync API. High effort — requires careful conflict resolution.
+### Meal planner day-scroll view on mobile
+The meal planner week view is cramped on small screens. A day-scroll view (swipeable day-by-day) would be more usable on phones.
+
+### Calendar week view scrollable or day-list fallback on mobile
+The calendar week view is also cramped on mobile. A day-list fallback or scrollable week would improve mobile usability.
+
 
 ---
 

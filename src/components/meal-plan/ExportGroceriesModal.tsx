@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ShoppingCategory } from '@/lib/list-helpers'
 import { toast } from 'sonner'
-import { ShoppingCartIcon, CheckIcon } from 'lucide-react'
+import { ShoppingCartIcon, CheckIcon, PlusIcon, CheckCheckIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PreviewIngredient {
@@ -21,6 +21,7 @@ interface PreviewIngredient {
   key: string
   category: ShoppingCategory
   source: 'learned' | 'custom' | 'guessed'
+  alreadyInList?: boolean
 }
 
 interface PreviewRecipe {
@@ -240,9 +241,19 @@ export function ExportGroceriesModal({
                           return (
                             <div
                               key={ing.key + ing.text}
-                              className="flex items-center gap-2 py-1"
+                              className={cn(
+                                'flex items-center gap-2 py-1',
+                                ing.alreadyInList && 'opacity-60'
+                              )}
                             >
-                              <span className="flex-1 text-sm">{ing.text}</span>
+                              <span className="flex-1 text-sm flex items-center gap-1.5">
+                                {ing.alreadyInList ? (
+                                  <CheckCheckIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <PlusIcon className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                )}
+                                {ing.text}
+                              </span>
                               <select
                                 aria-label={`Category for ${ing.text}`}
                                 value={cat}

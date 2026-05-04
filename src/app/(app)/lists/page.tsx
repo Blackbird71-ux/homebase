@@ -18,7 +18,7 @@ export default async function ListsPage() {
   const [user, lists] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.id },
-      select: { uiPreferences: true },
+      select: { id: true, uiPreferences: true },
     }),
     getLists(session.familyId),
   ])
@@ -48,5 +48,5 @@ export default async function ListsPage() {
     })),
   }))
 
-  return <ListsClient initialLists={serialized} defaultListId={defaultListId} />
+  return <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} />
 }

@@ -5,6 +5,8 @@ import { ListSelector } from '@/components/lists/ListSelector'
 import { ShoppingList } from '@/components/lists/ShoppingList'
 import { TodoList } from '@/components/lists/TodoList'
 import { NewListDialog } from '@/components/lists/NewListDialog'
+import { TemplateDialog } from '@/components/lists/TemplateDialog'
+import { ListPresence } from '@/components/lists/ListPresence'
 import type { ListItemShape } from '@/lib/list-helpers'
 import { toast } from 'sonner'
 
@@ -49,9 +51,10 @@ function toListItemShape(item: SerializedItem): ListItemShape {
 interface ListsClientProps {
   initialLists: SerializedList[]
   defaultListId?: string | null
+  currentUserId: string
 }
 
-export function ListsClient({ initialLists, defaultListId: initialDefaultListId }: ListsClientProps) {
+export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId }: ListsClientProps) {
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
 
@@ -65,7 +68,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
   const [activeListId, setActiveListId] = useState<string | null>(initialActiveId)
 
   const [dialogOpen, setDialogOpen] = useState(false)
-
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
 
   const activeList = lists.find((l) => l.id === activeListId) ?? null
 
@@ -201,7 +204,18 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
           </div>
         ) : activeList.type === 'SHOPPING' ? (
           <>
-            <h1 className="text-base sm:text-xl font-semibold mb-1.5 sm:mb-4">{activeList.name}</h1>
+            <div className="flex items-center justify-between mb-1.5 sm:mb-4">
+              <div className="flex items-center gap-3">
+                <h1 className="text-base sm:text-xl font-semibold">{activeList.name}</h1>
+                <ListPresence listId={activeList.id} currentUserId={currentUserId} />
+              </div>
+              <button
+                onClick={() => setTemplateDialogOpen(true)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md border border-border hover:bg-muted"
+              >
+                Templates
+              </button>
+            </div>
             <ShoppingList
               key={activeList.id}
               listId={activeList.id}
@@ -218,7 +232,15 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
           </>
         ) : (
           <>
-            <h1 className="text-xl font-semibold mb-4">{activeList.name}</h1>
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-xl font-semibold">{activeList.name}</h1>
+              <button
+                onClick={() => setTemplateDialogOpen(true)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md border border-border hover:bg-muted"
+              >
+                Templates
+              </button>
+            </div>
             <TodoList
               key={activeList.id}
               listId={activeList.id}
@@ -237,6 +259,33 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId 
         onOpenChange={setDialogOpen}
         onCreated={handleCreated}
       />
+
+      {activeList && (
+        <TemplateDialog
+          open={templateDialogOpen}
+          onOpenChange={setTemplateDialogOpen}
+          listId={activeList.id}
+          listName={activeList.name}
+          listType={activeList.type as 'SHOPPING' | 'TODO'}
+          onCloneToList={async (templateId, listName) => {
+            const res = await fetch('/api/lists/templates', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'clone',
+                templateId,
+                listName,
+              }),
+            })
+            if (!res.ok) {
+              const err = await res.json()
+              throw new Error(err.error || 'Failed to clone template')
+            }
+            const newList = await res.json()
+            handleCreated({ id: newList.id, name: newList.name, type: newList.type })
+          }}
+        />
+      )}
     </div>
   )
 }

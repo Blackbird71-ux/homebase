@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusIcon } from 'lucide-react'
+import { PlusIcon, BarcodeIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { groupByCategory, groupByRecipe, DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ListItemShape, ShoppingCategory } from '@/lib/list-helpers'
@@ -28,6 +28,7 @@ import { CategoryGroup } from './CategoryGroup'
 import { DoneSection } from './DoneSection'
 import { ListItemRow } from './ListItemRow'
 import { EditItemDialog } from './EditItemDialog'
+import { BarcodeScanner } from './BarcodeScanner'
 
 interface ShoppingListProps {
   listId: string
@@ -40,6 +41,7 @@ type ViewMode = 'aisle' | 'recipe'
 export function ShoppingList({ listId, initialItems, initialCategoryOrder }: ShoppingListProps) {
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [viewMode, setViewMode] = useState<ViewMode>('aisle')
+  const [showRecipePills, setShowRecipePills] = useState(false)
   const [categories, setCategories] = useState<string[]>(DEFAULT_SHOPPING_CATEGORIES)
   const [categoryOrder, setCategoryOrder] = useState<string[]>(
     initialCategoryOrder ?? [...DEFAULT_SHOPPING_CATEGORIES]
@@ -51,13 +53,15 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [newQuantity, setNewQuantity] = useState('')
   const [, startTransition] = useTransition()
   const [loadingCategories, setLoadingCategories] = useState(true)
-  const [availableCategories, setAvailableCategories] = useState<Array<{id: string, name: string}>>([])
+  const [availableCategories, setAvailableCategories] = useState<Array<{id: string, name: string, aisle?: string | null}>>([])
+  const [aisleMap, setAisleMap] = useState<Record<string, string | null>>({})
   const [editItemId, setEditItemId] = useState<string | null>(null)
   const [editItemContent, setEditItemContent] = useState('')
   const [editItemCategory, setEditItemCategory] = useState<string | null>(null)
   const [addingCategoryInline, setAddingCategoryInline] = useState(false)
   const [inlineCatName, setInlineCatName] = useState('')
   const [isSavingCat, setIsSavingCat] = useState(false)
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
 
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -211,6 +215,15 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
           }
           setCategories(categoryNames)
           setAvailableCategories(data)
+
+          // Build aisle map from category data
+          const aisleMapping: Record<string, string | null> = {}
+          for (const cat of data) {
+            if (cat.aisle) {
+              aisleMapping[cat.category] = cat.aisle
+            }
+          }
+          setAisleMap(aisleMapping)
 
           // Update category order to include new categories
           setCategoryOrder((currentOrder) => {
@@ -512,28 +525,42 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
 
   return (
     <div className="flex flex-col gap-2 sm:gap-4">
-      {/* View toggle */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-        <button
-          onClick={() => setViewMode('aisle')}
-          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-            viewMode === 'aisle'
-              ? 'bg-background shadow-sm text-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          By Aisle
-        </button>
-        <button
-          onClick={() => setViewMode('recipe')}
-          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-            viewMode === 'recipe'
-              ? 'bg-background shadow-sm text-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          By Recipe
-        </button>
+      {/* View toggle + Recipe pills toggle */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+          <button
+            onClick={() => setViewMode('aisle')}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'aisle'
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            By Aisle
+          </button>
+          <button
+            onClick={() => setViewMode('recipe')}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'recipe'
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            By Recipe
+          </button>
+        </div>
+        {viewMode === 'aisle' && (
+          <button
+            onClick={() => setShowRecipePills((v) => !v)}
+            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors border ${
+              showRecipePills
+                ? 'bg-primary/10 border-primary/30 text-primary'
+                : 'bg-transparent border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {showRecipePills ? 'Hide Recipes' : 'Show Recipes'}
+          </button>
+        )}
       </div>
 
       {/* Add item form */}
@@ -572,6 +599,16 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
               </>
             )}
           </select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowBarcodeScanner((v) => !v)}
+            className="shrink-0"
+            title="Scan barcode"
+          >
+            <BarcodeIcon className="h-4 w-4" />
+          </Button>
           <Button type="submit" size="sm" className="shrink-0">
             <PlusIcon className="h-4 w-4" />
           </Button>
@@ -596,6 +633,17 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingCategoryInline(false); setInlineCatName('') }} disabled={isSavingCat}>
               Cancel
             </Button>
+          </div>
+        )}
+        {showBarcodeScanner && (
+          <div className="p-3 bg-muted rounded-lg">
+            <BarcodeScanner
+              onDetected={(code) => {
+                setNewContent(code)
+                setShowBarcodeScanner(false)
+              }}
+              onClose={() => setShowBarcodeScanner(false)}
+            />
           </div>
         )}
       </div>
@@ -632,6 +680,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
                     category={cat}
                     items={catItems}
                     showDragHandle={true}
+                    showRecipePills={showRecipePills}
+                    aisle={aisleMap[cat] ?? null}
                     onToggle={toggleItem}
                     onDelete={deleteItem}
                     onToggleLock={toggleLock}

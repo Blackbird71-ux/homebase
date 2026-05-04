@@ -19,6 +19,7 @@ interface ListItemRowProps {
   isLocked?: boolean
   dueDate?: string | null
   recipeName?: string | null
+  showRecipePills?: boolean
   doneItemColor?: string
   category?: string
   availableCategories?: string[]
@@ -36,6 +37,7 @@ export function ListItemRow({
   isLocked = false,
   dueDate,
   recipeName,
+  showRecipePills = false,
   doneItemColor = 'RED',
   category,
   availableCategories = [],
@@ -121,7 +123,12 @@ export function ListItemRow({
         type="button"
       >
         <span className={`text-sm block ${isCompleted ? 'line-through' : ''}`}>{content}</span>
-        {!isCompleted && recipeName && (
+        {!isCompleted && recipeName && showRecipePills && (
+          <span className="inline-flex text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium mt-0.5">
+            {recipeName}
+          </span>
+        )}
+        {!isCompleted && recipeName && !showRecipePills && (
           <span className="text-xs text-primary block mt-0.5">{recipeName}</span>
         )}
       </button>

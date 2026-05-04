@@ -13,6 +13,7 @@ import type { ListItemShape } from '@/lib/list-helpers'
 interface SortableItemProps {
   item: ListItemShape
   showDragHandle: boolean
+  showRecipePills?: boolean
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
   onToggleLock?: (id: string, isLocked: boolean) => void
@@ -24,6 +25,7 @@ interface SortableItemProps {
 function SortableItem({
   item,
   showDragHandle,
+  showRecipePills,
   onToggle,
   onDelete,
   onToggleLock,
@@ -68,6 +70,7 @@ function SortableItem({
           isCompleted={item.isCompleted}
           isLocked={item.isLocked}
           recipeName={item.recipeName}
+          showRecipePills={showRecipePills}
           category={item.category || undefined}
           availableCategories={availableCategories}
           onToggle={onToggle}
@@ -85,6 +88,8 @@ interface CategoryGroupProps {
   category: string
   items: ListItemShape[]
   showDragHandle: boolean
+  showRecipePills?: boolean
+  aisle?: string | null
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
   onToggleLock?: (id: string, isLocked: boolean) => void
@@ -97,6 +102,8 @@ export function CategoryGroup({
   category,
   items,
   showDragHandle,
+  showRecipePills,
+  aisle,
   onToggle,
   onDelete,
   onToggleLock,
@@ -150,6 +157,11 @@ export function CategoryGroup({
         <p className="text-xs font-bold text-foreground uppercase tracking-wide">
           {category}
         </p>
+        {aisle && (
+          <span className="text-[10px] font-medium text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded ml-1">
+            Aisle {aisle}
+          </span>
+        )}
         <span className="text-[10px] text-muted-foreground ml-1">
           ({itemCount} item{itemCount !== 1 ? 's' : ''})
         </span>
@@ -170,6 +182,7 @@ export function CategoryGroup({
               key={item.id}
               item={item}
               showDragHandle={showDragHandle}
+              showRecipePills={showRecipePills}
               onToggle={onToggle}
               onDelete={onDelete}
               onToggleLock={onToggleLock}

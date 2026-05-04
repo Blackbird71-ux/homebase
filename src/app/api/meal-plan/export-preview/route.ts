@@ -144,11 +144,31 @@ export async function GET(req: Request) {
 
   const groceriesList = await prisma.list.findFirst({
     where: { familyId: user.familyId, name: 'Groceries', type: 'SHOPPING', isActive: true },
-    include: { _count: { select: { items: { where: { isCompleted: false } } } } },
+    include: {
+      _count: { select: { items: { where: { isCompleted: false } } } },
+      items: {
+        where: { isCompleted: false },
+        select: { content: true, category: true },
+      },
+    },
   })
 
+  // Build a set of existing item keys (normalized) for diff view
+  const existingItemKeys = new Set(
+    (groceriesList?.items ?? []).map((item) => normalizeIngredient(item.content))
+  )
+
+  // Mark each ingredient as new or already in list
+  const recipesWithDiff = recipes.map((recipe) => ({
+    ...recipe,
+    ingredients: recipe.ingredients.map((ing) => ({
+      ...ing,
+      alreadyInList: existingItemKeys.has(ing.key),
+    })),
+  }))
+
   return NextResponse.json({
-    recipes,
+    recipes: recipesWithDiff,
     groceriesList: groceriesList
       ? { id: groceriesList.id, itemCount: groceriesList._count.items }
       : null,

@@ -7,6 +7,7 @@ import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIco
 import { AddToListDialog } from '@/components/lists/AddToListDialog'
 import { RecipeForm } from '@/components/recipes/RecipeForm'
 import { NutritionPanel } from '@/components/recipes/NutritionPanel'
+import { CookingTimerPanel } from '@/components/recipes/CookingTimer'
 import Link from 'next/link'
 import {
   Dialog,
@@ -55,8 +56,46 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
   const [cookingMode, setCookingMode] = useState(false)
   const [completedSteps, setCompletedSteps] = useState<boolean[]>([])
   const [completedIngredients, setCompletedIngredients] = useState<boolean[]>([])
+  const [wakeLock, setWakeLock] = useState<any>(null)
 
   const [scaleFactor, setScaleFactor] = useState(1)
+
+  // Request wake lock when cooking mode is active (keeps screen on)
+  useEffect(() => {
+    if (!cookingMode) {
+      if (wakeLock) {
+        wakeLock.release().catch(() => {})
+        setWakeLock(null)
+      }
+      return
+    }
+
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          const wl = await (navigator as any).wakeLock.request('screen')
+          setWakeLock(wl)
+          wl.addEventListener('release', () => setWakeLock(null))
+        }
+      } catch {
+        // Wake lock not supported or denied — silently continue
+      }
+    }
+
+    requestWakeLock()
+
+    // Re-acquire wake lock if page becomes visible again
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && cookingMode) {
+        requestWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [cookingMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
@@ -337,43 +376,51 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
             ))}
           </ol>
           {cookingMode && (
-            <div className="mt-4 p-3 bg-muted rounded-lg">
-              <p className="text-sm font-medium">Cooking Mode Active</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {completedIngredients.filter(Boolean).length} of {recipe.ingredients.length} ingredients prepared • {completedSteps.filter(Boolean).length} of {recipe.instructions.length} steps completed
-              </p>
-              <div className="flex flex-wrap gap-2 mt-2">
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCompletedIngredients(new Array(recipe.ingredients.length).fill(false))}
-                  >
-                    Reset Ingredients
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCompletedIngredients(new Array(recipe.ingredients.length).fill(true))}
-                  >
-                    Mark All Ingredients Complete
-                  </Button>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(false))}
-                  >
-                    Reset Steps
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(true))}
-                  >
-                    Mark All Steps Complete
-                  </Button>
+            <div className="mt-4 space-y-4">
+              {/* Timer panel */}
+              <div className="p-3 bg-muted rounded-lg">
+                <CookingTimerPanel />
+              </div>
+
+              {/* Progress panel */}
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium">Cooking Mode Active</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {completedIngredients.filter(Boolean).length} of {recipe.ingredients.length} ingredients prepared • {completedSteps.filter(Boolean).length} of {recipe.instructions.length} steps completed
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCompletedIngredients(new Array(recipe.ingredients.length).fill(false))}
+                    >
+                      Reset Ingredients
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCompletedIngredients(new Array(recipe.ingredients.length).fill(true))}
+                    >
+                      Mark All Ingredients Complete
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(false))}
+                    >
+                      Reset Steps
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCompletedSteps(new Array(recipe.instructions.length).fill(true))}
+                    >
+                      Mark All Steps Complete
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -31,6 +31,7 @@ model Family {
   householdContacts    HouseholdContact[]
   auditLogs            AuditLog[]
   documents            Document[]
+  listTemplates        ListTemplate[]
 }
 
 model User {
@@ -122,6 +123,32 @@ model List {
   familyId      String
   family        Family     @relation(fields: [familyId], references: [id])
   createdAt     DateTime   @default(now())
+}
+
+model ListTemplate {
+  id        String              @id @default(cuid())
+  name      String
+  type      String              // SHOPPING | TODO
+  familyId  String
+  family    Family              @relation(fields: [familyId], references: [id])
+  items     ListTemplateItem[]
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([familyId, name])
+  @@index([familyId])
+}
+
+model ListTemplateItem {
+  id         String        @id @default(cuid())
+  templateId String
+  template   ListTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  content    String
+  category   String?
+  sortOrder  Int           @default(0)
+  createdAt  DateTime      @default(now())
+
+  @@index([templateId])
 }
 
 model ListItem {
@@ -248,6 +275,7 @@ model IngredientCategory {
   category  String
   sortOrder Int      @default(0)
   isCustom  Boolean  @default(false)
+  aisle     String?  // e.g. "A1", "A2", "B1" — store aisle/section location
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

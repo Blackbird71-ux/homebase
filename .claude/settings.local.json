@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Appdev/memories/**)",
+      "PowerShell(cd C:\\\\Appdev\\\\HomeBase; npx tsc --noEmit 2>&1 | Where-Object { $_ -match \"offline-queue|OfflineBanner|AppShell|ShoppingList|sw\\\\.js|layout\\\\.tsx\" })",
+      "PowerShell(cd C:\\\\Appdev\\\\HomeBase; $out = npx tsc --noEmit 2>&1; $out | Where-Object { $_ -notmatch \"notes\" })",
+      "PowerShell(cd C:\\\\Appdev\\\\HomeBase; npx tsc --noEmit 2>&1 > C:\\\\temp\\\\tsc-out.txt; Get-Content C:\\\\temp\\\\tsc-out.txt | Where-Object { $_ -notmatch \"notes\" })",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
