@@ -85,14 +85,38 @@ export default async function RootLayout({
         {/* Register service worker as early as possible after page is interactive.
             afterInteractive fires before React useEffect, reducing the window
             where navigations can bypass the SW. skipWaiting + clients.claim()
-            in sw.js ensures it takes control of this tab immediately. */}
+            in sw.js ensures it takes control of this tab immediately.
+            
+            Also triggers:
+            - Idle warm-up: after 3 seconds of page being interactive, sends
+              WARM_CACHE message to the SW to pre-cache recipe details + images
+            - Periodic Background Sync: registers for daily cache refresh
+              (Chrome Android only — silently ignored on other browsers) */}
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(function(err) {
-              console.error('[SW] Registration failed:', err)
-            })
+            navigator.serviceWorker.register('/sw.js').then(function(reg) {
+              // Idle warm-up: wait 3s then ask SW to warm the cache
+              setTimeout(function() {
+                if (reg.active) {
+                  reg.active.postMessage({ type: 'WARM_CACHE' });
+                }
+              }, 3000);
+
+              // Periodic Background Sync — daily cache refresh
+              // Supported on Chrome Android; silently ignored elsewhere
+              if ('periodicSync' in reg) {
+                reg.periodicSync.register('homebase-cache-warm', {
+                  minInterval: 24 * 60 * 60 * 1000 // once per day
+                }).catch(function() {
+                  // Periodic sync not supported or permission denied — ignore
+                });
+              }
+            }).catch(function(err) {
+              console.error('[SW] Registration failed:', err);
+            });
           }
         `}</Script>
+
         {showUmami && (
           <Script
             src={umamiScriptUrl!}

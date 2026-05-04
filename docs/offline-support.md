@@ -107,13 +107,15 @@ Queue count is broadcast via `window.dispatchEvent(new CustomEvent('offline-queu
 
 | File | Role |
 |---|---|
-| `public/sw.js` | Service worker: two-cache architecture, RSC caching, Background Sync, warmNavCache |
+| `public/sw.js` | Service worker: two-cache architecture, RSC caching, Background Sync, warmNavCache, periodic sync, recipe detail + image warming |
 | `public/offline.html` | Fallback page for uncached navigation requests |
 | `src/lib/offline-queue.ts` | IndexedDB queue: enqueue, getAll, remove, getQueueCount |
 | `src/components/layout/OfflineBanner.tsx` | Offline status banner with pending count |
 | `src/components/layout/AppShell.tsx` | Mounts OfflineBanner; lazy sidebar init |
 | `src/components/lists/ShoppingList.tsx` | Offline-aware addItem/toggleItem; sync listeners |
-| `src/app/layout.tsx` | SW registration via `<Script strategy="afterInteractive">` |
+| `src/app/layout.tsx` | SW registration via `<Script strategy="afterInteractive">`; idle warm-up trigger; periodic sync registration |
+| `src/app/api/warm/route.ts` | Returns recipe IDs + image URLs for SW cache warming |
+
 
 ---
 

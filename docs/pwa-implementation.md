@@ -65,9 +65,25 @@ The Dockerfile already copies the `public/` directory to the final image, so all
 - **Offline support**: Basic caching is implemented, but full offline functionality (e.g., offline form submissions, data sync) would require additional work with libraries like Serwist or Workbox.
 - **iOS**: iOS Safari supports PWA installation from iOS 16.4+, but some features (like push notifications) have limited support.
 
-## Future Enhancements
+## v6 Enhancements (May 2026)
 
-1. Implement push notification subscription management with database storage
-2. Add a VAPID key generation and configuration UI in Settings
-3. Enhance offline support with background sync for data mutations
-4. Add periodic background sync for data freshness
+### Automatic Cache Warming for Mobile
+
+The service worker now automatically warms more content for offline use:
+
+1. **Recipe detail pages** — The top 20 most recent recipes are pre-cached (HTML + RSC) on SW activation, so tapping a recipe works offline even if never visited before.
+2. **Recipe images** — Recipe images are pre-fetched and stored in the shell cache during warm-up, so they display offline.
+3. **Idle warm-up** — 3 seconds after the page loads, the client sends a `WARM_CACHE` message to the SW to trigger a background warm-up. This catches the case where the SW activation warm-up didn't include auth-protected content.
+4. **Periodic Background Sync** — On Chrome Android, a daily `periodicsync` event re-warms the cache so new recipes and meal plans are available offline without the user visiting every page while online.
+
+### New Endpoint
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/warm` | Returns top 20 recipe IDs + image URLs for SW cache warming |
+
+### Cache Version Bump
+
+Cache names updated from `-v5` to `-v6` to ensure old caches are cleaned up on activation.
+
+

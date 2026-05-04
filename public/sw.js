@@ -1,4 +1,4 @@
-// Homebase Service Worker — v5
+// Homebase Service Worker — v6
 //
 // Lessons applied from Memories offline implementation:
 //   - Two-cache architecture (shell + api) — simpler than three caches
@@ -12,9 +12,14 @@
 //   - .catch(()=>{}) on every cache.put — quota errors must not crash fetch handler
 //   - Background Sync delegates to clients via postMessage — avoids duplicating
 //     IndexedDB logic in SW context
+// v6 additions:
+//   - Recipe detail page warming (top 20 recipes) on activation
+//   - Recipe image pre-caching into shell cache for offline image display
+//   - Periodic background sync for daily cache refresh
+//   - Client-side idle warm-up trigger via postMessage
 
-const SHELL_CACHE = 'homebase-shell-v5';
-const API_CACHE   = 'homebase-api-v5';
+const SHELL_CACHE = 'homebase-shell-v6';
+const API_CACHE   = 'homebase-api-v6';
 const ALL_CACHES  = [SHELL_CACHE, API_CACHE];
 
 const SYNC_TAG = 'homebase-list-sync';
@@ -35,6 +40,10 @@ const WARM_PAGES = [
   '/notes',
   '/contacts',
 ];
+
+// Number of recipe detail pages to warm on activation
+const MAX_RECIPE_WARM = 20;
+
 
 // API GET paths cached with stale-while-revalidate
 // Using regex for precise matching — avoids accidentally caching mutation endpoints
@@ -77,25 +86,67 @@ self.addEventListener('activate', (event) => {
 //   2. RSC payload → API_CACHE under ?__rsc_cache key (serves client-side
 //      navigation offline — without this, Next.js receives HTML in place of
 //      an RSC response, fails to parse it, and shows a broken partial page)
+//
+// v6: Also warms recipe detail pages and recipe images for offline viewing.
 async function warmNavCache() {
   const shellCache = await caches.open(SHELL_CACHE);
   const apiCache   = await caches.open(API_CACHE);
+
+  // Step 1: Warm main navigation pages (HTML + RSC)
   for (const url of WARM_PAGES) {
-    // Full HTML
-    try {
-      const res = await fetch(url, { credentials: 'include' });
-      if (res.ok) await shellCache.put(url, res).catch(() => {});
-    } catch {}
-    // RSC payload — RSC: 1 tells Next.js to return the component payload
-    try {
-      const res = await fetch(url, { credentials: 'include', headers: { 'RSC': '1' } });
-      if (res.ok) {
-        const rscKey = new Request(self.location.origin + url + '?__rsc_cache');
-        await apiCache.put(rscKey, res).catch(() => {});
+    await warmPage(url, shellCache, apiCache);
+  }
+
+  // Step 2: Fetch warm list from /api/warm and warm recipe details + images
+  try {
+    const warmRes = await fetch(self.location.origin + '/api/warm', {
+      credentials: 'include',
+    });
+    if (warmRes.ok) {
+      const warmData = await warmRes.json();
+
+      // Warm recipe detail pages (top N)
+      const recipeIds = (warmData.recipeIds || []).slice(0, MAX_RECIPE_WARM);
+      for (const id of recipeIds) {
+        await warmPage('/recipes/' + id, shellCache, apiCache);
       }
-    } catch {}
+
+      // Warm recipe images into the shell cache
+      const images = warmData.recipeImages || [];
+      for (const img of images) {
+        if (img.alreadyCached) continue;
+        // Only warm cacheable images (those with a cachePath)
+        if (!img.cachePath) continue;
+        const imgUrl = self.location.origin + '/api/images/' + img.cachePath + '?url=' + encodeURIComponent(img.url);
+        try {
+          const res = await fetch(imgUrl, { credentials: 'include' });
+          if (res.ok) await shellCache.put(imgUrl, res).catch(() => {});
+        } catch {}
+      }
+    }
+  } catch {
+    // /api/warm may fail if not logged in (SW activation can happen before auth)
+    // That's fine — the warm-up is best-effort; pages will cache on first visit.
   }
 }
+
+// Warm a single page: fetch both full HTML and RSC payload
+async function warmPage(url, shellCache, apiCache) {
+  // Full HTML
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    if (res.ok) await shellCache.put(url, res).catch(() => {});
+  } catch {}
+  // RSC payload — RSC: 1 tells Next.js to return the component payload
+  try {
+    const res = await fetch(url, { credentials: 'include', headers: { 'RSC': '1' } });
+    if (res.ok) {
+      const rscKey = new Request(self.location.origin + url + '?__rsc_cache');
+      await apiCache.put(rscKey, res).catch(() => {});
+    }
+  } catch {}
+}
+
 
 // ── Background Sync ────────────────────────────────────────────────────────────
 
@@ -108,6 +159,17 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+// ── Periodic Background Sync (daily cache refresh) ────────────────────────────
+// Supported on Chrome Android. Re-warms the cache daily so new content
+// (recipes, meal plans) is available offline without the user visiting
+// every page while online.
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'homebase-cache-warm') {
+    event.waitUntil(warmNavCache());
+  }
+});
+
+
 async function notifyClientsToSync() {
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   clients.forEach((client) => client.postMessage({ type: 'SYNC_REQUESTED' }));
@@ -118,7 +180,12 @@ async function notifyClientsToSync() {
 self.addEventListener('message', (event) => {
   // Allow new SW version to take over immediately when prompted
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  // Client-triggered cache warm-up (e.g. after login or idle)
+  if (event.data?.type === 'WARM_CACHE') {
+    event.waitUntil(warmNavCache());
+  }
 });
+
 
 // ── Push Notifications ─────────────────────────────────────────────────────────
 
