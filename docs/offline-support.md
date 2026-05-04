@@ -36,6 +36,7 @@ Homebase works offline for the most common mobile use cases: checking items off 
 ### Fetch handler routing (top-to-bottom)
 
 1. **API cache patterns** (`/api/meal-plan*`, `/api/recipes*`, `/api/lists*`, `/api/events*`, `/api/event-categories*`, `/api/ingredient-categories*`) — stale-while-revalidate. Note: pages that use server components with direct Prisma queries (lists, contacts, notes) get their data from the RSC/HTML cache, not from these API routes. The API routes are cached for components that fetch them client-side (e.g. `CalendarView` fetches `/api/events` when navigating months, `ShoppingList` fetches `/api/ingredient-categories` on mount).
+   - **RSC handler offline fallback** returns `503 { offline: true }` when there is no cached RSC payload — it does NOT fall through to `offlineNavigationFallback`. Serving full-page HTML as an RSC response causes Next.js to navigate to the wrong page (e.g. meal plan when clicking a recipe) or show a browser-level "this page couldn't load" error.
 2. **RSC fetches** (not prefetches) — network-first, stored under `?__rsc_cache` key
 3. **Full navigation** (`mode: navigate`) — network-first, cached on success
 4. **Static assets** — cache-first

@@ -212,13 +212,16 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
   return (
     <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl">
+      {/* max-h-[90dvh] uses dynamic viewport height so the dialog shrinks when
+          the mobile keyboard opens, keeping the footer (Delete/Save) visible.
+          flex flex-col lets the body scroll while the footer stays pinned. */}
+      <DialogContent className="sm:max-w-xl flex flex-col max-h-[90dvh]">
         {showDeleteConfirm ? (
           <>
             <DialogHeader>
               <DialogTitle>Delete Recurring Event</DialogTitle>
             </DialogHeader>
-            <div className="py-4 space-y-4">
+            <div className="py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
               <p className="text-sm text-muted-foreground">
                 This event is part of a recurring series. What would you like to delete?
               </p>
@@ -251,7 +254,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                 </label>
               </div>
             </div>
-            <DialogFooter className="gap-2">
+            <DialogFooter className="gap-2 shrink-0">
               <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setDeleteAll(false) }}>
                 Cancel
               </Button>
@@ -265,7 +268,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
             <DialogHeader>
               <DialogTitle>{event ? 'Edit Event' : 'New Event'}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-2">
+            <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-1">
                 <Label>Title</Label>
                 <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title" />
@@ -400,7 +403,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                 <EventAttendeePanel eventId={getEventId() ?? event.id} currentUserId={currentUserId} />
               )}
             </div>
-            <DialogFooter className="gap-2">
+            <DialogFooter className="gap-2 shrink-0">
               {event && (
                 <Button variant="destructive" onClick={handleDelete} disabled={loading}>Delete</Button>
               )}

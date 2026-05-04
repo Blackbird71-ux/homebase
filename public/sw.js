@@ -212,8 +212,14 @@ self.addEventListener('fetch', (event) => {
         const cached = await cache.match(rscKey);
         if (cached) return cached;
 
-        // Nothing cached — fall through to the cached full-page HTML
-        return offlineNavigationFallback(new Request(url.origin + url.pathname));
+        // Nothing cached — return 503 so Next.js shows its error boundary.
+        // DO NOT fall through to offlineNavigationFallback here: serving full-page
+        // HTML as an RSC payload causes Next.js to navigate to the wrong page
+        // (e.g. /meal-plan) or show a browser-level "this page couldn't load" error.
+        return new Response(JSON.stringify({ offline: true }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }),
     );
     return;
