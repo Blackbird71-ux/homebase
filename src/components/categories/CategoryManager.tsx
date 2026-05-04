@@ -15,7 +15,9 @@ interface Category {
   isSystem: boolean
   sortOrder: number
   ingredientCount: number
+  aisle?: string | null
 }
+
 
 export function CategoryManager() {
   const [categories, setCategories] = useState<Category[]>([])
@@ -27,7 +29,9 @@ export function CategoryManager() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [editCategoryName, setEditCategoryName] = useState('')
+  const [editCategoryAisle, setEditCategoryAisle] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
 
   useEffect(() => {
     fetchCategories()
@@ -45,8 +49,10 @@ export function CategoryManager() {
         name: cat.category,  // API returns "category" field
         isSystem: !cat.isCustom,  // API returns "isCustom" field
         sortOrder: cat.sortOrder,
-        ingredientCount: 0  // Default value, not provided by API
+        ingredientCount: 0,  // Default value, not provided by API
+        aisle: cat.aisle ?? null,
       }))
+
       setCategories(mappedData)
     } catch (error) {
       toast.error('Failed to load categories')
@@ -106,8 +112,12 @@ export function CategoryManager() {
       const res = await fetch(`/api/ingredient-categories/${selectedCategory.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: editCategoryName.trim() }),
+        body: JSON.stringify({
+          category: editCategoryName.trim(),
+          aisle: editCategoryAisle.trim() || null,
+        }),
       })
+
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to update category')
@@ -119,8 +129,10 @@ export function CategoryManager() {
         name: apiResponse.category,
         isSystem: !apiResponse.isCustom,
         sortOrder: apiResponse.sortOrder,
-        ingredientCount: selectedCategory.ingredientCount // Keep existing count
+        ingredientCount: selectedCategory.ingredientCount, // Keep existing count
+        aisle: apiResponse.aisle ?? null,
       }
+
       setCategories(categories.map(cat => cat.id === selectedCategory.id ? updatedCategory : cat))
       setEditOpen(false)
       setSelectedCategory(null)
@@ -193,8 +205,10 @@ export function CategoryManager() {
   function handleEditClick(category: Category) {
     setSelectedCategory(category)
     setEditCategoryName(category.name)
+    setEditCategoryAisle(category.aisle ?? '')
     setEditOpen(true)
   }
+
 
   function handleDeleteClick(category: Category) {
     setSelectedCategory(category)
@@ -359,7 +373,7 @@ export function CategoryManager() {
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
             <DialogDescription>
-              Update the name of this category.
+              Update the name and aisle number for this category.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -371,6 +385,18 @@ export function CategoryManager() {
                 onChange={(e) => setEditCategoryName(e.target.value)}
                 autoFocus
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-aisle">Aisle Number (optional)</Label>
+              <Input
+                id="edit-category-aisle"
+                value={editCategoryAisle}
+                onChange={(e) => setEditCategoryAisle(e.target.value)}
+                placeholder="e.g., 3, A5, 12b"
+              />
+              <p className="text-xs text-muted-foreground">
+                Set the aisle number for this category to sort your shopping list by store layout.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -384,6 +410,7 @@ export function CategoryManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* Delete Dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
