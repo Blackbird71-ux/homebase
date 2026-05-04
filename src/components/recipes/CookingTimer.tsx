@@ -110,13 +110,56 @@ function TimerDisplay({ timer, onToggle, onReset, onDelete }: {
   )
 }
 
-export function CookingTimerPanel() {
+/**
+ * Parse recipe instruction text for time patterns like:
+ *   "Bake for 20 minutes"
+ *   "Cook for 5 mins"
+ *   "Bake for a further 5 minutes"
+ *   "Simmer 30 min"
+ *   "Rest 10 minutes"
+ *   "Bake 25-30 minutes" (uses the lower bound)
+ *
+ * Returns an array of { label, minutes } objects.
+ */
+function parseStepTimers(step: string, stepNumber: number): { label: string; minutes: number }[] {
+  const timers: { label: string; minutes: number }[] = []
+
+  // Pattern: "for X minutes" or "for X mins" or "for a further X minutes"
+  // Also: "X minutes" without "for" (e.g., "Simmer 30 min")
+  // Also: "X-Y minutes" (range, use lower bound)
+  const patterns = [
+    /for\s+a\s+further\s+(\d+)\s*(?:minutes?|mins?)/gi,
+    /for\s+(\d+)\s*(?:minutes?|mins?)/gi,
+    /(?:bake|cook|simmer|boil|roast|grill|fry|saute|sauté|rest|chill|refrigerate|freeze|marinate|proof|rise|stand|cool|heat|microwave|steam|broil|toast)\s+(?:for\s+)?(\d+)\s*(?:minutes?|mins?)/gi,
+    /(\d+)\s*(?:minutes?|mins?)\s+(?:or\s+until\s|longer\s+or\s+until)/gi,
+  ]
+
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null
+    pattern.lastIndex = 0
+    while ((match = pattern.exec(step)) !== null) {
+      const minutes = parseInt(match[1], 10)
+      if (!isNaN(minutes) && minutes > 0 && minutes <= 999) {
+        // Create a short label from the surrounding context
+        const before = step.substring(Math.max(0, match.index - 20), match.index).trim()
+        const label = before ? `${before}...` : `Step ${stepNumber}`
+        timers.push({ label, minutes })
+      }
+    }
+  }
+
+  return timers
+}
+
+export function CookingTimerPanel({ instructions }: { instructions?: string[] }) {
   const [timers, setTimers] = useState<Timer[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newMinutes, setNewMinutes] = useState('')
   const [newSeconds, setNewSeconds] = useState('')
+  const [autoCreated, setAutoCreated] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
 
   // Play sound when timer completes
   const playAlarm = useCallback(() => {
@@ -218,6 +261,58 @@ export function CookingTimerPanel() {
     setTimers((prev) => prev.filter((t) => t.id !== id))
   }
 
+  // Auto-create timers from instructions on mount (only once)
+  useEffect(() => {
+    if (instructions && instructions.length > 0 && !autoCreated) {
+      const detected: Timer[] = []
+      instructions.forEach((step, i) => {
+        const parsed = parseStepTimers(step, i + 1)
+        parsed.forEach((p) => {
+          detected.push({
+            id: crypto.randomUUID(),
+            label: p.label,
+            duration: p.minutes * 60,
+            remaining: p.minutes * 60,
+            isRunning: false,
+            isComplete: false,
+          })
+        })
+      })
+      if (detected.length > 0) {
+        setTimers(detected)
+        setAutoCreated(true)
+      }
+    }
+  }, [instructions, autoCreated])
+
+  function createStepTimers() {
+    if (!instructions) return
+    const detected: Timer[] = []
+    instructions.forEach((step, i) => {
+      const parsed = parseStepTimers(step, i + 1)
+      parsed.forEach((p) => {
+        // Avoid duplicates — check if a timer with same label and duration already exists
+        const exists = timers.some(
+          (t) => t.label === p.label && t.duration === p.minutes * 60
+        )
+        if (!exists) {
+          detected.push({
+            id: crypto.randomUUID(),
+            label: p.label,
+            duration: p.minutes * 60,
+            remaining: p.minutes * 60,
+            isRunning: false,
+            isComplete: false,
+          })
+        }
+      })
+    })
+    if (detected.length > 0) {
+      setTimers((prev) => [...prev, ...detected])
+      setAutoCreated(true)
+    }
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -225,18 +320,33 @@ export function CookingTimerPanel() {
           <TimerIcon className="h-4 w-4" />
           Timers
         </h3>
-        {!showAddForm && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAddForm(true)}
-            className="h-7 text-xs"
-          >
-            <PlusIcon className="h-3 w-3 mr-1" />
-            Add Timer
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {instructions && instructions.length > 0 && !showAddForm && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={createStepTimers}
+              className="h-7 text-xs"
+              title="Auto-detect timers from recipe steps"
+            >
+              <TimerIcon className="h-3 w-3 mr-1" />
+              Step Timers
+            </Button>
+          )}
+          {!showAddForm && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddForm(true)}
+              className="h-7 text-xs"
+            >
+              <PlusIcon className="h-3 w-3 mr-1" />
+              Add Timer
+            </Button>
+          )}
+        </div>
       </div>
+
 
       {showAddForm && (
         <div className="flex flex-col gap-2 p-3 bg-muted rounded-lg">

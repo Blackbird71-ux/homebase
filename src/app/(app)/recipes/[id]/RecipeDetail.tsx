@@ -379,8 +379,9 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
             <div className="mt-4 space-y-4">
               {/* Timer panel */}
               <div className="p-3 bg-muted rounded-lg">
-                <CookingTimerPanel />
+                <CookingTimerPanel instructions={recipe.instructions} />
               </div>
+
 
               {/* Progress panel */}
               <div className="p-3 bg-muted rounded-lg">
