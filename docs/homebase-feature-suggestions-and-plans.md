@@ -64,9 +64,12 @@
 | Shopping list real-time presence | See who else is viewing/editing the same shopping list | Low | ✅ Done |
 | Recipe cook mode | Full-screen cooking mode with wake lock, step-by-step check-off, and ingredient scaling | Medium | ✅ Done |
 | Recipe meal prep timers | Multi-timer system for recipe steps with audio alarm | Low | ✅ Done |
+| Step timer auto-detection | Parse recipe instructions for time patterns (e.g. "Bake for 20 mins") and auto-create timers | Low | ✅ Done |
+| Context-sensitive help | Floating ? button on every page with page-specific help content dialog | Low | ✅ Done |
 | Missing items view | Diff view when adding meal plan ingredients to shopping list | Low | ✅ Done |
 | Family activity log | Lightweight audit trail of changes with undo support | Medium | ✅ Done |
 | Automated DB backups | Cron job in Docker to snapshot SQLite to NAS volume with restore UI in Settings | Low | ✅ Done |
+
 
 ---
 
