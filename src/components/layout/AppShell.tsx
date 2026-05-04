@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { QuickAdd } from './QuickAdd'
 import { OfflineBanner } from './OfflineBanner'
+import { HelpButton } from './HelpButton'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -33,6 +34,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Floating action button — nav + quick-add on mobile, quick-add dialog on desktop */}
       <QuickAdd />
+
+      {/* Context-sensitive help button */}
+      <HelpButton />
     </div>
+
   )
 }
