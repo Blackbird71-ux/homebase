@@ -141,9 +141,11 @@ export function ExportGroceriesModal({
           text: ing.text,
           key: ing.key,
           category: getCategory(ing),
+          recipeName: r.title,
         }))
       )
   }
+
 
   async function save(mode: 'replace' | 'append') {
     setStatus('saving')

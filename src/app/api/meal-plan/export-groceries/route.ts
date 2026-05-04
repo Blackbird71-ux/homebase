@@ -6,7 +6,9 @@ interface ExportItem {
   text: string
   key: string
   category: string
+  recipeName?: string
 }
+
 
 export async function POST(req: Request) {
   const user = await requireSession()
@@ -63,8 +65,10 @@ export async function POST(req: Request) {
       sortOrder: i,
       createdBy: user.id,
       listId: resolvedList.id,
+      recipeName: item.recipeName ?? null,
     })),
   })
+
 
   return NextResponse.json({ listId: resolvedList.id, itemCount: items.length })
 }
