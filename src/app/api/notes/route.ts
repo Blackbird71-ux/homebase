@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { createAuditLog } from '@/lib/audit-log'
+import { hashPin } from '@/lib/secure-unlock'
 
 function parseTags(tags: string | null): string[] {
   if (!tags) return []
@@ -45,6 +46,7 @@ export async function GET(req: Request) {
       category: true,
       tags: true,
       isPrivate: true,
+      pinHash: true,
       createdBy: true,
       createdAt: true,
       updatedAt: true,
@@ -72,6 +74,7 @@ export async function GET(req: Request) {
       content: note.content,
       category: note.category,
       isPrivate: note.isPrivate,
+      isSecured: !!note.pinHash,
       tags: parseTags(note.tags),
       createdBy: note.createdBy,
       createdAt: note.createdAt.toISOString(),
@@ -83,13 +86,19 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, content, category, tags, isPrivate } = body
+  const { title, content, category, tags, isPrivate, pin } = body
 
   if (!title) {
     return NextResponse.json(
       { error: 'title is required' },
       { status: 400 }
     )
+  }
+
+  // Hash PIN if provided
+  let pinHash: string | undefined
+  if (pin && typeof pin === 'string' && pin.length >= 4) {
+    pinHash = await hashPin(pin)
   }
 
   const note = await prisma.note.create({
@@ -99,6 +108,7 @@ export async function POST(req: Request) {
       category: category || null,
       tags: tags ? JSON.stringify(tags) : null,
       isPrivate: isPrivate ?? false,
+      pinHash: pinHash ?? null,
       createdBy: user.id,
       familyId: user.familyId,
     },
@@ -109,7 +119,7 @@ export async function POST(req: Request) {
     'create',
     'note',
     note.id,
-    `Created note "${title}"`,
+    `Created note "${title}"${pinHash ? ' (PIN protected)' : ''}`,
     { note: { title, category } }
   )
 
@@ -119,6 +129,7 @@ export async function POST(req: Request) {
     content: note.content,
     category: note.category,
     isPrivate: note.isPrivate,
+    isSecured: !!(note as any).pinHash,
     tags: parseTags(note.tags),
     createdBy: note.createdBy,
     createdAt: note.createdAt.toISOString(),

@@ -29,6 +29,7 @@ export async function GET(
   return NextResponse.json({
     id: tag.id,
     name: tag.name,
+    color: tag.color,
     createdAt: tag.createdAt.toISOString(),
     recipeCount: tag._count.recipes,
   })
@@ -41,7 +42,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { name } = body
+  const { name, color } = body
 
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
@@ -51,6 +52,7 @@ export async function PUT(
   }
 
   const trimmedName = name.trim()
+  const trimmedColor = color !== undefined ? (color && typeof color === 'string' ? color.trim() : null) : undefined
 
   // Check if tag exists and belongs to user's family
   const existingTag = await (prisma as any).tag.findFirst({
@@ -80,9 +82,14 @@ export async function PUT(
     )
   }
 
+  const updateData: Record<string, unknown> = { name: trimmedName }
+  if (trimmedColor !== undefined) {
+    updateData.color = trimmedColor
+  }
+
   const updatedTag = await (prisma as any).tag.update({
     where: { id },
-    data: { name: trimmedName },
+    data: updateData,
   })
 
   void createAuditLog(
@@ -90,13 +97,14 @@ export async function PUT(
     'update',
     'tag',
     id,
-    `Renamed tag "${existingTag.name}" to "${trimmedName}"`,
-    { before: { name: existingTag.name }, after: { name: trimmedName } }
+    `Updated tag "${existingTag.name}"`,
+    { before: { name: existingTag.name, color: existingTag.color }, after: { name: trimmedName, color: trimmedColor } }
   )
 
   return NextResponse.json({
     id: updatedTag.id,
     name: updatedTag.name,
+    color: updatedTag.color,
     createdAt: updatedTag.createdAt.toISOString(),
   })
 }

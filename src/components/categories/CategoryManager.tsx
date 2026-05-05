@@ -6,18 +6,25 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { toast } from 'sonner'
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowUpIcon, ArrowDownIcon } from 'lucide-react'
 
 interface Category {
   id: string
   name: string
+  color: string | null
   isSystem: boolean
   sortOrder: number
   ingredientCount: number
   aisle?: string | null
 }
 
+const CATEGORY_COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
+  '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+  '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#78716c',
+]
 
 export function CategoryManager() {
   const [categories, setCategories] = useState<Category[]>([])
@@ -28,7 +35,9 @@ export function CategoryManager() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryColor, setNewCategoryColor] = useState('#6366f1')
   const [editCategoryName, setEditCategoryName] = useState('')
+  const [editCategoryColor, setEditCategoryColor] = useState('#6366f1')
   const [editCategoryAisle, setEditCategoryAisle] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -47,6 +56,7 @@ export function CategoryManager() {
       const mappedData = data.map((cat: any) => ({
         id: cat.id,
         name: cat.category,  // API returns "category" field
+        color: cat.color ?? null,
         isSystem: !cat.isCustom,  // API returns "isCustom" field
         sortOrder: cat.sortOrder,
         ingredientCount: 0,  // Default value, not provided by API
@@ -75,7 +85,7 @@ export function CategoryManager() {
       const res = await fetch('/api/ingredient-categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, category: trimmed }),
+        body: JSON.stringify({ key, category: trimmed, color: newCategoryColor }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -86,12 +96,14 @@ export function CategoryManager() {
       const newCategory = {
         id: apiResponse.id,
         name: apiResponse.category,
+        color: apiResponse.color ?? null,
         isSystem: !apiResponse.isCustom,
         sortOrder: apiResponse.sortOrder,
         ingredientCount: 0
       }
       setCategories([...categories, newCategory])
       setNewCategoryName('')
+      setNewCategoryColor('#6366f1')
       setCreateOpen(false)
       toast.success('Category created successfully')
     } catch (error: any) {
@@ -114,6 +126,7 @@ export function CategoryManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           category: editCategoryName.trim(),
+          color: editCategoryColor,
           aisle: editCategoryAisle.trim() || null,
         }),
       })
@@ -127,6 +140,7 @@ export function CategoryManager() {
       const updatedCategory = {
         id: apiResponse.id,
         name: apiResponse.category,
+        color: apiResponse.color ?? null,
         isSystem: !apiResponse.isCustom,
         sortOrder: apiResponse.sortOrder,
         ingredientCount: selectedCategory.ingredientCount, // Keep existing count
@@ -205,6 +219,7 @@ export function CategoryManager() {
   function handleEditClick(category: Category) {
     setSelectedCategory(category)
     setEditCategoryName(category.name)
+    setEditCategoryColor(category.color ?? '#6366f1')
     setEditCategoryAisle(category.aisle ?? '')
     setEditOpen(true)
   }
@@ -249,6 +264,27 @@ export function CategoryManager() {
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="e.g., Produce, Dairy, Pantry"
                   autoFocus
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Category Color</Label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {CATEGORY_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewCategoryColor(color)}
+                      className={`w-7 h-7 rounded-full border-2 transition-all ${
+                        newCategoryColor === color ? 'border-white scale-110 ring-2 ring-offset-1 ring-foreground' : 'border-transparent hover:scale-110'
+                      }`}
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+                <ColorPicker
+                  value={newCategoryColor}
+                  onChange={setNewCategoryColor}
                 />
               </div>
             </div>
@@ -325,7 +361,12 @@ export function CategoryManager() {
                     </div>
                   </div>
                   <div className="col-span-4 font-medium">
-                    {category.name}
+                    <span className="inline-flex items-center gap-1.5">
+                      {category.color && (
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
+                      )}
+                      {category.name}
+                    </span>
                     {category.isSystem && (
                       <span className="ml-2 text-xs text-muted-foreground">(System)</span>
                     )}
@@ -373,7 +414,7 @@ export function CategoryManager() {
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
             <DialogDescription>
-              Update the name and aisle number for this category.
+              Update the name, color, and aisle number for this category.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -384,6 +425,27 @@ export function CategoryManager() {
                 value={editCategoryName}
                 onChange={(e) => setEditCategoryName(e.target.value)}
                 autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Category Color</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {CATEGORY_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setEditCategoryColor(color)}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
+                      editCategoryColor === color ? 'border-white scale-110 ring-2 ring-offset-1 ring-foreground' : 'border-transparent hover:scale-110'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+              <ColorPicker
+                value={editCategoryColor}
+                onChange={setEditCategoryColor}
               />
             </div>
             <div className="space-y-2">

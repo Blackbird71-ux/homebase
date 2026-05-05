@@ -66,6 +66,7 @@ export async function GET(req: Request) {
       return {
         id: tag.id,
         name: tag.name,
+        color: tag.color,
         createdAt: tag.createdAt.toISOString(),
         recipeCount: totalCount,
       }
@@ -77,6 +78,7 @@ export async function GET(req: Request) {
   const response = tags.map((tag: any) => ({
     id: tag.id,
     name: tag.name,
+    color: tag.color,
     createdAt: tag.createdAt.toISOString(),
   }))
 
@@ -86,7 +88,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { name } = body
+  const { name, color } = body
 
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
@@ -96,6 +98,7 @@ export async function POST(req: Request) {
   }
 
   const trimmedName = name.trim()
+  const trimmedColor = color && typeof color === 'string' ? color.trim() : null
 
   // Check if tag already exists for this family
   const existingTag = await (prisma as any).tag.findFirst({
@@ -115,6 +118,7 @@ export async function POST(req: Request) {
   const tag = await (prisma as any).tag.create({
     data: {
       name: trimmedName,
+      color: trimmedColor,
       familyId: user.familyId,
     },
   })
@@ -125,13 +129,14 @@ export async function POST(req: Request) {
     'tag',
     tag.id,
     `Created tag "${trimmedName}"`,
-    { tag: { name: trimmedName } }
+    { tag: { name: trimmedName, color: trimmedColor } }
   )
 
   return NextResponse.json(
     {
       id: tag.id,
       name: tag.name,
+      color: tag.color,
       createdAt: tag.createdAt.toISOString(),
     },
     { status: 201 }

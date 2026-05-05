@@ -30,6 +30,11 @@
 | Document vault | Store household documents (insurance, warranties, passports) with expiry reminders | High | ✅ Done |
 | Budgeting module | Track household spending by category; complements shopping lists and recipe cost data | High | |
 | Push notifications | VAPID + service worker already in place — add subscription store and preferences UI | Medium | ✅ Done |
+| Secure notes/documents/contacts | PIN/password protection for sensitive notes, documents, and contacts with bcrypt hashing | Medium | ✅ Done |
+| Audit log backup & truncate | One-click backup and cleanup of activity log entries older than 3 months | Low | ✅ Done |
+| Tag color picker | Visual color selection for tags with live preview in TagManager | Low | ✅ Done |
+| Category color picker | Visual color selection for ingredient categories with live preview | Low | ✅ Done |
+| Apple Pro theme | Premium high-contrast professional theme with refined typography and spacing | Low | ✅ Done |
 
 ### Enhancements to Existing Features
 

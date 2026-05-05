@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { createAuditLog } from '@/lib/audit-log'
+import { getUnlockCookieName, isUnlockTokenValid } from '@/lib/secure-unlock'
 
 export async function GET(
   req: Request,
@@ -22,6 +24,7 @@ export async function GET(
       category: true,
       tags: true,
       isPrivate: true,
+      pinHash: true,
       createdBy: true,
       createdAt: true,
       updatedAt: true,
@@ -40,12 +43,23 @@ export async function GET(
     return NextResponse.json({ error: 'Note not found' }, { status: 404 })
   }
 
+  // Check if note is PIN-protected and needs unlocking
+  let isLocked = false
+  if (note.pinHash) {
+    const cookieStore = await cookies()
+    const cookieName = getUnlockCookieName('note', id)
+    const unlockCookie = cookieStore.get(cookieName)
+    isLocked = !(unlockCookie?.value && isUnlockTokenValid(unlockCookie.value))
+  }
+
   return NextResponse.json({
     id: note.id,
     title: note.title,
-    content: note.content,
+    content: isLocked ? '' : note.content,
     category: note.category,
     isPrivate: note.isPrivate,
+    isSecured: !!note.pinHash,
+    isLocked,
     tags: note.tags ? JSON.parse(note.tags) as string[] : [],
     createdBy: note.createdBy,
     createdAt: note.createdAt.toISOString(),

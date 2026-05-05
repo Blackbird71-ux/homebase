@@ -273,6 +273,7 @@ model IngredientCategory {
   family    Family   @relation(fields: [familyId], references: [id])
   key       String
   category  String
+  color     String?
   sortOrder Int      @default(0)
   isCustom  Boolean  @default(false)
   aisle     String?  // e.g. "A1", "A2", "B1" — store aisle/section location
@@ -308,6 +309,7 @@ model RecipeBook {
 model Tag {
   id        String   @id @default(cuid())
   name      String
+  color     String?
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
   recipes   RecipeTag[]
@@ -361,6 +363,7 @@ model Note {
   category  String?
   tags      String?  // JSON array of tags
   isPrivate Boolean  @default(false)  // private = only visible to creator
+  pinHash   String?  // bcrypt hash of PIN for secure notes (null = not secured)
   createdBy String
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
@@ -402,6 +405,7 @@ model HouseholdContact {
   email     String?
   address   String?
   notes     String?
+  pinHash   String?  // bcrypt hash of PIN for secure contacts (null = not secured)
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -453,6 +457,7 @@ model Document {
   fileSize      Int       @default(0)
   mimeType      String    @default("application/octet-stream")
   notes         String?
+  pinHash       String?   // bcrypt hash of PIN for secure documents (null = not secured)
   expiryDate    DateTime?
   remindBefore  Int       @default(30)  // Days before expiry to show reminder
   uploadedById  String

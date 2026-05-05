@@ -69,6 +69,7 @@ export async function GET() {
         id: cat.id,
         key: cat.key,
         category: cat.category,
+        color: cat.color,
         sortOrder: cat.sortOrder,
         isCustom: cat.isCustom,
         aisle: cat.aisle,
@@ -88,6 +89,7 @@ export async function GET() {
       id: cat.id,
       key: cat.key,
       category: cat.category,
+      color: cat.color,
       sortOrder: cat.sortOrder,
       isCustom: cat.isCustom,
       aisle: cat.aisle,
@@ -105,7 +107,7 @@ export async function POST(req: Request) {
     
     const body = await req.json()
     console.log('POST /api/ingredient-categories - Request body:', JSON.stringify(body))
-    const { key, category, sortOrder } = body
+    const { key, category, sortOrder, color } = body
 
     // Validation
     if (!key || typeof key !== 'string' || key.trim() === '') {
@@ -164,6 +166,7 @@ export async function POST(req: Request) {
         id: ingredientCategory.id,
         key: ingredientCategory.key,
         category: ingredientCategory.category,
+        color: ingredientCategory.color,
         sortOrder: ingredientCategory.sortOrder,
         isCustom: ingredientCategory.isCustom,
         createdAt: ingredientCategory.createdAt.toISOString(),

@@ -27,6 +27,7 @@ const themeOptions = [
   { value: 'modern',             label: 'Modern',          icon: Sun,     swatch: 'bg-[#f5f5f7]' },
   { value: 'midnight',           label: 'Midnight',        icon: Moon,    swatch: 'bg-[#0b0e14]' },
   { value: 'apple-grey',         label: 'Apple',           icon: Sun,     swatch: 'bg-[#f2f2f7]' },
+  { value: 'apple-pro',          label: 'Apple Pro',       icon: Moon,    swatch: 'bg-gradient-to-br from-[#0a0e1a] to-[#1a1f35] border border-blue-400/30' },
   { value: 'glass-dark',         label: 'Glass',           icon: Moon,    swatch: 'bg-black' },
   { value: 'sunset',             label: 'Sunset',          icon: Sun,     swatch: 'bg-gradient-to-br from-orange-100 to-pink-100' },
   { value: 'ocean',              label: 'Ocean',           icon: Sun,     swatch: 'bg-gradient-to-br from-blue-50 to-cyan-50' },

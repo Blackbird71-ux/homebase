@@ -555,6 +555,45 @@ body {
   --color-sidebar: oklch(0.97 0.01 140);
 }
 
+/* ── Apple Pro theme (premium dark, glassmorphism, vibrant accent) ── */
+.apple-pro {
+  --background: oklch(0.08 0.015 260);
+  --foreground: oklch(0.97 0.005 260);
+  --card: oklch(0.12 0.02 260 / 0.6);
+  --card-foreground: oklch(0.97 0.005 260);
+  --popover: oklch(0.12 0.02 260 / 0.95);
+  --popover-foreground: oklch(0.97 0.005 260);
+  --primary: oklch(0.65 0.22 260);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.18 0.02 260 / 0.5);
+  --secondary-foreground: oklch(0.97 0.005 260);
+  --muted: oklch(0.18 0.02 260 / 0.5);
+  --muted-foreground: oklch(0.65 0.01 260);
+  --accent: oklch(0.22 0.02 260 / 0.5);
+  --accent-foreground: oklch(0.97 0.005 260);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.65 0.22 260);
+  --radius: 0.875rem;
+  --sidebar: oklch(0.06 0.01 260 / 0.8);
+  --sidebar-foreground: oklch(0.7 0.01 260);
+  --sidebar-primary: oklch(0.65 0.22 260);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.15 0.02 260 / 0.5);
+  --sidebar-accent-foreground: oklch(0.97 0.005 260);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.65 0.22 260);
+  --color-sidebar: oklch(0.06 0.01 260 / 0.8);
+}
+
+/* Apple Pro glass card effect */
+.apple-pro .card,
+.apple-pro [class*="Card"] {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
 /* ── High Contrast Midnight theme (WCAG AA, bright sky on near-black navy) ── */
 .high-contrast-midnight {
   --background: oklch(0.03 0.02 260);

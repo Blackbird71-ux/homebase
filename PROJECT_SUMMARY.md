@@ -55,6 +55,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Database schema with tag relationships
 - API endpoints with comprehensive testing
 - Recipe-tag association system
+- **Color Picker**: Visual color selection for tags with live preview
 
 #### 7. **Ingredient Category Management** (New in Phase 7)
 - **CategoryManager**: Interface for ingredient category management
@@ -62,6 +63,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Machine learning-based category suggestions
 - API endpoints for category operations
 - Integration with recipe ingredient parsing
+- **Color Picker**: Visual color selection for categories with live preview
 
 #### 8. **Notes System** (New in Phase 7)
 - Full-featured notes application
@@ -70,6 +72,8 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Individual note pages with detail view
 - API endpoints for CRUD operations
 - Family-based note sharing
+- **PIN Protection**: Optional PIN-based security for sensitive notes
+- **Secure Unlock**: bcrypt-hashed PIN verification with 15-minute session cookies
 
 #### 9. **Advanced Theming System** (New in Phase 7)
 - **AdvancedThemeProvider**: Extended theme management
@@ -78,12 +82,26 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Dynamic theme switching (dark/light/auto)
 - Font size and UI preference settings
 - Done item color customization
+- **Apple Pro Theme**: Premium high-contrast professional theme with refined typography and spacing
 
-#### 10. **Settings & Configuration**
+#### 10. **Secure Document & Contact Vault** (New in Phase 7)
+- **PIN Protection**: Optional PIN-based security for documents and household contacts
+- **Secure Unlock Dialog**: Reusable unlock dialog with show/hide PIN toggle and error handling
+- **Session Management**: 15-minute httpOnly cookie-based unlock sessions
+- **API Endpoints**: Dedicated unlock endpoints for notes, documents, and contacts
+- **Content Masking**: Locked content is masked until verified unlock
+
+#### 11. **Audit Log & Activity Tracking** (New in Phase 7)
+- **Activity Log**: Lightweight audit trail of family changes with undo support
+- **Backup & Truncate**: One-click backup and cleanup of entries older than 3 months
+- **JSON Export**: Downloads audit log backup as JSON before truncation
+- **Confirmation Dialog**: Safe-guarded truncation with user confirmation
+
+#### 12. **Settings & Configuration**
 - Family settings management
 - Google Calendar integration
 - Data import/export functionality
-- Appearance customization
+- Appearance customization (including Apple Pro theme)
 - Integration management
 - Tunnel configuration for external access
 
@@ -122,6 +140,8 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 #### Database Migrations
 - `prisma/migrations/20260419101620_add_tag_and_category_enhancements/migration.sql`
 - `prisma/migrations/20260419201552_add_done_item_color/migration.sql`
+- `prisma/migrations/20260505000000_add_tag_category_colors/migration.sql`: Tag and category color picker support
+- `prisma/migrations/20260505000001_add_pin_hash_fields/migration.sql`: PIN hash fields for notes, documents, and contacts
 
 #### Scripts
 - `scripts/migrate-tags.ts`: Data migration utility
@@ -129,19 +149,28 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - `scripts/MIGRATION-README.md`: Migration documentation
 
 #### API Endpoints
-- `src/app/api/tags/`: Tag management API
-- `src/app/api/tags/[id]/`: Individual tag operations
+- `src/app/api/tags/`: Tag management API (with color support)
+- `src/app/api/tags/[id]/`: Individual tag operations (with color support)
 - `src/app/api/tags/[id]/recipes/`: Tag-recipe relationships
-- `src/app/api/ingredient-categories/`: Category management
+- `src/app/api/ingredient-categories/`: Category management (with color support)
+- `src/app/api/ingredient-categories/[id]/`: Individual category operations (with color support)
 - `src/app/api/ingredient-categories/learn/`: ML category suggestions
-- `src/app/api/notes/`: Notes CRUD operations
+- `src/app/api/notes/`: Notes CRUD operations (with PIN support)
+- `src/app/api/notes/[id]/`: Individual note operations (with unlock cookie check)
+- `src/app/api/notes/[id]/unlock/`: PIN verification and unlock session
+- `src/app/api/documents/[id]/unlock/`: Document PIN verification and unlock
+- `src/app/api/contacts/[id]/unlock/`: Contact PIN verification and unlock
+- `src/app/api/audit-log/backup/`: Audit log backup and truncation
 
 #### UI Components
-- `src/components/tags/`: Tag management components
-- `src/components/categories/`: Category management components
+- `src/components/tags/`: Tag management components (with color picker)
+- `src/components/categories/`: Category management components (with color picker)
 - `src/components/notes/`: Notes interface components
 - `src/components/providers/AdvancedThemeProvider.tsx`: Enhanced theming
-- `src/components/settings/AdvancedThemingTab.tsx`: Theme settings
+- `src/components/settings/AdvancedThemingTab.tsx`: Theme settings (with Apple Pro theme)
+- `src/components/settings/AppearanceTab.tsx`: Appearance settings (with Apple Pro theme option)
+- `src/components/settings/ActivityLogTab.tsx`: Activity log with backup/truncate button
+- `src/components/shared/SecureUnlockDialog.tsx`: Reusable PIN unlock dialog
 - `src/components/ui/color-picker.tsx`: Color selection component
 
 #### Pages
@@ -151,7 +180,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 
 #### Utilities
 - `src/lib/meal-types.ts`: Meal type constants
-- `src/types/index.ts`: Extended TypeScript definitions
+- `src/lib/secure-unlock.ts`: PIN hashing, verification, and unlock session management
 
 ### Usage Instructions
 

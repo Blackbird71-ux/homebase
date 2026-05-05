@@ -6,15 +6,23 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { toast } from 'sonner'
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowRightLeftIcon } from 'lucide-react'
 
 interface Tag {
   id: string
   name: string
+  color: string | null
   createdAt: string
   recipeCount: number
 }
+
+const TAG_COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
+  '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+  '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#78716c',
+]
 
 export function TagManager() {
   const [tags, setTags] = useState<Tag[]>([])
@@ -25,7 +33,9 @@ export function TagManager() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedTag, setSelectedTag] = useState<Tag | null>(null)
   const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#6366f1')
   const [editTagName, setEditTagName] = useState('')
+  const [editTagColor, setEditTagColor] = useState('#6366f1')
   const [submitting, setSubmitting] = useState(false)
   const [legacyCount, setLegacyCount] = useState(0)
   const [migrating, setMigrating] = useState(false)
@@ -88,7 +98,7 @@ export function TagManager() {
       const res = await fetch('/api/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTagName.trim() }),
+        body: JSON.stringify({ name: newTagName.trim(), color: newTagColor }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -97,6 +107,7 @@ export function TagManager() {
       const newTag = await res.json()
       setTags([newTag, ...tags])
       setNewTagName('')
+      setNewTagColor('#6366f1')
       setCreateOpen(false)
       toast.success('Tag created successfully')
     } catch (error: any) {
@@ -117,7 +128,7 @@ export function TagManager() {
       const res = await fetch(`/api/tags/${selectedTag.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editTagName.trim() }),
+        body: JSON.stringify({ name: editTagName.trim(), color: editTagColor }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -161,6 +172,7 @@ export function TagManager() {
   function handleEditClick(tag: Tag) {
     setSelectedTag(tag)
     setEditTagName(tag.name)
+    setEditTagColor(tag.color ?? '#6366f1')
     setEditOpen(true)
   }
 
@@ -187,7 +199,7 @@ export function TagManager() {
             <DialogHeader>
               <DialogTitle>Create New Tag</DialogTitle>
               <DialogDescription>
-                Tags help organize recipes. Enter a name for your new tag.
+                Tags help organize recipes. Enter a name and choose a color for your new tag.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -199,6 +211,27 @@ export function TagManager() {
                   onChange={(e) => setNewTagName(e.target.value)}
                   placeholder="e.g., Italian, Quick, Vegetarian"
                   autoFocus
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tag Color</Label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {TAG_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewTagColor(color)}
+                      className={`w-7 h-7 rounded-full border-2 transition-all ${
+                        newTagColor === color ? 'border-white scale-110 ring-2 ring-offset-1 ring-foreground' : 'border-transparent hover:scale-110'
+                      }`}
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+                <ColorPicker
+                  value={newTagColor}
+                  onChange={setNewTagColor}
                 />
               </div>
             </div>
@@ -224,7 +257,7 @@ export function TagManager() {
               {legacyCount} legacy tag{legacyCount !== 1 ? 's' : ''} found
             </p>
             <p className="text-xs text-amber-600/80 dark:text-amber-500/80 mt-0.5">
-              These tags are stored in an old format and can&apos;t be managed. Migrate them to make them fully editable and deleteable.
+              These tags are stored in an old format and can't be managed. Migrate them to make them fully editable and deleteable.
             </p>
           </div>
           <Button
@@ -277,7 +310,13 @@ export function TagManager() {
               {tags.map((tag) => (
                 <div key={tag.id} className="grid grid-cols-12 gap-4 px-4 py-3 items-center border rounded-lg hover:bg-muted/50">
                   <div className="col-span-4 font-medium">
-                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold">
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                      style={tag.color ? { borderColor: tag.color, backgroundColor: tag.color + '20', color: tag.color } : {}}
+                    >
+                      {tag.color && (
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                      )}
                       {tag.name}
                     </span>
                   </div>
@@ -319,7 +358,7 @@ export function TagManager() {
           <DialogHeader>
             <DialogTitle>Edit Tag</DialogTitle>
             <DialogDescription>
-              Update the name of this tag.
+              Update the name and color of this tag.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -330,6 +369,27 @@ export function TagManager() {
                 value={editTagName}
                 onChange={(e) => setEditTagName(e.target.value)}
                 autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tag Color</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {TAG_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setEditTagColor(color)}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
+                      editTagColor === color ? 'border-white scale-110 ring-2 ring-offset-1 ring-foreground' : 'border-transparent hover:scale-110'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+              <ColorPicker
+                value={editTagColor}
+                onChange={setEditTagColor}
               />
             </div>
           </div>
@@ -351,7 +411,7 @@ export function TagManager() {
           <DialogHeader>
             <DialogTitle>Delete Tag</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the tag &quot;{selectedTag?.name}&quot;?
+              Are you sure you want to delete the tag "{selectedTag?.name}"?
               {selectedTag && selectedTag.recipeCount > 0 && (
                 <span className="text-destructive block mt-1">
                   This tag is used in {selectedTag.recipeCount} recipe{selectedTag.recipeCount !== 1 ? 's' : ''}.

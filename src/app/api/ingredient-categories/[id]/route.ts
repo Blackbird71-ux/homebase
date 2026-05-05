@@ -38,7 +38,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { key, category: categoryName, sortOrder, aisle } = body
+  const { key, category: categoryName, sortOrder, aisle, color } = body
 
   // Check if category exists and belongs to user's family
   const existingCategory = await (prisma as any).ingredientCategory.findFirst({
@@ -105,6 +105,14 @@ export async function PUT(
     updateData.sortOrder = sortOrder
   }
 
+  if (color !== undefined) {
+    updateData.color = color && typeof color === 'string' ? color.trim() : null
+  }
+
+  if (aisle !== undefined) {
+    updateData.aisle = aisle && typeof aisle === 'string' ? aisle.trim() : null
+  }
+
   const updatedCategory = await (prisma as any).ingredientCategory.update({
     where: { id },
     data: updateData,
@@ -114,6 +122,7 @@ export async function PUT(
     id: updatedCategory.id,
     key: updatedCategory.key,
     category: updatedCategory.category,
+    color: updatedCategory.color,
     sortOrder: updatedCategory.sortOrder,
     isCustom: updatedCategory.isCustom,
     aisle: updatedCategory.aisle,
