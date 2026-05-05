@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { createAuditLog } from '@/lib/audit-log'
-import { getUnlockCookieName, isUnlockTokenValid } from '@/lib/secure-unlock'
+import { getUnlockCookieName, isUnlockTokenValid, hashPin } from '@/lib/secure-unlock'
 
 export async function GET(
   req: Request,
@@ -74,7 +74,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { title, content, category, tags, isPrivate } = body
+  const { title, content, category, tags, isPrivate, pin } = body
 
   if (!title || !content) {
     return NextResponse.json(
@@ -98,16 +98,28 @@ export async function PUT(
     )
   }
 
+  const updateData: Record<string, unknown> = {
+    title,
+    content,
+    category: category || null,
+    tags: tags ? JSON.stringify(tags) : null,
+    isPrivate: isPrivate ?? existingNote.isPrivate,
+    updatedAt: new Date(),
+  }
+
+  // Handle PIN changes
+  if (pin !== undefined) {
+    if (pin && typeof pin === 'string' && pin.length >= 4 && pin.length <= 6) {
+      updateData.pinHash = await hashPin(pin)
+    } else if (pin === null) {
+      updateData.pinHash = null
+    }
+    // If pin is an empty string, leave current pinHash unchanged
+  }
+
   const note = await prisma.note.update({
     where: { id },
-    data: {
-      title,
-      content,
-      category: category || null,
-      tags: tags ? JSON.stringify(tags) : null,
-      isPrivate: isPrivate ?? existingNote.isPrivate,
-      updatedAt: new Date(),
-    },
+    data: updateData,
   })
 
   void createAuditLog(
@@ -125,6 +137,7 @@ export async function PUT(
     content: note.content,
     category: note.category,
     isPrivate: note.isPrivate,
+    isSecured: !!note.pinHash,
     tags: note.tags ? JSON.parse(note.tags) as string[] : [],
     createdBy: note.createdBy,
     createdAt: note.createdAt.toISOString(),

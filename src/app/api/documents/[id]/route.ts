@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { hashPin } from '@/lib/secure-unlock'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
 import { createAuditLog } from '@/lib/audit-log'
@@ -25,6 +26,7 @@ export async function GET(
       expiryDate: true,
       remindBefore: true,
       uploadedById: true,
+      pinHash: true,
       createdAt: true,
       updatedAt: true,
       uploadedBy: {
@@ -39,6 +41,8 @@ export async function GET(
 
   return NextResponse.json({
     ...document,
+    isSecured: !!document.pinHash,
+    pinHash: undefined,
     expiryDate: document.expiryDate?.toISOString() ?? null,
     createdAt: document.createdAt.toISOString(),
     updatedAt: document.updatedAt.toISOString(),
@@ -60,7 +64,7 @@ export async function PATCH(
   }
 
   const body = await req.json()
-  const { title, category, notes, expiryDate, remindBefore } = body
+  const { title, category, notes, expiryDate, remindBefore, pin } = body
 
   const updateData: Record<string, unknown> = {}
   if (title !== undefined) updateData.title = title
@@ -68,6 +72,16 @@ export async function PATCH(
   if (notes !== undefined) updateData.notes = notes
   if (expiryDate !== undefined) updateData.expiryDate = expiryDate ? new Date(expiryDate) : null
   if (remindBefore !== undefined) updateData.remindBefore = remindBefore
+
+  // Handle PIN changes
+  if (pin !== undefined) {
+    if (pin && typeof pin === 'string' && pin.length >= 4 && pin.length <= 6) {
+      updateData.pinHash = await hashPin(pin)
+    } else if (pin === null) {
+      updateData.pinHash = null
+    }
+    // If pin is an empty string, leave current pinHash unchanged
+  }
 
   const updated = await prisma.document.update({
     where: { id },
@@ -83,6 +97,7 @@ export async function PATCH(
       expiryDate: true,
       remindBefore: true,
       uploadedById: true,
+      pinHash: true,
       createdAt: true,
       updatedAt: true,
       uploadedBy: {
@@ -102,6 +117,8 @@ export async function PATCH(
 
   return NextResponse.json({
     ...updated,
+    isSecured: !!updated.pinHash,
+    pinHash: undefined,
     expiryDate: updated.expiryDate?.toISOString() ?? null,
     createdAt: updated.createdAt.toISOString(),
     updatedAt: updated.updatedAt.toISOString(),

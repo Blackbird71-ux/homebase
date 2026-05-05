@@ -40,12 +40,13 @@ interface RecipeDetailProps {
     carbContent: string | null
     sodiumContent: string | null
   }
+  tagColors?: Record<string, string>
   books: { id: string; name: string; recipeCount: number }[]
   currentUserId: string
   isAdmin: boolean
 }
 
-export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDetailProps) {
+export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin }: RecipeDetailProps) {
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -275,11 +276,21 @@ export function RecipeDetail({ recipe, books, currentUserId, isAdmin }: RecipeDe
           </div>
           {recipe.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-3">
-              {recipe.tags.map((tag) => (
-                <span key={tag} className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground">
-                  {tag}
-                </span>
-              ))}
+              {recipe.tags.map((tag) => {
+                const color = tagColors?.[tag]
+                return (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 rounded text-xs font-medium"
+                    style={{
+                      backgroundColor: color ? `${color}20` : undefined,
+                      color: color || undefined,
+                    }}
+                  >
+                    {tag}
+                  </span>
+                )
+              })}
             </div>
           )}
         </div>

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, NotepadTextIcon } from 'lucide-react'
+import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Note {
@@ -17,6 +17,7 @@ interface Note {
   category: string | null
   tags: string[]
   isPrivate: boolean
+  isSecured?: boolean
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -26,14 +27,17 @@ interface NotesClientProps {
   initialNotes: Note[]
   initialCategories: string[]
   currentUserId: string
+  tagColors?: Record<string, string>
 }
 
-export function NotesClient({ initialNotes, initialCategories, currentUserId }: NotesClientProps) {
+type TabType = 'family' | 'private' | 'secure'
+
+export function NotesClient({ initialNotes, initialCategories, currentUserId, tagColors }: NotesClientProps) {
   const [notes, setNotes] = useState(initialNotes)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string | null>('all')
   const [tagFilter, setTagFilter] = useState<string | null>('')
-  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'family' | 'private'>('all')
+  const [activeTab, setActiveTab] = useState<TabType>('family')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -47,9 +51,14 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
     return Array.from(tagSet).sort()
   }, [notes])
 
-  // Filter notes based on search, category, tag and visibility
+  // Filter notes based on active tab, search, category, and tag
   const filteredNotes = useMemo(() => {
     return notes.filter(note => {
+      // Tab filter
+      if (activeTab === 'family' && note.isPrivate) return false
+      if (activeTab === 'private' && (!note.isPrivate || note.createdBy !== currentUserId)) return false
+      if (activeTab === 'secure' && !note.isSecured) return false
+
       // Search filter (strip HTML from title/content before matching)
       if (search) {
         const searchLower = search.toLowerCase()
@@ -71,13 +80,9 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
         if (!note.tags.includes(tagFilter)) return false
       }
 
-      // Visibility filter
-      if (visibilityFilter === 'private' && !note.isPrivate) return false
-      if (visibilityFilter === 'family' && note.isPrivate) return false
-
       return true
     })
-  }, [notes, search, categoryFilter, tagFilter, visibilityFilter])
+  }, [notes, search, categoryFilter, tagFilter, activeTab, currentUserId])
 
   const handleCreateNote = async (data: {
     title: string
@@ -85,6 +90,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
     category?: string | null
     tags?: string[]
     isPrivate?: boolean
+    pin?: string | null
   }) => {
     setIsLoading(true)
     try {
@@ -116,6 +122,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
     category?: string | null
     tags?: string[]
     isPrivate?: boolean
+    pin?: string | null
   }) => {
     if (!editingNote) return
 
@@ -177,6 +184,8 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
     content: string
     category?: string | null
     tags?: string[]
+    isPrivate?: boolean
+    pin?: string | null
   }) => {
     if (editingNote) {
       handleUpdateNote(data)
@@ -189,31 +198,26 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
     setSearch('')
     setCategoryFilter('all')
     setTagFilter('')
-    setVisibilityFilter('all')
   }
 
-  const hasActiveFilters = search || (categoryFilter && categoryFilter !== 'all') || tagFilter || visibilityFilter !== 'all'
+  const hasActiveFilters = search || (categoryFilter && categoryFilter !== 'all') || tagFilter
+
+  const tabCounts = useMemo(() => ({
+    family: notes.filter(n => !n.isPrivate).length,
+    private: notes.filter(n => n.isPrivate && n.createdBy === currentUserId).length,
+    secure: notes.filter(n => n.isSecured).length,
+  }), [notes, currentUserId])
 
   return (
     <div className="flex flex-col h-full overflow-y-auto p-4 md:p-6 gap-6">
-      {/* Header with stats */}
+      {/* Header with tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl font-bold">Notes</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="text-muted-foreground">
-              {filteredNotes.length} note{filteredNotes.length !== 1 ? 's' : ''}
-              {hasActiveFilters && ' (filtered)'}
-            </p>
-            <span className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-              <UsersIcon className="h-3 w-3" />
-              {notes.filter(n => !n.isPrivate).length} family
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-              <LockIcon className="h-3 w-3" />
-              {notes.filter(n => n.isPrivate && n.createdBy === currentUserId).length} private
-            </span>
-          </div>
+          <p className="text-muted-foreground text-sm mt-1">
+            {filteredNotes.length} note{filteredNotes.length !== 1 ? 's' : ''}
+            {hasActiveFilters && ' (filtered)'}
+          </p>
         </div>
         <Button onClick={() => {
           setEditingNote(null)
@@ -222,6 +226,55 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
           <PlusIcon className="h-4 w-4 mr-2" />
           New Note
         </Button>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex border-b border-border shrink-0">
+        <button
+          type="button"
+          onClick={() => setActiveTab('family')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'family'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+          }`}
+        >
+          <UsersIcon className="h-4 w-4" />
+          Family
+          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+            {tabCounts.family}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('private')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'private'
+              ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+          }`}
+        >
+          <LockIcon className="h-4 w-4" />
+          Private
+          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+            {tabCounts.private}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('secure')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'secure'
+              ? 'border-green-500 text-green-600 dark:text-green-400'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+          }`}
+        >
+          <ShieldCheckIcon className="h-4 w-4" />
+          Secure
+          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+            {tabCounts.secure}
+          </span>
+        </button>
       </div>
 
       {/* Filters */}
@@ -268,52 +321,12 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
               </SelectContent>
             </Select>
 
-            {/* Visibility quick-filter buttons */}
-            <div className="flex rounded-md border border-input overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setVisibilityFilter('all')}
-                className={`px-3 py-1.5 text-xs flex items-center gap-1 transition-colors ${
-                  visibilityFilter === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                }`}
-              >
-                <NotepadTextIcon className="h-3 w-3" /> All
-              </button>
-              <button
-                type="button"
-                onClick={() => setVisibilityFilter('family')}
-                className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-input transition-colors ${
-                  visibilityFilter === 'family' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                }`}
-              >
-                <UsersIcon className="h-3 w-3" /> Family
-              </button>
-              <button
-                type="button"
-                onClick={() => setVisibilityFilter('private')}
-                className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-input transition-colors ${
-                  visibilityFilter === 'private' ? 'bg-amber-500 text-white' : 'hover:bg-muted'
-                }`}
-              >
-                <LockIcon className="h-3 w-3" /> Private
-              </button>
-            </div>
-
             {hasActiveFilters && (
               <Button variant="outline" onClick={clearFilters}>
                 <XIcon className="h-4 w-4 mr-2" />
                 Clear
               </Button>
             )}
-          {visibilityFilter !== 'all' && (
-            <div className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded-full">
-              {visibilityFilter === 'private' ? <LockIcon className="h-3 w-3" /> : <UsersIcon className="h-3 w-3" />}
-              {visibilityFilter === 'private' ? 'Private only' : 'Family only'}
-              <button type="button" onClick={() => setVisibilityFilter('all')} className="ml-1 hover:text-destructive">
-                <XIcon className="h-3 w-3" />
-              </button>
-            </div>
-          )}
           </div>
         </div>
 
@@ -373,6 +386,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
               <NoteCard
               key={note.id}
               {...note}
+              tagColors={tagColors}
               onDelete={handleDeleteNote}
               onEdit={handleEditNote}
             />
@@ -400,6 +414,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId }: 
             initialTags={editingNote?.tags || []}
             initialIsPrivate={editingNote?.isPrivate ?? false}
             categories={initialCategories}
+            tagColors={tagColors}
             onSubmit={handleEditorSubmit}
             onCancel={() => {
               setEditorOpen(false)

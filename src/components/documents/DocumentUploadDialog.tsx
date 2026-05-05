@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Upload, FileText, X } from 'lucide-react'
+import { Upload, FileText, X, LockIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import type { DocumentData } from './DocumentCard'
 
@@ -51,6 +51,8 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
   const [notes, setNotes] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
   const [remindBefore, setRemindBefore] = useState('30')
+  const [hasPin, setHasPin] = useState(false)
+  const [pinCode, setPinCode] = useState('')
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -95,6 +97,9 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
       formData.append('notes', notes || '')
       formData.append('expiryDate', expiryDate || '')
       formData.append('remindBefore', remindBefore)
+      if (hasPin && pinCode) {
+        formData.append('pin', pinCode)
+      }
 
       const res = await fetch('/api/documents', {
         method: 'POST',
@@ -125,6 +130,8 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
     setNotes('')
     setExpiryDate('')
     setRemindBefore('30')
+    setHasPin(false)
+    setPinCode('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -250,6 +257,50 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
                 onChange={e => setRemindBefore(e.target.value)}
               />
             </div>
+          </div>
+
+          {/* PIN Protection */}
+          <div className="p-3 border border-input rounded-md bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <LockIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">PIN Protection</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setHasPin(!hasPin)
+                  if (hasPin) setPinCode('')
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+                  hasPin ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+                aria-checked={hasPin}
+                role="switch"
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  hasPin ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+            {hasPin && (
+              <div className="mt-3 space-y-2">
+                <Label htmlFor="doc-pin">Set a 4-6 digit PIN</Label>
+                <Input
+                  id="doc-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={pinCode}
+                  onChange={(e) => setPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter PIN"
+                />
+                <p className="text-xs text-muted-foreground">
+                  A PIN must be entered to view or download this document.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

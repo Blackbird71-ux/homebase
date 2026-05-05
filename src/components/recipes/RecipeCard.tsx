@@ -7,6 +7,7 @@ interface RecipeCardProps {
   title: string
   description: string | null
   tags: string[]
+  tagColors?: Record<string, string>
   prepTime: number | null
   cookTime: number | null
   servings: number | null
@@ -20,6 +21,7 @@ export function RecipeCard({
   title,
   description,
   tags,
+  tagColors,
   prepTime,
   cookTime,
   servings,
@@ -74,14 +76,21 @@ export function RecipeCard({
           </div>
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {tags.slice(0, 4).map((tag) => (
-                <span
-                  key={tag}
-                  className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded text-xs"
-                >
-                  {tag}
-                </span>
-              ))}
+              {tags.slice(0, 4).map((tag) => {
+                const color = tagColors?.[tag]
+                return (
+                  <span
+                    key={tag}
+                    className="px-1.5 py-0.5 rounded text-xs font-medium"
+                    style={{
+                      backgroundColor: color ? `${color}20` : undefined,
+                      color: color || undefined,
+                    }}
+                  >
+                    {tag}
+                  </span>
+                )
+              })}
             </div>
           )}
         </CardContent>

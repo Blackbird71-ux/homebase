@@ -8,6 +8,7 @@ interface TagWithCount {
   id: string
   name: string
   recipeCount: number
+  color?: string | null
 }
 
 interface TagCloudProps {
@@ -100,7 +101,16 @@ export function TagCloud({ selectedTag, onTagClick, maxTags = 20, showCounts = t
           size="sm"
           className={getSizeClass(tag.recipeCount)}
           onClick={() => onTagClick?.(selectedTag === tag.name ? null : tag.name)}
+          style={tag.color && selectedTag !== tag.name ? {
+            borderColor: `${tag.color}40`,
+          } : undefined}
         >
+          {tag.color && (
+            <span
+              className="inline-block w-2 h-2 rounded-full mr-1"
+              style={{ backgroundColor: tag.color }}
+            />
+          )}
           {tag.name}
           {showCounts && (
             <span className="ml-1.5 text-xs opacity-70">

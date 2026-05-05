@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { NoteEditor } from '@/components/notes/NoteEditor'
-import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon } from 'lucide-react'
+import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon, ShieldCheckIcon, UnlockIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 
@@ -18,23 +20,60 @@ interface NoteDetailProps {
     category: string | null
     tags: string[]
     isPrivate: boolean
+    isSecured?: boolean
+    isLocked?: boolean
+    pinHash?: string | null
     createdBy: string
     createdAt: string
     updatedAt: string
   }
+  tagColors?: Record<string, string>
 }
 
-export function NoteDetail({ note }: NoteDetailProps) {
+export function NoteDetail({ note, tagColors }: NoteDetailProps) {
   const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [unlockPin, setUnlockPin] = useState('')
+  const [isUnlocking, setIsUnlocking] = useState(false)
+  const [isLocked, setIsLocked] = useState(note.isLocked ?? false)
+  const [unlockError, setUnlockError] = useState('')
+
+  const handleUnlock = async () => {
+    if (!unlockPin) return
+    setIsUnlocking(true)
+    setUnlockError('')
+    try {
+      const response = await fetch(`/api/notes/${note.id}/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: unlockPin }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Incorrect PIN')
+      }
+
+      setIsLocked(false)
+      setUnlockPin('')
+      toast.success('Note unlocked')
+      router.refresh()
+    } catch (error) {
+      setUnlockError(error instanceof Error ? error.message : 'Failed to unlock')
+    } finally {
+      setIsUnlocking(false)
+    }
+  }
 
   const handleUpdate = async (data: {
     title: string
     content: string
     category?: string | null
     tags?: string[]
+    isPrivate?: boolean
+    pin?: string | null
   }) => {
     setIsLoading(true)
     try {
@@ -50,7 +89,7 @@ export function NoteDetail({ note }: NoteDetailProps) {
 
       toast.success('Note updated successfully')
       setIsEditing(false)
-      router.refresh() // Refresh the page to get updated data
+      router.refresh()
     } catch (error) {
       console.error('Error updating note:', error)
       toast.error('Failed to update note')
@@ -87,6 +126,82 @@ export function NoteDetail({ note }: NoteDetailProps) {
   const formattedUpdatedAt = format(new Date(note.updatedAt), 'PPpp')
   const isRecentlyUpdated = new Date(note.updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
 
+  // If locked, show unlock screen
+  if (isLocked) {
+    return (
+      <div className="flex flex-col h-full overflow-y-auto p-4 md:p-6 gap-6">
+        <div className="flex items-center gap-4 shrink-0">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => router.push('/notes')}
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-bold">Secure Note</h1>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <ShieldCheckIcon className="h-5 w-5 text-green-500" />
+                </div>
+                <div>
+                  <CardTitle>This note is PIN-protected</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Enter the PIN to view this note's content.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="unlock-pin">PIN Code</Label>
+                <Input
+                  id="unlock-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={unlockPin}
+                  onChange={(e) => {
+                    setUnlockPin(e.target.value.replace(/\D/g, '').slice(0, 6))
+                    setUnlockError('')
+                  }}
+                  placeholder="Enter PIN"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleUnlock()
+                  }}
+                  disabled={isUnlocking}
+                  autoFocus
+                />
+                {unlockError && (
+                  <p className="text-sm text-destructive">{unlockError}</p>
+                )}
+              </div>
+              <Button
+                className="w-full"
+                onClick={handleUnlock}
+                disabled={isUnlocking || !unlockPin}
+              >
+                {isUnlocking ? (
+                  'Unlocking...'
+                ) : (
+                  <>
+                    <UnlockIcon className="h-4 w-4 mr-2" />
+                    Unlock
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto p-4 md:p-6 gap-6">
       {/* Header */}
@@ -105,6 +220,11 @@ export function NoteDetail({ note }: NoteDetailProps) {
                 className="text-2xl font-bold"
                 dangerouslySetInnerHTML={{ __html: note.title }}
               />
+              {note.isSecured && (
+                <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded-full">
+                  <ShieldCheckIcon className="h-3 w-3" /> Secure
+                </span>
+              )}
               {note.isPrivate ? (
                 <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
                   <LockIcon className="h-3 w-3" /> Private
@@ -164,15 +284,27 @@ export function NoteDetail({ note }: NoteDetailProps) {
         
         {note.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {note.tags.map((tag, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-md"
-              >
-                <TagIcon className="h-3 w-3" />
-                <span>{tag}</span>
-              </div>
-            ))}
+            {note.tags.map((tag, index) => {
+              const color = tagColors?.[tag]
+              return (
+                <div
+                  key={index}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md font-medium"
+                  style={{
+                    backgroundColor: color ? `${color}20` : undefined,
+                    color: color || undefined,
+                  }}
+                >
+                  {color && (
+                    <span
+                      className="inline-block w-2 h-2 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                  )}
+                  <span>{tag}</span>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -202,7 +334,9 @@ export function NoteDetail({ note }: NoteDetailProps) {
             initialCategory={note.category}
             initialTags={note.tags}
             initialIsPrivate={note.isPrivate}
+            initialPinHash={note.pinHash ?? null}
             categories={note.category ? [note.category] : []}
+            tagColors={tagColors}
             onSubmit={handleUpdate}
             onCancel={() => setIsEditing(false)}
             isLoading={isLoading}

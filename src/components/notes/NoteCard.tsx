@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon } from 'lucide-react'
+import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon, ShieldCheckIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
@@ -10,7 +10,9 @@ interface NoteCardProps {
   content: string
   category: string | null
   tags: string[]
+  tagColors?: Record<string, string>
   isPrivate?: boolean
+  isSecured?: boolean
   createdAt: string
   updatedAt: string
   onDelete?: (id: string) => void
@@ -23,7 +25,9 @@ export function NoteCard({
   content,
   category,
   tags,
+  tagColors,
   isPrivate = false,
+  isSecured = false,
   createdAt,
   updatedAt,
   onDelete,
@@ -44,6 +48,11 @@ export function NoteCard({
                 dangerouslySetInnerHTML={{ __html: title }}
               />
               <div className="flex items-center gap-1 shrink-0">
+                {isSecured && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 px-2 py-0.5 rounded-full">
+                    <ShieldCheckIcon className="h-2.5 w-2.5" /> Secure
+                  </span>
+                )}
                 {isPrivate ? (
                   <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
                     <LockIcon className="h-2.5 w-2.5" /> Private
@@ -85,15 +94,27 @@ export function NoteCard({
             
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {tags.slice(0, 3).map((tag, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-secondary text-secondary-foreground rounded-full"
-                  >
-                    <TagIcon className="h-2 w-2" />
-                    {tag}
-                  </span>
-                ))}
+                {tags.slice(0, 3).map((tag, index) => {
+                  const color = tagColors?.[tag]
+                  return (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full font-medium"
+                      style={{
+                        backgroundColor: color ? `${color}20` : undefined,
+                        color: color || undefined,
+                      }}
+                    >
+                      {color && (
+                        <span
+                          className="inline-block w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                      )}
+                      {tag}
+                    </span>
+                  )
+                })}
                 {tags.length > 3 && (
                   <span className="text-xs text-muted-foreground">
                     +{tags.length - 3} more

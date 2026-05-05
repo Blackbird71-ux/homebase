@@ -16,6 +16,7 @@ import {
 interface Tag {
   id: string
   name: string
+  color?: string | null
 }
 
 interface TagSelectorProps {
@@ -82,24 +83,38 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
     <div className="space-y-2">
       <Label>Tags</Label>
       <div className="flex flex-wrap gap-2 p-2 border rounded-lg min-h-[42px]">
-        {value.map((tag) => (
-          <div
-            key={tag}
-            className="inline-flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary rounded-md"
-          >
-            <span>{tag}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-4 w-4 p-0 hover:bg-primary/20"
-              onClick={() => handleRemoveTag(tag)}
-              disabled={disabled}
+        {value.map((tagName) => {
+          const tag = allTags.find(t => t.name === tagName)
+          const color = tag?.color
+          return (
+            <div
+              key={tagName}
+              className="inline-flex items-center gap-1 px-2 py-1 text-sm rounded-md"
+              style={{
+                backgroundColor: color ? `${color}20` : undefined,
+                color: color || undefined,
+              }}
             >
-              <XIcon className="h-3 w-3" />
-            </Button>
-          </div>
-        ))}
+              {color && (
+                <span
+                  className="inline-block w-2 h-2 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+              )}
+              <span>{tagName}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-4 w-4 p-0 hover:bg-primary/20"
+                onClick={() => handleRemoveTag(tagName)}
+                disabled={disabled}
+              >
+                <XIcon className="h-3 w-3" />
+              </Button>
+            </div>
+          )
+        })}
         <button
           type="button"
           onClick={openModal}
@@ -157,7 +172,15 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
                         : 'hover:bg-muted'
                     }`}
                   >
-                    <span>{tag.name}</span>
+                    <span className="flex items-center gap-2">
+                      {tag.color && (
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                      )}
+                      {tag.name}
+                    </span>
                     {pending.includes(tag.name) && (
                       <XIcon className="h-3.5 w-3.5 opacity-60" />
                     )}

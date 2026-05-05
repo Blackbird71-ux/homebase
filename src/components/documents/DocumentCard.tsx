@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar } from 'lucide-react'
+import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar, ShieldCheckIcon, LockIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
@@ -37,6 +37,7 @@ export interface DocumentData {
   uploadedById: string
   createdAt: string
   updatedAt: string
+  isSecured?: boolean
   uploadedBy: {
     id: string
     name: string
@@ -101,6 +102,8 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
     document.expiryDate ? document.expiryDate.slice(0, 10) : ''
   )
   const [editRemindBefore, setEditRemindBefore] = useState(String(document.remindBefore))
+  const [editHasPin, setEditHasPin] = useState(!!(document as DocumentData & { pinHash?: string | null }).pinHash)
+  const [editPinCode, setEditPinCode] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -129,16 +132,22 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
   async function handleSave() {
     setSaving(true)
     try {
+      const body: Record<string, unknown> = {
+        title: editTitle,
+        category: editCategory,
+        notes: editNotes || null,
+        expiryDate: editExpiryDate || null,
+        remindBefore: parseInt(editRemindBefore, 10) || 30,
+      }
+      if (editHasPin) {
+        body.pin = editPinCode || null
+      } else {
+        body.pin = null
+      }
       const res = await fetch(`/api/documents/${document.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editTitle,
-          category: editCategory,
-          notes: editNotes || null,
-          expiryDate: editExpiryDate || null,
-          remindBefore: parseInt(editRemindBefore, 10) || 30,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error('Failed to update')
       const updated = await res.json()
@@ -170,6 +179,12 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
   return (
     <>
       <Card size="sm" className="relative">
+        {document.isSecured && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 text-xs text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/40 px-2 py-0.5 rounded-full z-10">
+            <ShieldCheckIcon className="h-3 w-3" />
+            Secure
+          </div>
+        )}
         {isExpired && (
           <div className="absolute top-2 right-2 flex items-center gap-1 text-xs text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
             <AlertTriangle className="h-3 w-3" />
@@ -269,6 +284,55 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
               </div>
             </div>
           </div>
+
+          {/* PIN Protection */}
+          <div className="p-3 border border-input rounded-md bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <LockIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">PIN Protection</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditHasPin(!editHasPin)
+                  if (editHasPin) setEditPinCode('')
+                }}
+                disabled={saving}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+                  editHasPin ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+                aria-checked={editHasPin}
+                role="switch"
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  editHasPin ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+            {editHasPin && (
+              <div className="mt-3 space-y-2">
+                <Label htmlFor="edit-doc-pin">
+                  {document.isSecured ? 'Enter new PIN (leave blank to keep current)' : 'Set a 4-6 digit PIN'}
+                </Label>
+                <Input
+                  id="edit-doc-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={editPinCode}
+                  onChange={(e) => setEditPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter PIN"
+                  disabled={saving}
+                />
+                <p className="text-xs text-muted-foreground">
+                  A PIN must be entered to view this document's content.
+                </p>
+              </div>
+            )}
+          </div>
+
           <DialogFooter showCloseButton>
             <Button onClick={handleSave} disabled={saving || !editTitle}>
               {saving ? 'Saving...' : 'Save'}

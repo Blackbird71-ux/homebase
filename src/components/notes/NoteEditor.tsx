@@ -19,14 +19,18 @@ interface NoteEditorProps {
   initialCategory?: string | null
   initialTags?: string[]
   initialIsPrivate?: boolean
+  initialPinHash?: string | null
   categories?: string[]
+  tagColors?: Record<string, string>
   onSubmit: (data: {
     title: string
     content: string
     category?: string | null
     tags?: string[]
     isPrivate?: boolean
+    pin?: string | null
   }) => void
+
   onCancel?: () => void
   isLoading?: boolean
 }
@@ -45,7 +49,9 @@ export function NoteEditor({
   initialCategory = null,
   initialTags = [],
   initialIsPrivate = false,
+  initialPinHash = null,
   categories = [],
+  tagColors,
   onSubmit,
   onCancel,
   isLoading = false,
@@ -54,6 +60,8 @@ export function NoteEditor({
   const [tags, setTags] = useState<string[]>(initialTags)
   const [newTag, setNewTag] = useState('')
   const [isPrivate, setIsPrivate] = useState(initialIsPrivate)
+  const [pinCode, setPinCode] = useState('')
+  const [hasPin, setHasPin] = useState(!!initialPinHash)
   const [textColor, setTextColor] = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
   const [fontSizeKey, setFontSizeKey] = useState(0)
@@ -100,8 +108,10 @@ export function NoteEditor({
       category: category || null,
       tags: tags.length > 0 ? tags : undefined,
       isPrivate,
+      pin: hasPin && pinCode ? pinCode : undefined,
     })
   }
+
 
   const addTag = () => {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
@@ -475,15 +485,71 @@ export function NoteEditor({
           </div>
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
-              {tags.map((tag) => (
-                <div key={tag} className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded-full">
-                  <TagIcon className="h-3 w-3" />
-                  {tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive" disabled={isLoading}>
-                    <XIcon className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
+              {tags.map((tag) => {
+                const color = tagColors?.[tag]
+                return (
+                  <div
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-3 py-1 text-sm rounded-full font-medium"
+                    style={{
+                      backgroundColor: color ? `${color}20` : undefined,
+                      color: color || undefined,
+                    }}
+                  >
+                    {color && (
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                    )}
+                    {tag}
+                    <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive" disabled={isLoading}>
+                      <XIcon className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {/* Existing tags selector */}
+          {tagColors && Object.keys(tagColors).length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-1.5">Existing tags — click to add:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(tagColors)
+                  .filter(([tagName]) => !tags.includes(tagName))
+                  .slice(0, 20)
+                  .map(([tagName, color]) => (
+                    <button
+                      key={tagName}
+                      type="button"
+                      onClick={() => {
+                        if (!tags.includes(tagName)) {
+                          setTags([...tags, tagName])
+                        }
+                      }}
+                      disabled={isLoading}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium transition-colors hover:opacity-80 border border-input"
+                      style={{
+                        backgroundColor: color ? `${color}15` : undefined,
+                        color: color || undefined,
+                      }}
+                    >
+                      {color && (
+                        <span
+                          className="inline-block w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                      )}
+                      {tagName}
+                    </button>
+                  ))}
+                {Object.keys(tagColors).filter(t => !tags.includes(t)).length > 20 && (
+                  <span className="text-xs text-muted-foreground self-center">
+                    +{Object.keys(tagColors).filter(t => !tags.includes(t)).length - 20} more
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -525,6 +591,55 @@ export function NoteEditor({
           )}
         </div>
       </div>
+
+      {/* PIN Protection */}
+      <div className="p-3 border border-input rounded-md bg-muted/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <LockIcon className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">PIN Protection</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setHasPin(!hasPin)
+              if (hasPin) setPinCode('')
+            }}
+            disabled={isLoading}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+              hasPin ? 'bg-primary' : 'bg-muted-foreground/30'
+            }`}
+            aria-checked={hasPin}
+            role="switch"
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+              hasPin ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        {hasPin && (
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="note-pin">
+              {initialPinHash ? 'Enter new PIN (leave blank to keep current)' : 'Set a 4-6 digit PIN'}
+            </Label>
+            <Input
+              id="note-pin"
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={pinCode}
+              onChange={(e) => setPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Enter PIN"
+              disabled={isLoading}
+            />
+            <p className="text-xs text-muted-foreground">
+              A PIN must be entered to view this note's content.
+            </p>
+          </div>
+        )}
+      </div>
+
 
       <div className="flex justify-end gap-2 pt-2">
         {onCancel && (

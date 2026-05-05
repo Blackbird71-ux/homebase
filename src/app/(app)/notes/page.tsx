@@ -20,6 +20,7 @@ async function getData(familyId: string, userId: string) {
       category: true,
       tags: true,
       isPrivate: true,
+      pinHash: true,
       createdBy: true,
       createdAt: true,
       updatedAt: true,
@@ -28,6 +29,18 @@ async function getData(familyId: string, userId: string) {
 
   const categories = Array.from(new Set(notes.map(note => note.category).filter(Boolean))) as string[]
 
+  // Fetch tag colors for the family
+  const tags = await prisma.tag.findMany({
+    where: { familyId },
+    select: { name: true, color: true },
+  })
+  const tagColors: Record<string, string> = {}
+  for (const tag of tags) {
+    if (tag.color) {
+      tagColors[tag.name] = tag.color
+    }
+  }
+
   return {
     notes: notes.map(note => ({
       id: note.id,
@@ -35,6 +48,7 @@ async function getData(familyId: string, userId: string) {
       content: note.content,
       category: note.category,
       isPrivate: note.isPrivate,
+      isSecured: !!note.pinHash,
       tags: (() => {
         if (!note.tags) return []
         try { return JSON.parse(note.tags) as string[] } catch { return [] }
@@ -44,11 +58,19 @@ async function getData(familyId: string, userId: string) {
       updatedAt: note.updatedAt.toISOString(),
     })),
     categories,
+    tagColors,
   }
 }
 
 export default async function NotesPage() {
   const user = await requireSession()
-  const { notes, categories } = await getData(user.familyId, user.id)
-  return <NotesClient initialNotes={notes} initialCategories={categories} currentUserId={user.id} />
+  const { notes, categories, tagColors } = await getData(user.familyId, user.id)
+  return (
+    <NotesClient
+      initialNotes={notes}
+      initialCategories={categories}
+      currentUserId={user.id}
+      tagColors={tagColors}
+    />
+  )
 }

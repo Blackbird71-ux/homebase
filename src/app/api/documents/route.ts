@@ -5,6 +5,8 @@ import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { createAuditLog } from '@/lib/audit-log'
+import { hashPin } from '@/lib/secure-unlock'
+
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -34,6 +36,7 @@ export async function GET(req: Request) {
       expiryDate: true,
       remindBefore: true,
       uploadedById: true,
+      pinHash: true,
       createdAt: true,
       updatedAt: true,
       uploadedBy: {
@@ -45,6 +48,8 @@ export async function GET(req: Request) {
   return NextResponse.json(
     documents.map((doc) => ({
       ...doc,
+      isSecured: !!doc.pinHash,
+      pinHash: undefined,
       expiryDate: doc.expiryDate?.toISOString() ?? null,
       createdAt: doc.createdAt.toISOString(),
       updatedAt: doc.updatedAt.toISOString(),
@@ -63,8 +68,16 @@ export async function POST(req: Request) {
     const notes = (formData.get('notes') as string) ?? null
     const expiryDate = (formData.get('expiryDate') as string) ?? null
     const remindBefore = parseInt((formData.get('remindBefore') as string) ?? '30', 10)
+    const pin = formData.get('pin') as string | null
+
+    // Hash PIN if provided
+    let pinHash: string | undefined
+    if (pin && typeof pin === 'string' && pin.length >= 4) {
+      pinHash = await hashPin(pin)
+    }
 
     if (!file || !title) {
+
       return NextResponse.json(
         { error: 'File and title are required' },
         { status: 400 }
@@ -94,10 +107,12 @@ export async function POST(req: Request) {
         fileSize: buffer.length,
         mimeType: file.type || 'application/octet-stream',
         notes,
+        pinHash: pinHash ?? null,
         expiryDate: expiryDate ? new Date(expiryDate) : null,
         remindBefore,
         uploadedById: user.id,
       },
+
       select: {
         id: true,
         title: true,
@@ -109,6 +124,7 @@ export async function POST(req: Request) {
         expiryDate: true,
         remindBefore: true,
         uploadedById: true,
+        pinHash: true,
         createdAt: true,
         updatedAt: true,
         uploadedBy: {
@@ -129,6 +145,8 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         ...document,
+        isSecured: !!document.pinHash,
+        pinHash: undefined,
         expiryDate: document.expiryDate?.toISOString() ?? null,
         createdAt: document.createdAt.toISOString(),
         updatedAt: document.updatedAt.toISOString(),
