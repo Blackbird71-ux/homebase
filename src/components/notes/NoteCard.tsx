@@ -83,7 +83,18 @@ export function NoteCard({
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {content ? (
+            {isSecured ? (
+              <div className="relative overflow-hidden">
+                <div className="text-sm text-muted-foreground line-clamp-3 blur-sm select-none [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_*]:!my-0 [&_ul]:pl-4 [&_ol]:pl-4"
+                  dangerouslySetInnerHTML={{ __html: content || '' }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs font-medium text-muted-foreground bg-background/80 px-3 py-1.5 rounded-full backdrop-blur-sm">
+                    🔒 PIN required to view
+                  </span>
+                </div>
+              </div>
+            ) : content ? (
               <div
                 className="text-sm text-muted-foreground line-clamp-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_*]:!my-0 [&_ul]:pl-4 [&_ol]:pl-4"
                 dangerouslySetInnerHTML={{ __html: content }}

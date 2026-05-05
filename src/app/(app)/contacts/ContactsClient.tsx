@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { PlusIcon, PhoneIcon, MailIcon, MapPinIcon, Trash2Icon, PencilIcon } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { PlusIcon, PhoneIcon, MailIcon, MapPinIcon, Trash2Icon, PencilIcon, LockIcon, UnlockIcon, ShieldCheckIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 
 interface Contact {
   id: string
@@ -30,6 +32,7 @@ interface Contact {
   email: string | null
   address: string | null
   notes: string | null
+  pinHash: string | null
   createdAt: string
   updatedAt: string
 }
@@ -84,7 +87,13 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
   const [email, setEmail] = useState('')
   const [address, setAddress] = useState('')
   const [notes, setNotes] = useState('')
+  const [pin, setPin] = useState('')
+  const [pinEnabled, setPinEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Unlock state
+  const [unlockContact, setUnlockContact] = useState<Contact | null>(null)
+  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
 
   // Derive the full list of categories to show (built-ins + any custom ones already in use)
   const customCatsInUse = [...new Set(
@@ -106,6 +115,8 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     setEmail('')
     setAddress('')
     setNotes('')
+    setPin('')
+    setPinEnabled(false)
     setDialogOpen(true)
   }
 
@@ -124,6 +135,8 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     setEmail(contact.email ?? '')
     setAddress(contact.address ?? '')
     setNotes(contact.notes ?? '')
+    setPin('')
+    setPinEnabled(!!contact.pinHash)
     setDialogOpen(true)
   }
 
@@ -140,13 +153,23 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
 
     setSaving(true)
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         name: name.trim(),
         category: finalCategory,
         phone: phone.trim() || null,
         email: email.trim() || null,
         address: address.trim() || null,
         notes: notes.trim() || null,
+      }
+
+      // Handle PIN
+      if (pinEnabled) {
+        if (pin) {
+          body.pin = pin
+        }
+        // If editing and pinEnabled but no new pin provided, keep existing pin
+      } else {
+        body.pin = '' // Remove PIN protection
       }
 
       const url = editingContact ? `/api/contacts/${editingContact.id}` : '/api/contacts'
@@ -188,6 +211,10 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     }
   }
 
+  const handleUnlocked = useCallback((contactId: string) => {
+    setUnlockedIds((prev) => new Set(prev).add(contactId))
+  }, [])
+
   // Group contacts by category — built-ins first (in order), then custom cats alphabetically
   const allCategoryValues = [
     ...BUILT_IN_CATEGORIES.map((c) => c.value),
@@ -224,57 +251,92 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
               {group.label} ({group.contacts.length})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {group.contacts.map((contact) => (
-                <Card key={contact.id} className="group">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                        <span>{getCategoryIcon(contact.category)}</span>
-                        {contact.name}
-                      </CardTitle>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEdit(contact)}
-                          className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
-                          aria-label="Edit contact"
-                        >
-                          <PencilIcon className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(contact.id, contact.name)}
-                          className="text-muted-foreground/40 hover:text-destructive transition-colors p-1"
-                          aria-label="Delete contact"
-                        >
-                          <Trash2Icon className="h-3.5 w-3.5" />
-                        </button>
+              {group.contacts.map((contact) => {
+                const isSecured = !!contact.pinHash
+                const isUnlocked = unlockedIds.has(contact.id)
+
+                return (
+                  <Card key={contact.id} className={`group ${isSecured && !isUnlocked ? 'relative overflow-hidden' : ''}`}>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                          <span>{getCategoryIcon(contact.category)}</span>
+                          {contact.name}
+                          {isSecured && (
+                            <ShieldCheckIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          )}
+                        </CardTitle>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {isSecured && !isUnlocked && (
+                            <button
+                              onClick={() => setUnlockContact(contact)}
+                              className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
+                              aria-label="Unlock contact"
+                            >
+                              <LockIcon className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openEdit(contact)}
+                            className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
+                            aria-label="Edit contact"
+                          >
+                            <PencilIcon className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(contact.id, contact.name)}
+                            className="text-muted-foreground/40 hover:text-destructive transition-colors p-1"
+                            aria-label="Delete contact"
+                          >
+                            <Trash2Icon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-1">
-                    {contact.phone && (
-                      <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                        <PhoneIcon className="h-3 w-3 shrink-0" />
-                        {contact.phone}
-                      </a>
-                    )}
-                    {contact.email && (
-                      <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                        <MailIcon className="h-3 w-3 shrink-0" />
-                        {contact.email}
-                      </a>
-                    )}
-                    {contact.address && (
-                      <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <MapPinIcon className="h-3 w-3 shrink-0 mt-0.5" />
-                        <span>{contact.address}</span>
-                      </div>
-                    )}
-                    {contact.notes && (
-                      <p className="text-[10px] text-muted-foreground/60 italic mt-1">{contact.notes}</p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardHeader>
+                    <CardContent className="space-y-1">
+                      {isSecured && !isUnlocked ? (
+                        <div className="flex flex-col items-center justify-center py-4 text-center">
+                          <LockIcon className="h-5 w-5 text-muted-foreground/50 mb-2" />
+                          <p className="text-xs text-muted-foreground/60">PIN required to view details</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 h-7 text-xs"
+                            onClick={() => setUnlockContact(contact)}
+                          >
+                            <UnlockIcon className="h-3 w-3 mr-1" />
+                            Unlock
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          {contact.phone && (
+                            <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                              <PhoneIcon className="h-3 w-3 shrink-0" />
+                              {contact.phone}
+                            </a>
+                          )}
+                          {contact.email && (
+                            <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                              <MailIcon className="h-3 w-3 shrink-0" />
+                              {contact.email}
+                            </a>
+                          )}
+                          {contact.address && (
+                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                              <MapPinIcon className="h-3 w-3 shrink-0 mt-0.5" />
+                              <span>{contact.address}</span>
+                            </div>
+                          )}
+                          {contact.notes && (
+                            <p className="text-[10px] text-muted-foreground/60 italic mt-1">{contact.notes}</p>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           </div>
         ))
@@ -335,6 +397,48 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
               <Label htmlFor="contact-notes">Notes</Label>
               <Input id="contact-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
             </div>
+
+            {/* PIN Protection Toggle */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LockIcon className="h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="contact-pin-toggle" className="font-medium">PIN Protection</Label>
+                </div>
+                <Switch
+                  id="contact-pin-toggle"
+                  checked={pinEnabled}
+                  onCheckedChange={(checked) => {
+                    setPinEnabled(checked)
+                    if (!checked) setPin('')
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {pinEnabled
+                  ? 'A PIN will be required to view this contact\'s details.'
+                  : editingContact && !!editingContact.pinHash
+                    ? 'Disable to remove PIN protection.'
+                    : 'Enable to protect this contact with a PIN.'}
+              </p>
+              {pinEnabled && (
+                <div className="mt-3 space-y-1.5">
+                  <Label htmlFor="contact-pin">PIN</Label>
+                  <Input
+                    id="contact-pin"
+                    type="password"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    placeholder={editingContact && !!editingContact.pinHash ? 'Leave blank to keep current PIN' : 'Enter a 4-10 digit PIN'}
+                    maxLength={10}
+                    className="max-w-[200px]"
+                  />
+                  {editingContact && !!editingContact.pinHash && (
+                    <p className="text-xs text-muted-foreground">Leave blank to keep the existing PIN.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -344,8 +448,20 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unlock Dialog */}
+      {unlockContact && (
+        <SecureUnlockDialog
+          open={!!unlockContact}
+          onOpenChange={(open) => {
+            if (!open) setUnlockContact(null)
+          }}
+          entityType="contact"
+          entityId={unlockContact.id}
+          entityName={unlockContact.name}
+          onUnlocked={() => handleUnlocked(unlockContact.id)}
+        />
+      )}
     </div>
   )
 }
-
-

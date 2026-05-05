@@ -17,10 +17,17 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { name, category, phone, email, address, notes } = body
+  const { name, category, phone, email, address, notes, pin } = body
 
   if (!name) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
+  }
+
+  // Hash PIN if provided
+  let pinHash: string | null = null
+  if (pin) {
+    const bcrypt = await import('bcryptjs')
+    pinHash = await bcrypt.hash(pin, 10)
   }
 
   const contact = await prisma.householdContact.create({
@@ -31,6 +38,7 @@ export async function POST(req: Request) {
       email: email ?? null,
       address: address ?? null,
       notes: notes ?? null,
+      pinHash,
       familyId: user.familyId,
     },
   })

@@ -48,7 +48,7 @@ export async function PATCH(req: Request) {
 
   const { theme, fontSize, lineHeight, fontWeight, weekStartsOn, doneItemColor, name, currentPassword, newPassword, uiPreferences } = body
 
-  if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'glass-dark', 'sunset', 'ocean', 'forest', 'high-contrast', 'high-contrast-dark', 'high-contrast-sunset', 'high-contrast-ocean', 'high-contrast-forest', 'high-contrast-midnight'].includes(theme)) {
+  if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'apple-pro', 'glass-dark', 'sunset', 'ocean', 'forest', 'high-contrast', 'high-contrast-dark', 'high-contrast-sunset', 'high-contrast-ocean', 'high-contrast-forest', 'high-contrast-midnight'].includes(theme)) {
     return NextResponse.json({ error: 'Invalid theme value' }, { status: 400 })
   }
   if (fontSize !== undefined && !['sm', 'base', 'lg', 'xl'].includes(fontSize)) {

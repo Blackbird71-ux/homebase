@@ -31,15 +31,13 @@
 | Budgeting module | Track household spending by category; complements shopping lists and recipe cost data | High | |
 | Push notifications | VAPID + service worker already in place — add subscription store and preferences UI | Medium | ✅ Done |
 | Secure notes/documents/contacts | PIN/password protection for sensitive notes, documents, and contacts with bcrypt hashing | Medium | ✅ Done |
+| Secure card appearance settings | Configurable blur/colour placeholder style for PIN-protected cards in Appearance settings | Low | ✅ Done |
+| Secure contacts full UI | PIN toggle in add/edit dialog, secure badge, content hiding, unlock flow for contacts | Low | ✅ Done |
+| Modern theme sidebar contrast fix | Sidebar nav uses sidebar-specific CSS variables for proper contrast in modern theme | Low | ✅ Done |
 | Audit log backup & truncate | One-click backup and cleanup of activity log entries older than 3 months | Low | ✅ Done |
 | Tag color picker | Visual color selection for tags with live preview in TagManager | Low | ✅ Done |
 | Category color picker | Visual color selection for ingredient categories with live preview | Low | ✅ Done |
-| Apple Pro theme | Premium high-contrast professional theme with refined typography and spacing | Low | ✅ Done |
-
-### Enhancements to Existing Features
-
-| Feature | Description | Effort | Status |
-|---|---|---|---|
+| Apple Pro theme | Premium high-contrast professional theme with refined typography and spacing | Low | ✅ Done
 | Meal plan templates | Save a week's meal plan as a named template and re-apply in future weeks | Medium | ✅ Done |
 | Recipe scaling | Multiply/halve ingredient quantities when viewing a recipe | Low | ✅ Done |
 | Shopping list price estimates | Optional unit price field on ListItem for estimating shop cost | Low | ✅ Done |

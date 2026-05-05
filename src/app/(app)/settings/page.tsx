@@ -106,6 +106,8 @@ export default async function SettingsPage() {
               initialFontWeight={user.fontWeight}
               initialWeekStartsOn={user.weekStartsOn}
               initialDoneItemColor={user.doneItemColor || 'RED'}
+              initialSecureCardStyle={user.uiPreferences ? (JSON.parse(user.uiPreferences)?.secureCardStyle ?? 'blur') : 'blur'}
+              initialSecureCardColor={user.uiPreferences ? (JSON.parse(user.uiPreferences)?.secureCardColor ?? 'default') : 'default'}
             />
           </TabsContent>
 

@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +17,8 @@ interface AppearanceTabProps {
   initialFontWeight: string
   initialWeekStartsOn: number
   initialDoneItemColor: string
+  initialSecureCardStyle?: string
+  initialSecureCardColor?: string
 }
 
 type Status = { type: 'success' | 'error'; message: string } | null
@@ -79,6 +82,21 @@ interface ShoppingListOption {
   name: string
 }
 
+const secureCardStyleOptions = [
+  { value: 'blur',   label: 'Blur',   description: 'Blur content with overlay' },
+  { value: 'color',  label: 'Colour', description: 'Show coloured placeholder' },
+] as const
+
+const secureCardColorOptions = [
+  { value: 'default',  label: 'Default',   swatch: 'bg-muted' },
+  { value: 'red',      label: 'Red',       swatch: 'bg-red-100 dark:bg-red-950/40' },
+  { value: 'blue',     label: 'Blue',      swatch: 'bg-blue-100 dark:bg-blue-950/40' },
+  { value: 'green',    label: 'Green',     swatch: 'bg-green-100 dark:bg-green-950/40' },
+  { value: 'amber',    label: 'Amber',     swatch: 'bg-amber-100 dark:bg-amber-950/40' },
+  { value: 'purple',   label: 'Purple',    swatch: 'bg-purple-100 dark:bg-purple-950/40' },
+  { value: 'pink',     label: 'Pink',      swatch: 'bg-pink-100 dark:bg-pink-950/40' },
+] as const
+
 export function AppearanceTab({
   initialTheme,
   initialFontSize,
@@ -86,6 +104,8 @@ export function AppearanceTab({
   initialFontWeight,
   initialWeekStartsOn,
   initialDoneItemColor,
+  initialSecureCardStyle = 'blur',
+  initialSecureCardColor = 'default',
 }: AppearanceTabProps) {
   const { setTheme } = useTheme()
   const [theme, setLocalTheme] = useState(initialTheme)
@@ -94,6 +114,8 @@ export function AppearanceTab({
   const [fontWeight, setFontWeight] = useState(initialFontWeight)
   const [weekStartsOn, setWeekStartsOn] = useState(initialWeekStartsOn)
   const [doneItemColor, setDoneItemColor] = useState(initialDoneItemColor)
+  const [secureCardStyle, setSecureCardStyle] = useState(initialSecureCardStyle)
+  const [secureCardColor, setSecureCardColor] = useState(initialSecureCardColor)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<Status>(null)
 
@@ -118,6 +140,12 @@ export function AppearanceTab({
           if (prefs?.dashboardShoppingListId) {
             setDashboardShoppingListId(prefs.dashboardShoppingListId)
           }
+          if (prefs?.secureCardStyle) {
+            setSecureCardStyle(prefs.secureCardStyle)
+          }
+          if (prefs?.secureCardColor) {
+            setSecureCardColor(prefs.secureCardColor)
+          }
         }
       } catch {
         // ignore
@@ -139,7 +167,11 @@ export function AppearanceTab({
         fontWeight,
         weekStartsOn,
         doneItemColor,
-        uiPreferences: { dashboardShoppingListId: dashboardShoppingListId || null },
+        uiPreferences: {
+          dashboardShoppingListId: dashboardShoppingListId || null,
+          secureCardStyle,
+          secureCardColor,
+        },
       }
 
       const res = await fetch('/api/settings', {
@@ -354,6 +386,64 @@ export function AppearanceTab({
               </button>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Secure Card Appearance */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Secure Card Appearance</CardTitle>
+          <CardDescription>
+            How PIN-protected notes and contacts appear on cards before unlocking.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label className="text-sm font-medium mb-2 block">Style</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {secureCardStyleOptions.map(({ value, label, description }) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={secureCardStyle === value}
+                  onClick={() => setSecureCardStyle(value)}
+                  className={cn(
+                    'flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-colors text-left',
+                    secureCardStyle === value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-muted-foreground/30'
+                  )}
+                >
+                  <span className="text-sm font-medium">{label}</span>
+                  <span className="text-xs text-muted-foreground">{description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {secureCardStyle === 'color' && (
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Placeholder Colour</Label>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                {secureCardColorOptions.map(({ value, label, swatch }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={secureCardColor === value}
+                    onClick={() => setSecureCardColor(value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-colors',
+                      secureCardColor === value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-muted-foreground/30'
+                    )}
+                  >
+                    <div className={cn('w-6 h-6 rounded-full shrink-0', swatch)} />
+                    <span className="text-[10px] font-medium truncate w-full text-center">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -20,6 +20,7 @@ export default async function ContactsPage() {
         <ContactsClient
           initialContacts={contacts.map((c) => ({
             ...c,
+            pinHash: c.pinHash,
             createdAt: c.createdAt.toISOString(),
             updatedAt: c.updatedAt.toISOString(),
           }))}

@@ -102,7 +102,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
                 isActive
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -117,13 +117,13 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         <Link
           href="/settings"
           title={collapsed ? 'Settings' : undefined}
-          className={cn(
-            'flex items-center rounded-md text-sm font-medium transition-colors',
-            collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-            pathname.startsWith('/settings')
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-          )}
+              className={cn(
+                'flex items-center rounded-md text-sm font-medium transition-colors',
+                collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
+                pathname.startsWith('/settings')
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
+              )}
         >
           <Settings className="h-4 w-4 shrink-0" />
           {!collapsed && 'Settings'}
@@ -133,7 +133,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           onClick={() => signOut({ callbackUrl: '/login' })}
           title={collapsed ? 'Sign out' : undefined}
           className={cn(
-            'flex w-full items-center rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors',
+            'flex w-full items-center rounded-md text-sm font-medium text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors',
             collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
           )}
         >

@@ -15,6 +15,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // Handle PIN changes
+  let pinHash = existing.pinHash
+  if (body.pin !== undefined) {
+    if (body.pin) {
+      const bcrypt = await import('bcryptjs')
+      pinHash = await bcrypt.hash(body.pin, 10)
+    } else {
+      pinHash = null // Remove PIN protection
+    }
+  }
+
   const contact = await prisma.householdContact.update({
     where: { id },
     data: {
@@ -24,6 +35,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.email !== undefined ? { email: body.email } : {}),
       ...(body.address !== undefined ? { address: body.address } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
+      ...(body.pin !== undefined ? { pinHash } : {}),
     },
   })
 

@@ -74,6 +74,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Family-based note sharing
 - **PIN Protection**: Optional PIN-based security for sensitive notes
 - **Secure Unlock**: bcrypt-hashed PIN verification with 15-minute session cookies
+- **Content Masking**: Locked note content is blurred with "PIN required to view" overlay on cards
 
 #### 9. **Advanced Theming System** (New in Phase 7)
 - **AdvancedThemeProvider**: Extended theme management

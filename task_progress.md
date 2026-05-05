@@ -1,15 +1,12 @@
 # Task Progress
 
-## Todo List
-
-- [x] Analyze codebase and create plan
-- [x] **1. Premium Theme Updates** - Update globals.css with glassmorphism for all non-high-contrast themes
-- [x] **2. Colored Tags on Recipes** - Update RecipeCard, RecipeDetail, TagCloud, TagSelector to show tag colors
-- [x] **3. Colored Tags on Notes** - Update NoteCard, NoteDetail, NoteEditor to show tag colors with name→color lookup
-- [x] **4. Notes Family/Private/Secure Tabs** - Update NotesClient and notes page with tabbed interface
-- [x] **5. PIN Protection UI** - Add PIN input to NoteEditor, DocumentUploadDialog, DocumentCard
-- [x] **6. Note Detail PIN Unlock** - Add unlock UI to NoteDetail page
-- [x] **7. Document Card PIN Status** - Show lock status on document cards
-- [x] **8. Document PIN API routes** - Create/update documents/[id]/unlock route, update PATCH/POST/GET for pinHash
-- [x] **9. Note PIN API routes** - Update notes/[id]/route.ts PUT to handle PIN changes
-- [x] **10. Tag Selector List in NoteEditor** - Show existing tags as clickable buttons in NoteEditor
+- [x] Analyze codebase and understand all issues
+- [ ] **Issue 1**: Hide secure note content on NoteCard (show blurred/blur placeholder)
+- [ ] **Issue 2**: Add secure card appearance settings (blur/color) in AppearanceTab
+- [ ] **Issue 3**: Fix modern theme sidebar nav contrast for unselected items
+- [ ] **Issue 4**: Fix "Apple pro" invalid theme value issue
+- [ ] **Issue 5**: Implement secure contacts (PIN protection UI, badge, content hiding)
+  - [ ] Update contacts API routes to support pinHash
+  - [ ] Update ContactsClient with PIN toggle in dialog
+  - [ ] Show secure badge and hide content on secured contacts
+  - [ ] Add unlock flow for secured contacts
