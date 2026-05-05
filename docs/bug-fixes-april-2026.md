@@ -440,14 +440,16 @@ After moving the whole entry to Tuesday, the Monday slot became empty. Trying to
 - `src/components/meal-plan/MealSlotCell.tsx` — individual recipe draggability
 - `src/components/meal-plan/MealPlanGrid.tsx` — recipe-level drag handling
 
-### Bug 23b: Cannot drag individual recipes to empty meal slots
+### Bug 23b: Cannot drag individual recipes to empty meal slots — hard to target
 
 **Root Cause:** In compact (mobile) mode, `DailyMealColumn` only rendered `DroppableMealSlot` for `recipeFilledMealTypes` — meal types that already had recipes. Empty slots had no DOM element with a `useDroppable` hook, so `@dnd-kit` couldn't detect drops on them.
 
-**Fix:** Changed compact mode to render `DroppableMealSlot` for ALL meal types. Empty slots are visually collapsed to a 2px strip (`h-0 overflow-hidden min-h-[2px]`) to keep them in the DOM for drag detection, and expand to a visible drop zone (`min-h-[40px] py-1`) when something is dragged over them.
+**Fix (v1):** Changed compact mode to render `DroppableMealSlot` for ALL meal types. Empty slots were collapsed to a 2px strip (`h-0 overflow-hidden min-h-[2px]`) to keep them in the DOM for drag detection, and expanded to a visible drop zone when dragged over.
+
+**Fix (v2 — final):** The 2px strip was too hard to target. Empty slots now render as thin but clearly visible dashed-border drop zones (~28px tall) with the meal type icon, label, and a "— drop recipe here" hint text. On drag-over they expand with a blue highlight ring and "— drop to add" text. Filled slots remain unchanged. The `MealSlotCell` is only rendered for non-empty slots to save DOM nodes.
 
 **Files modified:**
-- `src/components/meal-plan/DailyMealColumn.tsx` — render all meal type droppable slots in compact mode; collapse empty ones visually
+- `src/components/meal-plan/DailyMealColumn.tsx` — render all meal type droppable slots in compact mode; empty slots show as visible dashed drop zones
 
 ## Testing
 
