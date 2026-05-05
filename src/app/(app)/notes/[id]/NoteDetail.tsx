@@ -37,7 +37,11 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [unlockPin, setUnlockPin] = useState('')
   const [isUnlocking, setIsUnlocking] = useState(false)
-  const [isLocked, setIsLocked] = useState(note.isLocked ?? false)
+  // Always start secured notes as locked on the client side.
+  // The server-side cookie check (note.isLocked) is used for SSR content hiding,
+  // but on page refresh the cookie-clearing sendBeacon may not complete in time,
+  // so we always require explicit unlock for secured items.
+  const [isLocked, setIsLocked] = useState(note.isSecured ? true : false)
   const [unlockError, setUnlockError] = useState('')
 
   // Lock the note by calling the lock API and updating local state
