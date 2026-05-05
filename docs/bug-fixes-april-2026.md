@@ -440,7 +440,17 @@ After moving the whole entry to Tuesday, the Monday slot became empty. Trying to
 - `src/components/meal-plan/MealSlotCell.tsx` — individual recipe draggability
 - `src/components/meal-plan/MealPlanGrid.tsx` — recipe-level drag handling
 
+### Bug 23b: Cannot drag individual recipes to empty meal slots
+
+**Root Cause:** In compact (mobile) mode, `DailyMealColumn` only rendered `DroppableMealSlot` for `recipeFilledMealTypes` — meal types that already had recipes. Empty slots had no DOM element with a `useDroppable` hook, so `@dnd-kit` couldn't detect drops on them.
+
+**Fix:** Changed compact mode to render `DroppableMealSlot` for ALL meal types. Empty slots are visually collapsed to a 2px strip (`h-0 overflow-hidden min-h-[2px]`) to keep them in the DOM for drag detection, and expand to a visible drop zone (`min-h-[40px] py-1`) when something is dragged over them.
+
+**Files modified:**
+- `src/components/meal-plan/DailyMealColumn.tsx` — render all meal type droppable slots in compact mode; collapse empty ones visually
+
 ## Testing
+
 
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
 2. **Event display:** Create an event for tomorrow, verify it shows as "Tomorrow" on the home page
