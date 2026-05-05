@@ -73,6 +73,7 @@ function DroppableMealSlot({
   })
 
   const Icon = mealType.icon
+  const isEmpty = !entry || !entry.recipes || entry.recipes.length === 0
 
   return (
     <div
@@ -80,6 +81,10 @@ function DroppableMealSlot({
       className={cn(
         'flex flex-col gap-1 rounded-lg transition-colors',
         compact ? '' : 'p-0.5 -mx-0.5',
+        // In compact mode, empty slots are collapsed to a thin strip
+        // but expand when something is dragged over them
+        compact && isEmpty && !isOver && 'h-0 overflow-hidden min-h-[2px]',
+        compact && isEmpty && isOver && 'min-h-[40px] py-1',
         isOver && 'bg-primary/10 ring-2 ring-primary/40 ring-dashed'
       )}
     >
@@ -171,33 +176,32 @@ export function DailyMealColumn({
           </p>
         </div>
 
-        {/* Filled meal slots with natural height — only those with a recipe */}
-        {recipeFilledMealTypes.length > 0 && (
-          <div className="flex flex-col gap-2 pl-1">
-            {recipeFilledMealTypes.map((mealType) => {
-              const entry = getEntryForMealType(mealType.id)!
-              const isSelected = selectedMealIds.has(entry.id)
-              const isNewlyMoved = newlyMovedEntryIds.has(entry.id)
+        {/* All meal slots — filled ones visible, empty ones are minimal droppable targets */}
+        <div className="flex flex-col gap-2 pl-1">
+          {MEAL_TYPES.map((mealType) => {
+            const entry = getEntryForMealType(mealType.id)
+            const isFilled = entry && entry.recipes && entry.recipes.length > 0
+            const isSelected = entry ? selectedMealIds.has(entry.id) : false
+            const isNewlyMoved = entry ? newlyMovedEntryIds.has(entry.id) : false
 
-              return (
-                <DroppableMealSlot
-                  key={mealType.id}
-                  date={date}
-                  mealType={mealType}
-                  entry={entry}
-                  isNewlyMoved={isNewlyMoved}
-                  selectMode={selectMode}
-                  isSelected={isSelected}
-                  onToggleMealSelect={onToggleMealSelect}
-                  onMealClick={onMealClick}
-                  onMealClear={onMealClear}
-                  onMealAddToGroceries={onMealAddToGroceries}
-                  compact
-                />
-              )
-            })}
-          </div>
-        )}
+            return (
+              <DroppableMealSlot
+                key={mealType.id}
+                date={date}
+                mealType={mealType}
+                entry={entry ?? undefined}
+                isNewlyMoved={isNewlyMoved}
+                selectMode={selectMode}
+                isSelected={isSelected}
+                onToggleMealSelect={onToggleMealSelect}
+                onMealClick={onMealClick}
+                onMealClear={onMealClear}
+                onMealAddToGroceries={onMealAddToGroceries}
+                compact
+              />
+            )
+          })}
+        </div>
 
         {/* No meals state + add button */}
         {recipeFilledMealTypes.length === 0 && (
