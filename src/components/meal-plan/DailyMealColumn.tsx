@@ -174,11 +174,11 @@ export function DailyMealColumn({
 
   if (compact) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         {/* Day header — horizontal for compact */}
         <div className="flex items-center gap-2">
           <div className={cn(
-            "text-sm h-7 w-7 flex items-center justify-center rounded-full shrink-0",
+            "text-sm h-6 w-6 flex items-center justify-center rounded-full shrink-0",
             isToday ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground"
           )}>
             {new Date(date + 'T00:00:00').getDate()}
@@ -192,7 +192,7 @@ export function DailyMealColumn({
         </div>
 
         {/* All meal slots — filled ones visible, empty ones are minimal droppable targets */}
-        <div className="flex flex-col gap-2 pl-1">
+        <div className="flex flex-col gap-1 pl-1">
           {MEAL_TYPES.map((mealType) => {
             const entry = getEntryForMealType(mealType.id)
             const isFilled = entry && entry.recipes && entry.recipes.length > 0

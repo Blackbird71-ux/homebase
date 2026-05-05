@@ -158,7 +158,7 @@ export function MealSlotCell({
       <button
         onClick={onClick}
         className={cn(
-          'w-full h-16 flex items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors',
+          'w-full h-12 flex items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors',
           mealColor
         )}
         aria-label="Add meal"
@@ -173,8 +173,8 @@ export function MealSlotCell({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group relative w-full rounded-lg border bg-card px-2 py-1.5 flex items-start gap-1.5 cursor-pointer transition-colors',
-        naturalHeight ? 'min-h-[2.5rem]' : 'h-16',
+        'group relative w-full rounded-lg border bg-card px-2 py-1 flex items-start gap-1.5 cursor-pointer transition-colors',
+        naturalHeight ? 'min-h-[2rem]' : 'h-14',
         isDragging ? 'opacity-30 border-primary/30' : 'hover:border-primary/50',
         isDragOverlay ? 'shadow-xl border-primary/50 bg-card rotate-2 scale-105' : 'border-border',
         isNewlyMoved && 'border-primary/40 bg-primary/5 ring-1 ring-primary/20',
@@ -201,7 +201,7 @@ export function MealSlotCell({
         <img
           src={firstImage}
           alt=""
-          className="h-7 w-7 rounded object-cover shrink-0 mt-0.5"
+          className="h-6 w-6 rounded object-cover shrink-0 mt-0.5"
         />
       )}
 

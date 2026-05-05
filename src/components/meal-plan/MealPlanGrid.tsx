@@ -636,7 +636,7 @@ export function MealPlanGrid({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col gap-4 p-4 md:p-6 h-full overflow-hidden">
+      <div className="flex flex-col gap-2 p-3 md:p-4 h-full overflow-hidden">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-semibold shrink-0">Meal Plan</h1>
 
@@ -723,14 +723,14 @@ export function MealPlanGrid({
         </p>
 
         {/* ── Stacked day cards (one per day, full width) ── */}
-        <div className="flex-1 overflow-y-auto flex flex-col gap-3 pb-2">
+        <div className="flex-1 overflow-y-auto flex flex-col gap-2 pb-2">
           {days.map((day) => {
             const ymd = toYMD(day)
             const dayEntries = entries.filter((e) => e.date.slice(0, 10) === ymd)
             return (
               <div
                 key={ymd}
-                className={`rounded-xl border p-3 ${ymd === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}
+                className={`rounded-xl border p-2 ${ymd === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}
               >
                 <DailyMealColumn
                   date={ymd}
