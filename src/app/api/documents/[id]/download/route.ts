@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { getUnlockCookieName, isUnlockTokenValid } from '@/lib/secure-unlock'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 
@@ -17,6 +19,21 @@ export async function GET(
 
   if (!document) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  // Check if document is PIN-protected and needs unlocking
+  if (document.pinHash) {
+    const cookieStore = await cookies()
+    const cookieName = getUnlockCookieName('document', id)
+    const unlockCookie = cookieStore.get(cookieName)
+    const isUnlocked = unlockCookie?.value && isUnlockTokenValid(unlockCookie.value)
+
+    if (!isUnlocked) {
+      return NextResponse.json(
+        { error: 'Document is PIN-protected. Please unlock first.' },
+        { status: 403 }
+      )
+    }
   }
 
   try {

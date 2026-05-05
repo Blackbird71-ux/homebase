@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,9 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar, ShieldCheckIcon, LockIcon } from 'lucide-react'
+import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar, ShieldCheckIcon, LockIcon, UnlockIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 
 export interface DocumentData {
   id: string
@@ -106,6 +107,29 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
   const [editPinCode, setEditPinCode] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // Unlock state
+  const [isUnlocked, setIsUnlocked] = useState(false)
+  const [showUnlockDialog, setShowUnlockDialog] = useState(false)
+
+  // Lock the document by calling the lock API and updating local state
+  const handleLock = useCallback(async () => {
+    try {
+      await fetch(`/api/documents/${document.id}/lock`, { method: 'POST' })
+    } catch {
+      // Silently fail
+    }
+    setIsUnlocked(false)
+  }, [document.id])
+
+  // Lock the document when the component unmounts (user navigates away)
+  useEffect(() => {
+    return () => {
+      if (isUnlocked) {
+        fetch(`/api/documents/${document.id}/lock`, { method: 'POST' }).catch(() => {})
+      }
+    }
+  }, [document.id, isUnlocked])
 
   const daysUntilExpiry = document.expiryDate ? getDaysUntilExpiry(document.expiryDate) : null
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry <= document.remindBefore && daysUntilExpiry > 0
@@ -228,10 +252,23 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
             </p>
           )}
           <div className="flex items-center gap-1 mt-3">
-            <Button variant="ghost" size="xs" onClick={handleDownload}>
-              <Download className="h-3 w-3 mr-1" />
-              Download
-            </Button>
+            {document.isSecured && !isUnlocked ? (
+              <Button variant="ghost" size="xs" onClick={() => setShowUnlockDialog(true)}>
+                <LockIcon className="h-3 w-3 mr-1" />
+                Unlock to Download
+              </Button>
+            ) : (
+              <Button variant="ghost" size="xs" onClick={handleDownload}>
+                <Download className="h-3 w-3 mr-1" />
+                Download
+              </Button>
+            )}
+            {document.isSecured && isUnlocked && (
+              <Button variant="ghost" size="xs" onClick={handleLock}>
+                <LockIcon className="h-3 w-3 mr-1" />
+                Lock
+              </Button>
+            )}
             <Button variant="ghost" size="xs" onClick={() => setEditOpen(true)}>
               <Edit3 className="h-3 w-3 mr-1" />
               Edit
@@ -340,6 +377,23 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unlock Dialog */}
+      {document.isSecured && (
+        <SecureUnlockDialog
+          open={showUnlockDialog}
+          onOpenChange={(open) => {
+            if (!open) setShowUnlockDialog(false)
+          }}
+          entityType="document"
+          entityId={document.id}
+          entityName={document.title}
+          onUnlocked={() => {
+            setIsUnlocked(true)
+            setShowUnlockDialog(false)
+          }}
+        />
+      )}
 
       {/* Delete Confirmation */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

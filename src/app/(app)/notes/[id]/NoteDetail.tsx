@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -40,6 +40,32 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
   const [isLocked, setIsLocked] = useState(note.isLocked ?? false)
   const [unlockError, setUnlockError] = useState('')
 
+  // Lock the note by calling the lock API and updating local state
+  const handleLock = useCallback(async () => {
+    try {
+      await fetch(`/api/notes/${note.id}/lock`, { method: 'POST' })
+    } catch {
+      // Silently fail — cookie will expire naturally
+    }
+    setIsLocked(true)
+  }, [note.id])
+
+  // Lock the note when the component unmounts (user navigates away) or page is refreshed/closed
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Use sendBeacon for reliable delivery on page unload
+      navigator.sendBeacon(`/api/notes/${note.id}/lock`, '')
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Fire-and-forget: lock the note on unmount
+      fetch(`/api/notes/${note.id}/lock`, { method: 'POST' }).catch(() => {})
+    }
+  }, [note.id])
+
   const handleUnlock = async () => {
     if (!unlockPin) return
     setIsUnlocking(true)
@@ -66,6 +92,7 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
       setIsUnlocking(false)
     }
   }
+
 
   const handleUpdate = async (data: {
     title: string
@@ -254,6 +281,16 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
         </div>
         
         <div className="flex gap-2">
+          {note.isSecured && (
+            <Button
+              variant="outline"
+              onClick={handleLock}
+              disabled={isLoading || isDeleting}
+            >
+              <LockIcon className="h-4 w-4 mr-2" />
+              Lock
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => setIsEditing(true)}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PlusIcon, PhoneIcon, MailIcon, MapPinIcon, Trash2Icon, PencilIcon, LockIcon, UnlockIcon, ShieldCheckIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -94,6 +94,40 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
   // Unlock state
   const [unlockContact, setUnlockContact] = useState<Contact | null>(null)
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
+
+  // Lock a contact by calling the lock API and updating local state
+  const handleLock = useCallback(async (contactId: string) => {
+    try {
+      await fetch(`/api/contacts/${contactId}/lock`, { method: 'POST' })
+    } catch {
+      // Silently fail
+    }
+    setUnlockedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(contactId)
+      return next
+    })
+  }, [])
+
+  // Lock all unlocked contacts when the component unmounts (user navigates away)
+  // or page is refreshed/closed
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      unlockedIds.forEach((id) => {
+        navigator.sendBeacon(`/api/contacts/${id}/lock`, '')
+      })
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Fire-and-forget: lock all currently unlocked contacts
+      unlockedIds.forEach((id) => {
+        fetch(`/api/contacts/${id}/lock`, { method: 'POST' }).catch(() => {})
+      })
+    }
+  }, [unlockedIds])
 
   // Derive the full list of categories to show (built-ins + any custom ones already in use)
   const customCatsInUse = [...new Set(
@@ -274,6 +308,15 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
                               <LockIcon className="h-3.5 w-3.5" />
                             </button>
                           )}
+                          {isSecured && isUnlocked && (
+                            <button
+                              onClick={() => handleLock(contact.id)}
+                              className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
+                              aria-label="Lock contact"
+                            >
+                              <UnlockIcon className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => openEdit(contact)}
                             className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
@@ -328,6 +371,19 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
                           )}
                           {contact.notes && (
                             <p className="text-[10px] text-muted-foreground/60 italic mt-1">{contact.notes}</p>
+                          )}
+                          {isSecured && (
+                            <div className="pt-2">
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                className="h-6 text-xs text-muted-foreground/60 hover:text-foreground"
+                                onClick={() => handleLock(contact.id)}
+                              >
+                                <LockIcon className="h-3 w-3 mr-1" />
+                                Lock
+                              </Button>
+                            </div>
                           )}
                         </>
                       )}

@@ -5,7 +5,14 @@
       "PowerShell(cd C:\\\\Appdev\\\\HomeBase; npx tsc --noEmit 2>&1 | Where-Object { $_ -match \"offline-queue|OfflineBanner|AppShell|ShoppingList|sw\\\\.js|layout\\\\.tsx\" })",
       "PowerShell(cd C:\\\\Appdev\\\\HomeBase; $out = npx tsc --noEmit 2>&1; $out | Where-Object { $_ -notmatch \"notes\" })",
       "PowerShell(cd C:\\\\Appdev\\\\HomeBase; npx tsc --noEmit 2>&1 > C:\\\\temp\\\\tsc-out.txt; Get-Content C:\\\\temp\\\\tsc-out.txt | Where-Object { $_ -notmatch \"notes\" })",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(Get-Content -Path 'c:\\\\Appdev\\\\HomeBase\\\\src\\\\app\\\\\\(app\\)\\\\chores\\\\ChoreDialog.tsx' -TotalCount 100)",
+      "Bash(ls -la \"c:\\\\Appdev\\\\HomeBase\\\\\" | head -20)",
+      "Read(//c/Appdev/**)",
+      "Bash(PowerShell -Command \"Get-ChildItem -Path 'c:\\\\Appdev\\\\HomeBase\\\\node_modules\\\\next\\\\dist\\\\docs' -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(dir \"c:\\\\Appdev\\\\HomeBase\\\\src\\\\app\\\\api\" -Directory)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Appdev\\\\HomeBase\\\\src\\\\app\\\\api\" -Directory | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Appdev\\\\HomeBase\" -File | Where-Object { $_.Name -match \"^server\\\\.\\(ts|js\\)$\" })"
     ]
   }
 }

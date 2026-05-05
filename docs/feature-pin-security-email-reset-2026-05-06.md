@@ -36,6 +36,18 @@ Implemented PIN security bug fixes, PIN reset via email with UI-managed SMTP con
 | `src/app/api/settings/email/test/route.ts` | Test email endpoint (admin-only) |
 | `src/app/(app)/settings/page.tsx` | Added Email tab (admin-only) |
 
+### Lock-on-Navigate-Away for Secure Items
+
+| File | Change |
+|------|--------|
+| `src/app/api/notes/[id]/lock/route.ts` | **New** — POST endpoint that clears the unlock cookie for notes |
+| `src/app/api/documents/[id]/lock/route.ts` | **New** — POST endpoint that clears the unlock cookie for documents |
+| `src/app/api/contacts/[id]/lock/route.ts` | **New** — POST endpoint that clears the unlock cookie for contacts |
+| `src/app/(app)/notes/[id]/NoteDetail.tsx` | Added `beforeunload` listener (sendBeacon) + useEffect cleanup to lock on navigate away/refresh; added Lock button in header |
+| `src/app/(app)/contacts/ContactsClient.tsx` | Added `beforeunload` listener (sendBeacon for all unlocked contacts) + useEffect cleanup; added Lock buttons in hover actions and card body |
+| `src/components/documents/DocumentCard.tsx` | Added unlock/lock state, `SecureUnlockDialog`, `beforeunload` listener + useEffect cleanup; "Unlock to Download" button for locked secured docs; Lock button for unlocked secured docs |
+| `src/app/api/documents/[id]/download/route.ts` | Added server-side unlock cookie check — returns 403 if document is PIN-protected and not unlocked |
+
 ### Help Content Updates
 
 | File | Description |
