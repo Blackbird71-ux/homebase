@@ -50,6 +50,8 @@ interface Chore {
   nextDueDate: string | null
   triggerOnComplete: boolean
   autoRotateOnComplete: boolean
+  emailReminder: boolean
+  emailReminderDays: number
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string
@@ -92,6 +94,8 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [endDate, setEndDate] = useState(toDateInputValue(chore?.endDate ?? null))
   const [triggerOnComplete, setTriggerOnComplete] = useState(chore?.triggerOnComplete ?? false)
   const [autoRotateOnComplete, setAutoRotateOnComplete] = useState(chore?.autoRotateOnComplete ?? false)
+  const [emailReminder, setEmailReminder] = useState(chore?.emailReminder ?? false)
+  const [emailReminderDays, setEmailReminderDays] = useState(chore?.emailReminderDays?.toString() ?? '1')
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -114,6 +118,8 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         endDate: endDate || null,
         triggerOnComplete,
         autoRotateOnComplete,
+        emailReminder,
+        emailReminderDays: parseInt(emailReminderDays) || 1,
       }
 
       // For monthly chores, auto-set dayOfMonth from start date if not explicitly set
@@ -287,6 +293,33 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                 onCheckedChange={setAutoRotateOnComplete}
               />
             </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="chore-email-reminder">Email reminder</Label>
+                <p className="text-xs text-muted-foreground">
+                  Send an email to the assignee before the due date
+                </p>
+              </div>
+              <Switch
+                id="chore-email-reminder"
+                checked={emailReminder}
+                onCheckedChange={setEmailReminder}
+              />
+            </div>
+            {emailReminder && (
+              <div className="space-y-1.5 pl-1">
+                <Label htmlFor="chore-reminder-days">Remind how many days before due?</Label>
+                <Input
+                  id="chore-reminder-days"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={emailReminderDays}
+                  onChange={(e) => setEmailReminderDays(e.target.value)}
+                  className="w-24"
+                />
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter>

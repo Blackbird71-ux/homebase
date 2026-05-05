@@ -26,7 +26,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { title, description, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate } = body
+  const { title, description, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails } = body
 
   const existing = await prisma.event.findFirst({
     where: { id, familyId: user.familyId },
@@ -56,6 +56,9 @@ export async function PUT(
       ...(recurrenceRule !== undefined && { recurrenceRule: recurrenceRule ?? null }),
       ...(isRecurring !== undefined && { isRecurring }),
       ...(recurrenceEndDate !== undefined && { recurrenceEndDate: recurrenceEndDate ? new Date(recurrenceEndDate) : null }),
+      ...(emailReminder !== undefined && { emailReminder }),
+      ...(emailReminderHours !== undefined && { emailReminderHours }),
+      ...(emailReminderEmails !== undefined && { emailReminderEmails: emailReminderEmails ? JSON.stringify(emailReminderEmails) : null }),
     },
   })
 

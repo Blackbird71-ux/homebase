@@ -88,13 +88,18 @@ model Event {
   googleCalendarSyncs  GoogleCalendarSync[]
   attendees            EventAttendee[]
   createdAt            DateTime               @default(now())
-  
+
   // Recurrence fields
   recurrenceRule       String?                // RRULE string (e.g., "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
   recurrenceEndDate    DateTime?              // When recurrence ends
   recurrenceExceptions String?                // JSON array of exception dates
   seriesId             String?                // ID linking events in a series
   isRecurring          Boolean                @default(false)
+
+  // Email reminder fields
+  emailReminder        Boolean                @default(false)  // Send reminder email before event
+  emailReminderHours   Int                    @default(24)     // Hours before start to send reminder
+  emailReminderEmails  String?                // JSON array of extra recipient emails (non-family)
 }
 
 model EventAttendee {
@@ -389,6 +394,8 @@ model Chore {
   nextDueDate          DateTime?          // Calculated next due date (null = due now)
   triggerOnComplete    Boolean            @default(false)  // Calculate next from completion date
   autoRotateOnComplete Boolean            @default(false)  // Auto-rotate assignee on completion
+  emailReminder        Boolean            @default(false)   // Send email reminder to assignee
+  emailReminderDays    Int                @default(1)       // Days before nextDueDate to send reminder
   completions          ChoreCompletion[]
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
@@ -460,6 +467,7 @@ model Document {
   pinHash       String?   // bcrypt hash of PIN for secure documents (null = not secured)
   expiryDate    DateTime?
   remindBefore  Int       @default(30)  // Days before expiry to show reminder
+  emailReminder Boolean   @default(false)  // Send email reminder when expiry is approaching
   uploadedById  String
   uploadedBy    User      @relation(fields: [uploadedById], references: [id])
   createdAt     DateTime  @default(now())
@@ -482,4 +490,13 @@ model ChoreCompletion {
   @@index([choreId])
   @@index([completedById])
   @@index([completedAt])
+}
+
+model EmailReminderLog {
+  id          String   @id @default(cuid())
+  entityType  String   // "chore" | "event" | "document"
+  reminderKey String   @unique  // e.g. "chore_<id>_2026-05-07"
+  sentAt      DateTime @default(now())
+
+  @@index([entityType])
 }

@@ -35,6 +35,7 @@ export async function GET(req: Request) {
       notes: true,
       expiryDate: true,
       remindBefore: true,
+      emailReminder: true,
       uploadedById: true,
       pinHash: true,
       createdAt: true,
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
     const notes = (formData.get('notes') as string) ?? null
     const expiryDate = (formData.get('expiryDate') as string) ?? null
     const remindBefore = parseInt((formData.get('remindBefore') as string) ?? '30', 10)
+    const emailReminder = formData.get('emailReminder') === 'true'
     const pin = formData.get('pin') as string | null
 
     // Hash PIN if provided
@@ -110,6 +112,7 @@ export async function POST(req: Request) {
         pinHash: pinHash ?? null,
         expiryDate: expiryDate ? new Date(expiryDate) : null,
         remindBefore,
+        emailReminder,
         uploadedById: user.id,
       },
 
@@ -123,6 +126,7 @@ export async function POST(req: Request) {
         notes: true,
         expiryDate: true,
         remindBefore: true,
+        emailReminder: true,
         uploadedById: true,
         pinHash: true,
         createdAt: true,

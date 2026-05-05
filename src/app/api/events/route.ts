@@ -67,7 +67,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, description, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate } = body
+  const { title, description, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails } = body
 
   if (!title || !start || !end) {
     return NextResponse.json({ error: 'title, start, and end are required' }, { status: 400 })
@@ -93,6 +93,9 @@ export async function POST(req: Request) {
       recurrenceRule: recurrenceRule ?? null,
       isRecurring: isRecurring ?? false,
       recurrenceEndDate: recurrenceEndDate ? new Date(recurrenceEndDate) : null,
+      emailReminder: emailReminder ?? false,
+      emailReminderHours: emailReminderHours ?? 24,
+      emailReminderEmails: emailReminderEmails ? JSON.stringify(emailReminderEmails) : null,
     },
   })
 

@@ -47,6 +47,9 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
   const [isPersonal, setIsPersonal] = useState(false)
   const [recurrenceRule, setRecurrenceRule] = useState('')
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
+  const [emailReminder, setEmailReminder] = useState(false)
+  const [emailReminderHours, setEmailReminderHours] = useState('24')
+  const [emailReminderEmails, setEmailReminderEmails] = useState('')
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -74,6 +77,11 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setIsPersonal(event.isPersonal ?? false)
       setRecurrenceRule(event.recurrenceRule ?? '')
       setRecurrenceEndDate(event.recurrenceEndDate ? format(new Date(event.recurrenceEndDate), "yyyy-MM-dd") : '')
+      const ev = event as unknown as Record<string, unknown>
+      setEmailReminder((ev.emailReminder as boolean) ?? false)
+      setEmailReminderHours(String((ev.emailReminderHours as number) ?? 24))
+      const extraEmails = ev.emailReminderEmails as string | null
+      setEmailReminderEmails(extraEmails ? (JSON.parse(extraEmails) as string[]).join(', ') : '')
     } else {
       const d = defaultDate ?? new Date()
       setTitle('')
@@ -86,6 +94,9 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setIsPersonal(false)
       setRecurrenceRule('')
       setRecurrenceEndDate('')
+      setEmailReminder(false)
+      setEmailReminderHours('24')
+      setEmailReminderEmails('')
     }
     setError('')
   }, [event, defaultDate, open])
@@ -108,6 +119,11 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
         category,
         color: color || null,
         isPersonal,
+        emailReminder,
+        emailReminderHours: parseInt(emailReminderHours) || 24,
+        emailReminderEmails: emailReminderEmails
+          ? emailReminderEmails.split(',').map(e => e.trim()).filter(Boolean)
+          : [],
       }
 
       // Only send start/end dates if this is NOT a recurring instance
@@ -394,6 +410,49 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                   <p className="text-xs text-muted-foreground">Leave empty to repeat indefinitely</p>
                 </div>
               )}
+              {/* Email Reminder */}
+              <div className="space-y-2 pt-1 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Email Reminder</Label>
+                    <p className="text-xs text-muted-foreground">Notify the whole family before this event</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={emailReminder}
+                    onChange={e => setEmailReminder(e.target.checked)}
+                    className="w-4 h-4 rounded"
+                  />
+                </div>
+                {emailReminder && (
+                  <div className="space-y-2 pl-1">
+                    <div className="space-y-1">
+                      <Label>Notify how long before?</Label>
+                      <Select value={emailReminderHours} onValueChange={v => setEmailReminderHours(v ?? '24')}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 hour before</SelectItem>
+                          <SelectItem value="2">2 hours before</SelectItem>
+                          <SelectItem value="6">6 hours before</SelectItem>
+                          <SelectItem value="12">12 hours before</SelectItem>
+                          <SelectItem value="24">24 hours before</SelectItem>
+                          <SelectItem value="48">48 hours before</SelectItem>
+                          <SelectItem value="168">1 week before</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Extra recipients (optional)</Label>
+                      <Input
+                        value={emailReminderEmails}
+                        onChange={e => setEmailReminderEmails(e.target.value)}
+                        placeholder="email1@example.com, email2@example.com"
+                      />
+                      <p className="text-xs text-muted-foreground">Comma-separated; in addition to all family members</p>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="space-y-1">
                 <Label>Notes</Label>
                 <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional notes" />

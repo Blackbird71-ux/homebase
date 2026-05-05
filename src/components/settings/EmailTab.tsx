@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Mail, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
+import { Mail, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, BellIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface SmtpConfig {
@@ -30,6 +30,8 @@ export function EmailTab() {
   const [testEmail, setTestEmail] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [sendingReminders, setSendingReminders] = useState(false)
+  const [reminderResult, setReminderResult] = useState<{ success: boolean; message: string } | null>(null)
 
   useEffect(() => {
     loadConfig()
@@ -81,6 +83,28 @@ export function EmailTab() {
       toast.error('Failed to save email settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSendReminders() {
+    setSendingReminders(true)
+    setReminderResult(null)
+    try {
+      const res = await fetch('/api/reminders/process', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        const { sent } = data as { sent: { chores: number; events: number; documents: number } }
+        setReminderResult({
+          success: true,
+          message: `Sent ${sent.chores} chore, ${sent.events} event, and ${sent.documents} document reminder(s).`,
+        })
+      } else {
+        setReminderResult({ success: false, message: data.error ?? 'Failed to process reminders' })
+      }
+    } catch {
+      setReminderResult({ success: false, message: 'Network error' })
+    } finally {
+      setSendingReminders(false)
     }
   }
 
@@ -267,6 +291,45 @@ export function EmailTab() {
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               )}
               <span>{testResult.message}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <BellIcon className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <CardTitle className="text-lg">Reminders</CardTitle>
+              <CardDescription>
+                Reminders run automatically at 8:00 AM daily. Use this button to trigger them immediately.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button variant="outline" onClick={handleSendReminders} disabled={sendingReminders}>
+            {sendingReminders ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Processing...
+              </>
+            ) : (
+              'Send Reminders Now'
+            )}
+          </Button>
+          {reminderResult && (
+            <div className={`flex items-start gap-2 text-sm p-3 rounded-md ${
+              reminderResult.success
+                ? 'text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-950/30'
+                : 'text-destructive bg-destructive/10'
+            }`}>
+              {reminderResult.success ? (
+                <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              )}
+              <span>{reminderResult.message}</span>
             </div>
           )}
         </CardContent>

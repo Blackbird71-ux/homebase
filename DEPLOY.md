@@ -59,6 +59,10 @@ NEXTAUTH_SECRET=<same as AUTH_SECRET>
 NEXTAUTH_URL=https://homebase.liddleapps.com
 ENCRYPTION_KEY=<output of: openssl rand -base64 32>
 
+# Email reminders (optional — reminders won't send without SMTP config in Settings)
+CRON_SECRET=<output of: openssl rand -base64 32>
+REMINDER_CRON_SCHEDULE=0 8 * * *
+
 # Google Calendar sync (optional — leave blank to disable)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -213,6 +217,8 @@ After deployment, to enable Google Calendar sync for family members:
 | `ENCRYPTION_KEY` | ✅ | Invite code encryption key (32 random bytes) |
 | `DATABASE_URL` | Auto | Set by deploy script: `file:/data/homebase.db` |
 | `ADMIN_RESET_TOKEN` | Recommended | Secret token for emergency password reset API |
+| `CRON_SECRET` | Recommended | Protects `POST /api/reminders/process` from unauthenticated calls |
+| `REMINDER_CRON_SCHEDULE` | Optional | Cron expression for daily reminders (default: `0 8 * * *` = 8 AM) |
 | `GOOGLE_CLIENT_ID` | Optional | Google OAuth — enables Calendar sync |
 | `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth |
 | `GOOGLE_REDIRECT_URI` | Optional | Must match Google Console exactly |

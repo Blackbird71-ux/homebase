@@ -36,6 +36,8 @@ interface Chore {
   nextDueDate: string | null
   triggerOnComplete: boolean
   autoRotateOnComplete: boolean
+  emailReminder: boolean
+  emailReminderDays: number
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string

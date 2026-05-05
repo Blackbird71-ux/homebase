@@ -51,6 +51,7 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
   const [notes, setNotes] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
   const [remindBefore, setRemindBefore] = useState('30')
+  const [emailReminder, setEmailReminder] = useState(false)
   const [hasPin, setHasPin] = useState(false)
   const [pinCode, setPinCode] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -97,6 +98,7 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
       formData.append('notes', notes || '')
       formData.append('expiryDate', expiryDate || '')
       formData.append('remindBefore', remindBefore)
+      formData.append('emailReminder', emailReminder ? 'true' : 'false')
       if (hasPin && pinCode) {
         formData.append('pin', pinCode)
       }
@@ -130,6 +132,7 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
     setNotes('')
     setExpiryDate('')
     setRemindBefore('30')
+    setEmailReminder(false)
     setHasPin(false)
     setPinCode('')
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -258,6 +261,24 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
               />
             </div>
           </div>
+
+          {/* Email Reminder */}
+          {expiryDate && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Email Reminder</Label>
+                <p className="text-xs text-muted-foreground">
+                  Email all family members {remindBefore} day{remindBefore === '1' ? '' : 's'} before expiry
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={emailReminder}
+                onChange={e => setEmailReminder(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+            </div>
+          )}
 
           {/* PIN Protection */}
           <div className="p-3 border border-input rounded-md bg-muted/30">

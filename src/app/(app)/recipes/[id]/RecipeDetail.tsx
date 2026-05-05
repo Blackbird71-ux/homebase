@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon, CopyIcon, ChefHatIcon, PlusIcon, MinusIcon } from 'lucide-react'
+import { ArrowLeftIcon, ClockIcon, UsersIcon, PrinterIcon, Trash2Icon, PencilIcon, ExternalLinkIcon, ShoppingCartIcon, CopyIcon, ChefHatIcon, PlusIcon, MinusIcon, MailIcon } from 'lucide-react'
 import { AddToListDialog } from '@/components/lists/AddToListDialog'
 import { RecipeForm } from '@/components/recipes/RecipeForm'
 import { NutritionPanel } from '@/components/recipes/NutritionPanel'
@@ -16,6 +16,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 
 interface RecipeDetailProps {
   recipe: {
@@ -60,6 +62,11 @@ export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin 
   const [wakeLock, setWakeLock] = useState<any>(null)
 
   const [scaleFactor, setScaleFactor] = useState(1)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [shareEmails, setShareEmails] = useState('')
+  const [shareMessage, setShareMessage] = useState('')
+  const [sharing, setSharing] = useState(false)
+  const [shareResult, setShareResult] = useState<string | null>(null)
 
   // Request wake lock when cooking mode is active (keeps screen on)
   useEffect(() => {
@@ -183,6 +190,32 @@ export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin 
     }
   }
 
+  async function handleShare() {
+    const emails = shareEmails.split(',').map(e => e.trim()).filter(Boolean)
+    if (!emails.length) return
+    setSharing(true)
+    setShareResult(null)
+    try {
+      const res = await fetch(`/api/recipes/${recipe.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails, message: shareMessage || undefined }),
+      })
+      if (res.ok) {
+        setShareResult('Recipe sent successfully!')
+        setShareEmails('')
+        setShareMessage('')
+      } else {
+        const data = await res.json()
+        setShareResult(data.error ?? 'Failed to send email')
+      }
+    } catch {
+      setShareResult('Network error — could not send email')
+    } finally {
+      setSharing(false)
+    }
+  }
+
   return (
     <>
       <style>{`@media print { .no-print { display: none !important; } }`}</style>
@@ -227,6 +260,10 @@ export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin 
             >
               <CopyIcon className="h-4 w-4 mr-1" />
               {duplicating ? 'Duplicating...' : 'Duplicate'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setShareDialogOpen(true); setShareResult(null) }}>
+              <MailIcon className="h-4 w-4 mr-1" />
+              Share
             </Button>
             <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
               <PencilIcon className="h-4 w-4 mr-1" />
@@ -499,6 +536,46 @@ export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin 
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareDialogOpen} onOpenChange={(o) => { setShareDialogOpen(o); if (!o) { setShareResult(null); setShareEmails(''); setShareMessage('') } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share Recipe by Email</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="share-emails">Recipients</Label>
+              <Input
+                id="share-emails"
+                value={shareEmails}
+                onChange={e => setShareEmails(e.target.value)}
+                placeholder="email1@example.com, email2@example.com"
+              />
+              <p className="text-xs text-muted-foreground">Comma-separated email addresses</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="share-message">Personal message (optional)</Label>
+              <Input
+                id="share-message"
+                value={shareMessage}
+                onChange={e => setShareMessage(e.target.value)}
+                placeholder="Thought you might enjoy this!"
+              />
+            </div>
+            {shareResult && (
+              <p className={`text-sm ${shareResult.includes('success') ? 'text-green-600' : 'text-destructive'}`}>
+                {shareResult}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShareDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleShare} disabled={sharing || !shareEmails.trim()}>
+              {sharing ? 'Sending...' : 'Send Recipe'}
             </Button>
           </DialogFooter>
         </DialogContent>
