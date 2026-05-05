@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server'
+ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -117,6 +118,15 @@ export async function POST(req: Request) {
       familyId: user.familyId,
     },
   })
+
+  void createAuditLog(
+    user,
+    'create',
+    'tag',
+    tag.id,
+    `Created tag "${trimmedName}"`,
+    { tag: { name: trimmedName } }
+  )
 
   return NextResponse.json(
     {

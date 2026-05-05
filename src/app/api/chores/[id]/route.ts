@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession()
@@ -43,6 +44,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
   })
 
+  if (body.title !== undefined && body.title !== existing.title) {
+    void createAuditLog(
+      user,
+      'update',
+      'chore',
+      id,
+      `Renamed chore "${existing.title}" to "${body.title}"`,
+      { before: { title: existing.title }, after: { title: body.title } }
+    )
+  }
+
   return NextResponse.json(chore)
 }
 
@@ -58,5 +70,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
 
   await prisma.chore.delete({ where: { id } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'chore',
+    id,
+    `Deleted chore "${existing.title}"`,
+    { chore: { title: existing.title, frequency: existing.frequency } }
+  )
+
   return NextResponse.json({ success: true })
 }

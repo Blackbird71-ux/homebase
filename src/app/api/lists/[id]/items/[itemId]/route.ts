@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function PATCH(
   req: Request,
@@ -39,6 +40,30 @@ export async function PATCH(
       ...(quantity !== undefined && { quantity }),
     },
   })
+
+  // Log significant changes (completion status, content changes)
+  if (isCompleted !== undefined && isCompleted !== existing.isCompleted) {
+    void createAuditLog(
+      user,
+      'update',
+      'listItem',
+      itemId,
+      isCompleted
+        ? `Completed "${existing.content}" in list "${list.name}"`
+        : `Uncompleted "${existing.content}" in list "${list.name}"`,
+      { before: { isCompleted: existing.isCompleted }, after: { isCompleted } }
+    )
+  } else if (content !== undefined && content !== existing.content) {
+    void createAuditLog(
+      user,
+      'update',
+      'listItem',
+      itemId,
+      `Updated item "${existing.content}" in list "${list.name}"`,
+      { before: { content: existing.content }, after: { content } }
+    )
+  }
+
   return NextResponse.json(updated)
 }
 
@@ -61,5 +86,15 @@ export async function DELETE(
   if (existing.isLocked) return NextResponse.json({ error: 'Item is locked' }, { status: 403 })
 
   await prisma.listItem.delete({ where: { id: itemId } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'listItem',
+    itemId,
+    `Deleted "${existing.content}" from list "${list.name}"`,
+    { item: { content: existing.content, category: existing.category, listId: id, listName: list.name } }
+  )
+
   return NextResponse.json({ success: true })
 }

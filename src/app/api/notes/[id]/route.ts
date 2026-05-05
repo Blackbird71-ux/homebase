@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(
   req: Request,
@@ -95,6 +96,15 @@ export async function PUT(
     },
   })
 
+  void createAuditLog(
+    user,
+    'update',
+    'note',
+    id,
+    `Updated note "${title}"`,
+    { before: { title: existingNote.title } }
+  )
+
   return NextResponse.json({
     id: note.id,
     title: note.title,
@@ -133,6 +143,15 @@ export async function DELETE(
   await prisma.note.delete({
     where: { id },
   })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'note',
+    id,
+    `Deleted note "${existingNote.title}"`,
+    { note: { title: existingNote.title, category: existingNote.category } }
+  )
 
   return NextResponse.json({ success: true })
 }

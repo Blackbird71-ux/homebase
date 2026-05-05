@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET() {
   const user = await requireSession()
@@ -23,5 +24,15 @@ export async function POST(req: Request) {
   const book = await prisma.recipeBook.create({
     data: { name: name.trim(), familyId: user.familyId },
   })
+
+  void createAuditLog(
+    user,
+    'create',
+    'recipe',
+    book.id,
+    `Created recipe book "${book.name}"`,
+    { recipeBook: { name: book.name } }
+  )
+
   return NextResponse.json({ id: book.id, name: book.name }, { status: 201 })
 }

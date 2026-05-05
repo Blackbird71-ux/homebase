@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(req: NextRequest) {
   const user = await requireSession()
@@ -37,5 +38,15 @@ export async function POST(req: Request) {
   const list = await prisma.list.create({
     data: { name, type, familyId: user.familyId },
   })
+
+  void createAuditLog(
+    user,
+    'create',
+    'list',
+    list.id,
+    `Created ${type === 'SHOPPING' ? 'shopping' : 'to-do'} list "${name}"`,
+    { list: { name, type } }
+  )
+
   return NextResponse.json(list, { status: 201 })
 }

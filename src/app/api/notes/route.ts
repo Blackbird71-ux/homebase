@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 function parseTags(tags: string | null): string[] {
   if (!tags) return []
@@ -102,6 +103,15 @@ export async function POST(req: Request) {
       familyId: user.familyId,
     },
   })
+
+  void createAuditLog(
+    user,
+    'create',
+    'note',
+    note.id,
+    `Created note "${title}"`,
+    { note: { title, category } }
+  )
 
   return NextResponse.json({
     id: note.id,

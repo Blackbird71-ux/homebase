@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { MEAL_TYPES } from '@/lib/meal-types'
 import { getLocalImageUrl } from '@/lib/image-cache'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function PATCH(
   _req: Request,
@@ -161,6 +162,15 @@ export async function PATCH(
   if (!updatedTarget) {
     return NextResponse.json({ error: 'Failed to update meal plan' }, { status: 500 })
   }
+
+  void createAuditLog(
+    user,
+    'update',
+    'mealPlan',
+    id,
+    `Moved ${sourceEntry.mealType} meal from ${sourceEntry.date.toISOString().split('T')[0]} to ${normalizedTarget.toISOString().split('T')[0]} (${targetMealType})`,
+    { move: { from: { date: sourceEntry.date.toISOString(), mealType: sourceEntry.mealType }, to: { date: normalizedTarget.toISOString(), mealType: targetMealType } } }
+  )
 
   return NextResponse.json({
     target: {

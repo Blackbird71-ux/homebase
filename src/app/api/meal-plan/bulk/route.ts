@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function DELETE(req: Request) {
   const user = await requireSession()
@@ -26,6 +27,15 @@ export async function DELETE(req: Request) {
         date: { gte: fromDate, lte: toDate },
       },
     })
+
+    void createAuditLog(
+      user,
+      'delete',
+      'mealPlan',
+      'bulk',
+      `Cleared ${result.count} meal plan entries (${from} to ${to})`,
+      { bulk: { from: fromDate.toISOString(), to: toDate.toISOString(), count: result.count } }
+    )
 
     return NextResponse.json({
       success: true,

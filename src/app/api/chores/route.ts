@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 function calculateInitialDueDate(
   frequency: string,
@@ -127,6 +128,15 @@ export async function POST(req: Request) {
       _count: { select: { completions: true } },
     },
   })
+
+  void createAuditLog(
+    user,
+    'create',
+    'chore',
+    chore.id,
+    `Created chore "${title}"`,
+    { chore: { title, frequency, description } }
+  )
 
   return NextResponse.json(chore, { status: 201 })
 }

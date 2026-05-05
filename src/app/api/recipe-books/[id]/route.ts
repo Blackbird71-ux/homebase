@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function DELETE(
   _req: Request,
@@ -15,5 +16,15 @@ export async function DELETE(
   if (!book) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await prisma.recipeBook.delete({ where: { id } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'recipe',
+    id,
+    `Deleted recipe book "${book.name}"`,
+    { recipeBook: { name: book.name } }
+  )
+
   return NextResponse.json({ ok: true })
 }

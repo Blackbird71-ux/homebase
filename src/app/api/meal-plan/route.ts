@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { MEAL_TYPES } from '@/lib/meal-types'
 import { getLocalImageUrl } from '@/lib/image-cache'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -168,6 +169,21 @@ export async function POST(req: Request) {
   if (!updatedPlan) {
     return NextResponse.json({ error: 'Failed to create meal plan' }, { status: 500 })
   }
+
+  // Get recipe titles for the audit log
+  const recipeTitles = updatedPlan.recipes
+    .map(r => r.recipe?.title)
+    .filter(Boolean)
+    .join(', ')
+
+  void createAuditLog(
+    user,
+    'create',
+    'mealPlan',
+    updatedPlan.id,
+    `Added ${mealType} meal on ${normalized.toISOString().split('T')[0]}${recipeTitles ? `: ${recipeTitles}` : ''}`,
+    { mealPlan: { date: normalized.toISOString(), mealType, recipeIds: finalRecipeIds } }
+  )
 
   return NextResponse.json(
     {

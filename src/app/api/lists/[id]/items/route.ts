@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(
   _req: Request,
@@ -56,5 +57,15 @@ export async function POST(
       listId: id,
     },
   })
+
+  void createAuditLog(
+    user,
+    'create',
+    'listItem',
+    item.id,
+    `Added "${content}" to list "${list.name}"`,
+    { item: { content, category, listId: id, listName: list.name } }
+  )
+
   return NextResponse.json(item, { status: 201 })
 }

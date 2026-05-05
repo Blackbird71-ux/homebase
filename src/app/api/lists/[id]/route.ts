@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function PATCH(
   req: Request,
@@ -23,6 +24,18 @@ export async function PATCH(
       ...(isActive !== undefined && { isActive }),
     },
   })
+
+  if (name !== undefined && name !== existing.name) {
+    void createAuditLog(
+      user,
+      'update',
+      'list',
+      id,
+      `Renamed list "${existing.name}" to "${name}"`,
+      { before: { name: existing.name }, after: { name } }
+    )
+  }
+
   return NextResponse.json(updated)
 }
 
@@ -39,5 +52,15 @@ export async function DELETE(
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await prisma.list.delete({ where: { id } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'list',
+    id,
+    `Deleted list "${existing.name}"`,
+    { list: { name: existing.name, type: existing.type } }
+  )
+
   return NextResponse.json({ ok: true })
 }

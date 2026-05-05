@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { getLocalImageUrl } from '@/lib/image-cache'
+import { createAuditLog } from '@/lib/audit-log'
 
 function safeParseArray(json: string): string[] {
   try {
@@ -297,6 +298,16 @@ export async function PUT(
 
     // Get the full recipe with tags for response
     const fullRecipe = await getRecipeWithTags(id, user.familyId)
+
+    void createAuditLog(
+      user,
+      'update',
+      'recipe',
+      id,
+      `Updated recipe "${existing.title}"`,
+      { before: { title: existing.title } }
+    )
+
     return NextResponse.json(fullRecipe)
   } catch (error) {
     console.error('PUT /api/recipes/[id] - Recipe update error:', error)
@@ -321,5 +332,15 @@ export async function DELETE(
 
   // Delete recipe (cascade will delete recipe-tag relationships)
   await prisma.recipe.delete({ where: { id } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'recipe',
+    id,
+    `Deleted recipe "${existing.title}"`,
+    { recipe: { title: existing.title } }
+  )
+
   return NextResponse.json({ success: true })
 }

@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -96,6 +97,15 @@ export async function POST(req: Request) {
   })
 
   void pushEventToGoogle(event.id, 'create')
+
+  void createAuditLog(
+    user,
+    'create',
+    'event',
+    event.id,
+    `Created event "${title}"`,
+    { eventId: event.id }
+  )
 
   return NextResponse.json(maskPersonalEvent(event, user.id), { status: 201 })
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(
   _req: Request,
@@ -84,6 +85,15 @@ export async function PUT(
     data: { name: trimmedName },
   })
 
+  void createAuditLog(
+    user,
+    'update',
+    'tag',
+    id,
+    `Renamed tag "${existingTag.name}" to "${trimmedName}"`,
+    { before: { name: existingTag.name }, after: { name: trimmedName } }
+  )
+
   return NextResponse.json({
     id: updatedTag.id,
     name: updatedTag.name,
@@ -122,6 +132,16 @@ export async function DELETE(
     await (prisma as any).tag.delete({
       where: { id },
     })
+
+    void createAuditLog(
+      user,
+      'delete',
+      'tag',
+      id,
+      `Deleted tag "${tag.name}" (removed from ${tag._count.recipes} recipes)`,
+      { tag: { name: tag.name, recipeCount: tag._count.recipes } }
+    )
+
     return NextResponse.json({
       success: true,
       message: `Tag "${tag.name}" and its ${tag._count.recipes} recipe associations have been deleted`,
@@ -131,6 +151,16 @@ export async function DELETE(
     await (prisma as any).recipeTag.deleteMany({
       where: { tagId: id },
     })
+
+    void createAuditLog(
+      user,
+      'update',
+      'tag',
+      id,
+      `Detached tag "${tag.name}" from ${tag._count.recipes} recipes`,
+      { tag: { name: tag.name, detachedFrom: tag._count.recipes } }
+    )
+
     return NextResponse.json({
       success: true,
       message: `Tag "${tag.name}" has been removed from ${tag._count.recipes} recipes`,

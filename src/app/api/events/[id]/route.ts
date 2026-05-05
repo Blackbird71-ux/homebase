@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { getAccessToken, deleteGoogleEvent } from '@/lib/google-calendar'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(
   _req: Request,
@@ -59,6 +60,25 @@ export async function PUT(
   })
 
   void pushEventToGoogle(id, 'update')
+
+  void createAuditLog(
+    user,
+    'update',
+    'event',
+    id,
+    `Updated event "${existing.title}"`,
+    {
+      before: {
+        title: existing.title,
+        description: existing.description,
+        start: existing.start.toISOString(),
+        end: existing.end.toISOString(),
+        isAllDay: existing.isAllDay,
+        category: existing.category,
+        color: existing.color,
+      },
+    }
+  )
 
   return NextResponse.json(maskPersonalEvent(updated, user.id))
 }
@@ -137,6 +157,30 @@ export async function DELETE(
     : []
 
   await prisma.event.delete({ where: { id } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'event',
+    id,
+    `Deleted event "${existing.title}"`,
+    {
+      event: {
+        title: existing.title,
+        description: existing.description,
+        start: existing.start.toISOString(),
+        end: existing.end.toISOString(),
+        isAllDay: existing.isAllDay,
+        isPersonal: existing.isPersonal,
+        category: existing.category,
+        color: existing.color,
+        createdBy: existing.createdBy,
+        recurrenceRule: existing.recurrenceRule,
+        isRecurring: existing.isRecurring,
+        recurrenceEndDate: existing.recurrenceEndDate?.toISOString() ?? null,
+      },
+    }
+  )
 
   // Fire-and-forget: delete from each user's Google Calendar
   void (async () => {

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(
   _req: Request,
@@ -90,6 +91,15 @@ export async function PATCH(
     },
   })
 
+  void createAuditLog(
+    user,
+    'update',
+    'document',
+    id,
+    `Updated document "${updated.title}"`,
+    { before: { title: existing.title, category: existing.category }, after: { title: updated.title, category: updated.category } }
+  )
+
   return NextResponse.json({
     ...updated,
     expiryDate: updated.expiryDate?.toISOString() ?? null,
@@ -123,6 +133,15 @@ export async function DELETE(
 
   // Delete the database record
   await prisma.document.delete({ where: { id } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'document',
+    id,
+    `Deleted document "${existing.title}"`,
+    { document: { title: existing.title, category: existing.category, fileName: existing.fileName } }
+  )
 
   return NextResponse.json({ success: true })
 }

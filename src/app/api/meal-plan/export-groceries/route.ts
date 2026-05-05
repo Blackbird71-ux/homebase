@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 interface ExportItem {
   text: string
@@ -69,6 +70,14 @@ export async function POST(req: Request) {
     })),
   })
 
+  void createAuditLog(
+    user,
+    'create',
+    'listItem',
+    resolvedList.id,
+    `Exported ${items.length} grocery items to "${resolvedList.name}" list (${mode})`,
+    { export: { listId: resolvedList.id, listName: resolvedList.name, mode, itemCount: items.length } }
+  )
 
   return NextResponse.json({ listId: resolvedList.id, itemCount: items.length })
 }

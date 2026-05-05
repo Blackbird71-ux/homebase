@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession()
@@ -26,6 +27,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
   })
 
+  if (body.name !== undefined && body.name !== existing.name) {
+    void createAuditLog(
+      user,
+      'update',
+      'contact',
+      id,
+      `Renamed contact "${existing.name}" to "${body.name}"`,
+      { before: { name: existing.name }, after: { name: body.name } }
+    )
+  }
+
   return NextResponse.json(contact)
 }
 
@@ -41,5 +53,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
 
   await prisma.householdContact.delete({ where: { id } })
+
+  void createAuditLog(
+    user,
+    'delete',
+    'contact',
+    id,
+    `Deleted contact "${existing.name}"`,
+    { contact: { name: existing.name, category: existing.category } }
+  )
+
   return NextResponse.json({ success: true })
 }

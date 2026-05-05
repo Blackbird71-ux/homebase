@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -115,6 +116,15 @@ export async function POST(req: Request) {
         },
       },
     })
+
+    void createAuditLog(
+      user,
+      'create',
+      'document',
+      document.id,
+      `Uploaded document "${title}"`,
+      { document: { title, category, fileName: safeFilename, fileSize: buffer.length } }
+    )
 
     return NextResponse.json(
       {

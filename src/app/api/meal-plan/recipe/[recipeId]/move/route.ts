@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { MEAL_TYPES } from '@/lib/meal-types'
 import { getLocalImageUrl } from '@/lib/image-cache'
+import { createAuditLog } from '@/lib/audit-log'
 
 export async function PATCH(
   _req: Request,
@@ -151,6 +152,15 @@ export async function PATCH(
   if (!updatedTarget) {
     return NextResponse.json({ error: 'Failed to update meal plan' }, { status: 500 })
   }
+
+  void createAuditLog(
+    user,
+    'update',
+    'mealPlan',
+    recipeId,
+    `Moved recipe "${mealPlanRecipe.recipe?.title ?? 'unknown'}" from ${mealPlanRecipe.mealPlan.date.toISOString().split('T')[0]} (${mealPlanRecipe.mealPlan.mealType}) to ${normalizedTarget.toISOString().split('T')[0]} (${targetMealType})`,
+    { move: { recipeId, recipeTitle: mealPlanRecipe.recipe?.title, from: { date: mealPlanRecipe.mealPlan.date.toISOString(), mealType: mealPlanRecipe.mealPlan.mealType }, to: { date: normalizedTarget.toISOString(), mealType: targetMealType } } }
+  )
 
   // Fetch the source entry (may have been deleted)
   const sourceEntry = remainingRecipes > 0

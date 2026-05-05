@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { getLocalImageUrl } from '@/lib/image-cache'
+import { createAuditLog } from '@/lib/audit-log'
 
 function safeParseArray(json: string): string[] {
   try {
@@ -231,6 +232,15 @@ export async function POST(req: Request) {
 
   // Get the full recipe with tags for response
   const fullRecipe = await getRecipeWithTags(recipe.id, user.familyId)
+
+  void createAuditLog(
+    user,
+    'create',
+    'recipe',
+    recipe.id,
+    `Created recipe "${title}"`,
+    { recipeId: recipe.id }
+  )
 
   return NextResponse.json(fullRecipe, { status: 201 })
 }

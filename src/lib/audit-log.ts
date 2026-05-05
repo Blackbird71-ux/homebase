@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { SessionUser } from '@/types'
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'undo'
-export type AuditEntity = 'event' | 'list' | 'listItem' | 'recipe' | 'chore' | 'contact' | 'note' | 'document'
+export type AuditEntity = 'event' | 'list' | 'listItem' | 'recipe' | 'chore' | 'contact' | 'note' | 'document' | 'mealPlan' | 'tag'
 
 export interface AuditLogEntry {
   id: string
