@@ -50,11 +50,12 @@ export function MealSlotCell({
   const sortedRecipes = hasRecipes ? [...recipes].sort((a, b) => a.order - b.order) : []
   const firstImage = sortedRecipes.find(r => r.imageUrl)?.imageUrl ?? null
 
-  // Draggable setup — only for filled slots
-  const isDraggable = !!mealPlanId && !isDragOverlay
+  // Draggable setup — only for filled slots with a single recipe (backward compat)
+  const isDraggable = !!mealPlanId && !isDragOverlay && sortedRecipes.length <= 1
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: mealPlanId ?? '',
     data: {
+      type: 'entry',
       date,
       mealType,
       mealPlanId,
@@ -77,22 +78,36 @@ export function MealSlotCell({
   if (hasRecipes) {
     displayContent = (
       <div className="space-y-0.5">
-        {sortedRecipes.map((recipe) => (
-          <div key={recipe.id} className="flex items-start gap-1">
-            {recipe.courseType && (
-              <span className="text-[10px] font-medium text-muted-foreground shrink-0">
-                {recipe.courseType}:
+        {sortedRecipes.map((recipe) => {
+          // Each individual recipe is draggable when there are multiple recipes
+          const isMultiRecipe = sortedRecipes.length > 1
+          return isMultiRecipe ? (
+            <DraggableRecipeItem
+              key={recipe.id}
+              recipe={recipe}
+              date={date}
+              mealType={mealType}
+              mealPlanId={mealPlanId!}
+              naturalHeight={naturalHeight}
+              isNewlyMoved={isNewlyMoved}
+            />
+          ) : (
+            <div key={recipe.id} className="flex items-start gap-1">
+              {recipe.courseType && (
+                <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                  {recipe.courseType}:
+                </span>
+              )}
+              <span className={cn(
+                'text-xs font-medium',
+                naturalHeight ? '' : 'line-clamp-1',
+                isNewlyMoved && 'text-primary'
+              )}>
+                {recipe.recipeName}
               </span>
-            )}
-            <span className={cn(
-              'text-xs font-medium',
-              naturalHeight ? '' : 'line-clamp-1',
-              isNewlyMoved && 'text-primary'
-            )}>
-              {recipe.recipeName}
-            </span>
-          </div>
-        ))}
+            </div>
+          )
+        })}
         {hasNote && (
           <div className={cn(
             'text-[10px] text-muted-foreground italic',
@@ -166,10 +181,9 @@ export function MealSlotCell({
         mealColor
       )}
       onClick={isDragging ? undefined : onClick}
-      {...listeners}
-      {...attributes}
+      {...(isDraggable ? { ...listeners, ...attributes } : {})}
     >
-      {/* Drag handle indicator */}
+      {/* Drag handle indicator — only for single-recipe entries */}
       {isDraggable && !isDragOverlay && (
         <div className="absolute -left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
           <GripVerticalIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
@@ -227,6 +241,76 @@ export function MealSlotCell({
           </Button>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Draggable individual recipe item (for multi-recipe slots) ──
+
+function DraggableRecipeItem({
+  recipe,
+  date,
+  mealType,
+  mealPlanId,
+  naturalHeight,
+  isNewlyMoved,
+}: {
+  recipe: { id: string; recipeId: string; recipeName: string; imageUrl?: string | null; courseType?: string; order: number }
+  date: string
+  mealType?: string
+  mealPlanId: string
+  naturalHeight: boolean
+  isNewlyMoved: boolean
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: recipe.id, // Use the MealPlanRecipe.id as the draggable ID
+    data: {
+      type: 'recipe',
+      mealPlanRecipeId: recipe.id,
+      recipeId: recipe.recipeId,
+      recipeName: recipe.recipeName,
+      courseType: recipe.courseType,
+      order: recipe.order,
+      sourceEntryId: mealPlanId,
+      sourceDate: date,
+      sourceMealType: mealType,
+    },
+  })
+
+  const style = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        zIndex: 50,
+      }
+    : undefined
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-start gap-1 rounded px-0.5 -mx-0.5 cursor-grab active:cursor-grabbing transition-colors',
+        isDragging && 'opacity-30 bg-primary/10'
+      )}
+      {...listeners}
+      {...attributes}
+    >
+      {/* Drag handle */}
+      <div className="shrink-0 mt-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
+        <GripVerticalIcon className="h-3 w-3 text-muted-foreground" />
+      </div>
+      {recipe.courseType && (
+        <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+          {recipe.courseType}:
+        </span>
+      )}
+      <span className={cn(
+        'text-xs font-medium',
+        naturalHeight ? '' : 'line-clamp-1',
+        isNewlyMoved && 'text-primary'
+      )}>
+        {recipe.recipeName}
+      </span>
     </div>
   )
 }

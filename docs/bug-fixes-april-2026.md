@@ -417,7 +417,31 @@ The High Contrast themes target WCAG AA contrast ratios — pure black/white bac
 36. `src/components/tags/TagSelector.tsx` - Always-visible placeholder; portal-rendered dropdown to escape dialog overflow
 37. `src/components/tags/TagSelector.tsx` - Replaced inline input/dropdown with modal tag picker (both empty and has-tags states)
 
+---
+
+## May 5 2026 — Individual recipe drag-and-drop between meal slots
+
+### Bug 23: Cannot drag individual recipes between meal slots — entire entry moves instead
+
+**Root Cause:** The `MealSlotCell` used a single `useDraggable` hook attached to the entire meal entry container, with `id: mealPlanId` (the entry's database ID). When dragging a multi-recipe slot (e.g. Monday's dinner with "Italian Keto Meatballs" + "Garlic Bread"), the entire entry — all recipes — moved together. There was no way to drag a single recipe out of a multi-recipe slot.
+
+After moving the whole entry to Tuesday, the Monday slot became empty. Trying to drag back from Tuesday to Monday was impossible because the drag always operated at the entry level — you'd have to move all of Tuesday's recipes back.
+
+**Fix:** Three changes:
+
+1. **New API endpoint** (`src/app/api/meal-plan/recipe/[recipeId]/move/route.ts`): Moves a single `MealPlanRecipe` record between entries. If the source entry becomes empty after the move, it's automatically deleted. Returns both the updated target entry and (if it still exists) the updated source entry.
+
+2. **`MealSlotCell.tsx`**: Added a `DraggableRecipeItem` component that wraps each individual recipe in a multi-recipe slot with its own `useDraggable` hook (using `recipe.id` — the `MealPlanRecipe.id` — as the draggable ID). Single-recipe entries still use the old entry-level drag for backward compatibility. Each recipe shows a grip handle icon on hover.
+
+3. **`MealPlanGrid.tsx`**: Updated `handleDragStart`/`handleDragEnd` to detect whether the dragged item is a recipe (`type: 'recipe'`) or an entry (`type: 'entry'`). Recipe drags call the new per-recipe API endpoint; entry drags use the existing endpoint. Added a recipe-level drag overlay for visual feedback.
+
+**Files modified:**
+- `src/app/api/meal-plan/recipe/[recipeId]/move/route.ts` — new
+- `src/components/meal-plan/MealSlotCell.tsx` — individual recipe draggability
+- `src/components/meal-plan/MealPlanGrid.tsx` — recipe-level drag handling
+
 ## Testing
+
 1. **Meal plan on home:** Plan a dinner for today, verify it shows on the home page
 2. **Event display:** Create an event for tomorrow, verify it shows as "Tomorrow" on the home page
 3. **Shopping list:** Go to Settings > Appearance, select a specific shopping list for the dashboard, verify it shows on the home page

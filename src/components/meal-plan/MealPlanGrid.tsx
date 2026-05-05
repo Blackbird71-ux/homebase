@@ -8,7 +8,7 @@ import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { SaveTemplateDialog } from './SaveTemplateDialog'
 import { ApplyTemplateDialog } from './ApplyTemplateDialog'
 import { Button } from '@/components/ui/button'
-import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon, MoreHorizontalIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon, MoreHorizontalIcon, GripVerticalIcon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { DEFAULT_MEAL_TYPE, type MealType } from '@/lib/meal-types'
@@ -125,6 +125,11 @@ export function MealPlanGrid({
 
   // Drag and drop state
   const [activeDragEntry, setActiveDragEntry] = useState<MealPlanEntry | null>(null)
+  const [activeDragRecipe, setActiveDragRecipe] = useState<{
+    recipeName: string
+    courseType?: string
+    imageUrl?: string | null
+  } | null>(null)
   const [newlyMovedEntryIds, setNewlyMovedEntryIds] = useState<Set<string>>(new Set())
 
   const days = getWeekDays(weekStart)
@@ -278,28 +283,224 @@ export function MealPlanGrid({
 
   function handleDragStart(event: DragStartEvent) {
     const { active } = event
-    const entryId = active.id as string
-    const entry = entries.find((e) => e.id === entryId)
-    if (entry) {
-      setActiveDragEntry(entry)
+    const dragData = active.data.current as Record<string, unknown> | undefined
+
+    if (dragData?.type === 'recipe') {
+      // Dragging an individual recipe
+      setActiveDragRecipe({
+        recipeName: dragData.recipeName as string,
+        courseType: dragData.courseType as string | undefined,
+      })
+      setActiveDragEntry(null)
+    } else {
+      // Dragging an entire entry
+      const entryId = active.id as string
+      const entry = entries.find((e) => e.id === entryId)
+      if (entry) {
+        setActiveDragEntry(entry)
+      }
+      setActiveDragRecipe(null)
     }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     setActiveDragEntry(null)
+    setActiveDragRecipe(null)
 
     if (!over) return
 
-    const sourceId = active.id as string
-    const sourceEntry = entries.find((e) => e.id === sourceId)
-    if (!sourceEntry) return
+    const dragData = active.data.current as Record<string, unknown> | undefined
 
     // Get target info from the droppable data
     const targetData = over.data.current as { date: string; mealType: string } | undefined
     if (!targetData) return
 
     const { date: targetDate, mealType: targetMealType } = targetData
+
+    if (dragData?.type === 'recipe') {
+      // ── Moving a single recipe ──
+      await handleRecipeDragEnd(active.id as string, dragData, targetDate, targetMealType)
+    } else {
+      // ── Moving an entire entry ──
+      await handleEntryDragEnd(active.id as string, targetDate, targetMealType)
+    }
+  }
+
+  async function handleRecipeDragEnd(
+    recipeId: string,
+    dragData: Record<string, unknown>,
+    targetDate: string,
+    targetMealType: string
+  ) {
+    const sourceEntryId = dragData.sourceEntryId as string
+    const sourceDate = dragData.sourceDate as string
+    const sourceMealType = dragData.sourceMealType as string
+
+    // Check if dropping on the same slot
+    if (sourceDate === targetDate && sourceMealType === targetMealType) return
+
+    // Find the source entry
+    const sourceEntry = entries.find((e) => e.id === sourceEntryId)
+    if (!sourceEntry) return
+
+    // Find the recipe being moved
+    const movingRecipe = sourceEntry.recipes?.find((r) => r.id === recipeId)
+    if (!movingRecipe) return
+
+    // Find existing target entry
+    const existingTargetEntry = entries.find(
+      (e) => e.date.slice(0, 10) === targetDate && e.mealType === targetMealType
+    )
+
+    // Optimistic UI update: remove recipe from source, add to target
+    const updatedSourceRecipes = sourceEntry.recipes.filter((r) => r.id !== recipeId)
+
+    const updatedTargetEntry: MealPlanEntry = existingTargetEntry
+      ? {
+          ...existingTargetEntry,
+          recipes: [
+            ...(existingTargetEntry.recipes || []),
+            {
+              id: movingRecipe.id,
+              recipeId: movingRecipe.recipeId,
+              order: (existingTargetEntry.recipes?.length || 0),
+              courseType: movingRecipe.courseType,
+              recipe: { ...movingRecipe.recipe },
+            },
+          ],
+        }
+      : {
+          id: `temp-${Date.now()}`,
+          date: targetDate + 'T00:00:00.000Z',
+          mealType: targetMealType,
+          recipeId: null,
+          recipe: null,
+          note: null,
+          familyId: sourceEntry.familyId,
+          recipes: [{
+            id: movingRecipe.id,
+            recipeId: movingRecipe.recipeId,
+            order: 0,
+            courseType: movingRecipe.courseType,
+            recipe: { ...movingRecipe.recipe },
+          }],
+        }
+
+    // Optimistic update
+    setEntries((prev) => {
+      // Update source entry (remove the moved recipe)
+      const withUpdatedSource = prev.map((e) => {
+        if (e.id === sourceEntryId) {
+          if (updatedSourceRecipes.length === 0) {
+            return null // will be filtered out
+          }
+          return { ...e, recipes: updatedSourceRecipes }
+        }
+        return e
+      }).filter(Boolean) as MealPlanEntry[]
+
+      // Remove existing target entry if it exists (we'll replace with updated)
+      const withoutTarget = existingTargetEntry
+        ? withUpdatedSource.filter((e) => e.id !== existingTargetEntry.id)
+        : withUpdatedSource
+
+      return [...withoutTarget, updatedTargetEntry]
+    })
+
+    // Mark as newly moved
+    setNewlyMovedEntryIds((prev) => {
+      const next = new Set(prev)
+      next.add(updatedTargetEntry.id)
+      return next
+    })
+
+    // Clear newly moved indicator after 10 seconds
+    setTimeout(() => {
+      setNewlyMovedEntryIds((prev) => {
+        const next = new Set(prev)
+        next.delete(updatedTargetEntry.id)
+        return next
+      })
+    }, 10000)
+
+    // API call
+    try {
+      const res = await fetch(`/api/meal-plan/recipe/${recipeId}/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetDate,
+          targetMealType,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('Recipe move failed:', res.status, errorText)
+        toast.error('Failed to move recipe. Please try again.')
+        // Refresh entries to revert optimistic update
+        const { from, to } = weekDateRange(weekStart)
+        const refreshRes = await fetch(`/api/meal-plan?from=${from}&to=${to}`)
+        if (refreshRes.ok) {
+          const data: MealPlanEntry[] = await refreshRes.json()
+          setEntries(data)
+        }
+        return
+      }
+
+      const result = await res.json()
+
+      // Update with server response to get correct IDs
+      setEntries((prev) => {
+        // Remove the optimistic entries
+        let cleaned = prev.filter(
+          (e) => e.id !== updatedTargetEntry.id && e.id !== sourceEntryId
+        )
+        // Remove the old target entry if it existed
+        if (existingTargetEntry) {
+          cleaned = cleaned.filter((e) => e.id !== existingTargetEntry.id)
+        }
+
+        const updated: MealPlanEntry[] = [result.target]
+
+        // Add source entry if it still exists (has remaining recipes)
+        if (result.source) {
+          updated.push(result.source)
+        }
+
+        return [...cleaned, ...updated]
+      })
+
+      // Update newly moved to use the real ID from server
+      setNewlyMovedEntryIds((prev) => {
+        const next = new Set(prev)
+        next.delete(updatedTargetEntry.id)
+        next.add(result.target.id)
+        return next
+      })
+
+      toast.success('Recipe moved successfully')
+    } catch (error) {
+      console.error('Recipe move error:', error)
+      toast.error('Network error moving recipe. Please try again.')
+      // Refresh entries
+      const { from, to } = weekDateRange(weekStart)
+      const refreshRes = await fetch(`/api/meal-plan?from=${from}&to=${to}`)
+      if (refreshRes.ok) {
+        const data: MealPlanEntry[] = await refreshRes.json()
+        setEntries(data)
+      }
+    }
+  }
+
+  async function handleEntryDragEnd(
+    sourceId: string,
+    targetDate: string,
+    targetMealType: string
+  ) {
+    const sourceEntry = entries.find((e) => e.id === sourceId)
+    if (!sourceEntry) return
 
     // Check if dropping on the same slot
     const sourceDate = sourceEntry.date.slice(0, 10)
@@ -646,7 +847,7 @@ export function MealPlanGrid({
         />
       </div>
 
-      {/* Drag overlay — shows a floating copy of the dragged meal */}
+      {/* Drag overlay — shows a floating copy of the dragged item */}
       <DragOverlay>
         {activeDragEntry ? (
           <div className="w-72">
@@ -668,6 +869,20 @@ export function MealPlanGrid({
               onClear={() => {}}
               isDragOverlay
             />
+          </div>
+        ) : activeDragRecipe ? (
+          <div className="w-64 rounded-lg border border-primary/50 bg-card px-3 py-2 shadow-xl rotate-2 scale-105">
+            <div className="flex items-center gap-2">
+              <GripVerticalIcon className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+              {activeDragRecipe.courseType && (
+                <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                  {activeDragRecipe.courseType}:
+                </span>
+              )}
+              <span className="text-xs font-medium">
+                {activeDragRecipe.recipeName}
+              </span>
+            </div>
           </div>
         ) : null}
       </DragOverlay>
