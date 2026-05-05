@@ -17,15 +17,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   // Handle PIN changes
   let pinHash = existing.pinHash
-  if (body.pin !== undefined) {
-    if (body.pin) {
-      const bcrypt = await import('bcryptjs')
-      pinHash = await bcrypt.hash(body.pin, 10)
-    } else {
-      pinHash = null // Remove PIN protection
-    }
+  if (body.pin === null) {
+    pinHash = null
+  } else if (typeof body.pin === 'string' && body.pin.length > 0) {
+    const bcrypt = await import('bcryptjs')
+    pinHash = await bcrypt.hash(body.pin, 10)
   }
-
   const contact = await prisma.householdContact.update({
     where: { id },
     data: {
@@ -77,3 +74,4 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   return NextResponse.json({ success: true })
 }
+

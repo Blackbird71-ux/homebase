@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SecureUnlockDialogProps {
@@ -35,6 +35,10 @@ export function SecureUnlockDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [attempts, setAttempts] = useState(0)
+  const [showForgotPin, setShowForgotPin] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   const entityLabel = entityType === 'note' ? 'Note' : entityType === 'document' ? 'Document' : 'Contact'
 
@@ -136,10 +140,97 @@ export function SecureUnlockDialog({
             </div>
           )}
 
-          {attempts >= 3 && (
+          {attempts >= 3 && !showForgotPin && (
             <div className="flex items-start gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-md">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>Multiple failed attempts. Please remember your PIN.</span>
+              <span>Multiple failed attempts.</span>
+            </div>
+          )}
+
+          {attempts >= 3 && !showForgotPin && (
+            <button
+              type="button"
+              onClick={() => setShowForgotPin(true)}
+              className="text-xs text-primary hover:text-primary/80 underline underline-offset-2 transition-colors self-start"
+            >
+              Forgot PIN? Reset via email
+            </button>
+          )}
+
+          {showForgotPin && (
+            <div className="border border-input rounded-md p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Reset PIN via Email</span>
+              </div>
+              {resetSent ? (
+                <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-950/30 p-3 rounded-md">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>If the email matches your account, a reset link has been sent.</span>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Enter your account email to receive a PIN reset link.
+                  </p>
+                  <Input
+                    type="email"
+                    placeholder="your.email@example.com"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    disabled={resetLoading}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowForgotPin(false)
+                        setResetEmail('')
+                      }}
+                      disabled={resetLoading}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!resetEmail) return
+                        setResetLoading(true)
+                        try {
+                          await fetch('/api/pin-reset/request', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              entityType,
+                              entityId,
+                              userEmail: resetEmail,
+                            }),
+                          })
+                          setResetSent(true)
+                        } catch {
+                          // Silent fail — don't reveal if email exists
+                          setResetSent(true)
+                        } finally {
+                          setResetLoading(false)
+                        }
+                      }}
+                      disabled={resetLoading || !resetEmail}
+                      className="flex-1"
+                    >
+                      {resetLoading ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          Sending...
+                        </>
+                      ) : (
+                        'Send Reset Link'
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

@@ -42,7 +42,6 @@ export async function GET(
   return NextResponse.json({
     ...document,
     isSecured: !!document.pinHash,
-    pinHash: undefined,
     expiryDate: document.expiryDate?.toISOString() ?? null,
     createdAt: document.createdAt.toISOString(),
     updatedAt: document.updatedAt.toISOString(),
@@ -118,7 +117,6 @@ export async function PATCH(
   return NextResponse.json({
     ...updated,
     isSecured: !!updated.pinHash,
-    pinHash: undefined,
     expiryDate: updated.expiryDate?.toISOString() ?? null,
     createdAt: updated.createdAt.toISOString(),
     updatedAt: updated.updatedAt.toISOString(),
@@ -162,3 +160,4 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+

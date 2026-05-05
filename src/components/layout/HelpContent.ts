@@ -62,6 +62,14 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         ],
       },
       {
+        title: 'Drag & Drop Reordering',
+        items: [
+          'Drag and drop entire meal slots to reorder them within a day.',
+          'Drag individual recipe cards within a meal slot to reorder them.',
+          'Use the drag handle on the left side of each card to pick it up.',
+        ],
+      },
+      {
         title: 'Exporting to Groceries',
         items: [
           'Click "Export to Groceries" to send all planned recipe ingredients to your shopping list.',
@@ -280,7 +288,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         title: 'Overview',
         items: [
           'Store and manage family contacts — phone numbers, emails, and addresses.',
-          'Contacts are shared across the family.',
+          'Contacts are shared across the family and grouped by category.',
         ],
       },
       {
@@ -288,6 +296,24 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Click "Add Contact" to enter a new contact\'s details.',
           'Include phone, email, address, and notes.',
+          'Choose from built-in categories (Family, Emergency, Doctor, School, Tradesperson) or create custom ones.',
+        ],
+      },
+      {
+        title: 'PIN Protection',
+        items: [
+          'Enable PIN protection on any contact to keep their details private.',
+          'When PIN-protected, the contact card shows as locked — click "Unlock" to enter the PIN.',
+          'Once unlocked, the contact remains accessible for 15 minutes.',
+          'If you forget your PIN, use the "Forgot PIN?" option to reset it via email.',
+        ],
+      },
+      {
+        title: 'Category Grouping',
+        items: [
+          'Contacts are automatically grouped by category for easy browsing.',
+          'Built-in categories include Family, Emergency, Doctor, School, and Tradesperson.',
+          'You can also create custom categories for your specific needs.',
         ],
       },
     ],
@@ -300,6 +326,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Upload and organize important family documents.',
           'Documents are stored securely and accessible to all family members.',
+          'Use the scrollable category tabs at the top to filter by document type.',
         ],
       },
       {
@@ -307,6 +334,32 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Click "Upload" to select files from your computer.',
           'Supported formats: PDF, images, and common document types.',
+        ],
+      },
+      {
+        title: 'PIN Protection',
+        items: [
+          'Enable PIN protection on any document to keep its contents private.',
+          'When PIN-protected, the document shows a "Secure" badge.',
+          'A PIN must be entered to view the document\'s content.',
+          'If you forget your PIN, use the "Forgot PIN?" option to reset it via email.',
+        ],
+      },
+      {
+        title: 'Expiry Tracking',
+        items: [
+          'Set an expiry date on documents like passports, insurance policies, or warranties.',
+          'Documents show a warning badge when approaching expiry.',
+          'Expired documents are clearly marked with an "Expired" badge.',
+          'Set how many days before expiry you want to be reminded.',
+        ],
+      },
+      {
+        title: 'Category Tabs',
+        items: [
+          'Use the scrollable category tabs to filter documents by type.',
+          'Categories include Insurance, Warranty, Passport, Medical, Financial, Legal, and more.',
+          'The active category is highlighted for easy navigation.',
         ],
       },
     ],
@@ -319,6 +372,16 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Create and organize notes for your family.',
           'Notes support rich text and can be organized with tags.',
+          'Notes are organized into three tabs: Family, Private, and Secure.',
+        ],
+      },
+      {
+        title: 'Tabbed Interface',
+        items: [
+          'Family tab — notes visible to all family members.',
+          'Private tab — notes visible only to you (the creator).',
+          'Secure tab — notes protected by a PIN that must be entered to view.',
+          'Switch between tabs to filter your notes view.',
         ],
       },
       {
@@ -326,6 +389,16 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Click "New Note" to create a note with a title and content.',
           'Notes are automatically saved as you type.',
+          'Use the privacy toggle to mark a note as private or family-shared.',
+        ],
+      },
+      {
+        title: 'PIN Protection',
+        items: [
+          'Enable PIN protection on any note to keep it secure.',
+          'Set a 4-6 digit PIN when enabling protection.',
+          'Secure notes appear in the Secure tab and require a PIN to view.',
+          'If you forget your PIN, use the "Forgot PIN?" option to reset it via email.',
         ],
       },
     ],
@@ -368,6 +441,48 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Connect Google Calendar for two-way event sync.',
           'Configure Cloudflare Tunnel for remote access.',
+          'Configure Umami analytics for website tracking.',
+        ],
+      },
+      {
+        title: 'Email Configuration',
+        items: [
+          'Configure SMTP email settings to enable PIN reset emails and notifications.',
+          'Supports any SMTP provider including Gmail (using App Passwords).',
+          'Use the "Test Email" feature to verify your configuration.',
+          'Email settings are managed by the family admin.',
+        ],
+      },
+      {
+        title: 'Secure Card Appearance',
+        items: [
+          'Customize how secure (PIN-protected) cards appear in lists.',
+          'Choose between "Blur" (content is blurred) or "Redact" (content is hidden).',
+          'Set a custom accent color for secure cards.',
+        ],
+      },
+      {
+        title: 'Tag & Category Colors',
+        items: [
+          'Assign colors to tags and categories for visual organization.',
+          'Use the color picker in Settings → Tags or Settings → Categories.',
+          'Colors appear as badges throughout the app.',
+        ],
+      },
+      {
+        title: 'Themes',
+        items: [
+          'Choose from a variety of themes including the new Apple Pro theme.',
+          'Themes include light, dark, and high-contrast options.',
+          'Customize font size, line height, and font weight.',
+        ],
+      },
+      {
+        title: 'Audit Log',
+        items: [
+          'View a complete history of changes made in your family account.',
+          'Filter by action type (create, update, delete) or entity type.',
+          'Export the audit log for external backup.',
         ],
       },
     ],

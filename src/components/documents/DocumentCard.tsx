@@ -140,9 +140,9 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
         remindBefore: parseInt(editRemindBefore, 10) || 30,
       }
       if (editHasPin) {
-        body.pin = editPinCode || null
-      } else {
-        body.pin = null
+        if (editPinCode) {
+          body.pin = editPinCode
+        }
       }
       const res = await fetch(`/api/documents/${document.id}`, {
         method: 'PATCH',
@@ -363,3 +363,4 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
     </>
   )
 }
+

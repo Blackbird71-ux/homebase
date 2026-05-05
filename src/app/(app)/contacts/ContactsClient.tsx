@@ -168,8 +168,6 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
           body.pin = pin
         }
         // If editing and pinEnabled but no new pin provided, keep existing pin
-      } else {
-        body.pin = '' // Remove PIN protection
       }
 
       const url = editingContact ? `/api/contacts/${editingContact.id}` : '/api/contacts'

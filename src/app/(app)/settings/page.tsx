@@ -13,6 +13,7 @@ import { IngredientMappingsTab } from '@/components/settings/IngredientMappingsT
 import { EventCategoryManager } from '@/components/calendar/EventCategoryManager'
 import { NotificationSettings } from '@/components/settings/NotificationSettings'
 import { ActivityLogTab } from '@/components/settings/ActivityLogTab'
+import { EmailTab } from '@/components/settings/EmailTab'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -82,6 +83,9 @@ export default async function SettingsPage() {
               <TabsTrigger value="ingredient-mappings">Ingredient Mappings</TabsTrigger>
               <TabsTrigger value="notifications">Notifications</TabsTrigger>
               <TabsTrigger value="activity">Activity Log</TabsTrigger>
+              {user.role === 'admin' && (
+                <TabsTrigger value="email">Email</TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -158,6 +162,12 @@ export default async function SettingsPage() {
           <TabsContent value="activity">
             <ActivityLogTab />
           </TabsContent>
+
+          {user.role === 'admin' && (
+            <TabsContent value="email">
+              <EmailTab />
+            </TabsContent>
+          )}
 
         </Tabs>
       </div>
