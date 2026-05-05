@@ -1,8 +1,10 @@
 'use client'
 
-import { PlusIcon, XIcon, ShoppingCartIcon } from 'lucide-react'
+import { PlusIcon, XIcon, ShoppingCartIcon, GripVerticalIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getMealTypeColor } from '@/lib/meal-types'
+import { useDraggable } from '@dnd-kit/core'
+import { cn } from '@/lib/utils'
 
 interface MealSlotCellProps {
   date: string // ISO date string YYYY-MM-DD
@@ -22,9 +24,12 @@ interface MealSlotCellProps {
   onClear: () => void
   onAddToGroceries?: () => void
   naturalHeight?: boolean // mobile: remove fixed h-16 and line-clamp
+  isDragOverlay?: boolean // whether this is being rendered as a drag preview
+  isNewlyMoved?: boolean // highlight recipes that were just moved in
 }
 
 export function MealSlotCell({
+  date,
   mealPlanId,
   recipeName,
   recipes,
@@ -34,13 +39,38 @@ export function MealSlotCell({
   onClear,
   onAddToGroceries,
   naturalHeight = false,
+  isDragOverlay = false,
+  isNewlyMoved = false,
 }: MealSlotCellProps) {
+
   const hasRecipes = recipes && recipes.length > 0
   const hasRecipeName = recipeName && recipeName.trim() !== ''
   const hasNote = note && note.trim() !== ''
 
   const sortedRecipes = hasRecipes ? [...recipes].sort((a, b) => a.order - b.order) : []
   const firstImage = sortedRecipes.find(r => r.imageUrl)?.imageUrl ?? null
+
+  // Draggable setup — only for filled slots
+  const isDraggable = !!mealPlanId && !isDragOverlay
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: mealPlanId ?? '',
+    data: {
+      date,
+      mealType,
+      mealPlanId,
+      recipeName,
+      recipes: sortedRecipes,
+      note,
+    },
+    disabled: !isDraggable,
+  })
+
+  const style = transform && !isDragOverlay
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        zIndex: 50,
+      }
+    : undefined
 
   let displayContent: React.ReactNode = null
 
@@ -54,13 +84,20 @@ export function MealSlotCell({
                 {recipe.courseType}:
               </span>
             )}
-            <span className={`text-xs font-medium ${naturalHeight ? '' : 'line-clamp-1'}`}>
+            <span className={cn(
+              'text-xs font-medium',
+              naturalHeight ? '' : 'line-clamp-1',
+              isNewlyMoved && 'text-primary'
+            )}>
               {recipe.recipeName}
             </span>
           </div>
         ))}
         {hasNote && (
-          <div className={`text-[10px] text-muted-foreground italic ${naturalHeight ? '' : 'line-clamp-1'}`}>
+          <div className={cn(
+            'text-[10px] text-muted-foreground italic',
+            naturalHeight ? '' : 'line-clamp-1'
+          )}>
             {note}
           </div>
         )}
@@ -69,9 +106,16 @@ export function MealSlotCell({
   } else if (hasRecipeName) {
     displayContent = (
       <div className="space-y-0.5">
-        <p className={`text-xs font-medium ${naturalHeight ? '' : 'line-clamp-2'}`}>{recipeName}</p>
+        <p className={cn(
+          'text-xs font-medium',
+          naturalHeight ? '' : 'line-clamp-2',
+          isNewlyMoved && 'text-primary'
+        )}>{recipeName}</p>
         {hasNote && (
-          <div className={`text-[10px] text-muted-foreground italic ${naturalHeight ? '' : 'line-clamp-1'}`}>
+          <div className={cn(
+            'text-[10px] text-muted-foreground italic',
+            naturalHeight ? '' : 'line-clamp-1'
+          )}>
             {note}
           </div>
         )}
@@ -79,7 +123,11 @@ export function MealSlotCell({
     )
   } else if (hasNote) {
     displayContent = (
-      <p className={`text-xs font-medium italic ${naturalHeight ? '' : 'line-clamp-3'}`}>{note}</p>
+      <p className={cn(
+        'text-xs font-medium italic',
+        naturalHeight ? '' : 'line-clamp-3',
+        isNewlyMoved && 'text-primary'
+      )}>{note}</p>
     )
   }
 
@@ -94,7 +142,10 @@ export function MealSlotCell({
     return (
       <button
         onClick={onClick}
-        className={`w-full h-16 flex items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors ${mealColor}`}
+        className={cn(
+          'w-full h-16 flex items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors',
+          mealColor
+        )}
         aria-label="Add meal"
       >
         <PlusIcon className="h-4 w-4" />
@@ -104,9 +155,32 @@ export function MealSlotCell({
 
   return (
     <div
-      className={`group relative w-full ${naturalHeight ? 'min-h-[2.5rem]' : 'h-16'} rounded-lg border border-border bg-card px-2 py-1.5 flex items-start gap-1.5 cursor-pointer hover:border-primary/50 transition-colors ${mealColor}`}
-      onClick={onClick}
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'group relative w-full rounded-lg border bg-card px-2 py-1.5 flex items-start gap-1.5 cursor-pointer transition-colors',
+        naturalHeight ? 'min-h-[2.5rem]' : 'h-16',
+        isDragging ? 'opacity-30 border-primary/30' : 'hover:border-primary/50',
+        isDragOverlay ? 'shadow-xl border-primary/50 bg-card rotate-2 scale-105' : 'border-border',
+        isNewlyMoved && 'border-primary/40 bg-primary/5 ring-1 ring-primary/20',
+        mealColor
+      )}
+      onClick={isDragging ? undefined : onClick}
+      {...listeners}
+      {...attributes}
     >
+      {/* Drag handle indicator */}
+      {isDraggable && !isDragOverlay && (
+        <div className="absolute -left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <GripVerticalIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
+        </div>
+      )}
+
+      {/* Newly moved badge */}
+      {isNewlyMoved && (
+        <div className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-primary border-2 border-background" title="Recently moved" />
+      )}
+
       {/* Thumbnail — first recipe image */}
       {firstImage && (
         // eslint-disable-next-line @next/next/no-img-element
@@ -128,7 +202,7 @@ export function MealSlotCell({
           <Button
             variant="ghost"
             size="icon-xs"
-            className={`${btnVisibility} hover:text-primary`}
+            className={cn(btnVisibility, 'hover:text-primary')}
             onClick={(e) => {
               e.stopPropagation()
               onAddToGroceries()
@@ -142,7 +216,7 @@ export function MealSlotCell({
           <Button
             variant="ghost"
             size="icon-xs"
-            className={`${btnVisibility} hover:text-destructive`}
+            className={cn(btnVisibility, 'hover:text-destructive')}
             onClick={(e) => {
               e.stopPropagation()
               onClear()

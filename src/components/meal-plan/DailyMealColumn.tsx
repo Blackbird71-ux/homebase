@@ -5,6 +5,7 @@ import { MealSlotCell } from './MealSlotCell'
 import { MEAL_TYPES, type MealType } from '@/lib/meal-types'
 import { cn } from '@/lib/utils'
 import { PlusIcon, CheckIcon } from 'lucide-react'
+import { useDroppable } from '@dnd-kit/core'
 
 interface MealPlanEntry {
   id: string
@@ -34,7 +35,97 @@ interface DailyMealColumnProps {
   selectedMealIds?: Set<string>
   onToggleMealSelect?: (entryId: string) => void
   compact?: boolean // mobile: hide empty slots, natural height
+  newlyMovedEntryIds?: Set<string> // entry IDs that were just moved in
 }
+
+// ── Droppable meal slot wrapper ──
+
+function DroppableMealSlot({
+  date,
+  mealType,
+  entry,
+  isNewlyMoved,
+  selectMode,
+  isSelected,
+  onToggleMealSelect,
+  onMealClick,
+  onMealClear,
+  onMealAddToGroceries,
+  compact,
+}: {
+  date: string
+  mealType: { id: MealType; label: string; icon: React.ComponentType<{ className?: string }> }
+  entry: MealPlanEntry | undefined
+  isNewlyMoved: boolean
+  selectMode: boolean
+  isSelected: boolean
+  onToggleMealSelect?: (entryId: string) => void
+  onMealClick: (date: string, mealType: MealType) => void
+  onMealClear: (entryId: string) => void
+  onMealAddToGroceries: (entryId: string) => void
+  compact: boolean
+}) {
+
+  const droppableId = `${date}-${mealType.id}`
+  const { setNodeRef, isOver } = useDroppable({
+    id: droppableId,
+    data: { date, mealType: mealType.id },
+  })
+
+  const Icon = mealType.icon
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex flex-col gap-1 rounded-lg transition-colors',
+        compact ? '' : 'p-0.5 -mx-0.5',
+        isOver && 'bg-primary/10 ring-2 ring-primary/40 ring-dashed'
+      )}
+    >
+      <div className="flex items-center gap-1">
+        {selectMode && entry && (
+          <button
+            type="button"
+            onClick={() => onToggleMealSelect?.(entry.id)}
+            className={cn(
+              'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors mr-1',
+              isSelected
+                ? 'bg-primary border-primary text-primary-foreground'
+                : 'border-muted-foreground/50'
+            )}
+          >
+            {isSelected && <CheckIcon className="h-3 w-3" />}
+          </button>
+        )}
+        <Icon className="h-3 w-3 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">{mealType.label}</span>
+      </div>
+      <MealSlotCell
+        date={date}
+        mealPlanId={entry?.id ?? null}
+        recipeName={entry?.recipe?.title ?? null}
+        recipes={entry?.recipes?.map(r => ({
+          id: r.id,
+          recipeId: r.recipeId,
+          recipeName: r.recipe.title,
+          imageUrl: r.recipe.image,
+          courseType: r.courseType ?? undefined,
+          order: r.order,
+        }))}
+        note={entry?.note ?? null}
+        mealType={mealType.id}
+        onClick={() => onMealClick(date, mealType.id)}
+        onClear={() => entry && onMealClear(entry.id)}
+        onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
+        naturalHeight={compact}
+        isNewlyMoved={isNewlyMoved}
+      />
+    </div>
+  )
+}
+
+// ── Main component ──
 
 export function DailyMealColumn({
   date,
@@ -47,6 +138,7 @@ export function DailyMealColumn({
   selectedMealIds = new Set(),
   onToggleMealSelect,
   compact = false,
+  newlyMovedEntryIds = new Set(),
 }: DailyMealColumnProps) {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
 
@@ -84,48 +176,24 @@ export function DailyMealColumn({
           <div className="flex flex-col gap-2 pl-1">
             {recipeFilledMealTypes.map((mealType) => {
               const entry = getEntryForMealType(mealType.id)!
-              const Icon = mealType.icon
               const isSelected = selectedMealIds.has(entry.id)
+              const isNewlyMoved = newlyMovedEntryIds.has(entry.id)
+
               return (
-                <div key={mealType.id} className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1">
-                    {selectMode && (
-                      <button
-                        type="button"
-                        onClick={() => onToggleMealSelect?.(entry.id)}
-                        className={cn(
-                          'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors mr-1',
-                          isSelected
-                            ? 'bg-primary border-primary text-primary-foreground'
-                            : 'border-muted-foreground/50'
-                        )}
-                      >
-                        {isSelected && <CheckIcon className="h-3 w-3" />}
-                      </button>
-                    )}
-                    <Icon className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{mealType.label}</span>
-                  </div>
-                  <MealSlotCell
-                    date={date}
-                    mealPlanId={entry.id}
-                    recipeName={entry.recipe?.title ?? null}
-                    recipes={entry.recipes?.map(r => ({
-                      id: r.id,
-                      recipeId: r.recipeId,
-                      recipeName: r.recipe.title,
-                      imageUrl: r.recipe.image,
-                      courseType: r.courseType ?? undefined,
-                      order: r.order,
-                    }))}
-                    note={entry.note}
-                    mealType={mealType.id}
-                    onClick={() => !selectMode && onMealClick(date, mealType.id)}
-                    onClear={() => !selectMode && onMealClear(entry.id)}
-                    onAddToGroceries={() => !selectMode && onMealAddToGroceries(entry.id)}
-                    naturalHeight
-                  />
-                </div>
+                <DroppableMealSlot
+                  key={mealType.id}
+                  date={date}
+                  mealType={mealType}
+                  entry={entry}
+                  isNewlyMoved={isNewlyMoved}
+                  selectMode={selectMode}
+                  isSelected={isSelected}
+                  onToggleMealSelect={onToggleMealSelect}
+                  onMealClick={onMealClick}
+                  onMealClear={onMealClear}
+                  onMealAddToGroceries={onMealAddToGroceries}
+                  compact
+                />
               )
             })}
           </div>
@@ -199,33 +267,22 @@ export function DailyMealColumn({
       <div className="flex flex-col gap-2">
         {MEAL_TYPES.map((mealType) => {
           const entry = getEntryForMealType(mealType.id)
-          const Icon = mealType.icon
+          const isNewlyMoved = entry ? newlyMovedEntryIds.has(entry.id) : false
 
           return (
-            <div key={mealType.id} className="flex flex-col gap-1">
-              <div className="flex items-center gap-1">
-                <Icon className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">{mealType.label}</span>
-              </div>
-              <MealSlotCell
-                date={date}
-                mealPlanId={entry?.id ?? null}
-                recipeName={entry?.recipe?.title ?? null}
-                recipes={entry?.recipes?.map(r => ({
-                  id: r.id,
-                  recipeId: r.recipeId,
-                  recipeName: r.recipe.title,
-                  imageUrl: r.recipe.image,
-                  courseType: r.courseType ?? undefined,
-                  order: r.order,
-                }))}
-                note={entry?.note ?? null}
-                mealType={mealType.id}
-                onClick={() => onMealClick(date, mealType.id)}
-                onClear={() => entry && onMealClear(entry.id)}
-                onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
-              />
-            </div>
+            <DroppableMealSlot
+              key={mealType.id}
+              date={date}
+              mealType={mealType}
+              entry={entry ?? undefined}
+              isNewlyMoved={isNewlyMoved}
+              selectMode={false}
+              isSelected={false}
+              onMealClick={onMealClick}
+              onMealClear={onMealClear}
+              onMealAddToGroceries={onMealAddToGroceries}
+              compact={false}
+            />
           )
         })}
       </div>
