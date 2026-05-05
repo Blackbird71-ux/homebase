@@ -3,13 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { DocumentCard, type DocumentData } from '@/components/documents/DocumentCard'
 import { DocumentUploadDialog } from '@/components/documents/DocumentUploadDialog'
 import { Plus, Search, AlertTriangle, FileText } from 'lucide-react'
@@ -110,7 +103,26 @@ export default function DocumentsPage() {
           </Button>
         </div>
 
-        {/* Filters */}
+        {/* Category Tabs */}
+        <div className="overflow-x-auto -mx-4 md:-mx-6 mb-4">
+          <div className="flex gap-1 px-4 md:px-6 min-w-max border-b border-border">
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setCategoryFilter(value)}
+                className={`whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-md transition-colors border-b-2 -mb-px ${
+                  categoryFilter === value
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Search & Expiring Filter */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -121,16 +133,6 @@ export default function DocumentsPage() {
               className="pl-8"
             />
           </div>
-          <Select value={categoryFilter} onValueChange={(v) => { if (v !== null) setCategoryFilter(v) }}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button
             variant={showExpiringOnly ? 'default' : 'outline'}
             size="sm"

@@ -472,3 +472,10 @@ After moving the whole entry to Tuesday, the Monday slot became empty. Trying to
 28. **Tag modal — add more:** Edit a recipe with existing tags; click "+ Add more tags..." — verify the modal opens with current tags pre-selected, additional tags can be toggled, Done applies the full updated set
 29. **Tag modal — create new:** In the tag modal, type a name that doesn't exist; verify a "Create" row appears; click it and verify the new tag is added to pending and saved on Done
 30. **Tag modal — cancel:** Open the tag modal, select some tags, then press Escape or click ×; verify no changes are applied to the recipe
+
+### Enhancement: Document Vault category tabs
+
+**Change:** Replaced the category dropdown filter with scrollable horizontal tabs for one-click category switching.
+
+**Files modified:**
+- `src/app/(app)/documents/page.tsx` — Removed `<Select>` import and dropdown, added scrollable tab bar with active indicator styling
