@@ -81,11 +81,11 @@ function DroppableMealSlot({
       className={cn(
         'flex flex-col gap-1 rounded-lg transition-colors',
         compact ? '' : 'p-0.5 -mx-0.5',
-        // In compact mode, empty slots are collapsed to a thin strip
-        // but expand when something is dragged over them
-        compact && isEmpty && !isOver && 'h-0 overflow-hidden min-h-[2px]',
-        compact && isEmpty && isOver && 'min-h-[40px] py-1',
-        isOver && 'bg-primary/10 ring-2 ring-primary/40 ring-dashed'
+        // In compact mode, empty slots show as thin dashed drop zones
+        compact && isEmpty && !isOver && 'border border-dashed border-border/50 rounded-md px-2 py-1.5',
+        compact && isEmpty && isOver && 'border-2 border-primary/40 border-dashed rounded-md px-2 py-2 bg-primary/5',
+        !compact && isEmpty && 'p-0.5',
+        isOver && !isEmpty && 'bg-primary/10 ring-2 ring-primary/40 ring-dashed'
       )}
     >
       <div className="flex items-center gap-1">
@@ -103,31 +103,46 @@ function DroppableMealSlot({
             {isSelected && <CheckIcon className="h-3 w-3" />}
           </button>
         )}
-        <Icon className="h-3 w-3 text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">{mealType.label}</span>
+        <Icon className={cn(
+          'shrink-0',
+          compact && isEmpty ? 'h-3 w-3 text-muted-foreground/50' : 'h-3 w-3 text-muted-foreground'
+        )} />
+        <span className={cn(
+          'text-xs',
+          compact && isEmpty ? 'text-muted-foreground/50' : 'text-muted-foreground'
+        )}>{mealType.label}</span>
+        {compact && isEmpty && !isOver && (
+          <span className="text-[10px] text-muted-foreground/30 ml-1">— drop recipe here</span>
+        )}
+        {compact && isEmpty && isOver && (
+          <span className="text-[10px] text-primary/60 ml-1">— drop to add</span>
+        )}
       </div>
-      <MealSlotCell
-        date={date}
-        mealPlanId={entry?.id ?? null}
-        recipeName={entry?.recipe?.title ?? null}
-        recipes={entry?.recipes?.map(r => ({
-          id: r.id,
-          recipeId: r.recipeId,
-          recipeName: r.recipe.title,
-          imageUrl: r.recipe.image,
-          courseType: r.courseType ?? undefined,
-          order: r.order,
-        }))}
-        note={entry?.note ?? null}
-        mealType={mealType.id}
-        onClick={() => onMealClick(date, mealType.id)}
-        onClear={() => entry && onMealClear(entry.id)}
-        onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
-        naturalHeight={compact}
-        isNewlyMoved={isNewlyMoved}
-      />
+      {!isEmpty && (
+        <MealSlotCell
+          date={date}
+          mealPlanId={entry?.id ?? null}
+          recipeName={entry?.recipe?.title ?? null}
+          recipes={entry?.recipes?.map(r => ({
+            id: r.id,
+            recipeId: r.recipeId,
+            recipeName: r.recipe.title,
+            imageUrl: r.recipe.image,
+            courseType: r.courseType ?? undefined,
+            order: r.order,
+          }))}
+          note={entry?.note ?? null}
+          mealType={mealType.id}
+          onClick={() => onMealClick(date, mealType.id)}
+          onClear={() => entry && onMealClear(entry.id)}
+          onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
+          naturalHeight={compact}
+          isNewlyMoved={isNewlyMoved}
+        />
+      )}
     </div>
   )
+
 }
 
 // ── Main component ──
