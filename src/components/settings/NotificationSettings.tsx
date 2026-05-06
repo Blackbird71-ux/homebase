@@ -26,6 +26,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 export function NotificationSettings() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
+  const [subscribeLoading, setSubscribeLoading] = useState(false)
   const [supported, setSupported] = useState(false)
   const [permissionState, setPermissionState] = useState<NotificationPermission>('default')
 
@@ -57,6 +58,7 @@ export function NotificationSettings() {
       return
     }
 
+    setSubscribeLoading(true)
     try {
       const permission = await Notification.requestPermission()
       setPermissionState(permission)
@@ -69,7 +71,14 @@ export function NotificationSettings() {
 
       // Get VAPID public key from the server
       const keyRes = await fetch('/api/push-subscriptions/vapid-public-key')
-      if (!keyRes.ok) throw new Error('Failed to get VAPID key')
+      if (!keyRes.ok) {
+        if (keyRes.status === 500) {
+          toast.error('Push notifications not configured — contact your admin to set up VAPID keys')
+        } else {
+          toast.error('Failed to get push configuration from server')
+        }
+        return
+      }
       const { publicKey } = await keyRes.json()
 
       const pushSubscription = await registration.pushManager.subscribe({
@@ -94,7 +103,10 @@ export function NotificationSettings() {
       loadSubscriptions()
     } catch (err) {
       console.error('Subscription error:', err)
-      toast.error('Failed to enable push notifications')
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      toast.error(`Failed to enable push notifications: ${message}`)
+    } finally {
+      setSubscribeLoading(false)
     }
   }
 
@@ -156,9 +168,18 @@ export function NotificationSettings() {
                   Receive alerts for upcoming events, chores, and reminders.
                 </p>
               </div>
-              <Button size="sm" onClick={subscribe} disabled={loading}>
-                <BellIcon className="h-4 w-4 mr-1" />
-                Subscribe
+              <Button size="sm" onClick={subscribe} disabled={subscribeLoading}>
+                {subscribeLoading ? (
+                  <>
+                    <span className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Subscribing...
+                  </>
+                ) : (
+                  <>
+                    <BellIcon className="h-4 w-4 mr-1" />
+                    Subscribe
+                  </>
+                )}
               </Button>
             </div>
 
