@@ -119,6 +119,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **PWA compatible** — works on Windows PWA, Android PWA, and iOS PWA (16+)
 - **Text fallback** — typed commands always available when mic is unsupported or unavailable
 - **Context-aware** — AI receives recipes, shopping lists, meal plan, chores, events, and birthdays in its system prompt so it can resolve names and dates naturally
+- **Microphone Permission Prompt** — Cross-platform permission dialog that auto-shows when voice input is first used, with platform-specific instructions for Windows, macOS, iOS, and Android. Handles denied state with recovery guidance.
 
 **Meal plan**: add recipe, clear slot, query week, generate shopping list from meal plan  
 **Shopping list**: add items, read list, tick off item  

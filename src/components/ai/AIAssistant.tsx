@@ -5,6 +5,8 @@ import { Mic, MicOff, Send, X, Bot, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { dispatchAppEvent, AppEvents } from '@/lib/app-events'
+import { MicrophonePermissionPrompt } from '@/components/shared/MicrophonePermissionPrompt'
+import { useMicrophonePermission } from '@/lib/hooks/useMicrophonePermission'
 
 
 // Web Speech API type declarations
@@ -74,6 +76,8 @@ export function AIAssistant() {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const { permissionState, isSupported } = useMicrophonePermission()
 
   useEffect(() => {
     setHasVoiceSupport(!!getSpeechRecognition())
@@ -201,9 +205,12 @@ export function AIAssistant() {
   function toggleMic() {
     if (recordingState === 'listening') {
       stopListening()
-    } else {
+    } else if (permissionState === 'granted') {
+      // Permission already granted — start listening directly
       startListening()
     }
+    // If permission not granted, the MicrophonePermissionPrompt auto-shows
+    // based on permissionState === 'prompt' | 'denied'
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -217,6 +224,14 @@ export function AIAssistant() {
 
   return (
     <>
+      {/* Microphone permission prompt — auto-shows when permission is needed */}
+      <MicrophonePermissionPrompt
+        onPermissionGranted={() => {
+          // Permission was granted — now start listening
+          startListening()
+        }}
+      />
+
       {/* Floating button */}
       <button
         onClick={() => setOpen(v => !v)}
