@@ -590,10 +590,15 @@ ${eventsSummary}
 
 Stored birthdays/anniversaries: ${birthdaySummary}
 
-When the user mentions a recipe by name, match it to the closest recipe in the list above (case-insensitive, partial match is fine) and use its ID.
-When the user mentions a day like "Monday" or "tomorrow", resolve it to the correct date in the current or upcoming week.
-When the user mentions a chore by name, match it to the closest chore in the list above and use its ID.
-Always use function calls to perform actions — do not just describe what you would do.`
+IMPORTANT RULES FOR RECIPE MATCHING:
+- When the user mentions a recipe by name, search the recipe list above for matches.
+- If you find EXACTLY ONE clear match (case-insensitive, partial match is fine), use its ID and proceed.
+- If you find MULTIPLE close matches (e.g. "pasta" matches "Spaghetti Bolognese", "Pasta Bake", "Chicken Pasta"), do NOT guess. Instead, use the "unknown" function to ask the user which one they meant. List the matching options.
+- If you find NO match, use the "unknown" function to tell the user you couldn't find that recipe and ask if they'd like to add it as a quick item or search for something else.
+- When the user mentions a day like "Monday" or "tomorrow", resolve it to the correct date in the current or upcoming week.
+- When the user mentions a chore by name, match it to the closest chore in the list above and use its ID.
+- Always use function calls to perform actions — do not just describe what you would do.`
+
 
   // Call AI provider
   const aiResult = await callAIProvider(provider, userRecord.aiApiKey, model, systemPrompt, text)
@@ -664,11 +669,21 @@ Always use function calls to perform actions — do not just describe what you w
       data: { mealPlanId: plan.id, recipeId, order: 0 },
     })
 
+    // Notify the frontend to refresh
+    if (typeof globalThis !== 'undefined') {
+      try {
+        const { dispatchAppEvent } = await import('@/lib/app-events')
+        // This runs on the server, so we can't dispatch browser events here.
+        // The response includes action type so the client can dispatch.
+      } catch {}
+    }
+
     return NextResponse.json({
       message: `${recipe.title} added to ${dayLabel} ${mealType}.`,
       action: 'addRecipeToMealPlan',
     })
   }
+
 
   // ── clearMealPlanSlot ──────────────────────────────────────────────────────
   if (fnName === 'clearMealPlanSlot') {

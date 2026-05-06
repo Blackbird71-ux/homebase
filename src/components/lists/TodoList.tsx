@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ListItemRow } from './ListItemRow'
@@ -8,6 +8,7 @@ import { DoneSection } from './DoneSection'
 import { EditItemDialog } from './EditItemDialog'
 import { filterTodoItems } from '@/lib/list-helpers'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
+import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import { PlusIcon, TagIcon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -28,6 +29,28 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
   const [showCategoryInput, setShowCategoryInput] = useState(false)
   const [, startTransition] = useTransition()
   const [editItemId, setEditItemId] = useState<string | null>(null)
+
+  // Listen for todo list updates from AI assistant or other sources
+  useEffect(() => {
+    const cleanup = listenAppEvent(AppEvents.TODO_LIST_UPDATED, () => {
+      fetch(`/api/lists/${listId}/items`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((serverItems) => {
+          if (serverItems) {
+            setItems(
+              serverItems.map((i: Record<string, unknown>) => ({
+                ...i,
+                dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
+                createdAt: new Date(i.createdAt as string),
+              }))
+            )
+          }
+        })
+        .catch(() => {})
+    })
+    return cleanup
+  }, [listId])
+
   const [editItemContent, setEditItemContent] = useState('')
   const [editItemCategory, setEditItemCategory] = useState<string | null>(null)
 

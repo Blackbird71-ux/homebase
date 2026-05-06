@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useCallback, useEffect } from 'react'
 import { enqueueMutation, getAllMutations, removeMutation } from '@/lib/offline-queue'
+import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import {
   DndContext,
   closestCenter,
@@ -197,6 +198,30 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   useEffect(() => {
     broadcastQueueCount()
   }, [broadcastQueueCount])
+
+  // Listen for shopping list updates from AI assistant or other sources
+  useEffect(() => {
+    const cleanup = listenAppEvent(AppEvents.SHOPPING_LIST_UPDATED, () => {
+      // Refetch the authoritative list from the server
+      fetch(`/api/lists/${listId}/items`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((serverItems) => {
+          if (serverItems) {
+            setItems(
+              serverItems.map((i: Record<string, unknown>) => ({
+                ...i,
+                dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
+                createdAt: new Date(i.createdAt as string),
+                recipeId: (i.recipeId as string | null) ?? null,
+                recipeName: (i.recipeName as string | null) ?? null,
+              }))
+            )
+          }
+        })
+        .catch(() => {})
+    })
+    return cleanup
+  }, [listId])
 
   // ────────────────────────────────────────────────────────────────────────────
 

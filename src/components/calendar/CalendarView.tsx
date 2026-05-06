@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { addMonths, subMonths, addWeeks, subWeeks, format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { MonthView } from './MonthView'
 import { WeekView } from './WeekView'
 import { EventModal } from './EventModal'
+import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import type { CalendarEvent } from '@/types'
 
 interface CalendarViewProps {
@@ -55,6 +56,14 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
     const res = await fetch(`/api/events?${params}`)
     if (res.ok) setEvents(await res.json())
   }, [weekStartsOn])
+
+  // Listen for calendar updates from AI assistant or other sources
+  useEffect(() => {
+    const cleanup = listenAppEvent(AppEvents.CALENDAR_UPDATED, () => {
+      refresh()
+    })
+    return cleanup
+  }, [refresh])
 
   function navigate(dir: 'prev' | 'next') {
     if (view === 'month') {

@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Mic, MicOff, Send, X, Bot, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { dispatchAppEvent, AppEvents } from '@/lib/app-events'
+
 
 // Web Speech API type declarations
 declare global {
@@ -114,8 +116,36 @@ export function AIAssistant() {
           role: 'assistant',
           text: data.message ?? 'Done.',
         }])
+
+        // Dispatch events so other components (meal plan grid, etc.) refresh
+        if (data.action) {
+          switch (data.action) {
+            case 'addRecipeToMealPlan':
+            case 'clearMealPlanSlot':
+              dispatchAppEvent(AppEvents.MEAL_PLAN_UPDATED)
+              break
+            case 'createNote':
+              dispatchAppEvent(AppEvents.NOTES_UPDATED)
+              break
+            case 'addShoppingListItem':
+            case 'generateShoppingList':
+            case 'completeListItem':
+              dispatchAppEvent(AppEvents.SHOPPING_LIST_UPDATED)
+              break
+            case 'addTodoItem':
+              dispatchAppEvent(AppEvents.TODO_LIST_UPDATED)
+              break
+            case 'createCalendarEvent':
+              dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
+              break
+            case 'completeChore':
+              dispatchAppEvent(AppEvents.CHORES_UPDATED)
+              break
+          }
+        }
       }
     } catch {
+
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: 'error',

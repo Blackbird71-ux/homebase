@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DailyMealColumn } from './DailyMealColumn'
+import { listenAppEvent, AppEvents } from '@/lib/app-events'
+
 
 import { AssignMealModal } from './AssignMealModal'
 import { ExportGroceriesModal } from './ExportGroceriesModal'
@@ -134,7 +136,22 @@ export function MealPlanGrid({
 
   const days = getWeekDays(weekStart)
 
+  // Listen for meal plan updates from AI assistant or other sources
+  useEffect(() => {
+    const cleanup = listenAppEvent(AppEvents.MEAL_PLAN_UPDATED, () => {
+      const { from, to } = weekDateRange(weekStart)
+      setLoading(true)
+      fetch(`/api/meal-plan?from=${from}&to=${to}`)
+        .then((r) => r.json())
+        .then((data: MealPlanEntry[]) => setEntries(data))
+        .catch(() => toast.error('Failed to refresh meal plan'))
+        .finally(() => setLoading(false))
+    })
+    return cleanup
+  }, [weekStart])
+
   // Configure sensors for drag detection
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {

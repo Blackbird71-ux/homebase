@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { ChoreDialog } from './ChoreDialog'
 import { HoverCard } from '@/components/ui/hover-card'
+import { listenAppEvent, AppEvents } from '@/lib/app-events'
 
 interface Member {
   id: string
@@ -77,6 +78,19 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+
+  // Listen for chores updates from AI assistant or other sources
+  useEffect(() => {
+    const cleanup = listenAppEvent(AppEvents.CHORES_UPDATED, () => {
+      fetch('/api/chores')
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data) setChores(data as Chore[])
+        })
+        .catch(() => {})
+    })
+    return cleanup
+  }, [])
 
   async function handleComplete(chore: Chore) {
     setCompletingIds((prev) => new Set(prev).add(chore.id))

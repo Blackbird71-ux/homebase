@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { NoteCard } from '@/components/notes/NoteCard'
 import { NoteEditor } from '@/components/notes/NoteEditor'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { listenAppEvent, AppEvents } from '@/lib/app-events'
 
 interface Note {
   id: string
@@ -41,6 +42,24 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  // Listen for notes updates from AI assistant or other sources
+  useEffect(() => {
+    const cleanup = listenAppEvent(AppEvents.NOTES_UPDATED, () => {
+      fetch('/api/notes')
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data) {
+            setNotes(data.map((note: Record<string, unknown>) => ({
+              ...note,
+              isPrivate: (note as { isPrivate?: boolean }).isPrivate ?? false,
+            })) as Note[])
+          }
+        })
+        .catch(() => {})
+    })
+    return cleanup
+  }, [])
 
   // Get all unique tags from notes
   const allTags = useMemo(() => {
