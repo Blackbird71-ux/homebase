@@ -352,13 +352,35 @@ function safeParseStringArray(json: string): string[] {
 // ---------- POST handler ----------
 
 export async function POST(req: Request) {
-  const user = await requireSession()
-  const body = await req.json()
+  let user: Awaited<ReturnType<typeof requireSession>>
+  try {
+    user = await requireSession()
+  } catch {
+    return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
+  }
+
+  let body: { text?: unknown }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
+  }
+
   const { text } = body
 
   if (!text || typeof text !== 'string') {
     return NextResponse.json({ error: 'text is required' }, { status: 400 })
   }
+
+  try {
+    return await handleCommand(user, text)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'An unexpected error occurred.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+async function handleCommand(user: Awaited<ReturnType<typeof requireSession>>, text: string) {
 
   const userRecord = await prisma.user.findUnique({
     where: { id: user.id },
@@ -1190,3 +1212,4 @@ Always use function calls to perform actions — do not just describe what you w
 
   return NextResponse.json({ message: 'Action not recognised.' })
 }
+

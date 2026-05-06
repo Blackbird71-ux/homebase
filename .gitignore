@@ -46,6 +46,7 @@ next-env.d.ts
 
 # tool artifacts
 .cline/
+.claude/
 dist/
 
 # docker build artifacts

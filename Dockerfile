@@ -82,6 +82,10 @@ COPY --from=builder /app/prisma ./prisma
 # `migrate deploy` at startup, plus all serverExternalPackages and their deps.
 COPY --from=builder /app/node_modules ./node_modules
 
+# Prisma v7+ looks for prisma_schema_build_bg.wasm at node_modules/.bin/ but it's
+# actually at node_modules/prisma/build/. Create a symlink so migrate deploy works.
+RUN ln -sf ../prisma/build/prisma_schema_build_bg.wasm /app/node_modules/.bin/prisma_schema_build_bg.wasm 2>/dev/null || true
+
 # Scripts
 COPY docker/entrypoint.sh         ./entrypoint.sh
 COPY scripts/backup-db.sh         ./scripts/backup-db.sh
