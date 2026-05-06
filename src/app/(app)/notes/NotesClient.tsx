@@ -209,12 +209,12 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
   }), [notes, currentUserId])
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-3 md:p-4 gap-4">
+    <div className="flex flex-col h-full overflow-y-auto p-2 md:p-3 gap-2">
       {/* Header with tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold">Notes</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h1 className="text-xl font-bold">Notes</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
             {filteredNotes.length} note{filteredNotes.length !== 1 ? 's' : ''}
             {hasActiveFilters && ' (filtered)'}
           </p>
@@ -233,7 +233,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         <button
           type="button"
           onClick={() => setActiveTab('family')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'family'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
@@ -248,7 +248,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         <button
           type="button"
           onClick={() => setActiveTab('private')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'private'
               ? 'border-amber-500 text-amber-600 dark:text-amber-400'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
@@ -263,7 +263,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         <button
           type="button"
           onClick={() => setActiveTab('secure')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'secure'
               ? 'border-green-500 text-green-600 dark:text-green-400'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
@@ -278,8 +278,8 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
       </div>
 
       {/* Filters */}
-      <div className="space-y-4 shrink-0">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <div className="space-y-2 shrink-0">
+        <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -290,7 +290,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
             />
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-[160px]">
                 <FilterIcon className="h-4 w-4 mr-2" />
@@ -332,7 +332,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
 
         {/* Active filters display */}
         {hasActiveFilters && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {search && (
               <div className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded-full">
                 Search: "{search}"
@@ -375,13 +375,13 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
 
       {/* Notes Grid */}
       {filteredNotes.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg shrink-0">
+        <div className="text-center py-6 border rounded-lg shrink-0">
           <p className="text-muted-foreground">
             {notes.length === 0 ? 'No notes yet. Create your first note!' : 'No notes match your filters.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 flex-1 content-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 flex-1 content-start">
           {filteredNotes.map((note) => (
               <NoteCard
               key={note.id}

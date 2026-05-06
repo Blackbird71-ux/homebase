@@ -81,10 +81,13 @@ export function RecipeCard({
                 return (
                   <span
                     key={tag}
-                    className="px-1.5 py-0.5 rounded text-xs font-medium"
-                    style={{
-                      backgroundColor: color ? `${color}20` : undefined,
-                      color: color || undefined,
+                    className="px-1.5 py-0.5 rounded-full text-xs font-medium border"
+                    style={color ? {
+                      borderColor: color,
+                      backgroundColor: `${color}20`,
+                      color,
+                    } : {
+                      borderColor: 'hsl(var(--border))',
                     }}
                   >
                     {tag}

@@ -41,7 +41,7 @@ export function NoteCard({
     <div className="relative group h-full">
       <Link href={`/notes/${id}`} className="block h-full">
         <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
-          <CardHeader className="p-3 pb-1">
+          <CardHeader className="p-2 pb-0.5">
             <div className="flex justify-between items-start gap-2">
               <CardTitle
                 className="text-sm line-clamp-2 flex-1 [&_*]:leading-snug"
@@ -69,7 +69,7 @@ export function NoteCard({
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
               <div className="flex items-center gap-0.5">
                 <CalendarIcon className="h-2.5 w-2.5" />
                 <span>{formattedDate}</span>
@@ -82,7 +82,7 @@ export function NoteCard({
               )}
             </div>
           </CardHeader>
-          <CardContent className="flex flex-col gap-1.5 px-3 pb-3">
+          <CardContent className="flex flex-col gap-1 px-2 pb-2">
             {isSecured ? (
               <div className="relative overflow-hidden">
                 <div className="text-xs text-muted-foreground line-clamp-2 blur-sm select-none [&_h1]:text-xs [&_h1]:font-semibold [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:text-xs [&_h3]:font-semibold [&_*]:!my-0 [&_ul]:pl-4 [&_ol]:pl-4"

@@ -29,9 +29,10 @@ interface RecipesClientProps {
   initialRecipes: RecipeSummary[]
   initialBooks: RecipeBook[]
   initialFavoriteBookId?: string | null
+  tagColors?: Record<string, string>
 }
 
-export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBookId }: RecipesClientProps) {
+export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBookId, tagColors }: RecipesClientProps) {
   const [recipes, setRecipes] = useState(initialRecipes)
   const [books, setBooks] = useState(initialBooks)
   const [activeBookId, setActiveBookId] = useState<string | null>(initialFavoriteBookId ?? null)
@@ -201,7 +202,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {visibleRecipes.map(({ bookId: _bookId, createdAt: _createdAt, ...cardProps }) => (
-              <RecipeCard key={cardProps.id} {...cardProps} onDelete={handleDeleteRecipe} />
+              <RecipeCard key={cardProps.id} {...cardProps} tagColors={tagColors} onDelete={handleDeleteRecipe} />
             ))}
           </div>
         )}

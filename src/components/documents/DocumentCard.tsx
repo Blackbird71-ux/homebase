@@ -20,10 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar, ShieldCheckIcon, LockIcon, UnlockIcon } from 'lucide-react'
+import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar, ShieldCheckIcon, LockIcon, UnlockIcon, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
+import { DocumentViewer } from './DocumentViewer'
 
 export interface DocumentData {
   id: string
@@ -107,6 +108,9 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
   const [editPinCode, setEditPinCode] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // Viewer state
+  const [viewerOpen, setViewerOpen] = useState(false)
 
   // Unlock state
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -269,6 +273,10 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
                 Lock
               </Button>
             )}
+            <Button variant="ghost" size="xs" onClick={() => setViewerOpen(true)}>
+              <Eye className="h-3 w-3 mr-1" />
+              View
+            </Button>
             <Button variant="ghost" size="xs" onClick={() => setEditOpen(true)}>
               <Edit3 className="h-3 w-3 mr-1" />
               Edit
@@ -394,6 +402,13 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
           }}
         />
       )}
+
+      {/* Document Viewer */}
+      <DocumentViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        document={document}
+      />
 
       {/* Delete Confirmation */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
