@@ -41,6 +41,11 @@ const themeOptions = [
   { value: 'high-contrast-ocean',    label: 'HC Ocean',          icon: Eye,  swatch: 'bg-sky-50 border-2 border-sky-900' },
   { value: 'high-contrast-forest',   label: 'HC Forest',         icon: Eye,  swatch: 'bg-emerald-50 border-2 border-emerald-900' },
   { value: 'high-contrast-midnight', label: 'HC Midnight',       icon: Eye,  swatch: 'bg-[#070b18] border border-sky-300' },
+  { value: 'apple-aqua',     label: 'Apple Aqua',     icon: Sun,  swatch: 'bg-[#f5f5fa] border border-blue-200' },
+  { value: 'apple-graphite', label: 'Apple Graphite', icon: Moon, swatch: 'bg-[#2a2a2e]' },
+  { value: 'apple-sunset',   label: 'Apple Sunset',   icon: Sun,  swatch: 'bg-gradient-to-br from-orange-50 to-rose-100' },
+  { value: 'apple-midnight', label: 'Apple Midnight', icon: Moon, swatch: 'bg-[#0d1226]' },
+  { value: 'apple-forest',   label: 'Apple Forest',   icon: Sun,  swatch: 'bg-gradient-to-br from-green-50 to-teal-100' },
 ] as const
 
 const fontSizeOptions = [

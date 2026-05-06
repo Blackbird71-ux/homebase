@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType, FunctionCallingMode } from '@google/generative-ai'
+import OpenAI from 'openai'
 import { format, addDays, startOfWeek, parseISO } from 'date-fns'
 
 // ---------- Gemini function declarations ----------
@@ -349,6 +350,72 @@ function safeParseStringArray(json: string): string[] {
   }
 }
 
+// ---------- Provider adapter ----------
+
+const PROVIDER_BASE_URLS: Record<string, string> = {
+  deepseek: 'https://api.deepseek.com',
+}
+
+type AIResult =
+  | { fnName: string; args: Record<string, unknown> }
+  | { textResponse: string }
+
+async function callAIProvider(
+  provider: string,
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  text: string
+): Promise<AIResult> {
+  if (provider !== 'gemini') {
+    const openai = new OpenAI({ apiKey, baseURL: PROVIDER_BASE_URLS[provider] })
+    const tools: OpenAI.ChatCompletionTool[] = functionDeclarations.map(fn => ({
+      type: 'function',
+      function: {
+        name: fn.name,
+        description: fn.description ?? '',
+        parameters: fn.parameters as unknown as Record<string, unknown>,
+      },
+    }))
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: text },
+      ],
+      tools,
+      tool_choice: 'required',
+    })
+    const toolCall = response.choices[0]?.message?.tool_calls?.[0]
+    if (!toolCall || toolCall.type !== 'function') {
+      return { textResponse: response.choices[0]?.message?.content ?? "I didn't understand that." }
+    }
+    return {
+      fnName: toolCall.function.name,
+      args: JSON.parse(toolCall.function.arguments) as Record<string, unknown>,
+    }
+  }
+
+  // Gemini
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const geminiModel = genAI.getGenerativeModel({
+    model,
+    tools: [{ functionDeclarations }],
+    toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.ANY } },
+    systemInstruction: systemPrompt,
+  })
+  const result = await geminiModel.generateContent(text)
+  const response = result.response
+  const part = response.candidates?.[0]?.content?.parts?.[0]
+  if (!part?.functionCall) {
+    return { textResponse: response.text() ?? "I didn't understand that." }
+  }
+  return {
+    fnName: part.functionCall.name,
+    args: part.functionCall.args as Record<string, unknown>,
+  }
+}
+
 // ---------- POST handler ----------
 
 export async function POST(req: Request) {
@@ -385,21 +452,24 @@ async function handleCommand(user: Awaited<ReturnType<typeof requireSession>>, t
   const userRecord = await prisma.user.findUnique({
     where: { id: user.id },
     select: {
-      geminiApiKey: true,
+      aiApiKey: true,
+      aiProvider: true,
       aiModel: true,
       name: true,
       family: { select: { timezone: true, birthdays: true } },
     },
   })
 
-  if (!userRecord?.geminiApiKey) {
+  if (!userRecord?.aiApiKey) {
     return NextResponse.json(
-      { error: 'No Gemini API key configured. Go to Settings → AI to add your key.' },
+      { error: 'No AI API key configured. Go to Settings → AI to add your key.' },
       { status: 400 }
     )
   }
 
-  const model = userRecord.aiModel ?? 'gemini-2.0-flash'
+  const provider = userRecord.aiProvider ?? 'gemini'
+  const defaultModel = provider === 'deepseek' ? 'deepseek-chat' : 'gemini-2.0-flash'
+  const model = userRecord.aiModel ?? defaultModel
   const timezone = userRecord.family?.timezone ?? 'UTC'
   const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
   const weekEndStr = format(addDays(parseISO(nowStr), 6), 'yyyy-MM-dd')
@@ -525,27 +595,14 @@ When the user mentions a day like "Monday" or "tomorrow", resolve it to the corr
 When the user mentions a chore by name, match it to the closest chore in the list above and use its ID.
 Always use function calls to perform actions — do not just describe what you would do.`
 
-  // Call Gemini
-  const genAI = new GoogleGenerativeAI(userRecord.geminiApiKey)
-  const geminiModel = genAI.getGenerativeModel({
-    model,
-    tools: [{ functionDeclarations }],
-    toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.ANY } },
-    systemInstruction: systemPrompt,
-  })
+  // Call AI provider
+  const aiResult = await callAIProvider(provider, userRecord.aiApiKey, model, systemPrompt, text)
 
-  const result = await geminiModel.generateContent(text)
-  const response = result.response
-
-  const candidate = response.candidates?.[0]
-  const part = candidate?.content?.parts?.[0]
-
-  if (!part?.functionCall) {
-    const textResponse = response.text()
-    return NextResponse.json({ message: textResponse || "I didn't understand that. Try asking me to add a recipe to the meal plan, create a note, add items to your shopping list, or ask what's on the calendar." })
+  if ('textResponse' in aiResult) {
+    return NextResponse.json({ message: aiResult.textResponse || "I didn't understand that. Try asking me to add a recipe to the meal plan, create a note, add items to your shopping list, or ask what's on the calendar." })
   }
 
-  const { name: fnName, args } = part.functionCall
+  const { fnName, args } = aiResult
 
   // ── unknown ────────────────────────────────────────────────────────────────
   if (fnName === 'unknown') {

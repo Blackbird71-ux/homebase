@@ -4,14 +4,44 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle, AlertCircle, Bot, Eye, EyeOff } from 'lucide-react'
 
-const MODELS = [
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Recommended — fast and cost-effective' },
-  { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: 'More capable, higher cost' },
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Most capable, highest cost' },
+const PROVIDERS = [
+  { id: 'gemini', label: 'Google Gemini', description: 'Free tier available via Google AI Studio' },
+  { id: 'deepseek', label: 'DeepSeek', description: 'Very cost-effective, strong reasoning' },
 ]
+
+const MODELS_BY_PROVIDER: Record<string, Array<{ id: string; label: string }>> = {
+  gemini: [
+    { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite — lightest, lowest cost' },
+    { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash — recommended' },
+    { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro — more capable' },
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro — most capable' },
+  ],
+  deepseek: [
+    { id: 'deepseek-chat', label: 'DeepSeek Chat' },
+  ],
+}
+
+const KEY_HELP: Record<string, { placeholder: string; linkText: string; linkHref: string }> = {
+  gemini: {
+    placeholder: 'AIza...',
+    linkText: 'aistudio.google.com → Get API key',
+    linkHref: 'https://aistudio.google.com',
+  },
+  deepseek: {
+    placeholder: 'sk-...',
+    linkText: 'platform.deepseek.com → API Keys',
+    linkHref: 'https://platform.deepseek.com/api_keys',
+  },
+}
+
+const DEFAULT_MODEL: Record<string, string> = {
+  gemini: 'gemini-2.0-flash',
+  deepseek: 'deepseek-chat',
+}
 
 type Status = { type: 'success' | 'error'; message: string } | null
 
@@ -20,6 +50,7 @@ export function AISettingsTab() {
   const [hasKey, setHasKey] = useState(false)
   const [maskedKey, setMaskedKey] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
+  const [aiProvider, setAiProvider] = useState('gemini')
   const [aiModel, setAiModel] = useState('gemini-2.0-flash')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -31,19 +62,26 @@ export function AISettingsTab() {
       .then(r => r.json())
       .then(data => {
         setHasKey(data.hasKey)
-        setMaskedKey(data.geminiApiKey)
+        setMaskedKey(data.aiApiKey)
+        setAiProvider(data.aiProvider ?? 'gemini')
         setAiModel(data.aiModel ?? 'gemini-2.0-flash')
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
+  function handleProviderChange(newProvider: string) {
+    setAiProvider(newProvider)
+    setAiModel(DEFAULT_MODEL[newProvider] ?? 'gemini-2.0-flash')
+    setStatus(null)
+  }
+
   async function save() {
     setSaving(true)
     setStatus(null)
     try {
-      const body: Record<string, string> = { aiModel }
-      if (apiKey.trim()) body.geminiApiKey = apiKey.trim()
+      const body: Record<string, string> = { aiProvider, aiModel }
+      if (apiKey.trim()) body.aiApiKey = apiKey.trim()
       const res = await fetch('/api/settings/ai', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -96,7 +134,7 @@ export function AISettingsTab() {
       const res = await fetch('/api/settings/ai', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geminiApiKey: '' }),
+        body: JSON.stringify({ aiApiKey: '' }),
       })
       if (res.ok) {
         setHasKey(false)
@@ -115,6 +153,9 @@ export function AISettingsTab() {
     return <p className="text-sm text-muted-foreground">Loading...</p>
   }
 
+  const models = MODELS_BY_PROVIDER[aiProvider] ?? MODELS_BY_PROVIDER.gemini
+  const keyHelp = KEY_HELP[aiProvider] ?? KEY_HELP.gemini
+
   return (
     <div className="space-y-6">
       <Card>
@@ -124,13 +165,30 @@ export function AISettingsTab() {
             AI Assistant
           </CardTitle>
           <CardDescription>
-            Configure a Gemini API key to enable the AI assistant. You can then use voice or text to add recipes to the meal plan, create notes, add shopping items, and more.
+            Configure an AI provider and API key to enable the assistant. You can then use voice or text to add recipes to the meal plan, create notes, add shopping items, and more.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
+          {/* Provider selection */}
+          <div className="space-y-1.5">
+            <Label htmlFor="ai-provider">Provider</Label>
+            <Select value={aiProvider} onValueChange={v => { if (v) handleProviderChange(v) }}>
+              <SelectTrigger id="ai-provider">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROVIDERS.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label} — {p.description}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* API key */}
           <div className="space-y-1.5">
-            <Label htmlFor="gemini-key">Gemini API Key</Label>
+            <Label htmlFor="ai-key">API Key</Label>
             {hasKey && (
               <p className="text-xs text-muted-foreground">
                 Key saved: <span className="font-mono">{maskedKey}</span>
@@ -139,11 +197,11 @@ export function AISettingsTab() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
-                  id="gemini-key"
+                  id="ai-key"
                   type={showKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={e => { setApiKey(e.target.value); setStatus(null) }}
-                  placeholder={hasKey ? 'Enter a new key to replace the existing one' : 'AIza...'}
+                  placeholder={hasKey ? 'Enter a new key to replace the existing one' : keyHelp.placeholder}
                   className="pr-10"
                 />
                 <button
@@ -162,40 +220,31 @@ export function AISettingsTab() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Get a free key at{' '}
-              <span className="font-medium">aistudio.google.com</span> → Get API key.
+              Get a key at{' '}
+              <span className="font-medium">{keyHelp.linkText}</span>
             </p>
           </div>
 
           {/* Model selection */}
-          <div className="space-y-2">
-            <Label>Model</Label>
-            <div className="grid gap-2">
-              {MODELS.map(m => (
-                <label
-                  key={m.id}
-                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${aiModel === m.id ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/50'}`}
-                >
-                  <input
-                    type="radio"
-                    name="ai-model"
-                    value={m.id}
-                    checked={aiModel === m.id}
-                    onChange={() => { setAiModel(m.id); setStatus(null) }}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">{m.label}</p>
-                    <p className="text-xs text-muted-foreground">{m.description}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ai-model">Model</Label>
+            <Select value={aiModel} onValueChange={v => { if (v) { setAiModel(v); setStatus(null) } }}>
+              <SelectTrigger id="ai-model">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map(m => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Actions */}
           <div className="flex gap-2 flex-wrap">
-            <Button type="button" onClick={save} disabled={saving || (!apiKey.trim() && aiModel === (maskedKey ? aiModel : 'gemini-2.0-flash'))}>
+            <Button type="button" onClick={save} disabled={saving || (!apiKey.trim() && !hasKey)}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
             {hasKey && (

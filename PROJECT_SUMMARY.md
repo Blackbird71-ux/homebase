@@ -84,6 +84,8 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Font size and UI preference settings
 - Done item color customization
 - **Apple Pro Theme**: Premium high-contrast professional theme with refined typography and spacing
+- **5 Apple-system themes**: `apple-aqua` (light), `apple-graphite` (neutral dark), `apple-sunset` (warm coral), `apple-midnight` (deep navy), `apple-forest` (earthy green) — all additive, existing themes preserved
+- **iOS utility tokens**: `--cat-*` category colors and `--meal-*` meal-type colors added globally; Apple system font stack scoped to Apple themes
 
 #### 10. **Secure Document & Contact Vault** (New in Phase 7)
 - **PIN Protection**: Optional PIN-based security for documents and household contacts
@@ -109,13 +111,14 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 #### 13. **AI Voice & Chat Assistant** (New)
 - **Floating Bot button** present on every page — opens a chat panel with voice and text input
 - **Web Speech API** for microphone transcription (Chrome, Edge, iOS 14.5+, Android Chrome)
-- **Google Gemini function calling** — Gemini interprets the command and calls the correct action
+- **Multi-provider AI** — choose between **Google Gemini** (free tier via AI Studio) or **DeepSeek** (very cost-effective); provider selection persisted per user
+- **Supported models**: Gemini 2.0 Flash Lite / 2.0 Flash / 1.5 Pro / 2.5 Pro; DeepSeek Chat
 - **19 supported actions** across all major app areas (see below)
-- **AI Settings tab** in Settings: enter Gemini API key, choose model (2.0 Flash / 1.5 Pro / 2.5 Pro), test connection
-- **Per-user key storage** — each family member can configure their own Gemini key
+- **AI Settings tab** in Settings: select provider, enter API key, choose model, test connection
+- **Per-user key storage** — each family member can configure their own key and provider
 - **PWA compatible** — works on Windows PWA, Android PWA, and iOS PWA (16+)
 - **Text fallback** — typed commands always available when mic is unsupported or unavailable
-- **Context-aware** — Gemini receives recipes, shopping lists, meal plan, chores, events, and birthdays in its system prompt so it can resolve names and dates naturally
+- **Context-aware** — AI receives recipes, shopping lists, meal plan, chores, events, and birthdays in its system prompt so it can resolve names and dates naturally
 
 **Meal plan**: add recipe, clear slot, query week, generate shopping list from meal plan  
 **Shopping list**: add items, read list, tick off item  
@@ -186,10 +189,10 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - `src/app/api/audit-log/backup/`: Audit log backup and truncation
 
 #### AI Assistant (New)
-- `src/app/api/ai/command/route.ts`: Gemini function-calling command interpreter + action executor
-- `src/app/api/settings/ai/route.ts`: GET/PUT user AI settings (key + model)
+- `src/app/api/ai/command/route.ts`: Multi-provider function-calling command interpreter + action executor
+- `src/app/api/settings/ai/route.ts`: GET/PUT user AI settings (provider, key, model)
 - `src/components/ai/AIAssistant.tsx`: Floating panel with voice (Web Speech API) and text input
-- `src/components/settings/AISettingsTab.tsx`: Settings tab for API key, model selection, test connection
+- `src/components/settings/AISettingsTab.tsx`: Settings tab for provider selection, API key, model, test connection
 
 #### UI Components
 - `src/components/tags/`: Tag management components (with color picker)
@@ -300,8 +303,9 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 
 ### Project Status
 ✅ **Phase 7 Complete**: All features implemented and tested
-✅ **Phase 8 Complete**: AI Voice & Chat Assistant with Gemini function calling
+✅ **Phase 8 Complete**: AI Voice & Chat Assistant with multi-provider support (Gemini + DeepSeek)
 ✅ **Recurring Events**: Create, edit, delete recurring events with daily/weekly/monthly/yearly options
+✅ **Apple Themes**: 5 additive Apple-system themes added (aqua, graphite, sunset, midnight, forest)
 ✅ **TypeScript Validation**: No type errors
 ✅ **Build Success**: Production build compiles successfully
 ✅ **Git Status**: All changes committed with descriptive messages

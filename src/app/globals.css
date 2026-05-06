@@ -663,3 +663,171 @@ body {
 [data-font-weight="medium"] {
   --body-font-weight: 500;
 }
+
+/* ─── Apple System Font Stack (scoped to Apple themes only) ───── */
+.apple-aqua body,
+.apple-graphite body,
+.apple-sunset body,
+.apple-midnight body,
+.apple-forest body {
+  font-family: -apple-system, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+}
+
+/* ─── iOS Category Color Tokens (additive, globally available) ── */
+:root {
+  --cat-calendar:  oklch(0.62 0.22 25);
+  --cat-reminders: oklch(0.62 0.22 25);
+  --cat-lists:     oklch(0.60 0.20 148);
+  --cat-notes:     oklch(0.75 0.18 85);
+  --cat-health:    oklch(0.58 0.22 10);
+  --cat-fitness:   oklch(0.55 0.20 25);
+  --cat-maps:      oklch(0.55 0.18 148);
+}
+
+/* ─── Meal-Type Color Tokens (additive, globally available) ───── */
+:root {
+  --meal-breakfast: oklch(0.72 0.18 65);
+  --meal-lunch:     oklch(0.58 0.20 255);
+  --meal-dinner:    oklch(0.55 0.22 300);
+  --meal-snacks:    oklch(0.58 0.20 148);
+}
+
+/* ─── Theme: Apple Aqua (classic Apple light) ────────────────── */
+.apple-aqua {
+  --background:           oklch(0.97 0.005 240);
+  --foreground:           oklch(0.15 0.01 240);
+  --card:                 oklch(1 0 0);
+  --card-foreground:      oklch(0.15 0.01 240);
+  --popover:              oklch(1 0 0);
+  --popover-foreground:   oklch(0.15 0.01 240);
+  --primary:              oklch(0.55 0.22 255);
+  --primary-foreground:   oklch(1 0 0);
+  --secondary:            oklch(0.92 0.01 240);
+  --secondary-foreground: oklch(0.15 0.01 240);
+  --muted:                oklch(0.94 0.008 240);
+  --muted-foreground:     oklch(0.50 0.01 240);
+  --accent:               oklch(0.92 0.015 255);
+  --accent-foreground:    oklch(0.55 0.22 255);
+  --destructive:          oklch(0.58 0.22 25);
+  --border:               oklch(0.88 0.008 240);
+  --input:                oklch(0.93 0.008 240);
+  --ring:                 oklch(0.55 0.22 255);
+  --sidebar:              oklch(0.18 0.02 255);
+  --sidebar-foreground:   oklch(0.92 0.008 255);
+  --sidebar-accent:       oklch(0.55 0.22 255);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border:       oklch(0.28 0.02 255);
+  --radius: 0.75rem;
+}
+
+/* ─── Theme: Apple Graphite (neutral dark) ───────────────────── */
+.apple-graphite {
+  --background:           oklch(0.18 0.005 240);
+  --foreground:           oklch(0.90 0.005 240);
+  --card:                 oklch(0.22 0.008 240);
+  --card-foreground:      oklch(0.90 0.005 240);
+  --popover:              oklch(0.22 0.008 240);
+  --popover-foreground:   oklch(0.90 0.005 240);
+  --primary:              oklch(0.65 0.18 255);
+  --primary-foreground:   oklch(0.10 0.01 240);
+  --secondary:            oklch(0.28 0.008 240);
+  --secondary-foreground: oklch(0.85 0.005 240);
+  --muted:                oklch(0.26 0.008 240);
+  --muted-foreground:     oklch(0.60 0.008 240);
+  --accent:               oklch(0.30 0.01 255);
+  --accent-foreground:    oklch(0.65 0.18 255);
+  --destructive:          oklch(0.62 0.22 25);
+  --border:               oklch(0.32 0.008 240);
+  --input:                oklch(0.28 0.008 240);
+  --ring:                 oklch(0.65 0.18 255);
+  --sidebar:              oklch(0.13 0.005 240);
+  --sidebar-foreground:   oklch(0.85 0.008 240);
+  --sidebar-accent:       oklch(0.65 0.18 255);
+  --sidebar-accent-foreground: oklch(0.10 0.01 240);
+  --sidebar-border:       oklch(0.25 0.008 240);
+  --radius: 0.75rem;
+}
+
+/* ─── Theme: Apple Sunset (iOS warm orange/coral) ────────────── */
+.apple-sunset {
+  --background:           oklch(0.97 0.01 40);
+  --foreground:           oklch(0.18 0.02 40);
+  --card:                 oklch(1 0 0);
+  --card-foreground:      oklch(0.18 0.02 40);
+  --popover:              oklch(1 0 0);
+  --popover-foreground:   oklch(0.18 0.02 40);
+  --primary:              oklch(0.60 0.22 35);
+  --primary-foreground:   oklch(1 0 0);
+  --secondary:            oklch(0.93 0.02 40);
+  --secondary-foreground: oklch(0.18 0.02 40);
+  --muted:                oklch(0.94 0.015 40);
+  --muted-foreground:     oklch(0.52 0.02 40);
+  --accent:               oklch(0.93 0.025 40);
+  --accent-foreground:    oklch(0.60 0.22 35);
+  --destructive:          oklch(0.55 0.22 20);
+  --border:               oklch(0.88 0.02 40);
+  --input:                oklch(0.93 0.015 40);
+  --ring:                 oklch(0.60 0.22 35);
+  --sidebar:              oklch(0.22 0.06 35);
+  --sidebar-foreground:   oklch(0.92 0.02 40);
+  --sidebar-accent:       oklch(0.60 0.22 35);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border:       oklch(0.32 0.05 35);
+  --radius: 0.75rem;
+}
+
+/* ─── Theme: Apple Midnight (deep iOS navy) ─────────────────── */
+.apple-midnight {
+  --background:           oklch(0.12 0.025 255);
+  --foreground:           oklch(0.92 0.01 255);
+  --card:                 oklch(0.17 0.03 255);
+  --card-foreground:      oklch(0.92 0.01 255);
+  --popover:              oklch(0.17 0.03 255);
+  --popover-foreground:   oklch(0.92 0.01 255);
+  --primary:              oklch(0.70 0.18 215);
+  --primary-foreground:   oklch(0.10 0.02 255);
+  --secondary:            oklch(0.22 0.03 255);
+  --secondary-foreground: oklch(0.85 0.01 255);
+  --muted:                oklch(0.20 0.03 255);
+  --muted-foreground:     oklch(0.58 0.015 255);
+  --accent:               oklch(0.24 0.04 255);
+  --accent-foreground:    oklch(0.70 0.18 215);
+  --destructive:          oklch(0.62 0.22 25);
+  --border:               oklch(0.26 0.03 255);
+  --input:                oklch(0.22 0.03 255);
+  --ring:                 oklch(0.70 0.18 215);
+  --sidebar:              oklch(0.09 0.02 255);
+  --sidebar-foreground:   oklch(0.88 0.015 255);
+  --sidebar-accent:       oklch(0.70 0.18 215);
+  --sidebar-accent-foreground: oklch(0.10 0.02 255);
+  --sidebar-border:       oklch(0.18 0.025 255);
+  --radius: 0.75rem;
+}
+
+/* ─── Theme: Apple Forest (iOS earthy green) ─────────────────── */
+.apple-forest {
+  --background:           oklch(0.96 0.01 148);
+  --foreground:           oklch(0.18 0.03 148);
+  --card:                 oklch(1 0 0);
+  --card-foreground:      oklch(0.18 0.03 148);
+  --popover:              oklch(1 0 0);
+  --popover-foreground:   oklch(0.18 0.03 148);
+  --primary:              oklch(0.48 0.18 148);
+  --primary-foreground:   oklch(1 0 0);
+  --secondary:            oklch(0.91 0.02 148);
+  --secondary-foreground: oklch(0.18 0.03 148);
+  --muted:                oklch(0.93 0.015 148);
+  --muted-foreground:     oklch(0.50 0.02 148);
+  --accent:               oklch(0.91 0.025 148);
+  --accent-foreground:    oklch(0.48 0.18 148);
+  --destructive:          oklch(0.58 0.22 25);
+  --border:               oklch(0.87 0.02 148);
+  --input:                oklch(0.92 0.015 148);
+  --ring:                 oklch(0.48 0.18 148);
+  --sidebar:              oklch(0.20 0.06 148);
+  --sidebar-foreground:   oklch(0.92 0.02 148);
+  --sidebar-accent:       oklch(0.48 0.18 148);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border:       oklch(0.30 0.05 148);
+  --radius: 0.75rem;
+}
