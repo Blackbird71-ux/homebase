@@ -190,7 +190,7 @@ export function AIAssistant() {
       {/* Floating button */}
       <button
         onClick={() => setOpen(v => !v)}
-        className={`fixed bottom-24 right-4 md:bottom-6 md:right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all
+        className={`fixed bottom-36 right-4 md:bottom-6 md:right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all
           ${open ? 'bg-primary text-primary-foreground' : 'bg-card border border-border text-foreground hover:bg-accent'}
           ${recordingState === 'listening' ? 'ring-2 ring-red-500 ring-offset-2' : ''}
         `}
@@ -204,7 +204,7 @@ export function AIAssistant() {
 
       {/* Panel */}
       {open && (
-        <div className="fixed bottom-40 right-4 md:bottom-20 md:right-6 z-50 w-80 sm:w-96 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        <div className="fixed bottom-52 right-4 md:bottom-20 md:right-6 z-50 w-80 sm:w-96 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
           style={{ maxHeight: 'min(480px, calc(100dvh - 180px))' }}
         >
           {/* Header */}

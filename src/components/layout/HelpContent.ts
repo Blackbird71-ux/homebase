@@ -310,7 +310,9 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       {
         title: 'Completing Chores',
         items: [
-          'Mark chores as complete by checking the checkbox.',
+          'Mark chores as complete by checking the checkbox — the checkbox flashes green to confirm.',
+          'A notification shows the next scheduled date; tap Edit in the notification to adjust it.',
+          'If the chore reaches its end date it deactivates automatically.',
           'Completed chores show a history of who completed them and when.',
           'Rotating chores automatically reassign to the next person.',
         ],

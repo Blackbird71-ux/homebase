@@ -37,3 +37,35 @@ Redesigned the chores list from a card-based layout to a compact single-row layo
 - ✅ Linter passes with no warnings
 - ✅ ChoreDialog editor untouched
 - ✅ All existing functionality retained
+
+---
+
+# Chores — Completion Feedback + Mobile Button Fix
+**Date:** May 7, 2026
+
+## Summary
+Added satisfying visual feedback when completing a chore, richer toast notifications showing the next scheduled date, and fixed a mobile layout bug where the AI assistant button was obscured by the help button.
+
+## Changes
+
+### `src/app/(app)/chores/ChoresClient.tsx`
+- Added `completingIds` state (`Set<string>`) to track in-flight completions
+- `handleComplete` now accepts the full `Chore` object (was `choreId: string`)
+- Checkbox immediately turns solid green and scales up (`scale-110`) on click; resets after 700ms
+- Toast upgraded from plain "Chore completed!" to:
+  - **Recurring**: "Chore completed!" with `Next scheduled: {date}` description and an **Edit** action button to jump straight to the edit dialog
+  - **Final occurrence**: "All done!" with "No more occurrences — chore is now complete."
+- Help content updated to describe the new completion flow
+
+### `src/components/ai/AIAssistant.tsx`
+- Moved mobile floating button from `bottom-24` (96px) to `bottom-36` (144px) to clear the help button (which occupies 80–116px from bottom)
+- Chat panel adjusted from `bottom-40` to `bottom-52` on mobile correspondingly
+- Desktop positions (`md:bottom-6`, `md:bottom-20`) unchanged
+
+### `src/components/layout/HelpContent.ts`
+- Updated "Completing Chores" section to describe the green flash confirmation and the reschedule toast with Edit action
+
+## Design
+- Visual feedback is immediate (optimistic) — no waiting for the API before the checkbox animates
+- Toast duration: 5 s for recurring chores (time to read date + decide to edit), 4 s for final-occurrence message
+- Mobile button stack (bottom → top): QuickAdd FAB (20px) → Help button (80px) → AI button (144px)

@@ -76,31 +76,52 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
 
-  async function handleComplete(choreId: string) {
+  async function handleComplete(chore: Chore) {
+    setCompletingIds((prev) => new Set(prev).add(chore.id))
     try {
-      const res = await fetch(`/api/chores/${choreId}/complete`, {
+      const res = await fetch(`/api/chores/${chore.id}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
       if (!res.ok) throw new Error('Failed to complete chore')
       const data = await res.json()
-      setChores((prev) =>
-        prev.map((c) =>
-          c.id === choreId
-            ? {
-                ...c,
-                ...data.chore,
-                completions: [data.completion, ...c.completions],
-                _count: { completions: c._count.completions + 1 },
-              }
-            : c
-        )
-      )
-      toast.success('Chore completed!')
+      const updatedChore = {
+        ...chore,
+        ...data.chore,
+        completions: [data.completion, ...chore.completions],
+        _count: { completions: chore._count.completions + 1 },
+      }
+      setChores((prev) => prev.map((c) => (c.id === chore.id ? updatedChore : c)))
+
+      const nextDate = data.chore.nextDueDate
+      if (nextDate) {
+        toast.success('Chore completed!', {
+          description: `Next scheduled: ${formatDate(nextDate)}`,
+          action: {
+            label: 'Edit',
+            onClick: () => { setEditingChore(updatedChore); setDialogOpen(true) },
+          },
+          duration: 5000,
+        })
+      } else {
+        toast.success('All done!', {
+          description: 'No more occurrences — chore is now complete.',
+          duration: 4000,
+        })
+      }
     } catch {
       toast.error('Failed to complete chore')
+    } finally {
+      setTimeout(() => {
+        setCompletingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(chore.id)
+          return next
+        })
+      }, 700)
     }
   }
 
@@ -243,11 +264,17 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
               >
                 {/* Complete button (checkbox-style) */}
                 <button
-                  onClick={() => handleComplete(chore.id)}
-                  className="shrink-0 flex items-center justify-center h-5 w-5 rounded border border-border hover:border-green-500 hover:bg-green-500/10 transition-colors"
+                  onClick={() => handleComplete(chore)}
+                  className={`shrink-0 flex items-center justify-center h-5 w-5 rounded border transition-all duration-200
+                    ${completingIds.has(chore.id)
+                      ? 'border-green-500 bg-green-500 scale-110'
+                      : 'border-border hover:border-green-500 hover:bg-green-500/10'
+                    }`}
                   title="Mark complete"
                 >
-                  <CheckIcon className="h-3 w-3 text-transparent group-hover:text-green-500 transition-colors" />
+                  <CheckIcon className={`h-3 w-3 transition-colors duration-200 ${
+                    completingIds.has(chore.id) ? 'text-white' : 'text-transparent group-hover:text-green-500'
+                  }`} />
                 </button>
 
                 {/* Title + hover info */}
