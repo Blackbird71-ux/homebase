@@ -39,6 +39,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Use the floating action button (bottom-right) to quickly add items from any page.',
           'Click on a meal to view the recipe details.',
+          'Use the Bot button (bottom-right, above help) to open the AI assistant — add recipes to the meal plan, create notes, or add shopping items using voice or text.',
         ],
       },
     ],
@@ -530,6 +531,16 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'View a complete history of changes made in your family account.',
           'Filter by action type (create, update, delete) or entity type.',
           'Export the audit log for external backup.',
+        ],
+      },
+      {
+        title: 'AI Assistant',
+        items: [
+          'Go to Settings → AI to enter your Gemini API key and choose a model.',
+          'Gemini 2.0 Flash is recommended — it\'s fast and cost-effective for everyday commands.',
+          'Use "Test Connection" to verify your key works before using the assistant.',
+          'Once configured, the Bot button (bottom-right corner) opens the AI assistant on every page.',
+          'Get a free Gemini API key at aistudio.google.com → Get API key.',
         ],
       },
     ],

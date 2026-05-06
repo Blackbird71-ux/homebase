@@ -106,6 +106,17 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Integration management
 - Tunnel configuration for external access
 
+#### 13. **AI Voice & Chat Assistant** (New)
+- **Floating Bot button** present on every page — opens a chat panel with voice and text input
+- **Web Speech API** for microphone transcription (Chrome, Edge, iOS 14.5+, Android Chrome)
+- **Google Gemini function calling** — Gemini interprets the command and calls the correct action
+- **Supported actions**: add recipe to meal plan, create note by dictation, add shopping list items, query this week's meal plan
+- **AI Settings tab** in Settings: enter Gemini API key, choose model (2.0 Flash / 1.5 Pro / 2.5 Pro), test connection
+- **Per-user key storage** — each family member can configure their own Gemini key
+- **PWA compatible** — works on Windows PWA, Android PWA, and iOS PWA (16+)
+- **Text fallback** — typed commands always available when mic is unsupported or unavailable
+- **Context-aware** — Gemini receives current recipe list, active shopping lists, and this week's meal plan so it can resolve names and dates naturally
+
 ### Technical Architecture
 
 #### Database Schema (Prisma)
@@ -162,6 +173,12 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - `src/app/api/documents/[id]/unlock/`: Document PIN verification and unlock
 - `src/app/api/contacts/[id]/unlock/`: Contact PIN verification and unlock
 - `src/app/api/audit-log/backup/`: Audit log backup and truncation
+
+#### AI Assistant (New)
+- `src/app/api/ai/command/route.ts`: Gemini function-calling command interpreter + action executor
+- `src/app/api/settings/ai/route.ts`: GET/PUT user AI settings (key + model)
+- `src/components/ai/AIAssistant.tsx`: Floating panel with voice (Web Speech API) and text input
+- `src/components/settings/AISettingsTab.tsx`: Settings tab for API key, model selection, test connection
 
 #### UI Components
 - `src/components/tags/`: Tag management components (with color picker)
@@ -251,11 +268,11 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 1. **Mobile App**: React Native companion application
 2. **Real-time Collaboration**: Live updates for shared lists
 3. **Recipe Scaling**: Adjust recipe quantities for different serving sizes
-4. **Meal Plan Templates**: Save and reuse weekly meal plans
-5. **Nutrition Tracking**: Integrate nutrition data for recipes
-6. **Budget Tracking**: Connect shopping lists with expense tracking
-7. **AI Meal Suggestions**: Generate meal plans based on preferences
-8. **Offline Support**: Progressive Web App capabilities
+4. **Nutrition Tracking**: Integrate nutrition data for recipes
+5. **Budget Tracking**: Connect shopping lists with expense tracking
+6. **AI — Extended Actions**: Calendar event creation, chore completion, and read-only queries ("what chores are due this week?") via the AI assistant
+7. **AI — Note Templates**: Pre-built note templates the AI can populate by dictation
+8. **AI — Recipe Cross-links in Notes**: Type `[[` in the note editor to link to a recipe (Notion-style)
 
 ### Technical Debt & Considerations
 - TypeScript strict mode could be enabled
@@ -272,9 +289,9 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 
 ### Project Status
 ✅ **Phase 7 Complete**: All features implemented and tested
+✅ **Phase 8 Complete**: AI Voice & Chat Assistant with Gemini function calling
 ✅ **Recurring Events**: Create, edit, delete recurring events with daily/weekly/monthly/yearly options
 ✅ **TypeScript Validation**: No type errors
 ✅ **Build Success**: Production build compiles successfully
 ✅ **Git Status**: All changes committed with descriptive messages
-✅ **Worktree Management**: Worktrees updated and synchronized
 

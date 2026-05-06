@@ -49,6 +49,8 @@ model User {
   lineHeight          String                @default("normal")  // normal | relaxed | spacious
   fontWeight          String                @default("normal")  // normal | medium
   uiPreferences       String?
+  geminiApiKey        String?
+  aiModel             String?               @default("gemini-2.0-flash")
   googleConnected     Boolean               @default(false)
   googleEmail         String?
   googleRefreshToken  String?

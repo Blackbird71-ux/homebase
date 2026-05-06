@@ -5,6 +5,15 @@ HomeBase is a comprehensive family management application designed to help famil
 
 ## 🚀 **Recent Major Enhancements**
 
+### **Version 2.1 Feature Highlights**
+
+#### 1. **AI Voice & Chat Assistant**
+- Natural language commands via voice (microphone) or text from any page
+- Powered by Google Gemini — bring your own API key (free tier available)
+- Commands: add recipes to the meal plan, create notes by dictation, add shopping list items, query this week's meals
+- Works as a PWA on Windows, Android, and iOS (iOS 14.5+)
+- Configure at Settings → AI; floating Bot button available on every page
+
 ### **Version 2.0 Feature Highlights**
 
 #### 1. **Shopping List Color Customization**
@@ -61,6 +70,12 @@ HomeBase is a comprehensive family management application designed to help famil
 - Category organization
 - Family collaboration
 - Search functionality
+
+### **AI Assistant**
+- Voice and text command interface
+- Google Gemini function calling backend
+- Meal plan, notes, and shopping list actions
+- PWA-compatible across all platforms
 
 ## 🛠️ **Technical Stack**
 
@@ -244,6 +259,6 @@ For questions about usage or development, please check the documentation first o
 
 ---
 
-**Last Updated**: April 25, 2026  
-**Version**: 2.0.0  
+**Last Updated**: May 6, 2026  
+**Version**: 2.1.0  
 **Status**: ✅ **Production Ready**

@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar'
 import { QuickAdd } from './QuickAdd'
 import { OfflineBanner } from './OfflineBanner'
 import { HelpButton } from './HelpButton'
+import { AIAssistant } from '@/components/ai/AIAssistant'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -37,6 +38,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Context-sensitive help button */}
       <HelpButton />
+
+      {/* AI voice/chat assistant */}
+      <AIAssistant />
     </div>
 
   )
