@@ -221,14 +221,47 @@ export function AISettingsTab() {
           <CardTitle>What can the AI assistant do?</CardTitle>
         </CardHeader>
         <CardContent>
-          <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-            <li>Add a recipe to the meal plan — <em>"Add pasta bake to Monday lunch"</em></li>
-            <li>Create a note and dictate its content — <em>"Create a note called Weekly Goals"</em></li>
-            <li>Add items to the shopping list — <em>"Add milk, eggs, and bread"</em></li>
-            <li>Check the week's meal plan — <em>"What's for dinner this week?"</em></li>
-          </ul>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <div>
+              <p className="font-medium text-foreground mb-1">Meal plan</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Add a recipe — <em>"Add pasta bake to Monday lunch"</em></li>
+                <li>Remove a meal — <em>"Clear Tuesday dinner"</em></li>
+                <li>Check the plan — <em>"What's for dinner this week?"</em></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Shopping &amp; to-do lists</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Add items — <em>"Add milk, eggs, and bread"</em></li>
+                <li>Read the list — <em>"What's on the shopping list?"</em></li>
+                <li>Add a task — <em>"Add 'call the plumber' to my to-do list"</em></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Calendar</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Create an event — <em>"Add dentist appointment on Thursday at 2pm"</em></li>
+                <li>Check events — <em>"What's on this week?"</em></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Chores</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Mark done — <em>"I just did the vacuuming"</em></li>
+                <li>Check due — <em>"What chores are overdue?"</em></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Notes &amp; recipes</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Create a note — <em>"Create a note called Weekly Goals and dictate it"</em></li>
+                <li>Search recipes — <em>"Do we have a recipe for chicken curry?"</em></li>
+              </ul>
+            </div>
+          </div>
           <p className="text-xs text-muted-foreground mt-3">
-            Click the microphone button in the bottom-right corner of any page to start.
+            Click the Bot button (bottom-right corner of any page) to open the assistant. Voice and text input are both supported.
           </p>
         </CardContent>
       </Card>
