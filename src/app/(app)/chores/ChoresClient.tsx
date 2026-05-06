@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon } from 'lucide-react'
+import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { ChoreDialog } from './ChoreDialog'
+import { HoverCard } from '@/components/ui/hover-card'
 
 interface Member {
   id: string
@@ -47,7 +47,6 @@ interface Chore {
 interface ChoresClientProps {
   initialChores: Chore[]
   members: Member[]
-  currentUserId: string
 }
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -73,7 +72,7 @@ function isOverdue(nextDueDate: string | null): boolean {
   return new Date(nextDueDate) < new Date()
 }
 
-export function ChoresClient({ initialChores, members, currentUserId }: ChoresClientProps) {
+export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
@@ -87,7 +86,6 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
       })
       if (!res.ok) throw new Error('Failed to complete chore')
       const data = await res.json()
-      // Update the chore with the new state from the server
       setChores((prev) =>
         prev.map((c) =>
           c.id === choreId
@@ -146,8 +144,82 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
     return freq
   }
 
+  function HoverDetails({ chore }: { chore: Chore }) {
+    const overdue = isOverdue(chore.nextDueDate)
+    const lastCompleted = chore.completions?.[0]
+
+    return (
+      <div className="bg-popover text-popover-foreground rounded-lg border shadow-xl p-3 min-w-[220px] max-w-[300px] text-xs space-y-1.5">
+        {chore.description && (
+          <p className="text-sm font-medium leading-snug">{chore.description}</p>
+        )}
+
+        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+          <span className="text-muted-foreground">Schedule:</span>
+          <span>{getScheduleLabel(chore)}</span>
+
+          {chore.nextDueDate && (
+            <>
+              <span className="text-muted-foreground">Next due:</span>
+              <span className={overdue ? 'text-amber-500 font-medium' : ''}>
+                {overdue ? '⚠ ' : ''}{formatDate(chore.nextDueDate)}
+              </span>
+            </>
+          )}
+
+          {chore.currentAssignee && (
+            <>
+              <span className="text-muted-foreground">Assignee:</span>
+              <span>{chore.currentAssignee.name}</span>
+            </>
+          )}
+
+          <span className="text-muted-foreground">Times done:</span>
+          <span>{chore._count.completions}</span>
+
+          {chore.endDate && (
+            <>
+              <span className="text-muted-foreground">Ends:</span>
+              <span>{formatDate(chore.endDate)}</span>
+            </>
+          )}
+
+          {chore.rotationInterval > 1 && (
+            <>
+              <span className="text-muted-foreground">Rotation:</span>
+              <span>Every {chore.rotationInterval} completions</span>
+            </>
+          )}
+
+          {chore.autoRotateOnComplete && (
+            <>
+              <span className="text-muted-foreground">Auto-rotate:</span>
+              <span>Yes</span>
+            </>
+          )}
+
+          {chore.emailReminder && (
+            <>
+              <span className="text-muted-foreground">Email reminder:</span>
+              <span>{chore.emailReminderDays} day{chore.emailReminderDays > 1 ? 's' : ''} before</span>
+            </>
+          )}
+        </div>
+
+        {lastCompleted && (
+          <p className="text-[11px] text-muted-foreground/70 pt-1 border-t border-border/40 mt-1">
+            Last done by {lastCompleted.completedBy.name} on{' '}
+            {new Date(lastCompleted.completedAt).toLocaleDateString('en-AU', {
+              weekday: 'short', day: 'numeric', month: 'short',
+            })}
+          </p>
+        )}
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{chores.length} active chore{chores.length !== 1 ? 's' : ''}</p>
         <Button size="sm" onClick={() => { setEditingChore(null); setDialogOpen(true) }}>
@@ -156,98 +228,92 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
       </div>
 
       {chores.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">No chores yet. Add your first household chore to get started.</p>
-          </CardContent>
-        </Card>
+        <div className="py-8 text-center text-muted-foreground text-sm">
+          No chores yet. Add your first household chore to get started.
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-border/60 divide-y divide-border/40">
           {chores.map((chore) => {
             const overdue = isOverdue(chore.nextDueDate)
-            const lastCompleted = chore.completions?.[0]
 
             return (
-              <Card key={chore.id} className={`flex flex-col ${overdue ? 'border-amber-500/30' : ''}`}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-sm font-semibold">{chore.title}</CardTitle>
-                      {chore.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{chore.description}</p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDelete(chore.id)}
-                      className="text-muted-foreground/40 hover:text-destructive transition-colors ml-2 shrink-0"
-                      aria-label="Delete chore"
-                    >
-                      <Trash2Icon className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col gap-2">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{getScheduleLabel(chore)}</span>
-                    <span>{chore._count.completions} done</span>
-                  </div>
+              <div
+                key={chore.id}
+                className={`group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''}`}
+              >
+                {/* Complete button (checkbox-style) */}
+                <button
+                  onClick={() => handleComplete(chore.id)}
+                  className="shrink-0 flex items-center justify-center h-5 w-5 rounded border border-border hover:border-green-500 hover:bg-green-500/10 transition-colors"
+                  title="Mark complete"
+                >
+                  <CheckIcon className="h-3 w-3 text-transparent group-hover:text-green-500 transition-colors" />
+                </button>
 
-                  {/* Next due date */}
-                  {chore.nextDueDate && (
-                    <div className={`text-xs font-medium ${overdue ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                      {overdue ? '⚠ Overdue' : '📅 Next due'}: {formatDate(chore.nextDueDate)}
-                    </div>
-                  )}
+                {/* Title + hover info */}
+                <HoverCard
+                  content={<HoverDetails chore={chore} />}
+                  side="bottom"
+                  className="flex-1 min-w-0"
+                  contentClassName=""
+                >
+                  <span
+                    className="text-sm font-medium cursor-default truncate block"
+                    onClick={() => { setEditingChore(chore); setDialogOpen(true) }}
+                  >
+                    {chore.title}
+                  </span>
+                </HoverCard>
 
-                  {/* End date */}
-                  {chore.endDate && (
-                    <div className="text-[10px] text-muted-foreground/60">
-                      Ends: {formatDate(chore.endDate)}
-                    </div>
-                  )}
+                {/* Overdue badge */}
+                {overdue && (
+                  <span className="shrink-0 text-[11px] font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                    Overdue
+                  </span>
+                )}
 
-                  <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {chore.currentAssignee ? (
-                        <span className="text-xs font-medium truncate">
-                          👤 {chore.currentAssignee.name}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">Unassigned</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleComplete(chore.id)}
-                        title="Mark complete"
-                      >
-                        <CheckIcon className="h-3.5 w-3.5 text-green-500" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleRotate(chore.id)}
-                        title="Rotate assignee"
-                      >
-                        <RotateCcwIcon className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+                {/* Assignee */}
+                {chore.currentAssignee ? (
+                  <span className="shrink-0 text-xs text-muted-foreground truncate max-w-[100px] hidden sm:inline">
+                    👤 {chore.currentAssignee.name}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-xs text-muted-foreground/50 italic hidden sm:inline">
+                    Unassigned
+                  </span>
+                )}
 
-                  {lastCompleted && (
-                    <p className="text-[10px] text-muted-foreground/60">
-                      Last done by {lastCompleted.completedBy.name} on{' '}
-                      {new Date(lastCompleted.completedAt).toLocaleDateString('en-AU', {
-                        weekday: 'short', day: 'numeric', month: 'short',
-                      })}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                {/* Info dot for hover hint (mobile) */}
+                <HoverCard
+                  content={<HoverDetails chore={chore} />}
+                  side="left"
+                  contentClassName="sm:hidden"
+                >
+                  <button className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors sm:hidden">
+                    <InfoIcon className="h-3.5 w-3.5" />
+                  </button>
+                </HoverCard>
+
+                {/* Actions */}
+                <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleRotate(chore.id)}
+                    title="Rotate assignee"
+                  >
+                    <RotateCcwIcon className="h-3.5 w-3.5" />
+                  </Button>
+                  <button
+                    onClick={() => handleDelete(chore.id)}
+                    className="h-7 w-7 flex items-center justify-center text-muted-foreground/40 hover:text-destructive transition-colors"
+                    aria-label="Delete chore"
+                  >
+                    <Trash2Icon className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             )
           })}
         </div>

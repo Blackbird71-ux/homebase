@@ -1,4 +1,3 @@
-# HomeBase — Feature Suggestions & Build Plans
 **Generated:** April 2026  
 **App version:** 2.0 / Phase 7 complete  
 **Status:** Planning document

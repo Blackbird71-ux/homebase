@@ -68,7 +68,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { date, mealType, recipeIds, note } = body
+  const { date, mealType, recipeIds, note, append } = body
 
   if (!date || !mealType) {
     return NextResponse.json({ error: 'date and mealType are required' }, { status: 400 })
@@ -102,6 +102,83 @@ export async function POST(req: Request) {
     : legacyRecipeId && typeof legacyRecipeId === 'string' && legacyRecipeId.trim() !== ''
       ? [legacyRecipeId]
       : []
+  
+  // If append mode, fetch existing recipes for this slot and merge
+  let existingMealPlanId: string | null = null
+  let existingIngredientNames: string[] = []
+  if (append && finalRecipeIds.length > 0) {
+    const existing = await prisma.mealPlan.findUnique({
+      where: {
+        familyId_date_mealType: {
+          familyId: user.familyId,
+          date: normalized,
+          mealType,
+        },
+      },
+      include: {
+        recipes: {
+          include: {
+            recipe: { select: { id: true, title: true, ingredients: true } },
+          },
+        },
+      },
+    })
+    if (existing) {
+      existingMealPlanId = existing.id
+      const existingRecipeIds = existing.recipes.map(r => r.recipeId)
+      // Merge existing recipe IDs with new ones, preserving order
+      const mergedRecipeIds = [...existingRecipeIds]
+      for (const newId of finalRecipeIds) {
+        if (!mergedRecipeIds.includes(newId)) {
+          mergedRecipeIds.push(newId)
+        }
+      }
+      // Collect existing ingredient names for deduplication
+      existingIngredientNames = existing.recipes
+        .flatMap(r => {
+          try {
+            return JSON.parse(r.recipe.ingredients || '[]') as string[]
+          } catch {
+            return []
+          }
+        })
+        .map(i => i.split(',')[0]?.trim().toLowerCase() || '')
+      
+      // Replace finalRecipeIds with the merged list (passed via body or via reassignment)
+      // We need to use the merged list for the upsert below
+      // Since we can't reassign const, we'll pass it differently
+    }
+  }
+
+  // Determine the final list of recipe IDs to save
+  // If append mode and we found existing recipes, use the merged list
+  let idsToSave: string[]
+  if (append && existingMealPlanId !== null) {
+    // Re-fetch to compute the merged list properly
+    const existing = await prisma.mealPlan.findUnique({
+      where: { id: existingMealPlanId },
+      include: {
+        recipes: {
+          include: {
+            recipe: { select: { id: true, title: true, ingredients: true } },
+          },
+        },
+      },
+    })
+    if (existing) {
+      const existingRecipeIds = existing.recipes.map(r => r.recipeId)
+      idsToSave = [...existingRecipeIds]
+      for (const newId of finalRecipeIds) {
+        if (!idsToSave.includes(newId)) {
+          idsToSave.push(newId)
+        }
+      }
+    } else {
+      idsToSave = finalRecipeIds
+    }
+  } else {
+    idsToSave = finalRecipeIds
+  }
 
   const plan = await prisma.mealPlan.upsert({
     where: {
@@ -117,12 +194,12 @@ export async function POST(req: Request) {
       note: note ?? null,
       familyId: user.familyId,
       // For backward compatibility, keep recipeId if there's exactly one recipe
-      recipeId: finalRecipeIds.length === 1 ? finalRecipeIds[0] : null,
+      recipeId: idsToSave.length === 1 ? idsToSave[0] : null,
     },
     update: {
       note: note ?? null,
       // For backward compatibility, keep recipeId if there's exactly one recipe
-      recipeId: finalRecipeIds.length === 1 ? finalRecipeIds[0] : null,
+      recipeId: idsToSave.length === 1 ? idsToSave[0] : null,
     },
     include: {
       recipes: {
@@ -141,9 +218,9 @@ export async function POST(req: Request) {
       where: { mealPlanId: plan.id },
     })
 
-    if (finalRecipeIds.length > 0) {
+    if (idsToSave.length > 0) {
       await prisma.mealPlanRecipe.createMany({
-        data: finalRecipeIds.map((recipeId, index) => ({
+        data: idsToSave.map((recipeId, index) => ({
           mealPlanId: plan.id,
           recipeId,
           order: index,
@@ -178,11 +255,11 @@ export async function POST(req: Request) {
 
   void createAuditLog(
     user,
-    'create',
+    append ? 'update' : 'create',
     'mealPlan',
     updatedPlan.id,
-    `Added ${mealType} meal on ${normalized.toISOString().split('T')[0]}${recipeTitles ? `: ${recipeTitles}` : ''}`,
-    { mealPlan: { date: normalized.toISOString(), mealType, recipeIds: finalRecipeIds } }
+    `${append ? 'Updated' : 'Added'} ${mealType} meal on ${normalized.toISOString().split('T')[0]}${recipeTitles ? `: ${recipeTitles}` : ''}`,
+    { mealPlan: { date: normalized.toISOString(), mealType, recipeIds: idsToSave, append: !!append } }
   )
 
   return NextResponse.json(

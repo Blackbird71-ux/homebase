@@ -47,7 +47,6 @@ export default async function ChoresPage() {
             })),
           }))}
           members={members}
-          currentUserId={user.id}
         />
       </div>
     </div>

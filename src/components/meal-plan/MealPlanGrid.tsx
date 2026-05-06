@@ -182,6 +182,13 @@ export function MealPlanGrid({
 
   async function handleAssign(data: { recipeIds?: string[]; note?: string }): Promise<void> {
     if (!selectedDate) return
+    
+    // Check if there's already an entry for this slot
+    const existingEntry = entries.find(
+      (e) => e.date.slice(0, 10) === selectedDate && e.mealType === selectedMealType
+    )
+    const hasExistingRecipes = existingEntry && existingEntry.recipes?.length > 0
+    
     try {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
@@ -190,6 +197,8 @@ export function MealPlanGrid({
           date: selectedDate + 'T00:00:00Z',
           mealType: selectedMealType,
           ...data,
+          // If there are existing recipes, append new ones instead of replacing
+          append: hasExistingRecipes && data.recipeIds && data.recipeIds.length > 0 ? true : undefined,
         }),
       })
       

@@ -77,6 +77,7 @@ For large tasks, deploy sub-agents in parallel for independent modules:
 - Agents working on different containers must coordinate on network communication
 - **Do not use git for intermediate updates** — user commits manually when task is finished
 - Update all relevant worktrees when finished
+- Ensure contextual help button is updated 
 
 ### 1.5 Testing Protocol
 

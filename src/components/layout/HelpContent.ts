@@ -163,6 +163,14 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click "Add to List" to add recipe ingredients to any shopping or todo list.',
         ],
       },
+      {
+        title: 'Sharing Recipes',
+        items: [
+          'Click "Share" to email a recipe to any email address.',
+          'The shared recipe includes all ingredients and instructions.',
+          'Private information is removed from the shared version.',
+        ],
+      },
     ],
   },
   '/lists': {
@@ -251,6 +259,16 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Sync is manual — click "Sync Now" to push/pull changes.',
         ],
       },
+      {
+        title: 'Email Reminders',
+        items: [
+          'Enable "Email Reminder" on any event to notify the whole family before it starts.',
+          'Choose how far in advance to send the reminder (1 hour to 1 week).',
+          'Add extra email recipients beyond family members using the comma-separated field.',
+          'Reminders are processed automatically every day at 8:00 AM.',
+          'SMTP must be configured in Settings → Email for reminders to work.',
+        ],
+      },
     ],
   },
   '/chores': {
@@ -277,6 +295,16 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Mark chores as complete by checking the checkbox.',
           'Completed chores show a history of who completed them and when.',
           'Rotating chores automatically reassign to the next person.',
+        ],
+      },
+      {
+        title: 'Email Reminders',
+        items: [
+          'Enable "Email Reminder" on a chore to notify the assignee before the due date.',
+          'Choose how many days before the due date the reminder should be sent.',
+          'The reminder is sent to the assigned family member\'s email address.',
+          'Reminders are processed automatically every day at 8:00 AM.',
+          'SMTP must be configured in Settings → Email for reminders to work.',
         ],
       },
     ],
@@ -360,6 +388,15 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Use the scrollable category tabs to filter documents by type.',
           'Categories include Insurance, Warranty, Passport, Medical, Financial, Legal, and more.',
           'The active category is highlighted for easy navigation.',
+        ],
+      },
+      {
+        title: 'Email Reminders',
+        items: [
+          'Enable "Email Reminder" when uploading a document with an expiry date.',
+          'All family members will be notified the specified number of days before expiry.',
+          'Reminders are processed automatically every day at 8:00 AM.',
+          'SMTP must be configured in Settings → Email for reminders to work.',
         ],
       },
     ],
@@ -454,6 +491,16 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         ],
       },
       {
+        title: 'Email Reminders',
+        items: [
+          'Reminders for chores, events, and document expiries are processed automatically at 8:00 AM daily.',
+          'Use the "Send Reminders Now" button to trigger processing immediately.',
+          'SMTP must be configured for reminders to be delivered.',
+          'Configure the daily schedule by setting the REMINDER_CRON_SCHEDULE environment variable.',
+          'Secure the reminders endpoint with the CRON_SECRET environment variable for external schedulers.',
+        ],
+      },
+      {
         title: 'Secure Card Appearance',
         items: [
           'Customize how secure (PIN-protected) cards appear in lists.',
@@ -508,6 +555,16 @@ export function getHelpForPath(pathname: string): HelpPage | null {
   // /notes/[id] -> /notes
   if (pathname.startsWith('/notes/') && pathname !== '/notes') {
     return HELP_CONTENT['/notes'] ?? null
+  }
+
+  // /chores/[id] -> /chores
+  if (pathname.startsWith('/chores/') && pathname !== '/chores') {
+    return HELP_CONTENT['/chores'] ?? null
+  }
+
+  // /documents/[id] -> /documents
+  if (pathname.startsWith('/documents/') && pathname !== '/documents') {
+    return HELP_CONTENT['/documents'] ?? null
   }
 
   // /settings/* -> /settings

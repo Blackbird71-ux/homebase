@@ -12,7 +12,15 @@
       "Bash(PowerShell -Command \"Get-ChildItem -Path 'c:\\\\Appdev\\\\HomeBase\\\\node_modules\\\\next\\\\dist\\\\docs' -ErrorAction SilentlyContinue | Select-Object Name\")",
       "Bash(dir \"c:\\\\Appdev\\\\HomeBase\\\\src\\\\app\\\\api\" -Directory)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Appdev\\\\HomeBase\\\\src\\\\app\\\\api\" -Directory | ForEach-Object { $_.Name })",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Appdev\\\\HomeBase\" -File | Where-Object { $_.Name -match \"^server\\\\.\\(ts|js\\)$\" })"
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Appdev\\\\HomeBase\" -File | Where-Object { $_.Name -match \"^server\\\\.\\(ts|js\\)$\" })",
+      "Bash(npm install *)",
+      "Bash(cat .env.local)",
+      "Bash(cat .env)",
+      "PowerShell(cd \"C:\\\\Appdev\\\\HomeBase\"; $env:DATABASE_URL=\"file:./data/homebase.db\"; npx prisma migrate dev --name add_email_reminders 2>&1)",
+      "PowerShell(cd \"C:\\\\Appdev\\\\HomeBase\"; $env:DATABASE_URL=\"file:./data/homebase.db\"; npx prisma db push 2>&1)",
+      "PowerShell(cd \"C:\\\\Appdev\\\\HomeBase\"; $env:DATABASE_URL=\"file:./data/homebase.db\"; npx prisma generate 2>&1 | tail -5)",
+      "PowerShell(cd \"C:\\\\Appdev\\\\HomeBase\"; $env:DATABASE_URL=\"file:./data/homebase.db\"; npx prisma generate 2>&1 | Select-Object -Last 5)",
+      "PowerShell(cd \"c:\\\\Appdev\\\\HomeBase\"; $env:DATABASE_URL=\"file:./data/homebase.db\"; npx prisma migrate status 2>&1 | Select-Object -Last 20)"
     ]
   }
 }

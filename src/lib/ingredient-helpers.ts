@@ -98,6 +98,24 @@ export function getDefaultCategories(): CategoryWithKeywords[] {
   }))
 }
 
+/**
+ * Checks if a text is likely a section heading rather than an actual ingredient.
+ * Headings are defined as lines where all alphabetic characters are uppercase
+ * (ignoring digits, punctuation, whitespace) and the text is more than 2 characters.
+ * Examples: "FOR THE SAUCE", "TO SERVE", "INSTRUCTIONS"
+ */
+export function isLikelyHeading(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  
+  // Extract only alphabetic characters
+  const alphaChars = trimmed.replace(/[^a-zA-Z]/g, '')
+  if (alphaChars.length <= 2) return false // "EGG", "HAM" are valid ingredients
+  
+  // If all alpha characters are uppercase, it's a heading
+  return alphaChars === alphaChars.toUpperCase()
+}
+
 export function autoGuessCategoryWithFallback(
   ingredientText: string,
   categories?: CategoryWithKeywords[]

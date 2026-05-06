@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Dialog,
@@ -13,8 +13,9 @@ import { Button } from '@/components/ui/button'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ShoppingCategory } from '@/lib/list-helpers'
 import { toast } from 'sonner'
-import { ShoppingCartIcon, CheckIcon, PlusIcon, CheckCheckIcon } from 'lucide-react'
+import { ShoppingCartIcon, CheckIcon, PlusIcon, CheckCheckIcon, MinusIcon, TypeIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isLikelyHeading } from '@/lib/ingredient-helpers'
 
 interface PreviewIngredient {
   text: string
@@ -56,6 +57,11 @@ function recipeKey(r: PreviewRecipe) {
   return `${r.title}||${r.date}||${r.mealType}`
 }
 
+/** Unique key for an ingredient within its recipe context */
+function ingredientKey(recipe: PreviewRecipe, ing: PreviewIngredient, index: number) {
+  return `${recipeKey(recipe)}||${ing.key}||${ing.text}||${index}`
+}
+
 export function ExportGroceriesModal({
   open,
   onOpenChange,
@@ -68,7 +74,8 @@ export function ExportGroceriesModal({
   const [recipes, setRecipes] = useState<PreviewRecipe[]>([])
   const [groceriesList, setGroceriesList] = useState<GroceriesList | null>(null)
   const [overrides, setOverrides] = useState<Map<string, ShoppingCategory>>(new Map())
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [selectedRecipeKeys, setSelectedRecipeKeys] = useState<Set<string>>(new Set())
+  const [selectedIngredientKeys, setSelectedIngredientKeys] = useState<Set<string>>(new Set())
   const [allCategories, setAllCategories] = useState<string[]>(DEFAULT_SHOPPING_CATEGORIES)
 
   useEffect(() => {
@@ -102,8 +109,21 @@ export function ExportGroceriesModal({
           toast.info('No recipes found to add.')
           return
         }
-        setRecipes(data.recipes)
-        setSelectedKeys(new Set(data.recipes.map(recipeKey)))
+        const fetchedRecipes: PreviewRecipe[] = data.recipes
+        setRecipes(fetchedRecipes)
+        setSelectedRecipeKeys(new Set(fetchedRecipes.map(recipeKey)))
+
+        // Pre-select ingredients: everything EXCEPT ALL CAPS headings
+        const initialIngredientKeys = new Set<string>()
+        for (const recipe of fetchedRecipes) {
+          recipe.ingredients.forEach((ing, idx) => {
+            if (!isLikelyHeading(ing.text)) {
+              initialIngredientKeys.add(ingredientKey(recipe, ing, idx))
+            }
+          })
+        }
+        setSelectedIngredientKeys(initialIngredientKeys)
+
         setGroceriesList(data.groceriesList)
         setStatus('ready')
       })
@@ -125,7 +145,7 @@ export function ExportGroceriesModal({
   }
 
   function toggleRecipe(key: string) {
-    setSelectedKeys((prev) => {
+    setSelectedRecipeKeys((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -133,16 +153,27 @@ export function ExportGroceriesModal({
     })
   }
 
+  function toggleIngredient(ingKey: string) {
+    setSelectedIngredientKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(ingKey)) next.delete(ingKey)
+      else next.add(ingKey)
+      return next
+    })
+  }
+
   function buildItems() {
     return recipes
-      .filter((r) => selectedKeys.has(recipeKey(r)))
+      .filter((r) => selectedRecipeKeys.has(recipeKey(r)))
       .flatMap((r) =>
-        r.ingredients.map((ing) => ({
-          text: ing.text,
-          key: ing.key,
-          category: getCategory(ing),
-          recipeName: r.title,
-        }))
+        r.ingredients
+          .filter((ing, idx) => selectedIngredientKeys.has(ingredientKey(r, ing, idx)))
+          .map((ing) => ({
+            text: ing.text,
+            key: ing.key,
+            category: getCategory(ing),
+            recipeName: r.title,
+          }))
       )
   }
 
@@ -175,7 +206,18 @@ export function ExportGroceriesModal({
     }
   }
 
-  const selectedRecipes = recipes.filter((r) => selectedKeys.has(recipeKey(r)))
+  const selectedRecipes = recipes.filter((r) => selectedRecipeKeys.has(recipeKey(r)))
+  const checkedCount = useMemo(() => {
+    let count = 0
+    for (const r of selectedRecipes) {
+      r.ingredients.forEach((ing, idx) => {
+        if (selectedIngredientKeys.has(ingredientKey(r, ing, idx))) {
+          count++
+        }
+      })
+    }
+    return count
+  }, [selectedRecipes, selectedIngredientKeys])
   const totalItems = selectedRecipes.reduce((sum, r) => sum + r.ingredients.length, 0)
 
   return (
@@ -185,9 +227,8 @@ export function ExportGroceriesModal({
           <DialogTitle>Add to Groceries</DialogTitle>
           {status !== 'loading' && (
             <p className="text-sm text-muted-foreground mt-1">
-              {totalItems} ingredient{totalItems !== 1 ? 's' : ''} from{' '}
+              {checkedCount} of {totalItems} ingredient{totalItems !== 1 ? 's' : ''} selected from{' '}
               {selectedRecipes.length} of {recipes.length} recipe{recipes.length !== 1 ? 's' : ''}.
-              {recipes.length > 1 && ' Tap a recipe to include or exclude it.'}
             </p>
           )}
         </DialogHeader>
@@ -202,14 +243,14 @@ export function ExportGroceriesModal({
           <>
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 min-h-0">
               {recipes.map((recipe) => {
-                const key = recipeKey(recipe)
-                const isSelected = selectedKeys.has(key)
+                const rKey = recipeKey(recipe)
+                const isSelected = selectedRecipeKeys.has(rKey)
                 return (
-                  <div key={key}>
+                  <div key={rKey}>
                     {/* Recipe header — tap to toggle inclusion */}
                     <button
                       type="button"
-                      onClick={() => toggleRecipe(key)}
+                      onClick={() => toggleRecipe(rKey)}
                       className={cn(
                         'flex items-center gap-2 mb-2 w-full text-left rounded px-1 py-0.5 -mx-1 transition-opacity',
                         !isSelected && 'opacity-50'
@@ -231,30 +272,58 @@ export function ExportGroceriesModal({
                       </span>
                     </button>
 
-                    {/* Ingredients — only when selected */}
+                    {/* Ingredients — only when recipe is selected */}
                     {isSelected && (
                       <div className="space-y-1">
-                        {recipe.ingredients.map((ing) => {
+                        {recipe.ingredients.map((ing, idx) => {
+                          const ingKey = ingredientKey(recipe, ing, idx)
+                          const isIngSelected = selectedIngredientKeys.has(ingKey)
                           const cat = getCategory(ing)
                           const isLearned =
                             !overrides.has(ing.key) && ing.source === 'learned'
                           const isCustom =
                             !overrides.has(ing.key) && ing.source === 'custom'
+                          const isHeading = isLikelyHeading(ing.text)
+
                           return (
                             <div
-                              key={ing.key + ing.text}
+                              key={ingKey}
                               className={cn(
                                 'flex items-center gap-2 py-1',
                                 ing.alreadyInList && 'opacity-60'
                               )}
                             >
+                              {/* Per-ingredient checkbox */}
+                              <button
+                                type="button"
+                                onClick={() => toggleIngredient(ingKey)}
+                                className={cn(
+                                  'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                                  isIngSelected
+                                    ? 'bg-primary border-primary text-primary-foreground'
+                                    : 'border-muted-foreground/50'
+                                )}
+                              >
+                                {isIngSelected && <CheckIcon className="h-3 w-3" />}
+                              </button>
+
                               <span className="flex-1 text-sm flex items-center gap-1.5">
                                 {ing.alreadyInList ? (
                                   <CheckCheckIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                 ) : (
                                   <PlusIcon className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                                 )}
-                                {ing.text}
+                                <span className={cn(
+                                  isHeading && 'text-muted-foreground italic text-xs font-medium',
+                                  !isSelected && 'opacity-40'
+                                )}>
+                                  {ing.text}
+                                </span>
+                                {isHeading && (
+                                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
+                                    heading
+                                  </span>
+                                )}
                               </span>
                               <select
                                 aria-label={`Category for ${ing.text}`}
@@ -336,7 +405,7 @@ export function ExportGroceriesModal({
                   </Button>
                   <Button
                     onClick={handleAddToGroceries}
-                    disabled={status === 'saving' || selectedKeys.size === 0}
+                    disabled={status === 'saving' || selectedRecipeKeys.size === 0 || checkedCount === 0}
                   >
                     <ShoppingCartIcon className="h-4 w-4 mr-1" />
                     {status === 'saving' ? 'Saving…' : 'Add to Groceries'}
