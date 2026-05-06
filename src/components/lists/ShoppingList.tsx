@@ -19,6 +19,14 @@ import {
 } from '@dnd-kit/sortable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { PlusIcon, BarcodeIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { groupByCategory, groupByRecipe, DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
@@ -62,6 +70,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [inlineCatName, setInlineCatName] = useState('')
   const [isSavingCat, setIsSavingCat] = useState(false)
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -652,7 +661,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         <Button
           variant="ghost"
           size="sm"
-          onClick={clearCompleted}
+          onClick={() => setShowClearConfirm(true)}
           className="self-end text-muted-foreground"
         >
           Clear {completedItems.length} completed
@@ -744,6 +753,32 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
           />
         </div>
       )}
+
+      {/* Confirmation dialog for clearing completed items */}
+      <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clear completed items?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to clear all {completedItems.length} completed item{completedItems.length !== 1 ? 's' : ''}? Locked items will be kept.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowClearConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                setShowClearConfirm(false)
+                clearCompleted()
+              }}
+            >
+              Clear
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <EditItemDialog
         open={editItemId !== null}
