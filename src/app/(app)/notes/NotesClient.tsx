@@ -209,7 +209,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
   }), [notes, currentUserId])
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-4 md:p-6 gap-6">
+    <div className="flex flex-col h-full overflow-y-auto p-3 md:p-4 gap-4">
       {/* Header with tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
@@ -381,7 +381,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 content-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 flex-1 content-start">
           {filteredNotes.map((note) => (
               <NoteCard
               key={note.id}
