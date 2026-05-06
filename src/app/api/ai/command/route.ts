@@ -43,6 +43,17 @@ const functionDeclarations: FunctionDeclaration[] = [
       },
     },
   },
+  {
+    name: 'generateShoppingList',
+    description: 'Add all ingredients from this week\'s planned recipes to the shopping list. Use this when the user says "add this week\'s ingredients to the shopping list", "generate a shopping list from the meal plan", or "what do I need to buy for this week\'s meals?".',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        confirm: { type: SchemaType.BOOLEAN, description: 'Always set to true — the user has explicitly requested this.' },
+      },
+      required: ['confirm'],
+    },
+  },
   // ── Notes ──────────────────────────────────────────────────────────────────
   {
     name: 'createNote',
@@ -54,6 +65,17 @@ const functionDeclarations: FunctionDeclaration[] = [
         content: { type: SchemaType.STRING, description: 'The body content of the note (can be empty)' },
       },
       required: ['title'],
+    },
+  },
+  {
+    name: 'queryNotes',
+    description: 'Search notes by keyword. Use this when the user asks "do I have any notes about X?", "find my note on Y", or "what did I write about Z?".',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        query: { type: SchemaType.STRING, description: 'The keyword or phrase to search for in note titles and content' },
+      },
+      required: ['query'],
     },
   },
   // ── Shopping list ──────────────────────────────────────────────────────────
@@ -85,6 +107,18 @@ const functionDeclarations: FunctionDeclaration[] = [
     parameters: {
       type: SchemaType.OBJECT,
       properties: {},
+    },
+  },
+  {
+    name: 'completeListItem',
+    description: 'Mark a shopping list or to-do item as done/completed/bought. Use this when the user says "mark milk as bought", "I got the eggs", "tick off X", or "complete the task X".',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        itemName: { type: SchemaType.STRING, description: 'The name or partial name of the item to mark complete' },
+        listType: { type: SchemaType.STRING, description: 'Optional: "shopping" or "todo" to narrow the search. Omit to search both.' },
+      },
+      required: ['itemName'],
     },
   },
   // ── Todo list ──────────────────────────────────────────────────────────────
@@ -162,6 +196,52 @@ const functionDeclarations: FunctionDeclaration[] = [
       required: ['query'],
     },
   },
+  {
+    name: 'getRecipeIngredients',
+    description: 'Get the ingredient list for a specific recipe. Use this when the user asks "what do I need for X?", "what are the ingredients in X?", or "how do I make X?".',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        recipeId: { type: SchemaType.STRING, description: 'The ID of the recipe (from the recipes list in context)' },
+      },
+      required: ['recipeId'],
+    },
+  },
+  // ── Contacts ───────────────────────────────────────────────────────────────
+  {
+    name: 'lookupContact',
+    description: 'Look up a household contact by name or category. Use this when the user asks "what\'s the dentist\'s number?", "find the plumber\'s details", or "what\'s the school\'s phone number?".',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        query: { type: SchemaType.STRING, description: 'The name or category to search for (e.g. "dentist", "school", "plumber")' },
+      },
+      required: ['query'],
+    },
+  },
+  // ── Birthdays ──────────────────────────────────────────────────────────────
+  {
+    name: 'queryBirthdays',
+    description: 'Check upcoming birthdays or anniversaries. Use this when the user asks "any birthdays coming up?", "whose birthday is this month?", or "when is X\'s birthday?".',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        query: { type: SchemaType.STRING, description: 'Optional: a name or month to filter by, e.g. "May" or "Sarah". Omit to see all upcoming birthdays in the next 60 days.' },
+      },
+    },
+  },
+  // ── Documents ──────────────────────────────────────────────────────────────
+  {
+    name: 'queryDocuments',
+    description: 'Look up stored documents, particularly those expiring soon. Use this when the user asks "any documents expiring soon?", "when does our insurance expire?", or "find the X document".',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        query: { type: SchemaType.STRING, description: 'Optional: search term or category like "insurance", "passport", "warranty". Omit to show documents expiring within 90 days.' },
+        expiringOnly: { type: SchemaType.BOOLEAN, description: 'Set to true to only show documents with upcoming expiry dates' },
+      },
+    },
+  },
   // ── Fallback ───────────────────────────────────────────────────────────────
   {
     name: 'unknown',
@@ -187,14 +267,13 @@ function resolveDayToDate(dayName: string, userTimezone: string): string {
   if (lower === 'today') return todayStr
   if (lower === 'tomorrow') return format(addDays(today, 1), 'yyyy-MM-dd')
 
-  // If it looks like an ISO date already, return it
   if (/^\d{4}-\d{2}-\d{2}$/.test(lower)) return lower
 
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
   const targetIdx = days.indexOf(lower)
   if (targetIdx === -1) return todayStr
 
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 }) // Monday-based week
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const candidate = addDays(weekStart, targetIdx === 0 ? 6 : targetIdx - 1)
   const candidateStr = format(candidate, 'yyyy-MM-dd')
   if (candidateStr < todayStr) {
@@ -259,6 +338,17 @@ function calculateNextDueDateAI(
   return next
 }
 
+// ---------- Helper: safe JSON parse to string array ----------
+
+function safeParseStringArray(json: string): string[] {
+  try {
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 // ---------- POST handler ----------
 
 export async function POST(req: Request) {
@@ -276,7 +366,7 @@ export async function POST(req: Request) {
       geminiApiKey: true,
       aiModel: true,
       name: true,
-      family: { select: { timezone: true } },
+      family: { select: { timezone: true, birthdays: true } },
     },
   })
 
@@ -340,7 +430,7 @@ export async function POST(req: Request) {
     }),
   ])
 
-  // Build context summaries for the system prompt
+  // Build context summaries
   const recipeList = recipes.map(r => `"${r.title}" (id: ${r.id})`).join('\n')
 
   const shoppingListSummary = shoppingLists.length > 0
@@ -377,6 +467,15 @@ export async function POST(req: Request) {
       }).join('\n')
     : 'No events this week.'
 
+  // Parse upcoming birthdays for context
+  const birthdayRaw = userRecord.family?.birthdays ?? null
+  const birthdayList: Array<{ name: string; type: string; date: string }> = birthdayRaw
+    ? (() => { try { return JSON.parse(birthdayRaw) } catch { return [] } })()
+    : []
+  const birthdaySummary = birthdayList.length > 0
+    ? birthdayList.map(b => `${b.name} (${b.type}): ${b.date}`).join(', ')
+    : 'none stored'
+
   const systemPrompt = `You are a helpful AI assistant for a family household management app called HomeBase.
 Today is ${nowStr} (${new Date().toLocaleDateString('en-AU', { weekday: 'long', timeZone: timezone })}).
 The family's timezone is ${timezone}.
@@ -396,6 +495,8 @@ ${choresSummary}
 
 This week's calendar events:
 ${eventsSummary}
+
+Stored birthdays/anniversaries: ${birthdaySummary}
 
 When the user mentions a recipe by name, match it to the closest recipe in the list above (case-insensitive, partial match is fine) and use its ID.
 When the user mentions a day like "Monday" or "tomorrow", resolve it to the correct date in the current or upcoming week.
@@ -424,8 +525,7 @@ Always use function calls to perform actions — do not just describe what you w
 
   const { name: fnName, args } = part.functionCall
 
-  // ---------- Execute the action ----------
-
+  // ── unknown ────────────────────────────────────────────────────────────────
   if (fnName === 'unknown') {
     return NextResponse.json({ message: (args as { message: string }).message })
   }
@@ -510,6 +610,76 @@ Always use function calls to perform actions — do not just describe what you w
     })
   }
 
+  // ── generateShoppingList ───────────────────────────────────────────────────
+  if (fnName === 'generateShoppingList') {
+    // Collect all unique recipe IDs from this week's meal plan
+    const recipeIds = new Set<string>()
+    for (const plan of mealPlans) {
+      for (const r of plan.recipes) {
+        if ((r as { recipeId?: string }).recipeId) {
+          recipeIds.add((r as { recipeId: string }).recipeId)
+        }
+      }
+    }
+
+    // Also collect from the MealPlan.recipeId field (legacy)
+    const planRecipeIds = await prisma.mealPlanRecipe.findMany({
+      where: { mealPlanId: { in: mealPlans.map(p => p.id) } },
+      select: { recipeId: true },
+    })
+    for (const r of planRecipeIds) recipeIds.add(r.recipeId)
+
+    if (recipeIds.size === 0) {
+      return NextResponse.json({ message: 'No recipes in this week\'s meal plan to generate a list from.' })
+    }
+
+    // Load full ingredient lists for those recipes
+    const recipeDetails = await prisma.recipe.findMany({
+      where: { id: { in: Array.from(recipeIds) }, familyId: user.familyId },
+      select: { title: true, ingredients: true },
+    })
+
+    const allIngredients: string[] = []
+    for (const r of recipeDetails) {
+      const parsed = safeParseStringArray(r.ingredients)
+      allIngredients.push(...parsed)
+    }
+
+    if (allIngredients.length === 0) {
+      return NextResponse.json({ message: 'Recipes found but no ingredients to add.' })
+    }
+
+    // Get or create the shopping list
+    let list = shoppingLists[0]
+    if (!list) {
+      const created = await prisma.list.create({
+        data: { name: 'Shopping List', type: 'SHOPPING', familyId: user.familyId },
+      })
+      list = { id: created.id, name: created.name }
+    }
+
+    const maxOrder = await prisma.listItem.aggregate({
+      where: { listId: list.id },
+      _max: { sortOrder: true },
+    })
+    const baseOrder = (maxOrder._max.sortOrder ?? 0) + 1
+
+    await prisma.listItem.createMany({
+      data: allIngredients.map((ingredient, i) => ({
+        content: ingredient,
+        listId: list.id,
+        createdBy: user.id,
+        sortOrder: baseOrder + i,
+      })),
+    })
+
+    const recipeNames = recipeDetails.map(r => r.title).join(', ')
+    return NextResponse.json({
+      message: `Added ${allIngredients.length} ingredients from ${recipeDetails.length} recipe${recipeDetails.length > 1 ? 's' : ''} (${recipeNames}) to ${list.name}.`,
+      action: 'generateShoppingList',
+    })
+  }
+
   // ── createNote ─────────────────────────────────────────────────────────────
   if (fnName === 'createNote') {
     const { title, content } = args as { title: string; content?: string }
@@ -526,6 +696,40 @@ Always use function calls to perform actions — do not just describe what you w
       action: 'createNote',
       noteId: note.id,
     })
+  }
+
+  // ── queryNotes ─────────────────────────────────────────────────────────────
+  if (fnName === 'queryNotes') {
+    const { query } = args as { query: string }
+    const lower = query.toLowerCase()
+
+    const notes = await prisma.note.findMany({
+      where: {
+        familyId: user.familyId,
+        OR: [
+          { title: { contains: query } },
+          { content: { contains: query } },
+        ],
+      },
+      select: { id: true, title: true, content: true, createdAt: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
+    })
+
+    // SQLite contains is case-sensitive; do a secondary client-side filter for case-insensitivity
+    const matched = notes.filter(n =>
+      n.title.toLowerCase().includes(lower) || n.content.toLowerCase().includes(lower)
+    )
+
+    if (matched.length === 0) {
+      return NextResponse.json({ message: `No notes found matching "${query}".` })
+    }
+
+    const lines = matched.map(n => {
+      const snippet = n.content.length > 80 ? n.content.slice(0, 80).trimEnd() + '…' : n.content
+      return `• ${n.title}${snippet ? `: ${snippet}` : ''}`
+    })
+    return NextResponse.json({ message: `Found ${matched.length} note${matched.length > 1 ? 's' : ''} matching "${query}":\n${lines.join('\n')}` })
   }
 
   // ── addShoppingListItem ────────────────────────────────────────────────────
@@ -580,6 +784,53 @@ Always use function calls to perform actions — do not just describe what you w
     return NextResponse.json({ message: `${list.name}:\n${lines}` })
   }
 
+  // ── completeListItem ───────────────────────────────────────────────────────
+  if (fnName === 'completeListItem') {
+    const { itemName, listType } = args as { itemName: string; listType?: string }
+    const lower = itemName.toLowerCase()
+
+    // Determine which list types to search
+    const typeFilter = listType === 'shopping' ? 'SHOPPING' : listType === 'todo' ? 'TODO' : undefined
+
+    const activeLists = await prisma.list.findMany({
+      where: {
+        familyId: user.familyId,
+        isActive: true,
+        ...(typeFilter ? { type: typeFilter } : {}),
+      },
+      select: { id: true, name: true, type: true },
+    })
+
+    if (activeLists.length === 0) {
+      return NextResponse.json({ message: 'No active lists found.' })
+    }
+
+    // Find matching incomplete item across all relevant lists
+    const candidates = await prisma.listItem.findMany({
+      where: {
+        listId: { in: activeLists.map(l => l.id) },
+        isCompleted: false,
+      },
+      select: { id: true, content: true, listId: true },
+    })
+
+    const match = candidates.find(c => c.content.toLowerCase().includes(lower))
+    if (!match) {
+      return NextResponse.json({ message: `No incomplete item matching "${itemName}" found.` })
+    }
+
+    await prisma.listItem.update({
+      where: { id: match.id },
+      data: { isCompleted: true },
+    })
+
+    const listName = activeLists.find(l => l.id === match.listId)?.name ?? 'list'
+    return NextResponse.json({
+      message: `"${match.content}" marked as done in ${listName}.`,
+      action: 'completeListItem',
+    })
+  }
+
   // ── addTodoItem ────────────────────────────────────────────────────────────
   if (fnName === 'addTodoItem') {
     const { content, dueDate } = args as { content: string; dueDate?: string }
@@ -632,17 +883,13 @@ Always use function calls to perform actions — do not just describe what you w
     let allDay = isAllDay ?? false
 
     if (startTime && !allDay) {
-      // Parse HH:MM time and combine with date in user's timezone
       const [hours, minutes] = startTime.split(':').map(Number)
-      // Build a date string in the target timezone
       const startIso = `${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes ?? 0).padStart(2, '0')}:00`
-      // Create the date treating the input as local to the family's timezone
       const offsetDate = new Date(new Date(startIso).toLocaleString('en-US', { timeZone: timezone }))
       const utcOffset = new Date(startIso).getTime() - offsetDate.getTime()
       start = new Date(new Date(startIso).getTime() + utcOffset)
       end = new Date(start.getTime() + (durationMinutes ?? 60) * 60 * 1000)
     } else {
-      // All-day event
       allDay = true
       start = new Date(dateStr + 'T00:00:00Z')
       end = new Date(dateStr + 'T23:59:59Z')
@@ -772,6 +1019,173 @@ Always use function calls to perform actions — do not just describe what you w
     }
     const lines = matches.map(r => `• ${r.title}`).join('\n')
     return NextResponse.json({ message: `Found ${matches.length} recipe${matches.length > 1 ? 's' : ''} matching "${query}":\n${lines}` })
+  }
+
+  // ── getRecipeIngredients ───────────────────────────────────────────────────
+  if (fnName === 'getRecipeIngredients') {
+    const { recipeId } = args as { recipeId: string }
+
+    const recipe = await prisma.recipe.findFirst({
+      where: { id: recipeId, familyId: user.familyId },
+      select: { title: true, ingredients: true, servings: true },
+    })
+    if (!recipe) {
+      return NextResponse.json({ error: 'Recipe not found.' }, { status: 404 })
+    }
+
+    const ingredients = safeParseStringArray(recipe.ingredients)
+    if (ingredients.length === 0) {
+      return NextResponse.json({ message: `${recipe.title} has no ingredients listed.` })
+    }
+
+    const servingsPart = recipe.servings ? ` (serves ${recipe.servings})` : ''
+    const lines = ingredients.map(i => `• ${i}`).join('\n')
+    return NextResponse.json({ message: `${recipe.title}${servingsPart}:\n${lines}` })
+  }
+
+  // ── lookupContact ──────────────────────────────────────────────────────────
+  if (fnName === 'lookupContact') {
+    const { query } = args as { query: string }
+    const lower = query.toLowerCase()
+
+    const contacts = await prisma.householdContact.findMany({
+      where: { familyId: user.familyId },
+      select: { name: true, category: true, phone: true, email: true, address: true, notes: true, pinHash: true },
+      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    })
+
+    const matches = contacts.filter(c =>
+      c.name.toLowerCase().includes(lower) || c.category.toLowerCase().includes(lower)
+    )
+
+    if (matches.length === 0) {
+      return NextResponse.json({ message: `No contacts found matching "${query}".` })
+    }
+
+    const lines = matches.map(c => {
+      if (c.pinHash) {
+        return `• ${c.name} (${c.category}) — PIN protected`
+      }
+      const details: string[] = []
+      if (c.phone) details.push(`📞 ${c.phone}`)
+      if (c.email) details.push(`✉️ ${c.email}`)
+      if (c.address) details.push(`📍 ${c.address}`)
+      if (c.notes) details.push(`Note: ${c.notes}`)
+      return `• ${c.name} (${c.category})${details.length ? '\n  ' + details.join('  ') : ' — no details stored'}`
+    })
+    return NextResponse.json({ message: lines.join('\n') })
+  }
+
+  // ── queryBirthdays ─────────────────────────────────────────────────────────
+  if (fnName === 'queryBirthdays') {
+    const { query } = args as { query?: string }
+
+    if (birthdayList.length === 0) {
+      return NextResponse.json({ message: 'No birthdays or anniversaries stored. Add them in Settings → Family.' })
+    }
+
+    const today = parseISO(nowStr)
+    const currentYear = today.getFullYear()
+
+    // Enrich with next occurrence and days until
+    const enriched = birthdayList
+      .map(b => {
+        // date format: "MM-DD" or "YYYY-MM-DD"
+        const parts = b.date.split('-')
+        const month = parseInt(parts[parts.length - 2]) - 1  // 0-indexed
+        const day = parseInt(parts[parts.length - 1])
+        let next = new Date(currentYear, month, day)
+        if (next < today) next = new Date(currentYear + 1, month, day)
+        const daysUntil = Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        return { ...b, next, daysUntil }
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+
+    let filtered = enriched
+    if (query) {
+      const lower = query.toLowerCase()
+      const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december']
+      const monthIdx = monthNames.findIndex(m => m.startsWith(lower))
+      if (monthIdx >= 0) {
+        filtered = enriched.filter(b => b.next.getMonth() === monthIdx)
+      } else {
+        filtered = enriched.filter(b => b.name.toLowerCase().includes(lower))
+      }
+    } else {
+      // Default: next 60 days
+      filtered = enriched.filter(b => b.daysUntil <= 60)
+    }
+
+    if (filtered.length === 0) {
+      return NextResponse.json({ message: query ? `No birthdays found matching "${query}".` : 'No birthdays in the next 60 days.' })
+    }
+
+    const lines = filtered.map(b => {
+      const dateStr = b.next.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+      const countdown = b.daysUntil === 0 ? ' — TODAY!' : b.daysUntil === 1 ? ' — tomorrow!' : ` — in ${b.daysUntil} days`
+      return `• ${b.name} (${b.type}) — ${dateStr}${countdown}`
+    })
+    return NextResponse.json({ message: lines.join('\n') })
+  }
+
+  // ── queryDocuments ─────────────────────────────────────────────────────────
+  if (fnName === 'queryDocuments') {
+    const { query, expiringOnly } = args as { query?: string; expiringOnly?: boolean }
+
+    const documents = await prisma.document.findMany({
+      where: { familyId: user.familyId },
+      select: { title: true, category: true, expiryDate: true, notes: true, pinHash: true, fileName: true },
+      orderBy: { expiryDate: 'asc' },
+    })
+
+    if (documents.length === 0) {
+      return NextResponse.json({ message: 'No documents stored.' })
+    }
+
+    const today = parseISO(nowStr)
+    const ninetyDays = addDays(today, 90)
+
+    let filtered = documents
+    if (query) {
+      const lower = query.toLowerCase()
+      filtered = documents.filter(d =>
+        d.title.toLowerCase().includes(lower) ||
+        d.category.toLowerCase().includes(lower) ||
+        (d.notes ?? '').toLowerCase().includes(lower)
+      )
+    } else if (expiringOnly) {
+      filtered = documents.filter(d => d.expiryDate && new Date(d.expiryDate) <= ninetyDays)
+    } else {
+      // Default: show documents expiring within 90 days
+      filtered = documents.filter(d => d.expiryDate && new Date(d.expiryDate) <= ninetyDays)
+      if (filtered.length === 0) {
+        // Fallback: show all if nothing is expiring
+        filtered = documents
+      }
+    }
+
+    if (filtered.length === 0) {
+      return NextResponse.json({ message: query ? `No documents found matching "${query}".` : 'No documents expiring in the next 90 days.' })
+    }
+
+    const lines = filtered.map(d => {
+      if (d.pinHash) {
+        return `• ${d.title} (${d.category}) — PIN protected`
+      }
+      const expiry = d.expiryDate
+        ? (() => {
+            const exp = new Date(d.expiryDate)
+            const daysLeft = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+            const expStr = exp.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+            if (daysLeft < 0) return `expired ${Math.abs(daysLeft)} days ago (${expStr})`
+            if (daysLeft === 0) return `expires TODAY (${expStr})`
+            return `expires ${expStr} (${daysLeft} days)`
+          })()
+        : 'no expiry date'
+      const notePart = d.notes ? ` — ${d.notes}` : ''
+      return `• ${d.title} (${d.category}) — ${expiry}${notePart}`
+    })
+    return NextResponse.json({ message: lines.join('\n') })
   }
 
   return NextResponse.json({ message: 'Action not recognised.' })

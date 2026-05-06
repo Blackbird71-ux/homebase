@@ -110,12 +110,23 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **Floating Bot button** present on every page — opens a chat panel with voice and text input
 - **Web Speech API** for microphone transcription (Chrome, Edge, iOS 14.5+, Android Chrome)
 - **Google Gemini function calling** — Gemini interprets the command and calls the correct action
-- **Supported actions**: add recipe to meal plan, create note by dictation, add shopping list items, query this week's meal plan
+- **19 supported actions** across all major app areas (see below)
 - **AI Settings tab** in Settings: enter Gemini API key, choose model (2.0 Flash / 1.5 Pro / 2.5 Pro), test connection
 - **Per-user key storage** — each family member can configure their own Gemini key
 - **PWA compatible** — works on Windows PWA, Android PWA, and iOS PWA (16+)
 - **Text fallback** — typed commands always available when mic is unsupported or unavailable
-- **Context-aware** — Gemini receives current recipe list, active shopping lists, and this week's meal plan so it can resolve names and dates naturally
+- **Context-aware** — Gemini receives recipes, shopping lists, meal plan, chores, events, and birthdays in its system prompt so it can resolve names and dates naturally
+
+**Meal plan**: add recipe, clear slot, query week, generate shopping list from meal plan  
+**Shopping list**: add items, read list, tick off item  
+**To-do list**: add task with optional due date  
+**Calendar**: create event (timed or all-day), query week or specific day  
+**Chores**: mark complete (recalculates next due), query by filter (overdue/upcoming/mine)  
+**Notes**: create by dictation, search by keyword  
+**Recipes**: fuzzy search by name, get ingredient list  
+**Contacts**: look up by name or category (PIN-protected contacts shown as protected)  
+**Documents**: query by name/category, show expiring within 90 days  
+**Birthdays**: query upcoming (next 60 days), filter by month or name
 
 ### Technical Architecture
 

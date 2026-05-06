@@ -228,6 +228,7 @@ export function AISettingsTab() {
                 <li>Add a recipe — <em>"Add pasta bake to Monday lunch"</em></li>
                 <li>Remove a meal — <em>"Clear Tuesday dinner"</em></li>
                 <li>Check the plan — <em>"What's for dinner this week?"</em></li>
+                <li>Generate shopping list — <em>"Add this week's meal ingredients to the shopping list"</em></li>
               </ul>
             </div>
             <div>
@@ -235,13 +236,14 @@ export function AISettingsTab() {
               <ul className="space-y-1 list-disc list-inside">
                 <li>Add items — <em>"Add milk, eggs, and bread"</em></li>
                 <li>Read the list — <em>"What's on the shopping list?"</em></li>
+                <li>Tick off an item — <em>"Mark milk as bought"</em></li>
                 <li>Add a task — <em>"Add 'call the plumber' to my to-do list"</em></li>
               </ul>
             </div>
             <div>
               <p className="font-medium text-foreground mb-1">Calendar</p>
               <ul className="space-y-1 list-disc list-inside">
-                <li>Create an event — <em>"Add dentist appointment on Thursday at 2pm"</em></li>
+                <li>Create an event — <em>"Add dentist on Thursday at 2pm"</em></li>
                 <li>Check events — <em>"What's on this week?"</em></li>
               </ul>
             </div>
@@ -253,10 +255,25 @@ export function AISettingsTab() {
               </ul>
             </div>
             <div>
-              <p className="font-medium text-foreground mb-1">Notes &amp; recipes</p>
+              <p className="font-medium text-foreground mb-1">Notes</p>
               <ul className="space-y-1 list-disc list-inside">
-                <li>Create a note — <em>"Create a note called Weekly Goals and dictate it"</em></li>
-                <li>Search recipes — <em>"Do we have a recipe for chicken curry?"</em></li>
+                <li>Create — <em>"Create a note called Weekly Goals and dictate it"</em></li>
+                <li>Search — <em>"Do I have any notes about the car?"</em></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Recipes</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Search — <em>"Do we have a recipe for chicken curry?"</em></li>
+                <li>Ingredients — <em>"What do I need for pasta bake?"</em></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Contacts, documents &amp; birthdays</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Look up a contact — <em>"What's the dentist's number?"</em></li>
+                <li>Check documents — <em>"Any documents expiring soon?"</em></li>
+                <li>Birthdays — <em>"Any birthdays coming up this month?"</em></li>
               </ul>
             </div>
           </div>
