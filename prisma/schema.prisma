@@ -14,6 +14,7 @@ model Family {
   umamiSiteId          String?
   birthdays            String?               // JSON array: [{name, type, date}]
   loginTagline         String?
+  appVersion           String?
   users                User[]
   events               Event[]
   lists                List[]

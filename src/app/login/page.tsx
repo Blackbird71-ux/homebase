@@ -3,18 +3,21 @@ import { House } from 'lucide-react'
 import { LoginForm } from './LoginForm'
 
 const DEFAULT_TAGLINE = 'The calm command centre for the people who share your roof.'
+const DEFAULT_VERSION = '3.2'
 
 export default async function LoginPage() {
   let tagline = DEFAULT_TAGLINE
+  let version = DEFAULT_VERSION
   try {
-    const family = await prisma.family.findFirst({ select: { loginTagline: true } })
+    const family = await prisma.family.findFirst({ select: { loginTagline: true, appVersion: true } })
     if (family?.loginTagline) tagline = family.loginTagline
+    if (family?.appVersion) version = family.appVersion
   } catch {
     // DB not ready yet — use default
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col justify-center px-8 py-12 sm:px-12 md:px-16 lg:px-24">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm space-y-8">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-9 rounded-lg bg-foreground text-background shrink-0">
@@ -35,7 +38,7 @@ export default async function LoginPage() {
         <LoginForm />
 
         <p className="text-xs text-muted-foreground">
-          v3.2 · Made for households, not teams.
+          v{version} · Made for households, not teams.
         </p>
       </div>
     </div>

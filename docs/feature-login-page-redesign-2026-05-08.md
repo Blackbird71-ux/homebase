@@ -23,7 +23,7 @@ The page uses only semantic CSS variable tokens (`bg-background`, `text-foregrou
 
 ### Customisable tagline
 
-Admins can edit the subtitle in **Settings → General → Login page tagline** (max 200 characters). Clearing the field reverts to the default: *"The calm command centre for the people who share your roof."*
+Admins can edit the subtitle in **Settings → Login page → Tagline** (max 200 characters). Clearing the field reverts to the default: *"The calm command centre for the people who share your roof."*
 
 ## Files Changed
 

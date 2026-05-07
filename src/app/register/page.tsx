@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { House } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -89,9 +90,14 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-sm space-y-6 p-8 rounded-xl border border-border bg-card">
-        <div>
-          <h1 className="text-2xl font-bold">🏠 Homebase</h1>
-          <p className="text-sm text-muted-foreground mt-1">Create your account</p>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center size-9 rounded-lg bg-foreground text-background shrink-0">
+              <House className="size-5" />
+            </div>
+            <span className="text-sm font-semibold tracking-tight">Homebase</span>
+          </div>
+          <p className="text-sm text-muted-foreground">Create your account</p>
         </div>
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
           <RegisterForm />
