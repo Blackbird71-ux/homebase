@@ -124,6 +124,22 @@ export function documentExpiryHtml(doc: {
   return baseLayout('Document Expiry Reminder', body)
 }
 
+export function passwordResetHtml(userName: string, resetUrl: string): string {
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1e293b;font-size:20px">Password Reset Request</h2>
+    <p style="margin:0 0 24px;color:#64748b;font-size:14px">Hi ${userName}, we received a request to reset your HomeBase password.</p>
+
+    <p style="margin:0 0 24px;color:#475569;font-size:14px">Click the button below to choose a new password. This link expires in <strong>1 hour</strong>.</p>
+
+    <div style="text-align:center;margin:32px 0">
+      <a href="${resetUrl}" style="display:inline-block;padding:14px 28px;background:#1e293b;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">Reset Password</a>
+    </div>
+
+    <p style="margin:0;color:#94a3b8;font-size:13px">If you didn't request this, you can safely ignore this email — your password won't change.</p>
+  `
+  return baseLayout('Reset your HomeBase password', body)
+}
+
 export function recipeShareHtml(recipe: {
   title: string
   description: string | null
