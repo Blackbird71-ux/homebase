@@ -315,16 +315,16 @@ export default async function HomePage() {
     select: { uiPreferences: true },
   })
 
-  // Parse dashboardCards, dashboardShoppingListId and dashboardPanelFractions from uiPreferences
+  // Parse dashboardCards, dashboardShoppingListId and dashboardCardLayouts from uiPreferences
   let dashboardCards: DashboardCardConfig[] | null = null
   let dashboardShoppingListId: string | null = null
-  let dashboardPanelFractions: number[] | null = null
+  let dashboardCardLayouts: Record<string, { x: number; y: number; width: number; height: number | 'auto' }> | null = null
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
       dashboardCards = prefs.dashboardCards ?? null
       dashboardShoppingListId = prefs.dashboardShoppingListId ?? null
-      dashboardPanelFractions = prefs.dashboardPanelFractions ?? null
+      dashboardCardLayouts = prefs.dashboardCardLayouts ?? null
     } catch {
       // ignore parse errors
     }
@@ -338,7 +338,7 @@ export default async function HomePage() {
       data={data}
       timezone={timezone}
       initialCards={cards}
-      initialPanelFractions={dashboardPanelFractions}
+      initialLayouts={dashboardCardLayouts}
     />
   )
 }

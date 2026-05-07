@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
 import { DashboardCustomiser } from '@/components/dashboard/DashboardCustomiser'
 import type { DashboardCardConfig } from '@/lib/dashboard-cards'
+import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
 import type { DashboardData } from '@/types'
 
 type ScopeDays = 7 | 14 | 30
@@ -14,48 +15,59 @@ interface HomeClientProps {
   data: DashboardData
   timezone: string
   initialCards: DashboardCardConfig[]
-  initialPanelFractions?: number[] | null
+  initialLayouts?: CardLayoutMap | null
 }
 
 export function HomeClient({
   data: initialData,
   timezone,
   initialCards,
-  initialPanelFractions,
+  initialLayouts,
 }: HomeClientProps) {
   const [data, setData] = useState(initialData)
   const [cards, setCards] = useState(initialCards)
   const [customiserOpen, setCustomiserOpen] = useState(false)
-  const [panelFractions, setPanelFractions] = useState<number[] | null>(
-    initialPanelFractions ?? null
-  )
   const [scope, setScope] = useState<ScopeDays>(7)
   const [loading, setLoading] = useState(false)
 
-  // Use a ref to track the latest fractions for the save callback
-  const panelFractionsRef = useRef(panelFractions)
-  panelFractionsRef.current = panelFractions
+  // Track layouts for persistence via debounced save
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleLayoutsChange = useCallback((layouts: CardLayoutMap) => {
+    // Debounce save to server
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        // Only save layouts that exist in our card set
+        const saveData: Record<string, { x: number; y: number; width: number; height: number | 'auto' }> = {}
+        for (const card of cards) {
+          if (layouts[card.id]) {
+            saveData[card.id] = {
+              x: Math.round(layouts[card.id].x * 100) / 100,
+              y: Math.round(layouts[card.id].y * 100) / 100,
+              width: Math.round(layouts[card.id].width * 100) / 100,
+              height: layouts[card.id].height,
+            }
+          }
+        }
+        await fetch('/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uiPreferences: { dashboardCardLayouts: saveData },
+          }),
+        })
+      } catch {
+        // Silently fail - the UI state is still correct
+      }
+    }, 500)
+  }, [cards])
 
   function handleSaved(savedCards: DashboardCardConfig[]) {
     setCards(savedCards)
   }
-
-  const handlePanelResize = useCallback(async (fractions: number[]) => {
-    setPanelFractions(fractions)
-
-    // Persist to server
-    try {
-      await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uiPreferences: { dashboardPanelFractions: fractions },
-        }),
-      })
-    } catch {
-      // Silently fail - the UI state is still correct
-    }
-  }, [])
 
   // Re-fetch dashboard data when scope changes
   const handleScopeChange = useCallback(async (newScope: ScopeDays) => {
@@ -92,8 +104,8 @@ export function HomeClient({
           data={data}
           timezone={timezone}
           cards={cards}
-          panelFractions={panelFractions}
-          onPanelResize={handlePanelResize}
+          layoutData={initialLayouts}
+          onLayoutsChange={handleLayoutsChange}
           scope={scope}
           onScopeChange={handleScopeChange}
           loading={loading}

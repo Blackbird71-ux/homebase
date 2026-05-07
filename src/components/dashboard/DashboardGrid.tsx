@@ -1,10 +1,12 @@
 'use client'
 
-import { useCallback, useRef, useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { DashboardData } from '@/types'
-import type { DashboardCardConfig } from '@/lib/dashboard-cards'
-import { usePanelResize } from '@/lib/hooks/usePanelResize'
+import type { DashboardCardConfig, DashboardCardLayout } from '@/lib/dashboard-cards'
+import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
+import { useCardLayout } from '@/lib/hooks/useCardLayout'
 import { cn } from '@/lib/utils'
+import { DashboardCardWrapper } from './DashboardCardWrapper'
 import { UpcomingEventsCard } from './UpcomingEventsCard'
 import { TodaysMealsCard } from './TonightsDinnerCard'
 import { ShoppingListCard } from './ShoppingListCard'
@@ -18,10 +20,10 @@ interface DashboardGridProps {
   data: DashboardData
   timezone?: string
   cards: DashboardCardConfig[]
-  /** Saved panel size fractions from uiPreferences */
-  panelFractions?: number[] | null
-  /** Called when panel sizes change (for persistence) */
-  onPanelResize?: (fractions: number[]) => void
+  /** Saved card layouts from uiPreferences */
+  layoutData?: CardLayoutMap | null
+  /** Called when layouts change (for persistence) */
+  onLayoutsChange?: (layouts: CardLayoutMap) => void
   /** Scope for weekly summary / chore schedule cards */
   scope?: ScopeDays
   /** Called when scope changes */
@@ -30,13 +32,12 @@ interface DashboardGridProps {
   loading?: boolean
 }
 
-
 export function DashboardGrid({
   data,
   timezone,
   cards,
-  panelFractions,
-  onPanelResize,
+  layoutData,
+  onLayoutsChange,
   scope = 7,
   onScopeChange,
 }: DashboardGridProps) {
@@ -45,115 +46,92 @@ export function DashboardGrid({
     .filter((c) => c.visible)
     .sort((a, b) => a.order - b.order)
 
-  // We use a 2-column layout
-  const columnCount = 2
+  const cardIds = visibleCards.map((c) => c.id)
 
-  // Split visible cards into left/right columns (alternating)
-  const leftColumnCards = visibleCards.filter((_, i) => i % 2 === 0)
-  const rightColumnCards = visibleCards.filter((_, i) => i % 2 === 1)
-
-  const { sizes, setSizes, getResizeProps, isDragging } = usePanelResize(
-    columnCount,
-    panelFractions ?? undefined
-  )
-
-  const gridRef = useRef<HTMLDivElement>(null)
-
-  // Store the latest onPanelResize in a ref to avoid stale closures
-  const onPanelResizeRef = useRef(onPanelResize)
-  onPanelResizeRef.current = onPanelResize
-
-  // Persist sizes when they change (debounced)
-  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    if (persistTimeoutRef.current) {
-      clearTimeout(persistTimeoutRef.current)
-    }
-    persistTimeoutRef.current = setTimeout(() => {
-      if (onPanelResizeRef.current) {
-        onPanelResizeRef.current(sizes)
-      }
-    }, 500)
-    return () => {
-      if (persistTimeoutRef.current) {
-        clearTimeout(persistTimeoutRef.current)
+  // Build initial layouts from saved data, merging with card ids
+  const initialLayouts: CardLayoutMap = {}
+  if (layoutData) {
+    for (const id of cardIds) {
+      if (layoutData[id]) {
+        initialLayouts[id] = { ...layoutData[id] }
       }
     }
-  }, [sizes])
+  }
 
-  // When panelFractions change externally (e.g., loaded from settings), update
+  const {
+    layouts,
+    containerRef,
+    isDragging,
+    dragCardId,
+    isResizing,
+    resizeCardId,
+    handleDragStart,
+    handleResizeStart,
+    toggleWidth,
+  } = useCardLayout(initialLayouts, cardIds, onLayoutsChange)
+
+  // Track container size for percentage calculations
+  const containerSizeRef = useRef({ width: 800, height: 600 })
+
   useEffect(() => {
-    if (panelFractions && panelFractions.length === columnCount) {
-      setSizes(panelFractions)
-    }
-  }, [panelFractions, columnCount, setSizes])
+    const el = containerRef.current
+    if (!el) return
 
-  // Compute left column width fraction
-  const total = sizes.reduce((a, b) => a + b, 0)
-  const leftFraction = sizes[0] / total
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        containerSizeRef.current = { width, height }
+      }
+    })
 
-  // Gap is 16px (gap-4)
-  const gapPx = 16
-  // Handle width is 16px
-  const handlePx = 16
-  // Available space for columns = 100% - gap - handle
-  // We split the gap so each column gets (total - handle) * fraction - gap/2
-  const leftWidth = `calc(${leftFraction * 100}% - ${leftFraction * handlePx + gapPx / 2}px)`
-  const rightWidth = `calc(${(1 - leftFraction) * 100}% - ${(1 - leftFraction) * handlePx + gapPx / 2}px)`
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [containerRef])
 
   return (
     <div className="relative pb-4">
-      {/* Mobile layout: single column, no resize */}
+      {/* Mobile layout: single column stacked */}
       <div className="grid grid-cols-1 gap-4 md:hidden">
         {visibleCards.map((card) => (
           <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange)}</div>
         ))}
       </div>
 
-      {/* Desktop layout: resizable 2-column flex layout */}
-      <div ref={gridRef} className="hidden md:block">
-        <div
-          className="flex"
-          style={{
-            gap: `${gapPx}px`,
-            userSelect: isDragging ? 'none' : undefined,
-          }}
-        >
-          {/* Left column */}
-          <div className="flex flex-col gap-4 min-w-0 flex-1" style={{ width: leftWidth }}>
-            {leftColumnCards.map((card) => (
-              <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange)}</div>
-            ))}
-          </div>
+      {/* Desktop layout: free-form absolute positioning */}
+      <div
+        ref={containerRef}
+        className={cn(
+          'hidden md:relative md:block',
+          'min-h-[600px]', // Ensure minimum height for drag area
+        )}
+        style={{
+          userSelect: isDragging || isResizing ? 'none' : undefined,
+        }}
+      >
+        {visibleCards.map((card) => {
+          const layout = layouts[card.id]
+          if (!layout) return null
 
-          {/* Resize handle */}
-          <div className="relative shrink-0" style={{ width: `${handlePx}px` }}>
-            <div
-              className={cn(
-                'absolute inset-y-0 left-1/2 z-10 w-4 -translate-x-1/2 cursor-col-resize group/handle'
-              )}
-              style={{ touchAction: 'none' }}
-              {...getResizeProps(0)}
+          return (
+            <DashboardCardWrapper
+              key={card.id}
+              cardId={card.id}
+              layout={layout}
+              isDragging={isDragging}
+              isResizing={isResizing}
+              isDragActive={dragCardId === card.id}
+              isResizeActive={resizeCardId === card.id}
+              onDragStart={handleDragStart}
+              onResizeStart={handleResizeStart}
+              onToggleWidth={toggleWidth}
+              containerWidth={containerSizeRef.current.width}
+              containerHeight={containerSizeRef.current.height}
+              allLayouts={layouts}
             >
-              <div
-                className={cn(
-                  'absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full transition-all duration-150',
-                  isDragging
-                    ? 'bg-primary/60 w-1.5'
-                    : 'bg-transparent group-hover/handle:bg-border group-hover/handle:w-1'
-                )}
-                style={{ touchAction: 'none' }}
-              />
-            </div>
-          </div>
-
-          {/* Right column */}
-          <div className="flex flex-col gap-4 min-w-0 flex-1" style={{ width: rightWidth }}>
-            {rightColumnCards.map((card) => (
-              <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange)}</div>
-            ))}
-          </div>
-        </div>
+              {renderCard(card, data, timezone, scope, onScopeChange)}
+            </DashboardCardWrapper>
+          )
+        })}
       </div>
     </div>
   )

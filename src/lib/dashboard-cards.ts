@@ -1,7 +1,20 @@
+export interface DashboardCardLayout {
+  /** Percentage-based left position (0-100) */
+  x: number
+  /** Percentage-based top position (0-100) */
+  y: number
+  /** Percentage-based width (25-100) */
+  width: number
+  /** Height in pixels, or 'auto' */
+  height: number | 'auto'
+}
+
 export interface DashboardCardConfig {
   id: string
   visible: boolean
   order: number
+  /** Free-form layout position and size */
+  layout?: DashboardCardLayout
 }
 
 export interface DashboardCardDefinition {
@@ -40,12 +53,13 @@ export function mergeDashboardCards(
   const result: DashboardCardConfig[] = []
   const seen = new Set<string>()
 
-  // First, add saved cards in their saved order
+  // First, add saved cards in their saved order, preserving layout
   for (const card of saved) {
     result.push({
       id: card.id,
       visible: card.visible,
       order: result.length,
+      ...(card.layout ? { layout: { ...card.layout } } : {}),
     })
     seen.add(card.id)
   }
