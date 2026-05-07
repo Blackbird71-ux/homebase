@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon } from 'lucide-react'
+import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon, LockIcon, GlobeIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { ChoreDialog } from './ChoreDialog'
@@ -25,6 +25,7 @@ interface Chore {
   id: string
   title: string
   description: string | null
+  note: string | null
   frequency: string
   dayOfWeek: number | null
   dayOfMonth: number | null
@@ -78,6 +79,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+  const [publicView, setPublicView] = useState(true)
 
   // Listen for chores updates from AI assistant or other sources
   useEffect(() => {
@@ -185,8 +187,13 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
 
     return (
       <div className="bg-popover text-popover-foreground rounded-lg border shadow-xl p-3 min-w-[220px] max-w-[300px] text-xs space-y-1.5">
+        {chore.note && (
+          <p className="text-sm font-medium leading-snug text-muted-foreground/80 whitespace-pre-wrap">
+            {chore.note}
+          </p>
+        )}
         {chore.description && (
-          <p className="text-sm font-medium leading-snug">{chore.description}</p>
+          <p className="text-sm leading-snug">{chore.description}</p>
         )}
 
         <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
@@ -256,7 +263,25 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{chores.length} active chore{chores.length !== 1 ? 's' : ''}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-muted-foreground">{chores.length} active chore{chores.length !== 1 ? 's' : ''}</p>
+          <button
+            onClick={() => setPublicView(!publicView)}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+              publicView
+                ? 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
+                : 'bg-muted text-muted-foreground hover:bg-muted/70'
+            }`}
+            title={publicView ? 'Visible to family' : 'Private — only you can see'}
+          >
+            {publicView ? (
+              <GlobeIcon className="h-3 w-3" />
+            ) : (
+              <LockIcon className="h-3 w-3" />
+            )}
+            {publicView ? 'Family' : 'Private'}
+          </button>
+        </div>
         <Button size="sm" onClick={() => { setEditingChore(null); setDialogOpen(true) }}>
           <PlusIcon className="h-4 w-4 mr-1" /> Add Chore
         </Button>
@@ -361,6 +386,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
       )}
 
       <ChoreDialog
+        key={editingChore?.id ?? 'new'}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         chore={editingChore}

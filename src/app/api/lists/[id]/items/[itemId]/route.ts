@@ -10,7 +10,7 @@ export async function PATCH(
   const user = await requireSession()
   const { id, itemId } = await params
   const body = await req.json()
-  const { content, isCompleted, category, sortOrder, dueDate, isLocked, unitPrice, quantity } = body
+  const { content, isCompleted, category, sortOrder, dueDate, isLocked, unitPrice, quantity, assignedToUserId } = body
 
   const list = await prisma.list.findFirst({
     where: { id, familyId: user.familyId },
@@ -38,6 +38,7 @@ export async function PATCH(
       ...(dueDate !== undefined && { dueDate: parsed }),
       ...(unitPrice !== undefined && { unitPrice }),
       ...(quantity !== undefined && { quantity }),
+      ...(assignedToUserId !== undefined && { assignedToUserId }),
     },
   })
 

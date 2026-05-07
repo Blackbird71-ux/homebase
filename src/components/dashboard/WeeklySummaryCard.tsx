@@ -20,7 +20,7 @@ export function WeeklySummaryCard({ data }: { data: WeeklySummaryData | null }) 
     <Card className="flex flex-col col-span-1 md:col-span-2">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-          <CalendarDays className="h-4 w-4" /> This Week — {data.weekLabel}
+          <CalendarDays className="h-4 w-4" /> Next 7 Days — {data.weekLabel}
         </CardTitle>
       </CardHeader>
       <CardContent>

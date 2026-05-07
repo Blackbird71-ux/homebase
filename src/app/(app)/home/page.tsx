@@ -5,8 +5,8 @@ import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { mergeDashboardCards, type DashboardCardConfig } from '@/lib/dashboard-cards'
 import { HomeClient } from './HomeClient'
-import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
-import { format, startOfWeek, endOfWeek } from 'date-fns'
+import type { DashboardData, TodaysMeal, WeeklySummaryData, ChoreScheduleDay, ChoreScheduleItem } from '@/types'
+import { format } from 'date-fns'
 
 /**
  * Normalize a date string to midnight UTC for meal plan queries.
@@ -18,7 +18,44 @@ function normalizeToUtcMidnight(dateStr: string): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0): Promise<DashboardData> {
+function buildChoreSchedule(
+  chores: any[],
+  todayStart: Date,
+  days: number = 30
+): ChoreScheduleDay[] {
+  if (!chores || !Array.isArray(chores)) return []
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const schedule: ChoreScheduleDay[] = []
+  for (let i = 0; i < days; i++) {
+    const dayDate = new Date(todayStart)
+    dayDate.setDate(dayDate.getDate() + i)
+    const dayStart = new Date(dayDate)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(dayDate)
+    dayEnd.setHours(23, 59, 59, 999)
+    const dayChores = chores.filter((c: any) => {
+      if (!c.nextDueDate) return false
+      return c.nextDueDate >= dayStart && c.nextDueDate <= dayEnd
+    })
+    schedule.push({
+      day: dayNames[dayDate.getDay()],
+      date: dayDate.toISOString(),
+      chores: dayChores.map((c: any): ChoreScheduleItem => ({
+        id: c.id,
+        title: c.title,
+        frequency: c.frequency,
+        note: c.note,
+        currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
+        lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
+        lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
+        isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+      })),
+    })
+  }
+  return schedule
+}
+
+async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0, userId?: string): Promise<DashboardData> {
   // Get today's boundaries in the family's timezone
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -41,11 +78,13 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const needsMeals = visibleCardIds.has('todays-meals') || visibleCardIds.has('tomorrows-meals') || visibleCardIds.has('weekly-summary')
   const needsShopping = visibleCardIds.has('shopping-list')
   const needsTodo = visibleCardIds.has('todo-summary') || visibleCardIds.has('weekly-summary')
+  const needsChores = visibleCardIds.has('chore-schedule')
 
-  // Compute week boundaries for weekly summary
+  // Compute rolling 7-day window from today
   const nowInTz = new Date(new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()))
-  const weekStart = startOfWeek(nowInTz, { weekStartsOn })
-  const weekEndDate = endOfWeek(nowInTz, { weekStartsOn })
+  const weekStart = new Date(nowInTz)
+  const weekEndDate = new Date(nowInTz)
+  weekEndDate.setDate(weekEndDate.getDate() + 6)
   const weekLabel = `${format(weekStart, 'd MMM')} – ${format(weekEndDate, 'd MMM')}`
 
   // Normalize week boundaries to UTC midnight for DB queries
@@ -54,7 +93,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const weekStartUtc = normalizeToUtcMidnight(weekStartStr)
   const weekEndUtc = new Date(normalizeToUtcMidnight(weekEndStr).getTime() + 24 * 60 * 60 * 1000)
 
-  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, weekEvents, weekMealPlans, weekTodoLists] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData] = await Promise.all([
     needsEvents
       ? prisma.event.findMany({
           where: { familyId, start: { gte: todayStart } },
@@ -106,12 +145,22 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       ? prisma.list.findMany({
           where: { familyId, type: 'TODO', isActive: true },
           include: {
-            items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true } },
+            items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true, assignedToUserId: true } },
             _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
           },
           take: 1,
         })
       : Promise.resolve([]),
+    needsTodo && userId
+      ? prisma.listItem.count({
+          where: {
+            list: { familyId, type: 'TODO', isActive: true },
+            isCompleted: false,
+            dueDate: { gte: todayStart, lt: todayEnd },
+            assignedToUserId: userId,
+          },
+        })
+      : Promise.resolve(0),
     // Weekly summary queries
     visibleCardIds.has('weekly-summary')
       ? prisma.event.findMany({
@@ -138,6 +187,24 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
             items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
           },
           take: 1,
+        })
+      : Promise.resolve([]),
+    needsChores
+      ? prisma.chore.findMany({
+          where: {
+            familyId,
+            isActive: true,
+            nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+          },
+          include: {
+            currentAssignee: { select: { id: true, name: true } },
+            completions: {
+              orderBy: { completedAt: 'desc' },
+              take: 1,
+              include: { completedBy: { select: { id: true, name: true } } },
+            },
+          },
+          orderBy: { nextDueDate: 'asc' },
         })
       : Promise.resolve([]),
   ])
@@ -227,8 +294,11 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
     todoSummary: todoLists[0] ? {
       listId: todoLists[0].id, listName: todoLists[0].name,
       dueTodayCount: todoLists[0]._count.items,
+      myTasksCount: myTasksCountResult,
+      familyTasksCount: todoLists[0]._count.items - myTasksCountResult,
       firstItems: todoLists[0].items.map(i => i.content),
     } : null,
+    choreSchedule: buildChoreSchedule(choreData, todayStart, 30),
   }
 }
 
@@ -255,7 +325,7 @@ export default async function HomePage() {
   }
 
   const cards = mergeDashboardCards(dashboardCards)
-  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1)
+  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id)
 
   return (
     <HomeClient

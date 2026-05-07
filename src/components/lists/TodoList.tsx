@@ -16,9 +16,11 @@ interface TodoListProps {
   listId: string
   initialItems: ListItemShape[]
   initialCategoryOrder: string[] | null
+  members: { id: string; name: string }[]
+  currentUserId: string
 }
 
-export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoListProps) {
+export function TodoList({ listId, initialItems, initialCategoryOrder, members, currentUserId }: TodoListProps) {
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [filter, setFilter] = useState<TodoFilter>('all')
   const [categories, setCategories] = useState<string[]>(initialCategoryOrder ?? [])
@@ -151,6 +153,19 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
     }
   }
 
+  async function assignItem(id: string, assignedToUserId: string | null) {
+    const res = await fetch(`/api/lists/${listId}/items/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignedToUserId }),
+    })
+    if (res.ok) {
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, assignedToUserId } : i)))
+    } else {
+      toast.error('Failed to assign item.')
+    }
+  }
+
   async function saveCategoryOrder(cats: string[]) {
     const res = await fetch(`/api/lists/${listId}/category-order`, {
       method: 'PATCH',
@@ -190,6 +205,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
 
   const filters: { label: string; value: TodoFilter }[] = [
     { label: 'All', value: 'all' },
+    { label: 'My Tasks', value: 'mine' },
     { label: 'Due today', value: 'today' },
     { label: 'Overdue', value: 'overdue' },
   ]
@@ -319,10 +335,13 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
                         isCompleted={item.isCompleted}
                         isLocked={item.isLocked}
                         dueDate={item.dueDate?.toISOString() ?? null}
+                        assignedToUserId={item.assignedToUserId}
+                        members={members}
                         onToggle={toggleItem}
                         onDelete={deleteItem}
                         onToggleLock={toggleLock}
                         onEdit={handleEditItem}
+                        onAssign={assignItem}
                       />
                     ))}
                   </div>
@@ -346,10 +365,13 @@ export function TodoList({ listId, initialItems, initialCategoryOrder }: TodoLis
                 isCompleted={item.isCompleted}
                 isLocked={item.isLocked}
                 dueDate={item.dueDate?.toISOString() ?? null}
+                assignedToUserId={item.assignedToUserId}
+                members={members}
                 onToggle={toggleItem}
                 onDelete={deleteItem}
                 onToggleLock={toggleLock}
                 onEdit={handleEditItem}
+                onAssign={assignItem}
               />
             ))}
           </div>

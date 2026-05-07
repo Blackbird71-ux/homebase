@@ -31,6 +31,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Grocery list generation from meal plans
 - Export functionality for grocery shopping
 - Daily meal column organization
+- Scope selector (7/14/30 days) for rolling forward display
 
 #### 4. **Shopping & Todo Lists**
 - Multiple list types (shopping, todo)
@@ -39,6 +40,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Completed items with configurable colors
 - Recipe integration for shopping items
 - Due dates and priority management
+- **Per-user assignment** with My Tasks / Family Tasks filtering
 
 #### 5. **Recipe Management**
 - Recipe database with full CRUD operations
@@ -146,6 +148,8 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **Note**: Notes system
 - **RecipeBook**: Recipe organization
 - **GoogleCalendarSync**: Calendar integration
+- **Chore**: Chore management with assignment, scheduling, notes
+- **ChoreCompletion**: Completion tracking with who/when
 
 #### API Structure
 - RESTful API routes following Next.js App Router conventions
@@ -162,88 +166,72 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Real-time updates with optimistic UI
 - Theme-aware components
 
-### Key Files Created/Modified in Phase 7
+### Key Files Created/Modified
 
 #### Database Migrations
 - `prisma/migrations/20260419101620_add_tag_and_category_enhancements/migration.sql`
 - `prisma/migrations/20260419201552_add_done_item_color/migration.sql`
-- `prisma/migrations/20260505000000_add_tag_category_colors/migration.sql`: Tag and category color picker support
-- `prisma/migrations/20260505000001_add_pin_hash_fields/migration.sql`: PIN hash fields for notes, documents, and contacts
-
-#### Scripts
-- `scripts/migrate-tags.ts`: Data migration utility
-- `scripts/verify-migration.ts`: Migration verification
-- `scripts/MIGRATION-README.md`: Migration documentation
+- `prisma/migrations/20260505000000_add_tag_category_colors/migration.sql`
+- `prisma/migrations/20260505000001_add_pin_hash_fields/migration.sql`
+- `prisma/migrations/20260508200000_add_chore_note_and_item_assignment/migration.sql` — Add note to Chore, assignedToUserId to ListItem
 
 #### API Endpoints
 - `src/app/api/tags/`: Tag management API (with color support)
 - `src/app/api/tags/[id]/`: Individual tag operations (with color support)
 - `src/app/api/tags/[id]/recipes/`: Tag-recipe relationships
 - `src/app/api/ingredient-categories/`: Category management (with color support)
-- `src/app/api/ingredient-categories/[id]/`: Individual category operations (with color support)
+- `src/app/api/ingredient-categories/[id]/`: Individual category operations
 - `src/app/api/ingredient-categories/learn/`: ML category suggestions
 - `src/app/api/notes/`: Notes CRUD operations (with PIN support)
-- `src/app/api/notes/[id]/`: Individual note operations (with unlock cookie check)
+- `src/app/api/notes/[id]/`: Individual note operations
 - `src/app/api/notes/[id]/unlock/`: PIN verification and unlock session
-- `src/app/api/documents/[id]/unlock/`: Document PIN verification and unlock
-- `src/app/api/contacts/[id]/unlock/`: Contact PIN verification and unlock
+- `src/app/api/documents/[id]/unlock/`: Document PIN verification
+- `src/app/api/contacts/[id]/unlock/`: Contact PIN verification
 - `src/app/api/audit-log/backup/`: Audit log backup and truncation
+- `src/app/api/ai/command/route.ts`: Multi-provider function-calling command interpreter
+- `src/app/api/settings/ai/route.ts`: GET/PUT user AI settings
+- `src/app/api/chores/schedule/route.ts`: Chore schedule endpoint for dashboard
+- `src/app/api/dashboard/route.ts`: Dashboard data with rolling forward window
 
-#### AI Assistant (New)
-- `src/app/api/ai/command/route.ts`: Multi-provider function-calling command interpreter + action executor
-- `src/app/api/settings/ai/route.ts`: GET/PUT user AI settings (provider, key, model)
-- `src/components/ai/AIAssistant.tsx`: Floating panel with voice (Web Speech API) and text input
-- `src/components/settings/AISettingsTab.tsx`: Settings tab for provider selection, API key, model, test connection
+#### Dashboard Components
+- `src/components/dashboard/ChoreScheduleCard.tsx`: Rolling chore schedule card with scope toggle
+- `src/components/dashboard/WeeklySummaryCard.tsx`: Rolling 7-day summary with dynamic label
+- `src/components/dashboard/TodoCard.tsx`: My Tasks / Family Tasks counts
+- `src/components/dashboard/DashboardGrid.tsx`: Orchestrates all dashboard cards
 
-#### UI Components
-- `src/components/tags/`: Tag management components (with color picker)
-- `src/components/categories/`: Category management components (with color picker)
-- `src/components/notes/`: Notes interface components
-- `src/components/providers/AdvancedThemeProvider.tsx`: Enhanced theming
-- `src/components/settings/AdvancedThemingTab.tsx`: Theme settings (with Apple Pro theme)
-- `src/components/settings/AppearanceTab.tsx`: Appearance settings (with Apple Pro theme option)
-- `src/components/settings/ActivityLogTab.tsx`: Activity log with backup/truncate button
-- `src/components/shared/SecureUnlockDialog.tsx`: Reusable PIN unlock dialog
-- `src/components/ui/color-picker.tsx`: Color selection component
+#### Chore Components
+- `src/app/(app)/chores/ChoreDialog.tsx`: Modal editor with note textarea field
+- `src/app/(app)/chores/ChoresClient.tsx`: Compact single-row layout with completion feedback
 
-#### Pages
-- `src/app/(app)/notes/`: Notes application pages
-- `src/app/(app)/settings/tags/`: Tag management page
-- `src/app/(app)/settings/categories/`: Category management page
-
-#### Utilities
-- `src/lib/meal-types.ts`: Meal type constants
-- `src/lib/secure-unlock.ts`: PIN hashing, verification, and unlock session management
+#### List Components
+- `src/components/lists/TodoList.tsx`: Filter buttons (All/My Tasks/Due today/Overdue)
+- `src/components/lists/ListItemRow.tsx`: Assignee badge/dropdown
+- `src/lib/list-helpers.ts`: TodoFilter type and filterTodoItems function
 
 ### Usage Instructions
 
-#### Tag Management
-1. Navigate to Settings → Tags
-2. Create tags with names and colors
-3. Assign tags to recipes via RecipeForm or TagSelector
-4. Use TagCloud to visualize tag frequency
-5. Filter recipes by tags in the recipes page
+#### Dashboard Rolling Forward
+1. Home screen displays all panels starting from today's date
+2. **Chore Schedule** card shows rolling 7/14/30 days with scope toggle
+3. **Weekly Summary** shows "Next 7 Days — {date range}" label
+4. **Todo** shows My Tasks (User icon) vs Family Tasks (Users icon) counts
 
-#### Ingredient Categories
-1. Navigate to Settings → Categories
-2. Create ingredient categories
-3. Assign categories to ingredients in recipes
-4. Use automatic category suggestions via ML endpoint
-5. Filter shopping lists by ingredient categories
+#### Meal Planner Scope
+1. Navigate to Meal Plan from sidebar
+2. Use the Week/14d/30d toggle to change scope
+3. Current day is at the top with next days underneath
+4. Navigation arrows always advance by 7 days
 
-#### Notes System
-1. Navigate to Notes from sidebar
-2. Create new notes with rich text editor
-3. Edit existing notes
-4. View individual note details
-5. All notes are family-shared
+#### Todo Assignment
+1. Create a todo item in any todo list
+2. Click the assignee dropdown on the right side of any item
+3. Select a family member to assign the task
+4. Use filters: All / My Tasks / Due today / Overdue
 
-#### Advanced Theming
-1. Navigate to Settings → Appearance → Advanced
-2. Customize color schemes
-3. Adjust font sizes
-4. Configure done item colors
-5. Set UI preferences
+#### Chore Notes
+1. Create or edit a chore
+2. The ChoreDialog now has a "Notes" textarea field
+3. Notes appear in the Chore Schedule dashboard card
 
 ### Deployment & Development
 
@@ -251,6 +239,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Node.js 18+ 
 - SQLite database
 - npm or yarn package manager
+- Docker (for NAS deployment)
 
 #### Setup Instructions
 1. Clone repository: `git clone <repo-url>`
@@ -269,7 +258,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 #### Building for Production
 1. Build application: `npm run build`
 2. Start production server: `npm start`
-3. Docker deployment available via `docker-compose.yml`
+3. Docker deployment: `docker compose up -d --build` — migrations run at container startup via entrypoint.sh
 
 ### Known Limitations & Future Improvements
 
@@ -285,22 +274,16 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 3. **Recipe Scaling**: Adjust recipe quantities for different serving sizes
 4. **Nutrition Tracking**: Integrate nutrition data for recipes
 5. **Budget Tracking**: Connect shopping lists with expense tracking
-6. **AI — Extended Actions**: Calendar event creation, chore completion, and read-only queries ("what chores are due this week?") via the AI assistant
+6. **AI — Extended Actions**: Calendar event creation, chore completion, and read-only queries via the AI assistant
 7. **AI — Note Templates**: Pre-built note templates the AI can populate by dictation
-8. **AI — Recipe Cross-links in Notes**: Type `[[` in the note editor to link to a recipe (Notion-style)
-
-### Technical Debt & Considerations
-- TypeScript strict mode could be enabled
-- Additional test coverage needed for UI components
-- Performance optimization for large recipe databases
-- Accessibility improvements for screen readers
-- Internationalization support for multiple languages
+8. **AI — Recipe Cross-links in Notes**: Type `[[` in the note editor to link to a recipe
 
 ### Commit History Summary
 - **Phase 7 Commit**: Complete implementation of tags, categories, notes, and UI enhancements
-- **Recurring Events Fix**: Fixed recurring event expansion in calendar views, edit/delete for recurring instances, and seriesId preservation in CalendarEvent mapping
-- **AI Auto-Refresh Fix**: Created cross-component event bus so AI assistant actions (meal plan, calendar, shopping, todos, notes, chores) automatically refresh the UI. Also fixed ambiguous recipe matching — AI now asks clarifying questions instead of guessing.
-- **UI Overhaul**: Premium glassmorphism themes for all 7 non-high-contrast themes, colored tags on recipes and notes, notes Family/Private/Secure tabs, PIN protection UI for notes and documents, tag selector list in NoteEditor, lock status indicators on cards
+- **Recurring Events Fix**: Fixed recurring event expansion in calendar views, edit/delete for recurring instances, and seriesId preservation
+- **AI Auto-Refresh Fix**: Cross-component event bus for AI assistant UI refresh; fixed ambiguous recipe matching
+- **UI Overhaul**: Premium glassmorphism themes, colored tags, notes Family/Private/Secure tabs, PIN protection, lock status indicators
+- **Dashboard Rolling Forward**: Home screen and meal planner display from today going forward (rolling 7-day window). New Chore Schedule dashboard panel with scope toggle (7/14/30 days). Chore note field. Todo per-user assignment with My Tasks / Family Tasks filtering. Build verified with zero TypeScript errors.
 - **Previous Phases**: Recipe images, deployment scripts, bug fixes, and core feature development
 
 ### Project Status
@@ -308,7 +291,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 ✅ **Phase 8 Complete**: AI Voice & Chat Assistant with multi-provider support (Gemini + DeepSeek)
 ✅ **Recurring Events**: Create, edit, delete recurring events with daily/weekly/monthly/yearly options
 ✅ **Apple Themes**: 5 additive Apple-system themes added (aqua, graphite, sunset, midnight, forest)
+✅ **Dashboard Rolling Forward**: Home dashboard and meal planner show rolling 7 days from today, chore schedule card, chore note field, per-user todo assignment, scope selectors (7/14/30 days)
 ✅ **TypeScript Validation**: No type errors
 ✅ **Build Success**: Production build compiles successfully
 ✅ **Git Status**: All changes committed with descriptive messages
-

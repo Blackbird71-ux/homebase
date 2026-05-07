@@ -7,6 +7,7 @@ import { TodaysMealsCard } from './TonightsDinnerCard'
 import { ShoppingListCard } from './ShoppingListCard'
 import { TodoCard } from './TodoCard'
 import { WeeklySummaryCard } from './WeeklySummaryCard'
+import { ChoreScheduleCard } from './ChoreScheduleCard'
 
 interface DashboardGridProps {
   data: DashboardData
@@ -67,6 +68,14 @@ export function DashboardGrid({ data, timezone, cards }: DashboardGridProps) {
               <TodoCard
                 key={card.id}
                 todo={data.todoSummary}
+              />
+            )
+          case 'chore-schedule':
+            return (
+              <ChoreScheduleCard
+                key={card.id}
+                data={data.choreSchedule}
+                timezone={timezone}
               />
             )
           default:

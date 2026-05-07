@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Trash2Icon, EditIcon, LockIcon, LockOpenIcon, DollarSignIcon } from 'lucide-react'
+import { Trash2Icon, EditIcon, LockIcon, LockOpenIcon, DollarSignIcon, UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -23,11 +23,14 @@ interface ListItemRowProps {
   doneItemColor?: string
   category?: string
   availableCategories?: string[]
+  assignedToUserId?: string | null
+  members?: { id: string; name: string }[]
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
   onToggleLock?: (id: string, isLocked: boolean) => void
   onCategoryChange?: (id: string, newCategory: string) => void
   onEdit?: (id: string) => void
+  onAssign?: (id: string, assignedToUserId: string | null) => void
 }
 
 export function ListItemRow({
@@ -41,11 +44,14 @@ export function ListItemRow({
   doneItemColor = 'RED',
   category,
   availableCategories = [],
+  assignedToUserId,
+  members = [],
   onToggle,
   onDelete,
   onToggleLock,
   onCategoryChange,
   onEdit,
+  onAssign,
 }: ListItemRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState(category || 'Other')
@@ -182,6 +188,38 @@ export function ListItemRow({
         >
           {dueDateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
         </span>
+      )}
+
+      {/* Assignee badge / dropdown */}
+      {!isCompleted && members.length > 0 && onAssign && (
+        <div className="relative shrink-0">
+          {assignedToUserId ? (
+            <button
+              type="button"
+              onClick={() => onAssign(id, null)}
+              className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              title={`Assigned to ${members.find(m => m.id === assignedToUserId)?.name ?? 'Unknown'} — click to unassign`}
+            >
+              <UserIcon className="h-2.5 w-2.5" />
+              {members.find(m => m.id === assignedToUserId)?.name ?? 'Unknown'}
+            </button>
+          ) : (
+            <select
+              value=""
+              onChange={(e) => {
+                const val = e.target.value
+                if (val) onAssign(id, val)
+              }}
+              className="h-6 text-[10px] rounded-full border border-input bg-transparent px-1.5 text-muted-foreground hover:text-foreground appearance-none cursor-pointer opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              aria-label="Assign to"
+            >
+              <option value="">Assign</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
       )}
 
       {/* Lock button — visible on hover or when locked */}

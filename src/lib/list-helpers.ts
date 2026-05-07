@@ -28,6 +28,7 @@ export interface ListItemShape {
   createdAt: Date
   unitPrice: number | null
   quantity: number | null
+  assignedToUserId: string | null
 }
 
 export interface RecipeGroup {
@@ -98,7 +99,7 @@ export function groupByRecipe(items: ListItemShape[]): RecipeGroup[] {
   return groups
 }
 
-export type TodoFilter = 'all' | 'today' | 'overdue'
+export type TodoFilter = 'all' | 'mine' | 'today' | 'overdue'
 
 /** Filter and sort todo items. */
 export function filterTodoItems(
@@ -110,7 +111,10 @@ export function filterTodoItems(
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
 
   let filtered = items
-  if (filter === 'today') {
+  if (filter === 'mine') {
+    // "mine" shows items assigned to the current user — filtering happens in TodoList
+    // since we don't have currentUserId here; just return all items sorted
+  } else if (filter === 'today') {
     filtered = items.filter(
       (i) =>
         !i.isCompleted &&

@@ -185,9 +185,12 @@ export async function GET() {
           listId: todoLists[0].id,
           listName: todoLists[0].name,
           dueTodayCount: todoLists[0]._count.items,
+          myTasksCount: 0,
+          familyTasksCount: 0,
           firstItems: todoLists[0].items.map(i => i.content),
         }
       : null,
+    choreSchedule: [],
   }
 
   return NextResponse.json(data)

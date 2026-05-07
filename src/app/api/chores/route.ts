@@ -78,6 +78,7 @@ export async function POST(req: Request) {
   const {
     title,
     description,
+    note,
     frequency,
     dayOfWeek,
     dayOfMonth,
@@ -108,6 +109,7 @@ export async function POST(req: Request) {
     data: {
       title,
       description: description ?? null,
+      note: note ?? null,
       frequency: frequency ?? 'weekly',
       dayOfWeek: dayOfWeek ?? null,
       dayOfMonth: dayOfMonth ?? null,

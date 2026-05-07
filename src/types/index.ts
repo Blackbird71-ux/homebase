@@ -10,6 +10,23 @@ export interface SessionUser {
   timezone: string  // IANA timezone string e.g. 'Australia/Sydney'
 }
 
+export interface ChoreScheduleDay {
+  day: string
+  date: string
+  chores: ChoreScheduleItem[]
+}
+
+export interface ChoreScheduleItem {
+  id: string
+  title: string
+  frequency: string
+  note: string | null
+  currentAssignee: { id: string; name: string } | null
+  lastCompletedBy: { id: string; name: string } | null
+  lastCompletedAt: string | null
+  isOverdue: boolean
+}
+
 export interface DashboardData {
   weeklySummary: WeeklySummaryData | null
   upcomingEvents: UpcomingEvent[]
@@ -18,6 +35,7 @@ export interface DashboardData {
   tomorrowsMeals: TodaysMeals
   shoppingList: ShoppingListSummary | null
   todoSummary: TodoSummary | null
+  choreSchedule: ChoreScheduleDay[]
 }
 
 export interface WeeklySummaryData {
@@ -102,6 +120,8 @@ export interface TodoSummary {
   listId: string
   listName: string
   dueTodayCount: number
+  myTasksCount: number
+  familyTasksCount: number
   firstItems: string[]
 }
 

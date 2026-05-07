@@ -25,6 +25,7 @@ interface SerializedItem {
   createdAt: string
   unitPrice: number | null
   quantity: number | null
+  assignedToUserId: string | null
 }
 
 interface SerializedList {
@@ -52,9 +53,10 @@ interface ListsClientProps {
   initialLists: SerializedList[]
   defaultListId?: string | null
   currentUserId: string
+  members: { id: string; name: string }[]
 }
 
-export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId }: ListsClientProps) {
+export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId, members }: ListsClientProps) {
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
 
@@ -249,6 +251,8 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
                 if (!activeList.categoryOrder) return null
                 try { return JSON.parse(activeList.categoryOrder) } catch { return null }
               })()}
+              members={members}
+              currentUserId={currentUserId}
             />
           </>
         )}

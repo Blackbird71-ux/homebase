@@ -21,6 +21,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data: {
       ...(body.title !== undefined ? { title: body.title } : {}),
       ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.note !== undefined ? { note: body.note } : {}),
       ...(body.frequency !== undefined ? { frequency: body.frequency } : {}),
       ...(body.dayOfWeek !== undefined ? { dayOfWeek: body.dayOfWeek } : {}),
       ...(body.dayOfMonth !== undefined ? { dayOfMonth: body.dayOfMonth } : {}),

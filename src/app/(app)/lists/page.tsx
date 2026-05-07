@@ -15,12 +15,17 @@ async function getLists(familyId: string) {
 
 export default async function ListsPage() {
   const session = await requireSession()
-  const [user, lists] = await Promise.all([
+    const [user, lists, members] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.id },
       select: { id: true, uiPreferences: true },
     }),
     getLists(session.familyId),
+    prisma.user.findMany({
+      where: { familyId: session.familyId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
   ])
 
   // Parse defaultListId from uiPreferences
@@ -45,8 +50,9 @@ export default async function ListsPage() {
       ...i,
       dueDate: i.dueDate ? i.dueDate.toISOString() : null,
       createdAt: i.createdAt.toISOString(),
+      assignedToUserId: i.assignedToUserId ?? null,
     })),
   }))
 
-  return <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} />
+  return <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} members={members} />
 }

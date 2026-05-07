@@ -365,6 +365,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         createdAt: new Date(),
         unitPrice: null,
         quantity: null,
+        assignedToUserId: null,
       }
       setItems((prev) => [...prev, optimisticItem])
       setNewContent('')

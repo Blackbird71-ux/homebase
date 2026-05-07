@@ -11,12 +11,13 @@ export interface DashboardCardDefinition {
 }
 
 export const DASHBOARD_CARDS: DashboardCardDefinition[] = [
-  { id: 'weekly-summary',   label: 'Weekly Summary',  defaultVisible: true  },
-  { id: 'upcoming-events',  label: 'Upcoming Events',  defaultVisible: true  },
-  { id: 'todays-meals',     label: "Today's Meals",    defaultVisible: true  },
-  { id: 'tomorrows-meals',  label: "Tomorrow's Meals", defaultVisible: true  },
-  { id: 'shopping-list',    label: 'Shopping List',    defaultVisible: true  },
-  { id: 'todo-summary',     label: 'To-Do Summary',    defaultVisible: true  },
+  { id: 'weekly-summary',    label: 'Weekly Summary',   defaultVisible: true  },
+  { id: 'chore-schedule',     label: 'Chore Schedule',   defaultVisible: true  },
+  { id: 'upcoming-events',   label: 'Upcoming Events',  defaultVisible: true  },
+  { id: 'todays-meals',      label: "Today's Meals",    defaultVisible: true  },
+  { id: 'tomorrows-meals',   label: "Tomorrow's Meals", defaultVisible: true  },
+  { id: 'shopping-list',     label: 'Shopping List',    defaultVisible: true  },
+  { id: 'todo-summary',      label: 'To-Do Summary',    defaultVisible: true  },
 ]
 
 /**

@@ -58,8 +58,10 @@ interface MealPlanGridProps {
   timezone: string
 }
 
-function getWeekDays(startDate: Date): Date[] {
-  return Array.from({ length: 7 }, (_, i) => {
+type ScopeDays = 7 | 14 | 30
+
+function getScopeDays(startDate: Date, scope: ScopeDays): Date[] {
+  return Array.from({ length: scope }, (_, i) => {
     const d = new Date(startDate)
     d.setDate(d.getDate() + i)
     return d
@@ -82,8 +84,8 @@ function startOfWeek(date: Date, weekStartsOn: number): Date {
   return d
 }
 
-function weekDateRange(weekStart: Date): { from: string; to: string } {
-  const fromLocal = new Date(weekStart)
+function scopeDateRange(startDate: Date, scope: ScopeDays): { from: string; to: string } {
+  const fromLocal = new Date(startDate)
   fromLocal.setHours(0, 0, 0, 0)
   const from = new Date(Date.UTC(
     fromLocal.getFullYear(),
@@ -91,8 +93,8 @@ function weekDateRange(weekStart: Date): { from: string; to: string } {
     fromLocal.getDate()
   )).toISOString().slice(0, 10)
 
-  const toDateLocal = new Date(weekStart)
-  toDateLocal.setDate(toDateLocal.getDate() + 6)
+  const toDateLocal = new Date(startDate)
+  toDateLocal.setDate(toDateLocal.getDate() + scope - 1)
   const to = new Date(Date.UTC(
     toDateLocal.getFullYear(),
     toDateLocal.getMonth(),
@@ -124,6 +126,7 @@ export function MealPlanGrid({
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [scope, setScope] = useState<ScopeDays>(7)
 
   // Drag and drop state
   const [activeDragEntry, setActiveDragEntry] = useState<MealPlanEntry | null>(null)
@@ -134,12 +137,12 @@ export function MealPlanGrid({
   } | null>(null)
   const [newlyMovedEntryIds, setNewlyMovedEntryIds] = useState<Set<string>>(new Set())
 
-  const days = getWeekDays(weekStart)
+  const days = getScopeDays(weekStart, scope)
 
   // Listen for meal plan updates from AI assistant or other sources
   useEffect(() => {
     const cleanup = listenAppEvent(AppEvents.MEAL_PLAN_UPDATED, () => {
-      const { from, to } = weekDateRange(weekStart)
+      const { from, to } = scopeDateRange(weekStart, scope)
       setLoading(true)
       fetch(`/api/meal-plan?from=${from}&to=${to}`)
         .then((r) => r.json())
@@ -148,7 +151,7 @@ export function MealPlanGrid({
         .finally(() => setLoading(false))
     })
     return cleanup
-  }, [weekStart])
+  }, [weekStart, scope])
 
   // Configure sensors for drag detection
 
@@ -166,7 +169,7 @@ export function MealPlanGrid({
     next.setDate(next.getDate() + direction * 7)
     setWeekStart(next)
 
-    const { from, to } = weekDateRange(next)
+    const { from, to } = scopeDateRange(next, scope)
     setLoading(true)
     fetch(`/api/meal-plan?from=${from}&to=${to}`)
       .then((r) => r.json())
@@ -182,7 +185,7 @@ export function MealPlanGrid({
     const todayWeekStart = startOfWeek(localToday, weekStartsOn)
     setWeekStart(todayWeekStart)
     
-    const { from, to } = weekDateRange(todayWeekStart)
+    const { from, to } = scopeDateRange(todayWeekStart, scope)
     setLoading(true)
     fetch(`/api/meal-plan?from=${from}&to=${to}`)
       .then((r) => r.json())
@@ -277,7 +280,7 @@ export function MealPlanGrid({
   async function handleClearWeek() {
     setClearing(true)
     try {
-      const { from, to } = weekDateRange(weekStart)
+      const { from, to } = scopeDateRange(weekStart, scope)
       const res = await fetch(`/api/meal-plan/bulk?from=${from}&to=${to}`, {
         method: 'DELETE',
       })
@@ -466,7 +469,7 @@ export function MealPlanGrid({
         console.error('Recipe move failed:', res.status, errorText)
         toast.error('Failed to move recipe. Please try again.')
         // Refresh entries to revert optimistic update
-        const { from, to } = weekDateRange(weekStart)
+        const { from, to } = scopeDateRange(weekStart, scope)
         const refreshRes = await fetch(`/api/meal-plan?from=${from}&to=${to}`)
         if (refreshRes.ok) {
           const data: MealPlanEntry[] = await refreshRes.json()
@@ -511,7 +514,7 @@ export function MealPlanGrid({
       console.error('Recipe move error:', error)
       toast.error('Network error moving recipe. Please try again.')
       // Refresh entries
-      const { from, to } = weekDateRange(weekStart)
+      const { from, to } = scopeDateRange(weekStart, scope)
       const refreshRes = await fetch(`/api/meal-plan?from=${from}&to=${to}`)
       if (refreshRes.ok) {
         const data: MealPlanEntry[] = await refreshRes.json()
@@ -609,7 +612,7 @@ export function MealPlanGrid({
         console.error('Move failed:', res.status, errorText)
         toast.error('Failed to move meal. Please try again.')
         // Refresh entries to revert optimistic update
-        const { from, to } = weekDateRange(weekStart)
+        const { from, to } = scopeDateRange(weekStart, scope)
         const refreshRes = await fetch(`/api/meal-plan?from=${from}&to=${to}`)
         if (refreshRes.ok) {
           const data: MealPlanEntry[] = await refreshRes.json()
@@ -645,7 +648,7 @@ export function MealPlanGrid({
       console.error('Move error:', error)
       toast.error('Network error moving meal. Please try again.')
       // Refresh entries
-      const { from, to } = weekDateRange(weekStart)
+      const { from, to } = scopeDateRange(weekStart, scope)
       const refreshRes = await fetch(`/api/meal-plan?from=${from}&to=${to}`)
       if (refreshRes.ok) {
         const data: MealPlanEntry[] = await refreshRes.json()
@@ -697,7 +700,7 @@ export function MealPlanGrid({
                     </button>
                     <div className="border-t border-border my-1" />
                     <button type="button" onClick={() => { setClearDialogOpen(true); setMoreMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 text-left" disabled={clearing || loading}>
-                      <Trash2Icon className="h-3.5 w-3.5 shrink-0" /> Clear Week
+                      <Trash2Icon className="h-3.5 w-3.5 shrink-0" /> Clear
                     </button>
                   </div>
                 </>
@@ -732,7 +735,7 @@ export function MealPlanGrid({
             )}
             <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
             <Button variant="outline" size="sm" onClick={() => setClearDialogOpen(true)} disabled={clearing || loading} className="text-destructive border-destructive hover:bg-destructive/10">
-              <Trash2Icon className="h-4 w-4 mr-1" /> Clear Week
+              <Trash2Icon className="h-4 w-4 mr-1" /> Clear
             </Button>
             <Button variant="ghost" size="icon-sm" onClick={() => navWeek(-1)} disabled={loading} aria-label="Previous week">
               <ChevronLeftIcon className="h-4 w-4" />
@@ -743,10 +746,43 @@ export function MealPlanGrid({
           </div>
         </div>
 
-        {/* Week label */}
-        <p className="text-sm text-muted-foreground -mt-2">
-          {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-        </p>
+        {/* Week label + scope selector */}
+        <div className="flex items-center justify-between gap-2 -mt-2">
+          <p className="text-sm text-muted-foreground">
+            {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+          </p>
+          <div className="hidden sm:flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
+            {([7, 14, 30] as ScopeDays[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setScope(d)}
+                className={`px-2.5 py-0.5 text-xs font-medium rounded-md transition-colors ${
+                  scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {d === 30 ? '30d' : d === 14 ? '14d' : 'Week'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Mobile scope selector */}
+        <div className="flex sm:hidden items-center gap-1 -mt-1">
+          <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
+            {([7, 14, 30] as ScopeDays[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setScope(d)}
+                className={`px-2.5 py-0.5 text-xs font-medium rounded-md transition-colors ${
+                  scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {d === 30 ? '30d' : d === 14 ? '14d' : 'Week'}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* ── Stacked day cards (one per day, full width) ── */}
         <div className="flex-1 overflow-y-auto flex flex-col gap-2 pb-2">
@@ -824,9 +860,9 @@ export function MealPlanGrid({
         <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="text-destructive">Clear This Week?</DialogTitle>
+              <DialogTitle className="text-destructive">Clear This Period?</DialogTitle>
               <DialogDescription>
-                This will remove all meal plans for the week of{' '}
+                This will remove all meal plans from{' '}
                 {weekStart.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} through{' '}
                 {days[days.length - 1].toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}.
                 <br />
@@ -846,7 +882,7 @@ export function MealPlanGrid({
                 onClick={handleClearWeek}
                 disabled={clearing}
               >
-                {clearing ? 'Clearing...' : 'Clear Week'}
+                {clearing ? 'Clearing...' : `Clear ${scope} Days`}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -862,7 +898,7 @@ export function MealPlanGrid({
           onOpenChange={setApplyTemplateOpen}
           weekStart={toYMD(weekStart)}
           onApplied={() => {
-            const { from, to } = weekDateRange(weekStart)
+            const { from, to } = scopeDateRange(weekStart, scope)
             setLoading(true)
             fetch(`/api/meal-plan?from=${from}&to=${to}`)
               .then((r) => r.json())

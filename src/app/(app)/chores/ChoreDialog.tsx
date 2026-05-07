@@ -21,6 +21,9 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 
+const textareaClass =
+  'flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
+
 interface Member {
   id: string
   name: string
@@ -38,6 +41,7 @@ interface Chore {
   id: string
   title: string
   description: string | null
+  note: string | null
   frequency: string
   dayOfWeek: number | null
   dayOfMonth: number | null
@@ -85,6 +89,7 @@ function toDateInputValue(date: string | null): string {
 export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: ChoreDialogProps) {
   const [title, setTitle] = useState(chore?.title ?? '')
   const [description, setDescription] = useState(chore?.description ?? '')
+  const [note, setNote] = useState(chore?.note ?? '')
   const [frequency, setFrequency] = useState(chore?.frequency ?? 'weekly')
   const [dayOfWeek, setDayOfWeek] = useState(chore?.dayOfWeek?.toString() ?? '')
   const [dayOfMonth, setDayOfMonth] = useState(chore?.dayOfMonth?.toString() ?? '')
@@ -109,6 +114,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
       const body: Record<string, unknown> = {
         title: title.trim(),
         description: description.trim() || null,
+        note: note.trim() || null,
         frequency,
         dayOfWeek: dayOfWeek ? parseInt(dayOfWeek) : null,
         dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : null,
@@ -175,6 +181,16 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief description of the task"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="chore-note">Notes</Label>
+            <textarea
+              id="chore-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add any notes or instructions for this chore..."
+              className={textareaClass}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -256,7 +272,11 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
             <Label htmlFor="chore-assignee">Assign to</Label>
             <Select value={currentAssigneeId} onValueChange={(v) => setCurrentAssigneeId(v ?? '')}>
               <SelectTrigger id="chore-assignee">
-                <SelectValue placeholder="Unassigned" />
+                <SelectValue placeholder="Unassigned">
+                  {currentAssigneeId
+                    ? members.find((m) => m.id === currentAssigneeId)?.name ?? currentAssigneeId
+                    : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Unassigned</SelectItem>
