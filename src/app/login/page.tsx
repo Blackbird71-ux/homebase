@@ -1,77 +1,41 @@
-'use client'
+import { prisma } from '@/lib/prisma'
+import { House } from 'lucide-react'
+import { LoginForm } from './LoginForm'
 
-import { useState, useTransition, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
-import { loginAction } from './actions'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import Link from 'next/link'
+const DEFAULT_TAGLINE = 'The calm command centre for the people who share your roof.'
 
-function LoginForm() {
-  const searchParams = useSearchParams()
-  const justReset = searchParams.get('reset') === '1'
-
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [isPending, startTransition] = useTransition()
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    startTransition(async () => {
-      const err = await loginAction(email, password)
-      if (err) setError(err)
-    })
+export default async function LoginPage() {
+  let tagline = DEFAULT_TAGLINE
+  try {
+    const family = await prisma.family.findFirst({ select: { loginTagline: true } })
+    if (family?.loginTagline) tagline = family.loginTagline
+  } catch {
+    // DB not ready yet — use default
   }
 
   return (
-    <>
-      {justReset && (
-        <p className="text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
-          Password updated successfully. Sign in below.
-        </p>
-      )}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" value={email}
-            onChange={e => setEmail(e.target.value)} required />
-        </div>
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link href="/forgot-password" className="text-xs text-muted-foreground underline">
-              Forgot password?
-            </Link>
+    <div className="min-h-screen bg-background flex flex-col justify-center px-8 py-12 sm:px-12 md:px-16 lg:px-24">
+      <div className="w-full max-w-sm space-y-8">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-9 rounded-lg bg-foreground text-background shrink-0">
+            <House className="size-5" />
           </div>
-          <Input id="password" type="password" value={password}
-            onChange={e => setPassword(e.target.value)} required />
+          <span className="text-sm font-semibold tracking-tight">Homebase</span>
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full" disabled={isPending}>
-          {isPending ? 'Signing in...' : 'Sign in'}
-        </Button>
-      </form>
-    </>
-  )
-}
 
-export default function LoginPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-6 p-8 rounded-xl border border-border bg-card">
-        <div>
-          <h1 className="text-2xl font-bold">🏠 Homebase</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to your family account</p>
+        <div className="space-y-2">
+          <h1 className="text-5xl font-serif font-normal leading-tight tracking-tight text-foreground">
+            Welcome home.
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {tagline}
+          </p>
         </div>
-        <Suspense fallback={null}>
-          <LoginForm />
-        </Suspense>
-        <p className="text-sm text-center text-muted-foreground">
-          Need an account?{' '}
-          <Link href="/register" className="underline">Register</Link>
+
+        <LoginForm />
+
+        <p className="text-xs text-muted-foreground">
+          v3.2 · Made for households, not teams.
         </p>
       </div>
     </div>

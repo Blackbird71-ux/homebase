@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { signOut } from 'next-auth/react'
 
 interface FamilySettingsClientProps {
-  family: { name: string; timezone: string }
+  family: { name: string; timezone: string; loginTagline: string }
   isAdmin: boolean
   supportedTimezones: string[]
 }
@@ -20,6 +20,7 @@ export function FamilySettingsClient({
 }: FamilySettingsClientProps) {
   const [name, setName] = useState(family.name)
   const [timezone, setTimezone] = useState(family.timezone)
+  const [loginTagline, setLoginTagline] = useState(family.loginTagline)
   const [saving, setSaving] = useState(false)
 
   async function handleSave(e: React.FormEvent) {
@@ -29,7 +30,7 @@ export function FamilySettingsClient({
       const res = await fetch('/api/settings/family', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, timezone }),
+        body: JSON.stringify({ name, timezone, loginTagline }),
       })
       if (res.ok) {
         toast.success('Settings saved. Sign out and back in to apply timezone changes.')
@@ -52,6 +53,10 @@ export function FamilySettingsClient({
         <div>
           <p className="text-muted-foreground text-xs mb-1">Timezone</p>
           <p>{family.timezone}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground text-xs mb-1">Login tagline</p>
+          <p>{family.loginTagline || <span className="italic text-muted-foreground">(default)</span>}</p>
         </div>
         <p className="text-xs text-muted-foreground">Only admins can change family settings.</p>
       </div>
@@ -87,6 +92,20 @@ export function FamilySettingsClient({
         <p className="text-xs text-muted-foreground">
           After saving, sign out and back in to update date/time display.
         </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="login-tagline">Login page tagline</Label>
+        <textarea
+          id="login-tagline"
+          value={loginTagline}
+          onChange={(e) => setLoginTagline(e.target.value)}
+          rows={2}
+          maxLength={200}
+          className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 resize-none"
+          placeholder="The calm command centre for the people who share your roof."
+        />
+        <p className="text-xs text-muted-foreground">Shown on the login page. Max 200 characters.</p>
       </div>
 
       <div className="flex gap-2">

@@ -13,6 +13,7 @@ model Family {
   umamiScriptUrl       String?
   umamiSiteId          String?
   birthdays            String?               // JSON array: [{name, type, date}]
+  loginTagline         String?
   users                User[]
   events               Event[]
   lists                List[]

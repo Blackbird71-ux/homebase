@@ -7,14 +7,14 @@ export default async function GeneralSettingsPage() {
   const user = await requireSession()
   const family = await prisma.family.findUnique({
     where: { id: user.familyId },
-    select: { id: true, name: true, timezone: true },
+    select: { id: true, name: true, timezone: true, loginTagline: true },
   })
 
   return (
     <div className="max-w-lg p-6 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">General settings</h1>
       <FamilySettingsClient
-        family={{ name: family?.name ?? '', timezone: family?.timezone ?? 'Australia/Sydney' }}
+        family={{ name: family?.name ?? '', timezone: family?.timezone ?? 'Australia/Sydney', loginTagline: family?.loginTagline ?? '' }}
         isAdmin={user.role === 'admin'}
         supportedTimezones={[...SUPPORTED_TIMEZONES]}
       />

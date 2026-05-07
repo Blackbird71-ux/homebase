@@ -28,7 +28,7 @@ export async function GET() {
   const user = await requireSession()
   const family = await prisma.family.findUnique({
     where: { id: user.familyId },
-    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true },
+    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true, loginTagline: true },
   })
   if (!family) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(family)
@@ -37,7 +37,7 @@ export async function GET() {
 export async function PATCH(req: Request) {
   const user = await requireAdmin()
   const body = await req.json()
-  const { timezone, name, umamiScriptUrl, umamiSiteId } = body
+  const { timezone, name, umamiScriptUrl, umamiSiteId, loginTagline } = body
 
   if (timezone !== undefined && !SUPPORTED_TIMEZONES.includes(timezone)) {
     return NextResponse.json({ error: 'Unsupported timezone' }, { status: 400 })
@@ -50,11 +50,14 @@ export async function PATCH(req: Request) {
   }
   if (umamiScriptUrl !== undefined) updateData.umamiScriptUrl = umamiScriptUrl === '' ? null : umamiScriptUrl
   if (umamiSiteId !== undefined) updateData.umamiSiteId = umamiSiteId === '' ? null : umamiSiteId
+  if (loginTagline !== undefined) {
+    updateData.loginTagline = loginTagline === '' ? null : String(loginTagline).slice(0, 200)
+  }
 
   const updated = await prisma.family.update({
     where: { id: user.familyId },
     data: updateData,
-    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true },
+    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true, loginTagline: true },
   })
   return NextResponse.json(updated)
 }
