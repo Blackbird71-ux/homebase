@@ -17,7 +17,7 @@ export function WeeklySummaryCard({ data }: { data: WeeklySummaryData | null }) 
   if (!data) return null
 
   return (
-    <Card className="flex flex-col col-span-1 md:col-span-2">
+    <Card className="flex flex-col">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
           <CalendarDays className="h-4 w-4" /> Next 7 Days — {data.weekLabel}

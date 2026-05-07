@@ -1,16 +1,53 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
-import type { DashboardData, TodaysMeal } from '@/types'
+import type { DashboardData, TodaysMeal, ChoreScheduleDay, ChoreScheduleItem } from '@/types'
 
 function normalizeToUtcMidnight(dateStr: string): Date {
   const d = new Date(dateStr + 'T00:00:00Z')
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-export async function GET() {
+function buildChoreSchedule(
+  chores: any[],
+  todayStart: Date,
+  days: number = 30
+): ChoreScheduleDay[] {
+  if (!chores || !Array.isArray(chores)) return []
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const schedule: ChoreScheduleDay[] = []
+  for (let i = 0; i < days; i++) {
+    const dayDate = new Date(todayStart)
+    dayDate.setDate(dayDate.getDate() + i)
+    const dayStart = new Date(dayDate)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(dayDate)
+    dayEnd.setHours(23, 59, 59, 999)
+    const dayChores = chores.filter((c: any) => {
+      if (!c.nextDueDate) return false
+      return c.nextDueDate >= dayStart && c.nextDueDate <= dayEnd
+    })
+    schedule.push({
+      day: dayNames[dayDate.getDay()],
+      date: dayDate.toISOString(),
+      chores: dayChores.map((c: any): ChoreScheduleItem => ({
+        id: c.id,
+        title: c.title,
+        frequency: c.frequency,
+        note: c.note,
+        currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
+        lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
+        lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
+        isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+      })),
+    })
+  }
+  return schedule
+}
+
+export async function GET(request: NextRequest) {
   const user = await requireSession()
   const timezone = user.timezone ?? 'Australia/Sydney'
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
@@ -43,9 +80,11 @@ export async function GET() {
     tomorrowMealPlans,
     shoppingLists,
     todoLists,
+    myTasksCountResult,
     weekEvents,
     weekMeals,
     weekTodos,
+    choreData,
   ] = await Promise.all([
     prisma.event.findMany({
       where: { familyId: user.familyId, start: { gte: now } },
@@ -71,11 +110,20 @@ export async function GET() {
     prisma.list.findMany({
       where: { familyId: user.familyId, type: 'TODO', isActive: true },
       include: {
-        items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true } },
+        items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true, assignedToUserId: true } },
         _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
       },
       take: 1,
     }),
+    // Count tasks assigned to current user
+    prisma.listItem.count({
+      where: {
+        list: { familyId: user.familyId, type: 'TODO', isActive: true },
+        isCompleted: false,
+        dueDate: { gte: todayStart, lt: todayEnd },
+        assignedToUserId: user.id,
+      },
+    }).catch(() => 0),
     // Weekly summary: events this week
     prisma.event.findMany({
       where: { familyId: user.familyId, start: { gte: weekStart, lt: weekEndDate } },
@@ -102,6 +150,23 @@ export async function GET() {
       orderBy: { dueDate: 'asc' },
       take: 5,
       select: { content: true },
+    }),
+    // Chore data for chore schedule card
+    prisma.chore.findMany({
+      where: {
+        familyId: user.familyId,
+        isActive: true,
+        nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+      },
+      include: {
+        currentAssignee: { select: { id: true, name: true } },
+        completions: {
+          orderBy: { completedAt: 'desc' },
+          take: 1,
+          include: { completedBy: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: { nextDueDate: 'asc' },
     }),
   ])
 
@@ -185,12 +250,12 @@ export async function GET() {
           listId: todoLists[0].id,
           listName: todoLists[0].name,
           dueTodayCount: todoLists[0]._count.items,
-          myTasksCount: 0,
-          familyTasksCount: 0,
+          myTasksCount: myTasksCountResult,
+          familyTasksCount: todoLists[0]._count.items - myTasksCountResult,
           firstItems: todoLists[0].items.map(i => i.content),
         }
       : null,
-    choreSchedule: [],
+    choreSchedule: buildChoreSchedule(choreData, todayStart, 30),
   }
 
   return NextResponse.json(data)

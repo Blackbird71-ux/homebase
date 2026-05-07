@@ -1,14 +1,43 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ClipboardList, UserIcon, StickyNoteIcon } from 'lucide-react'
+import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw } from 'lucide-react'
 import type { ChoreScheduleDay } from '@/types'
+import { todayStringInTz } from '@/lib/timezone'
 
 type ScopeDays = 7 | 14 | 30
 
-export function ChoreScheduleCard({ data, timezone }: { data: ChoreScheduleDay[] | null | undefined; timezone?: string }) {
+export function ChoreScheduleCard({ data: initialData, timezone }: { data: ChoreScheduleDay[] | null | undefined; timezone?: string }) {
   const [scope, setScope] = useState<ScopeDays>(7)
+  const [data, setData] = useState<ChoreScheduleDay[] | null | undefined>(initialData)
+  const [loading, setLoading] = useState(false)
+
+  const fetchSchedule = useCallback(async (s: ScopeDays) => {
+    if (!timezone) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/chores/schedule?scope=${s}`)
+      if (res.ok) {
+        const json = await res.json()
+        setData(json.schedule)
+      }
+    } catch {
+      // ignore fetch errors
+    } finally {
+      setLoading(false)
+    }
+  }, [timezone])
+
+  // Refetch when scope changes
+  useEffect(() => {
+    if (scope !== 7) {
+      fetchSchedule(scope)
+    }
+  }, [scope, fetchSchedule])
+
+  // Compute today's YMD for highlighting
+  const today = timezone ? todayStringInTz(timezone) : new Date().toISOString().slice(0, 10)
 
   if (!data || data.every((d) => d.chores.length === 0)) return null
 
@@ -21,19 +50,22 @@ export function ChoreScheduleCard({ data, timezone }: { data: ChoreScheduleDay[]
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
             <ClipboardList className="h-4 w-4" /> Chore Schedule
           </CardTitle>
-          <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
-            {([7, 14, 30] as ScopeDays[]).map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setScope(d)}
-                className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
-                  scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {d === 30 ? '30d' : d === 14 ? '14d' : 'Week'}
-              </button>
-            ))}
+          <div className="flex items-center gap-1">
+            {loading && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
+            <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
+              {([7, 14, 30] as ScopeDays[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setScope(d)}
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                    scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {d === 30 ? '30d' : d === 14 ? '14d' : 'Week'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -44,16 +76,23 @@ export function ChoreScheduleCard({ data, timezone }: { data: ChoreScheduleDay[]
             const dateObj = new Date(day.date)
             const dayNum = dateObj.getDate()
             const month = dateObj.toLocaleDateString(undefined, { month: 'short' })
+            const isToday = dateStr === today
 
             if (day.chores.length === 0) return null
 
             return (
               <div
                 key={day.date}
-                className="border border-border rounded-lg p-2 bg-muted/20"
+                className={`border rounded-lg p-2 ${
+                  isToday
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border bg-muted/20'
+                }`}
               >
-                <div className="text-xs font-semibold text-muted-foreground mb-1.5">
+                <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                  {isToday && <span className="mr-1">●</span>}
                   {day.day} {dayNum} {month}
+                  {isToday && <span className="ml-1 text-primary font-bold">— Today</span>}
                 </div>
                 <div className="flex flex-col gap-1">
                   {day.chores.map((c) => (

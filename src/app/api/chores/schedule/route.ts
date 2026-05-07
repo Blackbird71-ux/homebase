@@ -1,23 +1,28 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { todayBoundsInTz } from '@/lib/timezone'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await requireSession()
   const timezone = user.timezone
 
-  // Get today's boundary in family timezone
-  const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
+  // Parse scope from query param, default to 30
+  const { searchParams } = new URL(request.url)
+  const scopeParam = searchParams.get('scope')
+  const scope = scopeParam ? Math.min(parseInt(scopeParam, 10) || 30, 30) : 30
 
-  // Rolling 7-day window from today
-  const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+  // Get today's boundary in family timezone
+  const { start: todayStart } = todayBoundsInTz(timezone)
+
+  // Rolling window from today
+  const windowEnd = new Date(todayStart.getTime() + scope * 24 * 60 * 60 * 1000)
 
   const chores = await prisma.chore.findMany({
     where: {
       familyId: user.familyId,
       isActive: true,
-      nextDueDate: { lte: weekEnd },
+      nextDueDate: { lte: windowEnd },
     },
     include: {
       currentAssignee: { select: { id: true, name: true } },
@@ -30,7 +35,7 @@ export async function GET() {
     orderBy: { nextDueDate: 'asc' },
   })
 
-  // Build schedule grouped by day-of-week within the rolling 7-day window
+  // Build schedule grouped by day within the rolling window
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const schedule: Array<{
     day: string
@@ -47,7 +52,7 @@ export async function GET() {
     }>
   }> = []
 
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < scope; i++) {
     const dayDate = new Date(todayStart)
     dayDate.setDate(dayDate.getDate() + i)
 
@@ -56,7 +61,7 @@ export async function GET() {
     const dayEnd = new Date(dayDate)
     dayEnd.setHours(23, 59, 59, 999)
 
-    const dayChores = chores.filter((c) => {
+    const dayChores = chores.filter((c: any) => {
       if (!c.nextDueDate) return false
       return c.nextDueDate >= dayStart && c.nextDueDate <= dayEnd
     })
@@ -64,7 +69,7 @@ export async function GET() {
     schedule.push({
       day: dayNames[dayDate.getDay()],
       date: dayDate.toISOString(),
-      chores: dayChores.map((c) => ({
+      chores: dayChores.map((c: any) => ({
         id: c.id,
         title: c.title,
         frequency: c.frequency,

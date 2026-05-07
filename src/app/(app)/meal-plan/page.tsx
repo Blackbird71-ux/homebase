@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { MealPlanGrid } from '@/components/meal-plan/MealPlanGrid'
 import { todayStringInTz } from '@/lib/timezone'
 import { getLocalImageUrl } from '@/lib/image-cache'
+import { startOfDay } from 'date-fns'
 
 function toYMDLocal(date: Date): string {
   const year = date.getFullYear()
