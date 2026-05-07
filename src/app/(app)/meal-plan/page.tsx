@@ -4,19 +4,6 @@ import { MealPlanGrid } from '@/components/meal-plan/MealPlanGrid'
 import { todayStringInTz } from '@/lib/timezone'
 import { getLocalImageUrl } from '@/lib/image-cache'
 
-function startOfWeek(date: Date, weekStartsOn: number): Date {
-  const d = new Date(date)
-  const day = d.getDay()
-  const diff = (day - weekStartsOn + 7) % 7
-  d.setDate(d.getDate() - diff)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function toYMD(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
 function toYMDLocal(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -28,9 +15,13 @@ export default async function MealPlanPage() {
   const user = await requireSession()
   const todayStr = todayStringInTz(user.timezone)
   const localToday = new Date(todayStr + 'T00:00:00')
-  const weekStart = startOfWeek(localToday, user.weekStartsOn)
+
+  // Use today as the start date — not the start of the week.
+  // The MealPlanGrid component will show `scope` number of days starting from today,
+  // so the current day always appears at the top.
+  const weekStart = localToday
   const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekEnd.getDate() + 6)
+  weekEnd.setDate(weekEnd.getDate() + 29) // Fetch 30 days for scope support
   weekEnd.setHours(23, 59, 59, 999)
 
   // Convert to UTC for database query (database stores dates normalized to UTC)

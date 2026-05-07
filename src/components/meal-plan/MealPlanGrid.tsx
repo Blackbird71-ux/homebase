@@ -182,10 +182,9 @@ export function MealPlanGrid({
     // Get today's local date string in the family's timezone
     const todayStr = todayStringInTz(timezone)
     const localToday = new Date(todayStr + 'T00:00:00')
-    const todayWeekStart = startOfWeek(localToday, weekStartsOn)
-    setWeekStart(todayWeekStart)
+    setWeekStart(localToday)
     
-    const { from, to } = scopeDateRange(todayWeekStart, scope)
+    const { from, to } = scopeDateRange(localToday, scope)
     setLoading(true)
     fetch(`/api/meal-plan?from=${from}&to=${to}`)
       .then((r) => r.json())
