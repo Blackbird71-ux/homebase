@@ -52,6 +52,11 @@ export async function GET(request: NextRequest) {
   const timezone = user.timezone ?? 'Australia/Sydney'
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const now = new Date()
+
+  // Parse optional scope query param for weekly summary window (default: 7)
+  const { searchParams } = new URL(request.url)
+  const scopeParam = searchParams.get('scope')
+  const scope = scopeParam === '14' ? 14 : scopeParam === '30' ? 30 : 7
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const todayStr = new Intl.DateTimeFormat('en-CA', {
@@ -72,7 +77,7 @@ export async function GET(request: NextRequest) {
   }
 
   const weekStart = new Date(todayStart.getTime())
-  const weekEndDate = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const weekEndDate = new Date(todayStart.getTime() + scope * 24 * 60 * 60 * 1000)
 
   const [
     upcomingEvents,
@@ -131,15 +136,16 @@ export async function GET(request: NextRequest) {
       take: 5,
       select: { id: true, title: true, start: true, color: true },
     }),
-    // Weekly summary: meals this week
+    // Weekly summary: meals this week (scoped to 7/14/30 days)
     prisma.mealPlan.findMany({
       where: { familyId: user.familyId, date: { gte: weekStart, lt: weekEndDate } },
       include: {
-        recipe: { select: { title: true } },
-        recipes: { include: { recipe: { select: { title: true } } } },
+        recipe: { select: { id: true, title: true, description: true } },
+        recipes: { include: { recipe: { select: { id: true, title: true, description: true } } }, orderBy: { order: 'asc' } },
       },
       orderBy: { date: 'asc' },
     }),
+
     // Weekly summary: pending todos this week
     prisma.listItem.findMany({
       where: {
@@ -205,10 +211,14 @@ export async function GET(request: NextRequest) {
       start: e.start.toISOString(),
       color: e.color,
     })),
-    topMeals: weekMeals.map(m => ({
-      day: dayNames[m.date.getDay()],
-      meal: m.recipes?.[0]?.recipe?.title ?? m.recipe?.title ?? m.note ?? m.mealType,
-    })),
+    topMeals: weekMeals.map(m => {
+      const dayIndex = m.date.getDay()
+      const recipeName = m.recipes?.[0]?.recipe?.title ?? m.recipe?.title ?? m.note ?? m.mealType
+      const recipeNote = m.recipes?.[0]?.recipe?.description ?? m.recipe?.description ?? m.note ?? null
+      const note = recipeNote && recipeNote !== recipeName ? recipeNote : null
+      return { day: dayNames[dayIndex], meal: recipeName, note }
+    }),
+
     topTodos: weekTodos.map(t => t.content),
   }
 

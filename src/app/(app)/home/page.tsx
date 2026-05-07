@@ -39,7 +39,8 @@ function buildChoreSchedule(
     })
     schedule.push({
       day: dayNames[dayDate.getDay()],
-      date: dayDate.toISOString(),
+      // Store as local YYYY-MM-DD string to avoid UTC timezone shift when parsing
+      date: `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`,
       chores: dayChores.map((c: any): ChoreScheduleItem => ({
         id: c.id,
         title: c.title,
@@ -174,8 +175,8 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       ? prisma.mealPlan.findMany({
           where: { familyId, date: { gte: weekStartUtc, lt: weekEndUtc } },
           include: {
-            recipe: { select: { id: true, title: true } },
-            recipes: { include: { recipe: { select: { id: true, title: true } } }, orderBy: { order: 'asc' } },
+            recipe: { select: { id: true, title: true, description: true } },
+            recipes: { include: { recipe: { select: { id: true, title: true, description: true } } }, orderBy: { order: 'asc' } },
           },
         })
       : Promise.resolve([]),
@@ -255,7 +256,10 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           return weekMealPlans.slice(0, 5).map(mp => {
             const dayIndex = new Date(mp.date).getUTCDay()
             const recipeName = mp.recipes?.[0]?.recipe?.title ?? mp.recipe?.title ?? mp.note ?? 'Planned'
-            return { day: dayNames[dayIndex], meal: recipeName }
+            const recipeNote = mp.recipes?.[0]?.recipe?.description ?? mp.recipe?.description ?? mp.note ?? null
+            // Use the recipe description as the note shown under the meal name (same as Today's Meals does)
+            const note = recipeNote && recipeNote !== recipeName ? recipeNote : null
+            return { day: dayNames[dayIndex], meal: recipeName, note }
           })
         })(),
         topTodos: weekTodoLists[0]?.items?.map(i => i.content) ?? [],
@@ -311,14 +315,16 @@ export default async function HomePage() {
     select: { uiPreferences: true },
   })
 
-  // Parse dashboardCards and dashboardShoppingListId from uiPreferences
+  // Parse dashboardCards, dashboardShoppingListId and dashboardPanelFractions from uiPreferences
   let dashboardCards: DashboardCardConfig[] | null = null
   let dashboardShoppingListId: string | null = null
+  let dashboardPanelFractions: number[] | null = null
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
       dashboardCards = prefs.dashboardCards ?? null
       dashboardShoppingListId = prefs.dashboardShoppingListId ?? null
+      dashboardPanelFractions = prefs.dashboardPanelFractions ?? null
     } catch {
       // ignore parse errors
     }
@@ -332,6 +338,7 @@ export default async function HomePage() {
       data={data}
       timezone={timezone}
       initialCards={cards}
+      initialPanelFractions={dashboardPanelFractions}
     />
   )
 }

@@ -2,16 +2,32 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw } from 'lucide-react'
+import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon } from 'lucide-react'
 import type { ChoreScheduleDay } from '@/types'
 import { todayStringInTz } from '@/lib/timezone'
 
 type ScopeDays = 7 | 14 | 30
 
-export function ChoreScheduleCard({ data: initialData, timezone }: { data: ChoreScheduleDay[] | null | undefined; timezone?: string }) {
-  const [scope, setScope] = useState<ScopeDays>(7)
+export function ChoreScheduleCard({
+  data: initialData,
+  timezone,
+  scope: parentScope,
+  onScopeChange,
+}: {
+  data: ChoreScheduleDay[] | null | undefined
+  timezone?: string
+  scope?: ScopeDays
+  onScopeChange?: (scope: ScopeDays) => void
+}) {
+  const [internalScope, setInternalScope] = useState<ScopeDays>(7)
   const [data, setData] = useState<ChoreScheduleDay[] | null | undefined>(initialData)
   const [loading, setLoading] = useState(false)
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+  // Persistently track chore IDs that have been completed this session
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+
+  // Use parent scope if provided, otherwise fall back to internal state
+  const scope = parentScope ?? internalScope
 
   const fetchSchedule = useCallback(async (s: ScopeDays) => {
     if (!timezone) return
@@ -29,12 +45,37 @@ export function ChoreScheduleCard({ data: initialData, timezone }: { data: Chore
     }
   }, [timezone])
 
-  // Refetch when scope changes
+  // Refetch whenever scope changes
   useEffect(() => {
-    if (scope !== 7) {
-      fetchSchedule(scope)
-    }
+    fetchSchedule(scope)
   }, [scope, fetchSchedule])
+
+  async function handleComplete(choreId: string) {
+    if (completingIds.has(choreId)) return // prevent double-click
+
+    setCompletingIds((prev) => new Set(prev).add(choreId))
+    try {
+      const res = await fetch(`/api/chores/${choreId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) throw new Error('Failed to complete chore')
+
+      // Mark as completed in local state for strikethrough + persist
+      setCompletedIds((prev) => new Set(prev).add(choreId))
+    } catch {
+      // Ignore silently on dashboard — the card will reappear on next fetch
+    } finally {
+      setTimeout(() => {
+        setCompletingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(choreId)
+          return next
+        })
+      }, 700)
+    }
+  }
 
   // Compute today's YMD for highlighting
   const today = timezone ? todayStringInTz(timezone) : new Date().toISOString().slice(0, 10)
@@ -57,7 +98,13 @@ export function ChoreScheduleCard({ data: initialData, timezone }: { data: Chore
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setScope(d)}
+                  onClick={() => {
+                    if (onScopeChange) {
+                      onScopeChange(d)
+                    } else {
+                      setInternalScope(d)
+                    }
+                  }}
                   className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
                     scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
@@ -73,9 +120,10 @@ export function ChoreScheduleCard({ data: initialData, timezone }: { data: Chore
         <div className="flex flex-col gap-2">
           {displayDays.map((day) => {
             const dateStr = day.date.slice(0, 10)
-            const dateObj = new Date(day.date)
-            const dayNum = dateObj.getDate()
-            const month = dateObj.toLocaleDateString(undefined, { month: 'short' })
+            // Parse YYYY-MM-DD as local date to avoid UTC timezone shift
+            const [y, m, d] = dateStr.split('-').map(Number)
+            const dayNum = d
+            const month = new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short' })
             const isToday = dateStr === today
 
             if (day.chores.length === 0) return null
@@ -95,34 +143,67 @@ export function ChoreScheduleCard({ data: initialData, timezone }: { data: Chore
                   {isToday && <span className="ml-1 text-primary font-bold">— Today</span>}
                 </div>
                 <div className="flex flex-col gap-1">
-                  {day.chores.map((c) => (
-                    <div
-                      key={c.id}
-                      className={`flex flex-col gap-0.5 px-2 py-1 rounded text-xs ${
-                        c.isOverdue
-                          ? 'bg-destructive/10 border border-destructive/20'
-                          : 'bg-background border border-border/50'
-                      }`}
-                    >
-                      <span className={`font-medium truncate ${c.isOverdue ? 'text-destructive' : ''}`}>
-                        {c.title}
-                      </span>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                        {c.currentAssignee && (
-                          <span className="flex items-center gap-0.5">
-                            <UserIcon className="h-2.5 w-2.5" />
-                            {c.currentAssignee.name}
+                  {day.chores.map((c) => {
+                    const isCompleted = completedIds.has(c.id)
+
+                    return (
+                      <div
+                        key={c.id}
+                        className={`flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${
+                          isCompleted
+                            ? 'bg-muted/40 border border-border/30'
+                            : c.isOverdue
+                              ? 'bg-destructive/10 border border-destructive/20'
+                              : 'bg-background border border-border/50'
+                        }`}
+                      >
+                        {/* Complete checkbox button */}
+                        <button
+                          onClick={() => handleComplete(c.id)}
+                          disabled={completingIds.has(c.id)}
+                          className={`shrink-0 flex items-center justify-center h-4 w-4 rounded border transition-all duration-200 ${
+                            completingIds.has(c.id)
+                              ? 'border-green-500 bg-green-500 scale-110'
+                              : isCompleted
+                                ? 'border-green-500 bg-green-500/20'
+                                : 'border-border hover:border-green-500 hover:bg-green-500/10'
+                          }`}
+                          title="Mark complete"
+                        >
+                          <CheckIcon className={`h-2.5 w-2.5 transition-colors duration-200 ${
+                            completingIds.has(c.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent'
+                          }`} />
+                        </button>
+
+                        {/* Chore details */}
+                        <div className="flex-1 min-w-0">
+                          <span className={`font-medium truncate block ${
+                            isCompleted
+                              ? 'line-through text-muted-foreground'
+                              : c.isOverdue
+                                ? 'text-destructive'
+                                : ''
+                          }`}>
+                            {c.title}
                           </span>
-                        )}
-                        {c.note && (
-                          <span className="flex items-center gap-0.5 truncate">
-                            <StickyNoteIcon className="h-2.5 w-2.5 shrink-0" />
-                            {c.note}
-                          </span>
-                        )}
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                            {c.currentAssignee && (
+                              <span className="flex items-center gap-0.5">
+                                <UserIcon className="h-2.5 w-2.5" />
+                                {c.currentAssignee.name}
+                              </span>
+                            )}
+                            {c.note && (
+                              <span className="flex items-center gap-0.5 truncate">
+                                <StickyNoteIcon className="h-2.5 w-2.5 shrink-0" />
+                                {c.note}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )

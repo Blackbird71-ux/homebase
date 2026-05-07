@@ -31,12 +31,18 @@ Major dashboard and meal planner overhaul to display rolling forward views (from
 - Each day card lists chore line items with: chore title, assignee (UserIcon), note (StickyNoteIcon)
 - Overdue chores highlighted with `bg-destructive/10 border border-destructive/20`
 - Hidden when no data (`data.every((d) => d.chores.length === 0)`)
+- **Added completion support (Bug 1 fix):** Each chore now has a checkbox button that:
+  - Calls `POST /api/chores/[id]/complete` to mark the chore complete
+  - Persistently tracks completed state via `completedIds` Set (never cleared during session)
+  - Shows green checkbox + strikethrough + reduced opacity on completion
+  - Uses `completingIds` Set for brief 700ms animation state
 - **New files:**
-  - `src/components/dashboard/ChoreScheduleCard.tsx` — 95 lines, 'use client' component
+  - `src/components/dashboard/ChoreScheduleCard.tsx` — 190 lines, 'use client' component (includes completion logic)
   - `src/app/api/chores/schedule/route.ts` — GET endpoint returning `ChoreScheduleDay[]`
 - **Modified files:**
   - `src/lib/dashboard-cards.ts` — registered `'chore-schedule'` card
   - `src/components/dashboard/DashboardGrid.tsx` — renders `<ChoreScheduleCard>`
+  - `src/app/(app)/home/HomeClient.tsx` — added `handleScopeChange` to re-fetch dashboard data on scope toggle (Bug 4 fix)
 
 ### 4. Chore Note Field
 - ChoreDialog now has a "Notes" textarea field for persistent notes on chore line items

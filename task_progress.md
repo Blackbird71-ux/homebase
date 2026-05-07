@@ -1,46 +1,18 @@
-# Implementation Progress
+# Bug Fixes - Dashboard Rolling Forward (2026-05-07)
 
-## Schema Changes
-- [x] Add `note` field to Chore model
-- [x] Add `assignedToUserId` field to ListItem model
-- [x] Create migration SQL file
+## Fix 1: Chore completion visual feedback (ChoresClient.tsx)
+- [ ] Add `completedIds` state for recently completed chores
+- [ ] Show strikethrough + muted opacity for completed chore rows
+- [ ] Auto-remove from completed state after 4 seconds
 
-## Meal Planner - Rolling Forward View
-- [x] Update `meal-plan/page.tsx` to pass today as initial week start
-- [x] Update `MealPlanGrid.tsx` for today-first ordering + scope selector (7/14/30)
+## Fix 2: Scope selector on Chores page (ChoresClient.tsx)
+- [ ] Add scope state (7/14/30) with toggle buttons
+- [ ] Filter chores within scope window
+- [ ] Show filtered count vs total
 
-## Home Dashboard - Rolling Display
-- [x] Update `home/page.tsx` weekly summary to start from today
-- [x] Update `WeeklySummaryCard.tsx` rolling label
-
-## Chore Schedule Card (New Dashboard Panel)
-- [x] Add types to `types/index.ts`
-- [x] Create `api/chores/schedule/route.ts` API endpoint
-- [x] Create `ChoreScheduleCard.tsx` component
-- [x] Register card in `dashboard-cards.ts`
-- [x] Add card rendering to `DashboardGrid.tsx`
-
-## Chore Dialog - Note Field
-- [x] Update `ChoreDialog.tsx` to add Notes text field
-- [x] Update `api/chores/route.ts` to accept/save note
-- [x] Update `api/chores/[id]/route.ts` to accept/save note
-
-## ToDo - Per-User Assignment
-- [x] Update `api/lists/[id]/items/route.ts` to accept `assignedToUserId`
-- [x] Update `api/lists/[id]/items/[itemId]/route.ts` to accept `assignedToUserId`
-- [x] Update `TodoList.tsx` to show assignee dropdown
-- [x] Update `ListItemRow.tsx` to show assignee badge
-- [x] Update `TodoCard.tsx` with "My Tasks / Family Tasks" filter
-
-## Chore Completion Visual Feedback
-- [x] Update `ChoresClient.tsx` for persistent checkbox + strikethrough
-
-## Documentation & Git
-- [x] Create feature doc `docs/feature-dashboard-rolling-forward-2026-05-07.md`
-- [x] Update `PROJECT_SUMMARY.md` with new features
-- [x] Update `task_progress.md` with completion status
-- [x] Commit all changes to git with descriptive message
-
-## Build Verification
-- [x] Build passes with zero TypeScript errors
-- [x] Docker configuration verified
+## Fix 3 & 4: Lift scope + apply to WeeklySummaryCard (HomeClient, WeeklySummaryCard, ChoreScheduleCard)
+- [ ] Add scope state to HomeClient and pass down
+- [ ] Update WeeklySummaryCard with scope toggles and dynamic title
+- [ ] Update ChoreScheduleCard to accept parent scope
+- [ ] Wire up DashboardGrid to pass scope to both cards
+- [ ] Ensure all cards respond to scope changes

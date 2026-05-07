@@ -44,7 +44,7 @@ export interface WeeklySummaryData {
   mealCount: number
   pendingTodoCount: number
   topEvents: { id: string; title: string; start: string; color: string | null }[]
-  topMeals: { day: string; meal: string }[]
+  topMeals: { day: string; meal: string; note?: string | null }[]
   topTodos: string[]
 }
 

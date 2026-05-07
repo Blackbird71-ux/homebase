@@ -74,11 +74,18 @@ function isOverdue(nextDueDate: string | null): boolean {
   return new Date(nextDueDate) < new Date()
 }
 
+type ScopeDays = 7 | 14 | 30
+
 export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+  // Persistently tracks chore IDs that have been completed this session (for strikethrough)
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  // Incremented each time a new chore is added, forcing ChoreDialog to re-mount with clean state
+  const [newChoreKey, setNewChoreKey] = useState(0)
+  const [scope, setScope] = useState<ScopeDays>(7)
   const [publicView, setPublicView] = useState(true)
 
   // Listen for chores updates from AI assistant or other sources
@@ -112,6 +119,8 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
       }
       setChores((prev) => prev.map((c) => (c.id === chore.id ? updatedChore : c)))
 
+      // Persistently track this chore as completed for strikethrough visual feedback
+      setCompletedIds((prev) => new Set(prev).add(chore.id))
       const nextDate = data.chore.nextDueDate
       if (nextDate) {
         toast.success('Chore completed!', {
@@ -260,11 +269,22 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
     )
   }
 
+  // Filter chores based on scope: only show chores due within the selected window
+  const filteredChores = chores.filter((chore) => {
+    if (!chore.nextDueDate) return true // no due date means recurring, always show
+    const dueDate = new Date(chore.nextDueDate)
+    const cutoff = new Date(Date.now() + scope * 86400000)
+    return dueDate <= cutoff
+  })
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">{chores.length} active chore{chores.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-muted-foreground">
+            {filteredChores.length} of {chores.length} active chore{chores.length !== 1 ? 's' : ''}
+            {scope !== 30 && <span className="text-muted-foreground/50"> due in {scope} days</span>}
+          </p>
           <button
             onClick={() => setPublicView(!publicView)}
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
@@ -282,24 +302,44 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
             {publicView ? 'Family' : 'Private'}
           </button>
         </div>
-        <Button size="sm" onClick={() => { setEditingChore(null); setDialogOpen(true) }}>
-          <PlusIcon className="h-4 w-4 mr-1" /> Add Chore
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Scope toggle */}
+          <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
+            {([7, 14, 30] as ScopeDays[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setScope(d)}
+                className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                  scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {d === 30 ? '30d' : d === 14 ? '14d' : '7d'}
+              </button>
+            ))}
+          </div>
+          <Button size="sm" onClick={() => { setEditingChore(null); setNewChoreKey(k => k + 1); setDialogOpen(true) }}>
+            <PlusIcon className="h-4 w-4 mr-1" /> Add Chore
+          </Button>
+        </div>
       </div>
 
-      {chores.length === 0 ? (
+      {filteredChores.length === 0 ? (
         <div className="py-8 text-center text-muted-foreground text-sm">
-          No chores yet. Add your first household chore to get started.
+          {chores.length === 0
+            ? 'No chores yet. Add your first household chore to get started.'
+            : `No chores due in the next ${scope} days. Try expanding the time window above.`}
         </div>
       ) : (
         <div className="rounded-lg border border-border/60 divide-y divide-border/40">
-          {chores.map((chore) => {
+          {filteredChores.map((chore) => {
             const overdue = isOverdue(chore.nextDueDate)
+            const isCompleted = completedIds.has(chore.id)
 
             return (
               <div
                 key={chore.id}
-                className={`group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''}`}
+                className={`group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''} ${isCompleted ? 'opacity-50' : ''}`}
               >
                 {/* Complete button (checkbox-style) */}
                 <button
@@ -307,12 +347,14 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
                   className={`shrink-0 flex items-center justify-center h-5 w-5 rounded border transition-all duration-200
                     ${completingIds.has(chore.id)
                       ? 'border-green-500 bg-green-500 scale-110'
-                      : 'border-border hover:border-green-500 hover:bg-green-500/10'
+                      : isCompleted
+                        ? 'border-green-500 bg-green-500/20'
+                        : 'border-border hover:border-green-500 hover:bg-green-500/10'
                     }`}
                   title="Mark complete"
                 >
                   <CheckIcon className={`h-3 w-3 transition-colors duration-200 ${
-                    completingIds.has(chore.id) ? 'text-white' : 'text-transparent group-hover:text-green-500'
+                    completingIds.has(chore.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent group-hover:text-green-500'
                   }`} />
                 </button>
 
@@ -324,7 +366,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
                   contentClassName=""
                 >
                   <span
-                    className="text-sm font-medium cursor-default truncate block"
+                    className={`text-sm font-medium cursor-default truncate block ${isCompleted ? 'line-through text-muted-foreground' : ''}`}
                     onClick={() => { setEditingChore(chore); setDialogOpen(true) }}
                   >
                     {chore.title}
@@ -332,7 +374,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
                 </HoverCard>
 
                 {/* Overdue badge */}
-                {overdue && (
+                {overdue && !isCompleted && (
                   <span className="shrink-0 text-[11px] font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
                     Overdue
                   </span>
@@ -386,7 +428,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
       )}
 
       <ChoreDialog
-        key={editingChore?.id ?? 'new'}
+        key={editingChore?.id ?? `new-${newChoreKey}`}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         chore={editingChore}

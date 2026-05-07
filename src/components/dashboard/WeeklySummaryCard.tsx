@@ -1,3 +1,5 @@
+'use client'
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CalendarDays, Utensils, CheckSquare } from 'lucide-react'
 import Link from 'next/link'
@@ -9,19 +11,47 @@ export interface WeeklySummaryData {
   mealCount: number
   pendingTodoCount: number
   topEvents: { id: string; title: string; start: string; color: string | null }[]
-  topMeals: { day: string; meal: string }[]
+  topMeals: { day: string; meal: string; note?: string | null }[]
   topTodos: string[]
 }
 
-export function WeeklySummaryCard({ data }: { data: WeeklySummaryData | null }) {
+type ScopeDays = 7 | 14 | 30
+
+export function WeeklySummaryCard({
+  data,
+  scope,
+  onScopeChange,
+}: {
+  data: WeeklySummaryData | null
+  scope?: ScopeDays
+  onScopeChange?: (scope: ScopeDays) => void
+}) {
   if (!data) return null
 
   return (
     <Card className="flex flex-col">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-          <CalendarDays className="h-4 w-4" /> Next 7 Days — {data.weekLabel}
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
+            <CalendarDays className="h-4 w-4" /> Next {scope ?? 7} Days — {data.weekLabel}
+          </CardTitle>
+          {onScopeChange && (
+            <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
+              {([7, 14, 30] as ScopeDays[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => onScopeChange(d)}
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                    (scope ?? 7) === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {d === 30 ? '30d' : d === 14 ? '14d' : '7d'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -56,9 +86,14 @@ export function WeeklySummaryCard({ data }: { data: WeeklySummaryData | null }) 
             {data.topMeals.length > 0 && (
               <div className="mt-2 space-y-1">
                 {data.topMeals.map((m, i) => (
-                  <p key={i} className="text-xs truncate">
-                    <span className="text-muted-foreground">{m.day}:</span> {m.meal}
-                  </p>
+                  <div key={i}>
+                    <p className="text-xs truncate">
+                      <span className="text-muted-foreground">{m.day}:</span> {m.meal}
+                    </p>
+                    {m.note && (
+                      <p className="text-[10px] text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
