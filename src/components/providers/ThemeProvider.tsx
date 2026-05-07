@@ -12,7 +12,15 @@ function ThemeSyncer({ children }: { children: React.ReactNode }) {
   async function fetchSettings() {
     try {
       const response = await fetch('/api/settings')
-      if (!response.ok) return
+      if (!response.ok) {
+        // Unauthenticated — apply the household's theme so the login page matches
+        const pub = await fetch('/api/public/theme')
+        if (pub.ok) {
+          const data = await pub.json()
+          if (data.theme) setTheme(data.theme)
+        }
+        return
+      }
       const data = await response.json()
 
       if (data.theme) setTheme(data.theme)
