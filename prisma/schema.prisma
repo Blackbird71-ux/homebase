@@ -634,6 +634,12 @@ model FinanceRecurringBill {
   autoPay         Boolean              @default(false)
   emailReminder   Boolean              @default(false)
   reminderDays    Int                  @default(3)
+  billType        String               @default("recurring")  // recurring | one-off
+  recurrenceInterval String?
+  invoiceReceived Boolean              @default(false)
+  invoiceReceivedDate DateTime?
+  paid            Boolean              @default(false)
+  paidDate        DateTime?
   notes           String?
   memberId        String?              // FK -> User. Inherited by auto-created transactions. Null = shared.
   locationId      String?
@@ -647,6 +653,7 @@ model FinanceRecurringBill {
   @@index([familyId])
   @@index([familyId, isActive])
   @@index([familyId, nextDueDate])
+  @@index([familyId, paid])
   @@index([memberId])
   @@index([locationId])
 }

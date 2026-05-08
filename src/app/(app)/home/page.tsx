@@ -229,6 +229,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           where: {
             familyId,
             isActive: true,
+            paid: false,
             nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
           },
           orderBy: { nextDueDate: 'asc' },
