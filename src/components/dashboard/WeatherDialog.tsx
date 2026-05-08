@@ -205,7 +205,12 @@ export function WeatherDialog({
     if (open && !hasAttempted.current) {
       hasAttempted.current = true
       if (prefetchedWeather || prefetchedError || prefetchedNeedsConfig || prefetchedGeoError) {
-        // Use prefetched data — no need to re-fetch
+        // Sync prefetched props into local state (useState only captures the initial value at mount)
+        setWeather(prefetchedWeather ?? null)
+        setError(prefetchedError ?? null)
+        setNeedsConfig(prefetchedNeedsConfig ?? false)
+        setGeoError(prefetchedGeoError ?? null)
+        setLoading(false)
         return
       }
       loadWeather()
