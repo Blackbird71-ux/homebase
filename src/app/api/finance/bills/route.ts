@@ -42,6 +42,13 @@ export async function PUT(request: NextRequest) {
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
+  const existing = await prisma.financeRecurringBill.findFirst({
+    where: { id, familyId: session.familyId },
+  })
+  if (!existing) {
+    return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
+  }
+
   const bill = await prisma.financeRecurringBill.update({
     where: { id },
     data: {
@@ -65,6 +72,13 @@ export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+
+  const existing = await prisma.financeRecurringBill.findFirst({
+    where: { id, familyId: session.familyId },
+  })
+  if (!existing) {
+    return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
+  }
 
   await prisma.financeRecurringBill.delete({ where: { id } })
   return NextResponse.json({ success: true })

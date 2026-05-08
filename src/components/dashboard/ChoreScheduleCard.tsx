@@ -26,7 +26,7 @@ export function ChoreScheduleCard({
   // Persistently track chore IDs that have been completed this session
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   // Track if we're filtering to only show current user's chores
-  const [showOnlyMine, setShowOnlyMine] = useState(true)
+  const [showOnlyMine, setShowOnlyMine] = useState(false)
 
   // Use parent scope if provided, otherwise fall back to internal state
   const scope = parentScope ?? internalScope
