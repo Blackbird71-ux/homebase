@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt, RefreshCw, Layers, Link as LinkIcon } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import {
+  Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
+  RefreshCw, Layers, Link as LinkIcon, Paperclip, Upload, X, FileText, Download,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -9,6 +12,16 @@ import Link from 'next/link'
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
+interface BillAttachment {
+  id: string
+  billId: string
+  title: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  createdAt: string
+}
+
 export interface Bill {
   id: string; name: string; amount: number; frequency: string
   dayOfMonth: number | null; monthOfYear: number | null
@@ -27,6 +40,7 @@ export interface Bill {
   billType: string
   recurrenceInterval: string | null
   parentBillId: string | null
+  attachments?: BillAttachment[]
 }
 
 export default function BillsPage() {
@@ -55,6 +69,14 @@ export default function BillsPage() {
     return []
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
+
+  // Attachment panel state
+  const [attachmentBillId, setAttachmentBillId] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<BillAttachment[]>([])
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const attachFileRef = useRef<HTMLInputElement>(null)
+
   const [form, setForm] = useState({
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
     dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
@@ -94,6 +116,58 @@ export default function BillsPage() {
 
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0) load() }, [members])
+
+  // ── Attachment helpers ─────────────────────────────────────────────────────
+
+  async function openAttachments(bill: Bill) {
+    setAttachmentBillId(bill.id)
+    setAttachmentsLoading(true)
+    try {
+      const res = await fetch(`/api/finance/bills/${bill.id}/attachments`)
+      if (res.ok) setAttachments(await res.json())
+    } finally { setAttachmentsLoading(false) }
+  }
+
+  function closeAttachments() {
+    setAttachmentBillId(null)
+    setAttachments([])
+  }
+
+  async function handleAttachmentUpload(billId: string, file: File) {
+    setUploadingAttachment(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('title', file.name.replace(/\.[^/.]+$/, '')) // strip extension for default title
+      const res = await fetch(`/api/finance/bills/${billId}/attachments`, { method: 'POST', body: fd })
+      if (res.ok) {
+        const att = await res.json()
+        setAttachments(prev => [...prev, att])
+        toast.success('Attachment uploaded')
+      } else {
+        toast.error('Failed to upload attachment')
+      }
+    } finally { setUploadingAttachment(false) }
+  }
+
+  async function handleAttachmentDelete(billId: string, attachmentId: string) {
+    if (!confirm('Remove this attachment?')) return
+    const res = await fetch(`/api/finance/bills/${billId}/attachments/${attachmentId}`, { method: 'DELETE' })
+    if (res.ok) {
+      setAttachments(prev => prev.filter(a => a.id !== attachmentId))
+      toast.success('Attachment removed')
+    } else {
+      toast.error('Failed to remove attachment')
+    }
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  // ── Existing helpers ───────────────────────────────────────────────────────
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter') {
     sessionStorage.setItem('bills-dateRange', r)
@@ -246,6 +320,9 @@ export default function BillsPage() {
     catTotals[catId] = visibleBills.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
   const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 6rem`
+
+  // Find the bill currently open for attachments
+  const attachmentBill = attachmentBillId ? bills.find(b => b.id === attachmentBillId) ?? null : null
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading bills…</div>
 
@@ -501,6 +578,78 @@ export default function BillsPage() {
         </div>
       )}
 
+      {/* Attachment panel */}
+      {attachmentBillId && attachmentBill && (
+        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-medium text-sm">
+              <Paperclip className="h-4 w-4 text-green-600" />
+              Attachments — <span className="text-muted-foreground">{attachmentBill.name}</span>
+            </div>
+            <button onClick={closeAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {attachmentsLoading ? (
+            <p className="text-xs text-muted-foreground">Loading…</p>
+          ) : attachments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No attachments yet.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {attachments.map(att => (
+                <div key={att.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="flex-1 truncate font-medium">{att.title}</span>
+                  <span className="text-xs text-muted-foreground">{formatFileSize(att.fileSize)}</span>
+                  <a
+                    href={`/api/finance/bills/${attachmentBillId}/attachments/${att.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="View / Download"
+                    className="p-1 rounded hover:bg-accent text-primary"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
+                  <button onClick={() => handleAttachmentDelete(attachmentBillId, att.id)}
+                    className="p-1 rounded hover:bg-accent text-red-500" title="Remove">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upload button — limit to 2 attachments (invoice + reference doc) */}
+          {attachments.length < 2 && (
+            <>
+              <input
+                ref={attachFileRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                className="hidden"
+                onChange={async e => {
+                  const file = e.target.files?.[0]
+                  if (file) await handleAttachmentUpload(attachmentBillId, file)
+                  e.target.value = ''
+                }}
+              />
+              <button
+                onClick={() => attachFileRef.current?.click()}
+                disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
+              </button>
+              <p className="text-[10px] text-muted-foreground">
+                PDF, JPG, PNG, DOC accepted · Max 2 files per bill
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Bill list */}
       {bills.length === 0 ? (
         <p className="text-sm text-muted-foreground">No bills yet.</p>
@@ -522,12 +671,20 @@ export default function BillsPage() {
           {overdue.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
-              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit} formatCurrency={formatCurrency} />
+              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
+              onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit}
+              onOpenAttachments={openAttachments}
+              attachmentBillId={attachmentBillId}
+              formatCurrency={formatCurrency} />
           ))}
           {upcoming.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={false}
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
-              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit} formatCurrency={formatCurrency} />
+              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
+              onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit}
+              onOpenAttachments={openAttachments}
+              attachmentBillId={attachmentBillId}
+              formatCurrency={formatCurrency} />
           ))}
 
           {/* Totals row */}
@@ -554,34 +711,55 @@ export default function BillsPage() {
   )
 }
 
-function BillRow({ bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate, onEdit, onDelete, onMarkPaid, onToggleInvoice, onDoubleClick, formatCurrency }: {
+function BillRow({
+  bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate,
+  onEdit, onDelete, onMarkPaid, onToggleInvoice, onDoubleClick,
+  onOpenAttachments, attachmentBillId, formatCurrency,
+}: {
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
   billAmountForCat: (bill: Bill, catId: string) => number
   gridTemplate: string
-  onEdit: (b: Bill) => void; onDelete: (id: string) => void
-  onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
+  onEdit: (b: Bill) => void
+  onDelete: (id: string) => void
+  onMarkPaid: (b: Bill) => void
+  onToggleInvoice: (b: Bill) => void
   onDoubleClick: (b: Bill) => void
+  onOpenAttachments: (b: Bill) => void
+  attachmentBillId: string | null
   formatCurrency: (n: number) => string
 }) {
   const isOneOff = bill.billType === 'one-off'
+  const hasInvoice = bill.invoiceReceived
+  const isAttachmentOpen = attachmentBillId === bill.id
+
+  // Row colour priority: overdue (red) > invoice received (green) > default
+  const rowClass = cn(
+    'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
+    isOverdue
+      ? 'border-red-500/30 bg-red-500/5'
+      : hasInvoice
+        ? 'border-green-500/30 bg-green-500/5'
+        : 'border-border hover:bg-accent/50',
+    isAttachmentOpen && 'ring-1 ring-green-500/40',
+  )
+
   return (
-    <div className={cn('grid gap-3 rounded-lg border p-3 cursor-default select-none',
-      isOverdue ? 'border-red-500/30 bg-red-500/5' : 'border-border hover:bg-accent/50')}
+    <div className={rowClass}
       style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
       onDoubleClick={() => onDoubleClick(bill)}>
       <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
-        isOverdue ? 'bg-red-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
+        isOverdue ? 'bg-red-500/10' : hasInvoice ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
         {isOneOff
           ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-orange-500')} />
-          : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-muted-foreground')} />}
+          : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : hasInvoice ? 'text-green-600' : 'text-muted-foreground')} />}
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium">{bill.name}</span>
           {!bill.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
           {bill.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
-          {bill.invoiceReceived && (
+          {hasInvoice && (
             <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
               <Receipt className="h-2.5 w-2.5" /> INVOICE
             </span>
@@ -606,6 +784,13 @@ function BillRow({ bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemp
       })}
       <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
       <div className="flex items-center gap-0.5 justify-end">
+        <button
+          onClick={() => onOpenAttachments(bill)}
+          title="Attachments"
+          className={cn('p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : 'text-muted-foreground')}
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
         <button onClick={() => onToggleInvoice(bill)} title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
           className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
           <Receipt className="h-3.5 w-3.5" />

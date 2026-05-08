@@ -43,10 +43,11 @@ echo "   ✓ Critical files present"
 # ---------------------------------------------------------------------------
 echo ""
 echo ">> [1/6] Setting up /data directory structure..."
-mkdir -p /data/uploads    # recipe images uploaded by users
-mkdir -p /data/documents  # document vault files
-mkdir -p /data/images     # cached external recipe images
-mkdir -p /data/backups    # automated database backups
+mkdir -p /data/uploads          # recipe images uploaded by users
+mkdir -p /data/documents        # document vault files
+mkdir -p /data/bill-attachments # invoice/reference docs attached to bills
+mkdir -p /data/images           # cached external recipe images
+mkdir -p /data/backups          # automated database backups
 
 chown -R nextjs:nodejs /data 2>/dev/null || true
 chmod -R 755 /data 2>/dev/null || true

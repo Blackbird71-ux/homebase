@@ -654,6 +654,7 @@ model FinanceRecurringBill {
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
+  attachments     BillAttachment[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -664,6 +665,22 @@ model FinanceRecurringBill {
   @@index([memberId])
   @@index([locationId])
   @@index([parentBillId])
+}
+
+model BillAttachment {
+  id           String               @id @default(cuid())
+  billId       String
+  bill         FinanceRecurringBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  familyId     String
+  title        String               // Display name (e.g. "Invoice Jan 2026")
+  fileName     String               // UUID-based filename on disk
+  fileSize     Int                  @default(0)
+  mimeType     String               @default("application/octet-stream")
+  uploadedById String
+  createdAt    DateTime             @default(now())
+
+  @@index([billId])
+  @@index([familyId])
 }
 
 model FinanceBudget {

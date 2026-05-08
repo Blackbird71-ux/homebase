@@ -11,6 +11,10 @@ export async function GET() {
       account: { select: { id: true, name: true } },
       category: true,
       location: { select: { id: true, name: true } },
+      attachments: {
+        select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      },
     },
     orderBy: { nextDueDate: 'asc' },
   })
@@ -64,6 +68,7 @@ export async function POST(request: NextRequest) {
       account: { select: { id: true, name: true } },
       category: true,
       location: { select: { id: true, name: true } },
+      attachments: { select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true } },
     },
   })
 
@@ -122,6 +127,7 @@ export async function PUT(request: NextRequest) {
       account: { select: { id: true, name: true } },
       category: true,
       location: { select: { id: true, name: true } },
+      attachments: { select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true } },
     },
   })
 
@@ -199,6 +205,7 @@ export async function PATCH(request: NextRequest) {
       account: { select: { id: true, name: true } },
       category: true,
       location: { select: { id: true, name: true } },
+      attachments: { select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true } },
     },
   })
 
