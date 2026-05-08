@@ -34,6 +34,12 @@ model Family {
   auditLogs            AuditLog[]
   documents            Document[]
   listTemplates        ListTemplate[]
+  financeAccounts      FinanceAccount[]
+  financeTransactions  FinanceTransaction[]
+  financeCategories    FinanceCategory[]
+  financeBudgets       FinanceBudget[]
+  financeRecurringBills FinanceRecurringBill[]
+  financeSavingsGoals  FinanceSavingsGoal[]
 }
 
 model User {
@@ -508,4 +514,162 @@ model EmailReminderLog {
   sentAt      DateTime @default(now())
 
   @@index([entityType])
+}
+
+// ─── Finance Module ──────────────────────────────────────────────────────────────────────────
+
+model FinanceAccount {
+  id              String   @id @default(cuid())
+  name            String
+  type            String   @default("checking")  // checking | savings | credit | cash | investment | loan
+  institution     String?
+  currency        String   @default("AUD")
+  currentBalance  Float    @default(0)
+  creditLimit     Float?   // For credit cards
+  isActive        Boolean  @default(true)
+  color           String?  // Display colour hex
+  icon            String?  // Lucide icon name
+  sortOrder       Int      @default(0)
+  familyId        String
+  family          Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  transactions    FinanceTransaction[]
+  savingsGoals    FinanceSavingsGoal[]
+  recurringBills  FinanceRecurringBill[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, isActive])
+}
+
+model FinanceCategory {
+  id              String            @id @default(cuid())
+  name            String
+  type            String            @default("expense")  // expense | income | transfer
+  parentId        String?
+  parent          FinanceCategory?  @relation("FinanceCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        FinanceCategory[] @relation("FinanceCategoryHierarchy")
+  icon            String?
+  color           String?
+  isSystem        Boolean           @default(false)
+  sortOrder       Int               @default(0)
+  familyId        String
+  family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  transactions    FinanceTransaction[]
+  budgetRules     FinanceBudget[]
+  recurringBills  FinanceRecurringBill[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([familyId, name])
+  @@index([familyId])
+  @@index([parentId])
+}
+
+model FinanceTransaction {
+  id              String               @id @default(cuid())
+  accountId       String?
+  account         FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId      String?
+  category        FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  type            String               @default("expense")  // expense | income | transfer
+  amount          Float                // Always positive; sign implied by type
+  payee           String?
+  description     String?
+  date            DateTime
+  isRecurring     Boolean              @default(false)
+  recurringBillId String?
+  recurringBill   FinanceRecurringBill? @relation(fields: [recurringBillId], references: [id], onDelete: SetNull)
+  tags            String?              // JSON array of tag strings
+  isPrivate       Boolean              @default(false)
+  isCleared       Boolean              @default(false)  // true = paid/reconciled
+  reconciledDate  DateTime?
+  reference       String?              // Cheque #, transaction ID, invoice #
+  receiptPath     String?              // Path to uploaded receipt image/PDF
+  notes           String?
+  createdBy       String
+  familyId        String
+  family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, date(sort: Desc)])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([familyId, isCleared])
+  @@index([familyId, isRecurring])
+  @@index([familyId, type])
+  @@index([recurringBillId])
+}
+
+model FinanceRecurringBill {
+  id              String               @id @default(cuid())
+  name            String               // e.g. "Netflix", "Mortgage"
+  amount          Float                // Expected amount
+  accountId       String?
+  account         FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId      String?
+  category        FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  frequency       String               @default("monthly")  // weekly | fortnightly | monthly | quarterly | annual
+  dayOfMonth      Int?                 // For monthly/quarterly (1–31)
+  monthOfYear     Int?                 // For annual (1–12)
+  nextDueDate     DateTime             // Calculated next occurrence
+  endDate         DateTime?
+  isActive        Boolean              @default(true)
+  autoPay         Boolean              @default(false)
+  emailReminder   Boolean              @default(false)
+  reminderDays    Int                  @default(3)
+  notes           String?
+  familyId        String
+  family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  transactions    FinanceTransaction[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, isActive])
+  @@index([familyId, nextDueDate])
+}
+
+model FinanceBudget {
+  id              String             @id @default(cuid())
+  name            String             // e.g. "Groceries – May 2026"
+  categoryId      String?
+  category        FinanceCategory?   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  amount          Float              // Budget limit for the period
+  period          String             @default("monthly")  // monthly | custom
+  startDate       DateTime           // Period start
+  endDate         DateTime           // Period end
+  rollover        Boolean            @default(false)
+  alertThreshold  Int                @default(80)  // Notify at X% spent
+  emailAlert      Boolean            @default(false)
+  familyId        String
+  family          Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, startDate, endDate])
+  @@index([categoryId])
+}
+
+model FinanceSavingsGoal {
+  id              String             @id @default(cuid())
+  name            String             // e.g. "Holiday to Japan 2027"
+  targetAmount    Float
+  currentAmount   Float              @default(0)
+  targetDate      DateTime?
+  accountId       String?
+  account         FinanceAccount?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  color           String?
+  icon            String?
+  isComplete      Boolean            @default(false)
+  familyId        String
+  family          Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, isComplete])
 }

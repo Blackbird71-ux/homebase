@@ -1,0 +1,60 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
+
+const tabs = [
+  { href: '/finance',         label: 'Overview',     exact: true },
+  { href: '/finance/accounts', label: 'Accounts',    exact: false },
+  { href: '/finance/transactions', label: 'Transactions', exact: false },
+  { href: '/finance/bills',   label: 'Bills',        exact: false },
+  { href: '/finance/budget',  label: 'Budget',       exact: false },
+  { href: '/finance/goals',   label: 'Goals',        exact: false },
+  { href: '/finance/reports', label: 'Reports',      exact: false },
+  { href: '/finance/categories', label: 'Categories', exact: false },
+]
+
+export default function FinanceLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="p-6 pb-0 shrink-0">
+        <h1 className="text-2xl font-bold">Finance</h1>
+        <p className="text-muted-foreground mt-1">Track income, expenses, budgets and savings.</p>
+      </div>
+
+      {/* Sub-navigation tabs */}
+      <div className="px-6 pt-4 pb-0 shrink-0 overflow-x-auto">
+        <nav className="flex gap-1 border-b border-border min-w-max">
+          {tabs.map((tab) => {
+            const isActive = tab.exact
+              ? pathname === tab.href
+              : pathname.startsWith(tab.href) && tab.href !== '/finance'
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={cn(
+                  'px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors',
+                  isActive
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+                )}
+              >
+                {tab.label}
+              </Link>
+            )
+          })}
+        </nav>
+      </div>
+
+      {/* Page content */}
+      <div className="flex-1 overflow-y-auto p-6 pt-4">
+        {children}
+      </div>
+    </div>
+  )
+}
