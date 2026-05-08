@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       familyId: user.familyId,
       isActive: true,
       nextDueDate: { lte: windowEnd },
-      ...(assignedToMe ? { assigneeUserId: user.id } : {}),
+      ...(assignedToMe ? { currentAssigneeId: user.id } : {}),
     },
     include: {
       currentAssignee: { select: { id: true, name: true } },

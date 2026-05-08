@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { DashboardData } from '@/types'
 import type { DashboardCardConfig } from '@/lib/dashboard-cards'
 import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
@@ -30,6 +30,12 @@ interface DashboardGridProps {
   onScopeChange?: (scope: ScopeDays) => void
   /** Loading state when re-fetching data */
   loading?: boolean
+  /** Available TODO lists for the weekly summary card picker */
+  availableTodoLists?: { id: string; name: string }[]
+  /** Currently selected TODO list ID for the weekly summary */
+  selectedTodoListId?: string | null
+  /** Called when the user picks a different TODO list */
+  onTodoListChange?: (listId: string) => void
 }
 
 export interface DashboardGridHandle {
@@ -44,6 +50,9 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
   onLayoutsChange,
   scope = 7,
   onScopeChange,
+  availableTodoLists,
+  selectedTodoListId,
+  onTodoListChange,
 }, ref) {
   // Sort cards by order, filter visible ones
   const visibleCards = cards
@@ -78,15 +87,18 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
   useImperativeHandle(ref, () => ({ resetLayouts }), [resetLayouts])
 
   // Track container width for x/width percentage calculations
-  const containerWidthRef = useRef(800)
+  const [containerWidth, setContainerWidth] = useState(800)
 
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
+    const initial = el.getBoundingClientRect().width
+    if (initial > 0) setContainerWidth(initial)
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        containerWidthRef.current = entry.contentRect.width
+        if (entry.contentRect.width > 0) setContainerWidth(entry.contentRect.width)
       }
     })
 
@@ -99,7 +111,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
       {/* Mobile layout: single column stacked */}
       <div className="grid grid-cols-1 gap-4 md:hidden">
         {visibleCards.map((card) => (
-          <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange)}</div>
+          <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange)}</div>
         ))}
       </div>
 
@@ -130,10 +142,10 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
               onDragStart={handleDragStart}
               onResizeStart={handleResizeStart}
               onToggleWidth={toggleWidth}
-              containerWidth={containerWidthRef.current}
+              containerWidth={containerWidth}
               allLayouts={layouts}
             >
-              {renderCard(card, data, timezone, scope, onScopeChange)}
+              {renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange)}
             </DashboardCardWrapper>
           )
         })}
@@ -147,11 +159,14 @@ function renderCard(
   data: DashboardData,
   timezone?: string,
   scope?: ScopeDays,
-  onScopeChange?: (scope: ScopeDays) => void
+  onScopeChange?: (scope: ScopeDays) => void,
+  availableTodoLists?: { id: string; name: string }[],
+  selectedTodoListId?: string | null,
+  onTodoListChange?: (listId: string) => void,
 ) {
   switch (card.id) {
     case 'weekly-summary':
-      return <WeeklySummaryCard key={card.id} data={data.weeklySummary} scope={scope} onScopeChange={onScopeChange} />
+      return <WeeklySummaryCard key={card.id} data={data.weeklySummary} scope={scope} onScopeChange={onScopeChange} availableLists={availableTodoLists} selectedListId={selectedTodoListId} onListChange={onTodoListChange} />
     case 'upcoming-events':
       return <UpcomingEventsCard key={card.id} events={data.upcomingEvents} timezone={timezone} />
     case 'todays-meals':

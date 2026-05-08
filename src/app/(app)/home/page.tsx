@@ -352,7 +352,14 @@ export default async function HomePage() {
   }
 
   const cards = mergeDashboardCards(dashboardCards)
-  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id, dashboardTodoListId)
+  const [data, availableTodoLists] = await Promise.all([
+    getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id, dashboardTodoListId),
+    prisma.list.findMany({
+      where: { familyId: user.familyId, type: 'TODO', isActive: true },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
 
   return (
     <HomeClient
@@ -361,6 +368,7 @@ export default async function HomePage() {
       initialCards={cards}
       initialLayouts={dashboardCardLayouts}
       dashboardTodoListId={dashboardTodoListId}
+      availableTodoLists={availableTodoLists}
     />
   )
 }

@@ -17,6 +17,7 @@ interface HomeClientProps {
   initialCards: DashboardCardConfig[]
   initialLayouts?: CardLayoutMap | null
   dashboardTodoListId?: string | null
+  availableTodoLists?: { id: string; name: string }[]
 }
 
 export function HomeClient({
@@ -25,11 +26,13 @@ export function HomeClient({
   initialCards,
   initialLayouts,
   dashboardTodoListId,
+  availableTodoLists,
 }: HomeClientProps) {
   const [data, setData] = useState(initialData)
   const [cards, setCards] = useState(initialCards)
   const [customiserOpen, setCustomiserOpen] = useState(false)
   const [scope, setScope] = useState<ScopeDays>(7)
+  const [currentTodoListId, setCurrentTodoListId] = useState<string | null>(dashboardTodoListId ?? null)
   const [loading, setLoading] = useState(false)
   const gridRef = useRef<DashboardGridHandle>(null)
 
@@ -72,15 +75,11 @@ export function HomeClient({
     setCards(savedCards)
   }
 
-  // Re-fetch dashboard data when scope changes
-  const handleScopeChange = useCallback(async (newScope: ScopeDays) => {
-    setScope(newScope)
+  const fetchDashboard = useCallback(async (newScope: ScopeDays, todoListId: string | null) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ scope: String(newScope) })
-      if (dashboardTodoListId) {
-        params.set('dashboardTodoListId', dashboardTodoListId)
-      }
+      if (todoListId) params.set('dashboardTodoListId', todoListId)
       const res = await fetch(`/api/dashboard?${params.toString()}`)
       if (res.ok) {
         const freshData: DashboardData = await res.json()
@@ -91,7 +90,26 @@ export function HomeClient({
     } finally {
       setLoading(false)
     }
-  }, [dashboardTodoListId])
+  }, [])
+
+  const handleScopeChange = useCallback(async (newScope: ScopeDays) => {
+    setScope(newScope)
+    await fetchDashboard(newScope, currentTodoListId)
+  }, [currentTodoListId, fetchDashboard])
+
+  const handleTodoListChange = useCallback(async (listId: string) => {
+    setCurrentTodoListId(listId)
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uiPreferences: { dashboardTodoListId: listId } }),
+      })
+    } catch {
+      // Silently fail
+    }
+    await fetchDashboard(scope, listId)
+  }, [scope, fetchDashboard])
 
   const handleResetLayout = useCallback(async () => {
     gridRef.current?.resetLayouts()
@@ -140,6 +158,9 @@ export function HomeClient({
           scope={scope}
           onScopeChange={handleScopeChange}
           loading={loading}
+          availableTodoLists={availableTodoLists}
+          selectedTodoListId={currentTodoListId}
+          onTodoListChange={handleTodoListChange}
         />
       </div>
       <DashboardCustomiser
