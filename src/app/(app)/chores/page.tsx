@@ -1,9 +1,14 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { ChoresClient } from './ChoresClient'
+import { todayBoundsInTz } from '@/lib/timezone'
 
 export default async function ChoresPage() {
   const user = await requireSession()
+  const timezone = user.timezone ?? 'UTC'
+
+  // Get today's start boundary in the user's timezone for overdue comparison
+  const { start: todayStart } = todayBoundsInTz(timezone)
 
   const [chores, members] = await Promise.all([
     prisma.chore.findMany({
@@ -45,7 +50,8 @@ export default async function ChoresPage() {
               ...comp,
               completedAt: comp.completedAt.toISOString(),
             })),
-          }))}
+            isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+          })) as any[]}
           members={members}
         />
       </div>

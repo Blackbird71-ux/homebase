@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { createAuditLog } from '@/lib/audit-log'
+import { todayBoundsInTz } from '@/lib/timezone'
 
 function calculateInitialDueDate(
   frequency: string,
@@ -54,6 +55,10 @@ function calculateInitialDueDate(
 
 export async function GET() {
   const user = await requireSession()
+  const timezone = user.timezone ?? 'UTC'
+
+  // Get today's start boundary in the user's timezone for overdue comparison
+  const { start: todayStart } = todayBoundsInTz(timezone)
 
   const chores = await prisma.chore.findMany({
     where: { familyId: user.familyId, isActive: true },
@@ -69,7 +74,13 @@ export async function GET() {
     orderBy: { createdAt: 'asc' },
   })
 
-  return NextResponse.json(chores)
+  // Attach isOverdue computed against the user's local timezone
+  const choresWithOverdue = chores.map((c) => ({
+    ...c,
+    isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+  }))
+
+  return NextResponse.json(choresWithOverdue)
 }
 
 export async function POST(req: Request) {

@@ -44,6 +44,7 @@ interface Chore {
   _count: { completions: number }
   createdAt: string
   updatedAt: string
+  isOverdue: boolean
 }
 
 interface ChoresClientProps {
@@ -67,11 +68,6 @@ function formatDate(dateStr: string): string {
     day: 'numeric',
     month: 'short',
   })
-}
-
-function isOverdue(nextDueDate: string | null): boolean {
-  if (!nextDueDate) return false
-  return new Date(nextDueDate) < new Date()
 }
 
 type ScopeDays = 7 | 14 | 30
@@ -191,7 +187,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   }
 
   function HoverDetails({ chore }: { chore: Chore }) {
-    const overdue = isOverdue(chore.nextDueDate)
+    const overdue = chore.isOverdue
     const lastCompleted = chore.completions?.[0]
 
     return (
@@ -333,7 +329,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
       ) : (
         <div className="rounded-lg border border-border/60 divide-y divide-border/40">
           {filteredChores.map((chore) => {
-            const overdue = isOverdue(chore.nextDueDate)
+            const overdue = chore.isOverdue
             const isCompleted = completedIds.has(chore.id)
 
             return (

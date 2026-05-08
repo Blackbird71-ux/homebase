@@ -10,7 +10,7 @@ export interface WeeklySummaryData {
   eventCount: number
   mealCount: number
   pendingTodoCount: number
-  topEvents: { id: string; title: string; start: string; color: string | null }[]
+  topEvents: { id: string; title: string; start: string; color: string | null; dayLabel: string }[]
   topMeals: { day: string; meal: string; note?: string | null }[]
   topTodos: string[]
 }
@@ -68,6 +68,7 @@ export function WeeklySummaryCard({
                 {data.topEvents.map((e) => (
                   <div key={e.id} className="flex items-center gap-1.5 text-xs">
                     <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color ?? '#6366f1' }} />
+                    <span className="text-muted-foreground font-medium shrink-0 w-[28px]">{e.dayLabel}</span>
                     <span className="truncate">{e.title}</span>
                   </div>
                 ))}

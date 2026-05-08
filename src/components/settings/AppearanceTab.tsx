@@ -87,6 +87,11 @@ interface ShoppingListOption {
   name: string
 }
 
+interface TodoListOption {
+  id: string
+  name: string
+}
+
 const secureCardStyleOptions = [
   { value: 'blur',   label: 'Blur',   description: 'Blur content with overlay' },
   { value: 'color',  label: 'Colour', description: 'Show coloured placeholder' },
@@ -126,24 +131,34 @@ export function AppearanceTab({
 
   const [shoppingLists, setShoppingLists] = useState<ShoppingListOption[]>([])
   const [dashboardShoppingListId, setDashboardShoppingListId] = useState<string>('')
+  const [todoLists, setTodoLists] = useState<TodoListOption[]>([])
+  const [dashboardTodoListId, setDashboardTodoListId] = useState<string>('')
   const [loadingLists, setLoadingLists] = useState(true)
 
   useEffect(() => {
     async function load() {
       try {
-        const [listsRes, settingsRes] = await Promise.all([
+        const [shoppingRes, todoRes, settingsRes] = await Promise.all([
           fetch('/api/lists?type=SHOPPING'),
+          fetch('/api/lists?type=TODO'),
           fetch('/api/settings'),
         ])
-        if (listsRes.ok) {
-          const lists = await listsRes.json()
+        if (shoppingRes.ok) {
+          const lists = await shoppingRes.json()
           setShoppingLists(lists)
+        }
+        if (todoRes.ok) {
+          const lists = await todoRes.json()
+          setTodoLists(lists)
         }
         if (settingsRes.ok) {
           const settings = await settingsRes.json()
           const prefs = settings.uiPreferences
           if (prefs?.dashboardShoppingListId) {
             setDashboardShoppingListId(prefs.dashboardShoppingListId)
+          }
+          if (prefs?.dashboardTodoListId) {
+            setDashboardTodoListId(prefs.dashboardTodoListId)
           }
           if (prefs?.secureCardStyle) {
             setSecureCardStyle(prefs.secureCardStyle)
@@ -174,6 +189,7 @@ export function AppearanceTab({
         doneItemColor,
         uiPreferences: {
           dashboardShoppingListId: dashboardShoppingListId || null,
+          dashboardTodoListId: dashboardTodoListId || null,
           secureCardStyle,
           secureCardColor,
         },
@@ -479,6 +495,44 @@ export function AppearanceTab({
                 <SelectContent>
                   <SelectItem value="">Auto (most recent active list)</SelectItem>
                   {shoppingLists.map((list) => (
+                    <SelectItem key={list.id} value={list.id}>
+                      {list.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dashboard Todo List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Dashboard Todo List</CardTitle>
+          <CardDescription>
+            Which todo list to show on the Home dashboard. Defaults to the most recently created active list.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingLists ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading todo lists...
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Select value={dashboardTodoListId} onValueChange={(v: string | null) => setDashboardTodoListId(v ?? '')}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Auto (most recent active list)">
+                    {dashboardTodoListId
+                      ? (todoLists.find((l) => l.id === dashboardTodoListId)?.name ?? dashboardTodoListId)
+                      : 'Auto (most recent active list)'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Auto (most recent active list)</SelectItem>
+                  {todoLists.map((list) => (
                     <SelectItem key={list.id} value={list.id}>
                       {list.name}
                     </SelectItem>

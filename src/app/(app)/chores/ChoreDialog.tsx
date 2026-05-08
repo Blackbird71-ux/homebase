@@ -60,6 +60,7 @@ interface Chore {
   _count: { completions: number }
   createdAt: string
   updatedAt: string
+  isOverdue: boolean
 }
 
 interface ChoreDialogProps {

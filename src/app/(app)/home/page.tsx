@@ -1,4 +1,3 @@
-import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
@@ -56,7 +55,7 @@ function buildChoreSchedule(
   return schedule
 }
 
-async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0, userId?: string): Promise<DashboardData> {
+async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0, userId?: string, dashboardTodoListId?: string | null): Promise<DashboardData> {
   // Get today's boundaries in the family's timezone
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -144,18 +143,28 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       : Promise.resolve([]),
     needsTodo
       ? prisma.list.findMany({
-          where: { familyId, type: 'TODO', isActive: true },
+          where: {
+            familyId,
+            type: 'TODO',
+            isActive: true,
+            ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
+          },
           include: {
             items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true, assignedToUserId: true } },
             _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
           },
-          take: 1,
+          ...(dashboardTodoListId ? {} : { take: 1 }),
         })
       : Promise.resolve([]),
     needsTodo && userId
       ? prisma.listItem.count({
           where: {
-            list: { familyId, type: 'TODO', isActive: true },
+            list: {
+              familyId,
+              type: 'TODO',
+              isActive: true,
+              ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
+            },
             isCompleted: false,
             dueDate: { gte: todayStart, lt: todayEnd },
             assignedToUserId: userId,
@@ -163,6 +172,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
         })
       : Promise.resolve(0),
     // Weekly summary queries
+
     visibleCardIds.has('weekly-summary')
       ? prisma.event.findMany({
           where: { familyId, start: { gte: weekStartUtc, lt: weekEndUtc } },
@@ -182,12 +192,17 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       : Promise.resolve([]),
     visibleCardIds.has('weekly-summary')
       ? prisma.list.findMany({
-          where: { familyId, type: 'TODO', isActive: true },
+          where: {
+            familyId,
+            type: 'TODO',
+            isActive: true,
+            ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
+          },
           include: {
             _count: { select: { items: { where: { isCompleted: false } } } },
             items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
           },
-          take: 1,
+          ...(dashboardTodoListId ? {} : { take: 1 }),
         })
       : Promise.resolve([]),
     needsChores
@@ -250,6 +265,10 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           title: e.title,
           start: e.start.toISOString(),
           color: e.color,
+          dayLabel: (() => {
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            return dayNames[e.start.getDay()]
+          })(),
         })),
         topMeals: (() => {
           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -315,15 +334,17 @@ export default async function HomePage() {
     select: { uiPreferences: true },
   })
 
-  // Parse dashboardCards, dashboardShoppingListId and dashboardCardLayouts from uiPreferences
+  // Parse dashboardCards, dashboardShoppingListId, dashboardTodoListId and dashboardCardLayouts from uiPreferences
   let dashboardCards: DashboardCardConfig[] | null = null
   let dashboardShoppingListId: string | null = null
+  let dashboardTodoListId: string | null = null
   let dashboardCardLayouts: Record<string, { x: number; y: number; width: number; height: number | 'auto' }> | null = null
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
       dashboardCards = prefs.dashboardCards ?? null
       dashboardShoppingListId = prefs.dashboardShoppingListId ?? null
+      dashboardTodoListId = prefs.dashboardTodoListId ?? null
       dashboardCardLayouts = prefs.dashboardCardLayouts ?? null
     } catch {
       // ignore parse errors
@@ -331,7 +352,7 @@ export default async function HomePage() {
   }
 
   const cards = mergeDashboardCards(dashboardCards)
-  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id)
+  const data = await getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id, dashboardTodoListId)
 
   return (
     <HomeClient
@@ -339,6 +360,7 @@ export default async function HomePage() {
       timezone={timezone}
       initialCards={cards}
       initialLayouts={dashboardCardLayouts}
+      dashboardTodoListId={dashboardTodoListId}
     />
   )
 }

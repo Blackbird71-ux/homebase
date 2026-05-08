@@ -16,6 +16,7 @@ interface HomeClientProps {
   timezone: string
   initialCards: DashboardCardConfig[]
   initialLayouts?: CardLayoutMap | null
+  dashboardTodoListId?: string | null
 }
 
 export function HomeClient({
@@ -23,6 +24,7 @@ export function HomeClient({
   timezone,
   initialCards,
   initialLayouts,
+  dashboardTodoListId,
 }: HomeClientProps) {
   const [data, setData] = useState(initialData)
   const [cards, setCards] = useState(initialCards)
@@ -74,7 +76,11 @@ export function HomeClient({
     setScope(newScope)
     setLoading(true)
     try {
-      const res = await fetch(`/api/dashboard?scope=${newScope}`)
+      const params = new URLSearchParams({ scope: String(newScope) })
+      if (dashboardTodoListId) {
+        params.set('dashboardTodoListId', dashboardTodoListId)
+      }
+      const res = await fetch(`/api/dashboard?${params.toString()}`)
       if (res.ok) {
         const freshData: DashboardData = await res.json()
         setData(freshData)
@@ -84,7 +90,7 @@ export function HomeClient({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [dashboardTodoListId])
 
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">

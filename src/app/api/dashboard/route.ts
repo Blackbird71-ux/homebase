@@ -53,10 +53,11 @@ export async function GET(request: NextRequest) {
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const now = new Date()
 
-  // Parse optional scope query param for weekly summary window (default: 7)
+  // Parse optional query params
   const { searchParams } = new URL(request.url)
   const scopeParam = searchParams.get('scope')
   const scope = scopeParam === '14' ? 14 : scopeParam === '30' ? 30 : 7
+  const dashboardTodoListId = searchParams.get('dashboardTodoListId')
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const todayStr = new Intl.DateTimeFormat('en-CA', {
@@ -113,17 +114,27 @@ export async function GET(request: NextRequest) {
       take: 1,
     }),
     prisma.list.findMany({
-      where: { familyId: user.familyId, type: 'TODO', isActive: true },
+      where: {
+        familyId: user.familyId,
+        type: 'TODO',
+        isActive: true,
+        ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
+      },
       include: {
         items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true, assignedToUserId: true } },
         _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
       },
-      take: 1,
+      ...(dashboardTodoListId ? {} : { take: 1 }),
     }),
     // Count tasks assigned to current user
     prisma.listItem.count({
       where: {
-        list: { familyId: user.familyId, type: 'TODO', isActive: true },
+        list: {
+          familyId: user.familyId,
+          type: 'TODO',
+          isActive: true,
+          ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
+        },
         isCompleted: false,
         dueDate: { gte: todayStart, lt: todayEnd },
         assignedToUserId: user.id,
@@ -149,7 +160,12 @@ export async function GET(request: NextRequest) {
     // Weekly summary: pending todos this week
     prisma.listItem.findMany({
       where: {
-        list: { familyId: user.familyId, type: 'TODO', isActive: true },
+        list: {
+          familyId: user.familyId,
+          type: 'TODO',
+          isActive: true,
+          ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
+        },
         isCompleted: false,
         dueDate: { gte: weekStart, lt: weekEndDate },
       },
@@ -210,6 +226,7 @@ export async function GET(request: NextRequest) {
       title: e.title,
       start: e.start.toISOString(),
       color: e.color,
+      dayLabel: dayNames[e.start.getDay()],
     })),
     topMeals: weekMeals.map(m => {
       const dayIndex = m.date.getDay()
