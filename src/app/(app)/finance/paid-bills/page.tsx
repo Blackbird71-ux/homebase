@@ -106,6 +106,7 @@ export default function PaidBillsPage() {
   for (const catId of selectedCatIds) {
     catTotals[catId] = sorted.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
+  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 2rem`
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading paid bills…</div>
 
@@ -161,23 +162,24 @@ export default function PaidBillsPage() {
         <div className="space-y-2">
           {/* Column headers */}
           {colCats.length > 0 && (
-            <div className="flex items-center gap-3 px-3 pb-1">
-              <div className="w-9 shrink-0" />
-              <div className="flex-1" />
+            <div className="grid gap-3 px-3 pb-1" style={{ gridTemplateColumns: gridTemplate, alignItems: 'end' }}>
+              <div />
+              <div />
               {colCats.map(c => (
-                <span key={c.id} className="text-xs font-medium text-muted-foreground w-24 text-right shrink-0">{c.name}</span>
+                <span key={c.id} className="text-xs font-medium text-muted-foreground text-right leading-tight">{c.name}</span>
               ))}
-              <span className="text-xs font-medium text-muted-foreground w-24 text-right shrink-0">Total</span>
-              <div className="w-7 shrink-0" />
+              <span className="text-xs font-medium text-muted-foreground text-right">Total</span>
+              <div />
             </div>
           )}
 
           {sorted.map(bill => (
-            <div key={bill.id} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50">
-              <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+            <div key={bill.id} className="grid gap-3 rounded-lg border border-border p-3 hover:bg-accent/50"
+                 style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>
+              <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{bill.name}</span>
                   {bill.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
@@ -199,34 +201,35 @@ export default function PaidBillsPage() {
               {colCats.map(c => {
                 const amt = billAmountForCat(bill, c.id)
                 return (
-                  <span key={c.id} className="text-sm w-24 text-right shrink-0 text-muted-foreground">
+                  <span key={c.id} className="text-sm text-right text-muted-foreground">
                     {amt > 0 ? formatCurrency(amt) : '—'}
                   </span>
                 )
               })}
-              <p className="text-sm font-semibold text-muted-foreground shrink-0 w-24 text-right">
+              <p className="text-sm font-semibold text-muted-foreground text-right">
                 {formatCurrency(bill.amount)}
               </p>
               <button onClick={() => handleUndoPaid(bill.id)} title="Undo paid"
-                className="p-1 hover:bg-accent rounded text-green-500 shrink-0">
+                className="p-1 hover:bg-accent rounded text-green-500 justify-self-end">
                 <Undo2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
 
           {/* Totals row */}
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1">
-            <div className="w-9 shrink-0" />
-            <div className="flex-1 text-xs font-semibold text-muted-foreground">
+          <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
+               style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>
+            <div />
+            <div className="text-xs font-semibold text-muted-foreground">
               {sorted.length} bill{sorted.length !== 1 ? 's' : ''} — last {monthRange === 1 ? '1 month' : `${monthRange} months`}
             </div>
             {colCats.map(c => (
-              <span key={c.id} className="text-xs font-semibold w-24 text-right shrink-0">
+              <span key={c.id} className="text-xs font-semibold text-right">
                 {catTotals[c.id] > 0 ? formatCurrency(catTotals[c.id]) : <span className="text-muted-foreground">—</span>}
               </span>
             ))}
-            <span className="text-sm font-bold text-green-600 w-24 text-right shrink-0">{formatCurrency(grandTotal)}</span>
-            <div className="w-7 shrink-0" />
+            <span className="text-sm font-bold text-green-600 text-right">{formatCurrency(grandTotal)}</span>
+            <div />
           </div>
         </div>
       )}
