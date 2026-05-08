@@ -103,6 +103,7 @@ export async function POST(req: Request) {
     endDate,
     triggerOnComplete,
     autoRotateOnComplete,
+    allowEarlyStart,
     emailReminder,
     emailReminderDays,
   } = body
@@ -135,6 +136,7 @@ export async function POST(req: Request) {
       nextDueDate,
       triggerOnComplete: triggerOnComplete ?? false,
       autoRotateOnComplete: autoRotateOnComplete ?? false,
+      allowEarlyStart: allowEarlyStart ?? false,
       emailReminder: emailReminder ?? false,
       emailReminderDays: emailReminderDays ?? 1,
       familyId: user.familyId,

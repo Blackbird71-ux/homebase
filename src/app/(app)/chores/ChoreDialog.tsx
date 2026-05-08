@@ -54,6 +54,7 @@ interface Chore {
   nextDueDate: string | null
   triggerOnComplete: boolean
   autoRotateOnComplete: boolean
+  allowEarlyStart: boolean
   emailReminder: boolean
   emailReminderDays: number
   completions: ChoreCompletion[]
@@ -100,6 +101,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [endDate, setEndDate] = useState(toDateInputValue(chore?.endDate ?? null))
   const [triggerOnComplete, setTriggerOnComplete] = useState(chore?.triggerOnComplete ?? false)
   const [autoRotateOnComplete, setAutoRotateOnComplete] = useState(chore?.autoRotateOnComplete ?? false)
+  const [allowEarlyStart, setAllowEarlyStart] = useState(chore?.allowEarlyStart ?? false)
   const [emailReminder, setEmailReminder] = useState(chore?.emailReminder ?? false)
   const [emailReminderDays, setEmailReminderDays] = useState(chore?.emailReminderDays?.toString() ?? '1')
   const [saving, setSaving] = useState(false)
@@ -125,6 +127,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         endDate: endDate || null,
         triggerOnComplete,
         autoRotateOnComplete,
+        allowEarlyStart,
         emailReminder,
         emailReminderDays: parseInt(emailReminderDays) || 1,
       }
@@ -316,6 +319,19 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                 id="chore-auto-rotate"
                 checked={autoRotateOnComplete}
                 onCheckedChange={setAutoRotateOnComplete}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="chore-early-start">Allow early completion</Label>
+                <p className="text-xs text-muted-foreground">
+                  Allow marking done and creating the next occurrence before the current one is due
+                </p>
+              </div>
+              <Switch
+                id="chore-early-start"
+                checked={allowEarlyStart}
+                onCheckedChange={setAllowEarlyStart}
               />
             </div>
             <div className="flex items-center justify-between">

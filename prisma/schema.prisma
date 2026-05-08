@@ -140,6 +140,7 @@ model List {
   items         ListItem[]
   familyId      String
   family        Family     @relation(fields: [familyId], references: [id])
+  createdBy     String     @default("")
   createdAt     DateTime   @default(now())
 }
 
@@ -410,6 +411,7 @@ model Chore {
   nextDueDate          DateTime?          // Calculated next due date (null = due now)
   triggerOnComplete    Boolean            @default(false)  // Calculate next from completion date
   autoRotateOnComplete Boolean            @default(false)  // Auto-rotate assignee on completion
+  allowEarlyStart      Boolean            @default(false)  // Allow creating a new occurrence even if last occurrence is not yet complete/due
   emailReminder        Boolean            @default(false)   // Send email reminder to assignee
   emailReminderDays    Int                @default(1)       // Days before nextDueDate to send reminder
   completions          ChoreCompletion[]

@@ -33,6 +33,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.nextDueDate !== undefined ? { nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : null } : {}),
       ...(body.triggerOnComplete !== undefined ? { triggerOnComplete: body.triggerOnComplete } : {}),
       ...(body.autoRotateOnComplete !== undefined ? { autoRotateOnComplete: body.autoRotateOnComplete } : {}),
+      ...(body.allowEarlyStart !== undefined ? { allowEarlyStart: body.allowEarlyStart } : {}),
       ...(body.emailReminder !== undefined ? { emailReminder: body.emailReminder } : {}),
       ...(body.emailReminderDays !== undefined ? { emailReminderDays: body.emailReminderDays } : {}),
     },

@@ -38,6 +38,7 @@ interface Chore {
   nextDueDate: string | null
   triggerOnComplete: boolean
   autoRotateOnComplete: boolean
+  allowEarlyStart: boolean
   emailReminder: boolean
   emailReminderDays: number
   completions: ChoreCompletion[]
@@ -106,7 +107,15 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      if (!res.ok) throw new Error('Failed to complete chore')
+      if (!res.ok) {
+        if (res.status === 422) {
+          const err = await res.json().catch(() => ({}))
+          toast.error(err.error ?? 'Chore is not yet due')
+        } else {
+          throw new Error('Failed to complete chore')
+        }
+        return
+      }
       const data = await res.json()
       const updatedChore = {
         ...chore,
