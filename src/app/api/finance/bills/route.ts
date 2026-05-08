@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { addMonths, addWeeks } from 'date-fns'
 
 export async function GET() {
   const session = await requireSession()
@@ -24,6 +25,9 @@ export async function POST(request: NextRequest) {
     dayOfMonth, monthOfYear, nextDueDate, endDate,
     isActive, autoPay, emailReminder, reminderDays,
     notes, memberId, locationId,
+    billType, recurrenceInterval,
+    invoiceReceived, invoiceReceivedDate,
+    paid, paidDate,
   } = json
 
   if (!name || !amount || !frequency) {
@@ -48,6 +52,12 @@ export async function POST(request: NextRequest) {
       notes: notes ?? null,
       memberId: memberId ?? null,
       locationId: locationId ?? null,
+      billType: billType ?? 'recurring',
+      recurrenceInterval: recurrenceInterval ?? null,
+      invoiceReceived: invoiceReceived ?? false,
+      invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null,
+      paid: paid ?? false,
+      paidDate: paidDate ? new Date(paidDate) : null,
       familyId: session.familyId,
     },
     include: {
@@ -68,6 +78,9 @@ export async function PUT(request: NextRequest) {
     dayOfMonth, monthOfYear, nextDueDate, endDate,
     isActive, autoPay, emailReminder, reminderDays,
     notes, memberId, locationId,
+    billType, recurrenceInterval,
+    invoiceReceived, invoiceReceivedDate,
+    paid, paidDate,
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -98,6 +111,12 @@ export async function PUT(request: NextRequest) {
       ...(notes !== undefined && { notes: notes ?? null }),
       ...(memberId !== undefined && { memberId: memberId ?? null }),
       ...(locationId !== undefined && { locationId: locationId ?? null }),
+      ...(billType !== undefined && { billType }),
+      ...(recurrenceInterval !== undefined && { recurrenceInterval: recurrenceInterval ?? null }),
+      ...(invoiceReceived !== undefined && { invoiceReceived }),
+      ...(invoiceReceivedDate !== undefined && { invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null }),
+      ...(paid !== undefined && { paid }),
+      ...(paidDate !== undefined && { paidDate: paidDate ? new Date(paidDate) : null }),
     },
     include: {
       account: { select: { id: true, name: true } },
@@ -124,4 +143,93 @@ export async function DELETE(request: NextRequest) {
 
   await prisma.financeRecurringBill.delete({ where: { id } })
   return NextResponse.json({ success: true })
+}
+
+/**
+ * Advance a due date by the given frequency.
+ * Mirrors the client-side getNextDue() logic in bills/page.tsx.
+ */
+function advanceNextDueDate(date: Date, frequency: string): Date {
+  if (frequency === 'monthly') return addMonths(date, 1)
+  if (frequency === 'fortnightly') return addWeeks(date, 2)
+  if (frequency === 'weekly') return addWeeks(date, 1)
+  if (frequency === 'quarterly') return addMonths(date, 3)
+  if (frequency === 'yearly') return addMonths(date, 12)
+  // fallback – monthly
+  return addMonths(date, 1)
+}
+
+// PATCH – toggle pay/invoice state without sending the whole bill
+export async function PATCH(request: NextRequest) {
+  const session = await requireSession()
+  const json = await request.json()
+  const { id, paid, invoiceReceived, invoiceReceivedDate } = json
+
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+
+  const existing = await prisma.financeRecurringBill.findFirst({
+    where: { id, familyId: session.familyId },
+  })
+  if (!existing) {
+    return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
+  }
+
+  const updateData: Record<string, any> = {}
+  if (paid !== undefined) {
+    updateData.paid = paid
+    updateData.paidDate = paid ? new Date() : null
+  }
+  if (invoiceReceived !== undefined) {
+    updateData.invoiceReceived = invoiceReceived
+    updateData.invoiceReceivedDate = invoiceReceived ? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()) : null
+  }
+
+  // Update the current record (mark paid or adjust invoice state)
+  const bill = await prisma.financeRecurringBill.update({
+    where: { id },
+    data: updateData,
+    include: {
+      account: { select: { id: true, name: true } },
+      category: true,
+      location: { select: { id: true, name: true } },
+    },
+  })
+
+  // ── Recurring bill paid → create the next occurrence ──────────────
+  if (paid === true && existing.billType !== 'one-off') {
+    const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
+
+    // Only create the next occurrence if we haven't passed the end date
+    if (!existing.endDate || newDueDate <= existing.endDate) {
+      await prisma.financeRecurringBill.create({
+        data: {
+          name: existing.name,
+          amount: existing.amount,
+          accountId: existing.accountId,
+          categoryId: existing.categoryId,
+          frequency: existing.frequency,
+          dayOfMonth: existing.dayOfMonth,
+          monthOfYear: existing.monthOfYear,
+          nextDueDate: newDueDate,
+          endDate: existing.endDate,
+          isActive: existing.isActive,
+          autoPay: existing.autoPay,
+          emailReminder: existing.emailReminder,
+          reminderDays: existing.reminderDays,
+          notes: existing.notes,
+          memberId: existing.memberId,
+          locationId: existing.locationId,
+          billType: existing.billType,
+          recurrenceInterval: existing.recurrenceInterval,
+          invoiceReceived: false,
+          invoiceReceivedDate: null,
+          paid: false,
+          paidDate: null,
+          familyId: session.familyId,
+        },
+      })
+    }
+  }
+
+  return NextResponse.json(bill)
 }
