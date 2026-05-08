@@ -39,6 +39,7 @@ export default async function ChoresPage() {
       </div>
       <div className="flex-1 overflow-y-auto p-6 pt-4">
         <ChoresClient
+          currentUserId={user.id}
           initialChores={chores.map((c) => ({
             ...c,
             startDate: c.startDate?.toISOString() ?? null,

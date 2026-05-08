@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon, LockIcon, GlobeIcon } from 'lucide-react'
+import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon, UserIcon, GlobeIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { ChoreDialog } from './ChoreDialog'
@@ -50,6 +50,7 @@ interface Chore {
 interface ChoresClientProps {
   initialChores: Chore[]
   members: Member[]
+  currentUserId: string
 }
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -72,7 +73,7 @@ function formatDate(dateStr: string): string {
 
 type ScopeDays = 7 | 14 | 30
 
-export function ChoresClient({ initialChores, members }: ChoresClientProps) {
+export function ChoresClient({ initialChores, members, currentUserId }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
@@ -82,7 +83,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
   // Incremented each time a new chore is added, forcing ChoreDialog to re-mount with clean state
   const [newChoreKey, setNewChoreKey] = useState(0)
   const [scope, setScope] = useState<ScopeDays>(7)
-  const [publicView, setPublicView] = useState(true)
+  const [publicView, setPublicView] = useState(false)
 
   // Listen for chores updates from AI assistant or other sources
   useEffect(() => {
@@ -265,8 +266,9 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
     )
   }
 
-  // Filter chores based on scope: only show chores due within the selected window
+  // Filter chores based on scope and mine/all toggle
   const filteredChores = chores.filter((chore) => {
+    if (!publicView && chore.currentAssigneeId !== currentUserId) return false
     if (!chore.nextDueDate) return true // no due date means recurring, always show
     const dueDate = new Date(chore.nextDueDate)
     const cutoff = new Date(Date.now() + scope * 86400000)
@@ -278,7 +280,7 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">
-            {filteredChores.length} of {chores.length} active chore{chores.length !== 1 ? 's' : ''}
+            {filteredChores.length} of {publicView ? chores.length : chores.filter(c => c.currentAssigneeId === currentUserId).length} active chore{chores.length !== 1 ? 's' : ''}
             {scope !== 30 && <span className="text-muted-foreground/50"> due in {scope} days</span>}
           </p>
           <button
@@ -288,14 +290,14 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
                 ? 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
                 : 'bg-muted text-muted-foreground hover:bg-muted/70'
             }`}
-            title={publicView ? 'Visible to family' : 'Private — only you can see'}
+            title={publicView ? 'Showing all family chores — click to show only yours' : 'Showing only your chores — click to show all'}
           >
             {publicView ? (
               <GlobeIcon className="h-3 w-3" />
             ) : (
-              <LockIcon className="h-3 w-3" />
+              <UserIcon className="h-3 w-3" />
             )}
-            {publicView ? 'Family' : 'Private'}
+            {publicView ? 'All' : 'Mine'}
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -324,7 +326,9 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
         <div className="py-8 text-center text-muted-foreground text-sm">
           {chores.length === 0
             ? 'No chores yet. Add your first household chore to get started.'
-            : `No chores due in the next ${scope} days. Try expanding the time window above.`}
+            : !publicView && !chores.some(c => c.currentAssigneeId === currentUserId)
+              ? 'No chores assigned to you. Switch to All to see family chores.'
+              : `No chores due in the next ${scope} days. Try expanding the time window above.`}
         </div>
       ) : (
         <div className="rounded-lg border border-border/60 divide-y divide-border/40">
