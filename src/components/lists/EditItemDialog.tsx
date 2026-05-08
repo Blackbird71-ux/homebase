@@ -234,7 +234,7 @@ export function EditItemDialog({
                 <Label htmlFor="edit-item-assignee">Assigned To</Label>
                 <Select
                   value={assignedToUserId || '__none__'}
-                  onValueChange={(v) => setAssignedToUserId(v === '__none__' ? '' : v)}
+                  onValueChange={(v) => setAssignedToUserId(v === '__none__' || v === null ? '' : v)}
                   disabled={isSaving}
                 >
                   <SelectTrigger className="w-full" id="edit-item-assignee">
