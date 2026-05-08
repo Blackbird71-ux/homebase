@@ -184,6 +184,13 @@ export async function PATCH(request: NextRequest) {
     updateData.invoiceReceivedDate = invoiceReceived ? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()) : null
   }
 
+  // ── Undo payment: delete the spawned next-occurrence child if it exists ──
+  if (paid === false && existing.paid === true) {
+    await prisma.financeRecurringBill.deleteMany({
+      where: { parentBillId: id, familyId: session.familyId, paid: false },
+    })
+  }
+
   // Update the current record (mark paid or adjust invoice state)
   const bill = await prisma.financeRecurringBill.update({
     where: { id },
@@ -225,6 +232,7 @@ export async function PATCH(request: NextRequest) {
           invoiceReceivedDate: null,
           paid: false,
           paidDate: null,
+          parentBillId: existing.id,   // ← link child to paid parent for clean undo
           familyId: session.familyId,
         },
       })

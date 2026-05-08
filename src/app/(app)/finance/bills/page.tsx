@@ -26,6 +26,7 @@ export interface Bill {
   invoiceReceivedDate: string | null
   billType: string
   recurrenceInterval: string | null
+  parentBillId: string | null
 }
 
 export default function BillsPage() {

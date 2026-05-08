@@ -644,6 +644,11 @@ model FinanceRecurringBill {
   memberId        String?              // FK -> User. Inherited by auto-created transactions. Null = shared.
   locationId      String?
   location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  // Self-referential: when a recurring bill is paid, the spawned next-occurrence stores the paid bill's id here.
+  // This allows "undo payment" to cleanly remove the orphaned future occurrence.
+  parentBillId    String?
+  parentBill      FinanceRecurringBill?  @relation("BillOccurrences", fields: [parentBillId], references: [id], onDelete: SetNull)
+  childBills      FinanceRecurringBill[] @relation("BillOccurrences")
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -656,6 +661,7 @@ model FinanceRecurringBill {
   @@index([familyId, paid])
   @@index([memberId])
   @@index([locationId])
+  @@index([parentBillId])
 }
 
 model FinanceBudget {

@@ -238,7 +238,11 @@ export function EditItemDialog({
                   disabled={isSaving}
                 >
                   <SelectTrigger className="w-full" id="edit-item-assignee">
-                    <SelectValue placeholder="Unassigned" />
+                    <SelectValue placeholder="Unassigned">
+                      {assignedToUserId
+                        ? (members?.find(m => m.id === assignedToUserId)?.name ?? assignedToUserId)
+                        : 'Unassigned'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Unassigned</SelectItem>

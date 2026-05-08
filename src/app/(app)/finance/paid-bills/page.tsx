@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Undo2, CheckCircle2, RotateCcw, Settings2 } from 'lucide-react'
+import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, subMonths } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -183,6 +183,10 @@ export default function PaidBillsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{bill.name}</span>
                   {bill.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
+                  {bill.billType !== 'one-off'
+                    ? <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 rounded flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> Recurring</span>
+                    : <span className="text-[10px] bg-orange-500/10 text-orange-500 px-1.5 rounded flex items-center gap-0.5"><Layers className="h-2.5 w-2.5" /> One-off</span>
+                  }
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                   {bill.paidDate && <span className="text-green-500">Paid {format(new Date(bill.paidDate), 'd MMM yyyy')}</span>}
@@ -192,7 +196,7 @@ export default function PaidBillsPage() {
                       {bill.category.name}
                     </span>
                   )}
-                  <span className="capitalize">{bill.frequency}</span>
+                  <span className="capitalize">{bill.billType !== 'one-off' ? bill.frequency : 'One-off'}</span>
                   {bill.account && <span>{bill.account.name}</span>}
                   {bill.member && <span className="text-primary">{bill.member.name}</span>}
                   {bill.location && <span>{bill.location.name}</span>}
@@ -209,7 +213,8 @@ export default function PaidBillsPage() {
               <p className="text-sm font-semibold text-muted-foreground text-right">
                 {formatCurrency(bill.amount)}
               </p>
-              <button onClick={() => handleUndoPaid(bill.id)} title="Undo paid"
+              <button onClick={() => handleUndoPaid(bill.id)}
+                title={bill.billType !== 'one-off' ? 'Undo payment (removes the next scheduled occurrence)' : 'Undo payment'}
                 className="p-1 hover:bg-accent rounded text-green-500 justify-self-end">
                 <Undo2 className="h-3.5 w-3.5" />
               </button>
