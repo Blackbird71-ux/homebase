@@ -37,8 +37,22 @@ export default function BillsPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Bill | null>(null)
-  const [dateRange, setDateRange] = useState<'14' | '30' | 'quarter'>('30')
-  const [selectedCatIds, setSelectedCatIds] = useState<string[]>([])
+  const [dateRange, setDateRange] = useState<'14' | '30' | 'quarter'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('bills-dateRange')
+      if (saved === '14' || saved === '30' || saved === 'quarter') return saved
+    }
+    return '30'
+  })
+  const [selectedCatIds, setSelectedCatIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('bills-selectedCatIds')
+        if (saved) return JSON.parse(saved) as string[]
+      } catch {}
+    }
+    return []
+  })
   const [showCatPicker, setShowCatPicker] = useState(false)
   const [form, setForm] = useState({
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
@@ -80,8 +94,17 @@ export default function BillsPage() {
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0) load() }, [members])
 
+  function setDateRangePersisted(r: '14' | '30' | 'quarter') {
+    sessionStorage.setItem('bills-dateRange', r)
+    setDateRange(r)
+  }
+
   function toggleCat(id: string) {
-    setSelectedCatIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    setSelectedCatIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      sessionStorage.setItem('bills-selectedCatIds', JSON.stringify(next))
+      return next
+    })
   }
 
   function openNew() {
@@ -234,7 +257,7 @@ export default function BillsPage() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           {(['14', '30', 'quarter'] as const).map(r => (
-            <button key={r} onClick={() => setDateRange(r)}
+            <button key={r} onClick={() => setDateRangePersisted(r)}
               className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
                 dateRange === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
               {r === '14' ? '14 Days' : r === '30' ? '30 Days' : 'Quarter'}

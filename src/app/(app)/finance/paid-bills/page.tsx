@@ -12,8 +12,22 @@ export default function PaidBillsPage() {
   const [bills, setBills] = useState<Bill[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([])
   const [loading, setLoading] = useState(true)
-  const [monthRange, setMonthRange] = useState<1 | 3 | 6 | 12>(3)
-  const [selectedCatIds, setSelectedCatIds] = useState<string[]>([])
+  const [monthRange, setMonthRange] = useState<1 | 3 | 6 | 12>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = parseInt(sessionStorage.getItem('paid-bills-monthRange') ?? '')
+      if (saved === 1 || saved === 3 || saved === 6 || saved === 12) return saved as 1 | 3 | 6 | 12
+    }
+    return 3
+  })
+  const [selectedCatIds, setSelectedCatIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('paid-bills-selectedCatIds')
+        if (saved) return JSON.parse(saved) as string[]
+      } catch {}
+    }
+    return []
+  })
   const [showCatPicker, setShowCatPicker] = useState(false)
 
   async function load() {
@@ -30,8 +44,17 @@ export default function PaidBillsPage() {
 
   useEffect(() => { load() }, [])
 
+  function setMonthRangePersisted(m: 1 | 3 | 6 | 12) {
+    sessionStorage.setItem('paid-bills-monthRange', String(m))
+    setMonthRange(m)
+  }
+
   function toggleCat(id: string) {
-    setSelectedCatIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    setSelectedCatIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      sessionStorage.setItem('paid-bills-selectedCatIds', JSON.stringify(next))
+      return next
+    })
   }
 
   async function handleUndoPaid(id: string) {
@@ -90,7 +113,7 @@ export default function PaidBillsPage() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           {([1, 3, 6, 12] as const).map(m => (
-            <button key={m} onClick={() => setMonthRange(m)}
+            <button key={m} onClick={() => setMonthRangePersisted(m)}
               className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
                 monthRange === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
               {m === 1 ? '1 Month' : `${m} Months`}
