@@ -41,16 +41,43 @@ function conditionEmoji(condition: string): string {
 interface WeatherDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Prefetched weather data to show immediately when dialog opens */
+  prefetchedWeather?: WeatherData | null
+  /** Prefetched loading state */
+  prefetchedLoading?: boolean
+  /** Prefetched error state */
+  prefetchedError?: string | null
+  /** Prefetched needsConfig state */
+  prefetchedNeedsConfig?: boolean
+  /** Prefetched geoError state */
+  prefetchedGeoError?: string | null
 }
 
-export function WeatherDialog({ open, onOpenChange }: WeatherDialogProps) {
-  const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [needsConfig, setNeedsConfig] = useState(false)
-  const [geoError, setGeoError] = useState<string | null>(null)
+export function WeatherDialog({
+  open,
+  onOpenChange,
+  prefetchedWeather,
+  prefetchedLoading,
+  prefetchedError,
+  prefetchedNeedsConfig,
+  prefetchedGeoError,
+}: WeatherDialogProps) {
+  // Use state for live-fetched data, fall back to prefetched props when dialog first opens
+  const [weather, setWeather] = useState<WeatherData | null>(prefetchedWeather ?? null)
+  const [loading, setLoading] = useState(prefetchedLoading ?? false)
+  const [error, setError] = useState<string | null>(prefetchedError ?? null)
+  const [needsConfig, setNeedsConfig] = useState(prefetchedNeedsConfig ?? false)
+  const [geoError, setGeoError] = useState<string | null>(prefetchedGeoError ?? null)
   const [isRetrying, setIsRetrying] = useState(false)
-  const hasAttempted = useRef(false)
+  const hasAttempted = useRef(!!(prefetchedWeather || prefetchedError || prefetchedNeedsConfig || prefetchedGeoError))
+  const hasPrefetchedData = useRef(false)
+
+  // Track that we've seen prefetched data on first render
+  useEffect(() => {
+    if ((prefetchedWeather || prefetchedError || prefetchedNeedsConfig || prefetchedGeoError) && !hasPrefetchedData.current) {
+      hasPrefetchedData.current = true
+    }
+  }, [prefetchedWeather, prefetchedError, prefetchedNeedsConfig, prefetchedGeoError])
 
   const fetchWeather = useCallback(async (lat: number, lon: number) => {
     setLoading(true)
@@ -173,10 +200,14 @@ export function WeatherDialog({ open, onOpenChange }: WeatherDialogProps) {
     }
   }, [fetchWeather])
 
-  // Load weather when dialog opens
+  // Load weather when dialog opens — only if no prefetched data available
   useEffect(() => {
     if (open && !hasAttempted.current) {
       hasAttempted.current = true
+      if (prefetchedWeather || prefetchedError || prefetchedNeedsConfig || prefetchedGeoError) {
+        // Use prefetched data — no need to re-fetch
+        return
+      }
       loadWeather()
     }
     if (!open) {
@@ -186,7 +217,7 @@ export function WeatherDialog({ open, onOpenChange }: WeatherDialogProps) {
       setGeoError(null)
       setNeedsConfig(false)
     }
-  }, [open, loadWeather])
+  }, [open, loadWeather, prefetchedWeather, prefetchedError, prefetchedNeedsConfig, prefetchedGeoError])
 
   function handleRetry() {
     setWeather(null)
