@@ -1,11 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CalendarDays, Utensils, CheckSquare, CloudSun } from 'lucide-react'
+import { CalendarDays, Utensils, CheckSquare, CloudSun, Plus } from 'lucide-react'
 import Link from 'next/link'
-import { format } from 'date-fns'
 import { WeatherDialog } from './WeatherDialog'
+import { EventModal } from '@/components/calendar/EventModal'
+import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
+import { CardQuickAdd } from './CardQuickAdd'
+import { toast } from 'sonner'
 import type { WeatherData } from '@/types'
 
 export interface WeeklySummaryData {
@@ -19,6 +23,11 @@ export interface WeeklySummaryData {
 }
 
 type ScopeDays = 7 | 14 | 30
+
+function todayLocal(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 export function WeeklySummaryCard({
   data,
@@ -35,7 +44,11 @@ export function WeeklySummaryCard({
   selectedListId?: string | null
   onListChange?: (listId: string) => void
 }) {
+  const router = useRouter()
   const [weatherOpen, setWeatherOpen] = useState(false)
+  const [eventOpen, setEventOpen] = useState(false)
+  const [mealOpen, setMealOpen] = useState(false)
+  const today = todayLocal()
 
   // Prefetch weather data on mount so it's instantly available when dialog opens
   const [prefetchedWeather, setPrefetchedWeather] = useState<WeatherData | null>(null)
@@ -117,6 +130,22 @@ export function WeeklySummaryCard({
     prefetchWeather()
   }, [])
 
+  async function handleMealAssign(assignData: { recipeIds?: string[]; note?: string }) {
+    try {
+      const res = await fetch('/api/meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today + 'T00:00:00Z', mealType: 'dinner', ...assignData }),
+      })
+      if (!res.ok) throw new Error('Failed to save meal')
+      toast.success('Meal added')
+      setMealOpen(false)
+      router.refresh()
+    } catch {
+      toast.error('Failed to save meal')
+    }
+  }
+
   if (!data) return null
 
   return (
@@ -169,54 +198,78 @@ export function WeeklySummaryCard({
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Events summary */}
-          <Link href="/calendar" className="block p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+          <div className="p-3 rounded-lg bg-muted/30">
             <div className="flex items-center gap-2 mb-1">
-              <CalendarDays className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground uppercase">Events</span>
+              <Link href="/calendar" className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                <CalendarDays className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground uppercase">Events</span>
+              </Link>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setEventOpen(true) }}
+                className="flex items-center justify-center h-5 w-5 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                title="Add Event"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <p className="text-lg font-bold">{data.eventCount}</p>
-            <p className="text-xs text-muted-foreground">this week</p>
-            {data.topEvents.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {data.topEvents.map((e) => (
-                  <div key={e.id} className="flex items-center gap-1.5 text-xs">
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color ?? '#6366f1' }} />
-                    <span className="text-muted-foreground font-medium shrink-0 w-[28px]">{e.dayLabel}</span>
-                    <span className="truncate">{e.title}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Link>
+            <Link href="/calendar" className="block hover:opacity-80 transition-opacity">
+              <p className="text-lg font-bold">{data.eventCount}</p>
+              <p className="text-xs text-muted-foreground">this week</p>
+              {data.topEvents.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {data.topEvents.map((e) => (
+                    <div key={e.id} className="flex items-center gap-1.5 text-xs">
+                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color ?? '#6366f1' }} />
+                      <span className="text-muted-foreground font-medium shrink-0 w-[28px]">{e.dayLabel}</span>
+                      <span className="truncate">{e.title}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Link>
+          </div>
 
           {/* Meals summary */}
-          <Link href="/meal-plan" className="block p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+          <div className="p-3 rounded-lg bg-muted/30">
             <div className="flex items-center gap-2 mb-1">
-              <Utensils className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground uppercase">Meals</span>
+              <Link href="/meal-plan" className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                <Utensils className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground uppercase">Meals</span>
+              </Link>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setMealOpen(true) }}
+                className="flex items-center justify-center h-5 w-5 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                title="Add Meal"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <p className="text-lg font-bold">{data.mealCount}</p>
-            <p className="text-xs text-muted-foreground">planned meals</p>
-            {data.topMeals.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {data.topMeals.map((m, i) => (
-                  <div key={i}>
-                    <p className="text-xs truncate">
-                      <span className="text-muted-foreground">{m.day}:</span> {m.meal}
-                    </p>
-                    {m.note && (
-                      <p className="text-[10px] text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Link>
+            <Link href="/meal-plan" className="block hover:opacity-80 transition-opacity">
+              <p className="text-lg font-bold">{data.mealCount}</p>
+              <p className="text-xs text-muted-foreground">planned meals</p>
+              {data.topMeals.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {data.topMeals.map((m, i) => (
+                    <div key={i}>
+                      <p className="text-xs truncate">
+                        <span className="text-muted-foreground">{m.day}:</span> {m.meal}
+                      </p>
+                      {m.note && (
+                        <p className="text-[10px] text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Link>
+          </div>
 
           {/* To-dos summary */}
           <div className="block p-3 rounded-lg bg-muted/30">
             <div className="flex items-center gap-2 mb-1">
-              <CheckSquare className="h-4 w-4 text-primary" />
+              <CheckSquare className="h-4 w-4 text-primary shrink-0" />
               <span className="text-xs font-medium text-muted-foreground uppercase">To-Do</span>
               {availableLists && availableLists.length > 1 && (
                 <select
@@ -228,6 +281,11 @@ export function WeeklySummaryCard({
                     <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
+              )}
+              {selectedListId && (
+                <div className={availableLists && availableLists.length > 1 ? '' : 'ml-auto'}>
+                  <CardQuickAdd type="todo-item" listId={selectedListId} />
+                </div>
               )}
             </div>
             <Link href="/lists" className="block hover:opacity-80 transition-opacity">
@@ -244,6 +302,23 @@ export function WeeklySummaryCard({
           </div>
         </div>
       </CardContent>
+
+      <EventModal
+        open={eventOpen}
+        event={null}
+        currentUserId=""
+        defaultDate={new Date()}
+        onClose={() => setEventOpen(false)}
+        onSave={() => { setEventOpen(false); router.refresh() }}
+      />
+
+      <AssignMealModal
+        open={mealOpen}
+        onOpenChange={setMealOpen}
+        date={today}
+        mealType="dinner"
+        onAssign={handleMealAssign}
+      />
     </Card>
   )
 }
