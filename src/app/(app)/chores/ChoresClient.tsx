@@ -71,7 +71,7 @@ function formatDate(dateStr: string): string {
   })
 }
 
-type ScopeDays = 7 | 14 | 30
+type ScopeDays = 7 | 30 | 90 | 365
 
 export function ChoresClient({ initialChores, members, currentUserId }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
@@ -82,7 +82,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   // Incremented each time a new chore is added, forcing ChoreDialog to re-mount with clean state
   const [newChoreKey, setNewChoreKey] = useState(0)
-  const [scope, setScope] = useState<ScopeDays>(7)
+  const [scope, setScope] = useState<ScopeDays>(30)
   const [publicView, setPublicView] = useState(false)
 
   // Listen for chores updates from AI assistant or other sources
@@ -269,7 +269,8 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
   // Filter chores based on scope and mine/all toggle
   const filteredChores = chores.filter((chore) => {
     if (!publicView && chore.currentAssigneeId !== currentUserId) return false
-    if (!chore.nextDueDate) return true // no due date means recurring, always show
+    if (scope === 365) return true
+    if (!chore.nextDueDate) return true // null = due now, always show
     const dueDate = new Date(chore.nextDueDate)
     const cutoff = new Date(Date.now() + scope * 86400000)
     return dueDate <= cutoff
@@ -281,7 +282,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
         <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">
             {filteredChores.length} of {publicView ? chores.length : chores.filter(c => c.currentAssigneeId === currentUserId).length} active chore{chores.length !== 1 ? 's' : ''}
-            {scope !== 30 && <span className="text-muted-foreground/50"> due in {scope} days</span>}
+            {scope !== 365 && <span className="text-muted-foreground/50"> due in {scope} days</span>}
           </p>
           <button
             onClick={() => setPublicView(!publicView)}
@@ -303,7 +304,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
         <div className="flex items-center gap-2">
           {/* Scope toggle */}
           <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
-            {([7, 14, 30] as ScopeDays[]).map((d) => (
+            {([7, 30, 90, 365] as ScopeDays[]).map((d) => (
               <button
                 key={d}
                 type="button"
@@ -312,7 +313,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
                   scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {d === 30 ? '30d' : d === 14 ? '14d' : '7d'}
+                {d === 365 ? 'All' : d === 90 ? '90d' : d === 30 ? '30d' : '7d'}
               </button>
             ))}
           </div>
@@ -328,7 +329,9 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
             ? 'No chores yet. Add your first household chore to get started.'
             : !publicView && !chores.some(c => c.currentAssigneeId === currentUserId)
               ? 'No chores assigned to you. Switch to All to see family chores.'
-              : `No chores due in the next ${scope} days. Try expanding the time window above.`}
+              : scope === 365
+                ? 'No active chores.'
+                : `No chores due in the next ${scope} days. Try expanding the time window above.`}
         </div>
       ) : (
         <div className="rounded-lg border border-border/60 divide-y divide-border/40">
