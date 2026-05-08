@@ -204,34 +204,36 @@ export function EditItemDialog({
               )}
             </div>
           )}
-          <div className="flex gap-4">
-            <div className="flex flex-col gap-2 flex-1">
-              <Label htmlFor="edit-item-unit-price">Unit Price ($)</Label>
-              <Input
-                id="edit-item-unit-price"
-                type="number"
-                step="0.01"
-                min="0"
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-                placeholder="0.00"
-                disabled={isSaving}
-              />
+          {(initialUnitPrice !== undefined || initialQuantity !== undefined) && (
+            <div className="flex gap-4">
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="edit-item-unit-price">Unit Price ($)</Label>
+                <Input
+                  id="edit-item-unit-price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={unitPrice}
+                  onChange={(e) => setUnitPrice(e.target.value)}
+                  placeholder="0.00"
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="edit-item-quantity">Quantity</Label>
+                <Input
+                  id="edit-item-quantity"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="1"
+                  disabled={isSaving}
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-2 flex-1">
-              <Label htmlFor="edit-item-quantity">Quantity</Label>
-              <Input
-                id="edit-item-quantity"
-                type="number"
-                step="0.01"
-                min="0"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                placeholder="1"
-                disabled={isSaving}
-              />
-            </div>
-          </div>
+          )}
         </div>
         <DialogFooter showCloseButton>
           <Button onClick={handleSave} disabled={isSaving || !content.trim()}>
