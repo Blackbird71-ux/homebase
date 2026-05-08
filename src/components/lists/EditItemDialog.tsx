@@ -28,10 +28,13 @@ interface EditItemDialogProps {
   initialCategory: string | null
   availableCategories: string[]
   listId: string
-  onSaved: (id: string, content: string, category: string | null) => void
+  onSaved: (id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null) => void
   onCategoryAdded?: (name: string) => Promise<void>
   initialUnitPrice?: number | null
   initialQuantity?: number | null
+  initialDueDate?: string | null
+  initialAssignedToUserId?: string | null
+  members?: { id: string; name: string }[]
 }
 
 export function EditItemDialog({
@@ -46,11 +49,16 @@ export function EditItemDialog({
   onCategoryAdded,
   initialUnitPrice,
   initialQuantity,
+  initialDueDate,
+  initialAssignedToUserId,
+  members,
 }: EditItemDialogProps) {
   const [content, setContent] = useState(initialContent)
   const [category, setCategory] = useState(initialCategory || 'Other')
   const [unitPrice, setUnitPrice] = useState(initialUnitPrice?.toString() ?? '')
   const [quantity, setQuantity] = useState(initialQuantity?.toString() ?? '')
+  const [dueDate, setDueDate] = useState(initialDueDate ? initialDueDate.slice(0, 10) : '')
+  const [assignedToUserId, setAssignedToUserId] = useState(initialAssignedToUserId ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [localCategories, setLocalCategories] = useState(availableCategories)
   const [showNewCatInput, setShowNewCatInput] = useState(false)
@@ -63,11 +71,13 @@ export function EditItemDialog({
       setCategory(initialCategory || 'Other')
       setUnitPrice(initialUnitPrice?.toString() ?? '')
       setQuantity(initialQuantity?.toString() ?? '')
+      setDueDate(initialDueDate ? initialDueDate.slice(0, 10) : '')
+      setAssignedToUserId(initialAssignedToUserId ?? '')
       setLocalCategories(availableCategories)
       setShowNewCatInput(false)
       setNewCatName('')
     }
-  }, [open, initialContent, initialCategory, availableCategories, initialUnitPrice, initialQuantity])
+  }, [open, initialContent, initialCategory, availableCategories, initialUnitPrice, initialQuantity, initialDueDate, initialAssignedToUserId])
 
   async function handleAddCategory() {
     const trimmed = newCatName.trim()
@@ -96,6 +106,8 @@ export function EditItemDialog({
     try {
       const parsedUnitPrice = unitPrice.trim() ? parseFloat(unitPrice) : null
       const parsedQuantity = quantity.trim() ? parseFloat(quantity) : null
+      const resolvedDueDate = members !== undefined ? (dueDate || null) : undefined
+      const resolvedAssignee = members !== undefined ? (assignedToUserId || null) : undefined
 
       const res = await fetch(`/api/lists/${listId}/items/${itemId}`, {
         method: 'PATCH',
@@ -105,11 +117,13 @@ export function EditItemDialog({
           category: category === 'Other' ? null : category,
           unitPrice: parsedUnitPrice,
           quantity: parsedQuantity,
+          ...(resolvedDueDate !== undefined && { dueDate: resolvedDueDate }),
+          ...(resolvedAssignee !== undefined && { assignedToUserId: resolvedAssignee }),
         }),
       })
 
       if (res.ok) {
-        onSaved(itemId, content.trim(), category === 'Other' ? null : category)
+        onSaved(itemId, content.trim(), category === 'Other' ? null : category, resolvedDueDate, resolvedAssignee)
         onOpenChange(false)
         toast.success('Item updated')
       } else {
@@ -202,6 +216,38 @@ export function EditItemDialog({
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+          {members !== undefined && (
+            <div className="flex gap-4">
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="edit-item-due-date">Due Date</Label>
+                <Input
+                  id="edit-item-due-date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="flex flex-col gap-2 flex-1">
+                <Label htmlFor="edit-item-assignee">Assigned To</Label>
+                <Select
+                  value={assignedToUserId || '__none__'}
+                  onValueChange={(v) => setAssignedToUserId(v === '__none__' ? '' : v)}
+                  disabled={isSaving}
+                >
+                  <SelectTrigger className="w-full" id="edit-item-assignee">
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Unassigned</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
           {(initialUnitPrice !== undefined || initialQuantity !== undefined) && (

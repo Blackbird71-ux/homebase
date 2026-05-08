@@ -10,7 +10,11 @@ export async function PATCH(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { name, isActive } = body
+  const { name, isActive, type } = body
+
+  if (type !== undefined && type !== 'SHOPPING' && type !== 'TODO') {
+    return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
+  }
 
   const existing = await prisma.list.findFirst({
     where: { id, familyId: user.familyId },
@@ -22,6 +26,7 @@ export async function PATCH(
     data: {
       ...(name !== undefined && { name }),
       ...(isActive !== undefined && { isActive }),
+      ...(type !== undefined && { type }),
     },
   })
 
@@ -33,6 +38,17 @@ export async function PATCH(
       id,
       `Renamed list "${existing.name}" to "${name}"`,
       { before: { name: existing.name }, after: { name } }
+    )
+  }
+
+  if (type !== undefined && type !== existing.type) {
+    void createAuditLog(
+      user,
+      'update',
+      'list',
+      id,
+      `Converted list "${existing.name}" from ${existing.type} to ${type}`,
+      { before: { type: existing.type }, after: { type } }
     )
   }
 

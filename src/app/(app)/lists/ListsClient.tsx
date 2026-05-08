@@ -123,6 +123,22 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     }
   }
 
+  async function handleConvert(id: string, newType: 'SHOPPING' | 'TODO') {
+    const list = lists.find((l) => l.id === id)
+    if (!list) return
+    const res = await fetch(`/api/lists/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: newType }),
+    })
+    if (res.ok) {
+      setLists((prev) => prev.map((l) => (l.id === id ? { ...l, type: newType } : l)))
+      toast.success(`"${list.name}" converted to ${newType === 'SHOPPING' ? 'Shopping' : 'Todo'} list`)
+    } else {
+      toast.error('Failed to convert list')
+    }
+  }
+
   const handleReorder = useCallback(async (orderedIds: string[]) => {
     // Update local state immediately
     setLists((prev) => {
@@ -197,6 +213,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))
           }}
           onReorder={handleReorder}
+          onConvert={handleConvert}
         />
       </aside>
 

@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
-import { PlusIcon, StarIcon, Trash2Icon, CheckIcon, XIcon, GripVerticalIcon } from 'lucide-react'
+import { PlusIcon, StarIcon, Trash2Icon, CheckIcon, XIcon, GripVerticalIcon, ArrowLeftRightIcon } from 'lucide-react'
 
 interface ListMeta {
   id: string
@@ -38,6 +38,7 @@ interface ListSelectorProps {
   onSetDefault?: (id: string) => void
   onRename?: (id: string, newName: string) => void
   onReorder?: (orderedIds: string[]) => void
+  onConvert?: (id: string, newType: 'SHOPPING' | 'TODO') => void
 }
 
 function EditableListName({
@@ -159,6 +160,7 @@ interface SortableListRowProps {
   onDeleteList?: (id: string) => void
   onSetDefault?: (id: string) => void
   onRename?: (id: string, newName: string) => void
+  onConvert?: (id: string, newType: 'SHOPPING' | 'TODO') => void
 }
 
 function SortableListRow({
@@ -169,6 +171,7 @@ function SortableListRow({
   onDeleteList,
   onSetDefault,
   onRename,
+  onConvert,
 }: SortableListRowProps) {
   const {
     attributes,
@@ -207,6 +210,15 @@ function SortableListRow({
         onNameChanged={(id, newName) => onRename?.(id, newName)}
       />
       <div className="flex items-center gap-0.5">
+        {onConvert && (
+          <button
+            onClick={() => onConvert(list.id, list.type === 'SHOPPING' ? 'TODO' : 'SHOPPING')}
+            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            title={list.type === 'SHOPPING' ? 'Convert to Todo list' : 'Convert to Shopping list'}
+          >
+            <ArrowLeftRightIcon className="h-3 w-3" />
+          </button>
+        )}
         {onSetDefault && (
           <button
             onClick={() => onSetDefault(isDefault ? '' : list.id)}
@@ -244,6 +256,7 @@ export function ListSelector({
   onSetDefault,
   onRename,
   onReorder,
+  onConvert,
 }: ListSelectorProps) {
   const shopping = lists.filter((l) => l.type === 'SHOPPING')
   const todo = lists.filter((l) => l.type === 'TODO')
@@ -304,6 +317,7 @@ export function ListSelector({
               onDeleteList={onDeleteList}
               onSetDefault={onSetDefault}
               onRename={onRename}
+              onConvert={onConvert}
             />
           ))}
         </SortableContext>

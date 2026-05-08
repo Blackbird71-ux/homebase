@@ -55,6 +55,8 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
 
   const [editItemContent, setEditItemContent] = useState('')
   const [editItemCategory, setEditItemCategory] = useState<string | null>(null)
+  const [editItemDueDate, setEditItemDueDate] = useState<string | null>(null)
+  const [editItemAssignedToUserId, setEditItemAssignedToUserId] = useState<string | null>(null)
 
   const filtered = filterTodoItems(items, filter)
   const activeItems = filtered.filter((i) => !i.isCompleted)
@@ -122,12 +124,20 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
       setEditItemId(id)
       setEditItemContent(item.content)
       setEditItemCategory(item.category || null)
+      setEditItemDueDate(item.dueDate ? item.dueDate.toISOString() : null)
+      setEditItemAssignedToUserId(item.assignedToUserId ?? null)
     }
   }
 
-  function handleItemSaved(id: string, content: string, category: string | null) {
+  function handleItemSaved(id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null) {
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, content, category } : i))
+      prev.map((i) => (i.id === id ? {
+        ...i,
+        content,
+        category,
+        ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+        ...(assignedToUserId !== undefined && { assignedToUserId }),
+      } : i))
     )
   }
 
@@ -401,6 +411,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
         listId={listId}
         onSaved={handleItemSaved}
         onCategoryAdded={editDialogCategories.length > 0 ? handleEditDialogCategoryAdded : undefined}
+        initialDueDate={editItemDueDate}
+        initialAssignedToUserId={editItemAssignedToUserId}
+        members={members}
       />
     </div>
   )
