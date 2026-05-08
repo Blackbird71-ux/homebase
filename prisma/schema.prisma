@@ -223,7 +223,7 @@ model MealPlan {
   date      DateTime
   mealType  String   @default("dinner")
   recipeId  String?
-  recipe    Recipe?  @relation(fields: [recipeId], references: [id])
+  recipe    Recipe?  @relation(fields: [recipeId], references: [id], onDelete: SetNull)
   note      String?
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
@@ -265,7 +265,7 @@ model MealPlanRecipe {
   mealPlanId String
   mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
   recipeId   String
-  recipe     Recipe   @relation(fields: [recipeId], references: [id])
+  recipe     Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
   order      Int      @default(0)
   courseType String?
   createdAt  DateTime @default(now())
