@@ -369,6 +369,13 @@ export function ChoresClient({ initialChores, members }: ChoresClientProps) {
                   </span>
                 </HoverCard>
 
+                {/* Next occurrence date */}
+                {chore.nextDueDate && (
+                  <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
+                    {formatDate(chore.nextDueDate)}
+                  </span>
+                )}
+
                 {/* Overdue badge */}
                 {overdue && !isCompleted && (
                   <span className="shrink-0 text-[11px] font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
