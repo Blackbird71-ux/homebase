@@ -79,6 +79,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const needsShopping = visibleCardIds.has('shopping-list')
   const needsTodo = visibleCardIds.has('todo-summary') || visibleCardIds.has('weekly-summary')
   const needsChores = visibleCardIds.has('chore-schedule')
+  const needsBills = visibleCardIds.has('bills-to-pay')
 
   // Compute rolling 7-day window from today
   const nowInTz = new Date(new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()))
@@ -93,7 +94,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const weekStartUtc = normalizeToUtcMidnight(weekStartStr)
   const weekEndUtc = new Date(normalizeToUtcMidnight(weekEndStr).getTime() + 24 * 60 * 60 * 1000)
 
-  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData] = await Promise.all([
     needsEvents
       ? prisma.event.findMany({
           where: { familyId, start: { gte: todayStart } },
@@ -223,6 +224,17 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           orderBy: { nextDueDate: 'asc' },
         })
       : Promise.resolve([]),
+    needsBills
+      ? prisma.financeRecurringBill.findMany({
+          where: {
+            familyId,
+            isActive: true,
+            nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+          },
+          orderBy: { nextDueDate: 'asc' },
+          select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true },
+        })
+      : Promise.resolve([]),
   ])
 
   // Map each meal type from a set of meal plans.
@@ -322,6 +334,21 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       firstItems: todoLists[0].items.map(i => i.content),
     } : null,
     choreSchedule: buildChoreSchedule(choreData, todayStart, 30),
+    billsToPay: billsData.map((bill) => {
+      const dueDate = new Date(bill.nextDueDate)
+      const diffMs = dueDate.getTime() - todayStart.getTime()
+      const daysUntilDue = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+      return {
+        id: bill.id,
+        name: bill.name,
+        amount: bill.amount,
+        frequency: bill.frequency,
+        nextDueDate: bill.nextDueDate.toISOString(),
+        isOverdue: daysUntilDue < 0,
+        daysUntilDue,
+        autoPay: bill.autoPay,
+      }
+    }),
   }
 }
 

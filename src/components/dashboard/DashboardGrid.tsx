@@ -13,6 +13,7 @@ import { ShoppingListCard } from './ShoppingListCard'
 import { TodoCard } from './TodoCard'
 import { WeeklySummaryCard } from './WeeklySummaryCard'
 import { ChoreScheduleCard } from './ChoreScheduleCard'
+import { BillsToPayCard } from './BillsToPayCard'
 
 type ScopeDays = 7 | 14 | 30
 
@@ -179,6 +180,8 @@ function renderCard(
       return <TodoCard key={card.id} todo={data.todoSummary} />
     case 'chore-schedule':
       return <ChoreScheduleCard key={card.id} data={data.choreSchedule} timezone={timezone} scope={scope} onScopeChange={onScopeChange} />
+    case 'bills-to-pay':
+      return <BillsToPayCard key={card.id} bills={data.billsToPay} />
     default:
       return null
   }

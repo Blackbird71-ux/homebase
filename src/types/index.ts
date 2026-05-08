@@ -27,6 +27,17 @@ export interface ChoreScheduleItem {
   isOverdue: boolean
 }
 
+export interface BillSummaryItem {
+  id: string
+  name: string
+  amount: number
+  frequency: string
+  nextDueDate: string
+  isOverdue: boolean
+  daysUntilDue: number
+  autoPay: boolean
+}
+
 export interface DashboardData {
   weeklySummary: WeeklySummaryData | null
   upcomingEvents: UpcomingEvent[]
@@ -36,6 +47,7 @@ export interface DashboardData {
   shoppingList: ShoppingListSummary | null
   todoSummary: TodoSummary | null
   choreSchedule: ChoreScheduleDay[]
+  billsToPay: BillSummaryItem[]
 }
 
 export interface WeeklySummaryData {

@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
     weekMeals,
     weekTodos,
     choreData,
+    billsData,
   ] = await Promise.all([
     prisma.event.findMany({
       where: { familyId: user.familyId, start: { gte: now } },
@@ -190,6 +191,16 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { nextDueDate: 'asc' },
     }),
+    // Bills data for bills-to-pay card
+    prisma.financeRecurringBill.findMany({
+      where: {
+        familyId: user.familyId,
+        isActive: true,
+        nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { nextDueDate: 'asc' },
+      select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true },
+    }),
   ])
 
   function mealByType(plans: typeof todayMealPlans, type: string): TodaysMeal | null {
@@ -283,6 +294,21 @@ export async function GET(request: NextRequest) {
         }
       : null,
     choreSchedule: buildChoreSchedule(choreData, todayStart, 30),
+    billsToPay: billsData.map((bill) => {
+      const dueDate = new Date(bill.nextDueDate)
+      const diffMs = dueDate.getTime() - todayStart.getTime()
+      const daysUntilDue = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+      return {
+        id: bill.id,
+        name: bill.name,
+        amount: bill.amount,
+        frequency: bill.frequency,
+        nextDueDate: bill.nextDueDate.toISOString(),
+        isOverdue: daysUntilDue < 0,
+        daysUntilDue,
+        autoPay: bill.autoPay,
+      }
+    }),
   }
 
   return NextResponse.json(data)
