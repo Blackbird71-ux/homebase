@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import type { DashboardData } from '@/types'
 import type { DashboardCardConfig, DashboardCardLayout } from '@/lib/dashboard-cards'
 import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
@@ -32,7 +32,11 @@ interface DashboardGridProps {
   loading?: boolean
 }
 
-export function DashboardGrid({
+export interface DashboardGridHandle {
+  resetLayouts: () => void
+}
+
+export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>(function DashboardGrid({
   data,
   timezone,
   cards,
@@ -40,7 +44,7 @@ export function DashboardGrid({
   onLayoutsChange,
   scope = 7,
   onScopeChange,
-}: DashboardGridProps) {
+}, ref) {
   // Sort cards by order, filter visible ones
   const visibleCards = cards
     .filter((c) => c.visible)
@@ -68,7 +72,10 @@ export function DashboardGrid({
     handleDragStart,
     handleResizeStart,
     toggleWidth,
+    resetLayouts,
   } = useCardLayout(initialLayouts, cardIds, onLayoutsChange)
+
+  useImperativeHandle(ref, () => ({ resetLayouts }), [resetLayouts])
 
   // Track container size for percentage calculations
   const containerSizeRef = useRef({ width: 800, height: 600 })
@@ -135,7 +142,7 @@ export function DashboardGrid({
       </div>
     </div>
   )
-}
+})
 
 function renderCard(
   card: DashboardCardConfig,

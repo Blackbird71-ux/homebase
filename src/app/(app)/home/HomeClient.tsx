@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { Settings2Icon } from 'lucide-react'
+import { Settings2Icon, LayoutGridIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
+import { DashboardGrid, type DashboardGridHandle } from '@/components/dashboard/DashboardGrid'
 import { DashboardCustomiser } from '@/components/dashboard/DashboardCustomiser'
 import type { DashboardCardConfig } from '@/lib/dashboard-cards'
 import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
@@ -31,6 +31,7 @@ export function HomeClient({
   const [customiserOpen, setCustomiserOpen] = useState(false)
   const [scope, setScope] = useState<ScopeDays>(7)
   const [loading, setLoading] = useState(false)
+  const gridRef = useRef<DashboardGridHandle>(null)
 
   // Track layouts for persistence via debounced save
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -92,21 +93,45 @@ export function HomeClient({
     }
   }, [dashboardTodoListId])
 
+  const handleResetLayout = useCallback(async () => {
+    gridRef.current?.resetLayouts()
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uiPreferences: { dashboardCardLayouts: {} } }),
+      })
+    } catch {
+      // Silently fail
+    }
+  }, [])
+
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">
       <div className="flex items-center justify-between mb-4 shrink-0">
         <h1 className="text-xl font-semibold">Home</h1>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCustomiserOpen(true)}
-        >
-          <Settings2Icon className="h-4 w-4 mr-1" />
-          Customise
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResetLayout}
+          >
+            <LayoutGridIcon className="h-4 w-4 mr-1" />
+            Reset Layout
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCustomiserOpen(true)}
+          >
+            <Settings2Icon className="h-4 w-4 mr-1" />
+            Customise
+          </Button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto min-h-0">
         <DashboardGrid
+          ref={gridRef}
           data={data}
           timezone={timezone}
           cards={cards}

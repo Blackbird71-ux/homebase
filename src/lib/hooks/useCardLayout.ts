@@ -34,31 +34,31 @@ interface ResizeState {
  * A hook that manages free-form card layouts on the dashboard.
  * Supports drag-to-move, drag-to-resize, collision push, and persistence.
  */
+function buildDefaultLayouts(cardIds: string[], base: CardLayoutMap = {}): CardLayoutMap {
+  const result: CardLayoutMap = { ...base }
+  let autoIndex = 0
+  for (const id of cardIds) {
+    if (!result[id]) {
+      result[id] = {
+        x: 0,
+        y: autoIndex * 35,
+        width: 100,
+        height: 'auto',
+      }
+      autoIndex++
+    }
+  }
+  return result
+}
+
 export function useCardLayout(
   initialLayouts: CardLayoutMap,
   cardIds: string[],
   onSave?: (layouts: CardLayoutMap) => void
 ) {
-  const [layouts, setLayouts] = useState<CardLayoutMap>(() => {
-    // Auto-position any cards that don't have a layout yet
-    const result: CardLayoutMap = { ...initialLayouts }
-    let autoIndex = 0
-    for (const id of cardIds) {
-      if (!result[id]) {
-        // Place at default positions: alternating left/right columns
-        const col = autoIndex % 2
-        const row = Math.floor(autoIndex / 2)
-        result[id] = {
-          x: col === 0 ? 0 : 52,
-          y: row * 35,
-          width: 48,
-          height: 'auto',
-        }
-        autoIndex++
-      }
-    }
-    return result
-  })
+  const [layouts, setLayouts] = useState<CardLayoutMap>(() =>
+    buildDefaultLayouts(cardIds, initialLayouts)
+  )
 
   const draggingRef = useRef<DragState | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -427,6 +427,11 @@ export function useCardLayout(
 
   // ─── Toggle Full/Half Width ─────────────────────────────────────────
 
+  const resetLayouts = useCallback(() => {
+    const fresh = buildDefaultLayouts(cardIds)
+    setLayouts(fresh)
+  }, [cardIds])
+
   const toggleWidth = useCallback(
     (cardId: string) => {
       setLayouts((prev) => {
@@ -465,5 +470,6 @@ export function useCardLayout(
     handleDragStart,
     handleResizeStart,
     toggleWidth,
+    resetLayouts,
   }
 }
