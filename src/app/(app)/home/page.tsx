@@ -201,7 +201,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           },
           include: {
             _count: { select: { items: { where: { isCompleted: false } } } },
-            items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
+            items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 4, select: { content: true } },
           },
           ...(dashboardTodoListId ? {} : { take: 1 }),
         })

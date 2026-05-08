@@ -288,7 +288,7 @@ export function WeeklySummaryCard({
                 </div>
               )}
             </div>
-            <Link href="/lists" className="block hover:opacity-80 transition-opacity">
+            <Link href={selectedListId ? `/lists?list=${selectedListId}` : '/lists'} className="block hover:opacity-80 transition-opacity">
               <p className="text-lg font-bold">{data.pendingTodoCount}</p>
               <p className="text-xs text-muted-foreground">pending tasks</p>
               {data.topTodos.length > 0 && (

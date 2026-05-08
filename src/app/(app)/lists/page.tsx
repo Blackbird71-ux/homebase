@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { ListsClient } from './ListsClient'
@@ -54,5 +55,9 @@ export default async function ListsPage() {
     })),
   }))
 
-  return <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} members={members} />
+  return (
+    <Suspense>
+      <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} members={members} />
+    </Suspense>
+  )
 }

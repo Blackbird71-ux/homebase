@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ListSelector } from '@/components/lists/ListSelector'
 import { ShoppingList } from '@/components/lists/ShoppingList'
 import { TodoList } from '@/components/lists/TodoList'
@@ -57,11 +58,14 @@ interface ListsClientProps {
 }
 
 export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId, members }: ListsClientProps) {
+  const searchParams = useSearchParams()
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
 
-  // Determine initial active list: prefer defaultListId, fall back to first list
+  // Determine initial active list: prefer ?list= param, then defaultListId, fall back to first list
   const initialActiveId = (() => {
+    const urlListId = searchParams.get('list')
+    if (urlListId && initialLists.some((l) => l.id === urlListId)) return urlListId
     if (initialDefaultListId && initialLists.some((l) => l.id === initialDefaultListId)) {
       return initialDefaultListId
     }
