@@ -522,12 +522,12 @@ export default function BillsPage() {
           {overdue.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
-              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} formatCurrency={formatCurrency} />
+              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit} formatCurrency={formatCurrency} />
           ))}
           {upcoming.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={false}
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
-              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} formatCurrency={formatCurrency} />
+              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit} formatCurrency={formatCurrency} />
           ))}
 
           {/* Totals row */}
@@ -554,20 +554,22 @@ export default function BillsPage() {
   )
 }
 
-function BillRow({ bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate, onEdit, onDelete, onMarkPaid, onToggleInvoice, formatCurrency }: {
+function BillRow({ bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate, onEdit, onDelete, onMarkPaid, onToggleInvoice, onDoubleClick, formatCurrency }: {
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
   billAmountForCat: (bill: Bill, catId: string) => number
   gridTemplate: string
   onEdit: (b: Bill) => void; onDelete: (id: string) => void
   onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
+  onDoubleClick: (b: Bill) => void
   formatCurrency: (n: number) => string
 }) {
   const isOneOff = bill.billType === 'one-off'
   return (
-    <div className={cn('grid gap-3 rounded-lg border p-3',
+    <div className={cn('grid gap-3 rounded-lg border p-3 cursor-default select-none',
       isOverdue ? 'border-red-500/30 bg-red-500/5' : 'border-border hover:bg-accent/50')}
-      style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>
+      style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
+      onDoubleClick={() => onDoubleClick(bill)}>
       <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
         isOverdue ? 'bg-red-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
         {isOneOff

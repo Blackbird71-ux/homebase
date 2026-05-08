@@ -106,7 +106,7 @@ interface TodoListProps {
 
 export function TodoList({ listId, initialItems, initialCategoryOrder, members, currentUserId }: TodoListProps) {
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
-  const [filter, setFilter] = useState<TodoFilter>('all')
+  const [filter, setFilter] = useState<TodoFilter>('mine')
   const [categories, setCategories] = useState<string[]>(initialCategoryOrder ?? [])
   const [newContent, setNewContent] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
@@ -163,9 +163,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
   const [editItemDueDate, setEditItemDueDate] = useState<string | null>(null)
   const [editItemAssignedToUserId, setEditItemAssignedToUserId] = useState<string | null>(null)
 
-  const filtered = filterTodoItems(items, filter)
+  const filtered = filterTodoItems(items, filter, undefined, currentUserId)
   const activeItems = filtered.filter((i) => !i.isCompleted)
-  const completedItems = filter === 'all' ? items.filter((i) => i.isCompleted) : []
+  const completedItems = (filter === 'all' || filter === 'mine') ? items.filter((i) => i.isCompleted) : []
 
   // Group active items by category when categories are defined
   const groupedItems = (() => {

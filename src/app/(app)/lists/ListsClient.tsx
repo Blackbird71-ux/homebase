@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ListSelector } from '@/components/lists/ListSelector'
 import { ShoppingList } from '@/components/lists/ShoppingList'
@@ -10,6 +10,7 @@ import { TemplateDialog } from '@/components/lists/TemplateDialog'
 import { ListPresence } from '@/components/lists/ListPresence'
 import type { ListItemShape } from '@/lib/list-helpers'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 
 interface SerializedItem {
   id: string
@@ -40,6 +41,7 @@ interface SerializedList {
   familyId: string
   items: SerializedItem[]
   _count: { items: number }
+  createdBy: string | null
 }
 
 function toListItemShape(item: SerializedItem): ListItemShape {
@@ -61,6 +63,8 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   const searchParams = useSearchParams()
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
+  const [listFilter, setListFilter] = useState<'all' | 'mine'>('mine')
+  const [loadingLists, setLoadingLists] = useState(false)
 
   // Determine initial active list: prefer ?list= param, then defaultListId, fall back to first list
   const initialActiveId = (() => {
@@ -72,6 +76,22 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     return initialLists[0]?.id ?? null
   })()
   const [activeListId, setActiveListId] = useState<string | null>(initialActiveId)
+
+  // Refetch lists when filter changes
+  useEffect(() => {
+    async function fetchLists() {
+      setLoadingLists(true)
+      const params = new URLSearchParams()
+      if (listFilter === 'mine') params.set('filter', 'mine')
+      const res = await fetch(`/api/lists?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setLists(data)
+      }
+      setLoadingLists(false)
+    }
+    fetchLists()
+  }, [listFilter])
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
@@ -110,6 +130,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     const maxSortOrder = lists.reduce((max, l) => Math.max(max, l.sortOrder), 0)
     const newList: SerializedList = {
       ...list,
+      createdBy: currentUserId,
       isActive: true,
       categoryOrder: null,
       sortOrder: maxSortOrder + 1,
@@ -190,7 +211,14 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     }
   }, [])
 
-  const listsMeta = lists.map((l) => ({
+  // Filter lists based on listFilter (client-side as well for instant UX)
+  const visibleLists = listFilter === 'mine'
+    ? lists.filter((l) => {
+        return l.createdBy === currentUserId || !l.createdBy
+      })
+    : lists
+
+  const listsMeta = visibleLists.map((l) => ({
     id: l.id,
     name: l.name,
     type: l.type as 'SHOPPING' | 'TODO',
@@ -200,8 +228,30 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   return (
 
     <div className="flex h-full overflow-hidden flex-col md:flex-row">
-      {/* Mobile: horizontal scroll chip bar — replaces the sidebar */}
-      <div className="md:hidden flex items-center gap-2 px-2 py-1.5 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
+        {/* Filter toggle for mobile */}
+        <div className="md:hidden flex items-center gap-2 px-2 py-1 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
+          <div className="flex gap-1 shrink-0">
+            <Button
+              variant={listFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={() => setListFilter('all')}
+            >
+              Family
+            </Button>
+            <Button
+              variant={listFilter === 'mine' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={() => setListFilter('mine')}
+            >
+              Mine
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile: horizontal scroll chip bar — replaces the sidebar */}
+        <div className="md:hidden flex items-center gap-2 px-2 py-1.5 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
         {listsMeta.map((list) => (
           renamingListId === list.id ? (
             <form
@@ -251,21 +301,49 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       </div>
 
       {/* Desktop: sidebar list selector */}
-      <aside className="hidden md:block w-[200px] shrink-0 border-r border-border overflow-y-auto">
-        <ListSelector
-          lists={listsMeta}
-          activeListId={activeListId}
-          defaultListId={defaultListId}
-          onSelect={setActiveListId}
-          onNewList={() => setDialogOpen(true)}
-          onDeleteList={handleDeleteList}
-          onSetDefault={handleSetDefault}
-          onRename={(id, newName) => {
-            setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))
-          }}
-          onReorder={handleReorder}
-          onConvert={handleConvert}
-        />
+      <aside className="hidden md:flex md:flex-col w-[200px] shrink-0 border-r border-border overflow-y-auto">
+        <div className="px-2 pt-2 pb-1 border-b border-border">
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => setListFilter('all')}
+              className={`flex-1 text-xs font-medium py-1 px-2 rounded transition-colors ${
+                listFilter === 'all'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Family
+            </button>
+            <button
+              type="button"
+              onClick={() => setListFilter('mine')}
+              className={`flex-1 text-xs font-medium py-1 px-2 rounded transition-colors ${
+                listFilter === 'mine'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Mine
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <ListSelector
+            lists={listsMeta}
+            activeListId={activeListId}
+            defaultListId={defaultListId}
+            onSelect={setActiveListId}
+            onNewList={() => setDialogOpen(true)}
+            onDeleteList={handleDeleteList}
+            onSetDefault={handleSetDefault}
+            onRename={(id, newName) => {
+              setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))
+            }}
+            onReorder={handleReorder}
+            onConvert={handleConvert}
+          />
+        </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto p-2 sm:p-4 md:p-6">
@@ -369,6 +447,8 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onCreated={handleCreated}
+        members={members}
+        currentUserId={currentUserId}
       />
 
       {activeList && (

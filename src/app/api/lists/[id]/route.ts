@@ -10,7 +10,7 @@ export async function PATCH(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { name, isActive, type } = body
+  const { name, isActive, type, createdBy } = body
 
   if (type !== undefined && type !== 'SHOPPING' && type !== 'TODO') {
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
@@ -21,12 +21,23 @@ export async function PATCH(
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // Validate createdBy if provided — must be a family member
+  if (createdBy !== undefined) {
+    const member = await prisma.user.findFirst({
+      where: { id: createdBy, familyId: user.familyId },
+    })
+    if (!member) {
+      return NextResponse.json({ error: 'Invalid user' }, { status: 400 })
+    }
+  }
+
   const updated = await prisma.list.update({
     where: { id },
     data: {
       ...(name !== undefined && { name }),
       ...(isActive !== undefined && { isActive }),
       ...(type !== undefined && { type }),
+      ...(createdBy !== undefined && { createdBy }),
     },
   })
 

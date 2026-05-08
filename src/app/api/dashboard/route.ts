@@ -196,6 +196,7 @@ export async function GET(request: NextRequest) {
       where: {
         familyId: user.familyId,
         isActive: true,
+        paid: false,
         nextDueDate: { lte: new Date(mealPlanTodayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
       },
       orderBy: { nextDueDate: 'asc' },

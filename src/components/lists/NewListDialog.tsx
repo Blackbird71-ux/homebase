@@ -16,11 +16,14 @@ interface NewListDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (list: { id: string; name: string; type: string }) => void
+  members?: { id: string; name: string }[]
+  currentUserId?: string
 }
 
-export function NewListDialog({ open, onOpenChange, onCreated }: NewListDialogProps) {
+export function NewListDialog({ open, onOpenChange, onCreated, members, currentUserId }: NewListDialogProps) {
   const [name, setName] = useState('')
   const [type, setType] = useState<'SHOPPING' | 'TODO'>('SHOPPING')
+  const [ownerId, setOwnerId] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -28,16 +31,21 @@ export function NewListDialog({ open, onOpenChange, onCreated }: NewListDialogPr
     if (!name.trim()) return
     setLoading(true)
     try {
+      const body: Record<string, unknown> = { name: name.trim(), type }
+      if (ownerId && ownerId !== currentUserId) {
+        body.createdBy = ownerId
+      }
       const res = await fetch('/api/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), type }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         const list = await res.json()
         onCreated(list)
         setName('')
         setType('SHOPPING')
+        setOwnerId('')
         onOpenChange(false)
       }
     } finally {
@@ -84,10 +92,30 @@ export function NewListDialog({ open, onOpenChange, onCreated }: NewListDialogPr
                 : 'Todo lists are private task lists — they do not appear on the home dashboard.'}
             </p>
           </fieldset>
+          {(members && members.length > 1) && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="list-owner">Owner</Label>
+              <select
+                id="list-owner"
+                value={ownerId || currentUserId || ''}
+                onChange={(e) => setOwnerId(e.target.value)}
+                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
+              >
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.id === currentUserId ? ' (me)' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                The owner controls who sees this list in "My Lists" view
+              </p>
+            </div>
+          )}
           <DialogFooter>
-            <Button type="submit" disabled={loading || !name.trim()}>
-              {loading ? 'Creating...' : 'Create'}
-            </Button>
+                <Button type="submit" disabled={loading || !name.trim()}>
+                  {loading ? 'Creating...' : 'Create'}
+                </Button>
           </DialogFooter>
         </form>
       </DialogContent>

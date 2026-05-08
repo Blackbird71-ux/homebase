@@ -7,10 +7,14 @@ export async function GET(req: NextRequest) {
   const user = await requireSession()
   const { searchParams } = new URL(req.url)
   const type = searchParams.get('type')
+  const filter = searchParams.get('filter') // 'mine' | null (family)
 
   const where: Record<string, unknown> = { familyId: user.familyId, isActive: true }
   if (type === 'SHOPPING' || type === 'TODO') {
     where.type = type
+  }
+  if (filter === 'mine') {
+    where.createdBy = user.id
   }
 
   const lists = await prisma.list.findMany({
@@ -26,17 +30,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { name, type } = body
+  const { name, type, createdBy } = body
 
   if (!name || !type) {
     return NextResponse.json({ error: 'name and type are required' }, { status: 400 })
+  }
+  // Validate createdBy if provided — must be the current user or a family member
+  if (createdBy !== undefined && createdBy !== user.id) {
+    const member = await prisma.user.findFirst({
+      where: { id: createdBy, familyId: user.familyId },
+    })
+    if (!member) {
+      return NextResponse.json({ error: 'Invalid user' }, { status: 400 })
+    }
   }
   if (type !== 'SHOPPING' && type !== 'TODO') {
     return NextResponse.json({ error: 'type must be SHOPPING or TODO' }, { status: 400 })
   }
 
   const list = await prisma.list.create({
-    data: { name, type, familyId: user.familyId },
+    data: { name, type, familyId: user.familyId, createdBy: user.id },
   })
 
   void createAuditLog(

@@ -105,15 +105,21 @@ export type TodoFilter = 'all' | 'mine' | 'today' | 'overdue'
 export function filterTodoItems(
   items: ListItemShape[],
   filter: TodoFilter,
-  now: Date = new Date()
+  now: Date = new Date(),
+  currentUserId?: string
 ): ListItemShape[] {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
 
   let filtered = items
   if (filter === 'mine') {
-    // "mine" shows items assigned to the current user — filtering happens in TodoList
-    // since we don't have currentUserId here; just return all items sorted
+    filtered = currentUserId
+      ? items.filter(
+          (i) =>
+            !i.isCompleted &&
+            (i.assignedToUserId === currentUserId || (!i.assignedToUserId && i.createdBy === currentUserId))
+        )
+      : items.filter((i) => !i.isCompleted)
   } else if (filter === 'today') {
     filtered = items.filter(
       (i) =>
