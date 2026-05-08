@@ -80,10 +80,19 @@ export default function PaidBillsPage() {
   }
 
   const rootCategories = categories.filter(c => !c.parentId)
-  const cutoff = subMonths(new Date(), monthRange)
+  // Use local-date midnight for cutoff to avoid timezone issues with stored UTC dates
+  const today = new Date()
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const cutoff = subMonths(todayMidnight, monthRange)
 
   const sorted = [...bills]
-    .filter(b => !b.paidDate || new Date(b.paidDate) >= cutoff)
+    .filter(b => {
+      if (!b.paidDate) return true // show bills with no paidDate (paid flag but no date recorded)
+      const pd = new Date(b.paidDate)
+      // Use date-only comparison to avoid timezone edge cases
+      const pdMidnight = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate())
+      return pdMidnight >= cutoff
+    })
     .sort((a, b) => {
       if (a.paidDate && b.paidDate) return new Date(b.paidDate).getTime() - new Date(a.paidDate).getTime()
       if (a.paidDate) return -1
