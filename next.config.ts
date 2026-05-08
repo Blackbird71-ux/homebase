@@ -13,8 +13,12 @@ const nextConfig: NextConfig = {
             value: 'nosniff',
           },
           {
+            // SAMEORIGIN (not DENY) is required so that the DocumentViewer
+            // and bill-attachment viewer can embed API-served PDFs in an
+            // <iframe> on the same origin.  Cross-origin embedding is still
+            // blocked, which is the important protection.
             key: 'X-Frame-Options',
-            value: 'DENY',
+            value: 'SAMEORIGIN',
           },
           {
             key: 'Referrer-Policy',

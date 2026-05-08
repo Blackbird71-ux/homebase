@@ -49,8 +49,12 @@ export async function GET(
         'Content-Disposition': `inline; filename="${document.fileName}"`,
         'Content-Length': String(buffer.length),
         'Cache-Control': 'private, max-age=3600',
-        // Allow PDF to be embedded in iframe
+        // Allow same-origin iframing (DocumentViewer embeds PDFs in an iframe).
+        // X-Frame-Options SAMEORIGIN is set globally in next.config.ts;
+        // the CSP frame-ancestors directive is the modern equivalent and
+        // takes precedence in browsers that support it.
         'X-Frame-Options': 'SAMEORIGIN',
+        'Content-Security-Policy': "frame-ancestors 'self'",
       },
     })
   } catch (err) {

@@ -29,6 +29,11 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         'Content-Disposition': `inline; filename="${downloadName}"`,
         'Content-Length': String(buffer.length),
         'Cache-Control': 'private, max-age=3600',
+        // Allow same-origin viewing/embedding; the global next.config.ts
+        // header is SAMEORIGIN, but adding the CSP directive explicitly
+        // ensures modern browsers honour it for PDF inline viewing.
+        'X-Frame-Options': 'SAMEORIGIN',
+        'Content-Security-Policy': "frame-ancestors 'self'",
       },
     })
   } catch {
