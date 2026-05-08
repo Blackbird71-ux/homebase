@@ -1,8 +1,13 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Coffee, Utensils, Pizza, Apple } from 'lucide-react'
+import { Coffee, Utensils, Pizza, Apple, Plus } from 'lucide-react'
 import type { TodaysMeals, TodaysMeal } from '@/types'
 import Link from 'next/link'
-import { CardQuickAdd } from './CardQuickAdd'
+import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
+import { toast } from 'sonner'
 
 const MEAL_CONFIG = [
   { key: 'breakfast' as const, label: 'Breakfast', Icon: Coffee },
@@ -10,6 +15,11 @@ const MEAL_CONFIG = [
   { key: 'dinner'    as const, label: 'Dinner',    Icon: Pizza },
   { key: 'snacks'    as const, label: 'Snacks',    Icon: Apple },
 ]
+
+function todayLocal(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function MealRow({ meal, label, Icon }: { meal: TodaysMeal | null; label: string; Icon: React.ElementType }) {
   const content = meal?.recipeName ?? meal?.note ?? null
@@ -40,6 +50,29 @@ function MealRow({ meal, label, Icon }: { meal: TodaysMeal | null; label: string
 
 export function TodaysMealsCard({ meals, title = "Today's Meals" }: { meals: TodaysMeals; title?: string }) {
   const hasAny = MEAL_CONFIG.some(({ key }) => meals[key] !== null)
+  const router = useRouter()
+  const [mealOpen, setMealOpen] = useState(false)
+  const today = todayLocal()
+
+  async function handleAssign(data: { recipeIds?: string[]; note?: string }) {
+    try {
+      const res = await fetch('/api/meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: today + 'T00:00:00Z',
+          mealType: 'dinner',
+          ...data,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save meal')
+      toast.success('Meal added')
+      setMealOpen(false)
+      router.refresh()
+    } catch {
+      toast.error('Failed to save meal')
+    }
+  }
 
   return (
     <Card className="flex flex-col">
@@ -48,7 +81,14 @@ export function TodaysMealsCard({ meals, title = "Today's Meals" }: { meals: Tod
           <Link href="/meal-plan" className="flex items-center gap-2 hover:text-foreground transition-colors flex-1 min-w-0">
             <Utensils className="h-4 w-4 shrink-0" /> {title}
           </Link>
-          <CardQuickAdd type="meal" />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setMealOpen(true) }}
+            className="flex items-center justify-center h-5 w-5 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            title="Add Meal"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col justify-center min-h-0">
@@ -64,6 +104,14 @@ export function TodaysMealsCard({ meals, title = "Today's Meals" }: { meals: Tod
           </Link>
         )}
       </CardContent>
+
+      <AssignMealModal
+        open={mealOpen}
+        onOpenChange={setMealOpen}
+        date={today}
+        mealType="dinner"
+        onAssign={handleAssign}
+      />
     </Card>
   )
 }

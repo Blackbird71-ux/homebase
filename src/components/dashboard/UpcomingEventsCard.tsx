@@ -1,9 +1,13 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar } from 'lucide-react'
+import { Calendar, Plus } from 'lucide-react'
 import { format } from 'date-fns'
 import type { UpcomingEvent } from '@/types'
 import Link from 'next/link'
-import { CardQuickAdd } from './CardQuickAdd'
+import { EventModal } from '@/components/calendar/EventModal'
 
 function formatEventDate(iso: string, timezone: string): string {
   const d = new Date(iso)
@@ -25,6 +29,9 @@ function formatEventDate(iso: string, timezone: string): string {
 
 export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent[]; timezone?: string }) {
   const tz = timezone ?? 'UTC'
+  const router = useRouter()
+  const [eventOpen, setEventOpen] = useState(false)
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
@@ -32,7 +39,14 @@ export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent
           <Link href="/calendar" className="flex items-center gap-2 hover:text-foreground transition-colors flex-1 min-w-0">
             <Calendar className="h-4 w-4 shrink-0" /> Upcoming
           </Link>
-          <CardQuickAdd type="event" />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setEventOpen(true) }}
+            className="flex items-center justify-center h-5 w-5 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            title="Add Event"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 space-y-2 min-h-0">
@@ -54,6 +68,15 @@ export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent
           ))
         )}
       </CardContent>
+
+      <EventModal
+        open={eventOpen}
+        event={null}
+        currentUserId=""
+        defaultDate={new Date()}
+        onClose={() => setEventOpen(false)}
+        onSave={() => { setEventOpen(false); router.refresh() }}
+      />
     </Card>
   )
 }

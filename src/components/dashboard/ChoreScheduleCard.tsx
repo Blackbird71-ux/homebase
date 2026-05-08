@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon } from 'lucide-react'
+import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon, Plus } from 'lucide-react'
 import type { ChoreScheduleDay } from '@/types'
 import { todayStringInTz } from '@/lib/timezone'
-import { CardQuickAdd } from './CardQuickAdd'
+import { ChoreDialog } from '@/app/(app)/chores/ChoreDialog'
 
 type ScopeDays = 7 | 14 | 30
 
@@ -20,14 +21,16 @@ export function ChoreScheduleCard({
   scope?: ScopeDays
   onScopeChange?: (scope: ScopeDays) => void
 }) {
+  const router = useRouter()
   const [internalScope, setInternalScope] = useState<ScopeDays>(7)
   const [data, setData] = useState<ChoreScheduleDay[] | null | undefined>(initialData)
   const [loading, setLoading] = useState(false)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
-  // Persistently track chore IDs that have been completed this session
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
-  // Track if we're filtering to only show current user's chores
   const [showOnlyMine, setShowOnlyMine] = useState(false)
+  const [choreDialogOpen, setChoreDialogOpen] = useState(false)
+  const [members, setMembers] = useState<{ id: string; name: string }[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
 
   // Use parent scope if provided, otherwise fall back to internal state
   const scope = parentScope ?? internalScope
@@ -84,6 +87,19 @@ export function ChoreScheduleCard({
     }
   }
 
+  async function handleOpenChoreDialog() {
+    if (members.length === 0 && !membersLoading) {
+      setMembersLoading(true)
+      try {
+        const res = await fetch('/api/members')
+        if (res.ok) setMembers(await res.json())
+      } catch { /* ignore */ } finally {
+        setMembersLoading(false)
+      }
+    }
+    setChoreDialogOpen(true)
+  }
+
   // Compute today's YMD for highlighting
   const today = timezone ? todayStringInTz(timezone) : new Date().toISOString().slice(0, 10)
 
@@ -97,7 +113,15 @@ export function ChoreScheduleCard({
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
             <ClipboardList className="h-4 w-4 shrink-0" /> Chore Schedule
-            <CardQuickAdd type="chore" />
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleOpenChoreDialog() }}
+              disabled={membersLoading}
+              className="flex items-center justify-center h-5 w-5 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0 disabled:opacity-50"
+              title="Add Chore"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
           </CardTitle>
           <div className="flex items-center gap-1">
             {loading && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
@@ -238,6 +262,18 @@ export function ChoreScheduleCard({
           })}
         </div>
       </CardContent>
+
+      <ChoreDialog
+        open={choreDialogOpen}
+        onOpenChange={setChoreDialogOpen}
+        chore={null}
+        members={members}
+        onSaved={() => {
+          setChoreDialogOpen(false)
+          fetchSchedule(scope, showOnlyMine)
+          router.refresh()
+        }}
+      />
     </Card>
   )
 }
