@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Coffee, Utensils, Pizza, Apple } from 'lucide-react'
 import type { TodaysMeals, TodaysMeal } from '@/types'
 import Link from 'next/link'
+import { CardQuickAdd } from './CardQuickAdd'
 
 const MEAL_CONFIG = [
   { key: 'breakfast' as const, label: 'Breakfast', Icon: Coffee },
@@ -44,9 +45,10 @@ export function TodaysMealsCard({ meals, title = "Today's Meals" }: { meals: Tod
     <Card className="flex flex-col">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-          <Link href="/meal-plan" className="flex items-center gap-2 hover:text-foreground transition-colors w-full">
-            <Utensils className="h-4 w-4" /> {title}
+          <Link href="/meal-plan" className="flex items-center gap-2 hover:text-foreground transition-colors flex-1 min-w-0">
+            <Utensils className="h-4 w-4 shrink-0" /> {title}
           </Link>
+          <CardQuickAdd type="meal" />
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col justify-center min-h-0">

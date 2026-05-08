@@ -7,7 +7,7 @@ export const MIN_WIDTH_PCT = 25
 const MIN_HEIGHT_PX = 150
 const GAP_PX = 16
 // Estimated height used for collision detection when height is 'auto'
-const AUTO_HEIGHT_EST_PX = 400
+const AUTO_HEIGHT_EST_PX = 280
 
 export interface CardLayoutMap {
   [cardId: string]: DashboardCardLayout
@@ -18,6 +18,7 @@ interface DragState {
   startMouseX: number
   startMouseY: number
   startLayout: DashboardCardLayout
+  startLayouts: CardLayoutMap
   containerWidth: number
 }
 
@@ -26,6 +27,7 @@ interface ResizeState {
   startMouseX: number
   startMouseY: number
   startLayout: DashboardCardLayout
+  startLayouts: CardLayoutMap
   containerWidth: number
   edge: 'se' | 'sw' | 'ne' | 'nw' | 'e' | 'w' | 'n' | 's'
 }
@@ -39,6 +41,39 @@ interface ResizeState {
  */
 export function isStalePercentageY(layout: DashboardCardLayout): boolean {
   return layout.height === 'auto' && layout.y > 0 && layout.y < 150
+}
+
+/**
+ * Push any overlapping cards downward so the initial layout has no collisions.
+ * Uses a fixed container width estimate — good enough for load-time correction.
+ */
+function compactLayouts(layouts: CardLayoutMap, containerW = 1200): CardLayoutMap {
+  const result: CardLayoutMap = JSON.parse(JSON.stringify(layouts))
+  const ids = Object.keys(result).sort((a, b) => result[a].y - result[b].y)
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i]
+    const layout = result[id]
+    const hPx = layout.height === 'auto' ? AUTO_HEIGHT_EST_PX : (layout.height as number)
+    const left = (layout.x / 100) * containerW
+    const right = left + (layout.width / 100) * containerW
+
+    let minY = layout.y
+    for (let j = 0; j < i; j++) {
+      const other = result[ids[j]]
+      const otherH = other.height === 'auto' ? AUTO_HEIGHT_EST_PX : (other.height as number)
+      const otherLeft = (other.x / 100) * containerW
+      const otherRight = otherLeft + (other.width / 100) * containerW
+
+      // Only push down if horizontally overlapping
+      if (left < otherRight && right > otherLeft) {
+        minY = Math.max(minY, other.y + otherH + GAP_PX)
+      }
+    }
+    layout.y = minY
+  }
+
+  return result
 }
 
 function buildDefaultLayouts(cardIds: string[], base: CardLayoutMap = {}): CardLayoutMap {
@@ -64,7 +99,8 @@ function buildDefaultLayouts(cardIds: string[], base: CardLayoutMap = {}): CardL
     }
     autoIndex++
   }
-  return result
+  // Resolve any overlaps from saved positions (e.g. a previously-hidden card reappearing)
+  return compactLayouts(result)
 }
 
 export function useCardLayout(
@@ -228,6 +264,7 @@ export function useCardLayout(
         startMouseX: e.clientX,
         startMouseY: e.clientY,
         startLayout: { ...layout },
+        startLayouts: JSON.parse(JSON.stringify(layouts)),
         containerWidth: rect.width,
       }
       setIsDragging(true)
@@ -254,11 +291,11 @@ export function useCardLayout(
       newX = Math.max(0, Math.min(100 - MIN_WIDTH_PCT, newX))
       newY = Math.max(0, newY)
 
-      setLayouts((prev) => {
+      setLayouts(() => {
         const updated: CardLayoutMap = {
-          ...prev,
+          ...drag.startLayouts,
           [drag.cardId]: {
-            ...prev[drag.cardId],
+            ...drag.startLayout,
             x: newX,
             y: newY,
           },
@@ -304,6 +341,7 @@ export function useCardLayout(
         startMouseX: e.clientX,
         startMouseY: e.clientY,
         startLayout: { ...layout },
+        startLayouts: JSON.parse(JSON.stringify(layouts)),
         containerWidth: rect.width,
         edge,
       }
@@ -356,9 +394,9 @@ export function useCardLayout(
         newHeight = Math.max(MIN_HEIGHT_PX, startH + deltaUp)
       }
 
-      setLayouts((prev) => {
+      setLayouts(() => {
         const updated: CardLayoutMap = {
-          ...prev,
+          ...resize.startLayouts,
           [resize.cardId]: {
             x: Math.max(0, Math.min(100 - MIN_WIDTH_PCT, newX)),
             y: Math.max(0, newY),

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon } from 'lucide-react'
 import type { ChoreScheduleDay } from '@/types'
 import { todayStringInTz } from '@/lib/timezone'
+import { CardQuickAdd } from './CardQuickAdd'
 
 type ScopeDays = 7 | 14 | 30
 
@@ -86,16 +87,17 @@ export function ChoreScheduleCard({
   // Compute today's YMD for highlighting
   const today = timezone ? todayStringInTz(timezone) : new Date().toISOString().slice(0, 10)
 
-  if (!data || data.every((d) => d.chores.length === 0)) return null
+  const isEmpty = !data || data.every((d) => d.chores.length === 0)
 
-  const displayDays = data.slice(0, scope)
+  const displayDays = (data ?? []).slice(0, scope)
 
   return (
     <Card className="flex flex-col h-full">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-            <ClipboardList className="h-4 w-4" /> Chore Schedule
+            <ClipboardList className="h-4 w-4 shrink-0" /> Chore Schedule
+            <CardQuickAdd type="chore" />
           </CardTitle>
           <div className="flex items-center gap-1">
             {loading && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
@@ -138,7 +140,13 @@ export function ChoreScheduleCard({
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-y-auto">
         <div className="flex flex-col gap-2">
-          {displayDays.map((day) => {
+          {isEmpty ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <CheckIcon className="h-8 w-8 text-green-500/60" />
+              <p className="text-sm font-medium text-muted-foreground">You&apos;re all caught up!</p>
+              <p className="text-xs text-muted-foreground/60">No outstanding chores in this period.</p>
+            </div>
+          ) : displayDays.map((day) => {
             const dateStr = day.date.slice(0, 10)
             // Parse YYYY-MM-DD as local date to avoid UTC timezone shift
             const [y, m, d] = dateStr.split('-').map(Number)
