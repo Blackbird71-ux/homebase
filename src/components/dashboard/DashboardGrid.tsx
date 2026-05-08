@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import type { DashboardData } from '@/types'
-import type { DashboardCardConfig, DashboardCardLayout } from '@/lib/dashboard-cards'
+import type { DashboardCardConfig } from '@/lib/dashboard-cards'
 import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
 import { useCardLayout } from '@/lib/hooks/useCardLayout'
 import { cn } from '@/lib/utils'
@@ -77,8 +77,8 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
 
   useImperativeHandle(ref, () => ({ resetLayouts }), [resetLayouts])
 
-  // Track container size for percentage calculations
-  const containerSizeRef = useRef({ width: 800, height: 600 })
+  // Track container width for x/width percentage calculations
+  const containerWidthRef = useRef(800)
 
   useEffect(() => {
     const el = containerRef.current
@@ -86,8 +86,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const { width, height } = entry.contentRect
-        containerSizeRef.current = { width, height }
+        containerWidthRef.current = entry.contentRect.width
       }
     })
 
@@ -131,8 +130,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
               onDragStart={handleDragStart}
               onResizeStart={handleResizeStart}
               onToggleWidth={toggleWidth}
-              containerWidth={containerSizeRef.current.width}
-              containerHeight={containerSizeRef.current.height}
+              containerWidth={containerWidthRef.current}
               allLayouts={layouts}
             >
               {renderCard(card, data, timezone, scope, onScopeChange)}

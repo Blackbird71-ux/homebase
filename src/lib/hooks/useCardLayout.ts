@@ -6,6 +6,8 @@ import type { DashboardCardLayout } from '@/lib/dashboard-cards'
 export const MIN_WIDTH_PCT = 25
 const MIN_HEIGHT_PX = 150
 const GAP_PX = 16
+// Estimated height used for collision detection when height is 'auto'
+const AUTO_HEIGHT_EST_PX = 400
 
 export interface CardLayoutMap {
   [cardId: string]: DashboardCardLayout
@@ -17,7 +19,6 @@ interface DragState {
   startMouseY: number
   startLayout: DashboardCardLayout
   containerWidth: number
-  containerHeight: number
 }
 
 interface ResizeState {
@@ -26,27 +27,42 @@ interface ResizeState {
   startMouseY: number
   startLayout: DashboardCardLayout
   containerWidth: number
-  containerHeight: number
   edge: 'se' | 'sw' | 'ne' | 'nw' | 'e' | 'w' | 'n' | 's'
 }
 
 /**
- * A hook that manages free-form card layouts on the dashboard.
- * Supports drag-to-move, drag-to-resize, collision push, and persistence.
+ * Returns true if a saved auto-height card's y value looks like it was stored
+ * as a percentage (old format) rather than pixels. Percentage values were
+ * small numbers (0–200) while pixel values for non-first cards start at 420+.
+ * We use a threshold of 150px: any auto-height card with 0 < y < 150 is
+ * assumed to be a stale percentage value and will be regenerated.
  */
+export function isStalePercentageY(layout: DashboardCardLayout): boolean {
+  return layout.height === 'auto' && layout.y > 0 && layout.y < 150
+}
+
 function buildDefaultLayouts(cardIds: string[], base: CardLayoutMap = {}): CardLayoutMap {
-  const result: CardLayoutMap = { ...base }
+  const result: CardLayoutMap = {}
+  // Copy over saved layouts, but discard auto-height cards whose y looks like
+  // an old percentage value — they would overlap badly after the pixel migration.
+  for (const id of cardIds) {
+    const saved = base[id]
+    if (saved && !isStalePercentageY(saved)) {
+      result[id] = { ...saved }
+    }
+  }
+  // Auto-position any cards that still lack a layout
   let autoIndex = 0
   for (const id of cardIds) {
     if (!result[id]) {
       result[id] = {
         x: 0,
-        y: autoIndex * 35,
+        y: autoIndex * (AUTO_HEIGHT_EST_PX + GAP_PX),
         width: 100,
         height: 'auto',
       }
-      autoIndex++
     }
+    autoIndex++
   }
   return result
 }
@@ -89,26 +105,21 @@ export function useCardLayout(
         clearTimeout(saveTimeoutRef.current)
       }
     }
-    // We only want to trigger on layout changes, not onSave reference changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layouts])
 
   // ─── Collision / Push Logic ──────────────────────────────────────────
 
-  /**
-   * Get the bounding rect for a card layout in pixels.
-   */
+  // y is always in pixels. x and width are percentages of container width.
   const getBoundingBox = useCallback(
-    (layout: DashboardCardLayout, containerW: number, containerH: number) => {
+    (layout: DashboardCardLayout, containerW: number) => {
       const wPx = (layout.width / 100) * containerW
-      const hPx = layout.height === 'auto' ? 300 : layout.height
+      const hPx = layout.height === 'auto' ? AUTO_HEIGHT_EST_PX : layout.height
       return {
         left: (layout.x / 100) * containerW,
-        top: layout.height === 'auto' ? (layout.y / 100) * containerH : layout.y,
+        top: layout.y,
         right: (layout.x / 100) * containerW + wPx,
-        bottom: layout.height === 'auto'
-          ? (layout.y / 100) * containerH + 300
-          : layout.y + hPx,
+        bottom: layout.y + hPx,
         width: wPx,
         height: hPx,
       }
@@ -123,25 +134,18 @@ export function useCardLayout(
     return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
   }
 
-  /**
-   * After moving/resizing a card, push overlapping cards down to resolve collisions.
-   * Returns a new layouts map with all collisions resolved.
-   */
   const resolveCollisions = useCallback(
     (
       currentLayouts: CardLayoutMap,
       movedCardId: string,
-      containerW: number,
-      containerH: number
+      containerW: number
     ): CardLayoutMap => {
       const result: CardLayoutMap = JSON.parse(JSON.stringify(currentLayouts))
       const ids = cardIds.filter((id) => id !== movedCardId && result[id])
 
-      // Get bounding box of the moved card
       const movedLayout = result[movedCardId]
       if (!movedLayout) return result
 
-      // Keep pushing until no overlaps
       let hasOverlap = true
       const maxIterations = 50
       let iteration = 0
@@ -150,68 +154,47 @@ export function useCardLayout(
         hasOverlap = false
         iteration++
 
-        const movedBox = getBoundingBox(movedLayout, containerW, containerH)
+        const movedBox = getBoundingBox(movedLayout, containerW)
 
         for (const id of ids) {
           const otherLayout = result[id]
           if (!otherLayout) continue
 
-          const otherBox = getBoundingBox(otherLayout, containerW, containerH)
+          const otherBox = getBoundingBox(otherLayout, containerW)
 
           if (rectsOverlap(movedBox, otherBox)) {
-            // Push the other card down below the moved card
+            // Push the other card down below the moved card (y is always pixels)
             const pushAmount = movedBox.bottom - otherBox.top + GAP_PX
-
-            if (otherLayout.height === 'auto') {
-              // y is stored as percentage
-              const pushPct = (pushAmount / containerH) * 100
-              otherLayout.y = Math.max(0, otherLayout.y + pushPct)
-            } else {
-              otherLayout.y = otherLayout.y + pushAmount
-            }
-
+            otherLayout.y = Math.max(0, otherLayout.y + pushAmount)
             hasOverlap = true
 
-            // Recalculate the other card's box for subsequent overlap checks
-            const newOtherBox = getBoundingBox(otherLayout, containerW, containerH)
-            // Check if the pushed card now overlaps with any others (including the moved one again)
+            const newOtherBox = getBoundingBox(otherLayout, containerW)
             for (const otherId of ids) {
               if (otherId === id) continue
               const thirdLayout = result[otherId]
               if (!thirdLayout) continue
-              const thirdBox = getBoundingBox(thirdLayout, containerW, containerH)
+              const thirdBox = getBoundingBox(thirdLayout, containerW)
               if (rectsOverlap(newOtherBox, thirdBox)) {
                 const push2 = newOtherBox.bottom - thirdBox.top + GAP_PX
-                if (thirdLayout.height === 'auto') {
-                  thirdLayout.y = Math.max(0, thirdLayout.y + (push2 / containerH) * 100)
-                } else {
-                  thirdLayout.y = thirdLayout.y + push2
-                }
+                thirdLayout.y = Math.max(0, thirdLayout.y + push2)
                 hasOverlap = true
               }
             }
 
-            // Also check the moved card against the new position
-            const updatedMovedBox = getBoundingBox(movedLayout, containerW, containerH)
-            const pushedBox = getBoundingBox(otherLayout, containerW, containerH)
+            const updatedMovedBox = getBoundingBox(movedLayout, containerW)
+            const pushedBox = getBoundingBox(otherLayout, containerW)
             if (rectsOverlap(updatedMovedBox, pushedBox)) {
               const pushAgain = updatedMovedBox.bottom - pushedBox.top + GAP_PX
-              if (otherLayout.height === 'auto') {
-                otherLayout.y = Math.max(0, otherLayout.y + (pushAgain / containerH) * 100)
-              } else {
-                otherLayout.y = otherLayout.y + pushAgain
-              }
+              otherLayout.y = Math.max(0, otherLayout.y + pushAgain)
             }
           }
         }
 
-        // Recalculate moved box after pushes
-        const updatedMoved = getBoundingBox(movedLayout, containerW, containerH)
-        // Check if any cards still overlap with the moved one
+        const updatedMoved = getBoundingBox(movedLayout, containerW)
         for (const id of ids) {
           const otherLayout = result[id]
           if (!otherLayout) continue
-          const otherBox = getBoundingBox(otherLayout, containerW, containerH)
+          const otherBox = getBoundingBox(otherLayout, containerW)
           if (rectsOverlap(updatedMoved, otherBox)) {
             hasOverlap = true
           }
@@ -246,7 +229,6 @@ export function useCardLayout(
         startMouseY: e.clientY,
         startLayout: { ...layout },
         containerWidth: rect.width,
-        containerHeight: rect.height,
       }
       setIsDragging(true)
       setDragCardId(cardId)
@@ -254,7 +236,6 @@ export function useCardLayout(
     [layouts]
   )
 
-  // Window-level pointermove/pointerup for drag
   useEffect(() => {
     if (!isDragging) return
 
@@ -265,20 +246,11 @@ export function useCardLayout(
       const deltaX = e.clientX - drag.startMouseX
       const deltaY = e.clientY - drag.startMouseY
 
-      // Convert pixels to percentages
       const deltaPctX = (deltaX / drag.containerWidth) * 100
-      const deltaPctY = deltaY // For auto-height, y is still a pixel offset but stored as pct
-
+      // y is always pixels
       let newX = drag.startLayout.x + deltaPctX
-      let newY: number
+      let newY = drag.startLayout.y + deltaY
 
-      if (drag.startLayout.height === 'auto') {
-        newY = drag.startLayout.y + (deltaY / drag.containerHeight) * 100
-      } else {
-        newY = drag.startLayout.y + deltaY
-      }
-
-      // Clamp to container bounds
       newX = Math.max(0, Math.min(100 - MIN_WIDTH_PCT, newX))
       newY = Math.max(0, newY)
 
@@ -291,8 +263,7 @@ export function useCardLayout(
             y: newY,
           },
         }
-        // Resolve collisions
-        return resolveCollisions(updated, drag.cardId, drag.containerWidth, drag.containerHeight)
+        return resolveCollisions(updated, drag.cardId, drag.containerWidth)
       })
     }
 
@@ -334,7 +305,6 @@ export function useCardLayout(
         startMouseY: e.clientY,
         startLayout: { ...layout },
         containerWidth: rect.width,
-        containerHeight: rect.height,
         edge,
       }
       setIsResizing(true)
@@ -343,7 +313,6 @@ export function useCardLayout(
     [layouts]
   )
 
-  // Window-level pointermove/pointerup for resize
   useEffect(() => {
     if (!isResizing) return
 
@@ -354,7 +323,6 @@ export function useCardLayout(
       const deltaX = e.clientX - resize.startMouseX
       const deltaY = e.clientY - resize.startMouseY
       const deltaPctX = (deltaX / resize.containerWidth) * 100
-      const deltaPctY = deltaY // height stored as pixels when not 'auto'
 
       let newWidth = resize.startLayout.width
       let newHeight = resize.startLayout.height
@@ -363,35 +331,27 @@ export function useCardLayout(
 
       const edge = resize.edge
 
-      // Width changes
       if (edge.includes('e')) {
         newWidth = Math.max(MIN_WIDTH_PCT, Math.min(100, resize.startLayout.width + deltaPctX))
-        // If resize would go past right edge, clamp
-        if (newX + newWidth > 100) {
-          newWidth = 100 - newX
-        }
+        if (newX + newWidth > 100) newWidth = 100 - newX
       }
       if (edge.includes('w')) {
-        const maxShrink = resize.startLayout.x // can't go past left edge
+        const maxShrink = resize.startLayout.x
         const shrinkBy = Math.min(deltaPctX, maxShrink)
         newX = resize.startLayout.x - shrinkBy
         newWidth = resize.startLayout.width + shrinkBy
         newWidth = Math.max(MIN_WIDTH_PCT, Math.min(100, newWidth))
-        if (newX + newWidth > 100) {
-          newWidth = 100 - newX
-        }
+        if (newX + newWidth > 100) newWidth = 100 - newX
       }
 
-      // Height changes
+      // Height changes (y is always pixels)
       if (edge.includes('s') && resize.startLayout.height !== 'auto') {
-        const startH = resize.startLayout.height as number
-        const minH = MIN_HEIGHT_PX
-        newHeight = Math.max(minH, startH + deltaY)
+        newHeight = Math.max(MIN_HEIGHT_PX, (resize.startLayout.height as number) + deltaY)
       }
       if (edge.includes('n') && resize.startLayout.height !== 'auto') {
         const startH = resize.startLayout.height as number
         const startY = resize.startLayout.y
-        const deltaUp = Math.min(deltaY, startY) // can't go above top
+        const deltaUp = Math.min(deltaY, startY)
         newY = startY - deltaUp
         newHeight = Math.max(MIN_HEIGHT_PX, startH + deltaUp)
       }
@@ -401,12 +361,12 @@ export function useCardLayout(
           ...prev,
           [resize.cardId]: {
             x: Math.max(0, Math.min(100 - MIN_WIDTH_PCT, newX)),
-            y: newHeight === 'auto' ? Math.max(0, newY) : Math.max(0, newY),
+            y: Math.max(0, newY),
             width: Math.max(MIN_WIDTH_PCT, Math.min(100, newWidth)),
             height: newHeight,
           },
         }
-        return resolveCollisions(updated, resize.cardId, resize.containerWidth, resize.containerHeight)
+        return resolveCollisions(updated, resize.cardId, resize.containerWidth)
       })
     }
 
@@ -442,18 +402,17 @@ export function useCardLayout(
         const newLayout: DashboardCardLayout = {
           ...layout,
           width: isFull ? 48 : 100,
-          x: isFull ? 0 : 0,
+          x: 0,
         }
 
         const container = containerRef.current
         const cw = container?.getBoundingClientRect().width ?? 800
-        const ch = container?.getBoundingClientRect().height ?? 600
 
         const updated: CardLayoutMap = {
           ...prev,
           [cardId]: newLayout,
         }
-        return resolveCollisions(updated, cardId, cw, ch)
+        return resolveCollisions(updated, cardId, cw)
       })
     },
     [resolveCollisions]

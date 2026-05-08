@@ -12,7 +12,7 @@ Replaced the rigid flex-based 2-column dashboard layout with a free-form, absolu
   - **Drag to resize:** 8-direction edge/corner handles. Width clamped to 25%-100%, height minimum 150px. East/west edges resize width, north/south resize height, corners resize both.
   - **Toggle width:** Button in each card header toggles between 48% (half) and 100% (full width). Collision resolution runs after toggle.
   - **Collision push-down:** After move/resize/toggle, overlapping cards are pushed downward with a 16px gap. Uses cascading push (up to 50 iterations) to resolve chains.
-  - **Auto-positioning:** Cards without saved layouts are placed full-width (`width: 100`, `x: 0`) stacked vertically (`y = index * 35`, `height: 'auto'`).
+  - **Auto-positioning:** Cards without saved layouts are placed full-width (`width: 100`, `x: 0`) stacked vertically (`y = index * 416px`, `height: 'auto'`). y is always stored in pixels.
   - **Persistence:** Debounced 500ms save via `onSave` callback.
   - **Reset:** `resetLayouts()` clears all layouts back to full-width defaults; exposed via `forwardRef`/`useImperativeHandle` on `DashboardGrid`.
 - **File:** `src/lib/hooks/useCardLayout.ts`
@@ -89,7 +89,9 @@ Replaced the rigid flex-based 2-column dashboard layout with a free-form, absolu
 ## Design
 - **Persistence:** User's layout positions are stored in `User.uiPreferences` as a JSON object (`dashboardCardLayouts` key), saved via debounced `PATCH /api/settings` 500ms after last interaction
 - **Collision resolution:** Cascading push-down algorithm; cards displaced by a moved/resized card are pushed below the moved card's bottom edge plus 16px gap. Cascading continues for pushed cards that now overlap others. Max 50 iterations to prevent infinite loops.
-- **Auto-positioning:** New cards (not yet persisted) are placed full-width, stacked vertically
+- **y coordinate system:** `y` is always stored in **pixels** for all cards (regardless of `height: 'auto'`). `x` and `width` remain percentage-based. This eliminates the circular dependency on container height that caused overlapping cards and cards disappearing during drag.
+- **Stale layout detection:** Saved auto-height cards with `0 < y < 150` are treated as old percentage-format values and discarded, triggering fresh auto-positioning on next load.
+- **Auto-positioning:** New cards (not yet persisted) are placed full-width, stacked vertically at 416px intervals
 - **No migrations required** — all layout data stored in the existing `uiPreferences` JSON field
 - **Mobile unchanged** — still uses simple stacked grid layout
 

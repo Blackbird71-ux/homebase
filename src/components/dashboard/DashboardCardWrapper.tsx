@@ -19,7 +19,6 @@ interface DashboardCardWrapperProps {
   onResizeStart: (cardId: string, edge: 'se' | 'sw' | 'ne' | 'nw' | 'e' | 'w' | 'n' | 's', e: React.PointerEvent<HTMLElement>) => void
   onToggleWidth: (cardId: string) => void
   containerWidth: number
-  containerHeight: number
   allLayouts: CardLayoutMap
 }
 
@@ -35,13 +34,11 @@ export function DashboardCardWrapper({
   onResizeStart,
   onToggleWidth,
   containerWidth,
-  containerHeight,
 }: DashboardCardWrapperProps) {
   const leftPx = (layout.x / 100) * (containerWidth || 800)
   const widthPx = (layout.width / 100) * (containerWidth || 800)
-  const topPx = layout.height === 'auto'
-    ? (layout.y / 100) * (containerHeight || 600)
-    : layout.y
+  // y is always in pixels
+  const topPx = layout.y
   const heightStyle = layout.height === 'auto' ? 'auto' : `${layout.height}px`
 
   const zIndex = isDragActive ? 50 : isResizeActive ? 40 : 10

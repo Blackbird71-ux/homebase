@@ -1,7 +1,7 @@
 export interface DashboardCardLayout {
   /** Percentage-based left position (0-100) */
   x: number
-  /** Percentage-based top position (0-100) */
+  /** Top position in pixels */
   y: number
   /** Percentage-based width (25-100) */
   width: number
