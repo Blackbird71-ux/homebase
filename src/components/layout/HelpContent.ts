@@ -460,6 +460,415 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       },
     ],
   },
+  '/finance': {
+    title: 'Finance',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Finance dashboard gives you a real-time snapshot of your household money — total balance across all accounts, this month\'s income and expenses, active budgets, upcoming bills, and savings goals.',
+          'Summary cards show Monthly Income, Monthly Expenses, Total Balance, Active Budgets, and Upcoming Bills at a glance.',
+          'Use the sub-navigation at the top to move between Transactions, Bills, Budget, Reports, and the setup pages (Accounts, Categories, Goals, Locations, Members).',
+        ],
+      },
+      {
+        title: 'Monthly Summary Cards',
+        items: [
+          'Monthly Income — sum of all income transactions entered for the current calendar month.',
+          'Monthly Expenses — sum of all expense transactions for the current month.',
+          'Total Balance — combined current balance across all active accounts.',
+          'Active Budgets — number of budget rules whose date range covers today.',
+          'Upcoming Bills — count of recurring bills due in the coming period.',
+        ],
+      },
+      {
+        title: 'Spending Breakdown',
+        items: [
+          'The dashboard shows expense totals split by category type: Personal (private to one member), Location-based, and External.',
+          'This helps you see quickly where household money is being spent across different spending contexts.',
+        ],
+      },
+      {
+        title: 'Recent Transactions',
+        items: [
+          'The five most recent transactions for the current month are shown on the dashboard.',
+          'Click "View All" or go to Finance → Transactions to see the full transaction list.',
+        ],
+      },
+      {
+        title: 'Getting Started',
+        items: [
+          'Start by adding your accounts under Finance → Accounts (e.g., everyday bank, credit card, savings).',
+          'Then set up categories under Finance → Categories to organise your spending and income.',
+          'Add recurring bills under Finance → Bills so overdue payments are flagged automatically.',
+          'Create budget rules under Finance → Budget to track spending against limits.',
+          'Set savings goals under Finance → Goals to monitor progress toward targets.',
+        ],
+      },
+    ],
+  },
+  '/finance/accounts': {
+    title: 'Finance — Accounts',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Accounts represent your real-world financial accounts — bank accounts, credit cards, savings accounts, loans, and investments.',
+          'Each account card shows the current balance, institution, account type, and a colour-coded indicator.',
+          'All accounts contribute to the Total Balance shown on the Finance dashboard.',
+        ],
+      },
+      {
+        title: 'Adding an Account',
+        items: [
+          'Click "Add Account" to open the form. Name and Type are required.',
+          'Account types: Checking, Savings, Credit, Cash, Investment, Loan, Entity Account, External Account, Other.',
+          'Set the Current Balance to your actual balance at the time of setup — transactions you add later will not automatically adjust this field.',
+          'For credit accounts, enter the Credit Limit to track how much of your limit is in use.',
+          'Choose a colour to visually distinguish accounts across the app.',
+        ],
+      },
+      {
+        title: 'Editing & Deleting',
+        items: [
+          'Click the pencil icon on an account card to edit its name, balance, type, or colour.',
+          'Deleting an account unlinks its transactions but does not delete them — transactions remain in the history without an account.',
+          'Inactive accounts are hidden from account selectors but remain in reports.',
+        ],
+      },
+      {
+        title: 'Entity & External Accounts',
+        items: [
+          '"Entity Account" is for accounts belonging to a business or external organisation that you want to track separately.',
+          '"External Account" is for accounts you don\'t directly control but still want to reference (e.g., a partner\'s account for transfer tracking).',
+        ],
+      },
+    ],
+  },
+  '/finance/bills': {
+    title: 'Finance — Bills & Recurring',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Bills tracks recurring or one-off payments — rent, utilities, subscriptions, insurance, and anything else that comes around on a schedule.',
+          'Bills are split into two groups: Overdue (past their next due date, shown in red) and Upcoming.',
+          'The Finance dashboard\'s "Bills to Pay" card is sourced from this list.',
+        ],
+      },
+      {
+        title: 'Adding a Bill',
+        items: [
+          'Click "Add Bill". Name, Amount, and Frequency are required.',
+          'Frequencies: Monthly, Fortnightly, Weekly, Quarterly, Yearly, One Off.',
+          'Set "Next Due Date" to the next payment date. For monthly or annual bills you can also set "Day of Month" and "Month of Year" for reference.',
+          'Assign the bill to an Account and Category to keep spending organised.',
+          'Optionally set an End Date for subscriptions with a known expiry.',
+        ],
+      },
+      {
+        title: 'Member & Location Assignment',
+        items: [
+          'Use "Assigned To" to link a bill to a specific family member (e.g., a personal subscription).',
+          'Use "Location" to associate the bill with a property or physical location (e.g., holiday home utilities).',
+          'Bills without a member assignment are treated as shared household expenses.',
+        ],
+      },
+      {
+        title: 'Auto-Pay & Reminders',
+        items: [
+          'Tick "Auto-pay" to flag bills that are paid automatically from your account — they still appear in the list as a record.',
+          'Tick "Email reminder" to receive an email before the bill is due. Set how many days in advance under "Remind N days before".',
+          'Email reminders require SMTP to be configured in Settings → Email.',
+        ],
+      },
+      {
+        title: 'Overdue Bills',
+        items: [
+          'A bill turns overdue once its Next Due Date has passed. It moves to the red "Overdue" section at the top.',
+          'To clear an overdue bill: edit it and update the Next Due Date to the next upcoming date.',
+          'The Finance dashboard shows an overdue count badge when bills are outstanding.',
+        ],
+      },
+    ],
+  },
+  '/finance/budget': {
+    title: 'Finance — Budget',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Budget rules let you set spending limits per category (or across all expenses) for a given period.',
+          'Each budget card shows a progress bar: green while under budget, amber when nearing the alert threshold, and red when over.',
+          'Spending is pulled live from this month\'s expense transactions.',
+        ],
+      },
+      {
+        title: 'Creating a Budget Rule',
+        items: [
+          'Click "Add Budget". Name, Amount, and Period are required.',
+          'Periods: Monthly, Weekly, or Yearly.',
+          'Leave Category blank to create an overall household spending cap across all expense categories.',
+          'Assign a specific category (e.g., Groceries, Fuel) to track that category\'s spending independently.',
+          'Set "Alert at %" to choose when the bar turns amber — default is 80%.',
+        ],
+      },
+      {
+        title: 'Rollover',
+        items: [
+          'Tick "Rollover unused" to carry any unspent budget forward into the next period.',
+          'For example, if your monthly grocery budget is $500 and you only spent $420, the extra $80 rolls into next month.',
+        ],
+      },
+      {
+        title: 'Reading Budget Cards',
+        items: [
+          'The progress bar fills as spending increases relative to the budget amount.',
+          'Amber bar means spending has exceeded the alert threshold (default 80%).',
+          'Red bar means spending has hit or exceeded 100% of the budget.',
+          'The card shows "Spent: $X of $Y" and a percentage so you can see exactly where you stand.',
+        ],
+      },
+    ],
+  },
+  '/finance/categories': {
+    title: 'Finance — Categories',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Categories classify transactions, bills, and budgets into meaningful groups (e.g., Groceries, Rent, Salary).',
+          'Categories are organised as a tree — root categories can have sub-categories nested beneath them.',
+          'System categories (marked "SYSTEM") are created automatically and cannot be deleted, but can be renamed.',
+        ],
+      },
+      {
+        title: 'Category Types',
+        items: [
+          'Expense — for spending transactions (shown in red badge).',
+          'Income — for money coming in (shown in green badge).',
+          'Transfer — for moving money between your own accounts (shown in blue badge).',
+          'When adding a transaction, only categories matching the transaction type are shown.',
+        ],
+      },
+      {
+        title: 'Sub-Categories',
+        items: [
+          'Select a "Parent Category" when creating a category to nest it under an existing one.',
+          'Sub-categories appear indented beneath their parent in the list.',
+          'Use sub-categories to get more detail — e.g., "Food" as the parent with "Groceries" and "Restaurants" as children.',
+        ],
+      },
+      {
+        title: 'Category Flags',
+        items: [
+          '"Personal (private to me)" — marks the category as representing personal spending visible only to the assigned member. Useful for tracking individual expenditure within a shared household.',
+          '"Location Based" — marks categories that are tied to a specific property or location (e.g., holiday home costs). Tagged transactions and bills can then be filtered by location.',
+          '"External" — marks categories for spending associated with entities outside the household (e.g., a business).',
+        ],
+      },
+      {
+        title: 'Colours',
+        items: [
+          'Each category can have a custom colour that appears in reports, budget progress bars, and the spending breakdown on the dashboard.',
+          'Choose a colour that makes sense at a glance — e.g., green for income, red for large expenses.',
+        ],
+      },
+    ],
+  },
+  '/finance/goals': {
+    title: 'Finance — Savings Goals',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Savings Goals help you track progress toward financial targets — a house deposit, holiday fund, emergency buffer, or any other savings objective.',
+          'Each goal shows a progress bar from the current amount to the target amount.',
+          'The bar turns green and shows "Goal completed!" when the current amount meets or exceeds the target.',
+        ],
+      },
+      {
+        title: 'Creating a Goal',
+        items: [
+          'Click "Add Goal". Name and Target Amount are required.',
+          'Enter the Current Amount — how much is already saved toward this goal.',
+          'Optionally set a Target Date to track the deadline and show the due month on the card.',
+          'Link to an Account to associate the goal with the savings account being used.',
+          'Choose a colour to visually identify the goal.',
+        ],
+      },
+      {
+        title: 'Updating Progress',
+        items: [
+          'Edit the goal and update the Current Amount as you save more toward the target.',
+          'The progress bar and percentage update automatically.',
+          'At 75% progress the bar turns amber; at 100% it turns green and the goal is marked complete.',
+        ],
+      },
+      {
+        title: 'Completing a Goal',
+        items: [
+          'A goal is marked complete automatically once the Current Amount reaches the Target Amount.',
+          'Completed goals show a green card border and a "Goal completed!" message.',
+          'Goals that are complete are hidden from the Finance dashboard\'s goal summary by default.',
+        ],
+      },
+    ],
+  },
+  '/finance/locations': {
+    title: 'Finance — Locations',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Locations represent physical places associated with spending — your primary home, a holiday property, a business premises, or any other address.',
+          'Once created, locations can be assigned to transactions and bills so you can filter and report on spending by property.',
+          'This is particularly useful for households that manage expenses across multiple properties.',
+        ],
+      },
+      {
+        title: 'Adding a Location',
+        items: [
+          'Click "Add Location". Name is required.',
+          'Types: Primary, Secondary, Vacation, Business, Other — choose the one that best describes the property.',
+          'Add the street address for reference — it\'s displayed on the location card but not used for filtering.',
+          'Choose a colour to make the location visually distinct in lists and reports.',
+        ],
+      },
+      {
+        title: 'Using Locations',
+        items: [
+          'When adding a transaction or bill, select a location from the "Location" dropdown.',
+          'On the Transactions page, use the Filters panel to filter the transaction list to a single location.',
+          'Location categories (flagged "Location Based" in Finance → Categories) pair with locations to segment location-specific spending.',
+        ],
+      },
+    ],
+  },
+  '/finance/members': {
+    title: 'Finance — Family Members',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Members page lists all family members who have access to the household finances.',
+          'Members can be assigned to transactions and bills so spending can be tracked per person.',
+          'This page mirrors your family\'s user list — members are added here by email and must already have a HomeBase account.',
+        ],
+      },
+      {
+        title: 'Adding a Member',
+        items: [
+          'Click "Add Member" and enter the person\'s name and email address.',
+          'The email must match an existing HomeBase user account.',
+          'Once added, the member\'s name appears in the "Assigned To" dropdowns throughout the Finance module.',
+        ],
+      },
+      {
+        title: 'Member Spending',
+        items: [
+          'Assign transactions to a member to track individual spending within the household.',
+          'Use Finance → Transactions → Filters → Member to view all transactions for a specific person.',
+          'Personal categories (flagged "Personal" in Finance → Categories) work alongside member assignment to give each person a private view of their spending.',
+        ],
+      },
+      {
+        title: 'Removing a Member',
+        items: [
+          'Click the delete icon to remove a member from the family finance group.',
+          'Removing a member does not delete their historical transactions — the member field on those transactions will become unlinked.',
+        ],
+      },
+    ],
+  },
+  '/finance/reports': {
+    title: 'Finance — Reports',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Reports gives you a summarised view of your financial health for the current month or full year.',
+          'Use the period selector (top-right) to switch between "This Month" and "This Year".',
+          'The page automatically recalculates when you change the period.',
+        ],
+      },
+      {
+        title: 'Summary Cards',
+        items: [
+          'Income — total of all income transactions in the selected period.',
+          'Expenses — total of all expense transactions in the selected period.',
+          'Net Change — Income minus Expenses; green when positive (surplus), red when negative (deficit).',
+          'Net Worth — combined current balance across all active accounts (not period-specific).',
+          'Bills (Total) — total value of all recurring bills on record.',
+        ],
+      },
+      {
+        title: 'Spending by Category',
+        items: [
+          'A breakdown of expense transactions grouped by category, sorted from highest to lowest spend.',
+          'Each row shows the category name, total amount, and percentage of total spending.',
+          'The progress bar gives a quick visual sense of each category\'s share.',
+          'Categories with no transactions in the period are omitted.',
+        ],
+      },
+      {
+        title: 'Account Balances',
+        items: [
+          'Shows each account\'s current balance and type.',
+          'The total at the bottom matches the Net Worth figure in the summary cards.',
+          'This section reflects live balances, not period-specific changes.',
+        ],
+      },
+    ],
+  },
+  '/finance/transactions': {
+    title: 'Finance — Transactions',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Transactions is the main ledger for all money in and out — expenses, income, and transfers between accounts.',
+          'Transactions are shown 50 per page, newest first. Use the Previous / Next buttons to page through older records.',
+          'Each row is colour-coded: red for expenses, green for income, blue for transfers.',
+        ],
+      },
+      {
+        title: 'Adding a Transaction',
+        items: [
+          'Click "Add Transaction". Type and Amount are required.',
+          'Types: Expense (money out), Income (money in), Transfer (between your own accounts).',
+          'Assign an Account, Category, Member, and Location to keep records organised and filterable.',
+          'Payee is the person or business you paid (or were paid by). Description is for any additional notes.',
+          'Tick "Cleared" once the transaction has settled in your bank account (uncleared transactions show a "PENDING" badge).',
+          'Tick "Private" to hide the transaction from other family members — useful for personal purchases.',
+        ],
+      },
+      {
+        title: 'Filtering Transactions',
+        items: [
+          'Click "Filters" to open the filter panel. You can filter by Type (Expense / Income / Transfer), Member, and Location.',
+          'A blue dot on the Filters button indicates active filters are applied.',
+          'Click "Clear" in the filter panel to remove all active filters.',
+          'Filters reset when you navigate away from the page.',
+        ],
+      },
+      {
+        title: 'Editing & Deleting',
+        items: [
+          'Click the pencil icon on any transaction row to edit all of its fields.',
+          'Click the red trash icon to permanently delete a transaction — you will be asked to confirm.',
+          'Deleting a transaction does not automatically adjust the linked account\'s current balance; update the account balance manually if needed.',
+        ],
+      },
+      {
+        title: 'Transaction Status Badges',
+        items: [
+          '"PENDING" — the transaction is not yet cleared (reconciled with your bank statement).',
+          '"PRIVATE" — the transaction is only visible to the person who created it.',
+        ],
+      },
+    ],
+  },
   '/settings': {
     title: 'Settings',
     sections: [
@@ -629,6 +1038,11 @@ export function getHelpForPath(pathname: string): HelpPage | null {
   // /documents/[id] -> /documents
   if (pathname.startsWith('/documents/') && pathname !== '/documents') {
     return HELP_CONTENT['/documents'] ?? null
+  }
+
+  // /finance/* — each sub-page has its own entry; fall back to /finance for unknown sub-paths
+  if (pathname.startsWith('/finance/')) {
+    return HELP_CONTENT[pathname] ?? HELP_CONTENT['/finance'] ?? null
   }
 
   // /settings/* -> /settings
