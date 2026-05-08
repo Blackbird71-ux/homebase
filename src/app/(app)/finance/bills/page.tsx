@@ -222,12 +222,20 @@ export default function BillsPage() {
 
   const rootCategories = categories.filter(c => !c.parentId)
   const now = new Date()
-  const rangeEnd = dateRange === '14' ? addDays(now, 14) : dateRange === '30' ? addDays(now, 30) : addMonths(now, 3)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const rangeEnd = dateRange === '14' ? addDays(todayStart, 14) : dateRange === '30' ? addDays(todayStart, 30) : addMonths(todayStart, 3)
+
+  function toLocalMidnight(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  }
 
   const activeBills = bills.filter(b => b.isActive && !b.paid)
-  const overdue = activeBills.filter(b => b.billType !== 'one-off' && isPast(new Date(b.nextDueDate)))
-  const overdueOneOff = activeBills.filter(b => b.billType === 'one-off' && isPast(new Date(b.nextDueDate)))
-  const upcoming = activeBills.filter(b => !isPast(new Date(b.nextDueDate)) && new Date(b.nextDueDate) <= rangeEnd)
+  const overdue = activeBills.filter(b => b.billType !== 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
+  const overdueOneOff = activeBills.filter(b => b.billType === 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
+  const upcoming = activeBills.filter(b => {
+    const due = toLocalMidnight(new Date(b.nextDueDate))
+    return due >= todayStart && due <= rangeEnd
+  })
   const visibleBills = [...overdue, ...upcoming]
 
   const colCats = rootCategories.filter(c => selectedCatIds.includes(c.id))
@@ -236,6 +244,7 @@ export default function BillsPage() {
   for (const catId of selectedCatIds) {
     catTotals[catId] = visibleBills.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
+  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 6rem`
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading bills…</div>
 
@@ -498,43 +507,44 @@ export default function BillsPage() {
         <div className="space-y-2">
           {/* Column headers when categories selected */}
           {colCats.length > 0 && (
-            <div className="flex items-center gap-3 px-3 pb-1">
-              <div className="w-9 shrink-0" />
-              <div className="flex-1" />
+            <div className="grid gap-3 px-3 pb-1" style={{ gridTemplateColumns: gridTemplate, alignItems: 'end' }}>
+              <div />
+              <div />
               {colCats.map(c => (
-                <span key={c.id} className="text-xs font-medium text-muted-foreground w-24 text-right shrink-0">{c.name}</span>
+                <span key={c.id} className="text-xs font-medium text-muted-foreground text-right leading-tight">{c.name}</span>
               ))}
-              <span className="text-xs font-medium text-muted-foreground w-24 text-right shrink-0">Total</span>
-              <div className="w-16 shrink-0" />
+              <span className="text-xs font-medium text-muted-foreground text-right">Total</span>
+              <div />
             </div>
           )}
 
           {overdue.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue
-              colCats={colCats} billAmountForCat={billAmountForCat}
+              colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} formatCurrency={formatCurrency} />
           ))}
           {upcoming.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={false}
-              colCats={colCats} billAmountForCat={billAmountForCat}
+              colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid} onToggleInvoice={handleToggleInvoice} formatCurrency={formatCurrency} />
           ))}
 
           {/* Totals row */}
           {visibleBills.length > 0 && (
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1">
-              <div className="w-9 shrink-0" />
-              <div className="flex-1 text-xs font-semibold text-muted-foreground">
+            <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
+                 style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>
+              <div />
+              <div className="text-xs font-semibold text-muted-foreground">
                 {visibleBills.length} bill{visibleBills.length !== 1 ? 's' : ''}
                 {overdue.length > 0 && <span className="text-red-500 ml-1">({overdue.length} overdue)</span>}
               </div>
               {colCats.map(c => (
-                <span key={c.id} className="text-xs font-semibold w-24 text-right shrink-0">
+                <span key={c.id} className="text-xs font-semibold text-right">
                   {catTotals[c.id] > 0 ? formatCurrency(catTotals[c.id]) : <span className="text-muted-foreground">—</span>}
                 </span>
               ))}
-              <span className="text-sm font-bold w-24 text-right shrink-0">{formatCurrency(grandTotal)}</span>
-              <div className="w-16 shrink-0" />
+              <span className="text-sm font-bold text-right">{formatCurrency(grandTotal)}</span>
+              <div />
             </div>
           )}
         </div>
@@ -543,25 +553,27 @@ export default function BillsPage() {
   )
 }
 
-function BillRow({ bill, nextDue, isOverdue, colCats, billAmountForCat, onEdit, onDelete, onMarkPaid, onToggleInvoice, formatCurrency }: {
+function BillRow({ bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate, onEdit, onDelete, onMarkPaid, onToggleInvoice, formatCurrency }: {
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
   billAmountForCat: (bill: Bill, catId: string) => number
+  gridTemplate: string
   onEdit: (b: Bill) => void; onDelete: (id: string) => void
   onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
   formatCurrency: (n: number) => string
 }) {
   const isOneOff = bill.billType === 'one-off'
   return (
-    <div className={cn('flex items-center gap-3 rounded-lg border p-3',
-      isOverdue ? 'border-red-500/30 bg-red-500/5' : 'border-border hover:bg-accent/50')}>
-      <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0',
+    <div className={cn('grid gap-3 rounded-lg border p-3',
+      isOverdue ? 'border-red-500/30 bg-red-500/5' : 'border-border hover:bg-accent/50')}
+      style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>
+      <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
         isOverdue ? 'bg-red-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
         {isOneOff
           ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-orange-500')} />
           : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-muted-foreground')} />}
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium">{bill.name}</span>
           {!bill.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
@@ -584,13 +596,13 @@ function BillRow({ bill, nextDue, isOverdue, colCats, billAmountForCat, onEdit, 
       {colCats.map(c => {
         const amt = billAmountForCat(bill, c.id)
         return (
-          <span key={c.id} className="text-sm w-24 text-right shrink-0 text-muted-foreground">
+          <span key={c.id} className="text-sm text-right text-muted-foreground">
             {amt > 0 ? formatCurrency(amt) : '—'}
           </span>
         )
       })}
-      <p className="text-sm font-semibold shrink-0 w-24 text-right">{formatCurrency(bill.amount)}</p>
-      <div className="flex items-center gap-0.5 shrink-0">
+      <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
+      <div className="flex items-center gap-0.5 justify-end">
         <button onClick={() => onToggleInvoice(bill)} title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
           className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
           <Receipt className="h-3.5 w-3.5" />
