@@ -129,8 +129,8 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         emailReminderDays: parseInt(emailReminderDays) || 1,
       }
 
-      // For monthly chores, auto-set dayOfMonth from start date if not explicitly set
-      if (frequency === 'monthly' && !dayOfMonth && startDate) {
+      // For monthly-based chores, auto-set dayOfMonth from start date if not explicitly set
+      if ((frequency === 'monthly' || frequency === 'bimonthly' || frequency === 'quarterly' || frequency === 'halfyearly' || frequency === 'yearly') && !dayOfMonth && startDate) {
         body.dayOfMonth = new Date(startDate).getDate()
       }
 
@@ -206,6 +206,10 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   <SelectItem value="weekly">Weekly</SelectItem>
                   <SelectItem value="biweekly">Bi-weekly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="bimonthly">Bi-monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="halfyearly">Half-yearly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -235,7 +239,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
               </Select>
             </div>
           )}
-          {frequency === 'monthly' && (
+          {(frequency === 'monthly' || frequency === 'bimonthly' || frequency === 'quarterly' || frequency === 'halfyearly' || frequency === 'yearly') && (
             <div className="space-y-1.5">
               <Label htmlFor="chore-day-month">Day of month</Label>
               <Input

@@ -31,7 +31,11 @@ function calculateInitialDueDate(
     case 'biweekly': {
       return base
     }
-    case 'monthly': {
+    case 'monthly':
+    case 'bimonthly':
+    case 'quarterly':
+    case 'halfyearly':
+    case 'yearly': {
       if (dayOfMonth !== null) {
         const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
         const targetDay = Math.min(dayOfMonth, lastDay)

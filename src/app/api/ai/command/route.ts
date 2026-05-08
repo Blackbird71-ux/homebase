@@ -328,6 +328,46 @@ function calculateNextDueDateAI(
       }
       break
     }
+    case 'bi-monthly': {
+      next = new Date(baseDate)
+      next.setHours(0, 0, 0, 0)
+      next.setMonth(next.getMonth() + 2)
+      if (chore.dayOfMonth !== null) {
+        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+      }
+      break
+    }
+    case 'quarterly': {
+      next = new Date(baseDate)
+      next.setHours(0, 0, 0, 0)
+      next.setMonth(next.getMonth() + 3)
+      if (chore.dayOfMonth !== null) {
+        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+      }
+      break
+    }
+    case 'half-year': {
+      next = new Date(baseDate)
+      next.setHours(0, 0, 0, 0)
+      next.setMonth(next.getMonth() + 6)
+      if (chore.dayOfMonth !== null) {
+        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+      }
+      break
+    }
+    case 'yearly': {
+      next = new Date(baseDate)
+      next.setHours(0, 0, 0, 0)
+      next.setFullYear(next.getFullYear() + 1)
+      if (chore.dayOfMonth !== null) {
+        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+      }
+      break
+    }
     default: {
       next = new Date(baseDate)
       next.setDate(next.getDate() + 7)

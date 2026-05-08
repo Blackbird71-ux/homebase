@@ -45,19 +45,33 @@ function calculateNextDueDate(
       next.setHours(0, 0, 0, 0)
       break
     }
-    case 'monthly': {
+    case 'monthly':
+    case 'bimonthly':
+    case 'quarterly':
+    case 'halfyearly':
+    case 'yearly': {
       next = new Date(baseDate)
       next.setHours(0, 0, 0, 0)
       if (chore.dayOfMonth !== null) {
-        // Set to the specified day of next month
         const targetDay = chore.dayOfMonth
-        // Move to next month
-        next.setMonth(next.getMonth() + 1)
+        // Advance by the appropriate number of months
+        let monthsToAdd = 1
+        if (chore.frequency === 'bimonthly') monthsToAdd = 2
+        else if (chore.frequency === 'quarterly') monthsToAdd = 3
+        else if (chore.frequency === 'halfyearly') monthsToAdd = 6
+        else if (chore.frequency === 'yearly') monthsToAdd = 12
+        next.setMonth(next.getMonth() + monthsToAdd)
         // Get the last day of that month
         const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
         next.setDate(Math.min(targetDay, lastDay))
       } else {
-        next.setMonth(next.getMonth() + 1)
+        // No specific day: advance by appropriate months from original
+        let monthsToAdd = 1
+        if (chore.frequency === 'bimonthly') monthsToAdd = 2
+        else if (chore.frequency === 'quarterly') monthsToAdd = 3
+        else if (chore.frequency === 'halfyearly') monthsToAdd = 6
+        else if (chore.frequency === 'yearly') monthsToAdd = 12
+        next.setMonth(next.getMonth() + monthsToAdd)
       }
       break
     }

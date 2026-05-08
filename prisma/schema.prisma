@@ -396,7 +396,7 @@ model Chore {
   title                String
   description          String?
   note                 String?            // Persistent note displayed on chore line items
-  frequency            String             @default("weekly")  // daily | weekly | biweekly | monthly
+  frequency            String             @default("weekly")  // daily | weekly | biweekly | monthly | bimonthly | quarterly | halfyearly | yearly
   dayOfWeek            Int?               // 0=Sunday, 1=Monday, etc. (for weekly)
   dayOfMonth           Int?               // 1-31 (for monthly)
   rotationInterval     Int                @default(1)  // rotate every N intervals
