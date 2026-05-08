@@ -6,7 +6,19 @@ import { toast } from 'sonner'
 import { format, subMonths } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import type { Bill } from '@/app/(app)/finance/bills/page'
+
+interface Bill {
+  id: string; name: string; amount: number; frequency: string
+  nextDueDate: string; endDate: string | null; isActive: boolean
+  autoPay: boolean; emailReminder: boolean; reminderDays: number
+  notes: string | null; memberId: string | null
+  paid: boolean; paidDate: string | null
+  billType: string | null; invoiceReceived: boolean
+  account: { id: string; name: string } | null
+  category: { id: string; name: string; color: string | null } | null
+  member: { id: string; name: string; email: string } | null
+  location: { id: string; name: string } | null
+}
 
 export default function PaidBillsPage() {
   const [bills, setBills] = useState<Bill[]>([])

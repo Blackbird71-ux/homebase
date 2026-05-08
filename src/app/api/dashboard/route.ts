@@ -239,13 +239,20 @@ export async function GET(request: NextRequest) {
       color: e.color,
       dayLabel: dayNames[e.start.getDay()],
     })),
-    topMeals: weekMeals.map(m => {
-      const dayIndex = m.date.getDay()
-      const recipeName = m.recipes?.[0]?.recipe?.title ?? m.recipe?.title ?? m.note ?? m.mealType
-      const recipeNote = m.recipes?.[0]?.recipe?.description ?? m.recipe?.description ?? m.note ?? null
-      const note = recipeNote && recipeNote !== recipeName ? recipeNote : null
-      return { day: dayNames[dayIndex], meal: recipeName, note }
-    }),
+    topMeals: [...weekMeals]
+      .sort((a, b) => {
+        const dateDiff = a.date.getTime() - b.date.getTime()
+        if (dateDiff !== 0) return dateDiff
+        const mealOrder = ['breakfast', 'lunch', 'dinner', 'snacks']
+        return mealOrder.indexOf(a.mealType) - mealOrder.indexOf(b.mealType)
+      })
+      .map(m => {
+        const dayIndex = m.date.getDay()
+        const recipeName = m.recipes?.[0]?.recipe?.title ?? m.recipe?.title ?? m.note ?? m.mealType
+        const recipeNote = m.recipes?.[0]?.recipe?.description ?? m.recipe?.description ?? m.note ?? null
+        const note = recipeNote && recipeNote !== recipeName ? recipeNote : null
+        return { day: dayNames[dayIndex], meal: recipeName, note }
+      }),
 
     topTodos: weekTodos.map(t => t.content),
   }
