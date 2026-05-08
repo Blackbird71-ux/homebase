@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ListSelector } from '@/components/lists/ListSelector'
 import { ShoppingList } from '@/components/lists/ShoppingList'
@@ -75,6 +75,33 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
+  const [renamingListId, setRenamingListId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  async function handleRenameSubmit(id: string) {
+    const trimmed = renameValue.trim()
+    if (!trimmed || trimmed === lists.find((l) => l.id === id)?.name) {
+      setRenamingListId(null)
+      return
+    }
+    const res = await fetch(`/api/lists/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed }),
+    })
+    if (res.ok) {
+      setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: trimmed } : l)))
+    }
+    setRenamingListId(null)
+  }
+
+  function startMobileRename(list: SerializedList) {
+    setRenamingListId(list.id)
+    setRenameValue(list.name)
+    setTimeout(() => renameInputRef.current?.focus(), 50)
+  }
 
   const activeList = lists.find((l) => l.id === activeListId) ?? null
 
@@ -176,19 +203,43 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       {/* Mobile: horizontal scroll chip bar — replaces the sidebar */}
       <div className="md:hidden flex items-center gap-2 px-2 py-1.5 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
         {listsMeta.map((list) => (
-          <button
-            key={list.id}
-            type="button"
-            onClick={() => setActiveListId(list.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0 ${
-              activeListId === list.id
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            {list.name}
-            <span className="text-xs opacity-70">({list._count.items})</span>
-          </button>
+          renamingListId === list.id ? (
+            <form
+              key={list.id}
+              onSubmit={(e) => { e.preventDefault(); handleRenameSubmit(list.id) }}
+              className="flex items-center gap-1 shrink-0"
+            >
+              <input
+                ref={renameInputRef}
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => handleRenameSubmit(list.id)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setRenamingListId(null) }}
+                className="px-2 py-1 rounded-full text-sm border border-primary bg-background w-32 outline-none"
+                maxLength={100}
+              />
+            </form>
+          ) : (
+            <button
+              key={list.id}
+              type="button"
+              onClick={() => setActiveListId(list.id)}
+              onTouchStart={() => {
+                longPressTimer.current = setTimeout(() => startMobileRename(lists.find((l) => l.id === list.id)!), 600)
+              }}
+              onTouchEnd={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
+              onTouchMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0 ${
+                activeListId === list.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              title="Long-press to rename"
+            >
+              {list.name}
+              <span className="text-xs opacity-70">({list._count.items})</span>
+            </button>
+          )
         ))}
         <button
           type="button"
@@ -226,7 +277,26 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
           <>
             <div className="flex items-center justify-between mb-1.5 sm:mb-4">
               <div className="flex items-center gap-3">
-                <h1 className="text-base sm:text-xl font-semibold">{activeList.name}</h1>
+                {renamingListId === activeList.id ? (
+                  <form onSubmit={(e) => { e.preventDefault(); handleRenameSubmit(activeList.id) }}>
+                    <input
+                      ref={renameInputRef}
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => handleRenameSubmit(activeList.id)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setRenamingListId(null) }}
+                      className="text-base sm:text-xl font-semibold border-b-2 border-primary bg-transparent outline-none"
+                      maxLength={100}
+                      autoFocus
+                    />
+                  </form>
+                ) : (
+                  <h1
+                    className="text-base sm:text-xl font-semibold cursor-pointer"
+                    onDoubleClick={() => { setRenamingListId(activeList.id); setRenameValue(activeList.name); setTimeout(() => renameInputRef.current?.focus(), 50) }}
+                    title="Double-click to rename"
+                  >{activeList.name}</h1>
+                )}
                 <ListPresence listId={activeList.id} currentUserId={currentUserId} />
               </div>
               <button
@@ -253,7 +323,26 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
         ) : (
           <>
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-semibold">{activeList.name}</h1>
+              {renamingListId === activeList.id ? (
+                <form onSubmit={(e) => { e.preventDefault(); handleRenameSubmit(activeList.id) }}>
+                  <input
+                    ref={renameInputRef}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => handleRenameSubmit(activeList.id)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setRenamingListId(null) }}
+                    className="text-xl font-semibold border-b-2 border-primary bg-transparent outline-none"
+                    maxLength={100}
+                    autoFocus
+                  />
+                </form>
+              ) : (
+                <h1
+                  className="text-xl font-semibold cursor-pointer"
+                  onDoubleClick={() => { setRenamingListId(activeList.id); setRenameValue(activeList.name); setTimeout(() => renameInputRef.current?.focus(), 50) }}
+                  title="Double-click to rename"
+                >{activeList.name}</h1>
+              )}
               <button
                 onClick={() => setTemplateDialogOpen(true)}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md border border-border hover:bg-muted"
