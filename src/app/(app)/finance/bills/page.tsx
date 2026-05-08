@@ -140,6 +140,7 @@ export default function BillsPage() {
                 <option value="weekly">Weekly</option>
                 <option value="quarterly">Quarterly</option>
                 <option value="yearly">Yearly</option>
+                <option value="one_off">One Off</option>
               </select>
             </div>
             <div>

@@ -336,11 +336,20 @@ export function useCardLayout(
       e.stopPropagation()
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
 
+      // Convert 'auto' height to actual pixel height so vertical resize works
+      let startLayout = { ...layout }
+      if (layout.height === 'auto' && (edge.includes('s') || edge.includes('n'))) {
+        const cardEl = (e.currentTarget as HTMLElement).parentElement
+        if (cardEl) {
+          startLayout = { ...layout, height: cardEl.getBoundingClientRect().height }
+        }
+      }
+
       resizingRef.current = {
         cardId,
         startMouseX: e.clientX,
         startMouseY: e.clientY,
-        startLayout: { ...layout },
+        startLayout,
         startLayouts: JSON.parse(JSON.stringify(layouts)),
         containerWidth: rect.width,
         edge,

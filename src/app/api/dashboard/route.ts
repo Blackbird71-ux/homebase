@@ -196,7 +196,7 @@ export async function GET(request: NextRequest) {
       where: {
         familyId: user.familyId,
         isActive: true,
-        nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+        nextDueDate: { lte: new Date(mealPlanTodayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
       },
       orderBy: { nextDueDate: 'asc' },
       select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true },
@@ -296,8 +296,8 @@ export async function GET(request: NextRequest) {
     choreSchedule: buildChoreSchedule(choreData, todayStart, 30),
     billsToPay: billsData.map((bill) => {
       const dueDate = new Date(bill.nextDueDate)
-      const diffMs = dueDate.getTime() - todayStart.getTime()
-      const daysUntilDue = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+      const diffMs = dueDate.getTime() - mealPlanTodayStart.getTime()
+      const daysUntilDue = Math.round(diffMs / (1000 * 60 * 60 * 24))
       return {
         id: bill.id,
         name: bill.name,
