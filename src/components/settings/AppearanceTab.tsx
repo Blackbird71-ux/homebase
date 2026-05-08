@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2 } from 'lucide-react'
+import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, CloudSun, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AppearanceTabProps {
@@ -134,6 +134,7 @@ export function AppearanceTab({
   const [todoLists, setTodoLists] = useState<TodoListOption[]>([])
   const [dashboardTodoListId, setDashboardTodoListId] = useState<string>('')
   const [loadingLists, setLoadingLists] = useState(true)
+  const [weatherLocation, setWeatherLocation] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -166,6 +167,9 @@ export function AppearanceTab({
           if (prefs?.secureCardColor) {
             setSecureCardColor(prefs.secureCardColor)
           }
+          if (prefs?.weatherLocation) {
+            setWeatherLocation(prefs.weatherLocation)
+          }
         }
       } catch {
         // ignore
@@ -192,6 +196,7 @@ export function AppearanceTab({
           dashboardTodoListId: dashboardTodoListId || null,
           secureCardStyle,
           secureCardColor,
+          weatherLocation: weatherLocation || null,
         },
       }
 
@@ -465,6 +470,33 @@ export function AppearanceTab({
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Weather Location */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Weather Location</CardTitle>
+          <CardDescription>
+            Default location for weather on the dashboard. Leave blank to use GPS location instead.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+              <input
+                type="text"
+                value={weatherLocation}
+                onChange={(e) => setWeatherLocation(e.target.value)}
+                placeholder="e.g. Sydney, AU"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Used as fallback when GPS location is unavailable. Get your free OpenWeatherMap API key to enable weather.
+            </p>
+          </div>
         </CardContent>
       </Card>
 

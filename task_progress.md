@@ -1,18 +1,16 @@
-# Bug Fixes - Dashboard Rolling Forward (2026-05-07)
+# Task Progress
 
-## Fix 1: Chore completion visual feedback (ChoresClient.tsx)
-- [ ] Add `completedIds` state for recently completed chores
-- [ ] Show strikethrough + muted opacity for completed chore rows
-- [ ] Auto-remove from completed state after 4 seconds
+## Feature 1: Chore Schedule Filter
+- [x] Modify chore schedule API to accept `assignedToMe` param
+- [x] Update ChoreScheduleCard to filter by current user by default
+- [x] Add "Show All" toggle button to show all family chores
 
-## Fix 2: Scope selector on Chores page (ChoresClient.tsx)
-- [ ] Add scope state (7/14/30) with toggle buttons
-- [ ] Filter chores within scope window
-- [ ] Show filtered count vs total
+## Feature 2: Weather Popup on WeeklySummaryCard
+- [x] Create WeatherDialog component
+- [x] Create `/api/weather` endpoint (uses OpenWeatherMap or browser geolocation)
+- [x] Add weather button to WeeklySummaryCard
+- [x] Add weather location to uiPreferences / settings
+- [x] Add OPENWEATHER_API_KEY to env.example
 
-## Fix 3 & 4: Lift scope + apply to WeeklySummaryCard (HomeClient, WeeklySummaryCard, ChoreScheduleCard)
-- [ ] Add scope state to HomeClient and pass down
-- [ ] Update WeeklySummaryCard with scope toggles and dynamic title
-- [ ] Update ChoreScheduleCard to accept parent scope
-- [ ] Wire up DashboardGrid to pass scope to both cards
-- [ ] Ensure all cards respond to scope changes
+## Done
+- [ ] Test both features

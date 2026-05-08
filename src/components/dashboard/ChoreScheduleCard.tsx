@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon } from 'lucide-react'
+import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon } from 'lucide-react'
 import type { ChoreScheduleDay } from '@/types'
 import { todayStringInTz } from '@/lib/timezone'
 
@@ -25,15 +25,21 @@ export function ChoreScheduleCard({
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
   // Persistently track chore IDs that have been completed this session
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  // Track if we're filtering to only show current user's chores
+  const [showOnlyMine, setShowOnlyMine] = useState(true)
 
   // Use parent scope if provided, otherwise fall back to internal state
   const scope = parentScope ?? internalScope
 
-  const fetchSchedule = useCallback(async (s: ScopeDays) => {
+  const fetchSchedule = useCallback(async (s: ScopeDays, onlyMine: boolean) => {
     if (!timezone) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/chores/schedule?scope=${s}`)
+      const params = new URLSearchParams({ scope: String(s) })
+      if (onlyMine) {
+        params.set('assignedToMe', 'true')
+      }
+      const res = await fetch(`/api/chores/schedule?${params.toString()}`)
       if (res.ok) {
         const json = await res.json()
         setData(json.schedule)
@@ -45,10 +51,10 @@ export function ChoreScheduleCard({
     }
   }, [timezone])
 
-  // Refetch whenever scope changes
+  // Refetch whenever scope or filter changes
   useEffect(() => {
-    fetchSchedule(scope)
-  }, [scope, fetchSchedule])
+    fetchSchedule(scope, showOnlyMine)
+  }, [scope, showOnlyMine, fetchSchedule])
 
   async function handleComplete(choreId: string) {
     if (completingIds.has(choreId)) return // prevent double-click
@@ -93,6 +99,20 @@ export function ChoreScheduleCard({
           </CardTitle>
           <div className="flex items-center gap-1">
             {loading && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
+            {/* Toggle: show only my chores vs all family chores */}
+            <button
+              type="button"
+              onClick={() => setShowOnlyMine((prev) => !prev)}
+              title={showOnlyMine ? 'Show all family chores' : 'Show only my chores'}
+              className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                showOnlyMine
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+              }`}
+            >
+              <UsersIcon className="h-3 w-3" />
+              <span>{showOnlyMine ? 'Mine' : 'All'}</span>
+            </button>
             <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
               {([7, 14, 30] as ScopeDays[]).map((d) => (
                 <button

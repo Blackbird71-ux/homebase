@@ -207,6 +207,17 @@ export interface UIPreferences {
   // other UI preferences can be added here
 }
 
+export interface WeatherData {
+  temperature: number
+  feelsLike: number
+  condition: string
+  icon: string
+  humidity: number
+  windSpeed: number
+  location: string
+  description: string
+}
+
 // Extend NextAuth session types
 // Note: next-auth v5 beta augmentation — kept for reference
 // The actual augmentation is in src/auth.ts once next-auth is configured

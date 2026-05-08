@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CalendarDays, Utensils, CheckSquare } from 'lucide-react'
+import { CalendarDays, Utensils, CheckSquare, CloudSun } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { WeatherDialog } from './WeatherDialog'
 
 export interface WeeklySummaryData {
   weekLabel: string
@@ -26,6 +28,8 @@ export function WeeklySummaryCard({
   scope?: ScopeDays
   onScopeChange?: (scope: ScopeDays) => void
 }) {
+  const [weatherOpen, setWeatherOpen] = useState(false)
+
   if (!data) return null
 
   return (
@@ -35,24 +39,38 @@ export function WeeklySummaryCard({
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
             <CalendarDays className="h-4 w-4" /> Next {scope ?? 7} Days — {data.weekLabel}
           </CardTitle>
-          {onScopeChange && (
-            <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
-              {([7, 14, 30] as ScopeDays[]).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => onScopeChange(d)}
-                  className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
-                    (scope ?? 7) === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {d === 30 ? '30d' : d === 14 ? '14d' : '7d'}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex items-center gap-1">
+            {/* Weather button */}
+            <button
+              type="button"
+              onClick={() => setWeatherOpen(true)}
+              title="Today's weather"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30"
+            >
+              <CloudSun className="h-3 w-3" />
+              <span className="hidden sm:inline">Weather</span>
+            </button>
+            {onScopeChange && (
+              <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
+                {([7, 14, 30] as ScopeDays[]).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => onScopeChange(d)}
+                    className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                      (scope ?? 7) === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {d === 30 ? '30d' : d === 14 ? '14d' : '7d'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </CardHeader>
+
+      <WeatherDialog open={weatherOpen} onOpenChange={setWeatherOpen} />
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Events summary */}

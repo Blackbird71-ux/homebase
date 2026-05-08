@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
   const scopeParam = searchParams.get('scope')
   const scope = scopeParam ? Math.min(parseInt(scopeParam, 10) || 30, 30) : 30
 
+  // Parse optional filter for "only my chores"
+  const assignedToMeParam = searchParams.get('assignedToMe')
+  const assignedToMe = assignedToMeParam === 'true'
+
   // Get today's boundary in family timezone
   const { start: todayStart } = todayBoundsInTz(timezone)
 
@@ -23,6 +27,7 @@ export async function GET(request: NextRequest) {
       familyId: user.familyId,
       isActive: true,
       nextDueDate: { lte: windowEnd },
+      ...(assignedToMe ? { assigneeUserId: user.id } : {}),
     },
     include: {
       currentAssignee: { select: { id: true, name: true } },
