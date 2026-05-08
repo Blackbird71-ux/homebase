@@ -117,8 +117,8 @@ export default async function FinanceOverviewPage() {
     spent: b.categoryId ? (spentByCategory[b.categoryId] || 0) : totalSpent,
   }))
 
-  // Count overdue bills
-  const overdueBills = bills.filter((b) => new Date(b.nextDueDate) < now)
+  // Count overdue bills (exclude already paid)
+  const overdueBills = bills.filter((b) => !b.paid && new Date(b.nextDueDate) < now)
 
   return (
     <OverviewClient
@@ -152,6 +152,8 @@ export default async function FinanceOverviewPage() {
         nextDueDate: b.nextDueDate.toISOString(),
         createdAt: b.createdAt.toISOString(),
         updatedAt: b.updatedAt.toISOString(),
+        paidDate: b.paidDate?.toISOString() ?? null,
+        invoiceReceivedDate: b.invoiceReceivedDate?.toISOString() ?? null,
         member: b.memberId ? (memberById[b.memberId] ?? null) : null,
         location: b.location ?? null,
         autoPay: b.autoPay,
@@ -160,6 +162,8 @@ export default async function FinanceOverviewPage() {
         notes: b.notes,
         endDate: b.endDate?.toISOString() ?? null,
         monthOfYear: b.monthOfYear,
+        billType: b.billType ?? 'recurring',
+        recurrenceInterval: b.recurrenceInterval ?? null,
       }))}
       savingsGoals={savingsGoals.map((g) => ({
         ...g,

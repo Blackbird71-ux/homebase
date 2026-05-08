@@ -37,6 +37,9 @@ interface SerializedBill {
   location: { id: string; name: string } | null
   autoPay: boolean; emailReminder: boolean; reminderDays: number; notes: string | null
   endDate: string | null; monthOfYear: number | null
+  paid: boolean; paidDate: string | null
+  invoiceReceived: boolean; invoiceReceivedDate: string | null
+  billType: string; recurrenceInterval: string | null
   createdAt: string; updatedAt: string
 }
 interface SerializedGoal {
