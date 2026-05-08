@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
   }
-  if (!['checking', 'savings', 'credit', 'cash', 'investment', 'loan', 'other'].includes(type)) {
+  if (!['checking', 'savings', 'credit', 'cash', 'investment', 'loan', 'entity_account', 'external_account', 'other'].includes(type)) {
     return NextResponse.json({ error: 'Invalid account type' }, { status: 400 })
   }
 

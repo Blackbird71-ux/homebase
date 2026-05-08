@@ -34,12 +34,13 @@ model Family {
   auditLogs            AuditLog[]
   documents            Document[]
   listTemplates        ListTemplate[]
-  financeAccounts      FinanceAccount[]
-  financeTransactions  FinanceTransaction[]
-  financeCategories    FinanceCategory[]
-  financeBudgets       FinanceBudget[]
-  financeRecurringBills FinanceRecurringBill[]
-  financeSavingsGoals  FinanceSavingsGoal[]
+  financeAccounts        FinanceAccount[]
+  financeTransactions    FinanceTransaction[]
+  financeCategories      FinanceCategory[]
+  financeBudgets         FinanceBudget[]
+  financeRecurringBills  FinanceRecurringBill[]
+  financeSavingsGoals    FinanceSavingsGoal[]
+  financeLocations       FinanceLocation[]
 }
 
 model User {
@@ -521,7 +522,7 @@ model EmailReminderLog {
 model FinanceAccount {
   id              String   @id @default(cuid())
   name            String
-  type            String   @default("checking")  // checking | savings | credit | cash | investment | loan
+  type            String   @default("checking")  // checking | savings | credit | cash | investment | loan | entity
   institution     String?
   currency        String   @default("AUD")
   currentBalance  Float    @default(0)
@@ -530,6 +531,8 @@ model FinanceAccount {
   color           String?  // Display colour hex
   icon            String?  // Lucide icon name
   sortOrder       Int      @default(0)
+  entityType      String?  // superannuation | trust | business | investment | other (only when type='entity')
+  entityABN       String?  // Australian Business Number
   familyId        String
   family          Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -540,6 +543,7 @@ model FinanceAccount {
 
   @@index([familyId])
   @@index([familyId, isActive])
+  @@index([familyId, type])
 }
 
 model FinanceCategory {
@@ -553,6 +557,10 @@ model FinanceCategory {
   color           String?
   isSystem        Boolean           @default(false)
   sortOrder       Int               @default(0)
+  level           Int               @default(0)  // 0 = master, 1 = sub
+  isPersonal      Boolean           @default(false)  // Show member selector on transaction
+  isLocationBased Boolean           @default(false)  // Show location selector on transaction
+  isExternal      Boolean           @default(false)  // Belongs to external entity account
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -564,6 +572,7 @@ model FinanceCategory {
   @@unique([familyId, name])
   @@index([familyId])
   @@index([parentId])
+  @@index([familyId, level])
 }
 
 model FinanceTransaction {
@@ -587,6 +596,9 @@ model FinanceTransaction {
   reference       String?              // Cheque #, transaction ID, invoice #
   receiptPath     String?              // Path to uploaded receipt image/PDF
   notes           String?
+  memberId        String?              // FK -> User. Inherited from bill or manually assigned. Null = shared.
+  locationId      String?
+  location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   createdBy       String
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
@@ -601,6 +613,8 @@ model FinanceTransaction {
   @@index([familyId, isRecurring])
   @@index([familyId, type])
   @@index([recurringBillId])
+  @@index([memberId])
+  @@index([locationId])
 }
 
 model FinanceRecurringBill {
@@ -621,6 +635,9 @@ model FinanceRecurringBill {
   emailReminder   Boolean              @default(false)
   reminderDays    Int                  @default(3)
   notes           String?
+  memberId        String?              // FK -> User. Inherited by auto-created transactions. Null = shared.
+  locationId      String?
+  location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -630,6 +647,8 @@ model FinanceRecurringBill {
   @@index([familyId])
   @@index([familyId, isActive])
   @@index([familyId, nextDueDate])
+  @@index([memberId])
+  @@index([locationId])
 }
 
 model FinanceBudget {
@@ -652,6 +671,27 @@ model FinanceBudget {
   @@index([familyId])
   @@index([familyId, startDate, endDate])
   @@index([categoryId])
+}
+
+model FinanceLocation {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "Address A – 12 Oak St", "Address B – 45 Elm Ave"
+  address   String?  // Full street address
+  type      String   @default("primary")  // primary | investment | business | other
+  isActive  Boolean  @default(true)
+  color     String?  // Display colour hex for UI chips
+  icon      String?  // lucide icon name
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions FinanceTransaction[]
+  recurringBills FinanceRecurringBill[]
+
+  @@index([familyId])
+  @@index([familyId, isActive])
 }
 
 model FinanceSavingsGoal {

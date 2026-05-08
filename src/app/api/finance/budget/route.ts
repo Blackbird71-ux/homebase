@@ -1,15 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { startOfMonth, endOfMonth } from 'date-fns'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await requireSession()
+  const { searchParams } = new URL(request.url)
+  const memberId = searchParams.get('memberId')
+  const locationId = searchParams.get('locationId')
+
   const budgets = await prisma.financeBudget.findMany({
     where: { familyId: session.familyId },
     include: { category: true },
     orderBy: { name: 'asc' },
   })
-  return NextResponse.json(budgets)
+
+  // Build transaction filter for spent calculation
+  const txWhere: any = {
+    familyId: session.familyId,
+    type: 'expense',
+    date: { gte: startOfMonth(new Date()), lte: endOfMonth(new Date()) },
+  }
+  if (memberId) txWhere.memberId = memberId
+  if (locationId) txWhere.locationId = locationId
+
+  const recentTx = await prisma.financeTransaction.findMany({
+    where: txWhere,
+    select: { categoryId: true, amount: true },
+  })
+
+  const spentMap: Record<string, number> = {}
+  for (const tx of recentTx) {
+    if (tx.categoryId) {
+      spentMap[tx.categoryId] = (spentMap[tx.categoryId] || 0) + tx.amount
+    }
+    // Also handle parent category rollup (budgets on master categories)
+    // Sub-categories have parentId, so we'd need to look that up.
+    // For now this is handled in the frontend by rolling up sub-categories.
+  }
+
+  const budgetsWithSpent = budgets.map(b => ({
+    ...b,
+    spent: b.categoryId ? (spentMap[b.categoryId] || 0) : Object.values(spentMap).reduce((a, b) => a + b, 0),
+  }))
+
+  return NextResponse.json(budgetsWithSpent)
 }
 
 export async function POST(request: NextRequest) {

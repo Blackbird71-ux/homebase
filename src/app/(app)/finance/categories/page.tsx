@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, FolderOpen } from 'lucide-react'
+import { Plus, Pencil, Trash2, FolderOpen, Eye, EyeOff, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 interface Category {
   id: string; name: string; type: string; parentId: string | null
   color: string | null; icon: string | null; isSystem: boolean
+  level: number; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean
   parent?: { id: string; name: string } | null
   children?: Category[]
 }
@@ -23,7 +24,10 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
-  const [form, setForm] = useState({ name: '', type: 'expense', parentId: '', color: '#6366F1', icon: '' })
+  const [form, setForm] = useState({
+    name: '', type: 'expense', parentId: '', color: '#6366F1', icon: '',
+    isPersonal: false, isLocationBased: false, isExternal: false,
+  })
 
   async function load() {
     setLoading(true)
@@ -37,13 +41,17 @@ export default function CategoriesPage() {
 
   function openNew() {
     setEditing(null)
-    setForm({ name: '', type: 'expense', parentId: '', color: '#6366F1', icon: '' })
+    setForm({ name: '', type: 'expense', parentId: '', color: '#6366F1', icon: '', isPersonal: false, isLocationBased: false, isExternal: false })
     setShowForm(true)
   }
 
   function openEdit(cat: Category) {
     setEditing(cat)
-    setForm({ name: cat.name, type: cat.type, parentId: cat.parentId ?? '', color: cat.color ?? '#6366F1', icon: cat.icon ?? '' })
+    setForm({
+      name: cat.name, type: cat.type, parentId: cat.parentId ?? '',
+      color: cat.color ?? '#6366F1', icon: cat.icon ?? '',
+      isPersonal: cat.isPersonal, isLocationBased: cat.isLocationBased, isExternal: cat.isExternal,
+    })
     setShowForm(true)
   }
 
@@ -88,6 +96,9 @@ export default function CategoriesPage() {
     }
   })
 
+  // Get available parents for form (only same-type root categories, not self when editing)
+  const availableParents = rootCategories.filter(c => editing ? c.id !== editing.id : true)
+
   if (loading) return <div className="p-4 text-muted-foreground">Loading categories…</div>
 
   return (
@@ -123,7 +134,7 @@ export default function CategoriesPage() {
               <select value={form.parentId} onChange={e => setForm(p => ({ ...p, parentId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">None (root)</option>
-                {rootCategories.map(c => (
+                {availableParents.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
@@ -135,6 +146,26 @@ export default function CategoriesPage() {
                   className="h-8 w-8 rounded cursor-pointer" />
                 <span className="text-xs text-muted-foreground">{form.color}</span>
               </div>
+            </div>
+            {/* Flags */}
+            <div className="flex items-center gap-4 sm:col-span-2">
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.isPersonal}
+                  onChange={e => setForm(p => ({ ...p, isPersonal: e.target.checked }))} />
+                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                Personal (private to me)
+              </label>
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.isLocationBased}
+                  onChange={e => setForm(p => ({ ...p, isLocationBased: e.target.checked }))} />
+                <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                Location Based
+              </label>
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.isExternal}
+                  onChange={e => setForm(p => ({ ...p, isExternal: e.target.checked }))} />
+                External
+              </label>
             </div>
           </div>
           <div className="flex gap-2">
@@ -172,6 +203,10 @@ function CategoryRow({ cat, childrenMap, depth, onEdit, onDelete, getTypeBadge }
 }) {
   const children = childrenMap.get(cat.id) || []
   const hasChildren = children.length > 0
+  const flags: string[] = []
+  if (cat.isPersonal) flags.push('PRIVATE')
+  if (cat.isLocationBased) flags.push('LOCATION')
+  if (cat.isExternal) flags.push('EXTERNAL')
 
   return (
     <>
@@ -183,6 +218,9 @@ function CategoryRow({ cat, childrenMap, depth, onEdit, onDelete, getTypeBadge }
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{cat.name}</span>
             {cat.isSystem && <span className="text-[10px] bg-muted px-1.5 rounded">SYSTEM</span>}
+            {flags.map(f => (
+              <span key={f} className="text-[10px] bg-muted px-1.5 rounded text-muted-foreground">{f}</span>
+            ))}
           </div>
         </div>
         {getTypeBadge(cat.type)}

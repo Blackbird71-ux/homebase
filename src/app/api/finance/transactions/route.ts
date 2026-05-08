@@ -7,6 +7,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const accountId = searchParams.get('accountId')
   const categoryId = searchParams.get('categoryId')
+  const memberId = searchParams.get('memberId')
+  const locationId = searchParams.get('locationId')
   const type = searchParams.get('type')
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
@@ -18,6 +20,8 @@ export async function GET(request: NextRequest) {
   const where: any = { familyId: session.familyId }
   if (accountId) where.accountId = accountId
   if (categoryId) where.categoryId = categoryId
+  if (memberId) where.memberId = memberId
+  if (locationId) where.locationId = locationId
   if (type) where.type = type
   if (startDate) where.date = { ...(where.date || {}), gte: new Date(startDate) }
   if (endDate) where.date = { ...(where.date || {}), lte: new Date(endDate) }
@@ -27,7 +31,11 @@ export async function GET(request: NextRequest) {
   const [transactions, total] = await Promise.all([
     prisma.financeTransaction.findMany({
       where,
-      include: { category: true, account: true },
+      include: {
+        category: true,
+        account: true,
+        location: { select: { id: true, name: true } },
+      },
       orderBy: { date: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
@@ -44,6 +52,7 @@ export async function POST(request: NextRequest) {
   const {
     accountId, categoryId, type, amount, payee,
     description, date, isRecurring, isCleared, isPrivate,
+    memberId, locationId,
   } = json
 
   if (!type || amount === undefined) {
@@ -65,10 +74,16 @@ export async function POST(request: NextRequest) {
       isRecurring: isRecurring ?? false,
       isCleared: isCleared ?? false,
       isPrivate: isPrivate ?? false,
+      memberId: memberId ?? null,
+      locationId: locationId ?? null,
       createdBy: session.id,
       familyId: session.familyId,
     },
-    include: { category: true, account: true },
+    include: {
+      category: true,
+      account: true,
+      location: { select: { id: true, name: true } },
+    },
   })
 
   // Update account balance
@@ -91,6 +106,7 @@ export async function PUT(request: NextRequest) {
   const {
     id, accountId, categoryId, type, amount, payee,
     description, date, isRecurring, isCleared, isPrivate,
+    memberId, locationId,
   } = json
 
   if (!id) {
@@ -128,8 +144,14 @@ export async function PUT(request: NextRequest) {
       ...(isRecurring !== undefined && { isRecurring }),
       ...(isCleared !== undefined && { isCleared }),
       ...(isPrivate !== undefined && { isPrivate }),
+      ...(memberId !== undefined && { memberId: memberId ?? null }),
+      ...(locationId !== undefined && { locationId: locationId ?? null }),
     },
-    include: { category: true, account: true },
+    include: {
+      category: true,
+      account: true,
+      location: { select: { id: true, name: true } },
+    },
   })
 
   // Apply new balance change

@@ -3,57 +3,112 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Bell } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, isPast, addMonths, addWeeks, addDays, startOfMonth, setDate } from 'date-fns'
+import { format, isPast, addMonths, addWeeks } from 'date-fns'
 import { cn } from '@/lib/utils'
 
+interface Member { id: string; name: string; email: string }
+interface Location { id: string; name: string }
 interface Bill {
   id: string; name: string; amount: number; frequency: string
-  dayOfMonth: number | null; nextDueDate: string; isActive: boolean
+  dayOfMonth: number | null; monthOfYear: number | null
+  nextDueDate: string; endDate: string | null; isActive: boolean
+  autoPay: boolean; emailReminder: boolean; reminderDays: number
+  notes: string | null
+  memberId: string | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
+  member: Member | null
+  location: Location | null
 }
 
 export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([])
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  const [members, setMembers] = useState<Member[]>([])
+  const [locations, setLocations] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Bill | null>(null)
   const [form, setForm] = useState({
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
-    dayOfMonth: '', nextDueDate: new Date().toISOString().split('T')[0],
+    dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
+    endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
+    notes: '', memberId: '', locationId: '',
   })
+
+  function enrichBills(data: any[]): Bill[] {
+    return data.map((b: any) => ({
+      ...b,
+      member: b.memberId ? (members.find((m: Member) => m.id === b.memberId) ?? null) : null,
+    }))
+  }
 
   async function load() {
     setLoading(true)
-    try { const res = await fetch('/api/finance/bills'); if (res.ok) setBills(await res.json()) }
+    try {
+      const res = await fetch('/api/finance/bills')
+      if (res.ok) setBills(enrichBills(await res.json()))
+    }
     finally { setLoading(false) }
   }
   async function loadRefs() {
-    const [aRes, cRes] = await Promise.all([
-      fetch('/api/finance/accounts'), fetch('/api/finance/categories'),
+    const [aRes, cRes, mRes, lRes] = await Promise.all([
+      fetch('/api/finance/accounts'),
+      fetch('/api/finance/categories'),
+      fetch('/api/finance/members'),
+      fetch('/api/finance/locations'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) setCategories(await cRes.json())
+    if (mRes.ok) setMembers(await mRes.json())
+    if (lRes.ok) setLocations(await lRes.json())
   }
-  useEffect(() => { loadRefs(); load() }, [])
+  useEffect(() => { loadRefs() }, [])
+  useEffect(() => { if (members.length > 0) load() }, [members])
 
   function openNew() {
-    setEditing(null); setForm({ name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '', dayOfMonth: '', nextDueDate: new Date().toISOString().split('T')[0] })
+    setEditing(null)
+    setForm({
+      name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
+      dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
+      endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
+      notes: '', memberId: '', locationId: '',
+    })
     setShowForm(true)
   }
   function openEdit(b: Bill) {
-    setEditing(b); setForm({
+    setEditing(b)
+    setForm({
       name: b.name, amount: b.amount, frequency: b.frequency,
       accountId: b.account?.id ?? '', categoryId: b.category?.id ?? '',
       dayOfMonth: b.dayOfMonth?.toString() ?? '',
+      monthOfYear: b.monthOfYear?.toString() ?? '',
       nextDueDate: new Date(b.nextDueDate).toISOString().split('T')[0],
-    }); setShowForm(true)
+      endDate: b.endDate ? new Date(b.endDate).toISOString().split('T')[0] : '',
+      autoPay: b.autoPay, emailReminder: b.emailReminder, reminderDays: b.reminderDays,
+      notes: b.notes ?? '', memberId: b.memberId ?? '', locationId: b.location?.id ?? '',
+    })
+    setShowForm(true)
+  }
+
+  function getFormPayload() {
+    return {
+      ...form,
+      amount: form.amount || 0,
+      accountId: form.accountId || null,
+      categoryId: form.categoryId || null,
+      dayOfMonth: form.dayOfMonth || null,
+      monthOfYear: form.monthOfYear || null,
+      endDate: form.endDate || null,
+      notes: form.notes || null,
+      memberId: form.memberId || null,
+      locationId: form.locationId || null,
+    }
   }
 
   async function handleSave() {
-    const body = editing ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null } : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null }
+    const body = editing ? { id: editing.id, ...getFormPayload() } : getFormPayload()
     const res = await fetch('/api/finance/bills', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -70,7 +125,6 @@ export default function BillsPage() {
     else toast.error('Failed to delete')
   }
 
-  // Calculate next due date for display
   function getNextDue(bill: Bill): Date {
     const due = new Date(bill.nextDueDate)
     if (isPast(due)) {
@@ -99,7 +153,6 @@ export default function BillsPage() {
         </button>
       </div>
 
-      {/* Overdue Alert */}
       {overdue.length > 0 && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
           <div className="flex items-center gap-2 text-red-500 font-medium mb-2">
@@ -166,12 +219,87 @@ export default function BillsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Next Due Date</label>
+              <label className="text-xs text-muted-foreground">Month of Year (for annual)</label>
+              <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">None</option>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Next Due Date *</label>
               <input type="date" value={form.nextDueDate}
                 onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
+            <div>
+              <label className="text-xs text-muted-foreground">End Date (optional)</label>
+              <input type="date" value={form.endDate}
+                onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Assigned To</label>
+              <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">Shared (household)</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Location</label>
+              <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">No location</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
           </div>
+
+          {/* Toggles row */}
+          <div className="flex flex-wrap gap-6 pt-2">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={form.autoPay}
+                onChange={e => setForm(p => ({ ...p, autoPay: e.target.checked }))}
+                className="rounded border-input" />
+              Auto-pay
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={form.emailReminder}
+                onChange={e => setForm(p => ({ ...p, emailReminder: e.target.checked }))}
+                className="rounded border-input" />
+              Email reminder
+            </label>
+            {form.emailReminder && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">Remind</label>
+                <input type="number" min={0} max={30} value={form.reminderDays}
+                  onChange={e => setForm(p => ({ ...p, reminderDays: parseInt(e.target.value) || 0 }))}
+                  className="w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center" />
+                <span className="text-xs text-muted-foreground">days before</span>
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs text-muted-foreground">Notes</label>
+            <textarea value={form.notes} rows={2}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
+          </div>
+
           <div className="flex gap-2">
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
@@ -186,7 +314,6 @@ export default function BillsPage() {
         <p className="text-sm text-muted-foreground">No bills yet.</p>
       ) : (
         <div className="space-y-2">
-          {/* Overdue first */}
           {overdue.map(b => <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue onEdit={openEdit} onDelete={handleDelete} formatCurrency={formatCurrency} />)}
           {upcoming.map(b => <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={false} onEdit={openEdit} onDelete={handleDelete} formatCurrency={formatCurrency} />)}
         </div>
@@ -210,11 +337,15 @@ function BillRow({ bill, nextDue, isOverdue, onEdit, onDelete, formatCurrency }:
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{bill.name}</span>
           {!bill.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
+          {bill.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span className="capitalize">{bill.frequency}</span>
           {bill.account && <span>{bill.account.name}</span>}
+          {bill.member && <span className="text-primary">{bill.member.name}</span>}
+          {bill.location && <span>{bill.location.name}</span>}
           <span>Due {format(nextDue, 'd MMM yyyy')}</span>
+          {bill.notes && <span className="italic truncate max-w-[120px]" title={bill.notes}>· {bill.notes}</span>}
         </div>
       </div>
       <p className="text-sm font-semibold">{formatCurrency(bill.amount)}</p>

@@ -6,7 +6,7 @@ export async function GET() {
   const session = await requireSession()
   const categories = await prisma.financeCategory.findMany({
     where: { familyId: session.familyId },
-    orderBy: [{ parentId: 'asc' }, { name: 'asc' }],
+    orderBy: [{ level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
   })
   return NextResponse.json(categories)
 }
@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { name, type, parentId, color, icon } = json
+  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal } = json
 
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
@@ -24,12 +24,17 @@ export async function POST(request: NextRequest) {
   }
 
   // Validate parent exists if provided
+  let level = 0
   if (parentId) {
     const parent = await prisma.financeCategory.findFirst({
       where: { id: parentId, familyId: session.familyId },
     })
     if (!parent) {
       return NextResponse.json({ error: 'Parent category not found' }, { status: 404 })
+    }
+    level = (parent.level ?? 0) + 1
+    if (level > 1) {
+      return NextResponse.json({ error: 'Maximum nesting depth is 2 (master/sub)' }, { status: 400 })
     }
   }
 
@@ -38,8 +43,12 @@ export async function POST(request: NextRequest) {
       name,
       type,
       parentId: parentId ?? null,
+      level,
       color: color ?? null,
       icon: icon ?? null,
+      isPersonal: isPersonal ?? false,
+      isLocationBased: isLocationBased ?? false,
+      isExternal: isExternal ?? false,
       familyId: session.familyId,
     },
   })
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, name, type, parentId, color, icon } = json
+  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal } = json
 
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -63,14 +72,37 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Category not found' }, { status: 404 })
   }
 
+  // Calculate new level if parentId changed
+  let level = existing.level
+  if (parentId !== undefined && parentId !== existing.parentId) {
+    if (parentId) {
+      const parent = await prisma.financeCategory.findFirst({
+        where: { id: parentId, familyId: session.familyId },
+      })
+      if (!parent) {
+        return NextResponse.json({ error: 'Parent category not found' }, { status: 404 })
+      }
+      level = (parent.level ?? 0) + 1
+      if (level > 1) {
+        return NextResponse.json({ error: 'Maximum nesting depth is 2 (master/sub)' }, { status: 400 })
+      }
+    } else {
+      level = 0
+    }
+  }
+
   const category = await prisma.financeCategory.update({
     where: { id },
     data: {
       ...(name !== undefined && { name }),
       ...(type !== undefined && { type }),
       ...(parentId !== undefined && { parentId: parentId ?? null }),
+      ...(level !== existing.level && { level }),
       ...(color !== undefined && { color }),
       ...(icon !== undefined && { icon }),
+      ...(isPersonal !== undefined && { isPersonal }),
+      ...(isLocationBased !== undefined && { isLocationBased }),
+      ...(isExternal !== undefined && { isExternal }),
     },
   })
 

@@ -10,7 +10,7 @@ interface Account {
   isActive: boolean; color: string | null; icon: string | null; sortOrder: number
 }
 
-const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'investment', 'loan', 'other'] as const
+const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'investment', 'loan', 'entity_account', 'external_account', 'other'] as const
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])

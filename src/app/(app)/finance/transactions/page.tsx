@@ -1,35 +1,45 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Filter } from 'lucide-react'
+import { Plus, Pencil, Trash2, Filter, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 
-interface Category { id: string; name: string; type: string; color: string | null }
+interface Category { id: string; name: string; type: string; color: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean }
 interface Account { id: string; name: string; type: string }
+interface Member { id: string; name: string }
+interface Location { id: string; name: string }
 
 interface Transaction {
   id: string; accountId: string | null; categoryId: string | null
   type: string; amount: number; payee: string | null; description: string | null
   date: string; isRecurring: boolean; isCleared: boolean; isPrivate: boolean
+  memberId: string | null; locationId: string | null
   category: Category | null; account: Account | null
+  member: Member | null
+  location: Location | null
 }
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [members, setMembers] = useState<Member[]>([])
+  const [locations, setLocations] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [filterType, setFilterType] = useState('')
+  const [filterMemberId, setFilterMemberId] = useState('')
+  const [filterLocationId, setFilterLocationId] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
   const [form, setForm] = useState({
     accountId: '', categoryId: '', type: 'expense', amount: 0,
     payee: '', description: '', date: new Date().toISOString().split('T')[0],
-    isCleared: false, isPrivate: false,
+    isCleared: false, isPrivate: false, memberId: '', locationId: '',
   })
 
   const limit = 50
@@ -39,27 +49,40 @@ export default function TransactionsPage() {
     try {
       const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() })
       if (filterType) params.set('type', filterType)
+      if (filterMemberId) params.set('memberId', filterMemberId)
+      if (filterLocationId) params.set('locationId', filterLocationId)
       const res = await fetch(`/api/finance/transactions?${params}`)
-      if (res.ok) { const d = await res.json(); setTransactions(d.transactions); setTotal(d.total) }
+      if (res.ok) {
+        const d = await res.json()
+        // Enrich transactions with member name from members list
+        setTransactions(d.transactions.map((t: any) => ({
+          ...t,
+          member: t.memberId ? (members.find((m: Member) => m.id === t.memberId) ?? null) : null,
+        })))
+        setTotal(d.total)
+      }
     } finally { setLoading(false) }
   }
 
   async function loadRefs() {
-    const [aRes, cRes] = await Promise.all([
+    const [aRes, cRes, mRes, lRes] = await Promise.all([
       fetch('/api/finance/accounts'), fetch('/api/finance/categories'),
+      fetch('/api/finance/members'), fetch('/api/finance/locations'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) setCategories(await cRes.json())
+    if (mRes.ok) setMembers(await mRes.json())
+    if (lRes.ok) setLocations(await lRes.json())
   }
 
   useEffect(() => { loadRefs() }, [])
-  useEffect(() => { load() }, [page, filterType])
+  useEffect(() => { load() }, [page, filterType, filterMemberId, filterLocationId])
 
   const totalPages = Math.ceil(total / limit)
 
   function openNew() {
     setEditing(null)
-    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false })
+    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '' })
     setShowForm(true)
   }
 
@@ -69,12 +92,15 @@ export default function TransactionsPage() {
       accountId: t.accountId ?? '', categoryId: t.categoryId ?? '', type: t.type,
       amount: t.amount, payee: t.payee ?? '', description: t.description ?? '',
       date: t.date.split('T')[0], isCleared: t.isCleared, isPrivate: t.isPrivate,
+      memberId: t.memberId ?? '', locationId: t.location?.id ?? '',
     })
     setShowForm(true)
   }
 
   async function handleSave() {
-    const body = editing ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null } : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null }
+    const body = editing
+      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null }
+      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null }
     const res = await fetch('/api/finance/transactions', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -100,18 +126,57 @@ export default function TransactionsPage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">Transactions</h1>
         <div className="flex items-center gap-2">
-          <select value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1) }}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs">
-            <option value="">All types</option>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-            <option value="transfer">Transfer</option>
-          </select>
+          <button onClick={() => setShowFilters(!showFilters)}
+            className="inline-flex items-center gap-1 text-xs rounded-md border border-input px-2 py-1 hover:bg-accent">
+            <Filter className="h-3.5 w-3.5" /> Filters
+            {(filterMemberId || filterLocationId) && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+          </button>
           <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <Plus className="h-4 w-4" /> Add Transaction
           </button>
         </div>
       </div>
+
+      {/* Advanced filters */}
+      {showFilters && (
+        <div className="rounded-lg border border-border p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Filters</span>
+            <button onClick={() => { setFilterMemberId(''); setFilterLocationId(''); setFilterType(''); setPage(1) }}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <X className="h-3 w-3" /> Clear
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Type</label>
+              <select value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1) }}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">All types</option>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Member</label>
+              <select value={filterMemberId} onChange={e => { setFilterMemberId(e.target.value); setPage(1) }}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">All members</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Location</label>
+              <select value={filterLocationId} onChange={e => { setFilterLocationId(e.target.value); setPage(1) }}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">All locations</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="rounded-lg border border-border p-4 space-y-3">
@@ -160,6 +225,22 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div>
+              <label className="text-xs text-muted-foreground">Member</label>
+              <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">No member</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Location</label>
+              <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">No location</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            <div>
               <label className="text-xs text-muted-foreground">Description</label>
               <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
@@ -203,13 +284,15 @@ export default function TransactionsPage() {
                   {!t.isCleared && <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-1.5 rounded">PENDING</span>}
                   {t.isPrivate && <span className="text-[10px] bg-muted px-1.5 rounded">PRIVATE</span>}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                   {t.category && <span>{t.category.name}</span>}
                   {t.account && <span>{t.account.name}</span>}
+                  {t.member && <span>{t.member.name}</span>}
+                  {t.location && <span>{t.location.name}</span>}
                   <span>{format(new Date(t.date), 'd MMM yyyy')}</span>
                 </div>
               </div>
-              <p className={cn('text-sm font-semibold', t.type === 'income' ? 'text-green-500' : t.type === 'transfer' ? 'text-blue-500' : 'text-red-500')}>
+              <p className={cn('text-sm font-semibold shrink-0', t.type === 'income' ? 'text-green-500' : t.type === 'transfer' ? 'text-blue-500' : 'text-red-500')}>
                 {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{formatCurrency(t.amount)}
               </p>
               <button onClick={() => openEdit(t)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>

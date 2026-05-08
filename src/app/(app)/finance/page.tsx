@@ -3,6 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { seedFinanceCategories } from '@/lib/finance-seed'
 import { OverviewClient } from './OverviewClient'
 import { startOfMonth, endOfMonth } from 'date-fns'
+import type {
+  FinanceAccount, FinanceTransaction, FinanceBudget,
+  FinanceRecurringBill, FinanceSavingsGoal, FinanceCategory, FinanceLocation,
+} from '@prisma/client'
 
 export default async function FinanceOverviewPage() {
   const user = await requireSession()
@@ -16,32 +20,64 @@ export default async function FinanceOverviewPage() {
   const monthStart = startOfMonth(now)
   const monthEnd = endOfMonth(now)
 
-  const [accounts, transactions, budgets, bills, savingsGoals] = await Promise.all([
+  const [
+    accounts,
+    transactions,
+    budgets,
+    bills,
+    savingsGoals,
+    categories,
+    familyUsers,
+    locations,
+  ] = await Promise.all([
     prisma.financeAccount.findMany({
       where: { familyId, isActive: true },
       orderBy: { sortOrder: 'asc' },
     }),
     prisma.financeTransaction.findMany({
       where: { familyId, date: { gte: monthStart, lte: monthEnd } },
-      include: { category: true, account: true },
+      include: {
+        category: true,
+        account: true,
+        location: { select: { id: true, name: true } },
+      },
       orderBy: { date: 'desc' },
-    }),
+    }) as Promise<(FinanceTransaction & { category: FinanceCategory | null; account: Pick<FinanceAccount, 'id' | 'name'> | null; location: { id: string; name: string } | null })[]>,
     prisma.financeBudget.findMany({
       where: { familyId, startDate: { lte: now }, endDate: { gte: now } },
       include: { category: true },
       orderBy: { name: 'asc' },
-    }),
+    }) as Promise<(FinanceBudget & { category: FinanceCategory | null })[]>,
     prisma.financeRecurringBill.findMany({
       where: { familyId, isActive: true },
-      include: { account: true, category: true },
+      include: {
+        account: true,
+        category: true,
+        location: { select: { id: true, name: true } },
+      },
       orderBy: { nextDueDate: 'asc' },
-    }),
+    }) as Promise<(FinanceRecurringBill & { account: Pick<FinanceAccount, 'id' | 'name'> | null; category: FinanceCategory | null; location: { id: string; name: string } | null })[]>,
     prisma.financeSavingsGoal.findMany({
       where: { familyId, isComplete: false },
       include: { account: true },
       orderBy: { createdAt: 'asc' },
+    }) as Promise<(FinanceSavingsGoal & { account: Pick<FinanceAccount, 'id' | 'name'> | null })[]>,
+    prisma.financeCategory.findMany({ where: { familyId } }),
+    prisma.user.findMany({
+      where: { familyId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.financeLocation.findMany({
+      where: { familyId, isActive: true },
     }),
   ])
+
+  // Build member lookup from family users
+  const memberById: Record<string, { id: string; name: string }> = {}
+  for (const m of familyUsers) {
+    memberById[m.id] = { id: m.id, name: m.name }
+  }
 
   // Compute monthly income/expense totals
   const monthlyIncome = transactions
@@ -54,9 +90,45 @@ export default async function FinanceOverviewPage() {
   // Compute total balance
   const totalBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0)
 
+  // Category type breakdowns
+  const personalCategories = categories.filter((c) => c.isPersonal)
+  const locationCategories = categories.filter((c) => c.isLocationBased)
+  const externalCategories = categories.filter((c) => c.isExternal)
+  const personalTransTotal = transactions
+    .filter((t) => t.type === 'expense' && t.categoryId && personalCategories.some((c) => c.id === t.categoryId))
+    .reduce((sum, t) => sum + t.amount, 0)
+  const locationTransTotal = transactions
+    .filter((t) => t.type === 'expense' && t.categoryId && locationCategories.some((c) => c.id === t.categoryId))
+    .reduce((sum, t) => sum + t.amount, 0)
+  const externalTransTotal = transactions
+    .filter((t) => t.type === 'expense' && t.categoryId && externalCategories.some((c) => c.id === t.categoryId))
+    .reduce((sum, t) => sum + t.amount, 0)
+
+  // Compute budget spent values
+  const spentByCategory: Record<string, number> = {}
+  for (const tx of transactions) {
+    if (tx.type === 'expense' && tx.categoryId) {
+      spentByCategory[tx.categoryId] = (spentByCategory[tx.categoryId] || 0) + tx.amount
+    }
+  }
+  const totalSpent = Object.values(spentByCategory).reduce((a, b) => a + b, 0)
+  const budgetsWithSpent = budgets.map((b) => ({
+    ...b,
+    spent: b.categoryId ? (spentByCategory[b.categoryId] || 0) : totalSpent,
+  }))
+
+  // Count overdue bills
+  const overdueBills = bills.filter((b) => new Date(b.nextDueDate) < now)
+
   return (
     <OverviewClient
-      accounts={accounts.map((a) => ({ ...a, createdAt: a.createdAt.toISOString(), updatedAt: a.updatedAt.toISOString() }))}
+      accounts={accounts.map((a) => ({
+        id: a.id, name: a.name, type: a.type, institution: a.institution,
+        currency: a.currency, currentBalance: a.currentBalance, creditLimit: a.creditLimit,
+        isActive: a.isActive, color: a.color, icon: a.icon,
+        sortOrder: a.sortOrder, familyId: a.familyId, createdAt: a.createdAt.toISOString(), updatedAt: a.updatedAt.toISOString(),
+        isBudget: false, isSavings: false, accountNumber: null, entityName: null, entityABN: null,
+      }))}
       monthlyIncome={monthlyIncome}
       monthlyExpense={monthlyExpense}
       totalBalance={totalBalance}
@@ -65,8 +137,10 @@ export default async function FinanceOverviewPage() {
         date: t.date.toISOString(),
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
+        member: t.memberId ? (memberById[t.memberId] ?? null) : null,
+        location: t.location ?? null,
       }))}
-      budgets={budgets.map((b) => ({
+      budgets={budgetsWithSpent.map((b) => ({
         ...b,
         startDate: b.startDate.toISOString(),
         endDate: b.endDate.toISOString(),
@@ -78,6 +152,14 @@ export default async function FinanceOverviewPage() {
         nextDueDate: b.nextDueDate.toISOString(),
         createdAt: b.createdAt.toISOString(),
         updatedAt: b.updatedAt.toISOString(),
+        member: b.memberId ? (memberById[b.memberId] ?? null) : null,
+        location: b.location ?? null,
+        autoPay: b.autoPay,
+        emailReminder: b.emailReminder,
+        reminderDays: b.reminderDays,
+        notes: b.notes,
+        endDate: b.endDate?.toISOString() ?? null,
+        monthOfYear: b.monthOfYear,
       }))}
       savingsGoals={savingsGoals.map((g) => ({
         ...g,
@@ -86,6 +168,12 @@ export default async function FinanceOverviewPage() {
         updatedAt: g.updatedAt.toISOString(),
       }))}
       timezone={timezone}
+      personalTransTotal={personalTransTotal}
+      locationTransTotal={locationTransTotal}
+      externalTransTotal={externalTransTotal}
+      members={familyUsers.map((m) => ({ id: m.id, name: m.name }))}
+      locations={locations.map((l) => ({ id: l.id, name: l.name }))}
+      overdueCount={overdueBills.length}
     />
   )
 }
