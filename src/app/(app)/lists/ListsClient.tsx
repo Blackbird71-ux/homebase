@@ -127,23 +127,20 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     // Update local state immediately
     setLists((prev) => {
       const listMap = new Map(prev.map((l) => [l.id, l]))
+      const reorderedIds = new Set(orderedIds)
       const updates = orderedIds.map((id, idx) => {
         const list = listMap.get(id)
         return list ? { ...list, sortOrder: idx } : list
       }).filter(Boolean) as SerializedList[]
-      
-      // Merge with any lists not in the orderedIds (shouldn't happen, but be safe)
-      const reorderedIds = new Set(orderedIds)
       const remaining = prev.filter((l) => !reorderedIds.has(l.id))
       return [...updates, ...remaining]
     })
 
-    // Persist to server
-    const items = orderedIds.map((id, idx) => ({ id, sortOrder: idx }))
-    const res = await fetch('/api/lists/reorder', {
+    // Persist per-user order to uiPreferences
+    const res = await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ uiPreferences: { listOrder: orderedIds } }),
     })
     if (!res.ok) {
       toast.error('Failed to save list order')

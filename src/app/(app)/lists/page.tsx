@@ -29,22 +29,36 @@ export default async function ListsPage() {
     }),
   ])
 
-  // Parse defaultListId from uiPreferences
+  // Parse defaultListId and listOrder from uiPreferences
   let defaultListId: string | null = null
+  let listOrder: string[] | null = null
   if (user?.uiPreferences) {
     try {
       const prefs = JSON.parse(user.uiPreferences)
       defaultListId = prefs.defaultListId ?? null
+      listOrder = Array.isArray(prefs.listOrder) ? prefs.listOrder : null
     } catch {
       // ignore parse errors
     }
   }
 
+  // Apply per-user list order if set
+  const orderedLists = listOrder
+    ? [...lists].sort((a, b) => {
+        const ai = listOrder!.indexOf(a.id)
+        const bi = listOrder!.indexOf(b.id)
+        if (ai === -1 && bi === -1) return a.sortOrder - b.sortOrder
+        if (ai === -1) return 1
+        if (bi === -1) return -1
+        return ai - bi
+      })
+    : lists
+
   // Serialize dates for client
   type RawList = Awaited<ReturnType<typeof getLists>>[number]
   type RawItem = RawList['items'][number]
 
-  const serialized = lists.map((l: RawList) => ({
+  const serialized = orderedLists.map((l: RawList) => ({
     ...l,
     createdAt: l.createdAt.toISOString(),
     items: l.items.map((i: RawItem) => ({

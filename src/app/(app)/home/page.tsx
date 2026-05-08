@@ -366,6 +366,7 @@ export default async function HomePage() {
   let dashboardShoppingListId: string | null = null
   let dashboardTodoListId: string | null = null
   let dashboardCardLayouts: Record<string, { x: number; y: number; width: number; height: number | 'auto' }> | null = null
+  let listOrder: string[] | null = null
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
@@ -373,6 +374,7 @@ export default async function HomePage() {
       dashboardShoppingListId = prefs.dashboardShoppingListId ?? null
       dashboardTodoListId = prefs.dashboardTodoListId ?? null
       dashboardCardLayouts = prefs.dashboardCardLayouts ?? null
+      listOrder = Array.isArray(prefs.listOrder) ? prefs.listOrder : null
     } catch {
       // ignore parse errors
     }
@@ -383,10 +385,23 @@ export default async function HomePage() {
     getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id, dashboardTodoListId),
     prisma.list.findMany({
       where: { familyId: user.familyId, type: 'TODO', isActive: true },
-      select: { id: true, name: true },
-      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, sortOrder: true },
+      orderBy: { sortOrder: 'asc' },
     }),
   ])
+
+  // Apply per-user list order to the todo list dropdown
+  const orderedTodoLists = (listOrder
+    ? [...availableTodoLists].sort((a, b) => {
+        const ai = listOrder!.indexOf(a.id)
+        const bi = listOrder!.indexOf(b.id)
+        if (ai === -1 && bi === -1) return a.sortOrder - b.sortOrder
+        if (ai === -1) return 1
+        if (bi === -1) return -1
+        return ai - bi
+      })
+    : availableTodoLists
+  ).map(({ id, name }) => ({ id, name }))
 
   return (
     <HomeClient
@@ -395,7 +410,7 @@ export default async function HomePage() {
       initialCards={cards}
       initialLayouts={dashboardCardLayouts}
       dashboardTodoListId={dashboardTodoListId}
-      availableTodoLists={availableTodoLists}
+      availableTodoLists={orderedTodoLists}
     />
   )
 }
