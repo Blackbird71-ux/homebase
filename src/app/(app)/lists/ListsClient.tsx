@@ -69,11 +69,11 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   const [listFilter, setListFilter] = useState<'all' | 'mine'>('mine')
 
   // Filtered view — pure client-side derivation, no extra network round-trip needed
-  // "mine"  → lists owned by the current user OR unowned (createdBy '' / null)
-  // "all"   → every list in the family
+  // "mine"   → lists owned by the current user OR unowned (createdBy '' / null)
+  // "family" → lists owned by other family members only
   const visibleLists = listFilter === 'mine'
     ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
-    : lists
+    : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
 
   // Determine initial active list: prefer ?list= param, then defaultListId, fall back to first visible
   const initialActiveId = (() => {
@@ -226,11 +226,25 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     createdBy: l.createdBy,
   }))
 
+  function handleFilterChange(filter: 'all' | 'mine') {
+    setListFilter(filter)
+    // If the currently active list is hidden by the new filter, switch to the first visible list
+    const newVisible = filter === 'mine'
+      ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
+      : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
+    if (activeListId && !newVisible.some((l) => l.id === activeListId)) {
+      const firstVisible = newVisible[0]
+      if (firstVisible) {
+        setActiveListId(firstVisible.id)
+      }
+    }
+  }
+
   const filterButtons = (
     <div className="flex gap-1">
       <button
         type="button"
-        onClick={() => setListFilter('all')}
+        onClick={() => handleFilterChange('all')}
         className={`flex-1 text-xs font-medium py-1 px-2 rounded transition-colors ${
           listFilter === 'all'
             ? 'bg-primary text-primary-foreground'
@@ -241,7 +255,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       </button>
       <button
         type="button"
-        onClick={() => setListFilter('mine')}
+        onClick={() => handleFilterChange('mine')}
         className={`flex-1 text-xs font-medium py-1 px-2 rounded transition-colors ${
           listFilter === 'mine'
             ? 'bg-primary text-primary-foreground'

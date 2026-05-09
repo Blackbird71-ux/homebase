@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet,
-  Check, Briefcase, Settings, X,
+  Check, Briefcase, Settings, ChevronDown, ChevronRight, BarChart3, List,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -127,6 +127,142 @@ const ENTITY_COLOURS = [
   '#06B6D4', '#EC4899', '#84CC16', '#F97316', '#6366F1',
 ]
 
+// ─── Category Spend View ──────────────────────────────────────────────────────
+
+interface CategoryGroup {
+  id: string | null
+  name: string
+  color: string | null
+  monthlyTotal: number
+  rules: BudgetRule[]
+}
+
+function CategorySpendView({ rules }: { rules: BudgetRule[] }) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  // Group rules by category
+  const included = rules.filter(r => r.isIncludedInPlanner)
+  const groupMap = new Map<string, CategoryGroup>()
+
+  for (const r of included) {
+    const key = r.categoryId ?? '__none__'
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        id: r.categoryId,
+        name: r.category?.name ?? 'Uncategorised',
+        color: r.category?.color ?? null,
+        monthlyTotal: 0,
+        rules: [],
+      })
+    }
+    const g = groupMap.get(key)!
+    g.monthlyTotal += toMonthly(r.amount, r.period)
+    g.rules.push(r)
+  }
+
+  const groups = Array.from(groupMap.values()).sort((a, b) => b.monthlyTotal - a.monthlyTotal)
+  const grandTotal = groups.reduce((sum, g) => sum + g.monthlyTotal, 0)
+  const maxTotal = groups.length > 0 ? groups[0].monthlyTotal : 0
+
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-6 text-center">
+        <p className="text-sm text-muted-foreground">No included budget rules to display.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {groups.map(g => {
+        const key = g.id ?? '__none__'
+        const isExpanded = expandedGroups.has(key)
+        const barPct = maxTotal > 0 ? (g.monthlyTotal / maxTotal) * 100 : 0
+
+        return (
+          <div key={key} className="rounded-lg border border-border overflow-hidden">
+            {/* Category header row */}
+            <button
+              onClick={() => toggleGroup(key)}
+              className="w-full flex items-center gap-3 px-3 py-3 hover:bg-accent/50 transition-colors text-left"
+            >
+              <div className="w-4 h-4 rounded-full shrink-0"
+                style={{ backgroundColor: g.color ?? '#6B7280' }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-semibold">{g.name}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">{g.rules.length} rule{g.rules.length !== 1 ? 's' : ''}</span>
+                    <span className="text-sm font-bold text-red-600">{fmtCurrency(g.monthlyTotal)}/mo</span>
+                    {isExpanded
+                      ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    }
+                  </div>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-primary/50 transition-all"
+                    style={{ width: `${Math.min(100, barPct)}%` }} />
+                </div>
+              </div>
+            </button>
+
+            {/* Expanded: individual rules */}
+            {isExpanded && (
+              <div className="border-t border-border bg-muted/20">
+                {g.rules.map(r => {
+                  const monthly = toMonthly(r.amount, r.period)
+                  return (
+                    <div key={r.id} className="flex items-center gap-3 px-4 py-2 border-b border-border/50 last:border-b-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0 ml-2" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm">{r.name}</span>
+                        {r.bill && (
+                          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground ml-2">from bill</span>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-medium">{fmtCurrency(r.amount)}</p>
+                        {r.period !== 'monthly' && (
+                          <p className="text-xs text-muted-foreground">{fmtCurrency(monthly)}/mo</p>
+                        )}
+                        {r.period === 'monthly' && (
+                          <p className="text-xs text-muted-foreground capitalize">{r.period}</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Grand total */}
+      <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 mt-1">
+        <div>
+          <p className="text-xs text-muted-foreground">Categories</p>
+          <p className="font-semibold">{groups.length}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-muted-foreground">Total / month</p>
+          <p className="font-semibold text-red-600">{fmtCurrency(grandTotal)}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function BudgetPage() {
@@ -137,6 +273,12 @@ export default function BudgetPage() {
   const [loading, setLoading]             = useState(true)
 
   const [activeEntityId, setActiveEntityId] = useState<string | null>(null)
+
+  // Income section collapse
+  const [incomeCollapsed, setIncomeCollapsed] = useState(false)
+
+  // View mode: 'list' | 'category'
+  const [expenseView, setExpenseView] = useState<'list' | 'category'>('list')
 
   // Income editing
   const [editingIncome, setEditingIncome]   = useState<IncomeStream | null>(null)
@@ -219,6 +361,7 @@ export default function BudgetPage() {
     setEditingIncome(null)
     setIncomeForm({ name: '', amount: 0, frequency: 'fortnightly', customInterval: '6', customUnit: 'months', entityId: activeEntityId ?? '' })
     setShowIncomeForm(true)
+    setIncomeCollapsed(false)
   }
 
   function openEditIncome(s: IncomeStream) {
@@ -230,6 +373,7 @@ export default function BudgetPage() {
       entityId: s.entityId ?? '',
     })
     setShowIncomeForm(true)
+    setIncomeCollapsed(false)
   }
 
   async function saveIncomeStreams(next: IncomeStream[]) {
@@ -370,6 +514,7 @@ export default function BudgetPage() {
 
   const activeEntity = entities.find(e => e.id === activeEntityId) ?? null
   const isCustomFreq = incomeForm.frequency === 'custom'
+  const includedStreams = activeStreams.filter(s => s.isIncluded)
 
   return (
     <div className="space-y-6">
@@ -440,7 +585,7 @@ export default function BudgetPage() {
           </div>
           <p className="text-2xl font-bold text-green-600">{fmtCurrency(monthlyIncome)}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {activeStreams.filter(s => s.isIncluded).length} stream{activeStreams.filter(s => s.isIncluded).length !== 1 ? 's' : ''} included
+            {includedStreams.length} stream{includedStreams.length !== 1 ? 's' : ''} included
           </p>
         </div>
         <div className="rounded-lg border border-border bg-red-500/5 p-4">
@@ -469,148 +614,180 @@ export default function BudgetPage() {
 
       {/* ── Income streams ─────────────────────────────────────────────────── */}
       <div>
+        {/* Section header with collapse toggle */}
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold">
-            Income streams
-            {activeEntity && <span className="text-muted-foreground font-normal text-sm ml-2">— {activeEntity.name}</span>}
-          </h2>
-          <button onClick={openNewIncome}
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-            <Plus className="h-4 w-4" /> Add income
+          <button
+            onClick={() => setIncomeCollapsed(c => !c)}
+            className="flex items-center gap-2 group"
+          >
+            <div className={cn(
+              'w-5 h-5 rounded border border-border flex items-center justify-center transition-colors',
+              'group-hover:border-primary group-hover:text-primary text-muted-foreground',
+            )}>
+              {incomeCollapsed
+                ? <Plus className="h-3 w-3" />
+                : <span className="text-base leading-none mb-0.5">−</span>
+              }
+            </div>
+            <h2 className="text-base font-semibold">
+              Income streams
+              {activeEntity && <span className="text-muted-foreground font-normal text-sm ml-2">— {activeEntity.name}</span>}
+            </h2>
           </button>
+
+          <div className="flex items-center gap-3">
+            {/* Collapsed total badge */}
+            {incomeCollapsed && activeStreams.length > 0 && (
+              <span className="text-sm font-semibold text-green-600 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-0.5">
+                {fmtCurrency(monthlyIncome)}/mo
+                <span className="text-xs font-normal text-muted-foreground ml-1.5">
+                  ({includedStreams.length} stream{includedStreams.length !== 1 ? 's' : ''})
+                </span>
+              </span>
+            )}
+            <button onClick={openNewIncome}
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <Plus className="h-4 w-4" /> Add income
+            </button>
+          </div>
         </div>
 
-        {showIncomeForm && (
-          <div className="rounded-lg border border-border p-4 space-y-3 mb-3">
-            <h3 className="font-semibold text-sm">{editingIncome ? 'Edit income stream' : 'New income stream'}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">Name *</label>
-                <input value={incomeForm.name}
-                  onChange={e => setIncomeForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Salary, Rent income, Interest"
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Amount *</label>
-                <input type="number" step="0.01" value={incomeForm.amount}
-                  onChange={e => setIncomeForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Frequency *</label>
-                <select value={incomeForm.frequency}
-                  onChange={e => setIncomeForm(p => ({ ...p, frequency: e.target.value as FrequencyOption }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="weekly">Weekly</option>
-                  <option value="fortnightly">Fortnightly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="yearly">Yearly</option>
-                  <option value="custom">Custom interval…</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity</label>
-                <select value={incomeForm.entityId}
-                  onChange={e => setIncomeForm(p => ({ ...p, entityId: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="">Personal / Family</option>
-                  {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Custom frequency row */}
-            {isCustomFreq && (
-              <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
-                <span className="text-xs text-muted-foreground shrink-0">Every</span>
-                <input
-                  type="number" min={1} max={999} value={incomeForm.customInterval}
-                  onChange={e => setIncomeForm(p => ({ ...p, customInterval: e.target.value }))}
-                  className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm text-center"
-                />
-                <select value={incomeForm.customUnit}
-                  onChange={e => setIncomeForm(p => ({ ...p, customUnit: e.target.value as CustomUnit }))}
-                  className="rounded-md border border-input bg-background px-2 py-1 text-sm">
-                  <option value="days">days</option>
-                  <option value="weeks">weeks</option>
-                  <option value="months">months</option>
-                  <option value="years">years</option>
-                </select>
-                <span className="text-xs text-muted-foreground">
-                  e.g. every 6 months for half-yearly interest
-                </span>
-              </div>
-            )}
-
-            {incomeForm.amount > 0 && (
-              <p className="text-xs text-muted-foreground">
-                = <strong>{fmtCurrency(streamToMonthly({
-                    id: '', name: '', isIncluded: true,
-                    amount: incomeForm.amount,
-                    frequency: incomeForm.frequency,
-                    customInterval: isCustomFreq ? parseInt(incomeForm.customInterval) || 1 : null,
-                    customUnit: isCustomFreq ? incomeForm.customUnit : null,
-                  }))}</strong>/month
-              </p>
-            )}
-            <div className="flex gap-2">
-              <button onClick={handleSaveIncome} disabled={savingIncome}
-                className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50">
-                {savingIncome ? 'Saving…' : editingIncome ? 'Update' : 'Add'}
-              </button>
-              <button onClick={() => { setShowIncomeForm(false); setEditingIncome(null) }}
-                className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            </div>
-          </div>
-        )}
-
-        {activeStreams.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border p-6 text-center">
-            <p className="text-sm text-muted-foreground">No income streams for {activeEntity?.name ?? 'this entity'}.</p>
-            <p className="text-xs text-muted-foreground mt-1">Add salary, rental income, investment interest, or any other regular income.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {activeStreams.map(s => {
-              const monthly = streamToMonthly(s)
-              return (
-                <div key={s.id} className={cn(
-                  'flex items-center gap-3 rounded-lg border p-3 transition-colors',
-                  s.isIncluded ? 'border-green-500/20 bg-green-500/5' : 'border-border opacity-60',
-                )}>
-                  <button onClick={() => toggleIncomeIncluded(s.id)}
-                    className={cn('w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
-                      s.isIncluded ? 'bg-green-500 border-green-500' : 'border-muted-foreground')}
-                    title={s.isIncluded ? 'Exclude from total' : 'Include in total'}>
-                    {s.isIncluded && <Check className="h-3 w-3 text-white" />}
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium">{s.name}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{freqLabel(s)}</span>
+        {/* Income body — only shown when expanded */}
+        {!incomeCollapsed && (
+          <>
+            {showIncomeForm && (
+              <div className="rounded-lg border border-border p-4 space-y-3 mb-3">
+                <h3 className="font-semibold text-sm">{editingIncome ? 'Edit income stream' : 'New income stream'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Name *</label>
+                    <input value={incomeForm.name}
+                      onChange={e => setIncomeForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="e.g. Salary, Rent income, Interest"
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-green-600">{fmtCurrency(s.amount)}</p>
-                    {s.frequency !== 'monthly' && (
-                      <p className="text-xs text-muted-foreground">{fmtCurrency(monthly)}/mo</p>
-                    )}
+                  <div>
+                    <label className="text-xs text-muted-foreground">Amount *</label>
+                    <input type="number" step="0.01" value={incomeForm.amount}
+                      onChange={e => setIncomeForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
                   </div>
-                  <button onClick={() => openEditIncome(s)} className="p-1 hover:bg-accent rounded">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDeleteIncome(s.id)} className="p-1 hover:bg-accent rounded text-red-500">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Frequency *</label>
+                    <select value={incomeForm.frequency}
+                      onChange={e => setIncomeForm(p => ({ ...p, frequency: e.target.value as FrequencyOption }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="weekly">Weekly</option>
+                      <option value="fortnightly">Fortnightly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                      <option value="custom">Custom interval…</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity</label>
+                    <select value={incomeForm.entityId}
+                      onChange={e => setIncomeForm(p => ({ ...p, entityId: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">Personal / Family</option>
+                      {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
+                  </div>
                 </div>
-              )
-            })}
-            {activeStreams.some(s => !s.isIncluded) && (
-              <p className="text-xs text-muted-foreground text-center pt-1">
-                Unticked streams are excluded from the monthly total.
-              </p>
+
+                {/* Custom frequency row */}
+                {isCustomFreq && (
+                  <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+                    <span className="text-xs text-muted-foreground shrink-0">Every</span>
+                    <input
+                      type="number" min={1} max={999} value={incomeForm.customInterval}
+                      onChange={e => setIncomeForm(p => ({ ...p, customInterval: e.target.value }))}
+                      className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm text-center"
+                    />
+                    <select value={incomeForm.customUnit}
+                      onChange={e => setIncomeForm(p => ({ ...p, customUnit: e.target.value as CustomUnit }))}
+                      className="rounded-md border border-input bg-background px-2 py-1 text-sm">
+                      <option value="days">days</option>
+                      <option value="weeks">weeks</option>
+                      <option value="months">months</option>
+                      <option value="years">years</option>
+                    </select>
+                    <span className="text-xs text-muted-foreground">
+                      e.g. every 6 months for half-yearly interest
+                    </span>
+                  </div>
+                )}
+
+                {incomeForm.amount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    = <strong>{fmtCurrency(streamToMonthly({
+                        id: '', name: '', isIncluded: true,
+                        amount: incomeForm.amount,
+                        frequency: incomeForm.frequency,
+                        customInterval: isCustomFreq ? parseInt(incomeForm.customInterval) || 1 : null,
+                        customUnit: isCustomFreq ? incomeForm.customUnit : null,
+                      }))}</strong>/month
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={handleSaveIncome} disabled={savingIncome}
+                    className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50">
+                    {savingIncome ? 'Saving…' : editingIncome ? 'Update' : 'Add'}
+                  </button>
+                  <button onClick={() => { setShowIncomeForm(false); setEditingIncome(null) }}
+                    className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+                </div>
+              </div>
             )}
-          </div>
+
+            {activeStreams.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                <p className="text-sm text-muted-foreground">No income streams for {activeEntity?.name ?? 'this entity'}.</p>
+                <p className="text-xs text-muted-foreground mt-1">Add salary, rental income, investment interest, or any other regular income.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activeStreams.map(s => {
+                  const monthly = streamToMonthly(s)
+                  return (
+                    <div key={s.id} className={cn(
+                      'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                      s.isIncluded ? 'border-green-500/20 bg-green-500/5' : 'border-border opacity-60',
+                    )}>
+                      <button onClick={() => toggleIncomeIncluded(s.id)}
+                        className={cn('w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
+                          s.isIncluded ? 'bg-green-500 border-green-500' : 'border-muted-foreground')}
+                        title={s.isIncluded ? 'Exclude from total' : 'Include in total'}>
+                        {s.isIncluded && <Check className="h-3 w-3 text-white" />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium">{s.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{freqLabel(s)}</span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold text-green-600">{fmtCurrency(s.amount)}</p>
+                        {s.frequency !== 'monthly' && (
+                          <p className="text-xs text-muted-foreground">{fmtCurrency(monthly)}/mo</p>
+                        )}
+                      </div>
+                      <button onClick={() => openEditIncome(s)} className="p-1 hover:bg-accent rounded">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteIncome(s.id)} className="p-1 hover:bg-accent rounded text-red-500">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )
+                })}
+                {activeStreams.some(s => !s.isIncluded) && (
+                  <p className="text-xs text-muted-foreground text-center pt-1">
+                    Unticked streams are excluded from the monthly total.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -626,10 +803,41 @@ export default function BudgetPage() {
               Bills flagged "include in budget" appear here automatically.
             </p>
           </div>
-          <button onClick={openNewRule}
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline shrink-0">
-            <Plus className="h-4 w-4" /> Add rule
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* View toggle */}
+            <div className="flex items-center rounded-md border border-border overflow-hidden">
+              <button
+                onClick={() => setExpenseView('list')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors',
+                  expenseView === 'list'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                )}
+                title="List view"
+              >
+                <List className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">List</span>
+              </button>
+              <button
+                onClick={() => setExpenseView('category')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors border-l border-border',
+                  expenseView === 'category'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                )}
+                title="Category spend view"
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">By Category</span>
+              </button>
+            </div>
+            <button onClick={openNewRule}
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <Plus className="h-4 w-4" /> Add rule
+            </button>
+          </div>
         </div>
 
         {showRuleForm && (
@@ -692,6 +900,8 @@ export default function BudgetPage() {
               Tick "Include in budget" when adding bills, or add manual rules above.
             </p>
           </div>
+        ) : expenseView === 'category' ? (
+          <CategorySpendView rules={activeRules} />
         ) : (
           <div className="space-y-2">
             {activeRules.map(r => {
