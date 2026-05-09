@@ -21,29 +21,37 @@ interface Bill {
   id: string; name: string; amount: number; frequency: string
   nextDueDate: string; paid: boolean; paidDate: string | null
   isActive: boolean; billType: string
-  category: { id: string; name: string; color: string | null } | null
+  category: { id: string; name: string; color: string | null; type?: string } | null
   vendor: { id: string; name: string } | null
 }
 
 interface DrillItem {
-  billId: string; billName: string; amount: number; monthlyAmount: number
-  paid: boolean; nextDueDate: string
+  billId: string; billName: string; amount: number; periodAmount: number
+  isOneOff: boolean; paid: boolean; nextDueDate: string
   categoryName: string | null; vendorName: string | null
 }
 
 interface GroupRow {
   key: string; label: string; color: string | null
-  totalMonthly: number; billCount: number; bills: DrillItem[]
+  totalPeriod: number; billCount: number; bills: DrillItem[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toMonthly(amount: number, frequency: string): number {
-  if (frequency === 'weekly')      return amount * 52 / 12
-  if (frequency === 'fortnightly') return amount * 26 / 12
-  if (frequency === 'quarterly')   return amount / 3
-  if (frequency === 'yearly')      return amount / 12
-  return amount
+/**
+ * Convert a recurring bill's amount to the total spend within a given period.
+ * One-off bills are NOT normalised — they contribute their face value only in
+ * the period they fall due (handled by the caller).
+ */
+function toPeriodAmount(amount: number, frequency: string, periodMonths: number): number {
+  // How many times does this frequency fire in periodMonths?
+  let timesPerMonth: number
+  if (frequency === 'weekly')      timesPerMonth = 52 / 12
+  else if (frequency === 'fortnightly') timesPerMonth = 26 / 12
+  else if (frequency === 'quarterly')   timesPerMonth = 1 / 3
+  else if (frequency === 'yearly')      timesPerMonth = 1 / 12
+  else                                  timesPerMonth = 1  // monthly
+  return amount * timesPerMonth * periodMonths
 }
 
 function fmtCurrency(n: number) {
@@ -103,20 +111,31 @@ export default function ReportsPage() {
 
   const { start, end, label } = getPeriodBounds(periodMode, anchor)
 
-  // ── Compute monthly-normalised bills for this period ──────────────────────
-  // A bill is "relevant" if it's active and its nextDueDate falls within the period
-  // OR if it's recurring and would fire at least once in the period.
-  // For simplicity we show all active unpaid bills (due up to end of period)
-  // and compute monthly-equivalent cost.
+  // ── Period multiplier ─────────────────────────────────────────────────────
+  const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
+
+  // ── Bills that fall within this period ────────────────────────────────────
+  // Recurring: include if active and nextDueDate <= end of period.
+  // One-off:   include only if nextDueDate falls within [start, end] so
+  //            they appear exactly once — not in every subsequent period.
 
   const relevantBills = useMemo(() => {
-    const endTs = end.getTime()
+    const startTs = start.getTime()
+    const endTs   = end.getTime()
     return bills.filter(b => {
       if (!b.isActive) return false
+      // Exclude transfers and income – only show actual costs
+      if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
+      if (b.billType === 'transfer') return false
       const dueTs = new Date(b.nextDueDate).getTime()
+      if (b.billType === 'one-off') {
+        // One-off: only show in the period it actually falls in
+        return dueTs >= startTs && dueTs <= endTs
+      }
+      // Recurring: show if due any time up to end of this period
       return dueTs <= endTs
     })
-  }, [bills, end])
+  }, [bills, start, end])
 
   // ── Group by category or vendor ───────────────────────────────────────────
 
@@ -137,17 +156,20 @@ export default function ReportsPage() {
       }
 
       if (!map.has(key)) {
-        map.set(key, { key, label, color, totalMonthly: 0, billCount: 0, bills: [] })
+        map.set(key, { key, label, color, totalPeriod: 0, billCount: 0, bills: [] })
       }
       const g = map.get(key)!
-      const monthly = toMonthly(b.amount, b.frequency)
-      g.totalMonthly += monthly
+      const isOneOff = b.billType === 'one-off'
+      // One-offs count their full amount once; recurring bills are scaled to period length
+      const periodAmt = isOneOff ? b.amount : toPeriodAmount(b.amount, b.frequency, periodMonths)
+      g.totalPeriod += periodAmt
       g.billCount++
       g.bills.push({
         billId: b.id,
         billName: b.name,
         amount: b.amount,
-        monthlyAmount: monthly,
+        periodAmount: periodAmt,
+        isOneOff,
         paid: b.paid,
         nextDueDate: b.nextDueDate,
         categoryName: b.category?.name ?? null,
@@ -155,16 +177,16 @@ export default function ReportsPage() {
       })
     }
 
-    return Array.from(map.values()).sort((a, b) => b.totalMonthly - a.totalMonthly)
-  }, [relevantBills, viewMode])
+    return Array.from(map.values()).sort((a, b) => b.totalPeriod - a.totalPeriod)
+  }, [relevantBills, viewMode, periodMonths])
 
-  const totalMonthly    = groups.reduce((s, g) => s + g.totalMonthly, 0)
-  const maxMonthly      = groups.length > 0 ? groups[0].totalMonthly : 0
-  const drillGroup      = drillKey ? groups.find(g => g.key === drillKey) : null
-
-  // ── Period multiplier for total period spend ──────────────────────────────
-  const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
-  const totalPeriod  = totalMonthly * periodMonths
+  const totalPeriod  = groups.reduce((s, g) => s + g.totalPeriod, 0)
+  const maxPeriod    = groups.length > 0 ? groups[0].totalPeriod : 0
+  const drillGroup   = drillKey ? groups.find(g => g.key === drillKey) : null
+  // Monthly average excludes one-offs (they distort recurring averages)
+  const recurringMonthly = relevantBills
+    .filter(b => b.billType !== 'one-off')
+    .reduce((s, b) => s + toPeriodAmount(b.amount, b.frequency, periodMonths) / periodMonths, 0)
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading reports…</div>
 
@@ -217,7 +239,7 @@ export default function ReportsPage() {
           icon={<TrendingDown className="h-4 w-4 text-red-500" />}
           label="Expected bills"
           value={fmtCurrency(totalPeriod)}
-          sub={periodMode !== 'month' ? `${fmtCurrency(totalMonthly)}/mo avg` : undefined}
+          sub={periodMode !== 'month' ? `${fmtCurrency(recurringMonthly)}/mo recurring` : undefined}
           colorClass="text-red-600"
         />
         <SummaryCard
@@ -250,7 +272,7 @@ export default function ReportsPage() {
               <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: drillGroup.color }} />
             )}
             <span className="text-sm text-muted-foreground ml-auto font-medium">
-              {fmtCurrency(drillGroup.totalMonthly * periodMonths)} {periodMode !== 'month' ? `(${fmtCurrency(drillGroup.totalMonthly)}/mo)` : ''}
+              {fmtCurrency(drillGroup.totalPeriod)}
             </span>
           </div>
           <div className="space-y-1.5">
@@ -267,10 +289,13 @@ export default function ReportsPage() {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold">{fmtCurrency(bill.amount)}</p>
-                  {bill.monthlyAmount !== bill.amount && (
-                    <p className="text-xs text-muted-foreground">{fmtCurrency(bill.monthlyAmount)}/mo</p>
+                  {!bill.isOneOff && bill.periodAmount !== bill.amount && (
+                    <p className="text-xs text-muted-foreground">{fmtCurrency(bill.periodAmount)} this {periodMode}</p>
                   )}
                 </div>
+                {bill.isOneOff && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-orange-500/10 text-orange-600">one-off</span>
+                )}
                 <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium',
                   bill.paid ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600')}>
                   {bill.paid ? 'Paid' : 'Due'}
@@ -289,10 +314,10 @@ export default function ReportsPage() {
           <div className="rounded-lg border border-border p-4 space-y-3">
             <div className="flex items-center justify-between text-xs text-muted-foreground font-medium pb-1 border-b border-border">
               <span>{viewMode === 'category' ? 'Category' : 'Vendor'}</span>
-              <span>Monthly est.</span>
+              <span>{periodMode === 'month' ? 'This month' : periodMode === 'quarter' ? 'This quarter' : 'This year'}</span>
             </div>
             {groups.map(g => {
-              const pct = maxMonthly > 0 ? (g.totalMonthly / maxMonthly) * 100 : 0
+              const pct = maxPeriod > 0 ? (g.totalPeriod / maxPeriod) * 100 : 0
               return (
                 <button key={g.key} onClick={() => setDrillKey(g.key)}
                   className="w-full text-left hover:bg-accent/50 rounded-md p-1.5 -mx-1.5 transition-colors group">
@@ -302,7 +327,7 @@ export default function ReportsPage() {
                       : <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30 shrink-0" />}
                     <span className="text-sm flex-1 font-medium">{g.label}</span>
                     <span className="text-xs text-muted-foreground">{g.billCount} bill{g.billCount !== 1 ? 's' : ''}</span>
-                    <span className="text-sm font-semibold min-w-[80px] text-right">{fmtCurrency(g.totalMonthly)}/mo</span>
+                    <span className="text-sm font-semibold min-w-[80px] text-right">{fmtCurrency(g.totalPeriod)}</span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -317,7 +342,7 @@ export default function ReportsPage() {
             })}
             <div className="flex items-center justify-between pt-2 border-t border-border text-sm">
               <span className="text-muted-foreground font-medium">Total</span>
-              <span className="font-bold">{fmtCurrency(totalMonthly)}/mo</span>
+              <span className="font-bold">{fmtCurrency(totalPeriod)}</span>
             </div>
           </div>
         )

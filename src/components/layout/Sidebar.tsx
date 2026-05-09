@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, ChevronLeft, ChevronRight, FileText, Wallet,
+  Plus, ChevronLeft, ChevronRight, FileText, DollarSign,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -15,7 +15,7 @@ const navItems = [
   { href: '/calendar',  label: 'Calendar',  icon: Calendar },
   { href: '/lists',     label: 'Lists',     icon: CheckSquare },
   { href: '/chores',    label: 'Chores',    icon: ListChecks },
-  { href: '/finance',   label: 'Finance',   icon: Wallet },
+  { href: '/finance',   label: 'Finance',   icon: DollarSign },
   { href: '/contacts',  label: 'Contacts',  icon: BookUser },
   { href: '/documents', label: 'Documents', icon: FileText },
   { href: '/recipes',   label: 'Recipes',   icon: ChefHat },
