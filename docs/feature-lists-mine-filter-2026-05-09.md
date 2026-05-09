@@ -2,7 +2,34 @@
 
 Added the ability to filter lists and todo items by "Mine" (created by the current user) or "Family" (all items). Lists default to "Mine" view.
 
-## Files Changed
+## Bug Fixes Applied (2026-05-09)
+
+### Issue 1: "Family" filter showing current user's lists
+**Before:** The "Family" filter showed *all* lists, including the current user's own lists. This meant a user's lists appeared in both "Mine" and "Family" views.
+
+**Fix:** Changed the "Family" filter semantic to show only lists where `createdBy` is set AND does NOT match the current user. Now:
+- **Mine** → `!l.createdBy || l.createdBy === currentUserId` (user's own lists + legacy unowned)
+- **Family** → `l.createdBy && l.createdBy !== currentUserId` (lists created by other family members only)
+
+### Issue 2: Filter button appeared to "do nothing"
+**Before:** The filter only controlled which lists appeared in the sidebar/chip bar. The main content panel always showed the currently selected list from the full set, so toggling the filter had no visible effect on the main content area.
+
+**Fix:** Added `handleFilterChange()` which:
+1. Updates the filter state
+2. Checks if the currently active list is still visible under the new filter
+3. If not, automatically switches `activeListId` to the first visible list
+
+This makes the filter feel responsive — toggling between Mine/Family now changes the main content panel.
+
+### Files Changed
+
+#### `src/app/(app)/lists/ListsClient.tsx`
+- Changed `visibleLists` logic for `'all'` ("Family") filter — now excludes current user's lists instead of showing everything
+- Added `handleFilterChange()` function that auto-navigates to a visible list when the active list is hidden by the filter
+- Updated all filter button click handlers (both desktop sidebar and mobile row) to use `handleFilterChange()` instead of `setListFilter()` directly
+- Removed stale comment about API refetching — filtering is purely client-side
+
+## Original Feature Implementation
 
 ### 1. `prisma/schema.prisma`
 - Added `createdBy String @default("")` field to the `List` model to track which user created each list
@@ -34,8 +61,7 @@ Added the ability to filter lists and todo items by "Mine" (created by the curre
   - **Desktop sidebar**: Toggle buttons at the top of the list panel
   - **Mobile**: Toggle buttons above the horizontal chip bar
 - Default filter is `'mine'`
-- Refetches lists from the API when filter changes (with `?filter=mine` param)
-- Client-side fallback filtering for instant UX: lists without a `createdBy` or lists where `createdBy === currentUserId` are shown in "Mine" view
+- Client-side filtering for instant UX: lists without a `createdBy` or lists where `createdBy === currentUserId` are shown in "Mine" view
 - Passes `members` and `currentUserId` to `NewListDialog`
 
 ### 8. `src/components/lists/NewListDialog.tsx`

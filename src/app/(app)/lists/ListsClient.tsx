@@ -277,7 +277,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             variant={listFilter === 'all' ? 'default' : 'outline'}
             size="sm"
             className="flex-1 h-7 text-xs px-2"
-            onClick={() => setListFilter('all')}
+            onClick={() => handleFilterChange('all')}
           >
             Family
           </Button>
@@ -285,7 +285,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             variant={listFilter === 'mine' ? 'default' : 'outline'}
             size="sm"
             className="flex-1 h-7 text-xs px-2"
-            onClick={() => setListFilter('mine')}
+            onClick={() => handleFilterChange('mine')}
           >
             Mine
           </Button>
