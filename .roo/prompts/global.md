@@ -8,12 +8,12 @@
 - If uncertain about something, ask for clarification
 
 ### Summary Before Action
-- Before ANY change, provide a structured summary containing:
+- Provide ONE structured summary per implementation phase (not per file edit):
   1. **Investigation findings** (what you discovered)
   2. **Proposed changes** (specific files and modifications)
   3. **Rationale** (why this approach)
   4. **Risks or considerations** (what could go wrong)
-  5. **Alternative approaches considered** (if any)
+- Do NOT re-summarize before every individual edit within an approved phase
 
 ### Quality Over Speed
 - Reject "quick fixes" - always implement proper solutions
@@ -32,6 +32,12 @@
 - Suggest settings page options when adding new functionality
 
 ## Code Quality Standards
+
+### Batching for Fewer Approvals
+- Read ALL needed files in parallel (single batch of read_file calls)
+- Make ALL related edits in as few apply_diff calls as possible (use multiple SEARCH/REPLACE blocks per call)
+- Run build/verify ONCE at end of each phase, not after every individual change
+- Do NOT ask "shall I proceed?" between edits within an approved phase
 
 ### Style & Polish
 - Modern, clean, professional appearance

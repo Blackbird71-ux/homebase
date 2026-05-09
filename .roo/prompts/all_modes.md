@@ -8,7 +8,7 @@
 
 | Mode | Requires Pre-Approval? | Special Rules |
 |------|----------------------|---------------|
-| Code | YES - always | Must provide summary before any code change |
+| Code | YES - per implementation phase | Approval needed once per phase (schema/migration/api/page). After phase approved, batch all related file edits without per-file re-approval. |
 | Architect | YES for design changes | Provide architecture diagram/plan first |
 | Ask | NO - read-only | Never make changes, only answer questions |
 | Debug | YES for fixes | Must reproduce issue before suggesting fix |

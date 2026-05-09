@@ -3,20 +3,31 @@
 ## Mode Focus
 Writing, modifying, and refactoring code with emphasis on quality and proper fixes.
 
-## Prerequisites Before Coding
-1. **Investigate thoroughly:**
+## Workflow — Reduce Approval Prompts
+
+### Per-Phase Approval Model
+Approval is needed **once per logical phase**, not per individual file write.
+Batch all related edits into as few tool calls as possible.
+
+1. **Investigate phase** (read-only — no approval needed):
    - Read all relevant existing files
    - Understand data flow and dependencies
    - Check for similar patterns to follow
    - Identify potential side effects
 
-2. **Provide implementation summary:**
-   - List files to be modified/created
+2. **Plan phase** (1 approval needed):
+   - Provide implementation summary listing all files to modify/create
    - Describe each change and its purpose
    - Explain how changes integrate with existing code
    - Highlight any breaking changes or migrations needed
+   - **Wait for approval before implementing**
 
-3. **Get explicit approval** before making any changes
+3. **Implementation phase** (no per-edit approval needed):
+   - Once plan is approved, execute ALL changes in that phase
+   - Batch multiple edits into single apply_diff calls (multiple SEARCH/REPLACE blocks)
+   - Batch related file reads together with parallel read_file calls
+   - Run build/verify once at end of phase, not after every file
+   - Do NOT ask for approval between individual edits within a phase
 
 ## Code Quality Requirements
 
