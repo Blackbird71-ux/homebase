@@ -54,6 +54,7 @@ function streamToMonthly(s: IncomeStream): number {
     case 'fortnightly': return amount * 26 / 12
     case 'monthly':     return amount
     case 'quarterly':   return amount / 3
+    case 'halfyearly':  return amount / 6
     case 'yearly':      return amount / 12
     default:            return amount
   }
@@ -63,6 +64,7 @@ function toMonthly(amount: number, period: string): number {
   if (period === 'weekly')      return amount * 52 / 12
   if (period === 'fortnightly') return amount * 26 / 12
   if (period === 'quarterly')   return amount / 3
+  if (period === 'halfyearly')  return amount / 6
   if (period === 'yearly')      return amount / 12
   return amount
 }

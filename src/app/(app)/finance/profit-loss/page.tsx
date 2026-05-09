@@ -52,6 +52,7 @@ function toPeriodAmount(amount: number, frequency: string, periodMonths: number)
   if (frequency === 'weekly')           timesPerMonth = 52 / 12
   else if (frequency === 'fortnightly') timesPerMonth = 26 / 12
   else if (frequency === 'quarterly')   timesPerMonth = 1 / 3
+  else if (frequency === 'halfyearly')  timesPerMonth = 1 / 6
   else if (frequency === 'yearly')      timesPerMonth = 1 / 12
   else                                   timesPerMonth = 1
   return amount * timesPerMonth * periodMonths

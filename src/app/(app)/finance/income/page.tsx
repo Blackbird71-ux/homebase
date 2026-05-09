@@ -55,6 +55,7 @@ function toMonthlyAmount(amount: number, frequency: string): number {
   if (frequency === 'weekly')      return amount * 52 / 12
   if (frequency === 'fortnightly') return amount * 26 / 12
   if (frequency === 'quarterly')   return amount / 3
+  if (frequency === 'halfyearly')  return amount / 6
   if (frequency === 'yearly')      return amount / 12
   return amount
 }
@@ -327,6 +328,7 @@ export default function IncomePage() {
       if (entry.frequency === 'fortnightly')  return addWeeks(due, 2)
       if (entry.frequency === 'weekly')       return addWeeks(due, 1)
       if (entry.frequency === 'quarterly')    return addMonths(due, 3)
+      if (entry.frequency === 'halfyearly')   return addMonths(due, 6)
       if (entry.frequency === 'yearly')       return addMonths(due, 12)
     }
     return due
@@ -381,6 +383,7 @@ export default function IncomePage() {
     if (frequency === 'fortnightly') return 14 * day
     if (frequency === 'monthly')     return 31 * day
     if (frequency === 'quarterly')   return 92 * day
+    if (frequency === 'halfyearly')  return 183 * day
     if (frequency === 'yearly')      return 366 * day
     return 31 * day
   }
@@ -557,6 +560,7 @@ export default function IncomePage() {
                   <option value="fortnightly">Fortnightly</option>
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly</option>
+                  <option value="halfyearly">6 Monthly / Half-Yearly</option>
                   <option value="yearly">Yearly</option>
                 </select>
               </div>

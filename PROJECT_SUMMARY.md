@@ -1,5 +1,5 @@
 # HomeBase — Project Summary
-## Current Build: Income Tax Tracking — ATO Compliance
+## Current Build: Half-Yearly Income Frequency
 
 ### Project Overview
 HomeBase is a comprehensive family management platform built with Next.js 16, TypeScript, Prisma, and SQLite. The application provides a centralised hub for family organisation including calendar management, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
@@ -89,6 +89,7 @@ Income tax tracking with ATO compliance support.
 
 #### Income Tracking
 - Recurring and one-off income entries
+- Frequency options: weekly, fortnightly, monthly, quarterly, **6 Monthly / Half-Yearly**, yearly
 - Mark as received — **date-received confirmation dialog** (defaults to today, fully backdatable)
   - **Auto-creates a `FinanceTransaction` (income)** on receipt so account balances stay accurate
   - Undo receipt: reverses the auto-created transaction and removes the spawned next occurrence
@@ -180,7 +181,7 @@ Income tax tracking with ATO compliance support.
 - **FinanceCategory**: Hierarchical income/expense/transfer categories (parent/child, 2 levels); usage counts via `_count`
 - **FinanceTransaction**: Individual transactions; auto-created on bill payment / income receipt; `sourceIncomeEntry` and `sourceBill` reverse relations; **`entityId` FK** (new) for multi-entity support
 - **FinanceRecurringBill**: Bills with `transactionId` FK → auto-created expense transaction; `parentBillId` for occurrence chaining
-- **FinanceIncomeEntry**: Income with `parentIncomeId` self-reference for occurrence chaining and `transactionId` FK → auto-created income transaction; `isTaxTracked` (boolean) and `taxRate` (nullable float) for ATO tax tracking
+- **FinanceIncomeEntry**: Income with `parentIncomeId` self-reference for occurrence chaining and `transactionId` FK → auto-created income transaction; `isTaxTracked` (boolean) and `taxRate` (nullable float) for ATO tax tracking; frequency supports `weekly | fortnightly | monthly | quarterly | halfyearly | yearly | one-off`
 - **FinanceBudget**: Budget rules linked to bills and categories
 - **FinanceSavingsGoal**: Savings goals linked to accounts; `currentAmount` auto-derived from account balance in API layer
 - **FinanceVendor**: Vendors/payers shared across bills and income; `_count` for usage stats
@@ -236,7 +237,7 @@ Income tax tracking with ATO compliance support.
 #### Pages
 | Page | Key changes in this build |
 |------|--------------------------|
-| `finance/income/page.tsx` | Tax tracking toggle + rate input in form; orange "TAX TRACKED" pill on rows |
+| `finance/income/page.tsx` | Tax tracking toggle + rate input in form; orange "TAX TRACKED" pill on rows; half-yearly frequency option added |
 | `finance/profit-loss/page.tsx` | Estimated Tax card (orange); auto-calculated ATO liability from tax-tracked income; net profit subtracts estimated tax |
 | `finance/reports/page.tsx` | Cash/Forecast toggle; label changes between "Paid bills" and "Expected bills" |
 | `finance/budget/page.tsx` | Income section reads from Income page (read-only); removed all income CRUD |
@@ -290,7 +291,8 @@ Migrations run automatically at container start via `docker/entrypoint.sh` — t
 
 | Commit | Description |
 |--------|-------------|
-| **Income Tax Tracking — ATO Compliance** *(current)* | `isTaxTracked`/`taxRate` on FinanceIncomeEntry (migration `20260516000000`); tax toggle + rate input in income form; orange "TAX TRACKED" pill on income rows; auto-calculated estimated tax in P&L report; orange Estimated Tax card and expenses line |
+| **Half-Yearly Income Frequency** *(current)* | Added `halfyearly` frequency option to recurring income entries — schema docs, API helpers (`advanceNextExpectedDate`, `streamToMonthly`, `mapFrequency`), UI dropdown, budget planner, and P&L report all updated. Value `halfyearly` consistent with existing Chore model. |
+| **Income Tax Tracking — ATO Compliance** | `isTaxTracked`/`taxRate` on FinanceIncomeEntry (migration `20260516000000`); tax toggle + rate input in income form; orange "TAX TRACKED" pill on income rows; auto-calculated estimated tax in P&L report; orange Estimated Tax card and expenses line |
 | **Finance — Accounting Fixes & UX Parity** | P&L cash/forecast toggle; Reports cash/forecast toggle; budget income → single source of truth (FinanceIncomeEntry); goals auto-progress from account balance; entity field on transactions (migration `20260515000000`); pending vs cleared balance on accounts; usage counts on categories/members/locations; vendor description fix; clickable reference data on bills (quick-filter) |
 | Finance — Income Accuracy & Category Sorting | Date-received/date-paid dialogs with backdating; auto-create FinanceTransaction on receipt/payment with undo; fixed overdue grace-period logic; cash-basis P&L; sorted+grouped category dropdowns; migration `20260514000000` |
 | Finance — Income Tracking & P&L | FinanceIncomeEntry model, income CRUD API, income page, received history, P&L report |
@@ -306,6 +308,7 @@ Migrations run automatically at container start via `docker/entrypoint.sh` — t
 ### Project Status
 - ✅ Finance — cash/forecast P&L and Reports, single-source income, goals from account balance, entity on transactions, pending balances, usage counts, clickable quick-filter on bills
 - ✅ Income Tax Tracking — `isTaxTracked`/`taxRate` on income entries; tax toggle + rate in UI; "TAX TRACKED" pill; auto-calculated estimated tax in P&L
+- ✅ Half-Yearly Income Frequency — `halfyearly` option added across income entry schema, all APIs, UI dropdown, budget planner, and P&L report calculations
 - ✅ Migration `20260516000000_add_income_tax_tracking` created and applied (runs automatically via entrypoint)
 - ✅ TypeScript: no breaking type changes introduced
 - ✅ Docker/NAS: no new `/data` subdirectories required; existing entrypoint unchanged

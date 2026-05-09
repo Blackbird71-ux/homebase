@@ -695,7 +695,7 @@ model FinanceIncomeEntry {
   id                  String               @id @default(cuid())
   name                String               // e.g. "Salary - May", "Rental Income", "Tax Refund"
   amount              Float                // Amount received (positive)
-  frequency           String               @default("monthly") // weekly | fortnightly | monthly | quarterly | yearly | one-off
+  frequency           String               @default("monthly") // weekly | fortnightly | monthly | quarterly | halfyearly | yearly | one-off
   incomeType          String               @default("recurring") // recurring | one-off
   isTaxTracked        Boolean              @default(false)   // Track this income for ATO/tax purposes
   taxRate             Float?               // Estimated tax rate (e.g. 30 for 30%). Null = not set
