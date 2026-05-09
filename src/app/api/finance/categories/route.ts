@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal } = json
+  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxableIncome, isTaxableExpense } = json
 
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
       isPersonal: isPersonal ?? false,
       isLocationBased: isLocationBased ?? false,
       isExternal: isExternal ?? false,
+      isTaxableIncome: isTaxableIncome ?? false,
+      isTaxableExpense: isTaxableExpense ?? false,
       familyId: session.familyId,
     },
   })
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal } = json
+  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxableIncome, isTaxableExpense } = json
 
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -103,6 +105,8 @@ export async function PUT(request: NextRequest) {
       ...(isPersonal !== undefined && { isPersonal }),
       ...(isLocationBased !== undefined && { isLocationBased }),
       ...(isExternal !== undefined && { isExternal }),
+      ...(isTaxableIncome !== undefined && { isTaxableIncome }),
+      ...(isTaxableExpense !== undefined && { isTaxableExpense }),
     },
   })
 

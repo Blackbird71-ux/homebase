@@ -13,7 +13,7 @@ interface SerializedAccount {
   isBudget: boolean; isSavings: boolean; accountNumber: string | null; entityName: string | null; entityABN: string | null
 }
 
-interface SerializedCategory { id: string; name: string; type: string; color: string | null; icon: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean }
+interface SerializedCategory { id: string; name: string; type: string; color: string | null; icon: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean; isTaxableIncome: boolean; isTaxableExpense: boolean }
 interface SerializedTransaction {
   id: string; accountId: string | null; categoryId: string | null
   type: string; amount: number; payee: string | null; description: string | null

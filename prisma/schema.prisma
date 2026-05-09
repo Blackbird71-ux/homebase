@@ -566,6 +566,8 @@ model FinanceCategory {
   isPersonal      Boolean           @default(false)  // Show member selector on transaction
   isLocationBased Boolean           @default(false)  // Show location selector on transaction
   isExternal      Boolean           @default(false)  // Belongs to external entity account
+  isTaxableIncome  Boolean          @default(false)  // Category generates taxable income
+  isTaxableExpense Boolean          @default(false)  // Category is a tax-deductible expense
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
