@@ -19,13 +19,14 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
-import { PlusIcon, StarIcon, Trash2Icon, CheckIcon, XIcon, GripVerticalIcon, ArrowLeftRightIcon } from 'lucide-react'
+import { PlusIcon, StarIcon, Trash2Icon, CheckIcon, XIcon, GripVerticalIcon, ArrowLeftRightIcon, PencilIcon } from 'lucide-react'
 
 interface ListMeta {
   id: string
   name: string
   type: 'SHOPPING' | 'TODO'
   _count: { items: number }
+  createdBy?: string | null
 }
 
 interface ListSelectorProps {
@@ -39,6 +40,7 @@ interface ListSelectorProps {
   onRename?: (id: string, newName: string) => void
   onReorder?: (orderedIds: string[]) => void
   onConvert?: (id: string, newType: 'SHOPPING' | 'TODO') => void
+  onEditList?: (id: string) => void
 }
 
 function EditableListName({
@@ -161,6 +163,7 @@ interface SortableListRowProps {
   onSetDefault?: (id: string) => void
   onRename?: (id: string, newName: string) => void
   onConvert?: (id: string, newType: 'SHOPPING' | 'TODO') => void
+  onEditList?: (id: string) => void
 }
 
 function SortableListRow({
@@ -172,6 +175,7 @@ function SortableListRow({
   onSetDefault,
   onRename,
   onConvert,
+  onEditList,
 }: SortableListRowProps) {
   const {
     attributes,
@@ -210,6 +214,15 @@ function SortableListRow({
         onNameChanged={(id, newName) => onRename?.(id, newName)}
       />
       <div className="flex items-center gap-0.5">
+        {onEditList && (
+          <button
+            onClick={() => onEditList(list.id)}
+            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            title="Edit list (change owner)"
+          >
+            <PencilIcon className="h-3 w-3" />
+          </button>
+        )}
         {onConvert && (
           <button
             onClick={() => onConvert(list.id, list.type === 'SHOPPING' ? 'TODO' : 'SHOPPING')}
@@ -257,6 +270,7 @@ export function ListSelector({
   onRename,
   onReorder,
   onConvert,
+  onEditList,
 }: ListSelectorProps) {
   const shopping = lists.filter((l) => l.type === 'SHOPPING')
   const todo = lists.filter((l) => l.type === 'TODO')
@@ -318,6 +332,7 @@ export function ListSelector({
               onSetDefault={onSetDefault}
               onRename={onRename}
               onConvert={onConvert}
+              onEditList={onEditList}
             />
           ))}
         </SortableContext>

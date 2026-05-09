@@ -1,0 +1,110 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
+
+interface EditListDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  list: { id: string; name: string; type: string; createdBy: string | null } | null
+  members: { id: string; name: string }[]
+  currentUserId: string
+  onUpdated: (id: string, changes: { createdBy?: string; name?: string }) => void
+}
+
+export function EditListDialog({
+  open,
+  onOpenChange,
+  list,
+  members,
+  currentUserId,
+  onUpdated,
+}: EditListDialogProps) {
+  const [ownerId, setOwnerId] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+
+  // Sync state when the list changes
+  useEffect(() => {
+    if (list) {
+      setOwnerId(list.createdBy || '')
+    }
+  }, [list])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!list) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/lists/${list.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ createdBy: ownerId }),
+      })
+      if (res.ok) {
+        onUpdated(list.id, { createdBy: ownerId })
+        toast.success(`"${list.name}" owner updated`)
+        onOpenChange(false)
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to update list')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!list) return null
+
+  const ownerName = members.find((m) => m.id === (ownerId || list.createdBy))?.name ?? 'Family'
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit list — {list.name}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-list-owner">Owner</Label>
+            <select
+              id="edit-list-owner"
+              value={ownerId || ''}
+              onChange={(e) => setOwnerId(e.target.value)}
+              className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
+            >
+              <option value="">Family (visible to everyone)</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}{m.id === currentUserId ? ' (me)' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {ownerId
+                ? `Only ${ownerName} will see this list in "Mine" view. Everyone sees it under "Family".`
+                : 'This list is shared — it appears for everyone under "Mine" view.'}
+            </p>
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
