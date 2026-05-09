@@ -704,7 +704,7 @@ model FinanceIncomeEntry {
   entityId        String?
   entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
   locationId      String?
-  location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   parentIncomeId  String?
   parentIncome    FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
   childEntries    FinanceIncomeEntry[] @relation("IncomeOccurrences")
