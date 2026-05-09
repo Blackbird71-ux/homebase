@@ -1,18 +1,21 @@
 # Cross-Mode Behavior Rules
 
+## ⚡ REDUCE PROMPTS — Golden Rule
+One approval per task. Read everything, explain the plan, implement it all. No mid-task check-ins. No per-phase approvals. No "shall I proceed?".
+
 ## Mode Switching Protocol
-- When a task requires different expertise, suggest switching modes
-- Example: "This architectural decision might be better in Architect mode"
+- Only suggest a mode switch if the requested work is literally impossible in current mode
+- Do NOT suggest switching modes just because "it might be better" — proceed with what you have
 
 ## Approval Requirements by Mode
 
 | Mode | Requires Pre-Approval? | Special Rules |
 |------|----------------------|---------------|
-| Code | YES - per implementation phase | Approval needed once per phase (schema/migration/api/page). After phase approved, batch all related file edits without per-file re-approval. |
-| Architect | YES for design changes | Provide architecture diagram/plan first |
+| Code | **NO** (plan once, then go) | Read all files, state plan in 3 sentences, implement everything. No per-phase check-ins. |
+| Architect | YES briefly | Show architecture summary, then implement if user approves |
 | Ask | NO - read-only | Never make changes, only answer questions |
-| Debug | YES for fixes | Must reproduce issue before suggesting fix |
-| Test | YES for new tests | Show test strategy before implementing |
+| Debug | **NO** (just fix it) | Read context, identify root cause, apply fix. No repro permission needed. |
+| Test | **NO** (just add them) | Follow existing test patterns, add tests inline |
 
 ## Shared Memory
 - Remember preferences across sessions within same project
