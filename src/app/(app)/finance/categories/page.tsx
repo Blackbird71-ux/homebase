@@ -17,7 +17,7 @@ interface Category {
   id: string; name: string; type: string; parentId: string | null
   color: string | null; icon: string | null; isSystem: boolean
   level: number; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean
-  isTaxableIncome: boolean; isTaxableExpense: boolean
+  isTaxDeduction: boolean
   parent?: { id: string; name: string } | null
   children?: Category[]
 }
@@ -54,8 +54,7 @@ function CategoryDialog({
     isPersonal: false,
     isLocationBased: false,
     isExternal: false,
-    isTaxableIncome: false,
-    isTaxableExpense: false,
+    isTaxDeduction: false,
   })
   const [saving, setSaving] = useState(false)
 
@@ -72,8 +71,7 @@ function CategoryDialog({
           isPersonal: editing.isPersonal,
           isLocationBased: editing.isLocationBased,
           isExternal: editing.isExternal,
-          isTaxableIncome: editing.isTaxableIncome,
-          isTaxableExpense: editing.isTaxableExpense,
+          isTaxDeduction: editing.isTaxDeduction,
         })
       } else {
         setForm({
@@ -85,8 +83,7 @@ function CategoryDialog({
           isPersonal: false,
           isLocationBased: false,
           isExternal: false,
-          isTaxableIncome: false,
-          isTaxableExpense: false,
+          isTaxDeduction: false,
         })
       }
     }
@@ -188,23 +185,15 @@ function CategoryDialog({
           </div>
           {/* Flags */}
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-            {/* Taxable flags — shown conditionally based on type */}
-            {(form.type === 'income' || form.type === 'transfer') && (
-              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input type="checkbox" checked={form.isTaxableIncome}
-                  onChange={e => setForm(p => ({ ...p, isTaxableIncome: e.target.checked }))}
-                  disabled={saving} />
-                <span className="text-green-600 dark:text-green-400 font-medium">Taxable Income</span>
-              </label>
-            )}
-            {(form.type === 'expense' || form.type === 'transfer') && (
-              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input type="checkbox" checked={form.isTaxableExpense}
-                  onChange={e => setForm(p => ({ ...p, isTaxableExpense: e.target.checked }))}
-                  disabled={saving} />
-                <span className="text-red-600 dark:text-red-400 font-medium">Taxable Expense</span>
-              </label>
-            )}
+            {/* Tax Deduction flag — shown for expense and transfer categories */}
+              {(form.type === 'expense' || form.type === 'transfer') && (
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.isTaxDeduction}
+                    onChange={e => setForm(p => ({ ...p, isTaxDeduction: e.target.checked }))}
+                    disabled={saving} />
+                  <span className="text-orange-600 dark:text-orange-400 font-medium">Tax Deduction</span>
+                </label>
+              )}
             {/* Separator before standard flags */}
             <span className="text-muted-foreground/40 mx-1 select-none">|</span>
             <label className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -266,8 +255,7 @@ function CategoryRow({
   const children = childrenMap.get(cat.id) || []
   const hasChildren = children.length > 0
   const flags: string[] = []
-  if (cat.isTaxableIncome) flags.push('TAXABLE INCOME')
-  if (cat.isTaxableExpense) flags.push('TAXABLE EXPENSE')
+  if (cat.isTaxDeduction) flags.push('TAX DEDUCTION')
   if (cat.isPersonal) flags.push('PRIVATE')
   if (cat.isLocationBased) flags.push('LOCATION')
   if (cat.isExternal) flags.push('EXTERNAL')

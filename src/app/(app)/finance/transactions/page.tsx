@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 
-interface Category { id: string; name: string; type: string; color: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean; isTaxableIncome: boolean; isTaxableExpense: boolean }
+interface Category { id: string; name: string; type: string; color: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean; isTaxDeduction: boolean }
 interface Account { id: string; name: string; type: string }
 interface Member { id: string; name: string }
 interface Location { id: string; name: string }

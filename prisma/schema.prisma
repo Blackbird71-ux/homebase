@@ -568,8 +568,7 @@ model FinanceCategory {
   isPersonal      Boolean           @default(false)  // Show member selector on transaction
   isLocationBased Boolean           @default(false)  // Show location selector on transaction
   isExternal      Boolean           @default(false)  // Belongs to external entity account
-  isTaxableIncome  Boolean          @default(false)  // Category generates taxable income
-  isTaxableExpense Boolean          @default(false)  // Category is a tax-deductible expense
+  isTaxDeduction   Boolean          @default(false)  // Expense/Transfer category that is tax deductible
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -685,33 +684,44 @@ model FinanceRecurringBill {
 }
 
 model FinanceIncomeEntry {
-  id              String               @id @default(cuid())
-  name            String               // e.g. "Salary - May", "Rental Income", "Tax Refund"
-  amount          Float                // Amount received (positive)
-  frequency       String               @default("monthly") // weekly | fortnightly | monthly | quarterly | yearly | one-off
-  incomeType      String               @default("recurring") // recurring | one-off
-  nextExpectedDate DateTime            // When next income is expected
-  endDate         DateTime?
-  isActive        Boolean              @default(true)
-  received        Boolean              @default(false)  // Has this occurrence been received?
-  receivedDate    DateTime?
-  notes           String?
-  memberId        String?              // Which family member earns this
-  accountId       String?
-  account         FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  categoryId      String?
-  category        FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  entityId        String?
-  entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  locationId      String?
-  location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  parentIncomeId  String?
-  parentIncome    FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
-  childEntries    FinanceIncomeEntry[] @relation("IncomeOccurrences")
-  familyId        String
-  family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id                  String               @id @default(cuid())
+  name                String               // e.g. "Salary - May", "Rental Income", "Tax Refund"
+  amount              Float                // Amount received (positive)
+  frequency           String               @default("monthly") // weekly | fortnightly | monthly | quarterly | yearly | one-off
+  incomeType          String               @default("recurring") // recurring | one-off
+  nextExpectedDate    DateTime             // When next income is expected
+  endDate             DateTime?
+  isActive            Boolean              @default(true)
+  received            Boolean              @default(false)  // Has this occurrence been received?
+  receivedDate        DateTime?
+  autoPay             Boolean              @default(false)  // Auto/direct deposit indicator
+  emailReminder       Boolean              @default(false)  // Send reminder when income is expected
+  reminderDays        Int                  @default(3)      // Days before nextExpectedDate to remind
+  dayOfMonth          Int?                 // Expected day of month (1-31)
+  monthOfYear         Int?                 // For yearly income (1-12)
+  recurrenceInterval  String?              // Custom recurrence detail
+  invoiceReceived     Boolean              @default(false)  // Invoice/remittance advice received
+  invoiceReceivedDate DateTime?
+  notes               String?
+  memberId            String?              // Which family member earns this
+  accountId           String?
+  account             FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId          String?
+  category            FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  vendorId            String?              // Payer / source (employer, tenant, etc.)
+  vendor              FinanceVendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  entityId            String?
+  entity              FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  locationId          String?
+  location            FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  parentIncomeId      String?
+  parentIncome        FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
+  childEntries        FinanceIncomeEntry[] @relation("IncomeOccurrences")
+  attachments         IncomeAttachment[]
+  familyId            String
+  family              Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([familyId])
   @@index([familyId, isActive])
@@ -720,6 +730,23 @@ model FinanceIncomeEntry {
   @@index([memberId])
   @@index([parentIncomeId])
   @@index([entityId])
+  @@index([vendorId])
+}
+
+model IncomeAttachment {
+  id           String             @id @default(cuid())
+  incomeId     String
+  income       FinanceIncomeEntry @relation(fields: [incomeId], references: [id], onDelete: Cascade)
+  familyId     String
+  title        String             // Display name (e.g. "Payslip May 2026")
+  fileName     String             // UUID-based filename on disk
+  fileSize     Int                @default(0)
+  mimeType     String             @default("application/octet-stream")
+  uploadedById String
+  createdAt    DateTime           @default(now())
+
+  @@index([incomeId])
+  @@index([familyId])
 }
 
 model BillAttachment {
@@ -822,6 +849,7 @@ model FinanceVendor {
   family              Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   recurringBills      FinanceRecurringBill[]
   transactions        FinanceTransaction[]
+  incomeEntries       FinanceIncomeEntry[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
