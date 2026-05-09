@@ -221,7 +221,7 @@ export async function PATCH(request: NextRequest) {
           locationId: existing.locationId,
           isCleared: true,       // money is already in hand
           reconciledDate: actualReceivedDate,
-          createdBy: session.userId,
+          createdBy: session.id,
           familyId: session.familyId,
         },
       })
