@@ -5,18 +5,20 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const tabs = [
-  { href: '/finance',         label: 'Overview',     exact: true },
-  { href: '/finance/accounts', label: 'Accounts',    exact: false },
+  { href: '/finance',            label: 'Overview',     exact: true },
+  { href: '/finance/accounts',   label: 'Accounts',     exact: false },
   { href: '/finance/transactions', label: 'Transactions', exact: false },
-  { href: '/finance/bills',   label: 'Bills',        exact: false },
-  { href: '/finance/budget',  label: 'Budget',       exact: false },
-  { href: '/finance/goals',   label: 'Goals',        exact: false },
-  { href: '/finance/reports', label: 'Reports',      exact: false },
-  { href: '/finance/vendors',   label: 'Vendors',   exact: false },
-  { href: '/finance/entities',  label: 'Entities',  exact: false },
-  { href: '/finance/members',   label: 'Members',   exact: false },
-  { href: '/finance/locations', label: 'Locations', exact: false },
-  { href: '/finance/categories', label: 'Categories', exact: false },
+  { href: '/finance/bills',      label: 'Bills',        exact: false },
+  { href: '/finance/income',     label: 'Income',       exact: false },
+  { href: '/finance/budget',     label: 'Budget',       exact: false },
+  { href: '/finance/goals',      label: 'Goals',        exact: false },
+  { href: '/finance/reports',    label: 'Reports',      exact: false },
+  { href: '/finance/profit-loss', label: 'P&L',         exact: false },
+  { href: '/finance/vendors',    label: 'Vendors',      exact: false },
+  { href: '/finance/entities',   label: 'Entities',     exact: false },
+  { href: '/finance/members',    label: 'Members',      exact: false },
+  { href: '/finance/locations',  label: 'Locations',    exact: false },
+  { href: '/finance/categories', label: 'Categories',   exact: false },
 ]
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {

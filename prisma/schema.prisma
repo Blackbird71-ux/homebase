@@ -43,6 +43,7 @@ model Family {
   financeLocations       FinanceLocation[]
   financeVendors         FinanceVendor[]
   financeEntities        FinanceEntity[]
+  financeIncomeEntries   FinanceIncomeEntry[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
 }
 
@@ -543,6 +544,7 @@ model FinanceAccount {
   transactions    FinanceTransaction[]
   savingsGoals    FinanceSavingsGoal[]
   recurringBills  FinanceRecurringBill[]
+  incomeEntries   FinanceIncomeEntry[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -573,6 +575,7 @@ model FinanceCategory {
   transactions    FinanceTransaction[]
   budgetRules     FinanceBudget[]
   recurringBills  FinanceRecurringBill[]
+  incomeEntries   FinanceIncomeEntry[]
   vendors         FinanceVendor[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -681,6 +684,44 @@ model FinanceRecurringBill {
   @@index([entityId])
 }
 
+model FinanceIncomeEntry {
+  id              String               @id @default(cuid())
+  name            String               // e.g. "Salary - May", "Rental Income", "Tax Refund"
+  amount          Float                // Amount received (positive)
+  frequency       String               @default("monthly") // weekly | fortnightly | monthly | quarterly | yearly | one-off
+  incomeType      String               @default("recurring") // recurring | one-off
+  nextExpectedDate DateTime            // When next income is expected
+  endDate         DateTime?
+  isActive        Boolean              @default(true)
+  received        Boolean              @default(false)  // Has this occurrence been received?
+  receivedDate    DateTime?
+  notes           String?
+  memberId        String?              // Which family member earns this
+  accountId       String?
+  account         FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId      String?
+  category        FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  entityId        String?
+  entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  locationId      String?
+  location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  parentIncomeId  String?
+  parentIncome    FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
+  childEntries    FinanceIncomeEntry[] @relation("IncomeOccurrences")
+  familyId        String
+  family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, isActive])
+  @@index([familyId, nextExpectedDate])
+  @@index([familyId, received])
+  @@index([memberId])
+  @@index([parentIncomeId])
+  @@index([entityId])
+}
+
 model BillAttachment {
   id           String               @id @default(cuid())
   billId       String
@@ -742,6 +783,7 @@ model FinanceLocation {
 
   transactions FinanceTransaction[]
   recurringBills FinanceRecurringBill[]
+  incomeEntries FinanceIncomeEntry[]
 
   @@index([familyId])
   @@index([familyId, isActive])
@@ -801,6 +843,7 @@ model FinanceEntity {
   family      Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   budgetRules     FinanceBudget[]
   recurringBills  FinanceRecurringBill[]
+  incomeEntries   FinanceIncomeEntry[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
