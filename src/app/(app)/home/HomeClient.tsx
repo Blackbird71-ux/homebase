@@ -16,8 +16,12 @@ interface HomeClientProps {
   timezone: string
   initialCards: DashboardCardConfig[]
   initialLayouts?: CardLayoutMap | null
+  dashboardShoppingListId?: string | null
+  availableShoppingLists?: { id: string; name: string }[]
   dashboardTodoListId?: string | null
   availableTodoLists?: { id: string; name: string }[]
+  dashboardScope?: ScopeDays
+  dashboardChoreShowOnlyMine?: boolean
 }
 
 export function HomeClient({
@@ -25,14 +29,20 @@ export function HomeClient({
   timezone,
   initialCards,
   initialLayouts,
+  dashboardShoppingListId,
+  availableShoppingLists,
   dashboardTodoListId,
   availableTodoLists,
+  dashboardScope,
+  dashboardChoreShowOnlyMine,
 }: HomeClientProps) {
   const [data, setData] = useState(initialData)
   const [cards, setCards] = useState(initialCards)
   const [customiserOpen, setCustomiserOpen] = useState(false)
-  const [scope, setScope] = useState<ScopeDays>(7)
+  const [scope, setScope] = useState<ScopeDays>(dashboardScope ?? 7)
+  const [choreShowOnlyMine, setChoreShowOnlyMine] = useState(dashboardChoreShowOnlyMine ?? false)
   const [currentTodoListId, setCurrentTodoListId] = useState<string | null>(dashboardTodoListId ?? null)
+  const [currentShoppingListId, setCurrentShoppingListId] = useState<string | null>(dashboardShoppingListId ?? null)
   const [loading, setLoading] = useState(false)
   const gridRef = useRef<DashboardGridHandle>(null)
 
@@ -75,11 +85,12 @@ export function HomeClient({
     setCards(savedCards)
   }
 
-  const fetchDashboard = useCallback(async (newScope: ScopeDays, todoListId: string | null) => {
+  const fetchDashboard = useCallback(async (newScope: ScopeDays, todoListId: string | null, shoppingListId: string | null) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ scope: String(newScope) })
       if (todoListId) params.set('dashboardTodoListId', todoListId)
+      if (shoppingListId) params.set('dashboardShoppingListId', shoppingListId)
       const res = await fetch(`/api/dashboard?${params.toString()}`)
       if (res.ok) {
         const freshData: DashboardData = await res.json()
@@ -94,8 +105,30 @@ export function HomeClient({
 
   const handleScopeChange = useCallback(async (newScope: ScopeDays) => {
     setScope(newScope)
-    await fetchDashboard(newScope, currentTodoListId)
-  }, [currentTodoListId, fetchDashboard])
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uiPreferences: { dashboardScope: newScope } }),
+      })
+    } catch {
+      // Silently fail
+    }
+    await fetchDashboard(newScope, currentTodoListId, currentShoppingListId)
+  }, [currentTodoListId, currentShoppingListId, fetchDashboard])
+
+  const handleChoreShowOnlyMineChange = useCallback(async (onlyMine: boolean) => {
+    setChoreShowOnlyMine(onlyMine)
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uiPreferences: { dashboardChoreShowOnlyMine: onlyMine } }),
+      })
+    } catch {
+      // Silently fail
+    }
+  }, [])
 
   const handleTodoListChange = useCallback(async (listId: string) => {
     setCurrentTodoListId(listId)
@@ -108,8 +141,22 @@ export function HomeClient({
     } catch {
       // Silently fail
     }
-    await fetchDashboard(scope, listId)
-  }, [scope, fetchDashboard])
+    await fetchDashboard(scope, listId, currentShoppingListId)
+  }, [scope, currentShoppingListId, fetchDashboard])
+
+  const handleShoppingListChange = useCallback(async (listId: string) => {
+    setCurrentShoppingListId(listId)
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uiPreferences: { dashboardShoppingListId: listId } }),
+      })
+    } catch {
+      // Silently fail
+    }
+    await fetchDashboard(scope, currentTodoListId, listId)
+  }, [scope, currentTodoListId, fetchDashboard])
 
   const handleResetLayout = useCallback(async () => {
     gridRef.current?.resetLayouts()
@@ -161,6 +208,11 @@ export function HomeClient({
           availableTodoLists={availableTodoLists}
           selectedTodoListId={currentTodoListId}
           onTodoListChange={handleTodoListChange}
+          choreShowOnlyMine={choreShowOnlyMine}
+          onChoreShowOnlyMineChange={handleChoreShowOnlyMineChange}
+          availableShoppingLists={availableShoppingLists}
+          selectedShoppingListId={currentShoppingListId}
+          onShoppingListChange={handleShoppingListChange}
         />
       </div>
       <DashboardCustomiser

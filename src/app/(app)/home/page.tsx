@@ -49,6 +49,7 @@ function buildChoreSchedule(
         lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
         lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
         isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayStart : false),
       })),
     })
   }
@@ -213,12 +214,18 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
             isActive: true,
             nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
           },
-          include: {
+          select: {
+            id: true,
+            title: true,
+            frequency: true,
+            note: true,
+            nextDueDate: true,
+            allowEarlyStart: true,
             currentAssignee: { select: { id: true, name: true } },
             completions: {
               orderBy: { completedAt: 'desc' },
               take: 1,
-              include: { completedBy: { select: { id: true, name: true } } },
+              select: { completedAt: true, completedBy: { select: { id: true, name: true } } },
             },
           },
           orderBy: { nextDueDate: 'asc' },
@@ -368,6 +375,8 @@ export default async function HomePage() {
   let dashboardTodoListId: string | null = null
   let dashboardCardLayouts: Record<string, { x: number; y: number; width: number; height: number | 'auto' }> | null = null
   let listOrder: string[] | null = null
+  let dashboardScope: 7 | 14 | 30 = 7
+  let dashboardChoreShowOnlyMine: boolean = false
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
@@ -376,18 +385,29 @@ export default async function HomePage() {
       dashboardTodoListId = prefs.dashboardTodoListId ?? null
       dashboardCardLayouts = prefs.dashboardCardLayouts ?? null
       listOrder = Array.isArray(prefs.listOrder) ? prefs.listOrder : null
+      if (prefs.dashboardScope && [7, 14, 30].includes(prefs.dashboardScope)) {
+        dashboardScope = prefs.dashboardScope as 7 | 14 | 30
+      }
+      if (typeof prefs.dashboardChoreShowOnlyMine === 'boolean') {
+        dashboardChoreShowOnlyMine = prefs.dashboardChoreShowOnlyMine
+      }
     } catch {
       // ignore parse errors
     }
   }
 
   const cards = mergeDashboardCards(dashboardCards)
-  const [data, availableTodoLists] = await Promise.all([
+  const [data, availableTodoLists, availableShoppingLists] = await Promise.all([
     getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id, dashboardTodoListId),
     prisma.list.findMany({
       where: { familyId: user.familyId, type: 'TODO', isActive: true },
       select: { id: true, name: true, sortOrder: true },
       orderBy: { sortOrder: 'asc' },
+    }),
+    prisma.list.findMany({
+      where: { familyId: user.familyId, type: 'SHOPPING', isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
     }),
   ])
 
@@ -410,8 +430,12 @@ export default async function HomePage() {
       timezone={timezone}
       initialCards={cards}
       initialLayouts={dashboardCardLayouts}
+      dashboardShoppingListId={dashboardShoppingListId}
+      availableShoppingLists={availableShoppingLists}
       dashboardTodoListId={dashboardTodoListId}
       availableTodoLists={orderedTodoLists}
+      dashboardScope={dashboardScope}
+      dashboardChoreShowOnlyMine={dashboardChoreShowOnlyMine}
     />
   )
 }

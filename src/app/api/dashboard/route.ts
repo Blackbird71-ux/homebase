@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
   const scopeParam = searchParams.get('scope')
   const scope = scopeParam === '14' ? 14 : scopeParam === '30' ? 30 : 7
   const dashboardTodoListId = searchParams.get('dashboardTodoListId')
+  const dashboardShoppingListId = searchParams.get('dashboardShoppingListId')
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const todayStr = new Intl.DateTimeFormat('en-CA', {
@@ -107,12 +108,17 @@ export async function GET(request: NextRequest) {
       include: mealPlanInclude,
     }),
     prisma.list.findMany({
-      where: { familyId: user.familyId, type: 'SHOPPING', isActive: true },
+      where: {
+        familyId: user.familyId,
+        type: 'SHOPPING',
+        isActive: true,
+        ...(dashboardShoppingListId ? { id: dashboardShoppingListId } : {}),
+      },
       include: {
-        items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
+        items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 10, select: { content: true } },
         _count: { select: { items: { where: { isCompleted: false } } } },
       },
-      take: 1,
+      ...(dashboardShoppingListId ? {} : { take: 1 }),
     }),
     prisma.list.findMany({
       where: {
