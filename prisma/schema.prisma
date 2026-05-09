@@ -664,7 +664,7 @@ model FinanceRecurringBill {
   parentBillId    String?
   parentBill      FinanceRecurringBill?  @relation("BillOccurrences", fields: [parentBillId], references: [id], onDelete: SetNull)
   childBills      FinanceRecurringBill[] @relation("BillOccurrences")
-  transactionId   String?               // FK -> FinanceTransaction created on payment
+  transactionId   String?               @unique // FK -> FinanceTransaction created on payment
   transaction     FinanceTransaction?   @relation("BillTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
@@ -722,7 +722,7 @@ model FinanceIncomeEntry {
   parentIncomeId      String?
   parentIncome        FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
   childEntries        FinanceIncomeEntry[] @relation("IncomeOccurrences")
-  transactionId       String?              // FK -> FinanceTransaction created on receipt
+  transactionId       String?              @unique // FK -> FinanceTransaction created on receipt
   transaction         FinanceTransaction?  @relation("IncomeTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   attachments         IncomeAttachment[]
   familyId            String
