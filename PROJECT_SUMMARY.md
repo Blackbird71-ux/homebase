@@ -142,6 +142,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **API Routes**: Full CRUD at `/api/finance/income` (GET, POST, PUT, DELETE, PATCH) with `advanceNextExpectedDate` helper for recurring date calculation; `/api/finance/income/received` (GET) for received-only queries
 - **Separate sessionStorage keys** (`income-` prefix) to avoid filter collisions with bills page
 - **Navigation**: Income and P&L tabs added to finance layout (14 tabs total)
+- **Collapsible Root Categories** (`/finance/categories`): Every root category with children now has an independent collapse/expand chevron toggle. "Not In Use" collapsed by default; all others expanded. Uses `Set<string>` for per-category collapse state. Dramatically reduces scrolling in the categories panel.
 
 ### Technical Architecture
 
@@ -298,6 +299,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **UI Overhaul**: Premium glassmorphism themes, colored tags, notes Family/Private/Secure tabs, PIN protection, lock status indicators
 - **Dashboard Rolling Forward**: Home screen and meal planner display from today going forward (rolling 7-day window). New Chore Schedule dashboard panel with scope toggle (7/14/30 days). Chore note field. Todo per-user assignment with My Tasks / Family Tasks filtering. Build verified with zero TypeScript errors.
 - **Income Tracking & P&L**: New FinanceIncomeEntry Prisma model with self-referencing occurrences, CRUD + PATCH API for marking received, income page (`/finance/income`), received income history (`/finance/income/received`), P&L report (`/finance/profit-loss`) with period controls and category drill-down. Income and P&L tabs added to finance layout. Build verified with zero TypeScript errors.
+- **Collapsible Root Categories**: Extended collapse/expand toggle from "Not In Use" only to ALL root categories with children. Per-category `Set<string>` collapse state with independent chevron toggles. "Not In Use" auto-collapsed on load; all others expanded by default. Dramatically reduces scrolling in the categories panel. Build verified with zero TypeScript errors.
 - **Previous Phases**: Recipe images, deployment scripts, bug fixes, and core feature development
 
 ### Project Status

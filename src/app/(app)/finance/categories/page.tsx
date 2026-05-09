@@ -319,7 +319,8 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
-  const [collapsedNotInUse, setCollapsedNotInUse] = useState(true) // collapsed by default
+  // Per-root-category collapse state: set of root category IDs that are collapsed
+  const [collapsedRootIds, setCollapsedRootIds] = useState<Set<string>>(new Set())
 
   async function load() {
     setLoading(true)
@@ -330,6 +331,34 @@ export default function CategoriesPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Auto-collapse "Not In Use" root after categories load
+  useEffect(() => {
+    const notInUse = categories.find(
+      c => !c.parentId && c.name.toLowerCase() === NOT_IN_USE_NAME.toLowerCase()
+    )
+    if (notInUse && !collapsedRootIds.has(notInUse.id)) {
+      setCollapsedRootIds(prev => {
+        const next = new Set(prev)
+        next.add(notInUse.id)
+        return next
+      })
+    }
+  // Only run when categories change (after initial load or refresh)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories])
+
+  function toggleCollapse(categoryId: string) {
+    setCollapsedRootIds(prev => {
+      const next = new Set(prev)
+      if (next.has(categoryId)) {
+        next.delete(categoryId)
+      } else {
+        next.add(categoryId)
+      }
+      return next
+    })
+  }
 
   function openNew() {
     setEditing(null)
@@ -409,20 +438,23 @@ export default function CategoriesPage() {
         <p className="text-sm text-muted-foreground">No categories yet. Create your first category above.</p>
       ) : (
         <div className="space-y-1">
-          {orderedRoots.map(cat => (
-            <CategoryRow
-              key={cat.id}
-              cat={cat}
-              childrenMap={childMap}
-              depth={0}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-              getTypeBadge={getTypeBadge}
-              isCollapsed={collapsedNotInUse && cat.name === NOT_IN_USE_NAME}
-              onToggleCollapse={() => setCollapsedNotInUse(prev => !prev)}
-              showToggle={cat.name === NOT_IN_USE_NAME}
-            />
-          ))}
+          {orderedRoots.map(cat => {
+            const hasChildren = (childMap.get(cat.id) || []).length > 0
+            return (
+              <CategoryRow
+                key={cat.id}
+                cat={cat}
+                childrenMap={childMap}
+                depth={0}
+                onEdit={openEdit}
+                onDelete={handleDelete}
+                getTypeBadge={getTypeBadge}
+                isCollapsed={collapsedRootIds.has(cat.id)}
+                onToggleCollapse={() => toggleCollapse(cat.id)}
+                showToggle={hasChildren}
+              />
+            )
+          })}
         </div>
       )}
     </div>
