@@ -9,6 +9,7 @@ export interface IncomeStream {
   amount: number
   frequency: 'weekly' | 'fortnightly' | 'monthly' | 'yearly'
   isIncluded: boolean
+  entityId?: string | null  // null/undefined = personal/family entity
 }
 
 function generateId() {
@@ -31,15 +32,15 @@ export async function PUT(request: NextRequest) {
   const session = await requireSession()
   const streams: IncomeStream[] = await request.json()
 
-  // Validate and sanitise
   const sanitised = streams.map((s) => ({
     id: s.id || generateId(),
     name: String(s.name || '').trim(),
     amount: parseFloat(String(s.amount)) || 0,
     frequency: ['weekly', 'fortnightly', 'monthly', 'yearly'].includes(s.frequency)
       ? s.frequency
-      : 'monthly',
+      : 'monthly' as const,
     isIncluded: Boolean(s.isIncluded),
+    entityId: s.entityId ?? null,
   })).filter((s) => s.name)
 
   await prisma.family.update({

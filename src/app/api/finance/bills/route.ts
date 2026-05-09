@@ -3,20 +3,23 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks } from 'date-fns'
 
+const BILL_INCLUDE = {
+  account: { select: { id: true, name: true } },
+  category: true,
+  location: { select: { id: true, name: true } },
+  vendor: { select: { id: true, name: true } },
+  entity: { select: { id: true, name: true, color: true, type: true } },
+  attachments: {
+    select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
+}
+
 export async function GET() {
   const session = await requireSession()
   const bills = await prisma.financeRecurringBill.findMany({
     where: { familyId: session.familyId },
-    include: {
-      account: { select: { id: true, name: true } },
-      category: true,
-      location: { select: { id: true, name: true } },
-      vendor: { select: { id: true, name: true } },
-      attachments: {
-        select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-      },
-    },
+    include: BILL_INCLUDE,
     orderBy: { nextDueDate: 'asc' },
   })
   return NextResponse.json(bills)
@@ -32,7 +35,7 @@ export async function POST(request: NextRequest) {
     notes, memberId, locationId, vendorId,
     billType, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
-    paid, paidDate,
+    paid, paidDate, entityId,
   } = json
 
   if (!name || !amount || !frequency) {
@@ -64,15 +67,10 @@ export async function POST(request: NextRequest) {
       invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null,
       paid: paid ?? false,
       paidDate: paidDate ? new Date(paidDate) : null,
+      entityId: entityId ?? null,
       familyId: session.familyId,
     },
-    include: {
-      account: { select: { id: true, name: true } },
-      category: true,
-      location: { select: { id: true, name: true } },
-      vendor: { select: { id: true, name: true } },
-      attachments: { select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true } },
-    },
+    include: BILL_INCLUDE,
   })
 
   return NextResponse.json(bill, { status: 201 })
@@ -88,17 +86,13 @@ export async function PUT(request: NextRequest) {
     notes, memberId, locationId, vendorId,
     billType, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
-    paid, paidDate,
+    paid, paidDate, entityId,
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-  const existing = await prisma.financeRecurringBill.findFirst({
-    where: { id, familyId: session.familyId },
-  })
-  if (!existing) {
-    return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
-  }
+  const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId } })
+  if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
   const bill = await prisma.financeRecurringBill.update({
     where: { id },
@@ -126,14 +120,9 @@ export async function PUT(request: NextRequest) {
       ...(invoiceReceivedDate !== undefined && { invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null }),
       ...(paid !== undefined && { paid }),
       ...(paidDate !== undefined && { paidDate: paidDate ? new Date(paidDate) : null }),
+      ...(entityId !== undefined && { entityId: entityId ?? null }),
     },
-    include: {
-      account: { select: { id: true, name: true } },
-      category: true,
-      location: { select: { id: true, name: true } },
-      vendor: { select: { id: true, name: true } },
-      attachments: { select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true } },
-    },
+    include: BILL_INCLUDE,
   })
 
   return NextResponse.json(bill)
@@ -145,32 +134,22 @@ export async function DELETE(request: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-  const existing = await prisma.financeRecurringBill.findFirst({
-    where: { id, familyId: session.familyId },
-  })
-  if (!existing) {
-    return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
-  }
+  const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId } })
+  if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
   await prisma.financeRecurringBill.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }
 
-/**
- * Advance a due date by the given frequency.
- * Mirrors the client-side getNextDue() logic in bills/page.tsx.
- */
 function advanceNextDueDate(date: Date, frequency: string): Date {
   if (frequency === 'monthly') return addMonths(date, 1)
   if (frequency === 'fortnightly') return addWeeks(date, 2)
   if (frequency === 'weekly') return addWeeks(date, 1)
   if (frequency === 'quarterly') return addMonths(date, 3)
   if (frequency === 'yearly') return addMonths(date, 12)
-  // fallback – monthly
   return addMonths(date, 1)
 }
 
-// PATCH – toggle pay/invoice state without sending the whole bill
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
@@ -178,12 +157,8 @@ export async function PATCH(request: NextRequest) {
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-  const existing = await prisma.financeRecurringBill.findFirst({
-    where: { id, familyId: session.familyId },
-  })
-  if (!existing) {
-    return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
-  }
+  const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId } })
+  if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
   const updateData: Record<string, any> = {}
   if (paid !== undefined) {
@@ -192,34 +167,25 @@ export async function PATCH(request: NextRequest) {
   }
   if (invoiceReceived !== undefined) {
     updateData.invoiceReceived = invoiceReceived
-    updateData.invoiceReceivedDate = invoiceReceived ? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()) : null
+    updateData.invoiceReceivedDate = invoiceReceived
+      ? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
+      : null
   }
 
-  // ── Undo payment: delete the spawned next-occurrence child if it exists ──
   if (paid === false && existing.paid === true) {
     await prisma.financeRecurringBill.deleteMany({
       where: { parentBillId: id, familyId: session.familyId, paid: false },
     })
   }
 
-  // Update the current record (mark paid or adjust invoice state)
   const bill = await prisma.financeRecurringBill.update({
     where: { id },
     data: updateData,
-    include: {
-      account: { select: { id: true, name: true } },
-      category: true,
-      location: { select: { id: true, name: true } },
-      vendor: { select: { id: true, name: true } },
-      attachments: { select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true } },
-    },
+    include: BILL_INCLUDE,
   })
 
-  // ── Recurring bill paid → create the next occurrence ──────────────
   if (paid === true && existing.billType !== 'one-off') {
     const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
-
-    // Only create the next occurrence if we haven't passed the end date
     if (!existing.endDate || newDueDate <= existing.endDate) {
       await prisma.financeRecurringBill.create({
         data: {
@@ -246,7 +212,8 @@ export async function PATCH(request: NextRequest) {
           invoiceReceivedDate: null,
           paid: false,
           paidDate: null,
-          parentBillId: existing.id,   // ← link child to paid parent for clean undo
+          parentBillId: existing.id,
+          entityId: existing.entityId,  // carry entity to next occurrence
           familyId: session.familyId,
         },
       })

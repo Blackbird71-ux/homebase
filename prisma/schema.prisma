@@ -42,7 +42,8 @@ model Family {
   financeSavingsGoals    FinanceSavingsGoal[]
   financeLocations       FinanceLocation[]
   financeVendors         FinanceVendor[]
-  budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded}]
+  financeEntities        FinanceEntity[]
+  budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
 }
 
 model User {
@@ -634,8 +635,8 @@ model FinanceRecurringBill {
   categoryId      String?
   category        FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   frequency       String               @default("monthly")  // weekly | fortnightly | monthly | quarterly | annual
-  dayOfMonth      Int?                 // For monthly/quarterly (1–31)
-  monthOfYear     Int?                 // For annual (1–12)
+  dayOfMonth      Int?                 // For monthly/quarterly (1-31)
+  monthOfYear     Int?                 // For annual (1-12)
   nextDueDate     DateTime             // Calculated next occurrence
   endDate         DateTime?
   isActive        Boolean              @default(true)
@@ -652,13 +653,13 @@ model FinanceRecurringBill {
   memberId        String?              // FK -> User. Inherited by auto-created transactions. Null = shared.
   locationId      String?
   location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  // Self-referential: when a recurring bill is paid, the spawned next-occurrence stores the paid bill's id here.
-  // This allows "undo payment" to cleanly remove the orphaned future occurrence.
   vendorId        String?
   vendor          FinanceVendor?         @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   parentBillId    String?
   parentBill      FinanceRecurringBill?  @relation("BillOccurrences", fields: [parentBillId], references: [id], onDelete: SetNull)
   childBills      FinanceRecurringBill[] @relation("BillOccurrences")
+  entityId        String?               // FK -> FinanceEntity; null = personal/default
+  entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -675,6 +676,7 @@ model FinanceRecurringBill {
   @@index([locationId])
   @@index([parentBillId])
   @@index([vendorId])
+  @@index([entityId])
 }
 
 model BillAttachment {
@@ -695,7 +697,7 @@ model BillAttachment {
 
 model FinanceBudget {
   id                  String             @id @default(cuid())
-  name                String             // e.g. "Groceries – monthly"
+  name                String             // e.g. "Groceries - monthly"
   categoryId          String?
   category            FinanceCategory?   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   amount              Float              // Budget limit for the period
@@ -708,6 +710,8 @@ model FinanceBudget {
   billId              String?            // FK to bill that auto-created this rule
   bill                FinanceRecurringBill? @relation(fields: [billId], references: [id], onDelete: SetNull)
   isIncludedInPlanner Boolean            @default(true)  // Show in budget planner cashflow
+  entityId            String?            // FK -> FinanceEntity; null = personal/default
+  entity              FinanceEntity?     @relation(fields: [entityId], references: [id], onDelete: SetNull)
   familyId            String
   family              Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
   createdAt           DateTime           @default(now())
@@ -717,13 +721,14 @@ model FinanceBudget {
   @@index([familyId, startDate, endDate])
   @@index([categoryId])
   @@index([billId])
+  @@index([entityId])
 }
 
 model FinanceLocation {
   id        String   @id @default(cuid())
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  name      String   // e.g. "Address A – 12 Oak St", "Address B – 45 Elm Ave"
+  name      String   // e.g. "Address A - 12 Oak St", "Address B - 45 Elm Ave"
   address   String?  // Full street address
   type      String   @default("primary")  // primary | investment | business | other
   isActive  Boolean  @default(true)
@@ -778,4 +783,26 @@ model FinanceVendor {
 
   @@unique([familyId, name])
   @@index([familyId])
+}
+
+model FinanceEntity {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "Personal", "Super Fund", "Unitrak", "Hopevale"
+  type        String   @default("personal")  // personal | superfund | trust | business | investment | other
+  description String?
+  color       String?  // hex colour for UI tabs/chips
+  icon        String?  // lucide icon name
+  isDefault   Boolean  @default(false)  // true = the primary personal/family entity
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  budgetRules     FinanceBudget[]
+  recurringBills  FinanceRecurringBill[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([familyId, name])
+  @@index([familyId])
+  @@index([familyId, isActive])
 }

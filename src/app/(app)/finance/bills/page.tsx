@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
   RefreshCw, Layers, Paperclip, Upload, X, FileText, Download, Building2,
-  BookmarkCheck,
+  BookmarkCheck, Briefcase,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
@@ -21,6 +21,7 @@ import {
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
 interface Vendor { id: string; name: string; defaultCategory?: { id: string; name: string } | null }
+interface Entity { id: string; name: string; color: string | null; type: string }
 interface BillAttachment {
   id: string; billId: string; title: string; fileName: string
   fileSize: number; mimeType: string; createdAt: string
@@ -37,19 +38,33 @@ export interface Bill {
   vendor: { id: string; name: string } | null
   member: Member | null
   location: Location | null
+  entity: Entity | null
   paid: boolean; paidDate: string | null
   invoiceReceived: boolean; invoiceReceivedDate: string | null
   billType: string; recurrenceInterval: string | null; parentBillId: string | null
   attachments?: BillAttachment[]
 }
 
-// Convert any bill frequency to a monthly-equivalent amount
 function toMonthlyAmount(amount: number, frequency: string): number {
   if (frequency === 'weekly')      return amount * 52 / 12
   if (frequency === 'fortnightly') return amount * 26 / 12
   if (frequency === 'quarterly')   return amount / 3
   if (frequency === 'yearly')      return amount / 12
-  return amount // monthly default
+  return amount
+}
+
+// Entity colour badge helper
+function entityChip(entity: Entity | null) {
+  if (!entity) return null
+  const bg = entity.color ?? '#6B7280'
+  return (
+    <span
+      className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+      style={{ backgroundColor: bg }}
+    >
+      {entity.name}
+    </span>
+  )
 }
 
 export default function BillsPage() {
@@ -59,14 +74,15 @@ export default function BillsPage() {
   const [members, setMembers]       = useState<Member[]>([])
   const [locations, setLocations]   = useState<Location[]>([])
   const [vendors, setVendors]       = useState<Vendor[]>([])
+  const [entities, setEntities]     = useState<Entity[]>([])
   const [budgetBillIds, setBudgetBillIds] = useState<Set<string>>(new Set())
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
   const [editing, setEditing]       = useState<Bill | null>(null)
-  const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter'>(() => {
+  const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('bills-dateRange')
-      if (saved === '14' || saved === '30' || saved === 'quarter') return saved
+      if (saved === '14' || saved === '30' || saved === 'quarter' || saved === '12months') return saved
     }
     return '30'
   })
@@ -90,7 +106,7 @@ export default function BillsPage() {
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
     dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
     endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
-    notes: '', memberId: '', locationId: '', vendorId: '',
+    notes: '', memberId: '', locationId: '', vendorId: '', entityId: '',
     billType: 'recurring', recurrenceInterval: '',
     invoiceReceived: false, invoiceReceivedDate: '',
     addToBudget: false,
@@ -113,19 +129,21 @@ export default function BillsPage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, mRes, lRes, vRes, bRes] = await Promise.all([
+    const [aRes, cRes, mRes, lRes, vRes, bRes, eRes] = await Promise.all([
       fetch('/api/finance/accounts'),
       fetch('/api/finance/categories'),
       fetch('/api/finance/members'),
       fetch('/api/finance/locations'),
       fetch('/api/finance/vendors'),
       fetch('/api/finance/budget'),
+      fetch('/api/finance/entities'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) setCategories(await cRes.json())
     if (mRes.ok) setMembers(await mRes.json())
     if (lRes.ok) setLocations(await lRes.json())
     if (vRes.ok) setVendors(await vRes.json())
+    if (eRes.ok) setEntities(await eRes.json())
     if (bRes.ok) {
       const budgets: any[] = await bRes.json()
       setBudgetBillIds(new Set(budgets.filter(b => b.billId).map(b => b.billId)))
@@ -134,8 +152,6 @@ export default function BillsPage() {
 
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
-
-  // ── Budget helpers ─────────────────────────────────────────────────────────
 
   async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
     if (addToBudget) {
@@ -149,6 +165,7 @@ export default function BillsPage() {
           amount: toMonthlyAmount(bill.amount, bill.frequency),
           categoryId: bill.category?.id ?? null,
           period: 'monthly',
+          entityId: bill.entity?.id ?? null,
         }),
       })
       setBudgetBillIds(prev => new Set([...prev, bill.id]))
@@ -161,8 +178,6 @@ export default function BillsPage() {
       setBudgetBillIds(prev => { const s = new Set(prev); s.delete(bill.id); return s })
     }
   }
-
-  // ── Attachment helpers ─────────────────────────────────────────────────────
 
   async function openAttachments(bill: Bill) {
     setAttachmentBillId(bill.id)
@@ -182,7 +197,7 @@ export default function BillsPage() {
       fd.append('file', file)
       fd.append('title', file.name.replace(/\.[^/.]+$/, ''))
       const res = await fetch(`/api/finance/bills/${billId}/attachments`, { method: 'POST', body: fd })
-      if (res.ok) { const newAttachment = await res.json(); setAttachments(prev => [...prev, newAttachment]); toast.success('Attachment uploaded') }
+      if (res.ok) { const a = await res.json(); setAttachments(prev => [...prev, a]); toast.success('Attachment uploaded') }
       else toast.error('Failed to upload attachment')
     } finally { setUploadingAttachment(false) }
   }
@@ -200,9 +215,7 @@ export default function BillsPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  // ── Filters ───────────────────────────────────────────────────────────────
-
-  function setDateRangePersisted(r: '14' | '30' | 'quarter') {
+  function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
     sessionStorage.setItem('bills-dateRange', r); setDateRange(r)
   }
 
@@ -214,11 +227,7 @@ export default function BillsPage() {
     })
   }
 
-  // ── Form helpers ──────────────────────────────────────────────────────────
-
-  function openNew() {
-    setEditing(null); setForm(emptyForm); setShowForm(true)
-  }
+  function openNew() { setEditing(null); setForm(emptyForm); setShowForm(true) }
 
   function openEdit(b: Bill) {
     setEditing(b)
@@ -230,8 +239,9 @@ export default function BillsPage() {
       nextDueDate: new Date(b.nextDueDate).toISOString().split('T')[0],
       endDate: b.endDate ? new Date(b.endDate).toISOString().split('T')[0] : '',
       autoPay: b.autoPay, emailReminder: b.emailReminder, reminderDays: b.reminderDays,
-      notes: b.notes ?? '', memberId: b.memberId ?? '', locationId: b.location?.id ?? '',
-      vendorId: b.vendor?.id ?? '',
+      notes: b.notes ?? '', memberId: b.memberId ?? '',
+      locationId: b.location?.id ?? '', vendorId: b.vendor?.id ?? '',
+      entityId: b.entity?.id ?? '',
       billType: b.billType ?? 'recurring', recurrenceInterval: b.recurrenceInterval ?? '',
       invoiceReceived: b.invoiceReceived ?? false,
       invoiceReceivedDate: b.invoiceReceivedDate
@@ -250,6 +260,7 @@ export default function BillsPage() {
       accountId: form.accountId || null,
       categoryId: form.categoryId || null,
       vendorId: form.vendorId || null,
+      entityId: form.entityId || null,
       dayOfMonth: form.dayOfMonth || null,
       monthOfYear: form.monthOfYear || null,
       endDate: form.endDate || null,
@@ -274,17 +285,13 @@ export default function BillsPage() {
     if (!res.ok) { const err = await res.json(); toast.error(err.error ?? 'Failed'); return }
     const savedBill: Bill = await res.json()
     toast.success(editing ? 'Bill updated' : 'Bill created')
-
-    // Sync budget rule
     await syncBudgetRule(savedBill, form.addToBudget)
-
     closeForm()
     load()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this bill?')) return
-    // Remove budget rule first
     await fetch('/api/finance/budget', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -316,13 +323,10 @@ export default function BillsPage() {
     else toast.error('Failed to update invoice status')
   }
 
-  // When vendor is selected, auto-fill category if bill has none yet
   function handleVendorChange(vendorId: string) {
     const vendor = vendors.find(v => v.id === vendorId)
     const update: any = { vendorId }
-    if (vendor?.defaultCategory && !form.categoryId) {
-      update.categoryId = vendor.defaultCategory.id
-    }
+    if (vendor?.defaultCategory && !form.categoryId) update.categoryId = vendor.defaultCategory.id
     setForm(p => ({ ...p, ...update }))
   }
 
@@ -355,6 +359,7 @@ export default function BillsPage() {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const rangeEnd = dateRange === '14' ? addDays(todayStart, 14)
     : dateRange === '30' ? addDays(todayStart, 30)
+    : dateRange === '12months' ? addMonths(todayStart, 12)
     : addMonths(todayStart, 3)
 
   function toLocalMidnight(d: Date): Date {
@@ -397,11 +402,11 @@ export default function BillsPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-          {(['14', '30', 'quarter'] as const).map(r => (
+          {(['14', '30', 'quarter', '12months'] as const).map(r => (
             <button key={r} onClick={() => setDateRangePersisted(r)}
               className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
                 dateRange === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
-              {r === '14' ? '14 Days' : r === '30' ? '30 Days' : 'Quarter'}
+              {r === '14' ? '14 Days' : r === '30' ? '30 Days' : r === 'quarter' ? 'Quarter' : '12 Months'}
             </button>
           ))}
         </div>
@@ -429,7 +434,6 @@ export default function BillsPage() {
         )}
       </div>
 
-      {/* Overdue banners */}
       {overdue.length > 0 && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
           <div className="flex items-center gap-2 text-red-500 font-medium mb-2">
@@ -463,17 +467,13 @@ export default function BillsPage() {
         </div>
       )}
 
-      {/* ── Bill Editor Modal ──────────────────────────────────────────────── */}
+      {/* Bill Editor Modal */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
-        <DialogContent
-          className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-          showCloseButton={true}
-        >
+        <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle>
           </DialogHeader>
 
-          {/* Bill type */}
           <div className="flex gap-4 pb-1">
             {(['recurring', 'one-off'] as const).map(bt => (
               <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -511,7 +511,6 @@ export default function BillsPage() {
                 </select>
               </div>
             )}
-            {/* Vendor */}
             <div>
               <label className="text-xs text-muted-foreground">Vendor</label>
               <div className="flex gap-1">
@@ -571,13 +570,30 @@ export default function BillsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
               </div>
             )}
+            {/* Assign To: members + entity separator */}
             <div>
-              <label className="text-xs text-muted-foreground">Assigned To</label>
+              <label className="text-xs text-muted-foreground">Assigned To (person)</label>
               <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">Shared (household)</option>
                 {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
+            </div>
+            {/* Entity selector */}
+            <div>
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                <Briefcase className="h-3 w-3" /> Entity / Fund
+              </label>
+              <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">Personal / Family</option>
+                {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              {entities.length === 0 && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Add entities (Super Fund, etc.) in the Budget Planner → Entities tab.
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Location</label>
@@ -589,7 +605,6 @@ export default function BillsPage() {
             </div>
           </div>
 
-          {/* Checkboxes row */}
           <div className="flex flex-wrap gap-6 pt-1">
             {form.billType === 'recurring' && (
               <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -624,7 +639,6 @@ export default function BillsPage() {
             )}
           </div>
 
-          {/* Budget toggle */}
           <div className={cn(
             'rounded-md border px-3 py-2.5 flex items-start gap-3',
             form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border',
@@ -642,7 +656,9 @@ export default function BillsPage() {
                   Creates a budget rule for{' '}
                   <strong>{formatCurrency(toMonthlyAmount(form.amount || 0, form.frequency))}</strong>/month
                   {form.frequency !== 'monthly' ? ` (${form.frequency} amount normalised to monthly)` : ''}.
-                  Visible on the Budget tab.
+                  {form.entityId && entities.find(e => e.id === form.entityId) && (
+                    <> Appears under <strong>{entities.find(e => e.id === form.entityId)!.name}</strong> tab.</>
+                  )}
                 </p>
               )}
             </label>
@@ -655,12 +671,8 @@ export default function BillsPage() {
           </div>
 
           <DialogFooter>
-            <button onClick={closeForm}
-              className="rounded-md border border-border px-4 py-1.5 text-sm">
-              Cancel
-            </button>
-            <button onClick={handleSave}
-              className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
+            <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
           </DialogFooter>
@@ -773,8 +785,7 @@ function BillRow({
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
   billAmountForCat: (bill: Bill, catId: string) => number
-  gridTemplate: string
-  inBudget: boolean
+  gridTemplate: string; inBudget: boolean
   onEdit: (b: Bill) => void; onDelete: (id: string) => void
   onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
   onOpenAttachments: (b: Bill) => void
@@ -813,6 +824,12 @@ function BillRow({
           {inBudget && (
             <span className="text-[10px] bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
               <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET
+            </span>
+          )}
+          {bill.entity && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+              style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>
+              {bill.entity.name}
             </span>
           )}
         </div>
