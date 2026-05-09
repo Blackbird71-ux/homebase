@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
   RefreshCw, Layers, Paperclip, Upload, X, FileText, Download, Building2,
-  BookmarkCheck, Briefcase,
+  BookmarkCheck, Briefcase, Eye, EyeOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
@@ -100,6 +100,7 @@ export default function BillsPage() {
   const [attachments, setAttachments]           = useState<BillAttachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null)
   const attachFileRef = useRef<HTMLInputElement>(null)
 
   const emptyForm = {
@@ -188,7 +189,19 @@ export default function BillsPage() {
     } finally { setAttachmentsLoading(false) }
   }
 
-  function closeAttachments() { setAttachmentBillId(null); setAttachments([]) }
+  function closeAttachments() { setAttachmentBillId(null); setAttachments([]); setPreviewAttachmentId(null) }
+
+  function togglePreview(attId: string) {
+    setPreviewAttachmentId(prev => prev === attId ? null : attId)
+  }
+
+  function isImageMime(mime: string) {
+    return mime.startsWith('image/')
+  }
+
+  function isPdfMime(mime: string) {
+    return mime === 'application/pdf'
+  }
 
   async function handleAttachmentUpload(billId: string, file: File) {
     setUploadingAttachment(true)
@@ -695,19 +708,51 @@ export default function BillsPage() {
             : attachments.length === 0 ? <p className="text-xs text-muted-foreground">No attachments yet.</p>
             : (
               <div className="space-y-1.5">
-                {attachments.map(att => (
-                  <div key={att.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="flex-1 truncate font-medium">{att.title}</span>
-                    <span className="text-xs text-muted-foreground">{formatFileSize(att.fileSize)}</span>
-                    <a href={`/api/finance/bills/${attachmentBillId}/attachments/${att.id}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-accent text-primary">
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
-                    <button onClick={() => handleAttachmentDelete(attachmentBillId, att.id)} className="p-1 rounded hover:bg-accent text-red-500">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
+                {attachments.map(att => {
+                  const attUrl = `/api/finance/bills/${attachmentBillId}/attachments/${att.id}`
+                  const isPreviewing = previewAttachmentId === att.id
+                  const canPreview = isImageMime(att.mimeType) || isPdfMime(att.mimeType)
+                  return (
+                    <div key={att.id} className="space-y-0">
+                      <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="flex-1 truncate font-medium">{att.title}</span>
+                        <span className="text-xs text-muted-foreground">{formatFileSize(att.fileSize)}</span>
+                        {canPreview && (
+                          <button onClick={() => togglePreview(att.id)}
+                            title={isPreviewing ? 'Hide preview' : 'View inline'}
+                            className={cn('p-1 rounded hover:bg-accent', isPreviewing ? 'text-primary' : 'text-muted-foreground')}>
+                            {isPreviewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+                        <a href={attUrl} target="_blank" rel="noopener noreferrer"
+                          className="p-1 rounded hover:bg-accent text-primary" title="Open in new tab / download">
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                        <button onClick={() => handleAttachmentDelete(attachmentBillId, att.id)}
+                          className="p-1 rounded hover:bg-accent text-red-500" title="Remove attachment">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {isPreviewing && (
+                        <div className="rounded-b-md border border-t-0 border-border bg-background overflow-hidden">
+                          {isImageMime(att.mimeType) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={attUrl} alt={att.title}
+                              className="max-h-[500px] w-full object-contain p-2" />
+                          ) : (
+                            <iframe
+                              src={attUrl}
+                              title={att.title}
+                              className="w-full border-0"
+                              style={{ height: '600px' }}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           {attachments.length < 2 && (

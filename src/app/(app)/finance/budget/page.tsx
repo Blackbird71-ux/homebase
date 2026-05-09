@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet,
   Check, Briefcase, Settings, X,
@@ -27,11 +27,16 @@ interface Entity {
   sortOrder: number
 }
 
+type FrequencyOption = 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'yearly' | 'custom'
+type CustomUnit = 'days' | 'weeks' | 'months' | 'years'
+
 interface IncomeStream {
   id: string
   name: string
   amount: number
-  frequency: 'weekly' | 'fortnightly' | 'monthly' | 'yearly'
+  frequency: FrequencyOption
+  customInterval?: number | null
+  customUnit?: CustomUnit | null
   isIncluded: boolean
   entityId?: string | null
 }
@@ -52,11 +57,36 @@ interface BudgetRule {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toMonthly(amount: number, frequency: string): number {
-  if (frequency === 'weekly')      return amount * 52 / 12
-  if (frequency === 'fortnightly') return amount * 26 / 12
-  if (frequency === 'quarterly')   return amount / 3
-  if (frequency === 'yearly')      return amount / 12
+/** Convert any income stream to a monthly equivalent */
+function streamToMonthly(s: IncomeStream): number {
+  const { amount, frequency, customInterval, customUnit } = s
+  switch (frequency) {
+    case 'weekly':      return amount * 52 / 12
+    case 'fortnightly': return amount * 26 / 12
+    case 'monthly':     return amount
+    case 'quarterly':   return amount / 3
+    case 'yearly':      return amount / 12
+    case 'custom': {
+      if (!customInterval || !customUnit || customInterval <= 0) return amount
+      let periodsPerYear: number
+      switch (customUnit) {
+        case 'days':   periodsPerYear = 365 / customInterval; break
+        case 'weeks':  periodsPerYear = 52  / customInterval; break
+        case 'months': periodsPerYear = 12  / customInterval; break
+        case 'years':  periodsPerYear = 1   / customInterval; break
+        default:       periodsPerYear = 1
+      }
+      return amount * periodsPerYear / 12
+    }
+    default: return amount
+  }
+}
+
+function toMonthly(amount: number, period: string): number {
+  if (period === 'weekly')      return amount * 52 / 12
+  if (period === 'fortnightly') return amount * 26 / 12
+  if (period === 'quarterly')   return amount / 3
+  if (period === 'yearly')      return amount / 12
   return amount
 }
 
@@ -68,8 +98,23 @@ function genId() {
   return Math.random().toString(36).slice(2, 10)
 }
 
+function freqLabel(s: IncomeStream): string {
+  if (s.frequency === 'custom') {
+    if (s.customInterval && s.customUnit) {
+      return `Every ${s.customInterval} ${s.customUnit}`
+    }
+    return 'Custom'
+  }
+  return FREQ_LABELS[s.frequency] ?? s.frequency
+}
+
 const FREQ_LABELS: Record<string, string> = {
-  weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly', yearly: 'Yearly',
+  weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly',
+  quarterly: 'Quarterly', yearly: 'Yearly', custom: 'Custom',
+}
+
+const CUSTOM_UNIT_LABELS: Record<CustomUnit, string> = {
+  days: 'days', weeks: 'weeks', months: 'months', years: 'years',
 }
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -77,7 +122,6 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   business: 'Business', investment: 'Investment', other: 'Other',
 }
 
-// Colour palette for new entities
 const ENTITY_COLOURS = [
   '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444',
   '#06B6D4', '#EC4899', '#84CC16', '#F97316', '#6366F1',
@@ -92,13 +136,14 @@ export default function BudgetPage() {
   const [categories, setCategories]       = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading]             = useState(true)
 
-  // Active entity tab — null means "All / overview"
   const [activeEntityId, setActiveEntityId] = useState<string | null>(null)
 
   // Income editing
   const [editingIncome, setEditingIncome]   = useState<IncomeStream | null>(null)
-  const [incomeForm, setIncomeForm]         = useState<{ name: string; amount: number; frequency: IncomeStream['frequency']; entityId: string }>
-    ({ name: '', amount: 0, frequency: 'fortnightly', entityId: '' })
+  const [incomeForm, setIncomeForm]         = useState<{
+    name: string; amount: number; frequency: FrequencyOption
+    customInterval: string; customUnit: CustomUnit; entityId: string
+  }>({ name: '', amount: 0, frequency: 'fortnightly', customInterval: '6', customUnit: 'months', entityId: '' })
   const [showIncomeForm, setShowIncomeForm] = useState(false)
   const [savingIncome, setSavingIncome]     = useState(false)
 
@@ -125,7 +170,6 @@ export default function BudgetPage() {
       if (eRes.ok) {
         const ents: Entity[] = await eRes.json()
         setEntities(ents)
-        // Auto-select the default entity on first load
         if (activeEntityId === null && ents.length > 0) {
           const def = ents.find(e => e.isDefault) ?? ents[0]
           setActiveEntityId(def?.id ?? null)
@@ -144,12 +188,11 @@ export default function BudgetPage() {
 
   // ── Derived: filter to active entity ──────────────────────────────────────
 
-  // 'null' entityId in stream/rule = belongs to the default entity
   const defaultEntityId = entities.find(e => e.isDefault)?.id ?? entities[0]?.id ?? null
 
   function streamBelongsToEntity(s: IncomeStream, entityId: string | null): boolean {
     const streamEntity = s.entityId ?? null
-    if (entityId === null) return true // "all" tab
+    if (entityId === null) return true
     if (streamEntity === null) return entityId === defaultEntityId
     return streamEntity === entityId
   }
@@ -164,7 +207,7 @@ export default function BudgetPage() {
   const activeStreams = incomeStreams.filter(s => streamBelongsToEntity(s, activeEntityId))
   const activeRules   = budgetRules.filter(r => ruleBelongsToEntity(r, activeEntityId))
 
-  const monthlyIncome   = activeStreams.filter(s => s.isIncluded).reduce((sum, s) => sum + toMonthly(s.amount, s.frequency), 0)
+  const monthlyIncome   = activeStreams.filter(s => s.isIncluded).reduce((sum, s) => sum + streamToMonthly(s), 0)
   const monthlyExpenses = activeRules.filter(r => r.isIncludedInPlanner).reduce((sum, r) => sum + toMonthly(r.amount, r.period), 0)
   const surplus         = monthlyIncome - monthlyExpenses
   const expenseRules    = activeRules.filter(r => r.isIncludedInPlanner)
@@ -174,13 +217,18 @@ export default function BudgetPage() {
 
   function openNewIncome() {
     setEditingIncome(null)
-    setIncomeForm({ name: '', amount: 0, frequency: 'fortnightly', entityId: activeEntityId ?? '' })
+    setIncomeForm({ name: '', amount: 0, frequency: 'fortnightly', customInterval: '6', customUnit: 'months', entityId: activeEntityId ?? '' })
     setShowIncomeForm(true)
   }
 
   function openEditIncome(s: IncomeStream) {
     setEditingIncome(s)
-    setIncomeForm({ name: s.name, amount: s.amount, frequency: s.frequency, entityId: s.entityId ?? '' })
+    setIncomeForm({
+      name: s.name, amount: s.amount, frequency: s.frequency,
+      customInterval: String(s.customInterval ?? 6),
+      customUnit: s.customUnit ?? 'months',
+      entityId: s.entityId ?? '',
+    })
     setShowIncomeForm(true)
   }
 
@@ -199,10 +247,23 @@ export default function BudgetPage() {
 
   async function handleSaveIncome() {
     if (!incomeForm.name.trim()) { toast.error('Name is required'); return }
+    if (incomeForm.frequency === 'custom' && (!incomeForm.customInterval || parseInt(incomeForm.customInterval) < 1)) {
+      toast.error('Custom interval must be at least 1'); return
+    }
     const entityId = incomeForm.entityId || null
+    const newStream: IncomeStream = {
+      id: editingIncome?.id ?? genId(),
+      name: incomeForm.name.trim(),
+      amount: incomeForm.amount,
+      frequency: incomeForm.frequency,
+      customInterval: incomeForm.frequency === 'custom' ? parseInt(incomeForm.customInterval) : null,
+      customUnit: incomeForm.frequency === 'custom' ? incomeForm.customUnit : null,
+      isIncluded: editingIncome?.isIncluded ?? true,
+      entityId,
+    }
     const updated = editingIncome
-      ? incomeStreams.map(s => s.id === editingIncome.id ? { ...s, ...incomeForm, entityId } : s)
-      : [...incomeStreams, { id: genId(), ...incomeForm, entityId, isIncluded: true }]
+      ? incomeStreams.map(s => s.id === editingIncome.id ? newStream : s)
+      : [...incomeStreams, newStream]
     if (await saveIncomeStreams(updated)) { setShowIncomeForm(false); setEditingIncome(null) }
   }
 
@@ -308,6 +369,7 @@ export default function BudgetPage() {
   if (loading) return <div className="p-4 text-muted-foreground">Loading budget planner…</div>
 
   const activeEntity = entities.find(e => e.id === activeEntityId) ?? null
+  const isCustomFreq = incomeForm.frequency === 'custom'
 
   return (
     <div className="space-y-6">
@@ -426,7 +488,7 @@ export default function BudgetPage() {
                 <label className="text-xs text-muted-foreground">Name *</label>
                 <input value={incomeForm.name}
                   onChange={e => setIncomeForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Salary, Rent income"
+                  placeholder="e.g. Salary, Rent income, Interest"
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
               </div>
               <div>
@@ -438,12 +500,14 @@ export default function BudgetPage() {
               <div>
                 <label className="text-xs text-muted-foreground">Frequency *</label>
                 <select value={incomeForm.frequency}
-                  onChange={e => setIncomeForm(p => ({ ...p, frequency: e.target.value as any }))}
+                  onChange={e => setIncomeForm(p => ({ ...p, frequency: e.target.value as FrequencyOption }))}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                   <option value="weekly">Weekly</option>
                   <option value="fortnightly">Fortnightly</option>
                   <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
                   <option value="yearly">Yearly</option>
+                  <option value="custom">Custom interval…</option>
                 </select>
               </div>
               <div>
@@ -456,9 +520,39 @@ export default function BudgetPage() {
                 </select>
               </div>
             </div>
+
+            {/* Custom frequency row */}
+            {isCustomFreq && (
+              <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+                <span className="text-xs text-muted-foreground shrink-0">Every</span>
+                <input
+                  type="number" min={1} max={999} value={incomeForm.customInterval}
+                  onChange={e => setIncomeForm(p => ({ ...p, customInterval: e.target.value }))}
+                  className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm text-center"
+                />
+                <select value={incomeForm.customUnit}
+                  onChange={e => setIncomeForm(p => ({ ...p, customUnit: e.target.value as CustomUnit }))}
+                  className="rounded-md border border-input bg-background px-2 py-1 text-sm">
+                  <option value="days">days</option>
+                  <option value="weeks">weeks</option>
+                  <option value="months">months</option>
+                  <option value="years">years</option>
+                </select>
+                <span className="text-xs text-muted-foreground">
+                  e.g. every 6 months for half-yearly interest
+                </span>
+              </div>
+            )}
+
             {incomeForm.amount > 0 && (
               <p className="text-xs text-muted-foreground">
-                = <strong>{fmtCurrency(toMonthly(incomeForm.amount, incomeForm.frequency))}</strong>/month
+                = <strong>{fmtCurrency(streamToMonthly({
+                    id: '', name: '', isIncluded: true,
+                    amount: incomeForm.amount,
+                    frequency: incomeForm.frequency,
+                    customInterval: isCustomFreq ? parseInt(incomeForm.customInterval) || 1 : null,
+                    customUnit: isCustomFreq ? incomeForm.customUnit : null,
+                  }))}</strong>/month
               </p>
             )}
             <div className="flex gap-2">
@@ -475,13 +569,12 @@ export default function BudgetPage() {
         {activeStreams.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-6 text-center">
             <p className="text-sm text-muted-foreground">No income streams for {activeEntity?.name ?? 'this entity'}.</p>
-            <p className="text-xs text-muted-foreground mt-1">Add salary, rental income, or any other regular income for this entity.</p>
+            <p className="text-xs text-muted-foreground mt-1">Add salary, rental income, investment interest, or any other regular income.</p>
           </div>
         ) : (
           <div className="space-y-2">
             {activeStreams.map(s => {
-              const monthly = toMonthly(s.amount, s.frequency)
-              const streamEntity = entities.find(e => e.id === (s.entityId ?? defaultEntityId))
+              const monthly = streamToMonthly(s)
               return (
                 <div key={s.id} className={cn(
                   'flex items-center gap-3 rounded-lg border p-3 transition-colors',
@@ -495,7 +588,7 @@ export default function BudgetPage() {
                   </button>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium">{s.name}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{FREQ_LABELS[s.frequency]}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{freqLabel(s)}</span>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-semibold text-green-600">{fmtCurrency(s.amount)}</p>
@@ -747,7 +840,6 @@ export default function BudgetPage() {
                 </div>
               </div>
             </div>
-            {/* Preview chip */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Preview:</span>
               <span className="text-xs px-3 py-1 rounded-full font-medium text-white"
