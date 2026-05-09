@@ -320,15 +320,17 @@ export default function BudgetPage() {
 
   function streamBelongsToEntity(s: IncomeStream, entityId: string | null): boolean {
     const streamEntity = s.entityId ?? null
-    if (entityId === null) return true
-    if (streamEntity === null) return entityId === defaultEntityId
+    if (entityId === null) return true  // "all" view (unused currently)
+    // Default entity tab: show streams with null entityId OR explicitly assigned to this entity
+    if (entityId === defaultEntityId) return streamEntity === null || streamEntity === defaultEntityId
     return streamEntity === entityId
   }
 
   function ruleBelongsToEntity(r: BudgetRule, entityId: string | null): boolean {
     const ruleEntity = r.entityId ?? null
     if (entityId === null) return true
-    if (ruleEntity === null) return entityId === defaultEntityId
+    // Default entity tab: show rules with null entityId OR explicitly assigned to this entity
+    if (entityId === defaultEntityId) return ruleEntity === null || ruleEntity === defaultEntityId
     return ruleEntity === entityId
   }
 
@@ -345,7 +347,7 @@ export default function BudgetPage() {
 
   function openNewIncome() {
     setEditingIncome(null)
-    setIncomeForm({ name: '', amount: 0, frequency: 'fortnightly', customInterval: '6', customUnit: 'months', entityId: activeEntityId ?? '' })
+    setIncomeForm({ name: '', amount: 0, frequency: 'fortnightly', customInterval: '6', customUnit: 'months', entityId: activeEntityId ?? defaultEntityId ?? '' })
     setShowIncomeForm(true)
     setIncomeCollapsed(false)
   }
@@ -356,7 +358,8 @@ export default function BudgetPage() {
       name: s.name, amount: s.amount, frequency: s.frequency,
       customInterval: String(s.customInterval ?? 6),
       customUnit: s.customUnit ?? 'months',
-      entityId: s.entityId ?? '',
+      // null entityId means it belongs to the default entity
+      entityId: s.entityId ?? defaultEntityId ?? '',
     })
     setShowIncomeForm(true)
     setIncomeCollapsed(false)
@@ -411,13 +414,13 @@ export default function BudgetPage() {
 
   function openNewRule() {
     setEditingRule(null)
-    setRuleForm({ name: '', amount: 0, period: 'monthly', categoryId: '', entityId: activeEntityId ?? '' })
+    setRuleForm({ name: '', amount: 0, period: 'monthly', categoryId: '', entityId: activeEntityId ?? defaultEntityId ?? '' })
     setShowRuleForm(true)
   }
 
   function openEditRule(r: BudgetRule) {
     setEditingRule(r)
-    setRuleForm({ name: r.name, amount: r.amount, period: r.period, categoryId: r.categoryId ?? '', entityId: r.entityId ?? '' })
+    setRuleForm({ name: r.name, amount: r.amount, period: r.period, categoryId: r.categoryId ?? '', entityId: r.entityId ?? defaultEntityId ?? '' })
     setShowRuleForm(true)
   }
 
@@ -490,13 +493,12 @@ export default function BudgetPage() {
           >
             <Briefcase className="h-3.5 w-3.5" />
             {e.name}
-            {e.isDefault && <span className="text-[10px] opacity-70">(default)</span>}
           </button>
         ))}
         <Link
           href="/finance/entities"
           className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
-          title="Manage entities"
+          title="Manage entities — rename, set colour, add new"
         >
           <ExternalLink className="h-3 w-3" /> Manage entities
         </Link>
@@ -511,6 +513,11 @@ export default function BudgetPage() {
           {!activeEntity.isDefault && (
             <span className="text-xs text-muted-foreground italic">
               Separate entity — income & expenses below are isolated from other entities.
+            </span>
+          )}
+          {activeEntity.isDefault && (
+            <span className="text-xs text-muted-foreground italic">
+              Household finances — bills and rules with no entity assigned appear here.
             </span>
           )}
         </div>
@@ -629,8 +636,7 @@ export default function BudgetPage() {
                     <select value={incomeForm.entityId}
                       onChange={e => setIncomeForm(p => ({ ...p, entityId: e.target.value }))}
                       className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                      <option value="">Personal / Family</option>
-                      {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                      {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                     </select>
                   </div>
                 </div>
@@ -816,8 +822,7 @@ export default function BudgetPage() {
                 <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity</label>
                 <select value={ruleForm.entityId} onChange={e => setRuleForm(p => ({ ...p, entityId: e.target.value }))}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="">Personal / Family</option>
-                  {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                 </select>
               </div>
             </div>

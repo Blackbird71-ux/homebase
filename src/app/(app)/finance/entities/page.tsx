@@ -159,6 +159,7 @@ export default function EntitiesPage() {
           <h1 className="text-2xl font-bold">Entities</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Named financial entities — Super funds, trusts, businesses — that bills and budgets can be assigned to.
+            The default entity (usually Personal / Family) appears first and cannot be deactivated.
           </p>
         </div>
         <button onClick={openNew}
@@ -345,8 +346,12 @@ export default function EntitiesPage() {
                 </button>
                 <button
                   onClick={() => handleDelete(entity)}
-                  className="p-1 hover:bg-accent rounded text-red-500"
-                  title="Deactivate entity"
+                  disabled={entity.isDefault}
+                  className={cn(
+                    'p-1 hover:bg-accent rounded',
+                    entity.isDefault ? 'text-muted-foreground/30 cursor-not-allowed' : 'text-red-500',
+                  )}
+                  title={entity.isDefault ? 'Default entity cannot be deactivated' : 'Deactivate entity'}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

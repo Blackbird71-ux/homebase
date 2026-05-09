@@ -6,6 +6,29 @@ export async function GET(request: NextRequest) {
   const session = await requireSession()
   const { searchParams } = new URL(request.url)
   const includeInactive = searchParams.get('includeInactive') === 'true'
+
+  // ── Bootstrap: ensure every family has a default "Personal / Family" entity ──
+  // This runs once per family (idempotent: upsert-style check before creating).
+  const hasDefault = await prisma.financeEntity.findFirst({
+    where: { familyId: session.familyId, isDefault: true },
+    select: { id: true },
+  })
+  if (!hasDefault) {
+    await prisma.financeEntity.create({
+      data: {
+        name: 'Personal / Family',
+        type: 'personal',
+        description: 'Default household income and expenses',
+        color: '#6366F1',
+        isDefault: true,
+        sortOrder: 0,
+        isActive: true,
+        familyId: session.familyId,
+      },
+    })
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const entities = await prisma.financeEntity.findMany({
     where: {
       familyId: session.familyId,

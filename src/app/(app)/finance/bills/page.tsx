@@ -107,7 +107,8 @@ export default function BillsPage() {
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
     dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
     endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
-    notes: '', memberId: '', locationId: '', vendorId: '', entityId: '',
+    notes: '', memberId: '', locationId: '', vendorId: '',
+    entityId: entities.find(e => e.isDefault)?.id ?? '',
     billType: 'recurring', recurrenceInterval: '',
     invoiceReceived: false, invoiceReceivedDate: '',
     addToBudget: false,
@@ -254,7 +255,8 @@ export default function BillsPage() {
       autoPay: b.autoPay, emailReminder: b.emailReminder, reminderDays: b.reminderDays,
       notes: b.notes ?? '', memberId: b.memberId ?? '',
       locationId: b.location?.id ?? '', vendorId: b.vendor?.id ?? '',
-      entityId: b.entity?.id ?? '',
+      // If no entity is set, default to the first entity with isDefault=true
+      entityId: b.entity?.id ?? entities.find(e => e.isDefault)?.id ?? '',
       billType: b.billType ?? 'recurring', recurrenceInterval: b.recurrenceInterval ?? '',
       invoiceReceived: b.invoiceReceived ?? false,
       invoiceReceivedDate: b.invoiceReceivedDate
@@ -599,8 +601,8 @@ export default function BillsPage() {
               </label>
               <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">Personal / Family</option>
-                {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                <option value="">Select entity…</option>
+                {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
               </select>
               {entities.length === 0 && (
                 <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -844,9 +846,14 @@ function BillRow({
         })}
         <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
         <div className="flex items-center gap-0.5 justify-end">
-          <button onClick={() => onOpenAttachments(bill)} title="Attachments"
-            className={cn('p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : 'text-muted-foreground')}>
+          <button onClick={() => onOpenAttachments(bill)} title={bill.attachments && bill.attachments.length > 0 ? `${bill.attachments.length} attachment${bill.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
+            className={cn('relative p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : bill.attachments && bill.attachments.length > 0 ? 'text-green-600' : 'text-muted-foreground')}>
             <Paperclip className="h-3.5 w-3.5" />
+            {!isAttachmentOpen && bill.attachments && bill.attachments.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-green-500 text-white text-[9px] font-bold flex items-center justify-center leading-none px-0.5">
+                {bill.attachments.length}
+              </span>
+            )}
           </button>
           <button onClick={() => onToggleInvoice(bill)} title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
             className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
