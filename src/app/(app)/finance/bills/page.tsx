@@ -175,7 +175,7 @@ export default function BillsPage() {
       fd.append('file', file)
       fd.append('title', file.name.replace(/\.[^/.]+$/, ''))
       const res = await fetch(`/api/finance/bills/${billId}/attachments`, { method: 'POST', body: fd })
-      if (res.ok) { setAttachments(prev => [...prev, await res.json()]); toast.success('Attachment uploaded') }
+      if (res.ok) { const newAttachment = await res.json(); setAttachments(prev => [...prev, newAttachment]); toast.success('Attachment uploaded') }
       else toast.error('Failed to upload attachment')
     } finally { setUploadingAttachment(false) }
   }

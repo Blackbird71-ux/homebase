@@ -59,7 +59,7 @@ export async function POST(
     const safeFilename = `${randomUUID()}.${ext}`
 
     // Store bill attachments in data/bill-attachments/ (separate from Document Vault)
-    const dir = join(process.cwd(), 'data', 'bill-attachments')
+    const dir = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'bill-attachments')
     await mkdir(dir, { recursive: true })
 
     const buffer = Buffer.from(await file.arrayBuffer())

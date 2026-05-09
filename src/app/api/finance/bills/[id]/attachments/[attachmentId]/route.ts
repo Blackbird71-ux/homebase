@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (!attachment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   try {
-    const filePath = join(process.cwd(), 'data', 'bill-attachments', attachment.fileName)
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'bill-attachments', attachment.fileName)
     const buffer = await readFile(filePath)
     const ext = attachment.fileName.split('.').pop() ?? 'bin'
     const downloadName = `${attachment.title}.${ext}`
@@ -54,7 +54,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
 
   // Delete from disk (best-effort – don't fail if file is already gone)
   try {
-    const filePath = join(process.cwd(), 'data', 'bill-attachments', attachment.fileName)
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'bill-attachments', attachment.fileName)
     await unlink(filePath)
   } catch {
     // ignore missing file
