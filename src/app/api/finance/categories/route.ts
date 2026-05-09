@@ -6,7 +6,7 @@ export async function GET() {
   const session = await requireSession()
   const categories = await prisma.financeCategory.findMany({
     where: { familyId: session.familyId },
-    orderBy: [{ level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
+    orderBy: [{ sortOrder: 'asc' }, { level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
   })
   return NextResponse.json(categories)
 }
