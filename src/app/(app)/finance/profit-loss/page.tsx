@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
+  ReceiptText,
 } from 'lucide-react'
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
@@ -28,6 +29,8 @@ interface IncomeEntry {
   incomeType: string
   nextExpectedDate: string; isActive: boolean
   received: boolean; receivedDate: string | null
+  isTaxTracked: boolean
+  taxRate: number | null
   category: { id: string; name: string; color: string | null } | null
 }
 
@@ -192,7 +195,21 @@ export default function ProfitLossPage() {
 
   const totalIncome   = incomeGroups.reduce((s, g) => s + g.totalPeriod, 0)
   const totalExpenses = expenseGroups.reduce((s, g) => s + g.totalPeriod, 0)
-  const netProfit     = totalIncome - totalExpenses
+
+  // ── Estimated Tax (ATO) ────────────────────────────────────────────────────
+  const estimatedTax = useMemo(() => {
+    let total = 0
+    for (const e of relevantIncome) {
+      if (e.isTaxTracked && e.taxRate != null) {
+        const isOneOff = e.incomeType === 'one-off'
+        const periodAmt = isOneOff ? e.amount : toPeriodAmount(e.amount, e.frequency, periodMonths)
+        total += periodAmt * (e.taxRate / 100)
+      }
+    }
+    return total
+  }, [relevantIncome, periodMonths])
+
+  const netProfit     = totalIncome - totalExpenses - estimatedTax
 
   const maxIncome   = incomeGroups.length  > 0 ? incomeGroups[0].totalPeriod  : 0
   const maxExpense  = expenseGroups.length > 0 ? expenseGroups[0].totalPeriod : 0
@@ -261,7 +278,7 @@ export default function ProfitLossPage() {
       )}
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <TrendingUp className="h-4 w-4 text-green-500" /> Total Income
@@ -278,6 +295,16 @@ export default function ProfitLossPage() {
           <p className="text-xs text-muted-foreground mt-0.5">{expenseGroups.length} categor{expenseGroups.length !== 1 ? 'ies' : 'y'}</p>
         </div>
 
+        {estimatedTax > 0 && (
+          <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <ReceiptText className="h-4 w-4 text-orange-500" /> Estimated Tax
+            </div>
+            <p className="text-xl font-bold text-orange-600">{fmtCurrency(estimatedTax)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">ATO estimate this {periodMode}</p>
+          </div>
+        )}
+
         <div className={cn('rounded-lg border p-3',
           netProfit >= 0 ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5')}>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
@@ -290,6 +317,12 @@ export default function ProfitLossPage() {
             {netProfit >= 0 ? 'Profit' : 'Loss'} this {periodMode}
           </p>
         </div>
+
+        {!estimatedTax && (
+          <div className="rounded-lg border border-dashed border-border p-3 flex items-center justify-center">
+            <p className="text-xs text-muted-foreground">No tax-tracked income</p>
+          </div>
+        )}
       </div>
 
       {/* ── Drill-down panel ──────────────────────────────────────────────── */}
@@ -427,6 +460,14 @@ export default function ProfitLossPage() {
                   <span className="text-muted-foreground font-medium">Total Expenses</span>
                   <span className="font-bold text-red-600">{fmtCurrency(totalExpenses)}</span>
                 </div>
+                {estimatedTax > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <ReceiptText className="h-3.5 w-3.5 text-orange-500" /> Estimated Tax (ATO)
+                    </span>
+                    <span className="font-semibold text-orange-600">{fmtCurrency(estimatedTax)}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>

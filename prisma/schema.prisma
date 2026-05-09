@@ -697,6 +697,8 @@ model FinanceIncomeEntry {
   amount              Float                // Amount received (positive)
   frequency           String               @default("monthly") // weekly | fortnightly | monthly | quarterly | yearly | one-off
   incomeType          String               @default("recurring") // recurring | one-off
+  isTaxTracked        Boolean              @default(false)   // Track this income for ATO/tax purposes
+  taxRate             Float?               // Estimated tax rate (e.g. 30 for 30%). Null = not set
   nextExpectedDate    DateTime             // When next income is expected
   endDate             DateTime?
   isActive            Boolean              @default(true)

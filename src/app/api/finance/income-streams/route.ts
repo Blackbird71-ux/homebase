@@ -16,6 +16,8 @@ export interface IncomeStream {
   customUnit?: 'days' | 'weeks' | 'months' | 'years' | null
   isIncluded: boolean
   entityId?: string | null
+  isTaxTracked: boolean
+  taxRate: number | null
 }
 
 /** Convert a stream's amount to a monthly equivalent for budget summaries. */
@@ -81,6 +83,8 @@ export async function GET() {
       isActive: true,
       parentIncomeId: true,
       nextExpectedDate: true,
+      isTaxTracked: true,
+      taxRate: true,
     },
     orderBy: { nextExpectedDate: 'asc' },
   })
@@ -110,6 +114,8 @@ export async function GET() {
     customUnit: null,
     isIncluded: true,  // All active income entries are included by default
     entityId: e.entityId ?? null,
+    isTaxTracked: e.isTaxTracked,
+    taxRate: e.taxRate,
   }))
 
   return NextResponse.json(streams)
@@ -127,7 +133,7 @@ export async function PUT(_request: NextRequest) {
   const session = await requireSession()
   const entries = await prisma.financeIncomeEntry.findMany({
     where: { familyId: session.familyId, isActive: true, received: false },
-    select: { id: true, name: true, amount: true, frequency: true, incomeType: true, entityId: true, isActive: true, parentIncomeId: true, nextExpectedDate: true },
+    select: { id: true, name: true, amount: true, frequency: true, incomeType: true, entityId: true, isActive: true, parentIncomeId: true, nextExpectedDate: true, isTaxTracked: true, taxRate: true },
     orderBy: { nextExpectedDate: 'asc' },
   })
   const seen = new Map<string, typeof entries[0]>()
@@ -141,6 +147,7 @@ export async function PUT(_request: NextRequest) {
   const streams: IncomeStream[] = Array.from(seen.values()).map(e => ({
     id: e.id, name: e.name, amount: e.amount, frequency: mapFrequency(e.frequency),
     customInterval: null, customUnit: null, isIncluded: true, entityId: e.entityId ?? null,
+    isTaxTracked: e.isTaxTracked, taxRate: e.taxRate,
   }))
   return NextResponse.json(streams)
 }

@@ -1,5 +1,5 @@
 # HomeBase — Project Summary
-## Current Build: Finance Module — Accounting Fixes & UX Parity
+## Current Build: Income Tax Tracking — ATO Compliance
 
 ### Project Overview
 HomeBase is a comprehensive family management platform built with Next.js 16, TypeScript, Prisma, and SQLite. The application provides a centralised hub for family organisation including calendar management, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
@@ -65,6 +65,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 #### 12. Finance Module ← *most recently enhanced*
 
 Full household finance tracking — bills, income, transactions, accounts, budget, P&L, reports, vendors, categories, entities, locations, members.
+Income tax tracking with ATO compliance support.
 
 ---
 
@@ -95,6 +96,11 @@ Full household finance tracking — bills, income, transactions, accounts, budge
 - Remittance/payslip attachment support (max 2 per entry)
 - Payer/source via the Vendors list — same vendor can appear on both bills (payee) and income (payer)
 - Fields: entity/fund, category, vendor, account, member, location, notes, email reminder
+- **Income Tax Tracking** — each income entry can be flagged for ATO/tax tracking with an optional estimated tax rate:
+  - Toggle per income entry in the add/edit dialog
+  - Orange "TAX TRACKED" pill displayed on income rows with rate shown when set
+  - Tax rate percentage input (e.g. 30% for corporate, marginal rate for individuals)
+  - Orange-themed tax tracking section in the form dialog with ReceiptText icon
 
 #### Transactions
 - Full CRUD; filters by type, member, location, **entity** (new)
@@ -120,6 +126,12 @@ Full household finance tracking — bills, income, transactions, accounts, budge
 - Period controls: month / quarter / year with prev/next navigation
 - Category breakdown with bar-chart percentages; drill-down to individual items
 - Drill-down items show actual paid/received dates (cash mode) or scheduled dates (forecast mode)
+- **Estimated Tax (ATO)** — auto-calculates tax liability from tax-tracked income:
+  - Estimates use `periodAmount × taxRate / 100` for each tax-tracked income entry
+  - Orange "Estimated Tax" summary card shows the ATO estimate for the period
+  - "Estimated Tax (ATO)" line displayed in the expenses breakdown
+  - Net Profit / Loss calculation now subtracts estimated tax
+  - Works in both Cash and Forecast modes
 
 #### Reports
 - **Cash / Forecast toggle** (new): matches P&L semantics — Cash shows only paid bills by `paidDate`; Forecast shows all active bills by `nextDueDate`
@@ -168,7 +180,7 @@ Full household finance tracking — bills, income, transactions, accounts, budge
 - **FinanceCategory**: Hierarchical income/expense/transfer categories (parent/child, 2 levels); usage counts via `_count`
 - **FinanceTransaction**: Individual transactions; auto-created on bill payment / income receipt; `sourceIncomeEntry` and `sourceBill` reverse relations; **`entityId` FK** (new) for multi-entity support
 - **FinanceRecurringBill**: Bills with `transactionId` FK → auto-created expense transaction; `parentBillId` for occurrence chaining
-- **FinanceIncomeEntry**: Income with `parentIncomeId` self-reference for occurrence chaining and `transactionId` FK → auto-created income transaction
+- **FinanceIncomeEntry**: Income with `parentIncomeId` self-reference for occurrence chaining and `transactionId` FK → auto-created income transaction; `isTaxTracked` (boolean) and `taxRate` (nullable float) for ATO tax tracking
 - **FinanceBudget**: Budget rules linked to bills and categories
 - **FinanceSavingsGoal**: Savings goals linked to accounts; `currentAmount` auto-derived from account balance in API layer
 - **FinanceVendor**: Vendors/payers shared across bills and income; `_count` for usage stats
@@ -204,14 +216,15 @@ Full household finance tracking — bills, income, transactions, accounts, budge
 | `20260512000000_fix_income_location_cascade` | Cascade fix |
 | `20260513000000_add_income_parity_fields` | Income parity with bills |
 | `20260514000000_add_income_transaction_link` | Income/bill → transaction FK |
-| `20260515000000_add_transaction_entity` | `entityId` on FinanceTransaction *(latest)* |
+| `20260515000000_add_transaction_entity` | `entityId` on FinanceTransaction |
+| `20260516000000_add_income_tax_tracking` | `isTaxTracked`/`taxRate` on FinanceIncomeEntry *(latest)* |
 
 #### API Routes
 | Route | Key behaviours |
 |-------|----------------|
 | `api/finance/accounts/route.ts` | GET enriches each account with `pendingCount`, `pendingExpense`, `pendingIncome` |
-| `api/finance/income/route.ts` | PATCH accepts backdatable `receivedDate`; auto-creates/deletes income transaction |
-| `api/finance/income-streams/route.ts` | GET derives streams from live `FinanceIncomeEntry` records; PUT is no-op stub |
+| `api/finance/income/route.ts` | POST/PUT accept `isTaxTracked`/`taxRate`; GET returns them automatically |
+| `api/finance/income-streams/route.ts` | GET derives streams from live `FinanceIncomeEntry` records (includes `isTaxTracked`/`taxRate`); PUT is no-op stub |
 | `api/finance/bills/route.ts` | PATCH accepts backdatable `paidDate`; auto-creates/deletes expense transaction |
 | `api/finance/transactions/route.ts` | CRUD; GET filters by `entityId`; all responses include `entity` relation |
 | `api/finance/goals/route.ts` | GET/PUT derive `currentAmount` from `account.currentBalance` when account linked |
@@ -223,7 +236,8 @@ Full household finance tracking — bills, income, transactions, accounts, budge
 #### Pages
 | Page | Key changes in this build |
 |------|--------------------------|
-| `finance/profit-loss/page.tsx` | Cash/Forecast toggle; cash mode filters to confirmed paid/received only |
+| `finance/income/page.tsx` | Tax tracking toggle + rate input in form; orange "TAX TRACKED" pill on rows |
+| `finance/profit-loss/page.tsx` | Estimated Tax card (orange); auto-calculated ATO liability from tax-tracked income; net profit subtracts estimated tax |
 | `finance/reports/page.tsx` | Cash/Forecast toggle; label changes between "Paid bills" and "Expected bills" |
 | `finance/budget/page.tsx` | Income section reads from Income page (read-only); removed all income CRUD |
 | `finance/goals/page.tsx` | Account-linked goals show live balance; current amount field disabled when linked |
@@ -268,7 +282,7 @@ deploy-build.bat          # Windows: build image, save tar, SCP to NAS
 sudo sh deploy-nas.sh     # NAS SSH: load image, restart container
 ```
 
-Migrations run automatically at container start via `docker/entrypoint.sh` — this includes the new `20260515000000_add_transaction_entity` migration which adds `entityId` to `FinanceTransaction`.
+Migrations run automatically at container start via `docker/entrypoint.sh` — this includes the new `20260516000000_add_income_tax_tracking` migration which adds `isTaxTracked` and `taxRate` to `FinanceIncomeEntry`, and the `20260515000000_add_transaction_entity` migration which adds `entityId` to `FinanceTransaction`.
 
 ---
 
@@ -276,7 +290,8 @@ Migrations run automatically at container start via `docker/entrypoint.sh` — t
 
 | Commit | Description |
 |--------|-------------|
-| **Finance — Accounting Fixes & UX Parity** *(current)* | P&L cash/forecast toggle; Reports cash/forecast toggle; budget income → single source of truth (FinanceIncomeEntry); goals auto-progress from account balance; entity field on transactions (migration `20260515000000`); pending vs cleared balance on accounts; usage counts on categories/members/locations; vendor description fix; clickable reference data on bills (quick-filter) |
+| **Income Tax Tracking — ATO Compliance** *(current)* | `isTaxTracked`/`taxRate` on FinanceIncomeEntry (migration `20260516000000`); tax toggle + rate input in income form; orange "TAX TRACKED" pill on income rows; auto-calculated estimated tax in P&L report; orange Estimated Tax card and expenses line |
+| **Finance — Accounting Fixes & UX Parity** | P&L cash/forecast toggle; Reports cash/forecast toggle; budget income → single source of truth (FinanceIncomeEntry); goals auto-progress from account balance; entity field on transactions (migration `20260515000000`); pending vs cleared balance on accounts; usage counts on categories/members/locations; vendor description fix; clickable reference data on bills (quick-filter) |
 | Finance — Income Accuracy & Category Sorting | Date-received/date-paid dialogs with backdating; auto-create FinanceTransaction on receipt/payment with undo; fixed overdue grace-period logic; cash-basis P&L; sorted+grouped category dropdowns; migration `20260514000000` |
 | Finance — Income Tracking & P&L | FinanceIncomeEntry model, income CRUD API, income page, received history, P&L report |
 | Collapsible Root Categories | Per-root collapse/expand toggle; "Not In Use" auto-collapsed |
@@ -290,6 +305,7 @@ Migrations run automatically at container start via `docker/entrypoint.sh` — t
 
 ### Project Status
 - ✅ Finance — cash/forecast P&L and Reports, single-source income, goals from account balance, entity on transactions, pending balances, usage counts, clickable quick-filter on bills
-- ✅ Migration `20260515000000_add_transaction_entity` created and ready for deploy (runs automatically via entrypoint)
+- ✅ Income Tax Tracking — `isTaxTracked`/`taxRate` on income entries; tax toggle + rate in UI; "TAX TRACKED" pill; auto-calculated estimated tax in P&L
+- ✅ Migration `20260516000000_add_income_tax_tracking` created and applied (runs automatically via entrypoint)
 - ✅ TypeScript: no breaking type changes introduced
 - ✅ Docker/NAS: no new `/data` subdirectories required; existing entrypoint unchanged

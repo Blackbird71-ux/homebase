@@ -5,7 +5,7 @@ import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2,
   RefreshCw, Layers, Briefcase, Paperclip, Upload, X,
   FileText, Download, Building2, BookmarkCheck, Receipt,
-  Eye, EyeOff,
+  Eye, EyeOff, ReceiptText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
@@ -38,6 +38,8 @@ export interface IncomeEntry {
   dayOfMonth: number | null; monthOfYear: number | null
   recurrenceInterval: string | null
   invoiceReceived: boolean; invoiceReceivedDate: string | null
+  isTaxTracked: boolean
+  taxRate: number | null
   notes: string | null; memberId: string | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
@@ -107,6 +109,8 @@ export default function IncomePage() {
     entityId: '',
     invoiceReceived: false, invoiceReceivedDate: '',
     recurrenceInterval: '',
+    isTaxTracked: false,
+    taxRate: '',
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -227,6 +231,8 @@ export default function IncomePage() {
       invoiceReceivedDate: e.invoiceReceivedDate
         ? new Date(e.invoiceReceivedDate).toISOString().split('T')[0] : '',
       recurrenceInterval: e.recurrenceInterval ?? '',
+      isTaxTracked: e.isTaxTracked ?? false,
+      taxRate: e.taxRate != null ? e.taxRate.toString() : '',
     })
     setShowForm(true)
   }
@@ -258,6 +264,8 @@ export default function IncomePage() {
       recurrenceInterval: form.recurrenceInterval || null,
       invoiceReceived: form.invoiceReceived,
       invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
+      isTaxTracked: form.isTaxTracked,
+      taxRate: form.taxRate !== '' ? parseFloat(form.taxRate) : null,
     }
   }
 
@@ -686,6 +694,39 @@ export default function IncomePage() {
             )}
           </div>
 
+          {/* Tax Tracking */}
+          <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <ReceiptText className="h-4 w-4 text-orange-500" />
+                ATO / Tax Tracking
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.isTaxTracked}
+                  onChange={e => setForm(p => ({ ...p, isTaxTracked: e.target.checked }))}
+                  className="rounded border-input accent-orange-500" />
+                Track for tax
+              </label>
+            </div>
+            {form.isTaxTracked && (
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground">Estimated tax rate (%)</label>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <input type="number" step="0.1" min="0" max="100" value={form.taxRate}
+                      onChange={e => setForm(p => ({ ...p, taxRate: e.target.value }))}
+                      placeholder="e.g. 30"
+                      className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <span className="text-xs text-muted-foreground">%</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground max-w-[200px]">
+                  This rate is used in the P&L report to estimate your tax liability.
+                </p>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-xs text-muted-foreground">Notes</label>
             <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
@@ -859,6 +900,14 @@ function IncomeRow({
             {hasRemittance && (
               <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
                 <Receipt className="h-2.5 w-2.5" /> REMITTANCE
+              </span>
+            )}
+            {entry.isTaxTracked && (
+              <span className="text-[10px] bg-orange-500/10 text-orange-600 px-1.5 rounded flex items-center gap-0.5">
+                <ReceiptText className="h-2.5 w-2.5" /> TAX TRACKED
+                {entry.taxRate != null && (
+                  <span className="font-medium">{entry.taxRate}%</span>
+                )}
               </span>
             )}
             {entry.entity && (

@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     dayOfMonth, monthOfYear, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
     notes, memberId, locationId, entityId, vendorId,
+    isTaxTracked, taxRate,
   } = json
 
   if (!name || !amount || !frequency) {
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
       memberId: memberId ?? null,
       locationId: locationId ?? null,
       entityId: entityId ?? null,
+      isTaxTracked: isTaxTracked ?? false,
+      taxRate: taxRate != null ? parseFloat(taxRate) : null,
       familyId: session.familyId,
     },
     include: INCOME_INCLUDE,
@@ -87,6 +90,7 @@ export async function PUT(request: NextRequest) {
     dayOfMonth, monthOfYear, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
     notes, memberId, locationId, entityId, vendorId,
+    isTaxTracked, taxRate,
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -121,6 +125,8 @@ export async function PUT(request: NextRequest) {
       ...(memberId !== undefined && { memberId: memberId ?? null }),
       ...(locationId !== undefined && { locationId: locationId ?? null }),
       ...(entityId !== undefined && { entityId: entityId ?? null }),
+      ...(isTaxTracked !== undefined && { isTaxTracked }),
+      ...(taxRate !== undefined && { taxRate: taxRate != null ? parseFloat(taxRate) : null }),
     },
     include: INCOME_INCLUDE,
   })
