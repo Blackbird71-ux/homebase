@@ -134,6 +134,15 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 **Documents**: query by name/category, show expiring within 90 days  
 **Birthdays**: query upcoming (next 60 days), filter by month or name
 
+#### 14. **Finance Module — Income Tracking & P&L Report** (New)
+- **Income Page** (`/finance/income`): Track recurring and one-off income entries with category columns, overdue/upcoming sections, and amber-500/ orange-500 overdue styling
+- **Received Income History** (`/finance/income/received`): View marked-as-received income with month-range filter and undo support
+- **P&L Report** (`/finance/profit-loss`): Compare income vs expenses side-by-side with period controls (month/quarter/year), category breakdowns with bar chart percentages, and drill-down to individual items
+- **Prisma Model**: `FinanceIncomeEntry` with self-referencing `parentIncomeId` for spawning child occurrences (same pattern as bills). Relations to account, category, entity, location, member, family
+- **API Routes**: Full CRUD at `/api/finance/income` (GET, POST, PUT, DELETE, PATCH) with `advanceNextExpectedDate` helper for recurring date calculation; `/api/finance/income/received` (GET) for received-only queries
+- **Separate sessionStorage keys** (`income-` prefix) to avoid filter collisions with bills page
+- **Navigation**: Income and P&L tabs added to finance layout (14 tabs total)
+
 ### Technical Architecture
 
 #### Database Schema (Prisma)
@@ -150,6 +159,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **GoogleCalendarSync**: Calendar integration
 - **Chore**: Chore management with assignment, scheduling, notes
 - **ChoreCompletion**: Completion tracking with who/when
+- **FinanceIncomeEntry**: Recurring/one-off income tracking with self-referencing occurrences, relations to account/category/entity/location/member
 
 #### API Structure
 - RESTful API routes following Next.js App Router conventions
@@ -174,6 +184,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - `prisma/migrations/20260505000000_add_tag_category_colors/migration.sql`
 - `prisma/migrations/20260505000001_add_pin_hash_fields/migration.sql`
 - `prisma/migrations/20260508200000_add_chore_note_and_item_assignment/migration.sql` — Add note to Chore, assignedToUserId to ListItem
+- `prisma/migrations/20260511200000_add_income_entries/migration.sql` — Add FinanceIncomeEntry model with self-referencing occurrences, relations to account/category/entity/location
 
 #### API Endpoints
 - `src/app/api/tags/`: Tag management API (with color support)
@@ -192,6 +203,8 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - `src/app/api/settings/ai/route.ts`: GET/PUT user AI settings
 - `src/app/api/chores/schedule/route.ts`: Chore schedule endpoint for dashboard
 - `src/app/api/dashboard/route.ts`: Dashboard data with rolling forward window
+- `src/app/api/finance/income/route.ts`: Income entries CRUD (GET, POST, PUT, DELETE, PATCH) with child occurrence spawning for recurring income
+- `src/app/api/finance/income/received/route.ts`: Received income history (GET)
 
 #### Dashboard Components
 - `src/components/dashboard/ChoreScheduleCard.tsx`: Rolling chore schedule card with scope toggle
@@ -284,6 +297,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **AI Auto-Refresh Fix**: Cross-component event bus for AI assistant UI refresh; fixed ambiguous recipe matching
 - **UI Overhaul**: Premium glassmorphism themes, colored tags, notes Family/Private/Secure tabs, PIN protection, lock status indicators
 - **Dashboard Rolling Forward**: Home screen and meal planner display from today going forward (rolling 7-day window). New Chore Schedule dashboard panel with scope toggle (7/14/30 days). Chore note field. Todo per-user assignment with My Tasks / Family Tasks filtering. Build verified with zero TypeScript errors.
+- **Income Tracking & P&L**: New FinanceIncomeEntry Prisma model with self-referencing occurrences, CRUD + PATCH API for marking received, income page (`/finance/income`), received income history (`/finance/income/received`), P&L report (`/finance/profit-loss`) with period controls and category drill-down. Income and P&L tabs added to finance layout. Build verified with zero TypeScript errors.
 - **Previous Phases**: Recipe images, deployment scripts, bug fixes, and core feature development
 
 ### Project Status
