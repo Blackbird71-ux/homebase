@@ -10,6 +10,7 @@ const tabs = [
   { href: '/finance/transactions', label: 'Transactions', exact: false },
   { href: '/finance/bills',      label: 'Bills',        exact: false },
   { href: '/finance/income',     label: 'Income',       exact: false },
+  { href: '/finance/tax-report', label: 'Tax Report',  exact: false },
   { href: '/finance/budget',     label: 'Budget',       exact: false },
   { href: '/finance/goals',      label: 'Goals',        exact: false },
   { href: '/finance/reports',    label: 'Reports',      exact: false },

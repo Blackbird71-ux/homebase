@@ -23,7 +23,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction } = json
+  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel } = json
 
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
       isLocationBased: isLocationBased ?? false,
       isExternal: isExternal ?? false,
       isTaxDeduction: isTaxDeduction ?? false,
+      taxIncludeInReporting: taxIncludeInReporting ?? false,
+      taxDisplayLabel: taxDisplayLabel ?? null,
       familyId: session.familyId,
     },
   })
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction } = json
+  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel } = json
 
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -114,6 +116,8 @@ export async function PUT(request: NextRequest) {
       ...(isLocationBased !== undefined && { isLocationBased }),
       ...(isExternal !== undefined && { isExternal }),
       ...(isTaxDeduction !== undefined && { isTaxDeduction }),
+      ...(taxIncludeInReporting !== undefined && { taxIncludeInReporting }),
+      ...(taxDisplayLabel !== undefined && { taxDisplayLabel }),
     },
   })
 

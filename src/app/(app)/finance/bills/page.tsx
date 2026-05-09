@@ -43,6 +43,7 @@ export interface Bill {
   paid: boolean; paidDate: string | null
   invoiceReceived: boolean; invoiceReceivedDate: string | null
   billType: string; recurrenceInterval: string | null; parentBillId: string | null
+  taxClassification: string | null
   attachments?: BillAttachment[]
 }
 
@@ -103,6 +104,7 @@ export default function BillsPage() {
     entityId: entities.find(e => e.isDefault)?.id ?? '',
     billType: 'recurring', recurrenceInterval: '',
     invoiceReceived: false, invoiceReceivedDate: '',
+    taxClassification: '',
     addToBudget: false,
   }
   const [form, setForm] = useState(emptyForm)
@@ -238,6 +240,7 @@ export default function BillsPage() {
       billType: b.billType ?? 'recurring', recurrenceInterval: b.recurrenceInterval ?? '',
       invoiceReceived: b.invoiceReceived ?? false,
       invoiceReceivedDate: b.invoiceReceivedDate ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
+      taxClassification: b.taxClassification ?? '',
       addToBudget: budgetBillIds.has(b.id),
     })
     setShowForm(true)
@@ -256,6 +259,7 @@ export default function BillsPage() {
       billType: form.billType || 'recurring', recurrenceInterval: form.recurrenceInterval || null,
       invoiceReceived: form.invoiceReceived,
       invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
+      taxClassification: form.taxClassification || null,
     }
   }
 
@@ -587,6 +591,17 @@ export default function BillsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">Select entity…</option>
                 {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+              <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">Not classified</option>
+                <option value="personal">Personal</option>
+                <option value="business">Business</option>
+                <option value="investment">Investment</option>
+                <option value="super">Super</option>
               </select>
             </div>
             <div>

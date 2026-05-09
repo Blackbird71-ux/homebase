@@ -40,6 +40,7 @@ export interface IncomeEntry {
   invoiceReceived: boolean; invoiceReceivedDate: string | null
   isTaxTracked: boolean
   taxRate: number | null
+  taxClassification: string | null
   notes: string | null; memberId: string | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
@@ -112,6 +113,7 @@ export default function IncomePage() {
     recurrenceInterval: '',
     isTaxTracked: false,
     taxRate: '',
+    taxClassification: '',
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -234,6 +236,7 @@ export default function IncomePage() {
       recurrenceInterval: e.recurrenceInterval ?? '',
       isTaxTracked: e.isTaxTracked ?? false,
       taxRate: e.taxRate != null ? e.taxRate.toString() : '',
+      taxClassification: e.taxClassification ?? '',
     })
     setShowForm(true)
   }
@@ -267,6 +270,7 @@ export default function IncomePage() {
       invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
       isTaxTracked: form.isTaxTracked,
       taxRate: form.taxRate !== '' ? parseFloat(form.taxRate) : null,
+      taxClassification: form.taxClassification || null,
     }
   }
 
@@ -713,20 +717,39 @@ export default function IncomePage() {
               </label>
             </div>
             {form.isTaxTracked && (
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <label className="text-xs text-muted-foreground">Estimated tax rate (%)</label>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <input type="number" step="0.1" min="0" max="100" value={form.taxRate}
-                      onChange={e => setForm(p => ({ ...p, taxRate: e.target.value }))}
-                      placeholder="e.g. 30"
-                      className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-                    <span className="text-xs text-muted-foreground">%</span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs text-muted-foreground">Estimated tax rate (%)</label>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <input type="number" step="0.1" min="0" max="100" value={form.taxRate}
+                        onChange={e => setForm(p => ({ ...p, taxRate: e.target.value }))}
+                        placeholder="e.g. 30"
+                        className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
                   </div>
+                  <p className="text-[10px] text-muted-foreground max-w-[200px]">
+                    This rate is used in the P&L report to estimate your tax liability.
+                  </p>
                 </div>
-                <p className="text-[10px] text-muted-foreground max-w-[200px]">
-                  This rate is used in the P&L report to estimate your tax liability.
-                </p>
+                <div>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+                  <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">Not classified</option>
+                    <option value="personal">Personal</option>
+                    <option value="business">Business</option>
+                    <option value="investment">Investment</option>
+                    <option value="super">Super</option>
+                  </select>
+                </div>
+                {!form.memberId && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <ReceiptText className="h-3 w-3 shrink-0" />
+                    Tax-tracked income should be assigned to a person (member) for accurate tax reporting.
+                  </p>
+                )}
               </div>
             )}
           </div>

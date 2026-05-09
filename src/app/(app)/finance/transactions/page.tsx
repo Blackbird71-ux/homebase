@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Filter, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Filter, X, Receipt } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ interface Transaction {
   type: string; amount: number; payee: string | null; description: string | null
   date: string; isRecurring: boolean; isCleared: boolean; isPrivate: boolean
   memberId: string | null; locationId: string | null; entityId: string | null
+  taxClassification: string | null
   category: Category | null; account: Account | null
   member: Member | null
   location: Location | null
@@ -46,6 +47,7 @@ export default function TransactionsPage() {
     accountId: '', categoryId: '', type: 'expense', amount: 0,
     payee: '', description: '', date: new Date().toISOString().split('T')[0],
     isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '',
+    taxClassification: '',
   })
 
   const limit = 50
@@ -90,7 +92,7 @@ export default function TransactionsPage() {
 
   function openNew() {
     setEditing(null)
-    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '' })
+    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '', taxClassification: '' })
     setShowForm(true)
   }
 
@@ -101,14 +103,15 @@ export default function TransactionsPage() {
       amount: t.amount, payee: t.payee ?? '', description: t.description ?? '',
       date: t.date.split('T')[0], isCleared: t.isCleared, isPrivate: t.isPrivate,
       memberId: t.memberId ?? '', locationId: t.location?.id ?? '', entityId: t.entityId ?? '',
+      taxClassification: t.taxClassification ?? '',
     })
     setShowForm(true)
   }
 
   async function handleSave() {
     const body = editing
-      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null }
-      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null }
+      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null }
+      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null }
     const res = await fetch('/api/finance/transactions', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,6 +269,17 @@ export default function TransactionsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">No entity</option>
                 {entities.map(en => <option key={en.id} value={en.id}>{en.name}{en.isDefault ? ' (default)' : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+              <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">Not classified</option>
+                <option value="personal">Personal</option>
+                <option value="business">Business</option>
+                <option value="investment">Investment</option>
+                <option value="super">Super</option>
               </select>
             </div>
             <div>

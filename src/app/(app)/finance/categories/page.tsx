@@ -18,6 +18,8 @@ interface Category {
   color: string | null; icon: string | null; isSystem: boolean
   level: number; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean
   isTaxDeduction: boolean
+  taxIncludeInReporting: boolean
+  taxDisplayLabel: string | null
   parent?: { id: string; name: string } | null
   children?: Category[]
   _count?: { transactions: number; recurringBills: number; incomeEntries: number }
@@ -56,6 +58,8 @@ function CategoryDialog({
     isLocationBased: false,
     isExternal: false,
     isTaxDeduction: false,
+    taxIncludeInReporting: false,
+    taxDisplayLabel: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -73,6 +77,8 @@ function CategoryDialog({
           isLocationBased: editing.isLocationBased,
           isExternal: editing.isExternal,
           isTaxDeduction: editing.isTaxDeduction,
+          taxIncludeInReporting: editing.taxIncludeInReporting,
+          taxDisplayLabel: editing.taxDisplayLabel ?? '',
         })
       } else {
         setForm({
@@ -85,6 +91,8 @@ function CategoryDialog({
           isLocationBased: false,
           isExternal: false,
           isTaxDeduction: false,
+          taxIncludeInReporting: false,
+          taxDisplayLabel: '',
         })
       }
     }
@@ -195,6 +203,28 @@ function CategoryDialog({
                   <span className="text-orange-600 dark:text-orange-400 font-medium">Tax Deduction</span>
                 </label>
               )}
+            {/* Tax Reporting flag — shown for expense and income categories */}
+            {(form.type === 'expense' || form.type === 'income') && (
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.taxIncludeInReporting}
+                  onChange={e => setForm(p => ({ ...p, taxIncludeInReporting: e.target.checked }))}
+                  disabled={saving} />
+                <span className="text-amber-600 dark:text-amber-400 font-medium">Include in Tax Report</span>
+              </label>
+            )}
+            {/* Tax display label — shown when taxIncludeInReporting is checked */}
+            {form.taxIncludeInReporting && (
+              <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Display label:</label>
+                <input
+                  value={form.taxDisplayLabel}
+                  onChange={e => setForm(p => ({ ...p, taxDisplayLabel: e.target.value }))}
+                  placeholder="e.g. Rental Income, Interest"
+                  className="w-full sm:w-48 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                  disabled={saving}
+                />
+              </div>
+            )}
             {/* Separator before standard flags */}
             <span className="text-muted-foreground/40 mx-1 select-none">|</span>
             <label className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -257,6 +287,7 @@ function CategoryRow({
   const hasChildren = children.length > 0
   const flags: string[] = []
   if (cat.isTaxDeduction) flags.push('TAX DEDUCTION')
+  if (cat.taxIncludeInReporting) flags.push('TAX REPORT')
   if (cat.isPersonal) flags.push('PRIVATE')
   if (cat.isLocationBased) flags.push('LOCATION')
   if (cat.isExternal) flags.push('EXTERNAL')

@@ -1,5 +1,5 @@
 # HomeBase — Project Summary
-## Current Build: Half-Yearly Income Frequency
+## Current Build: Tax Reporting & ATO Compliance
 
 ### Project Overview
 HomeBase is a comprehensive family management platform built with Next.js 16, TypeScript, Prisma, and SQLite. The application provides a centralised hub for family organisation including calendar management, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
@@ -62,10 +62,10 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - 19 actions across meal plan, shopping, todo, calendar, chores, notes, recipes, contacts, documents, birthdays
 - Context-aware: AI receives family data in system prompt; PWA-compatible
 
-#### 12. Finance Module ← *most recently enhanced*
+#### 12. Finance Module ← *most recently enhanced — Tax Reporting*
 
 Full household finance tracking — bills, income, transactions, accounts, budget, P&L, reports, vendors, categories, entities, locations, members.
-Income tax tracking with ATO compliance support.
+Income tax tracking with ATO compliance support including Australian tax brackets (2025-26), per-classification reporting (Personal/Business/Investment/Super), Medicare levy, and super contributions cap monitoring.
 
 ---
 
@@ -84,7 +84,7 @@ Income tax tracking with ATO compliance support.
 - Undo paid: reverses the auto-created transaction and removes the spawned next occurrence
 - Invoice/document attachment support (PDF, JPG, PNG, DOC — max 2 per bill)
 - Budget planner integration via "Include in budget" checkbox on form
-- Fields: entity/fund, category, vendor, account, member, location, notes, email reminder
+- Fields: entity/fund, category, vendor, account, member, location, notes, email reminder, **tax classification** (Personal/Business/Investment/Super)
 - **Clickable reference data**: vendor, member, and location names in each bill row are now clickable — clicking one activates a quick-filter badge that narrows the list to that value; click again or press × to clear
 
 #### Income Tracking
@@ -97,15 +97,18 @@ Income tax tracking with ATO compliance support.
 - Remittance/payslip attachment support (max 2 per entry)
 - Payer/source via the Vendors list — same vendor can appear on both bills (payee) and income (payer)
 - Fields: entity/fund, category, vendor, account, member, location, notes, email reminder
-- **Income Tax Tracking** — each income entry can be flagged for ATO/tax tracking with an optional estimated tax rate:
+- **Income Tax Tracking** — each income entry can be flagged for ATO/tax tracking with an optional estimated tax rate and classification:
   - Toggle per income entry in the add/edit dialog
   - Orange "TAX TRACKED" pill displayed on income rows with rate shown when set
   - Tax rate percentage input (e.g. 30% for corporate, marginal rate for individuals)
   - Orange-themed tax tracking section in the form dialog with ReceiptText icon
+  - **Tax Classification dropdown** (Personal / Business / Investment / Super) inside the tax tracking section
+  - Amber warning displayed when tax-tracked income has no assigned person (member)
 
 #### Transactions
 - Full CRUD; filters by type, member, location, **entity** (new)
 - **Entity field added**: transactions can now be tagged to a FinanceEntity just like bills and income — complete field parity across all three
+- **Tax Classification field** (Personal/Business/Investment/Super) — full parity with bills and income
 - Entity chip displayed on transaction row (non-default entities only)
 - Auto-created transactions from bill payment / income receipt remain linked via `sourceBill` / `sourceIncomeEntry` reverse relations
 
@@ -156,6 +159,9 @@ Income tax tracking with ATO compliance support.
 #### Categories
 - Hierarchical (parent / child, 2 levels); income / expense / transfer types
 - Tax deduction flag for expense and transfer categories
+- **Tax reporting flag** (`taxIncludeInReporting`): marks categories for inclusion in the Tax Report (expense and income types)
+- **Tax display label** (`taxDisplayLabel`): custom label override for the Tax Report (e.g. "Rental Income", "Interest")
+- **"TAX REPORT" badge** displayed on category rows when `taxIncludeInReporting` is enabled
 - **Usage counts** (new): each category row now shows transaction, bill, and income entry counts inline
 - "Not In Use" root auto-collapsed on page load
 
@@ -178,10 +184,10 @@ Income tax tracking with ATO compliance support.
 
 #### Database Schema (Prisma) — Finance Models
 - **FinanceAccount**: Bank accounts, credit cards, savings, investment accounts; `currentBalance` maintained by transaction events
-- **FinanceCategory**: Hierarchical income/expense/transfer categories (parent/child, 2 levels); usage counts via `_count`
+- **FinanceCategory**: Hierarchical income/expense/transfer categories (parent/child, 2 levels); usage counts via `_count`; `taxIncludeInReporting` (boolean) and `taxDisplayLabel` (nullable string) for Tax Report integration
 - **FinanceTransaction**: Individual transactions; auto-created on bill payment / income receipt; `sourceIncomeEntry` and `sourceBill` reverse relations; **`entityId` FK** (new) for multi-entity support
 - **FinanceRecurringBill**: Bills with `transactionId` FK → auto-created expense transaction; `parentBillId` for occurrence chaining
-- **FinanceIncomeEntry**: Income with `parentIncomeId` self-reference for occurrence chaining and `transactionId` FK → auto-created income transaction; `isTaxTracked` (boolean) and `taxRate` (nullable float) for ATO tax tracking; frequency supports `weekly | fortnightly | monthly | quarterly | halfyearly | yearly | one-off`
+- **FinanceIncomeEntry**: Income with `parentIncomeId` self-reference for occurrence chaining and `transactionId` FK → auto-created income transaction; `isTaxTracked` (boolean), `taxRate` (nullable float), and `taxClassification` (nullable string) for ATO tax tracking; frequency supports `weekly | fortnightly | monthly | quarterly | halfyearly | yearly | one-off`
 - **FinanceBudget**: Budget rules linked to bills and categories
 - **FinanceSavingsGoal**: Savings goals linked to accounts; `currentAmount` auto-derived from account balance in API layer
 - **FinanceVendor**: Vendors/payers shared across bills and income; `_count` for usage stats
@@ -218,18 +224,20 @@ Income tax tracking with ATO compliance support.
 | `20260513000000_add_income_parity_fields` | Income parity with bills |
 | `20260514000000_add_income_transaction_link` | Income/bill → transaction FK |
 | `20260515000000_add_transaction_entity` | `entityId` on FinanceTransaction |
-| `20260516000000_add_income_tax_tracking` | `isTaxTracked`/`taxRate` on FinanceIncomeEntry *(latest)* |
+| `20260516000000_add_income_tax_tracking` | `isTaxTracked`/`taxRate` on FinanceIncomeEntry |
+| `20260517000000_add_tax_classification` | `taxClassification` on FinanceTransaction/RecurringBill/IncomeEntry; `taxIncludeInReporting`/`taxDisplayLabel` on FinanceCategory *(latest)* |
 
 #### API Routes
 | Route | Key behaviours |
 |-------|----------------|
 | `api/finance/accounts/route.ts` | GET enriches each account with `pendingCount`, `pendingExpense`, `pendingIncome` |
-| `api/finance/income/route.ts` | POST/PUT accept `isTaxTracked`/`taxRate`; GET returns them automatically |
+| `api/finance/income/route.ts` | POST/PUT accept `isTaxTracked`/`taxRate`/`taxClassification`; PATCH propagates tax fields to spawned entries |
 | `api/finance/income-streams/route.ts` | GET derives streams from live `FinanceIncomeEntry` records (includes `isTaxTracked`/`taxRate`); PUT is no-op stub |
-| `api/finance/bills/route.ts` | PATCH accepts backdatable `paidDate`; auto-creates/deletes expense transaction |
-| `api/finance/transactions/route.ts` | CRUD; GET filters by `entityId`; all responses include `entity` relation |
+| `api/finance/bills/route.ts` | PATCH accepts backdatable `paidDate`; auto-creates/deletes expense transaction; POST/PUT/PATCH accept `taxClassification` |
+| `api/finance/transactions/route.ts` | CRUD; GET filters by `entityId`; POST/PUT accept `taxClassification`; all responses include `entity` relation |
+| `api/finance/categories/route.ts` | GET includes `_count` for transactions, recurringBills, incomeEntries; POST/PUT accept `taxIncludeInReporting`/`taxDisplayLabel` |
+| `api/finance/tax-report/route.ts` | **NEW** — GET aggregates tax data by classification; ATO 2025-26 bracket calculation + Medicare levy; entity filter; financial year detection |
 | `api/finance/goals/route.ts` | GET/PUT derive `currentAmount` from `account.currentBalance` when account linked |
-| `api/finance/categories/route.ts` | GET includes `_count` for transactions, recurringBills, incomeEntries |
 | `api/finance/members/route.ts` | GET includes `_count` for bills, income, transactions |
 | `api/finance/locations/route.ts` | GET includes `_count` for transactions, recurringBills, incomeEntries |
 | `api/finance/vendors/route.ts` | Vendor CRUD; `_count` for recurringBills and transactions |
@@ -237,16 +245,17 @@ Income tax tracking with ATO compliance support.
 #### Pages
 | Page | Key changes in this build |
 |------|--------------------------|
-| `finance/income/page.tsx` | Tax tracking toggle + rate input in form; orange "TAX TRACKED" pill on rows; half-yearly frequency option added |
+| `finance/tax-report/page.tsx` | **NEW** — Full tax report with summary cards (Income/Deductions/Net Tax/Tax+Medicare); entity filter tabs; per-classification expandable breakdown; super contributions cap indicator |
+| `finance/income/page.tsx` | Tax tracking toggle + rate input + **tax classification dropdown** in form; orange "TAX TRACKED" pill on rows; amber member warning |
+| `finance/bills/page.tsx` | **Tax Classification dropdown** added to form; interface/form/payload all updated |
+| `finance/transactions/page.tsx` | **Tax Classification dropdown** added to form; interface/form/payload all updated |
+| `finance/categories/page.tsx` | **Tax reporting checkbox** + display label input added; "TAX REPORT" badge on category rows |
 | `finance/profit-loss/page.tsx` | Estimated Tax card (orange); auto-calculated ATO liability from tax-tracked income; net profit subtracts estimated tax |
 | `finance/reports/page.tsx` | Cash/Forecast toggle; label changes between "Paid bills" and "Expected bills" |
 | `finance/budget/page.tsx` | Income section reads from Income page (read-only); removed all income CRUD |
 | `finance/goals/page.tsx` | Account-linked goals show live balance; current amount field disabled when linked |
-| `finance/transactions/page.tsx` | Entity filter + field added; entity chip on row |
 | `finance/accounts/page.tsx` | Pending transaction count and amounts shown on account cards |
-| `finance/bills/page.tsx` | Clickable vendor/member/location chips; quick-filter badge in filter bar |
 | `finance/vendors/page.tsx` | Description text updated |
-| `finance/categories/page.tsx` | Usage counts displayed under each category name |
 | `finance/members/page.tsx` | Usage counts displayed under each member email |
 | `finance/locations/page.tsx` | Usage counts displayed in each location card |
 

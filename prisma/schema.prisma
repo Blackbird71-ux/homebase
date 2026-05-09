@@ -568,7 +568,9 @@ model FinanceCategory {
   isPersonal      Boolean           @default(false)  // Show member selector on transaction
   isLocationBased Boolean           @default(false)  // Show location selector on transaction
   isExternal      Boolean           @default(false)  // Belongs to external entity account
-  isTaxDeduction   Boolean          @default(false)  // Expense/Transfer category that is tax deductible
+  isTaxDeduction     Boolean          @default(false)   // Expense/Transfer category that is tax deductible
+  taxIncludeInReporting Boolean        @default(false)   // Include this category's amounts in tax reports
+  taxDisplayLabel    String?                            // Override label shown on tax report (e.g. "Rental Property Expenses")
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -618,6 +620,7 @@ model FinanceTransaction {
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   entityId        String?              // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  taxClassification String?           // personal | business | investment | super; null = not classified
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -671,6 +674,7 @@ model FinanceRecurringBill {
   transaction     FinanceTransaction?   @relation("BillTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  taxClassification String?            // personal | business | investment | super; null = not classified
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -699,6 +703,7 @@ model FinanceIncomeEntry {
   incomeType          String               @default("recurring") // recurring | one-off
   isTaxTracked        Boolean              @default(false)   // Track this income for ATO/tax purposes
   taxRate             Float?               // Estimated tax rate (e.g. 30 for 30%). Null = not set
+  taxClassification   String?              // personal | business | investment | super; null = not classified
   nextExpectedDate    DateTime             // When next income is expected
   endDate             DateTime?
   isActive            Boolean              @default(true)

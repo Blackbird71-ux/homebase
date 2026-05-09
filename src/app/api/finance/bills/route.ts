@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     notes, memberId, locationId, vendorId,
     billType, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
-    paid, paidDate, entityId,
+    paid, paidDate, entityId, taxClassification,
   } = json
 
   if (!name || !amount || !frequency) {
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       paid: paid ?? false,
       paidDate: paidDate ? new Date(paidDate) : null,
       entityId: entityId ?? null,
+      taxClassification: taxClassification ?? null,
       familyId: session.familyId,
     },
     include: BILL_INCLUDE,
@@ -86,7 +87,7 @@ export async function PUT(request: NextRequest) {
     notes, memberId, locationId, vendorId,
     billType, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
-    paid, paidDate, entityId,
+    paid, paidDate, entityId, taxClassification,
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -121,6 +122,7 @@ export async function PUT(request: NextRequest) {
       ...(paid !== undefined && { paid }),
       ...(paidDate !== undefined && { paidDate: paidDate ? new Date(paidDate) : null }),
       ...(entityId !== undefined && { entityId: entityId ?? null }),
+      ...(taxClassification !== undefined && { taxClassification: taxClassification ?? null }),
     },
     include: BILL_INCLUDE,
   })
@@ -260,6 +262,7 @@ export async function PATCH(request: NextRequest) {
             paidDate: null,
             parentBillId: existing.id,
             entityId: existing.entityId,
+            taxClassification: existing.taxClassification,
             familyId: session.familyId,
           },
         })
