@@ -41,6 +41,7 @@ function buildChoreSchedule(
         lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
         lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
         isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayStart : false),
       })),
     })
   }

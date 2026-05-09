@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     }
     
     // Create uploads directory if it doesn't exist
-    const uploadDir = join(process.cwd(), 'data', 'uploads')
+    const uploadDir = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'uploads')
     try {
       await mkdir(uploadDir, { recursive: true })
     } catch (err) {

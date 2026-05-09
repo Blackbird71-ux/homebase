@@ -17,7 +17,7 @@ export async function GET(
     }
     
     // Check if file exists in uploads directory
-    const filePath = join(process.cwd(), 'data', 'uploads', filename)
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'uploads', filename)
     
     try {
       await stat(filePath)

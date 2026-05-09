@@ -60,7 +60,7 @@ export async function GET(
   }
 
   try {
-    const filePath = join(process.cwd(), 'data', 'documents', document.fileName)
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'documents', document.fileName)
     const mimeType = document.mimeType || ''
     const ext = document.fileName.split('.').pop()?.toLowerCase() || ''
 
@@ -196,7 +196,7 @@ export async function PATCH(
       )
     }
 
-    const filePath = join(process.cwd(), 'data', 'documents', document.fileName)
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'documents', document.fileName)
     await writeFile(filePath, text, 'utf-8')
 
     // Update the document's updatedAt timestamp

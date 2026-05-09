@@ -37,7 +37,7 @@ export async function GET(
   }
 
   try {
-    const filePath = join(process.cwd(), 'data', 'documents', document.fileName)
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'documents', document.fileName)
     const buffer = await readFile(filePath)
 
     // Use original filename for download

@@ -139,7 +139,7 @@ export async function DELETE(
 
   // Delete the file from disk
   try {
-    const filePath = join(process.cwd(), 'data', 'documents', existing.fileName)
+    const filePath = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'documents', existing.fileName)
     await unlink(filePath)
   } catch (err) {
     // File may not exist — that's okay

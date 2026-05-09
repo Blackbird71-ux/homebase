@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     const safeFilename = `${randomUUID()}.${ext}`
 
     // Ensure documents directory exists
-    const documentsDir = join(process.cwd(), 'data', 'documents')
+    const documentsDir = join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'documents')
     await mkdir(documentsDir, { recursive: true })
 
     // Write file to disk
