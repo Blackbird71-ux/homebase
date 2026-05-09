@@ -59,7 +59,7 @@ export default function BudgetPage() {
 
   // Income editing
   const [editingIncome, setEditingIncome] = useState<IncomeStream | null>(null)
-  const [incomeForm, setIncomeForm]       = useState({ name: '', amount: 0, frequency: 'fortnightly' as const })
+  const [incomeForm, setIncomeForm]       = useState<{ name: string; amount: number; frequency: IncomeStream['frequency'] }>({ name: '', amount: 0, frequency: 'fortnightly' })
   const [showIncomeForm, setShowIncomeForm] = useState(false)
   const [savingIncome, setSavingIncome]   = useState(false)
 

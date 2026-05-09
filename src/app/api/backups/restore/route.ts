@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'filename is required' }, { status: 400 })
   }
 
-  const backupPath = join(BACKUP_DIR, filename)
+  const backupPath = join(/*turbopackIgnore: true*/ BACKUP_DIR, filename)
 
   if (!existsSync(backupPath)) {
     return NextResponse.json({ error: 'Backup file not found' }, { status: 404 })
