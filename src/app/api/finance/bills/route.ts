@@ -153,7 +153,7 @@ function advanceNextDueDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, paid, invoiceReceived, invoiceReceivedDate } = json
+  const { id, paid, paidDate: paidDateRaw, invoiceReceived, invoiceReceivedDate } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -161,10 +161,13 @@ export async function PATCH(request: NextRequest) {
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
   const updateData: Record<string, any> = {}
+
   if (paid !== undefined) {
     updateData.paid = paid
-    updateData.paidDate = paid ? new Date() : null
+    const stampDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
+    updateData.paidDate = paid ? stampDate : null
   }
+
   if (invoiceReceived !== undefined) {
     updateData.invoiceReceived = invoiceReceived
     updateData.invoiceReceivedDate = invoiceReceived
@@ -172,7 +175,14 @@ export async function PATCH(request: NextRequest) {
       : null
   }
 
+  // ── Undo paid: delete spawned child bills & the auto-transaction ────────────
   if (paid === false && existing.paid === true) {
+    if (existing.transactionId) {
+      await prisma.financeTransaction.deleteMany({
+        where: { id: existing.transactionId, familyId: session.familyId },
+      })
+      updateData.transactionId = null
+    }
     await prisma.financeRecurringBill.deleteMany({
       where: { parentBillId: id, familyId: session.familyId, paid: false },
     })
@@ -184,39 +194,76 @@ export async function PATCH(request: NextRequest) {
     include: BILL_INCLUDE,
   })
 
-  if (paid === true && existing.billType !== 'one-off') {
-    const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
-    if (!existing.endDate || newDueDate <= existing.endDate) {
-      await prisma.financeRecurringBill.create({
+  // ── Mark paid: create expense transaction + spawn next occurrence ──────────
+  if (paid === true && !existing.paid) {
+    const actualPaidDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
+
+    // Auto-create an expense transaction so account balances stay accurate
+    try {
+      const tx = await prisma.financeTransaction.create({
         data: {
-          name: existing.name,
+          type: 'expense',
           amount: existing.amount,
           accountId: existing.accountId,
           categoryId: existing.categoryId,
+          payee: null,
+          description: existing.name,
+          date: actualPaidDate,
+          isRecurring: existing.billType !== 'one-off',
+          recurringBillId: existing.id,
           vendorId: existing.vendorId,
-          frequency: existing.frequency,
-          dayOfMonth: existing.dayOfMonth,
-          monthOfYear: existing.monthOfYear,
-          nextDueDate: newDueDate,
-          endDate: existing.endDate,
-          isActive: existing.isActive,
-          autoPay: existing.autoPay,
-          emailReminder: existing.emailReminder,
-          reminderDays: existing.reminderDays,
           notes: existing.notes,
           memberId: existing.memberId,
           locationId: existing.locationId,
-          billType: existing.billType,
-          recurrenceInterval: existing.recurrenceInterval,
-          invoiceReceived: false,
-          invoiceReceivedDate: null,
-          paid: false,
-          paidDate: null,
-          parentBillId: existing.id,
-          entityId: existing.entityId,  // carry entity to next occurrence
+          isCleared: true,
+          reconciledDate: actualPaidDate,
+          createdBy: session.userId,
           familyId: session.familyId,
         },
       })
+      await prisma.financeRecurringBill.update({
+        where: { id },
+        data: { transactionId: tx.id },
+      })
+    } catch {
+      // Best-effort; don't fail the whole mark-paid
+    }
+
+    // Spawn the next occurrence for recurring bills
+    if (existing.billType !== 'one-off') {
+      const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
+      if (!existing.endDate || newDueDate <= existing.endDate) {
+        await prisma.financeRecurringBill.create({
+          data: {
+            name: existing.name,
+            amount: existing.amount,
+            accountId: existing.accountId,
+            categoryId: existing.categoryId,
+            vendorId: existing.vendorId,
+            frequency: existing.frequency,
+            dayOfMonth: existing.dayOfMonth,
+            monthOfYear: existing.monthOfYear,
+            nextDueDate: newDueDate,
+            endDate: existing.endDate,
+            isActive: existing.isActive,
+            autoPay: existing.autoPay,
+            emailReminder: existing.emailReminder,
+            reminderDays: existing.reminderDays,
+            notes: existing.notes,
+            memberId: existing.memberId,
+            locationId: existing.locationId,
+            billType: existing.billType,
+            recurrenceInterval: existing.recurrenceInterval,
+            invoiceReceived: false,
+            invoiceReceivedDate: null,
+            paid: false,
+            paidDate: null,
+            parentBillId: existing.id,
+            entityId: existing.entityId,
+            familyId: session.familyId,
+          },
+        })
+      }
     }
   }
 

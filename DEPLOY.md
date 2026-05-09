@@ -24,11 +24,17 @@ Browser → Cloudflare CDN → Argo Tunnel (cloudflared container)
 
 ```
 /volume1/docker/homebase/
-  Data/               ← SQLite database (persists across rebuilds)
-  cloudflared/        ← cert.pem + homebase.json + config.yml (tunnel config)
-  .env.local          ← All secrets (never commit this)
-  homebase.tar        ← Uploaded Docker image (replaced on each deploy)
-  deploy-nas.sh       ← Run on NAS after uploading a new image
+  Data/                     ← SQLite database (persists across rebuilds)
+    uploads/                ← Recipe and general image uploads
+    documents/              ← Document vault files
+    bill-attachments/       ← Invoice/reference docs attached to bills
+    income-attachments/     ← Payslips/remittance docs attached to income
+    images/                 ← Cached external recipe images
+    backups/                ← Automated database backups (daily cron at 03:00)
+  cloudflared/              ← cert.pem + homebase.json + config.yml
+  .env.local                ← All secrets (never commit this)
+  homebase.tar              ← Uploaded Docker image (replaced on each deploy)
+  deploy-nas.sh             ← Run on NAS after uploading a new image
 ```
 
 ---

@@ -105,11 +105,18 @@ export default function ProfitLossPage() {
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
 
   // ── Filter income entries within this period ──────────────────────────────
+  // Cash-basis: received entries use receivedDate; pending use nextExpectedDate.
   const relevantIncome = useMemo(() => {
     const startTs = start.getTime()
     const endTs   = end.getTime()
     return incomeEntries.filter(e => {
       if (!e.isActive) return false
+      // For received income, slot by the actual date money arrived
+      if (e.received && e.receivedDate) {
+        const ts = new Date(e.receivedDate).getTime()
+        return ts >= startTs && ts <= endTs
+      }
+      // For pending income, slot by expected date (forward-looking forecast)
       const dueTs = new Date(e.nextExpectedDate).getTime()
       if (e.incomeType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
@@ -117,6 +124,7 @@ export default function ProfitLossPage() {
   }, [incomeEntries, start, end])
 
   // ── Filter bills within this period ───────────────────────────────────────
+  // Cash-basis: paid bills use paidDate; unpaid use nextDueDate.
   // Exclude transfers and income-category items
   const relevantExpenses = useMemo(() => {
     const startTs = start.getTime()
@@ -126,6 +134,12 @@ export default function ProfitLossPage() {
       // Exclude transfers and income-type category
       if ((b.category as any)?.type === 'transfer' || (b.category as any)?.type === 'income') return false
       if (b.billType === 'transfer') return false
+      // For paid bills, slot by actual payment date
+      if (b.paid && b.paidDate) {
+        const ts = new Date(b.paidDate).getTime()
+        return ts >= startTs && ts <= endTs
+      }
+      // For unpaid bills, slot by due date (forward-looking forecast)
       const dueTs = new Date(b.nextDueDate).getTime()
       if (b.billType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
@@ -145,7 +159,7 @@ export default function ProfitLossPage() {
       const periodAmt = isOneOff ? e.amount : toPeriodAmount(e.amount, e.frequency, periodMonths)
       g.totalPeriod += periodAmt
       g.count++
-      g.items.push({ id: e.id, name: e.name, amount: e.amount, periodAmount: periodAmt, isOneOff, date: e.nextExpectedDate })
+      g.items.push({ id: e.id, name: e.name, amount: e.amount, periodAmount: periodAmt, isOneOff, received: e.received, date: e.received && e.receivedDate ? e.receivedDate : e.nextExpectedDate })
     }
     return Array.from(map.values()).sort((a, b) => b.totalPeriod - a.totalPeriod)
   }, [relevantIncome, periodMonths])
@@ -163,7 +177,7 @@ export default function ProfitLossPage() {
       const periodAmt = isOneOff ? b.amount : toPeriodAmount(b.amount, b.frequency, periodMonths)
       g.totalPeriod += periodAmt
       g.count++
-      g.items.push({ id: b.id, name: b.name, amount: b.amount, periodAmount: periodAmt, isOneOff, paid: b.paid, date: b.nextDueDate })
+      g.items.push({ id: b.id, name: b.name, amount: b.amount, periodAmount: periodAmt, isOneOff, paid: b.paid, date: b.paid && b.paidDate ? b.paidDate : b.nextDueDate })
     }
     return Array.from(map.values()).sort((a, b) => b.totalPeriod - a.totalPeriod)
   }, [relevantExpenses, periodMonths])

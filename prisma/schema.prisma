@@ -593,6 +593,8 @@ model FinanceTransaction {
   category        FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   type            String               @default("expense")  // expense | income | transfer
   amount          Float                // Always positive; sign implied by type
+  sourceIncomeEntry   FinanceIncomeEntry?   @relation("IncomeTransaction")
+  sourceBill          FinanceRecurringBill? @relation("BillTransaction")
   payee           String?
   description     String?
   date            DateTime
@@ -662,6 +664,8 @@ model FinanceRecurringBill {
   parentBillId    String?
   parentBill      FinanceRecurringBill?  @relation("BillOccurrences", fields: [parentBillId], references: [id], onDelete: SetNull)
   childBills      FinanceRecurringBill[] @relation("BillOccurrences")
+  transactionId   String?               // FK -> FinanceTransaction created on payment
+  transaction     FinanceTransaction?   @relation("BillTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
   familyId        String
@@ -681,6 +685,7 @@ model FinanceRecurringBill {
   @@index([parentBillId])
   @@index([vendorId])
   @@index([entityId])
+  @@index([transactionId])
 }
 
 model FinanceIncomeEntry {
@@ -717,6 +722,8 @@ model FinanceIncomeEntry {
   parentIncomeId      String?
   parentIncome        FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
   childEntries        FinanceIncomeEntry[] @relation("IncomeOccurrences")
+  transactionId       String?              // FK -> FinanceTransaction created on receipt
+  transaction         FinanceTransaction?  @relation("IncomeTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   attachments         IncomeAttachment[]
   familyId            String
   family              Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
@@ -731,6 +738,7 @@ model FinanceIncomeEntry {
   @@index([parentIncomeId])
   @@index([entityId])
   @@index([vendorId])
+  @@index([transactionId])
 }
 
 model IncomeAttachment {

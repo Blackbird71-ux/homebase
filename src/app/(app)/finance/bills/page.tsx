@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { sortedCategoryList } from '@/lib/finance-categories'
 import Link from 'next/link'
 import {
   Dialog,
@@ -70,7 +71,7 @@ function entityChip(entity: Entity | null) {
 export default function BillsPage() {
   const [bills, setBills]           = useState<Bill[]>([])
   const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
-  const [categories, setCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
   const [members, setMembers]       = useState<Member[]>([])
   const [locations, setLocations]   = useState<Location[]>([])
   const [vendors, setVendors]       = useState<Vendor[]>([])
@@ -79,6 +80,9 @@ export default function BillsPage() {
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
   const [editing, setEditing]       = useState<Bill | null>(null)
+  // ── Date-paid confirmation state ───────────────────────────────────────
+  const [paidConfirm, setPaidConfirm] = useState<{ bill: Bill } | null>(null)
+  const [paidConfirmDate, setPaidConfirmDate] = useState<string>('')
   const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('bills-dateRange')
@@ -318,12 +322,20 @@ export default function BillsPage() {
   }
 
   async function handleMarkPaid(bill: Bill) {
+    const today = new Date().toISOString().split('T')[0]
+    setPaidConfirmDate(today)
+    setPaidConfirm({ bill })
+  }
+
+  async function confirmMarkPaid() {
+    if (!paidConfirm) return
+    const { bill } = paidConfirm
     const res = await fetch('/api/finance/bills', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bill.id, paid: true }),
+      body: JSON.stringify({ id: bill.id, paid: true, paidDate: paidConfirmDate }),
     })
-    if (res.ok) { toast.success('Bill marked as paid'); load() }
+    if (res.ok) { toast.success('Bill marked as paid'); setPaidConfirm(null); load() }
     else toast.error('Failed to mark as paid')
   }
 
@@ -369,7 +381,7 @@ export default function BillsPage() {
     return 0
   }
 
-  const rootCategories = categories.filter(c => !c.parentId)
+  const rootCategories = categories.filter(c => !c.parentId && c.type === 'expense')
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const rangeEnd = dateRange === '14' ? addDays(todayStart, 14)
@@ -576,7 +588,9 @@ export default function BillsPage() {
               <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">No category</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
+                  <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -719,6 +733,45 @@ export default function BillsPage() {
             <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Date paid confirmation dialog ──────────────────────────────────────────── */}
+      <Dialog open={!!paidConfirm} onOpenChange={open => { if (!open) setPaidConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>Confirm bill paid</DialogTitle>
+          </DialogHeader>
+          {paidConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Mark <span className="font-medium text-foreground">{paidConfirm.bill.name}</span> as paid.
+                What date did you make the payment?
+              </p>
+              <div>
+                <label className="text-xs text-muted-foreground">Date paid</label>
+                <input
+                  type="date"
+                  value={paidConfirmDate}
+                  onChange={e => setPaidConfirmDate(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                An expense transaction of{' '}
+                <span className="font-medium text-foreground">
+                  {formatCurrency(paidConfirm.bill.amount)}
+                </span>{' '}
+                will be added to your transaction feed on this date.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setPaidConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmMarkPaid} className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium">
+              Mark as paid
             </button>
           </DialogFooter>
         </DialogContent>

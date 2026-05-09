@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { sortedCategoryList } from '@/lib/finance-categories'
 import Link from 'next/link'
 import {
   Dialog,
@@ -59,7 +60,7 @@ function toMonthlyAmount(amount: number, frequency: string): number {
 export default function IncomePage() {
   const [entries, setEntries]         = useState<IncomeEntry[]>([])
   const [accounts, setAccounts]       = useState<{ id: string; name: string }[]>([])
-  const [categories, setCategories]   = useState<{ id: string; name: string; parentId: string | null }[]>([])
+  const [categories, setCategories]   = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
   const [members, setMembers]         = useState<Member[]>([])
   const [locations, setLocations]     = useState<Location[]>([])
   const [vendors, setVendors]         = useState<Vendor[]>([])
@@ -67,6 +68,9 @@ export default function IncomePage() {
   const [loading, setLoading]         = useState(true)
   const [showForm, setShowForm]       = useState(false)
   const [editing, setEditing]         = useState<IncomeEntry | null>(null)
+  // ── Date-received confirmation state ─────────────────────────────────────
+  const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
+  const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
   const [dateRange, setDateRange]     = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('income-dateRange')
@@ -279,12 +283,21 @@ export default function IncomePage() {
   }
 
   async function handleMarkReceived(entry: IncomeEntry) {
+    // Open the date-confirmation mini-dialog instead of firing immediately
+    const today = new Date().toISOString().split('T')[0]
+    setReceivedConfirmDate(today)
+    setReceivedConfirm({ entry })
+  }
+
+  async function confirmMarkReceived() {
+    if (!receivedConfirm) return
+    const { entry } = receivedConfirm
     const res = await fetch('/api/finance/income', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: entry.id, received: true }),
+      body: JSON.stringify({ id: entry.id, received: true, receivedDate: receivedConfirmDate }),
     })
-    if (res.ok) { toast.success('Income marked as received'); load() }
+    if (res.ok) { toast.success('Income marked as received'); setReceivedConfirm(null); load() }
     else toast.error('Failed to mark as received')
   }
 
@@ -323,7 +336,7 @@ export default function IncomePage() {
     return 0
   }
 
-  const rootCategories = categories.filter(c => !c.parentId)
+  const rootCategories = categories.filter(c => !c.parentId && c.type === 'income')
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const rangeEnd = dateRange === '14' ? addDays(todayStart, 14)
@@ -336,7 +349,35 @@ export default function IncomePage() {
   }
 
   const activeEntries     = entries.filter(e => e.isActive && !e.received)
-  const overdue           = activeEntries.filter(e => e.incomeType !== 'one-off' && toLocalMidnight(new Date(e.nextExpectedDate)) < todayStart)
+
+  // An entry is truly overdue only if its nextExpectedDate is in the past AND
+  // it is not a freshly-spawned child (parentIncomeId set means it was just
+  // created by a mark-received action — give it until the end of the window).
+  function isTrulyOverdue(e: IncomeEntry): boolean {
+    const due = toLocalMidnight(new Date(e.nextExpectedDate))
+    if (due >= todayStart) return false          // not past yet
+    if (e.incomeType === 'one-off') return false // one-off handled separately
+    // Child entries: only overdue if the expected date passed by more than one
+    // full cycle (i.e. the parent has been received but we’ve missed ANOTHER pay)
+    if (e.parentIncomeId) {
+      // Allow a grace period equal to the cycle length before flagging overdue
+      const graceMs = cycleMs(e.frequency)
+      return (todayStart.getTime() - due.getTime()) > graceMs
+    }
+    return true
+  }
+
+  function cycleMs(frequency: string): number {
+    const day = 86_400_000
+    if (frequency === 'weekly')      return 7  * day
+    if (frequency === 'fortnightly') return 14 * day
+    if (frequency === 'monthly')     return 31 * day
+    if (frequency === 'quarterly')   return 92 * day
+    if (frequency === 'yearly')      return 366 * day
+    return 31 * day
+  }
+
+  const overdue           = activeEntries.filter(isTrulyOverdue)
   const overdueOneOff     = activeEntries.filter(e => e.incomeType === 'one-off' && toLocalMidnight(new Date(e.nextExpectedDate)) < todayStart)
   const upcoming          = activeEntries.filter(e => {
     const due = toLocalMidnight(new Date(e.nextExpectedDate))
@@ -533,7 +574,9 @@ export default function IncomePage() {
               <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">No category</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
+                  <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -653,6 +696,45 @@ export default function IncomePage() {
             <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Date received confirmation dialog ─────────────────────────────────── */}
+      <Dialog open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>Confirm income received</DialogTitle>
+          </DialogHeader>
+          {receivedConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Mark <span className="font-medium text-foreground">{receivedConfirm.entry.name}</span> as
+                received. What date did the money arrive in your account?
+              </p>
+              <div>
+                <label className="text-xs text-muted-foreground">Date received</label>
+                <input
+                  type="date"
+                  value={receivedConfirmDate}
+                  onChange={e => setReceivedConfirmDate(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                An income transaction of{' '}
+                <span className="font-medium text-foreground">
+                  {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(receivedConfirm.entry.amount)}
+                </span>{' '}
+                will be added to your transaction feed on this date.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setReceivedConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmMarkReceived} className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium">
+              Mark as received
             </button>
           </DialogFooter>
         </DialogContent>

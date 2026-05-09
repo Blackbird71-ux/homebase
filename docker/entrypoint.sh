@@ -46,6 +46,7 @@ echo ">> [1/6] Setting up /data directory structure..."
 mkdir -p /data/uploads          # recipe images uploaded by users
 mkdir -p /data/documents        # document vault files
 mkdir -p /data/bill-attachments # invoice/reference docs attached to bills
+mkdir -p /data/income-attachments # payslips/remittance docs attached to income
 mkdir -p /data/images           # cached external recipe images
 mkdir -p /data/backups          # automated database backups
 

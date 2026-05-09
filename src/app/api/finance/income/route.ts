@@ -153,7 +153,7 @@ function advanceNextExpectedDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, received, invoiceReceived, invoiceReceivedDate } = json
+  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -161,10 +161,14 @@ export async function PATCH(request: NextRequest) {
   if (!existing) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
 
   const updateData: Record<string, any> = {}
+
   if (received !== undefined) {
     updateData.received = received
-    updateData.receivedDate = received ? new Date() : null
+    // Use the caller-supplied date (which may be backdated) or fall back to now
+    const stampDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
+    updateData.receivedDate = received ? stampDate : null
   }
+
   if (invoiceReceived !== undefined) {
     updateData.invoiceReceived = invoiceReceived
     updateData.invoiceReceivedDate = invoiceReceived
@@ -172,8 +176,16 @@ export async function PATCH(request: NextRequest) {
       : null
   }
 
-  // If undoing a received entry, delete child occurrences that were spawned
+  // ── Undo received: delete spawned child occurrences & the auto-transaction ──
   if (received === false && existing.received === true) {
+    // Delete the auto-created transaction if one exists
+    if (existing.transactionId) {
+      await prisma.financeTransaction.deleteMany({
+        where: { id: existing.transactionId, familyId: session.familyId },
+      })
+      updateData.transactionId = null
+    }
+    // Remove pending child occurrences that were spawned when marked received
     await prisma.financeIncomeEntry.deleteMany({
       where: { parentIncomeId: id, familyId: session.familyId, received: false },
     })
@@ -185,40 +197,78 @@ export async function PATCH(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
-  // If marking as received and it's a recurring entry, spawn the next occurrence
-  if (received === true && existing.incomeType !== 'one-off') {
-    const newExpectedDate = advanceNextExpectedDate(existing.nextExpectedDate, existing.frequency)
-    if (!existing.endDate || newExpectedDate <= existing.endDate) {
-      await prisma.financeIncomeEntry.create({
+  // ── Mark received: create income transaction + spawn next occurrence ────────
+  if (received === true && !existing.received) {
+    const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
+
+    // Auto-create a FinanceTransaction so account balances and the transaction
+    // feed stay accurate (cash-basis accounting — income recorded on receipt)
+    let newTransactionId: string | null = null
+    try {
+      const tx = await prisma.financeTransaction.create({
         data: {
-          name: existing.name,
+          type: 'income',
           amount: existing.amount,
           accountId: existing.accountId,
           categoryId: existing.categoryId,
+          payee: null,           // income has a vendor/payer, not a payee
+          description: existing.name,
+          date: actualReceivedDate,
+          isRecurring: existing.incomeType !== 'one-off',
           vendorId: existing.vendorId,
-          frequency: existing.frequency,
-          incomeType: existing.incomeType,
-          nextExpectedDate: newExpectedDate,
-          endDate: existing.endDate,
-          isActive: existing.isActive,
-          received: false,
-          receivedDate: null,
-          autoPay: existing.autoPay,
-          emailReminder: existing.emailReminder,
-          reminderDays: existing.reminderDays,
-          dayOfMonth: existing.dayOfMonth,
-          monthOfYear: existing.monthOfYear,
-          recurrenceInterval: existing.recurrenceInterval,
-          invoiceReceived: false,
-          invoiceReceivedDate: null,
           notes: existing.notes,
           memberId: existing.memberId,
           locationId: existing.locationId,
-          entityId: existing.entityId,
-          parentIncomeId: existing.id,
+          isCleared: true,       // money is already in hand
+          reconciledDate: actualReceivedDate,
+          createdBy: session.userId,
           familyId: session.familyId,
         },
       })
+      newTransactionId = tx.id
+      await prisma.financeIncomeEntry.update({
+        where: { id },
+        data: { transactionId: newTransactionId },
+      })
+    } catch {
+      // Transaction creation is best-effort; don't fail the whole mark-received
+    }
+
+    // Spawn the next occurrence for recurring income
+    if (existing.incomeType !== 'one-off') {
+      const newExpectedDate = advanceNextExpectedDate(existing.nextExpectedDate, existing.frequency)
+      if (!existing.endDate || newExpectedDate <= existing.endDate) {
+        await prisma.financeIncomeEntry.create({
+          data: {
+            name: existing.name,
+            amount: existing.amount,
+            accountId: existing.accountId,
+            categoryId: existing.categoryId,
+            vendorId: existing.vendorId,
+            frequency: existing.frequency,
+            incomeType: existing.incomeType,
+            nextExpectedDate: newExpectedDate,
+            endDate: existing.endDate,
+            isActive: existing.isActive,
+            received: false,
+            receivedDate: null,
+            autoPay: existing.autoPay,
+            emailReminder: existing.emailReminder,
+            reminderDays: existing.reminderDays,
+            dayOfMonth: existing.dayOfMonth,
+            monthOfYear: existing.monthOfYear,
+            recurrenceInterval: existing.recurrenceInterval,
+            invoiceReceived: false,
+            invoiceReceivedDate: null,
+            notes: existing.notes,
+            memberId: existing.memberId,
+            locationId: existing.locationId,
+            entityId: existing.entityId,
+            parentIncomeId: existing.id,
+            familyId: session.familyId,
+          },
+        })
+      }
     }
   }
 

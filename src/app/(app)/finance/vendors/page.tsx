@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Building2, Globe, Phone, Hash } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { sortedCategoryList } from '@/lib/finance-categories'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
-interface Category { id: string; name: string; color: string | null }
+interface Category { id: string; name: string; type: string; parentId: string | null; color: string | null }
 interface Vendor {
   id: string; name: string; website: string | null; phone: string | null
   accountRef: string | null; notes: string | null
@@ -46,8 +47,9 @@ export default function VendorsPage() {
   async function loadRefs() {
     const res = await fetch('/api/finance/categories')
     if (res.ok) {
-      const all: any[] = await res.json()
-      setCategories(all.filter(c => c.type === 'expense'))
+      // Load ALL category types so vendors used as payers can be assigned
+      // income categories, and vendors used as payees can have expense ones.
+      setCategories(await res.json())
     }
   }
 
@@ -127,7 +129,20 @@ export default function VendorsPage() {
                 onChange={e => setForm(p => ({ ...p, defaultCategoryId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">None</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {(['income', 'expense', 'transfer'] as const).flatMap(type => {
+                  const group = sortedCategoryList(categories.filter(c => c.type === type))
+                  if (group.length === 0) return []
+                  const label = type === 'income' ? 'Income' : type === 'expense' ? 'Expense' : 'Transfer'
+                  return [
+                    <optgroup key={type} label={label}>
+                      {group.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.parentId ? `\u2014 ${c.name}` : c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ]
+                })}
               </select>
             </div>
             <div>

@@ -5,9 +5,10 @@ import { Plus, Pencil, Trash2, Filter, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { sortedCategoryList } from '@/lib/finance-categories'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
-interface Category { id: string; name: string; type: string; color: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean; isTaxDeduction: boolean }
+interface Category { id: string; name: string; type: string; parentId: string | null; color: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean; isTaxDeduction: boolean }
 interface Account { id: string; name: string; type: string }
 interface Member { id: string; name: string }
 interface Location { id: string; name: string }
@@ -224,7 +225,9 @@ export default function TransactionsPage() {
               <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">Uncategorized</option>
-                {categories.filter(c => c.type === form.type).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {sortedCategoryList(categories.filter(c => c.type === form.type)).map(c => (
+                  <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
+                ))}
               </select>
             </div>
             <div>

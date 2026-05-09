@@ -1,265 +1,168 @@
-# HomeBase - Family Management Application
+# HomeBase — Family Management Platform
 
 ## Overview
-HomeBase is a comprehensive family management application designed to help families organize their daily lives. The application includes meal planning, shopping lists, recipe management, calendar integration, and notes functionality.
+HomeBase is a self-hosted family management platform for private NAS deployment. It provides a single hub for calendar, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
 
-## 🚀 **Recent Major Enhancements**
+**Live:** https://homebase.liddleapps.com  
+**Stack:** Next.js 16 · TypeScript · SQLite · Prisma · Docker  
+**Deployment:** Synology NAS via Cloudflare Argo Tunnel
 
-### **Version 2.1 Feature Highlights**
+---
 
-#### 1. **AI Voice & Chat Assistant**
-- Natural language commands via voice (microphone) or text from any page
-- Powered by Google Gemini — bring your own API key (free tier available)
-- **19 actions** across meal plan, shopping list, to-do, calendar, chores, notes, recipes, contacts, documents, and birthdays
-- Works as a PWA on Windows, Android, and iOS (iOS 14.5+)
-- Configure at Settings → AI; floating Bot button available on every page
-- Example commands: "Add pasta bake to Monday dinner", "What chores are overdue?", "What do I need for lasagne?", "Any documents expiring soon?", "Mark milk as bought"
+## Recent Changes — Finance Module (May 2026)
 
-### **Version 2.0 Feature Highlights**
+### Income accuracy & cash-basis accounting
+- **Date-received dialog** on income "mark as received" — pick the actual bank-credit date (defaults to today, fully backdatable). Previously the date was silently stamped as now.
+- **Date-paid dialog** on bills "mark as paid" — same pattern.
+- **Auto-creates a `FinanceTransaction`** when income is received or a bill is paid, so account balances and the transaction feed stay accurate without manual entry. Undo reverses the transaction.
+- **Fixed overdue logic**: freshly-spawned child income entries now get a grace period equal to one full pay cycle before being flagged overdue. Previously marking pay as received caused it to reappear as overdue immediately.
+- **Cash-basis P&L**: the Profit & Loss report now slots received income by `receivedDate` and paid bills by `paidDate`, not by their expected/due dates.
 
-#### 1. **Shopping List Color Customization**
-- Customize the color of completed shopping list items
-- Default color: RED
-- Real-time color application
+### Category dropdowns — sorted and grouped
+All category `<select>` elements across the finance module:
+- Sorted alphabetically (parents A→Z, children A→Z under each parent)
+- Children indented with `— ` prefix
+- **Vendors**: default-category dropdown now shows Income / Expense / Transfer in labelled sections (previously expense-only, which made it impossible to assign an income category to an employer/payer)
 
-#### 2. **Enhanced Meal Planner**
-- Support for multiple meals per day (breakfast, lunch, dinner, snacks)
-- Daily meal columns showing all meal types
-- Export multiple meals to shopping list
-- Visual meal type indicators
+### New migration
+`20260514000000_add_income_transaction_link` — adds `transactionId` FK to both `FinanceIncomeEntry` and `FinanceRecurringBill`. Runs automatically on container start.
 
-#### 3. **Advanced Theming System**
-- Customizable colors for sidebar, calendar, cards, and text
-- 10 preset themes including 3 new modern themes
-- Live preview of theme changes
-- Color picker interface
+---
 
-#### 4. **Integrated Notes System**
-- Family-shared notes with rich text editing
-- Categorization and tagging
-- Search and filtering capabilities
-- Full CRUD operations
+## Features
 
-## 📋 **Core Features**
+### Household Finance
+- **Bills** — recurring and one-off, mark paid with date, invoice attachments, budget planner integration
+- **Income** — recurring and one-off, mark received with date, payslip/remittance attachments, payer/source via Vendors
+- **Transactions** — full transaction feed auto-populated when bills are paid / income is received
+- **Accounts** — bank accounts, credit cards, savings, investment, entity accounts
+- **Budget** — monthly budget rules linked to bills and categories
+- **P&L** — cash-basis profit & loss by period (month/quarter/year) with category drill-down
+- **Categories** — hierarchical income/expense/transfer categories; sorted across all dropdowns
+- **Vendors** — shared payer/payee list used on both bills and income
+- **Entities** — Super Fund, Trust, Business, etc. for multi-entity households
+- **Goals** — savings goals linked to accounts
 
-### **Meal Planning**
-- Weekly meal planning grid
-- Multiple meals per day support
-- Recipe assignment
-- Grocery list generation
+### Calendar & Events
+- Month/week views; recurring events (daily/weekly/monthly/yearly); Google Calendar sync
+- Colour-coded categories; all-day events; delete single instance or full series
 
-### **Shopping Lists**
-- Collaborative shopping lists
-- Category grouping
-- Color-coded completed items
-- Due dates and priorities
+### Meal Planning
+- Weekly grid with multiple meals per day; recipe assignment; grocery list export
+- Rolling 7/14/30 day scope selector
 
-### **Recipe Management**
-- Recipe collection with photos
-- Tagging and categorization
-- Import from URLs
-- Family recipe books
+### Lists
+- Shopping and todo lists; category grouping; drag-and-drop; per-user assignment
+- My Tasks / Family Tasks filtering
 
-### **Calendar Integration**
-- Family calendar view
-- Google Calendar sync
-- Event management
-- Meal plan integration
+### Recipes
+- Full CRUD; import from URL; Umami archive import; recipe books; ingredient category parsing
 
-### **Notes System**
-- Rich text editing
-- Category organization
-- Family collaboration
-- Search functionality
+### Notes
+- Rich text editor; family sharing; PIN protection with 15-minute session unlock; content masking
 
-### **AI Assistant**
-- Voice and text command interface
-- Google Gemini function calling backend
-- 19 actions: meal plan, shopping & to-do lists, calendar, chores, notes, recipes, contacts, documents, birthdays
-- PWA-compatible across all platforms
+### Document & Contact Vault
+- PIN-protected documents and household contacts; masked until unlocked
 
-## 🛠️ **Technical Stack**
+### Chores
+- Recurring chore scheduling; assignee rotation; notes field; email reminders
 
-### **Frontend**
-- **Framework**: Next.js 14 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: Custom component library
-- **State Management**: React hooks and context
+### AI Assistant
+- Floating chat panel on every page; voice (Web Speech API) and text input
+- Google Gemini or DeepSeek; bring your own API key; per-user provider setting
+- 19 actions: meal plan, shopping, todo, calendar, chores, notes, recipes, contacts, documents, birthdays
 
-### **Backend**
-- **Runtime**: Node.js
-- **Database**: SQLite with Prisma ORM
-- **Authentication**: NextAuth.js
-- **API**: RESTful API routes
+### Theming
+- Dark / light / auto; 5 Apple-system themes; font size and done-item colour customisation
 
-### **Development Tools**
-- **Package Manager**: npm
-- **Type Checking**: TypeScript
-- **Code Formatting**: ESLint
-- **Containerization**: Docker
+---
 
-## 🚀 **Quick Start**
+## Quick Start
 
-### **Prerequisites**
-- Node.js 18+ 
-- npm or yarn
-- Git
-
-### **Installation**
 ```bash
-# Clone the repository
-git clone <repository-url>
-
-# Navigate to project directory
+git clone <repo-url>
 cd homebase
-
-# Install dependencies
 npm install
-
-# Set up environment variables
-cp env.local.example .env.local
-
-# Run database migrations
+cp env.local.example .env.local   # fill in AUTH_SECRET, ENCRYPTION_KEY
 npx prisma migrate deploy
-
-# Generate Prisma client
 npx prisma generate
-
-# Start development server
-npm run dev
+npm run dev                        # http://localhost:3300
 ```
 
-### **Development**
+## Production Deploy (NAS)
+
+```bat
+# On Windows — build image, save tar, SCP to NAS
+deploy-build.bat
+```
+
 ```bash
-# Run development server
-npm run dev
-
-# Run TypeScript check
-npx tsc --noEmit
-
-# Run production build
-npm run build
-
-# Start production server
-npm start
+# On NAS SSH — load image, restart container
+sudo sh /volume1/docker/homebase/deploy-nas.sh
 ```
 
-## 📁 **Project Structure**
+Migrations run automatically at container start. See [DEPLOY.md](DEPLOY.md) for full setup.
+
+---
+
+## Project Structure
 
 ```
 homebase/
 ├── src/
-│   ├── app/                    # Next.js app router pages
-│   │   ├── (app)/             # Authenticated app pages
-│   │   │   ├── calendar/      # Calendar functionality
-│   │   │   ├── home/          # Dashboard
-│   │   │   ├── lists/         # Shopping/todo lists
-│   │   │   ├── meal-plan/     # Meal planning
-│   │   │   ├── notes/         # Notes system (NEW)
-│   │   │   ├── recipes/       # Recipe management
-│   │   │   └── settings/      # User settings
-│   │   ├── api/               # API routes
-│   │   └── layout.tsx         # Root layout
-│   ├── components/            # React components
-│   │   ├── calendar/          # Calendar components
-│   │   ├── layout/            # Layout components
-│   │   ├── lists/             # List components
-│   │   ├── meal-plan/         # Meal plan components
-│   │   ├── notes/             # Notes components (NEW)
-│   │   ├── providers/         # Context providers
-│   │   ├── settings/          # Settings components
-│   │   └── ui/                # UI component library
-│   ├── lib/                   # Utility libraries
-│   └── types/                 # TypeScript definitions
-├── prisma/                    # Database schema and migrations
-├── scripts/                   # Utility scripts
-├── docs/                      # Documentation
-├── public/                    # Static assets
-└── package.json              # Dependencies
+│   ├── app/
+│   │   ├── (app)/finance/      # Finance pages (income, bills, transactions, p&l, …)
+│   │   ├── (app)/calendar/
+│   │   ├── (app)/home/
+│   │   ├── (app)/lists/
+│   │   ├── (app)/meal-plan/
+│   │   ├── (app)/notes/
+│   │   ├── (app)/recipes/
+│   │   ├── (app)/settings/
+│   │   └── api/                # API routes
+│   ├── components/
+│   ├── lib/
+│   │   ├── finance-categories.ts   # sortedCategoryList() utility
+│   │   └── …
+│   └── types/
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+├── docker/
+│   └── entrypoint.sh           # Runs migrations + starts app
+├── Dockerfile
+├── docker-compose.yml
+├── deploy-build.bat
+├── deploy-nas.sh
+├── DEPLOY.md
+└── PROJECT_SUMMARY.md
 ```
-
-## 🔧 **Configuration**
-
-### **Environment Variables**
-Create a `.env.local` file with:
-```env
-# Database
-DATABASE_URL="file:./data/dev.db"
-
-# Authentication
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-key"
-
-# Google OAuth (optional)
-GOOGLE_CLIENT_ID=""
-GOOGLE_CLIENT_SECRET=""
-```
-
-### **Database Setup**
-```bash
-# Run initial migrations
-npx prisma migrate deploy
-
-# Generate Prisma client
-npx prisma generate
-
-# Seed database (optional)
-npx prisma db seed
-```
-
-## 📖 **Documentation**
-
-### **Detailed Documentation**
-- **[Design Spec](docs/superpowers/specs/2026-04-16-homebase-design.md)** - Architecture and design specification
-- **[Phase 1 Plan](docs/superpowers/plans/2026-04-16-homebase-phase1.md)** - Core implementation plan
-- **[Phase 2 Plan](docs/superpowers/plans/2026-04-16-homebase-phase2.md)** - Content modules implementation plan
-- **[Phase 3 Plan](docs/superpowers/plans/2026-04-16-homebase-phase3.md)** - Polish and settings implementation plan
-- **[Deployment Guide](DEPLOY.md)** - Deployment reference for NAS and Cloudflare tunnel
-- **[Build Guide](Homebase%20build%20guide.md)** - Project specification and build instructions
-
-### **Feature Guides**
-- [Meal Planning](src/app/(app)/meal-plan/) - Meal planner module
-- [Shopping Lists](src/app/(app)/lists/) - Shopping and todo lists
-- [Recipe Management](src/app/(app)/recipes/) - Recipe management
-- [Notes System](src/app/(app)/notes/) - Family notes
-- [Settings](src/app/(app)/settings/) - Application settings and configuration
-
-## 🤝 **Contributing**
-
-### **Development Workflow**
-1. Fork the repository
-2. Create a feature branch
-3. Make changes with tests
-4. Submit a pull request
-
-### **Code Standards**
-- Follow TypeScript best practices
-- Use Tailwind CSS for styling
-- Write descriptive commit messages
-- Include appropriate tests
-
-## 📄 **License**
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📞 **Support**
-
-### **Issues**
-Report issues on the [GitHub Issues](https://github.com/your-username/homebase/issues) page.
-
-### **Questions**
-For questions about usage or development, please check the documentation first or open a discussion.
-
-## 🎉 **Acknowledgments**
-
-- Built with Next.js and React
-- Uses Prisma for database management
-- Inspired by family organization needs
-- Community contributions welcome
 
 ---
 
-**Last Updated**: May 6, 2026  
-**Version**: 2.1.0  
-**Status**: ✅ **Production Ready**
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUTH_SECRET` | ✅ | NextAuth v5 secret (32+ random bytes) |
+| `AUTH_URL` | ✅ | Public URL e.g. `https://homebase.liddleapps.com` |
+| `NEXTAUTH_SECRET` | ✅ | Same as `AUTH_SECRET` |
+| `NEXTAUTH_URL` | ✅ | Same as `AUTH_URL` |
+| `ENCRYPTION_KEY` | ✅ | Invite code encryption (32 random bytes, different from AUTH_SECRET) |
+| `DATABASE_URL` | Auto | Set by deploy script: `file:/data/homebase.db` |
+| `CRON_SECRET` | Recommended | Protects the reminders endpoint |
+| `ADMIN_RESET_TOKEN` | Recommended | Emergency password reset API |
+| `GOOGLE_CLIENT_ID/SECRET` | Optional | Enables Google Calendar sync |
+
+---
+
+## Documentation
+
+- [DEPLOY.md](DEPLOY.md) — Full NAS / Cloudflare tunnel deployment guide
+- [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) — Architecture, migrations, feature detail
+
+---
+
+**Version:** 3.0.0  
+**Last updated:** May 2026  
+**Status:** ✅ Production
