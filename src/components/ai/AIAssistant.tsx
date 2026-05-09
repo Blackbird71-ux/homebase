@@ -67,8 +67,12 @@ function getSpeechRecognition(): (new () => SpeechRecognition) | null {
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null
 }
 
-export function AIAssistant() {
-  const [open, setOpen] = useState(false)
+interface AIAssistantProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function AIAssistant({ open, onOpenChange }: AIAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [recordingState, setRecordingState] = useState<RecordingState>('idle')
@@ -86,6 +90,9 @@ export function AIAssistant() {
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50)
+    } else {
+      // Reset messages when closing
+      setMessages([])
     }
   }, [open])
 
@@ -232,25 +239,11 @@ export function AIAssistant() {
         }}
       />
 
-      {/* Floating button */}
-      <button
-        onClick={() => setOpen(v => !v)}
-        className={`fixed bottom-36 right-4 md:bottom-6 md:right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all
-          ${open ? 'bg-primary text-primary-foreground' : 'bg-card border border-border text-foreground hover:bg-accent'}
-          ${recordingState === 'listening' ? 'ring-2 ring-red-500 ring-offset-2' : ''}
-        `}
-        aria-label={open ? 'Close AI assistant' : 'Open AI assistant'}
-      >
-        <Bot className="h-5 w-5" />
-        {recordingState === 'listening' && (
-          <span className="absolute inset-0 rounded-full animate-ping bg-red-500 opacity-30" />
-        )}
-      </button>
-
-      {/* Panel */}
+      {/* Panel — rendered as a top-right anchored dropdown */}
       {open && (
-        <div className="fixed bottom-52 right-4 md:bottom-20 md:right-6 z-50 w-80 sm:w-96 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-          style={{ maxHeight: 'min(480px, calc(100dvh - 180px))' }}
+        <div
+          className="fixed top-14 right-4 z-50 w-80 sm:w-96 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ maxHeight: 'min(480px, calc(100dvh - 100px))' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -258,7 +251,7 @@ export function AIAssistant() {
               <Bot className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium">AI Assistant</span>
             </div>
-            <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close">
+            <button onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close">
               <X className="h-4 w-4" />
             </button>
           </div>

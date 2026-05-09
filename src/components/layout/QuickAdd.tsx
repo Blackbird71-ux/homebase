@@ -1,25 +1,19 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import Link from 'next/link'
-import { signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import {
   CalendarPlus,
   ListPlus,
   ChefHat,
   StickyNote,
-  Plus,
   Loader2,
   Check,
-  Home,
-  Calendar,
-  CheckSquare,
-  CalendarDays,
-  BookUser,
+  DollarSign,
   ListChecks,
-  Settings,
-  LogOut,
+  ShoppingCart,
+  CheckSquare,
+  Utensils,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,51 +24,102 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 
-const navItems = [
-  { href: '/home',      label: 'Home',     icon: Home },
-  { href: '/calendar',  label: 'Calendar', icon: Calendar },
-  { href: '/lists',     label: 'Lists',    icon: CheckSquare },
-  { href: '/chores',    label: 'Chores',   icon: ListChecks },
-  { href: '/contacts',  label: 'Contacts', icon: BookUser },
-  { href: '/recipes',   label: 'Recipes',  icon: ChefHat },
-  { href: '/meal-plan', label: 'Meals',    icon: CalendarDays },
-  { href: '/notes',     label: 'Notes',    icon: StickyNote },
-  { href: '/settings',  label: 'Settings', icon: Settings },
-]
+type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note'
 
-type QuickAction = 'event' | 'list' | 'recipe' | 'note'
-
-interface QuickAddProps {
-  shortcutKey?: string
+interface ListMeta {
+  id: string
+  name: string
+  type: 'SHOPPING' | 'TODO'
 }
 
-export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
+interface CategoryMeta {
+  id: string
+  name: string
+}
+
+const MEAL_TYPE_OPTIONS = [
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'snacks', label: 'Snacks' },
+]
+
+const actions: { id: QuickAction; label: string; icon: React.ReactNode; description: string }[] = [
+  { id: 'event',         label: 'Event',         icon: <CalendarPlus className="h-5 w-5" />,  description: 'Add a calendar event' },
+  { id: 'chore',         label: 'Chore',         icon: <ListChecks className="h-5 w-5" />,    description: 'Add a new chore' },
+  { id: 'expense',       label: 'Expense',       icon: <DollarSign className="h-5 w-5" />,    description: 'Log a transaction' },
+  { id: 'list-item',     label: 'List Item',     icon: <ListPlus className="h-5 w-5" />,      description: 'Add to a list' },
+  { id: 'shopping-list', label: 'Shopping List', icon: <ShoppingCart className="h-5 w-5" />,   description: 'New shopping list' },
+  { id: 'todo-list',     label: 'To-Do List',    icon: <CheckSquare className="h-5 w-5" />,   description: 'New to-do list' },
+  { id: 'recipe',        label: 'Recipe',        icon: <ChefHat className="h-5 w-5" />,       description: 'Add a recipe' },
+  { id: 'meal',          label: 'Meal',          icon: <Utensils className="h-5 w-5" />,      description: 'Plan a meal' },
+  { id: 'note',          label: 'Note',          icon: <StickyNote className="h-5 w-5" />,    description: 'Write a note' },
+]
+
+function todayLocal() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function QuickAdd() {
   const router = useRouter()
-  const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mode, setMode] = useState<QuickAction | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  // Form state
+  // Shared form state
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState(todayLocal())
+
+  // Event-specific
   const [eventTitle, setEventTitle] = useState('')
-  const [eventDate, setEventDate] = useState('')
+  const [eventDate, setEventDate] = useState(todayLocal())
+
+  // Chore-specific
+  const [choreFrequency, setChoreFrequency] = useState('weekly')
+
+  // Expense-specific
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseDescription, setExpenseDescription] = useState('')
+  const [expenseCategoryId, setExpenseCategoryId] = useState('')
+  const [categories, setCategories] = useState<CategoryMeta[]>([])
+
+  // List-specific
   const [listName, setListName] = useState('')
   const [listType, setListType] = useState<'SHOPPING' | 'TODO'>('SHOPPING')
+
+  // List item-specific
+  const [listItemContent, setListItemContent] = useState('')
+  const [selectedListId, setSelectedListId] = useState('')
+  const [lists, setLists] = useState<ListMeta[]>([])
+
+  // Recipe-specific
   const [recipeTitle, setRecipeTitle] = useState('')
+
+  // Meal-specific
+  const [mealType, setMealType] = useState('dinner')
+  const [mealNote, setMealNote] = useState('')
+
+  // Note-specific
   const [noteTitle, setNoteTitle] = useState('')
   const [noteContent, setNoteContent] = useState('')
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Keyboard shortcut: Cmd+K / Ctrl+K opens the quick-add dialog
+  // Keyboard shortcut: Cmd+K / Ctrl+K opens the dialog
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === shortcutKey) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setOpen((prev) => !prev)
       }
@@ -82,28 +127,75 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, shortcutKey])
+  }, [open])
 
-  // Sidebar Quick Add button fires this event to open the dialog
+  // Listen for sidebar or FAB "quickadd" event to open dialog
   useEffect(() => {
     function handleSidebarOpen() { setOpen(true) }
     window.addEventListener('homebase:quickadd', handleSidebarOpen)
     return () => window.removeEventListener('homebase:quickadd', handleSidebarOpen)
   }, [])
 
+  // Listen for quickadd-action event (from UniversalFAB mobile sheet)
+  useEffect(() => {
+    function handleQuickAddAction(e: Event) {
+      const detail = (e as CustomEvent).detail
+      if (detail?.action) {
+        setOpen(true)
+        selectMode(detail.action as QuickAction)
+      }
+    }
+    window.addEventListener('homebase:quickadd-action', handleQuickAddAction)
+    return () => window.removeEventListener('homebase:quickadd-action', handleQuickAddAction)
+  }, [])
+
+  // Focus input when mode changes
   useEffect(() => {
     if (mode && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [mode])
 
+  // Fetch categories when expense mode is entered
+  useEffect(() => {
+    if (mode === 'expense' && categories.length === 0) {
+      fetch('/api/finance/categories')
+        .then((r) => r.json())
+        .then((data: CategoryMeta[]) => setCategories(data))
+        .catch(() => { /* silently fail */ })
+    }
+  }, [mode, categories.length])
+
+  // Fetch lists when list-item mode is entered
+  useEffect(() => {
+    if (mode === 'list-item' && lists.length === 0) {
+      fetch('/api/lists')
+        .then((r) => r.json())
+        .then((data: ListMeta[]) => {
+          setLists(data)
+          if (data.length > 0) setSelectedListId(data[0].id)
+        })
+        .catch(() => { /* silently fail */ })
+    }
+  }, [mode, lists.length])
+
   const resetForm = useCallback(() => {
     setMode(null)
+    setTitle('')
+    setDate(todayLocal())
     setEventTitle('')
-    setEventDate('')
+    setEventDate(todayLocal())
+    setChoreFrequency('weekly')
+    setExpenseAmount('')
+    setExpenseDescription('')
+    setExpenseCategoryId('')
     setListName('')
     setListType('SHOPPING')
+    setListItemContent('')
+    setSelectedListId('')
     setRecipeTitle('')
+    setMealType('dinner')
+    setMealNote('')
     setNoteTitle('')
     setNoteContent('')
     setSubmitting(false)
@@ -115,21 +207,10 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
     if (!newOpen) resetForm()
   }
 
-  function closeMobileMenu() {
-    setMobileMenuOpen(false)
-    resetForm()
-  }
-
   function selectMode(m: QuickAction) {
     setMode(m)
-    if (m === 'event') setEventDate(new Date().toISOString().slice(0, 10))
-  }
-
-  // Mobile: close the sheet then open the add dialog with the chosen action
-  function handleMobileActionSelect(action: QuickAction) {
-    setMobileMenuOpen(false)
-    selectMode(action)
-    setOpen(true)
+    if (m === 'event') setEventDate(todayLocal())
+    if (m === 'meal' || m === 'expense') setDate(todayLocal())
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -138,6 +219,7 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
 
     try {
       switch (mode) {
+        // ── Event ──
         case 'event': {
           if (!eventTitle.trim() || !eventDate) {
             toast.error('Title and date are required')
@@ -162,7 +244,83 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
           setTimeout(() => { handleOpenChange(false); router.refresh() }, 800)
           break
         }
-        case 'list': {
+
+        // ── Chore ──
+        case 'chore': {
+          if (!title.trim()) {
+            toast.error('Chore name is required')
+            setSubmitting(false)
+            return
+          }
+          const res = await fetch('/api/chores', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: title.trim(), frequency: choreFrequency }),
+          })
+          if (!res.ok) throw new Error('Failed to create chore')
+          setSuccess(true)
+          toast.success('Chore created')
+          setTimeout(() => { handleOpenChange(false); router.refresh() }, 800)
+          break
+        }
+
+        // ── Expense ──
+        case 'expense': {
+          if (!expenseAmount.trim()) {
+            toast.error('Amount is required')
+            setSubmitting(false)
+            return
+          }
+          const amount = parseFloat(expenseAmount)
+          if (isNaN(amount) || amount <= 0) {
+            toast.error('Enter a valid amount')
+            setSubmitting(false)
+            return
+          }
+          const res = await fetch('/api/finance/transactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'expense',
+              amount,
+              description: expenseDescription.trim() || null,
+              categoryId: expenseCategoryId || null,
+              date: date ? new Date(date).toISOString() : new Date().toISOString(),
+            }),
+          })
+          if (!res.ok) throw new Error('Failed to log expense')
+          setSuccess(true)
+          toast.success('Expense logged')
+          setTimeout(() => { handleOpenChange(false); router.refresh() }, 800)
+          break
+        }
+
+        // ── List Item ──
+        case 'list-item': {
+          if (!selectedListId) {
+            toast.error('Select a list')
+            setSubmitting(false)
+            return
+          }
+          if (!listItemContent.trim()) {
+            toast.error('Item content is required')
+            setSubmitting(false)
+            return
+          }
+          const res = await fetch(`/api/lists/${selectedListId}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: listItemContent.trim() }),
+          })
+          if (!res.ok) throw new Error('Failed to add item')
+          setSuccess(true)
+          toast.success('Item added to list')
+          setTimeout(() => { handleOpenChange(false); router.refresh() }, 800)
+          break
+        }
+
+        // ── Shopping List ──
+        case 'shopping-list': {
           if (!listName.trim()) {
             toast.error('List name is required')
             setSubmitting(false)
@@ -171,14 +329,35 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
           const res = await fetch('/api/lists', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: listName.trim(), type: listType }),
+            body: JSON.stringify({ name: listName.trim(), type: 'SHOPPING' }),
           })
           if (!res.ok) throw new Error('Failed to create list')
           setSuccess(true)
-          toast.success(`${listType === 'SHOPPING' ? 'Shopping' : 'To-Do'} list created`)
+          toast.success('Shopping list created')
           setTimeout(() => { handleOpenChange(false); router.refresh() }, 800)
           break
         }
+
+        // ── To-Do List ──
+        case 'todo-list': {
+          if (!listName.trim()) {
+            toast.error('List name is required')
+            setSubmitting(false)
+            return
+          }
+          const res = await fetch('/api/lists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: listName.trim(), type: 'TODO' }),
+          })
+          if (!res.ok) throw new Error('Failed to create list')
+          setSuccess(true)
+          toast.success('To-do list created')
+          setTimeout(() => { handleOpenChange(false); router.refresh() }, 800)
+          break
+        }
+
+        // ── Recipe ──
         case 'recipe': {
           if (!recipeTitle.trim()) {
             toast.error('Recipe title is required')
@@ -200,6 +379,32 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
           }, 800)
           break
         }
+
+        // ── Meal ──
+        case 'meal': {
+          if (!date || !mealType) {
+            toast.error('Date and meal type are required')
+            setSubmitting(false)
+            return
+          }
+          if (!mealNote.trim()) {
+            toast.error('Enter what you\'re having')
+            setSubmitting(false)
+            return
+          }
+          const res = await fetch('/api/meal-plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date, mealType, note: mealNote.trim() }),
+          })
+          if (!res.ok) throw new Error('Failed to add meal')
+          setSuccess(true)
+          toast.success('Meal added')
+          setTimeout(() => { handleOpenChange(false); router.refresh() }, 800)
+          break
+        }
+
+        // ── Note ──
         case 'note': {
           if (!noteTitle.trim()) {
             toast.error('Note title is required')
@@ -228,273 +433,329 @@ export function QuickAdd({ shortcutKey = 'k' }: QuickAddProps) {
     }
   }
 
-  const actions: { id: QuickAction; label: string; icon: React.ReactNode; description: string }[] = [
-    { id: 'event',  label: 'Event',   icon: <CalendarPlus className="h-5 w-5" />, description: 'Add a calendar event' },
-    { id: 'list',   label: 'List',    icon: <ListPlus className="h-5 w-5" />,     description: 'New shopping or to-do list' },
-    { id: 'recipe', label: 'Recipe',  icon: <ChefHat className="h-5 w-5" />,      description: 'Add a new recipe' },
-    { id: 'note',   label: 'Note',    icon: <StickyNote className="h-5 w-5" />,   description: 'Write a quick note' },
-  ]
+  function renderForm() {
+    if (!mode) return null
 
-  return (
-    <>
-      {/* ── Mobile FAB ─────────────────────────────────────────────────────── */}
-      {/* Opens the bottom sheet (nav + quick-add). Hidden on desktop. */}
-      <button
-        type="button"
-        onClick={() => setMobileMenuOpen(true)}
-        className="fixed bottom-5 right-4 z-50 md:hidden flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 active:scale-95 transition-all"
-        aria-label="Open menu"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+    if (success) {
+      return (
+        <div className="flex flex-col items-center justify-center py-8 gap-2">
+          <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
+            <Check className="h-6 w-6 text-green-500" />
+          </div>
+          <p className="text-sm font-medium">Created successfully!</p>
+        </div>
+      )
+    }
 
-      {/* ── Mobile bottom sheet ─────────────────────────────────────────────── */}
-      {mobileMenuOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40 bg-black/60 md:hidden"
-            onClick={closeMobileMenu}
-            aria-hidden="true"
-          />
-
-          {/* Sheet panel — slides up from bottom */}
-          <div
-            className="fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-2xl shadow-2xl md:hidden overflow-y-auto"
-            style={{ maxHeight: '88svh' }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Navigation and quick add"
-          >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-2">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        {/* Event form */}
+        {mode === 'event' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="qa-event-title">Event Title</Label>
+              <Input
+                ref={inputRef as React.Ref<HTMLInputElement>}
+                id="qa-event-title"
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                placeholder="e.g., Doctor's appointment"
+                required
+              />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-event-date">Date</Label>
+              <Input
+                id="qa-event-date"
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                required
+              />
+            </div>
+          </>
+        )}
 
-            {/* Quick Add */}
-            <div className="px-4 pt-1 pb-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Quick Add
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {actions.map((action) => (
+        {/* Chore form */}
+        {mode === 'chore' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="qa-chore-title">Chore Name</Label>
+              <Input
+                ref={inputRef as React.Ref<HTMLInputElement>}
+                id="qa-chore-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g., Vacuum lounge"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-chore-freq">Frequency</Label>
+              <Select value={choreFrequency} onValueChange={(v) => v && setChoreFrequency(v)}>
+                <SelectTrigger id="qa-chore-freq">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+
+        {/* Expense form */}
+        {mode === 'expense' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="qa-expense-amount">Amount ($)</Label>
+              <Input
+                ref={inputRef as React.Ref<HTMLInputElement>}
+                id="qa-expense-amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={expenseAmount}
+                onChange={(e) => setExpenseAmount(e.target.value)}
+                placeholder="e.g., 29.99"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-expense-desc">Description</Label>
+              <Input
+                id="qa-expense-desc"
+                value={expenseDescription}
+                onChange={(e) => setExpenseDescription(e.target.value)}
+                placeholder="e.g., Weekly groceries"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-expense-cat">Category</Label>
+              <Select value={expenseCategoryId} onValueChange={(v) => setExpenseCategoryId(v ?? '')}>
+                <SelectTrigger id="qa-expense-cat">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-expense-date">Date</Label>
+              <Input
+                id="qa-expense-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* List Item form */}
+        {mode === 'list-item' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="qa-listitem-list">List</Label>
+              {lists.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No lists found. Create one first.</p>
+              ) : (
+                <Select value={selectedListId} onValueChange={(v) => v && setSelectedListId(v)}>
+                  <SelectTrigger id="qa-listitem-list">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lists.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name} ({l.type === 'SHOPPING' ? 'Shopping' : 'To-Do'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-listitem-content">Item</Label>
+              <Input
+                ref={inputRef as React.Ref<HTMLInputElement>}
+                id="qa-listitem-content"
+                value={listItemContent}
+                onChange={(e) => setListItemContent(e.target.value)}
+                placeholder="e.g., Milk, eggs, bread"
+                required
+              />
+            </div>
+          </>
+        )}
+
+        {/* Shopping / To-Do List form */}
+        {(mode === 'shopping-list' || mode === 'todo-list') && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="qa-list-name">List Name</Label>
+              <Input
+                ref={inputRef as React.Ref<HTMLInputElement>}
+                id="qa-list-name"
+                value={listName}
+                onChange={(e) => setListName(e.target.value)}
+                placeholder={mode === 'shopping-list' ? 'e.g., Weekly groceries' : 'e.g., Weekend tasks'}
+                required
+              />
+            </div>
+            {mode === 'shopping-list' && (
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                Creating a shopping list
+              </div>
+            )}
+            {mode === 'todo-list' && (
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                Creating a to-do list
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Recipe form */}
+        {mode === 'recipe' && (
+          <div className="space-y-2">
+            <Label htmlFor="qa-recipe-title">Recipe Title</Label>
+            <Input
+              ref={inputRef as React.Ref<HTMLInputElement>}
+              id="qa-recipe-title"
+              value={recipeTitle}
+              onChange={(e) => setRecipeTitle(e.target.value)}
+              placeholder="e.g., Spaghetti Bolognese"
+              required
+            />
+          </div>
+        )}
+
+        {/* Meal form */}
+        {mode === 'meal' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="qa-meal-date">Date</Label>
+              <Input
+                id="qa-meal-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Meal</Label>
+              <div className="grid grid-cols-4 gap-1">
+                {MEAL_TYPE_OPTIONS.map((m) => (
                   <button
-                    key={action.id}
+                    key={m.value}
                     type="button"
-                    onClick={() => handleMobileActionSelect(action.id)}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-accent hover:border-primary/40 active:scale-95 transition-all text-left"
+                    onClick={() => setMealType(m.value)}
+                    className={`px-2 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                      mealType === m.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border hover:bg-accent'
+                    }`}
                   >
-                    <span className="text-primary shrink-0">{action.icon}</span>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">{action.label}</div>
-                      <div className="text-xs text-muted-foreground leading-tight">{action.description}</div>
-                    </div>
+                    {m.label}
                   </button>
                 ))}
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-meal-note">What's on the menu?</Label>
+              <Input
+                ref={inputRef as React.Ref<HTMLInputElement>}
+                id="qa-meal-note"
+                value={mealNote}
+                onChange={(e) => setMealNote(e.target.value)}
+                placeholder="e.g., Spaghetti Bolognese"
+                required
+              />
+            </div>
+          </>
+        )}
 
-            {/* Navigate */}
-            <div className="px-4 pt-3 pb-6 border-t border-border">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Navigate
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {navItems.map(({ href, label, icon: Icon }) => {
-                  const isActive = pathname === href || pathname.startsWith(href + '/')
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={closeMobileMenu}
-                      className={cn(
-                        'flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors active:scale-95',
-                        isActive
-                          ? 'border-primary/40 bg-primary/10 text-primary'
-                          : 'border-transparent hover:bg-accent text-muted-foreground hover:text-foreground'
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                      <span className="text-xs font-medium">{label}</span>
-                    </Link>
-                  )
-                })}
-              </div>
+        {/* Note form */}
+        {mode === 'note' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="qa-note-title">Note Title</Label>
+              <Input
+                ref={inputRef as React.Ref<HTMLInputElement>}
+                id="qa-note-title"
+                value={noteTitle}
+                onChange={(e) => setNoteTitle(e.target.value)}
+                placeholder="e.g., Shopping ideas"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-note-content">Content (optional)</Label>
+              <textarea
+                id="qa-note-content"
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                placeholder="Write your note..."
+                rows={4}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+          </>
+        )}
 
+        <div className="flex gap-2 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setMode(null)}
+            className="flex-1"
+          >
+            Back
+          </Button>
+          <Button type="submit" disabled={submitting} className="flex-1">
+            {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Create
+          </Button>
+        </div>
+      </form>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {mode ? `New ${mode.charAt(0).toUpperCase() + mode.slice(1).replace('-', ' ')}` : 'Quick Add'}
+          </DialogTitle>
+        </DialogHeader>
+
+        {!mode ? (
+          <div className="grid grid-cols-3 gap-3 py-2">
+            {actions.map((action) => (
               <button
+                key={action.id}
                 type="button"
-                onClick={() => { closeMobileMenu(); signOut({ callbackUrl: '/login' }) }}
-                className="mt-3 flex w-full items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-muted transition-colors"
+                onClick={() => selectMode(action.id)}
+                className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:bg-accent hover:border-primary/50 transition-colors text-center"
               >
-                <LogOut className="h-4 w-4" />
-                Sign out
+                <span className="text-primary">{action.icon}</span>
+                <span className="text-xs font-medium leading-tight">{action.label}</span>
               </button>
-            </div>
+            ))}
           </div>
-        </>
-      )}
-
-      {/* ── Quick-add dialog (desktop + post-action-select on mobile) ──────── */}
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {mode ? `New ${mode.charAt(0).toUpperCase() + mode.slice(1)}` : 'Quick Add'}
-            </DialogTitle>
-          </DialogHeader>
-
-          {!mode ? (
-            <div className="grid grid-cols-2 gap-3 py-2">
-              {actions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => selectMode(action.id)}
-                  className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-accent hover:border-primary/50 transition-colors text-center"
-                >
-                  <span className="text-primary">{action.icon}</span>
-                  <span className="text-sm font-medium">{action.label}</span>
-                  <span className="text-xs text-muted-foreground">{action.description}</span>
-                </button>
-              ))}
-            </div>
-          ) : success ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Check className="h-6 w-6 text-green-500" />
-              </div>
-              <p className="text-sm font-medium">Created successfully!</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 py-2">
-              {mode === 'event' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="qa-event-title">Event Title</Label>
-                    <Input
-                      ref={inputRef as React.Ref<HTMLInputElement>}
-                      id="qa-event-title"
-                      value={eventTitle}
-                      onChange={(e) => setEventTitle(e.target.value)}
-                      placeholder="e.g., Doctor's appointment"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="qa-event-date">Date</Label>
-                    <Input
-                      id="qa-event-date"
-                      type="date"
-                      value={eventDate}
-                      onChange={(e) => setEventDate(e.target.value)}
-                      required
-                    />
-                  </div>
-                </>
-              )}
-
-              {mode === 'list' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="qa-list-name">List Name</Label>
-                    <Input
-                      ref={inputRef as React.Ref<HTMLInputElement>}
-                      id="qa-list-name"
-                      value={listName}
-                      onChange={(e) => setListName(e.target.value)}
-                      placeholder="e.g., Weekly groceries"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Type</Label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setListType('SHOPPING')}
-                        className={`flex-1 px-3 py-2 rounded-md text-sm font-medium border transition-colors ${
-                          listType === 'SHOPPING'
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border hover:bg-accent'
-                        }`}
-                      >
-                        Shopping
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setListType('TODO')}
-                        className={`flex-1 px-3 py-2 rounded-md text-sm font-medium border transition-colors ${
-                          listType === 'TODO'
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border hover:bg-accent'
-                        }`}
-                      >
-                        To-Do
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {mode === 'recipe' && (
-                <div className="space-y-2">
-                  <Label htmlFor="qa-recipe-title">Recipe Title</Label>
-                  <Input
-                    ref={inputRef as React.Ref<HTMLInputElement>}
-                    id="qa-recipe-title"
-                    value={recipeTitle}
-                    onChange={(e) => setRecipeTitle(e.target.value)}
-                    placeholder="e.g., Spaghetti Bolognese"
-                    required
-                  />
-                </div>
-              )}
-
-              {mode === 'note' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="qa-note-title">Note Title</Label>
-                    <Input
-                      ref={inputRef as React.Ref<HTMLInputElement>}
-                      id="qa-note-title"
-                      value={noteTitle}
-                      onChange={(e) => setNoteTitle(e.target.value)}
-                      placeholder="e.g., Shopping ideas"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="qa-note-content">Content (optional)</Label>
-                    <textarea
-                      id="qa-note-content"
-                      value={noteContent}
-                      onChange={(e) => setNoteContent(e.target.value)}
-                      placeholder="Write your note..."
-                      rows={4}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setMode(null)}
-                  className="flex-1"
-                >
-                  Back
-                </Button>
-                <Button type="submit" disabled={submitting} className="flex-1">
-                  {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Create
-                </Button>
-              </div>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+        ) : (
+          renderForm()
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
