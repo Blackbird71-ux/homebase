@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
-import { addYears } from 'date-fns'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await requireSession()
+  const { searchParams } = new URL(request.url)
+  const includeInactive = searchParams.get('includeInactive') === 'true'
   const entities = await prisma.financeEntity.findMany({
-    where: { familyId: session.familyId, isActive: true },
+    where: {
+      familyId: session.familyId,
+      ...(includeInactive ? {} : { isActive: true }),
+    },
     orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
   })
   return NextResponse.json(entities)

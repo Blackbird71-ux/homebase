@@ -3,17 +3,11 @@
 import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet,
-  Check, Briefcase, Settings, ChevronDown, ChevronRight, BarChart3, List,
+  Check, Briefcase, ChevronDown, ChevronRight, BarChart3, List, ExternalLink,
 } from 'lucide-react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,10 +116,6 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   business: 'Business', investment: 'Investment', other: 'Other',
 }
 
-const ENTITY_COLOURS = [
-  '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444',
-  '#06B6D4', '#EC4899', '#84CC16', '#F97316', '#6366F1',
-]
 
 // ─── Category Spend View ──────────────────────────────────────────────────────
 
@@ -274,8 +264,8 @@ export default function BudgetPage() {
 
   const [activeEntityId, setActiveEntityId] = useState<string | null>(null)
 
-  // Income section collapse
-  const [incomeCollapsed, setIncomeCollapsed] = useState(false)
+  // Income section collapse — collapsed by default
+  const [incomeCollapsed, setIncomeCollapsed] = useState(true)
 
   // View mode: 'list' | 'category'
   const [expenseView, setExpenseView] = useState<'list' | 'category'>('list')
@@ -294,11 +284,7 @@ export default function BudgetPage() {
   const [editingRule, setEditingRule]     = useState<BudgetRule | null>(null)
   const [ruleForm, setRuleForm]           = useState({ name: '', amount: 0, period: 'monthly', categoryId: '', entityId: '' })
 
-  // Entity management modal
-  const [showEntityModal, setShowEntityModal] = useState(false)
-  const [editingEntity, setEditingEntity]     = useState<Entity | null>(null)
-  const [entityForm, setEntityForm]           = useState({ name: '', type: 'personal', color: '#3B82F6', description: '' })
-  const [savingEntity, setSavingEntity]       = useState(false)
+
 
   async function load() {
     setLoading(true)
@@ -467,53 +453,14 @@ export default function BudgetPage() {
     }
   }
 
-  // ── Entity CRUD ────────────────────────────────────────────────────────────
 
-  function openNewEntity() {
-    setEditingEntity(null)
-    const nextColour = ENTITY_COLOURS[entities.length % ENTITY_COLOURS.length]
-    setEntityForm({ name: '', type: 'personal', color: nextColour, description: '' })
-    setShowEntityModal(true)
-  }
-
-  function openEditEntity(e: Entity) {
-    setEditingEntity(e)
-    setEntityForm({ name: e.name, type: e.type, color: e.color ?? '#3B82F6', description: '' })
-    setShowEntityModal(true)
-  }
-
-  async function handleSaveEntity() {
-    if (!entityForm.name.trim()) { toast.error('Name is required'); return }
-    setSavingEntity(true)
-    try {
-      const body = editingEntity
-        ? { id: editingEntity.id, ...entityForm }
-        : { ...entityForm, isDefault: entities.length === 0 }
-      const res = await fetch('/api/finance/entities', {
-        method: editingEntity ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (res.ok) {
-        toast.success(editingEntity ? 'Entity updated' : 'Entity created')
-        setShowEntityModal(false); setEditingEntity(null); load()
-      } else { const e = await res.json(); toast.error(e.error ?? 'Failed') }
-    } finally { setSavingEntity(false) }
-  }
-
-  async function handleDeleteEntity(id: string) {
-    if (!confirm('Deactivate this entity? Its bills and budget rules will be retained.')) return
-    const res = await fetch(`/api/finance/entities?id=${id}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Entity deactivated'); load() }
-    else { const e = await res.json(); toast.error(e.error ?? 'Failed') }
-  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading budget planner…</div>
 
   const activeEntity = entities.find(e => e.id === activeEntityId) ?? null
-  const isCustomFreq = incomeForm.frequency === 'custom'
+  const isCustomFreq  = incomeForm.frequency === 'custom'
   const includedStreams = activeStreams.filter(s => s.isIncluded)
 
   return (
@@ -546,21 +493,13 @@ export default function BudgetPage() {
             {e.isDefault && <span className="text-[10px] opacity-70">(default)</span>}
           </button>
         ))}
-        <button
-          onClick={openNewEntity}
+        <Link
+          href="/finance/entities"
           className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+          title="Manage entities"
         >
-          <Plus className="h-3 w-3" /> Add Entity
-        </button>
-        {entities.length > 0 && (
-          <button
-            onClick={() => activeEntity && openEditEntity(activeEntity)}
-            className="p-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title="Edit current entity"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
-        )}
+          <ExternalLink className="h-3 w-3" /> Manage entities
+        </Link>
       </div>
 
       {/* Entity label */}
@@ -1003,77 +942,16 @@ export default function BudgetPage() {
             Create entities for Personal/Family, Super Fund, Unitrak, Hopevale, etc.<br />
             Each entity gets its own isolated income and expense view.
           </p>
-          <button onClick={openNewEntity}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium">
-            <Plus className="h-4 w-4" /> Create First Entity
-          </button>
+          <Link
+            href="/finance/entities"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium"
+          >
+            <ExternalLink className="h-4 w-4" /> Go to Entities
+          </Link>
         </div>
       )}
 
-      {/* ── Entity management modal ────────────────────────────────────────── */}
-      <Dialog open={showEntityModal} onOpenChange={open => { if (!open) { setShowEntityModal(false); setEditingEntity(null) } }}>
-        <DialogContent className="sm:max-w-md" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editingEntity ? 'Edit Entity' : 'New Entity'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input value={entityForm.name}
-                onChange={e => setEntityForm(p => ({ ...p, name: e.target.value }))}
-                placeholder="e.g. Super Fund, Unitrak, Hopevale"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Type</label>
-              <select value={entityForm.type}
-                onChange={e => setEntityForm(p => ({ ...p, type: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                {Object.entries(ENTITY_TYPE_LABELS).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Colour</label>
-              <div className="flex items-center gap-2 mt-1">
-                <input type="color" value={entityForm.color}
-                  onChange={e => setEntityForm(p => ({ ...p, color: e.target.value }))}
-                  className="w-10 h-8 rounded border border-input cursor-pointer" />
-                <div className="flex gap-1.5 flex-wrap">
-                  {ENTITY_COLOURS.map(c => (
-                    <button key={c} onClick={() => setEntityForm(p => ({ ...p, color: c }))}
-                      className={cn('w-6 h-6 rounded-full border-2 transition-transform',
-                        entityForm.color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-105')}
-                      style={{ backgroundColor: c }} />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Preview:</span>
-              <span className="text-xs px-3 py-1 rounded-full font-medium text-white"
-                style={{ backgroundColor: entityForm.color }}>
-                {entityForm.name || 'Entity name'}
-              </span>
-            </div>
-            {editingEntity && !editingEntity.isDefault && (
-              <button onClick={() => { setShowEntityModal(false); handleDeleteEntity(editingEntity.id) }}
-                className="w-full rounded-md border border-red-500/30 text-red-500 px-4 py-1.5 text-sm hover:bg-red-500/5 transition-colors">
-                Deactivate entity
-              </button>
-            )}
-          </div>
-          <DialogFooter>
-            <button onClick={() => { setShowEntityModal(false); setEditingEntity(null) }}
-              className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            <button onClick={handleSaveEntity} disabled={savingEntity}
-              className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50">
-              {savingEntity ? 'Saving…' : editingEntity ? 'Update' : 'Create'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </div>
   )
 }

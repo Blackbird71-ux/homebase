@@ -393,7 +393,7 @@ export default function BillsPage() {
   for (const catId of selectedCatIds) {
     catTotals[catId] = visibleBills.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
-  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 6rem`
+  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 7rem 8.5rem`
   const attachmentBill = attachmentBillId ? bills.find(b => b.id === attachmentBillId) ?? null : null
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading bills…</div>
@@ -692,84 +692,6 @@ export default function BillsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Attachment panel */}
-      {attachmentBillId && attachmentBill && (
-        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-medium text-sm">
-              <Paperclip className="h-4 w-4 text-green-600" />
-              Attachments — <span className="text-muted-foreground">{attachmentBill.name}</span>
-            </div>
-            <button onClick={closeAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          {attachmentsLoading ? <p className="text-xs text-muted-foreground">Loading…</p>
-            : attachments.length === 0 ? <p className="text-xs text-muted-foreground">No attachments yet.</p>
-            : (
-              <div className="space-y-1.5">
-                {attachments.map(att => {
-                  const attUrl = `/api/finance/bills/${attachmentBillId}/attachments/${att.id}`
-                  const isPreviewing = previewAttachmentId === att.id
-                  const canPreview = isImageMime(att.mimeType) || isPdfMime(att.mimeType)
-                  return (
-                    <div key={att.id} className="space-y-0">
-                      <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="flex-1 truncate font-medium">{att.title}</span>
-                        <span className="text-xs text-muted-foreground">{formatFileSize(att.fileSize)}</span>
-                        {canPreview && (
-                          <button onClick={() => togglePreview(att.id)}
-                            title={isPreviewing ? 'Hide preview' : 'View inline'}
-                            className={cn('p-1 rounded hover:bg-accent', isPreviewing ? 'text-primary' : 'text-muted-foreground')}>
-                            {isPreviewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                          </button>
-                        )}
-                        <a href={attUrl} target="_blank" rel="noopener noreferrer"
-                          className="p-1 rounded hover:bg-accent text-primary" title="Open in new tab / download">
-                          <Download className="h-3.5 w-3.5" />
-                        </a>
-                        <button onClick={() => handleAttachmentDelete(attachmentBillId, att.id)}
-                          className="p-1 rounded hover:bg-accent text-red-500" title="Remove attachment">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {isPreviewing && (
-                        <div className="rounded-b-md border border-t-0 border-border bg-background overflow-hidden">
-                          {isImageMime(att.mimeType) ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={attUrl} alt={att.title}
-                              className="max-h-[500px] w-full object-contain p-2" />
-                          ) : (
-                            <iframe
-                              src={attUrl}
-                              title={att.title}
-                              className="w-full border-0"
-                              style={{ height: '600px' }}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          {attachments.length < 2 && (
-            <>
-              <input ref={attachFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden"
-                onChange={async e => { const file = e.target.files?.[0]; if (file) await handleAttachmentUpload(attachmentBillId, file); e.target.value = '' }} />
-              <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
-                <Upload className="h-3.5 w-3.5" />
-                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
-              </button>
-              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC accepted · Max 2 files per bill</p>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Bill list */}
       {bills.length === 0 ? (
         <p className="text-sm text-muted-foreground">No bills yet.</p>
@@ -789,7 +711,14 @@ export default function BillsPage() {
               inBudget={budgetBillIds.has(b.id)}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
               onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
-              attachmentBillId={attachmentBillId} formatCurrency={formatCurrency} />
+              attachmentBillId={attachmentBillId}
+              attachments={attachments} attachmentsLoading={attachmentsLoading}
+              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
+              previewAttachmentId={previewAttachmentId}
+              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
+              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
+              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
+              formatCurrency={formatCurrency} />
           ))}
           {upcoming.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={false}
@@ -797,7 +726,14 @@ export default function BillsPage() {
               inBudget={budgetBillIds.has(b.id)}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
               onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
-              attachmentBillId={attachmentBillId} formatCurrency={formatCurrency} />
+              attachmentBillId={attachmentBillId}
+              attachments={attachments} attachmentsLoading={attachmentsLoading}
+              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
+              previewAttachmentId={previewAttachmentId}
+              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
+              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
+              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
+              formatCurrency={formatCurrency} />
           ))}
           {visibleBills.length > 0 && (
             <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
@@ -825,7 +761,10 @@ export default function BillsPage() {
 function BillRow({
   bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate,
   inBudget, onEdit, onDelete, onMarkPaid, onToggleInvoice, onOpenAttachments,
-  attachmentBillId, formatCurrency,
+  attachmentBillId, attachments, attachmentsLoading, uploadingAttachment, attachFileRef,
+  previewAttachmentId, onCloseAttachments, onTogglePreview,
+  onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize,
+  formatCurrency,
 }: {
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
@@ -835,79 +774,181 @@ function BillRow({
   onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
   onOpenAttachments: (b: Bill) => void
   attachmentBillId: string | null
+  attachments: BillAttachment[]; attachmentsLoading: boolean
+  uploadingAttachment: boolean; attachFileRef: React.RefObject<HTMLInputElement | null>
+  previewAttachmentId: string | null
+  onCloseAttachments: () => void
+  onTogglePreview: (id: string) => void
+  onAttachmentUpload: (billId: string, file: File) => Promise<void>
+  onAttachmentDelete: (billId: string, attachmentId: string) => Promise<void>
+  isImageMime: (mime: string) => boolean; isPdfMime: (mime: string) => boolean
+  formatFileSize: (bytes: number) => string
   formatCurrency: (n: number) => string
 }) {
-  const isOneOff = bill.billType === 'one-off'
-  const hasInvoice = bill.invoiceReceived
+  const isOneOff         = bill.billType === 'one-off'
+  const hasInvoice       = bill.invoiceReceived
   const isAttachmentOpen = attachmentBillId === bill.id
   const rowClass = cn(
     'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
-    isOverdue ? 'border-red-500/30 bg-red-500/5'
-      : hasInvoice ? 'border-green-500/30 bg-green-500/5'
-      : 'border-border hover:bg-accent/50',
-    isAttachmentOpen && 'ring-1 ring-green-500/40',
+    isOverdue    ? 'border-red-500/30 bg-red-500/5'
+    : hasInvoice ? 'border-green-500/30 bg-green-500/5'
+    :              'border-border hover:bg-accent/50',
+    isAttachmentOpen && 'ring-1 ring-green-500/40 rounded-b-none',
   )
   return (
-    <div className={rowClass} style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
-      onDoubleClick={() => onEdit(bill)}>
-      <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
-        isOverdue ? 'bg-red-500/10' : hasInvoice ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
-        {isOneOff
-          ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-orange-500')} />
-          : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : hasInvoice ? 'text-green-600' : 'text-muted-foreground')} />}
+    <div>
+      {/* Bill row */}
+      <div className={rowClass} style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
+        onDoubleClick={() => onEdit(bill)}>
+        <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
+          isOverdue ? 'bg-red-500/10' : hasInvoice ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
+          {isOneOff
+            ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-orange-500')} />
+            : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : hasInvoice ? 'text-green-600' : 'text-muted-foreground')} />}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{bill.name}</span>
+            {!bill.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
+            {bill.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
+            {hasInvoice && (
+              <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
+                <Receipt className="h-2.5 w-2.5" /> INVOICE
+              </span>
+            )}
+            {inBudget && (
+              <span className="text-[10px] bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
+                <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET
+              </span>
+            )}
+            {bill.entity && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+                style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>
+                {bill.entity.name}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+            <span className="capitalize">{isOneOff ? 'One-off' : bill.frequency}</span>
+            {bill.vendor   && <span className="text-purple-500">{bill.vendor.name}</span>}
+            {bill.account  && <span>{bill.account.name}</span>}
+            {bill.member   && <span className="text-primary">{bill.member.name}</span>}
+            {bill.location && <span>{bill.location.name}</span>}
+            <span>Due {format(nextDue, 'd MMM yyyy')}</span>
+            {bill.notes && <span className="italic truncate max-w-[120px]" title={bill.notes}>· {bill.notes}</span>}
+          </div>
+        </div>
+        {colCats.map(c => {
+          const amt = billAmountForCat(bill, c.id)
+          return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
+        })}
+        <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
+        <div className="flex items-center gap-0.5 justify-end">
+          <button onClick={() => onOpenAttachments(bill)} title="Attachments"
+            className={cn('p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : 'text-muted-foreground')}>
+            <Paperclip className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => onToggleInvoice(bill)} title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
+            className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
+            <Receipt className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => onMarkPaid(bill)} title="Mark as paid" className="p-1 hover:bg-accent rounded text-green-500">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => onEdit(bill)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
+          <button onClick={() => onDelete(bill.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+        </div>
       </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium">{bill.name}</span>
-          {!bill.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
-          {bill.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
-          {hasInvoice && (
-            <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
-              <Receipt className="h-2.5 w-2.5" /> INVOICE
-            </span>
+
+      {/* Attachment panel — renders directly below this bill row when open */}
+      {isAttachmentOpen && (
+        <div className="rounded-b-lg border border-t-0 border-green-500/30 bg-green-500/5 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Paperclip className="h-3.5 w-3.5 text-green-600" />
+              Attachments
+            </div>
+            <button onClick={onCloseAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground" title="Close">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {attachmentsLoading ? (
+            <p className="text-xs text-muted-foreground">Loading…</p>
+          ) : attachments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No attachments yet — upload an invoice or reference document below.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {attachments.map(att => {
+                const attUrl      = `/api/finance/bills/${bill.id}/attachments/${att.id}`
+                const isPreviewing = previewAttachmentId === att.id
+                const canPreview  = isImageMime(att.mimeType) || isPdfMime(att.mimeType)
+                return (
+                  <div key={att.id}>
+                    <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="flex-1 truncate font-medium">{att.title}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(att.fileSize)}</span>
+                      {canPreview && (
+                        <button
+                          onClick={() => onTogglePreview(att.id)}
+                          title={isPreviewing ? 'Hide preview' : 'View inline'}
+                          className={cn('p-1 rounded hover:bg-accent transition-colors', isPreviewing ? 'text-primary' : 'text-muted-foreground')}
+                        >
+                          {isPreviewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                      <a href={attUrl} target="_blank" rel="noopener noreferrer"
+                        className="p-1 rounded hover:bg-accent text-primary" title="Open / download">
+                        <Download className="h-3.5 w-3.5" />
+                      </a>
+                      <button onClick={() => onAttachmentDelete(bill.id, att.id)}
+                        className="p-1 rounded hover:bg-accent text-red-500" title="Remove">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {isPreviewing && (
+                      <div className="mt-1 rounded-md border border-border bg-background overflow-hidden">
+                        {isImageMime(att.mimeType) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
+                        ) : (
+                          <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           )}
-          {inBudget && (
-            <span className="text-[10px] bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
-              <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET
-            </span>
-          )}
-          {bill.entity && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
-              style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>
-              {bill.entity.name}
-            </span>
+
+          {attachments.length < 2 && (
+            <div className="flex items-center gap-3">
+              <input
+                ref={attachFileRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                className="hidden"
+                onChange={async e => {
+                  const file = e.target.files?.[0]
+                  if (file) await onAttachmentUpload(bill.id, file)
+                  e.target.value = ''
+                }}
+              />
+              <button
+                onClick={() => attachFileRef.current?.click()}
+                disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
+              </button>
+              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC · Max 2 files</p>
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-          <span className="capitalize">{isOneOff ? 'One-off' : bill.frequency}</span>
-          {bill.vendor && <span className="text-purple-500">{bill.vendor.name}</span>}
-          {bill.account && <span>{bill.account.name}</span>}
-          {bill.member && <span className="text-primary">{bill.member.name}</span>}
-          {bill.location && <span>{bill.location.name}</span>}
-          <span>Due {format(nextDue, 'd MMM yyyy')}</span>
-          {bill.notes && <span className="italic truncate max-w-[120px]" title={bill.notes}>· {bill.notes}</span>}
-        </div>
-      </div>
-      {colCats.map(c => {
-        const amt = billAmountForCat(bill, c.id)
-        return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
-      })}
-      <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
-      <div className="flex items-center gap-0.5 justify-end">
-        <button onClick={() => onOpenAttachments(bill)} title="Attachments"
-          className={cn('p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : 'text-muted-foreground')}>
-          <Paperclip className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => onToggleInvoice(bill)} title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
-          className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
-          <Receipt className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => onMarkPaid(bill)} title="Mark as paid" className="p-1 hover:bg-accent rounded text-green-500">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => onEdit(bill)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-        <button onClick={() => onDelete(bill.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
-      </div>
+      )}
     </div>
   )
 }

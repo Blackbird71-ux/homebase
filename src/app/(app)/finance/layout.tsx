@@ -12,8 +12,9 @@ const tabs = [
   { href: '/finance/budget',  label: 'Budget',       exact: false },
   { href: '/finance/goals',   label: 'Goals',        exact: false },
   { href: '/finance/reports', label: 'Reports',      exact: false },
-  { href: '/finance/vendors', label: 'Vendors',      exact: false },
-  { href: '/finance/members',   label: 'Members',    exact: false },
+  { href: '/finance/vendors',   label: 'Vendors',   exact: false },
+  { href: '/finance/entities',  label: 'Entities',  exact: false },
+  { href: '/finance/members',   label: 'Members',   exact: false },
   { href: '/finance/locations', label: 'Locations', exact: false },
   { href: '/finance/categories', label: 'Categories', exact: false },
 ]
