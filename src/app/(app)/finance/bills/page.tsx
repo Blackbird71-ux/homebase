@@ -456,9 +456,23 @@ export default function BillsPage() {
           </div>
           <div className="space-y-1">
             {overdue.map(b => (
-              <div key={b.id} className="flex items-center justify-between text-sm">
-                <span>{b.name}</span>
-                <span className="font-medium">{formatCurrency(b.amount)}</span>
+              <div key={b.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate min-w-0 flex-1">{b.name}</span>
+                <span className="font-medium shrink-0">{formatCurrency(b.amount)}</span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button onClick={() => handleMarkPaid(b)} title="Mark as paid"
+                    className="p-1 hover:bg-red-500/10 rounded text-green-500">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => openEdit(b)} title="Edit"
+                    className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-foreground">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => handleDelete(b.id)} title="Delete"
+                    className="p-1 hover:bg-red-500/10 rounded text-red-500">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -472,10 +486,26 @@ export default function BillsPage() {
           </div>
           <div className="space-y-1">
             {overdueOneOff.map(b => (
-              <div key={b.id} className="flex items-center justify-between text-sm">
-                <span>{b.name}</span>
-                <span className="text-xs text-muted-foreground">Due {format(new Date(b.nextDueDate), 'd MMM yyyy')}</span>
-                <span className="font-medium">{formatCurrency(b.amount)}</span>
+              <div key={b.id} className="flex items-center justify-between gap-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <span>{b.name}</span>
+                  <span className="text-xs text-muted-foreground ml-2">Due {format(new Date(b.nextDueDate), 'd MMM yyyy')}</span>
+                </div>
+                <span className="font-medium shrink-0">{formatCurrency(b.amount)}</span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button onClick={() => handleMarkPaid(b)} title="Mark as paid"
+                    className="p-1 hover:bg-orange-500/10 rounded text-green-500">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => openEdit(b)} title="Edit"
+                    className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => handleDelete(b.id)} title="Delete"
+                    className="p-1 hover:bg-orange-500/10 rounded text-red-500">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
