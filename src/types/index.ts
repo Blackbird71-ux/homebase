@@ -25,6 +25,7 @@ export interface ChoreScheduleItem {
   lastCompletedBy: { id: string; name: string } | null
   lastCompletedAt: string | null
   isOverdue: boolean
+  isCompletable: boolean
 }
 
 export interface BillSummaryItem {

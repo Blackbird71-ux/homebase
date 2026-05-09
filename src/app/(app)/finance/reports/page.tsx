@@ -1,183 +1,342 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns'
+import { useEffect, useState, useMemo } from 'react'
+import {
+  ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
+  BarChart2, Building2,
+} from 'lucide-react'
+import {
+  format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
+  startOfYear, endOfYear, subMonths, addMonths, subQuarters, addQuarters,
+  subYears, addYears, getQuarter, getYear,
+} from 'date-fns'
 import { cn } from '@/lib/utils'
 
-interface Category { id: string; name: string; type: string; color: string | null }
-interface Account { id: string; name: string; type: string; currentBalance: number }
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Summary {
-  totalIncome: number
-  totalExpenses: number
-  netChange: number
-  netWorth: number
-  billTotal: number
-  upcommingBills: number
+type ViewMode = 'category' | 'vendor'
+type PeriodMode = 'month' | 'quarter' | 'year'
+
+interface Bill {
+  id: string; name: string; amount: number; frequency: string
+  nextDueDate: string; paid: boolean; paidDate: string | null
+  isActive: boolean; billType: string
+  category: { id: string; name: string; color: string | null } | null
+  vendor: { id: string; name: string } | null
 }
 
-export default function ReportsPage() {
-  const [summary, setSummary] = useState<Summary | null>(null)
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [categoryTotals, setCategoryTotals] = useState<{ name: string; total: number; color: string | null; pct: number }[]>([])
-  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'year'>('month')
-  const [loading, setLoading] = useState(true)
+interface DrillItem {
+  billId: string; billName: string; amount: number; monthlyAmount: number
+  paid: boolean; nextDueDate: string
+  categoryName: string | null; vendorName: string | null
+}
 
-  const periodStart = selectedPeriod === 'month' ? startOfMonth(new Date()) : startOfYear(new Date())
-  const periodEnd = selectedPeriod === 'month' ? endOfMonth(new Date()) : endOfYear(new Date())
+interface GroupRow {
+  key: string; label: string; color: string | null
+  totalMonthly: number; billCount: number; bills: DrillItem[]
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function toMonthly(amount: number, frequency: string): number {
+  if (frequency === 'weekly')      return amount * 52 / 12
+  if (frequency === 'fortnightly') return amount * 26 / 12
+  if (frequency === 'quarterly')   return amount / 3
+  if (frequency === 'yearly')      return amount / 12
+  return amount
+}
+
+function fmtCurrency(n: number) {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
+}
+
+function getPeriodBounds(mode: PeriodMode, anchor: Date): { start: Date; end: Date; label: string } {
+  if (mode === 'month') {
+    return {
+      start: startOfMonth(anchor),
+      end: endOfMonth(anchor),
+      label: format(anchor, 'MMMM yyyy'),
+    }
+  }
+  if (mode === 'quarter') {
+    return {
+      start: startOfQuarter(anchor),
+      end: endOfQuarter(anchor),
+      label: `Q${getQuarter(anchor)} ${getYear(anchor)}`,
+    }
+  }
+  return {
+    start: startOfYear(anchor),
+    end: endOfYear(anchor),
+    label: `${getYear(anchor)}`,
+  }
+}
+
+function navigateAnchor(mode: PeriodMode, anchor: Date, dir: -1 | 1): Date {
+  if (mode === 'month')   return dir === -1 ? subMonths(anchor, 1)   : addMonths(anchor, 1)
+  if (mode === 'quarter') return dir === -1 ? subQuarters(anchor, 1) : addQuarters(anchor, 1)
+  return dir === -1 ? subYears(anchor, 1) : addYears(anchor, 1)
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function ReportsPage() {
+  const [bills, setBills]         = useState<Bill[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [viewMode, setViewMode]   = useState<ViewMode>('category')
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
+  const [anchor, setAnchor]       = useState<Date>(new Date())
+  const [drillKey, setDrillKey]   = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
     try {
-      // Load all data
-      const [aRes, cRes, txRes, billsRes] = await Promise.all([
-        fetch('/api/finance/accounts'),
-        fetch('/api/finance/categories'),
-        fetch(`/api/finance/transactions?startDate=${periodStart.toISOString()}&endDate=${periodEnd.toISOString()}&limit=5000`),
-        fetch('/api/finance/bills'),
-      ])
-
-      const accountsData: Account[] = aRes.ok ? await aRes.json() : []
-      const categoriesData: Category[] = cRes.ok ? await cRes.json() : []
-      const txData = txRes.ok ? await txRes.json() : { transactions: [] }
-      const billsData = billsRes.ok ? await billsRes.json() : []
-
-      setAccounts(accountsData)
-      setCategories(categoriesData)
-
-      // Calculate totals
-      let totalIncome = 0
-      let totalExpenses = 0
-      let totalTransfers = 0
-      const catTotals: Record<string, { name: string; color: string | null; total: number }> = {}
-
-      txData.transactions.forEach((tx: any) => {
-        if (tx.type === 'income') totalIncome += tx.amount
-        else if (tx.type === 'expense') {
-          totalExpenses += tx.amount
-          const catId = tx.categoryId || 'uncategorized'
-          catTotals[catId] = catTotals[catId] || { name: tx.category?.name || 'Uncategorized', color: tx.category?.color || null, total: 0 }
-          catTotals[catId].total += tx.amount
-        } else if (tx.type === 'transfer') totalTransfers += tx.amount
-      })
-
-      const netWorth = accountsData.reduce((sum, a) => sum + a.currentBalance, 0)
-      const billTotal = billsData.reduce((sum: number, b: any) => sum + b.amount, 0)
-      const upcomingBills = billsData.filter((b: any) => b.isActive && new Date(b.nextDueDate) > new Date()).length
-
-      // Sort and add percentages
-      const sortedCatTotals = Object.entries(catTotals)
-        .map(([_, v]) => ({
-          name: v.name,
-          total: v.total,
-          color: v.color,
-          pct: totalExpenses > 0 ? Math.round((v.total / totalExpenses) * 100) : 0,
-        }))
-        .sort((a, b) => b.total - a.total)
-
-      setCategoryTotals(sortedCatTotals)
-      setSummary({
-        totalIncome,
-        totalExpenses,
-        netChange: totalIncome - totalExpenses,
-        netWorth,
-        billTotal,
-        upcommingBills: upcomingBills,
-      })
+      const res = await fetch('/api/finance/bills?includeAll=true')
+      if (res.ok) setBills(await res.json())
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [selectedPeriod])
+  useEffect(() => { load() }, [])
 
-  function formatCurrency(amount: number) {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(amount)
-  }
+  // Reset drill when period/view changes
+  useEffect(() => { setDrillKey(null) }, [periodMode, viewMode, anchor])
 
-  if (loading && !summary) return <div className="p-4 text-muted-foreground">Loading reports…</div>
+  const { start, end, label } = getPeriodBounds(periodMode, anchor)
+
+  // ── Compute monthly-normalised bills for this period ──────────────────────
+  // A bill is "relevant" if it's active and its nextDueDate falls within the period
+  // OR if it's recurring and would fire at least once in the period.
+  // For simplicity we show all active unpaid bills (due up to end of period)
+  // and compute monthly-equivalent cost.
+
+  const relevantBills = useMemo(() => {
+    const endTs = end.getTime()
+    return bills.filter(b => {
+      if (!b.isActive) return false
+      const dueTs = new Date(b.nextDueDate).getTime()
+      return dueTs <= endTs
+    })
+  }, [bills, end])
+
+  // ── Group by category or vendor ───────────────────────────────────────────
+
+  const groups = useMemo((): GroupRow[] => {
+    const map = new Map<string, GroupRow>()
+
+    for (const b of relevantBills) {
+      let key: string, label: string, color: string | null
+
+      if (viewMode === 'category') {
+        key   = b.category?.id ?? '__none__'
+        label = b.category?.name ?? 'Uncategorised'
+        color = b.category?.color ?? null
+      } else {
+        key   = b.vendor?.id ?? '__none__'
+        label = b.vendor?.name ?? 'No vendor'
+        color = null
+      }
+
+      if (!map.has(key)) {
+        map.set(key, { key, label, color, totalMonthly: 0, billCount: 0, bills: [] })
+      }
+      const g = map.get(key)!
+      const monthly = toMonthly(b.amount, b.frequency)
+      g.totalMonthly += monthly
+      g.billCount++
+      g.bills.push({
+        billId: b.id,
+        billName: b.name,
+        amount: b.amount,
+        monthlyAmount: monthly,
+        paid: b.paid,
+        nextDueDate: b.nextDueDate,
+        categoryName: b.category?.name ?? null,
+        vendorName: b.vendor?.name ?? null,
+      })
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.totalMonthly - a.totalMonthly)
+  }, [relevantBills, viewMode])
+
+  const totalMonthly    = groups.reduce((s, g) => s + g.totalMonthly, 0)
+  const maxMonthly      = groups.length > 0 ? groups[0].totalMonthly : 0
+  const drillGroup      = drillKey ? groups.find(g => g.key === drillKey) : null
+
+  // ── Period multiplier for total period spend ──────────────────────────────
+  const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
+  const totalPeriod  = totalMonthly * periodMonths
+
+  if (loading) return <div className="p-4 text-muted-foreground">Loading reports…</div>
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Reports</h1>
-        <select value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value as 'month' | 'year')}
-          className="rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-          <option value="month">This Month</option>
-          <option value="year">This Year</option>
-        </select>
+    <div className="space-y-5">
+      {/* ── Controls ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Period selector */}
+        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+          {(['month', 'quarter', 'year'] as const).map(p => (
+            <button key={p} onClick={() => setPeriodMode(p)}
+              className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors capitalize',
+                periodMode === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              {p === 'month' ? 'Month' : p === 'quarter' ? 'Quarter' : 'Year'}
+            </button>
+          ))}
+        </div>
+
+        {/* View toggle */}
+        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+          <button onClick={() => setViewMode('category')}
+            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1',
+              viewMode === 'category' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <BarChart2 className="h-3 w-3" /> By category
+          </button>
+          <button onClick={() => setViewMode('vendor')}
+            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1',
+              viewMode === 'vendor' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <Building2 className="h-3 w-3" /> By vendor
+          </button>
+        </div>
+
+        {/* Period navigator */}
+        <div className="flex items-center gap-1 rounded-lg border border-border px-2 py-1">
+          <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, -1))}
+            className="p-1 hover:bg-accent rounded text-muted-foreground">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="text-sm font-medium px-1 min-w-[100px] text-center">{label}</span>
+          <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, 1))}
+            className="p-1 hover:bg-accent rounded text-muted-foreground">
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <SummaryCard label="Income" value={summary?.totalIncome ?? 0} color="text-green-500" formatCurrency={formatCurrency} />
-        <SummaryCard label="Expenses" value={summary?.totalExpenses ?? 0} color="text-red-500" formatCurrency={formatCurrency} />
-        <SummaryCard label="Net Change" value={summary?.netChange ?? 0}
-          color={(summary?.netChange ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}
-          formatCurrency={formatCurrency} />
-        <SummaryCard label="Net Worth" value={summary?.netWorth ?? 0} color="text-primary" formatCurrency={formatCurrency} />
-        <SummaryCard label="Bills (Total)" value={summary?.billTotal ?? 0} color="text-amber-500" formatCurrency={formatCurrency} />
+      {/* ── Summary cards ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-3">
+        <SummaryCard
+          icon={<TrendingDown className="h-4 w-4 text-red-500" />}
+          label="Expected bills"
+          value={fmtCurrency(totalPeriod)}
+          sub={periodMode !== 'month' ? `${fmtCurrency(totalMonthly)}/mo avg` : undefined}
+          colorClass="text-red-600"
+        />
+        <SummaryCard
+          icon={<BarChart2 className="h-4 w-4 text-primary" />}
+          label={viewMode === 'category' ? 'Categories' : 'Vendors'}
+          value={String(groups.length)}
+          sub="with active bills"
+          colorClass="text-primary"
+        />
+        <SummaryCard
+          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+          label="Active bills"
+          value={String(relevantBills.length)}
+          sub={`${relevantBills.filter(b => b.paid).length} paid`}
+          colorClass="text-foreground"
+        />
       </div>
 
-      {/* Category Breakdown */}
-      {categoryTotals.length > 0 && (
-        <div className="rounded-lg border border-border p-4">
-          <h2 className="font-semibold mb-3">Spending by Category</h2>
-          <div className="space-y-2">
-            {categoryTotals.map(ct => (
-              <div key={ct.name}>
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ct.color ?? '#6B7280' }} />
-                    <span>{ct.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{formatCurrency(ct.total)}</span>
-                    <span className="text-xs text-muted-foreground w-8 text-right">{ct.pct}%</span>
+      {/* ── Drill-down panel ──────────────────────────────────────────────── */}
+      {drillGroup ? (
+        <div className="rounded-lg border border-border p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDrillKey(null)}
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </button>
+            <span className="text-muted-foreground text-sm">·</span>
+            <span className="font-semibold text-sm">{drillGroup.label}</span>
+            {drillGroup.color && (
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: drillGroup.color }} />
+            )}
+            <span className="text-sm text-muted-foreground ml-auto font-medium">
+              {fmtCurrency(drillGroup.totalMonthly * periodMonths)} {periodMode !== 'month' ? `(${fmtCurrency(drillGroup.totalMonthly)}/mo)` : ''}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {drillGroup.bills.map(bill => (
+              <div key={bill.billId}
+                className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium">{bill.billName}</span>
+                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+                    {viewMode === 'category' && bill.vendorName && <span>{bill.vendorName}</span>}
+                    {viewMode === 'vendor' && bill.categoryName && <span>{bill.categoryName}</span>}
+                    <span>Due {format(new Date(bill.nextDueDate), 'd MMM yyyy')}</span>
                   </div>
                 </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${ct.pct}%` }} />
+                <div className="text-right">
+                  <p className="font-semibold">{fmtCurrency(bill.amount)}</p>
+                  {bill.monthlyAmount !== bill.amount && (
+                    <p className="text-xs text-muted-foreground">{fmtCurrency(bill.monthlyAmount)}/mo</p>
+                  )}
                 </div>
+                <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium',
+                  bill.paid ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600')}>
+                  {bill.paid ? 'Paid' : 'Due'}
+                </span>
               </div>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Account Summary */}
-      {accounts.length > 0 && (
-        <div className="rounded-lg border border-border p-4">
-          <h2 className="font-semibold mb-3">Account Balances</h2>
-          <div className="space-y-1">
-            {accounts.map(a => (
-              <div key={a.id} className="flex items-center justify-between text-sm py-1">
-                <span>{a.name} <span className="text-xs text-muted-foreground">({a.type})</span></span>
-                <span className="font-medium">{formatCurrency(a.currentBalance)}</span>
-              </div>
-            ))}
-            <div className="flex items-center justify-between text-sm font-bold pt-2 border-t border-border mt-2">
-              <span>Total Net Worth</span>
-              <span>{formatCurrency(summary?.netWorth ?? 0)}</span>
+      ) : (
+        /* ── Group list ────────────────────────────────────────────────────── */
+        groups.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-10 text-center">
+            <p className="text-sm text-muted-foreground">No active bills found for this period.</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between text-xs text-muted-foreground font-medium pb-1 border-b border-border">
+              <span>{viewMode === 'category' ? 'Category' : 'Vendor'}</span>
+              <span>Monthly est.</span>
+            </div>
+            {groups.map(g => {
+              const pct = maxMonthly > 0 ? (g.totalMonthly / maxMonthly) * 100 : 0
+              return (
+                <button key={g.key} onClick={() => setDrillKey(g.key)}
+                  className="w-full text-left hover:bg-accent/50 rounded-md p-1.5 -mx-1.5 transition-colors group">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {g.color
+                      ? <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                      : <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30 shrink-0" />}
+                    <span className="text-sm flex-1 font-medium">{g.label}</span>
+                    <span className="text-xs text-muted-foreground">{g.billCount} bill{g.billCount !== 1 ? 's' : ''}</span>
+                    <span className="text-sm font-semibold min-w-[80px] text-right">{fmtCurrency(g.totalMonthly)}/mo</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: g.color ?? '#6366F1',
+                      }} />
+                  </div>
+                </button>
+              )
+            })}
+            <div className="flex items-center justify-between pt-2 border-t border-border text-sm">
+              <span className="text-muted-foreground font-medium">Total</span>
+              <span className="font-bold">{fmtCurrency(totalMonthly)}/mo</span>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* No data */}
-      {!summary?.totalIncome && !summary?.totalExpenses && categoryTotals.length === 0 && (
-        <p className="text-sm text-muted-foreground">No transaction data for this period. Add some transactions to see reports.</p>
+        )
       )}
     </div>
   )
 }
 
-function SummaryCard({ label, value, color, formatCurrency }: {
-  label: string; value: number; color: string; formatCurrency: (n: number) => string
+function SummaryCard({ icon, label, value, sub, colorClass }: {
+  icon: React.ReactNode; label: string; value: string
+  sub?: string; colorClass: string
 }) {
   return (
     <div className="rounded-lg border border-border p-3">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className={cn('text-lg font-bold', color)}>{formatCurrency(value)}</p>
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+        {icon} {label}
+      </div>
+      <p className={cn('text-xl font-bold', colorClass)}>{value}</p>
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   )
 }

@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon, Plus } from 'lucide-react'
+import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon, Plus, ClockIcon } from 'lucide-react'
 import type { ChoreScheduleDay } from '@/types'
+import { toast } from 'sonner'
 import { todayStringInTz } from '@/lib/timezone'
 import { ChoreDialog } from '@/app/(app)/chores/ChoreDialog'
 
@@ -15,11 +16,15 @@ export function ChoreScheduleCard({
   timezone,
   scope: parentScope,
   onScopeChange,
+  showOnlyMine: externalShowOnlyMine,
+  onShowOnlyMineChange,
 }: {
   data: ChoreScheduleDay[] | null | undefined
   timezone?: string
   scope?: ScopeDays
   onScopeChange?: (scope: ScopeDays) => void
+  showOnlyMine?: boolean
+  onShowOnlyMineChange?: (onlyMine: boolean) => void
 }) {
   const router = useRouter()
   const [internalScope, setInternalScope] = useState<ScopeDays>(7)
@@ -27,7 +32,16 @@ export function ChoreScheduleCard({
   const [loading, setLoading] = useState(false)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
-  const [showOnlyMine, setShowOnlyMine] = useState(false)
+  const [internalShowOnlyMine, setInternalShowOnlyMine] = useState(false)
+  // Use external prop if provided (controlled from parent for persistence), otherwise internal state
+  const showOnlyMine = externalShowOnlyMine ?? internalShowOnlyMine
+  const setShowOnlyMine = useCallback((value: boolean) => {
+    if (onShowOnlyMineChange) {
+      onShowOnlyMineChange(value)
+    } else {
+      setInternalShowOnlyMine(value)
+    }
+  }, [onShowOnlyMineChange])
   const [choreDialogOpen, setChoreDialogOpen] = useState(false)
   const [members, setMembers] = useState<{ id: string; name: string }[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
@@ -75,7 +89,7 @@ export function ChoreScheduleCard({
       // Mark as completed in local state for strikethrough + persist
       setCompletedIds((prev) => new Set(prev).add(choreId))
     } catch {
-      // Ignore silently on dashboard — the card will reappear on next fetch
+      toast.error('Failed to complete chore. Please try again.')
     } finally {
       setTimeout(() => {
         setCompletingIds((prev) => {
@@ -128,7 +142,7 @@ export function ChoreScheduleCard({
             {/* Toggle: show only my chores vs all family chores */}
             <button
               type="button"
-              onClick={() => setShowOnlyMine((prev) => !prev)}
+              onClick={() => setShowOnlyMine(!showOnlyMine)}
               title={showOnlyMine ? 'Show all family chores' : 'Show only my chores'}
               className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
                 showOnlyMine
@@ -209,23 +223,32 @@ export function ChoreScheduleCard({
                               : 'bg-background border border-border/50'
                         }`}
                       >
-                        {/* Complete checkbox button */}
-                        <button
-                          onClick={() => handleComplete(c.id)}
-                          disabled={completingIds.has(c.id)}
-                          className={`shrink-0 flex items-center justify-center h-4 w-4 rounded border transition-all duration-200 ${
-                            completingIds.has(c.id)
-                              ? 'border-green-500 bg-green-500 scale-110'
-                              : isCompleted
-                                ? 'border-green-500 bg-green-500/20'
-                                : 'border-border hover:border-green-500 hover:bg-green-500/10'
-                          }`}
-                          title="Mark complete"
-                        >
-                          <CheckIcon className={`h-2.5 w-2.5 transition-colors duration-200 ${
-                            completingIds.has(c.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent'
-                          }`} />
-                        </button>
+                        {/* Complete checkbox button (only for completable chores) */}
+                        {c.isCompletable ? (
+                          <button
+                            onClick={() => handleComplete(c.id)}
+                            disabled={completingIds.has(c.id)}
+                            className={`shrink-0 flex items-center justify-center h-4 w-4 rounded border transition-all duration-200 ${
+                              completingIds.has(c.id)
+                                ? 'border-green-500 bg-green-500 scale-110'
+                                : isCompleted
+                                  ? 'border-green-500 bg-green-500/20'
+                                  : 'border-border hover:border-green-500 hover:bg-green-500/10'
+                            }`}
+                            title="Mark complete"
+                          >
+                            <CheckIcon className={`h-2.5 w-2.5 transition-colors duration-200 ${
+                              completingIds.has(c.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent'
+                            }`} />
+                          </button>
+                        ) : (
+                          <div
+                            className="shrink-0 flex items-center justify-center h-4 w-4 rounded border border-dashed border-muted-foreground/30 text-muted-foreground/40"
+                            title="Scheduled — becomes available on its due date"
+                          >
+                            <ClockIcon className="h-2.5 w-2.5" />
+                          </div>
+                        )}
 
                         {/* Chore details */}
                         <div className="flex-1 min-w-0">

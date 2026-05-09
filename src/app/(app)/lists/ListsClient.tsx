@@ -79,18 +79,25 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
 
   // Refetch lists when filter changes
   useEffect(() => {
+    const controller = new AbortController()
     async function fetchLists() {
       setLoadingLists(true)
-      const params = new URLSearchParams()
-      if (listFilter === 'mine') params.set('filter', 'mine')
-      const res = await fetch(`/api/lists?${params.toString()}`)
-      if (res.ok) {
-        const data = await res.json()
-        setLists(data)
+      try {
+        const params = new URLSearchParams()
+        if (listFilter === 'mine') params.set('filter', 'mine')
+        const res = await fetch(`/api/lists?${params.toString()}`, { signal: controller.signal })
+        if (res.ok) {
+          const data = await res.json()
+          setLists(data)
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return
+      } finally {
+        if (!controller.signal.aborted) setLoadingLists(false)
       }
-      setLoadingLists(false)
     }
     fetchLists()
+    return () => controller.abort()
   }, [listFilter])
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -387,7 +394,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             <ShoppingList
               key={activeList.id}
               listId={activeList.id}
-              initialItems={activeList.items.map(toListItemShape)}
+              initialItems={(activeList.items ?? []).map(toListItemShape)}
               initialCategoryOrder={(() => {
                 if (!activeList.categoryOrder) return null
                 try {
@@ -431,7 +438,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             <TodoList
               key={activeList.id}
               listId={activeList.id}
-              initialItems={activeList.items.map(toListItemShape)}
+              initialItems={(activeList.items ?? []).map(toListItemShape)}
               initialCategoryOrder={(() => {
                 if (!activeList.categoryOrder) return null
                 try { return JSON.parse(activeList.categoryOrder) } catch { return null }

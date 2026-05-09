@@ -37,6 +37,16 @@ interface DashboardGridProps {
   selectedTodoListId?: string | null
   /** Called when the user picks a different TODO list */
   onTodoListChange?: (listId: string) => void
+  /** Chore schedule show only mine filter */
+  choreShowOnlyMine?: boolean
+  /** Called when chore filter changes */
+  onChoreShowOnlyMineChange?: (onlyMine: boolean) => void
+  /** Available shopping lists for the shopping list card picker */
+  availableShoppingLists?: { id: string; name: string }[]
+  /** Currently selected shopping list ID */
+  selectedShoppingListId?: string | null
+  /** Called when the user picks a different shopping list */
+  onShoppingListChange?: (listId: string) => void
 }
 
 export interface DashboardGridHandle {
@@ -54,6 +64,11 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
   availableTodoLists,
   selectedTodoListId,
   onTodoListChange,
+  choreShowOnlyMine,
+  onChoreShowOnlyMineChange,
+  availableShoppingLists,
+  selectedShoppingListId,
+  onShoppingListChange,
 }, ref) {
   // Sort cards by order, filter visible ones
   const visibleCards = cards
@@ -112,7 +127,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
       {/* Mobile layout: single column stacked */}
       <div className="grid grid-cols-1 gap-4 md:hidden">
         {visibleCards.map((card) => (
-          <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange)}</div>
+          <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange, choreShowOnlyMine, onChoreShowOnlyMineChange, availableShoppingLists, selectedShoppingListId, onShoppingListChange)}</div>
         ))}
       </div>
 
@@ -146,7 +161,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
               containerWidth={containerWidth}
               allLayouts={layouts}
             >
-              {renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange)}
+              {renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange, choreShowOnlyMine, onChoreShowOnlyMineChange, availableShoppingLists, selectedShoppingListId, onShoppingListChange)}
             </DashboardCardWrapper>
           )
         })}
@@ -164,6 +179,11 @@ function renderCard(
   availableTodoLists?: { id: string; name: string }[],
   selectedTodoListId?: string | null,
   onTodoListChange?: (listId: string) => void,
+  choreShowOnlyMine?: boolean,
+  onChoreShowOnlyMineChange?: (onlyMine: boolean) => void,
+  availableShoppingLists?: { id: string; name: string }[],
+  selectedShoppingListId?: string | null,
+  onShoppingListChange?: (listId: string) => void,
 ) {
   switch (card.id) {
     case 'weekly-summary':
@@ -175,11 +195,11 @@ function renderCard(
     case 'tomorrows-meals':
       return <TodaysMealsCard key={card.id} meals={data.tomorrowsMeals} title="Tomorrow's Meals" />
     case 'shopping-list':
-      return <ShoppingListCard key={card.id} list={data.shoppingList} />
+      return <ShoppingListCard key={card.id} list={data.shoppingList} availableLists={availableShoppingLists} selectedListId={selectedShoppingListId} onListChange={onShoppingListChange} />
     case 'todo-summary':
       return <TodoCard key={card.id} todo={data.todoSummary} />
     case 'chore-schedule':
-      return <ChoreScheduleCard key={card.id} data={data.choreSchedule} timezone={timezone} scope={scope} onScopeChange={onScopeChange} />
+      return <ChoreScheduleCard key={card.id} data={data.choreSchedule} timezone={timezone} scope={scope} onScopeChange={onScopeChange} showOnlyMine={choreShowOnlyMine} onShowOnlyMineChange={onChoreShowOnlyMineChange} />
     case 'bills-to-pay':
       return <BillsToPayCard key={card.id} bills={data.billsToPay} />
     default:

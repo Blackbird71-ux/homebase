@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
       lastCompletedBy: { id: string; name: string } | null
       lastCompletedAt: string | null
       isOverdue: boolean
+      isCompletable: boolean
     }>
   }> = []
 
@@ -87,6 +88,7 @@ export async function GET(request: NextRequest) {
           : null,
         lastCompletedAt: c.completions[0]?.completedAt?.toISOString() ?? null,
         isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayStart : false),
       })),
     })
   }

@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
-  RefreshCw, Layers, Link as LinkIcon, Paperclip, Upload, X, FileText, Download,
+  RefreshCw, Layers, Paperclip, Upload, X, FileText, Download, Building2,
+  BookmarkCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
@@ -12,14 +13,10 @@ import Link from 'next/link'
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
+interface Vendor { id: string; name: string; defaultCategory?: { id: string; name: string } | null }
 interface BillAttachment {
-  id: string
-  billId: string
-  title: string
-  fileName: string
-  fileSize: number
-  mimeType: string
-  createdAt: string
+  id: string; billId: string; title: string; fileName: string
+  fileSize: number; mimeType: string; createdAt: string
 }
 
 export interface Bill {
@@ -27,32 +24,39 @@ export interface Bill {
   dayOfMonth: number | null; monthOfYear: number | null
   nextDueDate: string; endDate: string | null; isActive: boolean
   autoPay: boolean; emailReminder: boolean; reminderDays: number
-  notes: string | null
-  memberId: string | null
+  notes: string | null; memberId: string | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
+  vendor: { id: string; name: string } | null
   member: Member | null
   location: Location | null
-  paid: boolean
-  paidDate: string | null
-  invoiceReceived: boolean
-  invoiceReceivedDate: string | null
-  billType: string
-  recurrenceInterval: string | null
-  parentBillId: string | null
+  paid: boolean; paidDate: string | null
+  invoiceReceived: boolean; invoiceReceivedDate: string | null
+  billType: string; recurrenceInterval: string | null; parentBillId: string | null
   attachments?: BillAttachment[]
 }
 
+// Convert any bill frequency to a monthly-equivalent amount
+function toMonthlyAmount(amount: number, frequency: string): number {
+  if (frequency === 'weekly')      return amount * 52 / 12
+  if (frequency === 'fortnightly') return amount * 26 / 12
+  if (frequency === 'quarterly')   return amount / 3
+  if (frequency === 'yearly')      return amount / 12
+  return amount // monthly default
+}
+
 export default function BillsPage() {
-  const [bills, setBills] = useState<Bill[]>([])
-  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
+  const [bills, setBills]           = useState<Bill[]>([])
+  const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([])
-  const [members, setMembers] = useState<Member[]>([])
-  const [locations, setLocations] = useState<Location[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState<Bill | null>(null)
-  const [dateRange, setDateRange] = useState<'14' | '30' | 'quarter'>(() => {
+  const [members, setMembers]       = useState<Member[]>([])
+  const [locations, setLocations]   = useState<Location[]>([])
+  const [vendors, setVendors]       = useState<Vendor[]>([])
+  const [budgetBillIds, setBudgetBillIds] = useState<Set<string>>(new Set())
+  const [loading, setLoading]       = useState(true)
+  const [showForm, setShowForm]     = useState(false)
+  const [editing, setEditing]       = useState<Bill | null>(null)
+  const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('bills-dateRange')
       if (saved === '14' || saved === '30' || saved === 'quarter') return saved
@@ -69,27 +73,27 @@ export default function BillsPage() {
     return []
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
-
-  // Attachment panel state
   const [attachmentBillId, setAttachmentBillId] = useState<string | null>(null)
-  const [attachments, setAttachments] = useState<BillAttachment[]>([])
+  const [attachments, setAttachments]           = useState<BillAttachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const attachFileRef = useRef<HTMLInputElement>(null)
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
     dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
     endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
-    notes: '', memberId: '', locationId: '',
+    notes: '', memberId: '', locationId: '', vendorId: '',
     billType: 'recurring', recurrenceInterval: '',
     invoiceReceived: false, invoiceReceivedDate: '',
-  })
+    addToBudget: false,
+  }
+  const [form, setForm] = useState(emptyForm)
 
   function enrichBills(data: any[]): Bill[] {
     return data.map((b: any) => ({
       ...b,
-      member: b.memberId ? (members.find((m: Member) => m.id === b.memberId) ?? null) : null,
+      member: b.memberId ? (members.find((m) => m.id === b.memberId) ?? null) : null,
     }))
   }
 
@@ -102,20 +106,54 @@ export default function BillsPage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, mRes, lRes] = await Promise.all([
+    const [aRes, cRes, mRes, lRes, vRes, bRes] = await Promise.all([
       fetch('/api/finance/accounts'),
       fetch('/api/finance/categories'),
       fetch('/api/finance/members'),
       fetch('/api/finance/locations'),
+      fetch('/api/finance/vendors'),
+      fetch('/api/finance/budget'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) setCategories(await cRes.json())
     if (mRes.ok) setMembers(await mRes.json())
     if (lRes.ok) setLocations(await lRes.json())
+    if (vRes.ok) setVendors(await vRes.json())
+    if (bRes.ok) {
+      const budgets: any[] = await bRes.json()
+      setBudgetBillIds(new Set(budgets.filter(b => b.billId).map(b => b.billId)))
+    }
   }
 
   useEffect(() => { loadRefs() }, [])
-  useEffect(() => { if (members.length > 0) load() }, [members])
+  useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
+
+  // ── Budget helpers ─────────────────────────────────────────────────────────
+
+  async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
+    if (addToBudget) {
+      await fetch('/api/finance/budget', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          upsertFromBill: true,
+          billId: bill.id,
+          name: bill.name,
+          amount: toMonthlyAmount(bill.amount, bill.frequency),
+          categoryId: bill.category?.id ?? null,
+          period: 'monthly',
+        }),
+      })
+      setBudgetBillIds(prev => new Set([...prev, bill.id]))
+    } else {
+      await fetch('/api/finance/budget', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeFromBill: true, billId: bill.id }),
+      })
+      setBudgetBillIds(prev => { const s = new Set(prev); s.delete(bill.id); return s })
+    }
+  }
 
   // ── Attachment helpers ─────────────────────────────────────────────────────
 
@@ -128,50 +166,37 @@ export default function BillsPage() {
     } finally { setAttachmentsLoading(false) }
   }
 
-  function closeAttachments() {
-    setAttachmentBillId(null)
-    setAttachments([])
-  }
+  function closeAttachments() { setAttachmentBillId(null); setAttachments([]) }
 
   async function handleAttachmentUpload(billId: string, file: File) {
     setUploadingAttachment(true)
     try {
       const fd = new FormData()
       fd.append('file', file)
-      fd.append('title', file.name.replace(/\.[^/.]+$/, '')) // strip extension for default title
+      fd.append('title', file.name.replace(/\.[^/.]+$/, ''))
       const res = await fetch(`/api/finance/bills/${billId}/attachments`, { method: 'POST', body: fd })
-      if (res.ok) {
-        const att = await res.json()
-        setAttachments(prev => [...prev, att])
-        toast.success('Attachment uploaded')
-      } else {
-        toast.error('Failed to upload attachment')
-      }
+      if (res.ok) { setAttachments(prev => [...prev, await res.json()]); toast.success('Attachment uploaded') }
+      else toast.error('Failed to upload attachment')
     } finally { setUploadingAttachment(false) }
   }
 
   async function handleAttachmentDelete(billId: string, attachmentId: string) {
     if (!confirm('Remove this attachment?')) return
     const res = await fetch(`/api/finance/bills/${billId}/attachments/${attachmentId}`, { method: 'DELETE' })
-    if (res.ok) {
-      setAttachments(prev => prev.filter(a => a.id !== attachmentId))
-      toast.success('Attachment removed')
-    } else {
-      toast.error('Failed to remove attachment')
-    }
+    if (res.ok) { setAttachments(prev => prev.filter(a => a.id !== attachmentId)); toast.success('Attachment removed') }
+    else toast.error('Failed to remove attachment')
   }
 
-  function formatFileSize(bytes: number): string {
+  function formatFileSize(bytes: number) {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  // ── Existing helpers ───────────────────────────────────────────────────────
+  // ── Filters ───────────────────────────────────────────────────────────────
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter') {
-    sessionStorage.setItem('bills-dateRange', r)
-    setDateRange(r)
+    sessionStorage.setItem('bills-dateRange', r); setDateRange(r)
   }
 
   function toggleCat(id: string) {
@@ -182,17 +207,10 @@ export default function BillsPage() {
     })
   }
 
+  // ── Form helpers ──────────────────────────────────────────────────────────
+
   function openNew() {
-    setEditing(null)
-    setForm({
-      name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
-      dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
-      endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
-      notes: '', memberId: '', locationId: '',
-      billType: 'recurring', recurrenceInterval: '',
-      invoiceReceived: false, invoiceReceivedDate: '',
-    })
-    setShowForm(true)
+    setEditing(null); setForm(emptyForm); setShowForm(true)
   }
 
   function openEdit(b: Bill) {
@@ -206,9 +224,12 @@ export default function BillsPage() {
       endDate: b.endDate ? new Date(b.endDate).toISOString().split('T')[0] : '',
       autoPay: b.autoPay, emailReminder: b.emailReminder, reminderDays: b.reminderDays,
       notes: b.notes ?? '', memberId: b.memberId ?? '', locationId: b.location?.id ?? '',
+      vendorId: b.vendor?.id ?? '',
       billType: b.billType ?? 'recurring', recurrenceInterval: b.recurrenceInterval ?? '',
       invoiceReceived: b.invoiceReceived ?? false,
-      invoiceReceivedDate: b.invoiceReceivedDate ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
+      invoiceReceivedDate: b.invoiceReceivedDate
+        ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
+      addToBudget: budgetBillIds.has(b.id),
     })
     setShowForm(true)
   }
@@ -219,6 +240,7 @@ export default function BillsPage() {
       amount: form.amount || 0,
       accountId: form.accountId || null,
       categoryId: form.categoryId || null,
+      vendorId: form.vendorId || null,
       dayOfMonth: form.dayOfMonth || null,
       monthOfYear: form.monthOfYear || null,
       endDate: form.endDate || null,
@@ -233,18 +255,31 @@ export default function BillsPage() {
   }
 
   async function handleSave() {
-    const body = editing ? { id: editing.id, ...getFormPayload() } : getFormPayload()
+    const { addToBudget, ...payload } = getFormPayload() as any
+    const body = editing ? { id: editing.id, ...payload } : payload
     const res = await fetch('/api/finance/bills', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (res.ok) { toast.success(editing ? 'Bill updated' : 'Bill created'); setShowForm(false); setEditing(null); load() }
-    else { const err = await res.json(); toast.error(err.error ?? 'Failed') }
+    if (!res.ok) { const err = await res.json(); toast.error(err.error ?? 'Failed'); return }
+    const savedBill: Bill = await res.json()
+    toast.success(editing ? 'Bill updated' : 'Bill created')
+
+    // Sync budget rule
+    await syncBudgetRule(savedBill, form.addToBudget)
+
+    setShowForm(false); setEditing(null); load()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this bill?')) return
+    // Remove budget rule first
+    await fetch('/api/finance/budget', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ removeFromBill: true, billId: id }),
+    })
     const res = await fetch(`/api/finance/bills?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Bill deleted'); load() }
     else toast.error('Failed to delete')
@@ -271,14 +306,24 @@ export default function BillsPage() {
     else toast.error('Failed to update invoice status')
   }
 
+  // When vendor is selected, auto-fill category if bill has none yet
+  function handleVendorChange(vendorId: string) {
+    const vendor = vendors.find(v => v.id === vendorId)
+    const update: any = { vendorId }
+    if (vendor?.defaultCategory && !form.categoryId) {
+      update.categoryId = vendor.defaultCategory.id
+    }
+    setForm(p => ({ ...p, ...update }))
+  }
+
   function getNextDue(bill: Bill): Date {
     const due = new Date(bill.nextDueDate)
     if (isPast(due)) {
-      if (bill.frequency === 'monthly') return addMonths(due, 1)
-      if (bill.frequency === 'fortnightly') return addWeeks(due, 2)
-      if (bill.frequency === 'weekly') return addWeeks(due, 1)
-      if (bill.frequency === 'quarterly') return addMonths(due, 3)
-      if (bill.frequency === 'yearly') return addMonths(due, 12)
+      if (bill.frequency === 'monthly')      return addMonths(due, 1)
+      if (bill.frequency === 'fortnightly')  return addWeeks(due, 2)
+      if (bill.frequency === 'weekly')       return addWeeks(due, 1)
+      if (bill.frequency === 'quarterly')    return addMonths(due, 3)
+      if (bill.frequency === 'yearly')       return addMonths(due, 12)
     }
     return due
   }
@@ -298,30 +343,29 @@ export default function BillsPage() {
   const rootCategories = categories.filter(c => !c.parentId)
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const rangeEnd = dateRange === '14' ? addDays(todayStart, 14) : dateRange === '30' ? addDays(todayStart, 30) : addMonths(todayStart, 3)
+  const rangeEnd = dateRange === '14' ? addDays(todayStart, 14)
+    : dateRange === '30' ? addDays(todayStart, 30)
+    : addMonths(todayStart, 3)
 
   function toLocalMidnight(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
   }
 
-  const activeBills = bills.filter(b => b.isActive && !b.paid)
-  const overdue = activeBills.filter(b => b.billType !== 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
-  const overdueOneOff = activeBills.filter(b => b.billType === 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
-  const upcoming = activeBills.filter(b => {
+  const activeBills     = bills.filter(b => b.isActive && !b.paid)
+  const overdue         = activeBills.filter(b => b.billType !== 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
+  const overdueOneOff   = activeBills.filter(b => b.billType === 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
+  const upcoming        = activeBills.filter(b => {
     const due = toLocalMidnight(new Date(b.nextDueDate))
     return due >= todayStart && due <= rangeEnd
   })
-  const visibleBills = [...overdue, ...upcoming]
-
-  const colCats = rootCategories.filter(c => selectedCatIds.includes(c.id))
-  const grandTotal = visibleBills.reduce((s, b) => s + b.amount, 0)
+  const visibleBills    = [...overdue, ...upcoming]
+  const colCats         = rootCategories.filter(c => selectedCatIds.includes(c.id))
+  const grandTotal      = visibleBills.reduce((s, b) => s + b.amount, 0)
   const catTotals: Record<string, number> = {}
   for (const catId of selectedCatIds) {
     catTotals[catId] = visibleBills.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
   const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 6rem`
-
-  // Find the bill currently open for attachments
   const attachmentBill = attachmentBillId ? bills.find(b => b.id === attachmentBillId) ?? null : null
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading bills…</div>
@@ -365,8 +409,7 @@ export default function BillsPage() {
                 <p className="text-xs text-muted-foreground font-medium mb-2">Show as columns:</p>
                 {rootCategories.map(c => (
                   <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" checked={selectedCatIds.includes(c.id)} onChange={() => toggleCat(c.id)}
-                      className="rounded border-input" />
+                    <input type="checkbox" checked={selectedCatIds.includes(c.id)} onChange={() => toggleCat(c.id)} className="rounded border-input" />
                     {c.name}
                   </label>
                 ))}
@@ -376,7 +419,7 @@ export default function BillsPage() {
         )}
       </div>
 
-      {/* Overdue banner - recurring */}
+      {/* Overdue banners */}
       {overdue.length > 0 && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
           <div className="flex items-center gap-2 text-red-500 font-medium mb-2">
@@ -393,7 +436,6 @@ export default function BillsPage() {
         </div>
       )}
 
-      {/* Overdue one-off bills */}
       {overdueOneOff.length > 0 && (
         <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-4">
           <div className="flex items-center gap-2 text-orange-500 font-medium mb-2">
@@ -414,21 +456,19 @@ export default function BillsPage() {
       {/* Form */}
       {showForm && (
         <div className="rounded-lg border border-border p-4 space-y-3">
-          <h3 className="font-semibold">{editing ? 'Edit Bill' : 'New Recurring Bill'}</h3>
-          {/* Bill Type */}
+          <h3 className="font-semibold">{editing ? 'Edit Bill' : 'New Bill'}</h3>
+
+          {/* Bill type */}
           <div className="flex gap-4 pb-1">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="radio" name="billType" value="recurring" checked={form.billType === 'recurring'}
-                onChange={() => setForm(p => ({ ...p, billType: 'recurring' }))}
-                className="accent-primary" />
-              <RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring Bill
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="radio" name="billType" value="one-off" checked={form.billType === 'one-off'}
-                onChange={() => setForm(p => ({ ...p, billType: 'one-off' }))}
-                className="accent-primary" />
-              <Layers className="h-3.5 w-3.5 text-orange-500" /> One-Off Bill
-            </label>
+            {(['recurring', 'one-off'] as const).map(bt => (
+              <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="billType" value={bt} checked={form.billType === bt}
+                  onChange={() => setForm(p => ({ ...p, billType: bt }))} className="accent-primary" />
+                {bt === 'recurring'
+                  ? <><RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring</>
+                  : <><Layers className="h-3.5 w-3.5 text-orange-500" /> One-off</>}
+              </label>
+            ))}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -444,25 +484,33 @@ export default function BillsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
             {form.billType === 'recurring' && (
-            <div>
-              <label className="text-xs text-muted-foreground">Frequency *</label>
-              <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="monthly">Monthly</option>
-                <option value="fortnightly">Fortnightly</option>
-                <option value="weekly">Weekly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-            </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Frequency *</label>
+                <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="weekly">Weekly</option>
+                  <option value="fortnightly">Fortnightly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
             )}
+            {/* Vendor */}
             <div>
-              <label className="text-xs text-muted-foreground">Account</label>
-              <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No account</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              <label className="text-xs text-muted-foreground">Vendor</label>
+              <div className="flex gap-1">
+                <select value={form.vendorId} onChange={e => handleVendorChange(e.target.value)}
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No vendor</option>
+                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+                <Link href="/finance/vendors"
+                  className="shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-muted-foreground hover:text-foreground"
+                  title="Manage vendors">
+                  <Building2 className="h-3.5 w-3.5" />
+                </Link>
+              </div>
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Category</label>
@@ -470,6 +518,14 @@ export default function BillsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">No category</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Account</label>
+              <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">No account</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             <div>
@@ -483,36 +539,22 @@ export default function BillsPage() {
               <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">None</option>
-                <option value="1">January</option><option value="2">February</option>
-                <option value="3">March</option><option value="4">April</option>
-                <option value="5">May</option><option value="6">June</option>
-                <option value="7">July</option><option value="8">August</option>
-                <option value="9">September</option><option value="10">October</option>
-                <option value="11">November</option><option value="12">December</option>
+                {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                  <option key={i+1} value={i+1}>{m}</option>
+                ))}
               </select>
             </div>
             <div>
               <label className="text-xs text-muted-foreground">{form.billType === 'one-off' ? 'Due Date *' : 'Next Due Date *'}</label>
-              <input type="date" value={form.nextDueDate}
-                onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
+              <input type="date" value={form.nextDueDate} onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
             {form.billType === 'recurring' && (
-            <div>
-              <label className="text-xs text-muted-foreground">End Date (optional)</label>
-              <input type="date" value={form.endDate}
-                onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            )}
-            {form.billType === 'recurring' && (
-            <div>
-              <label className="text-xs text-muted-foreground">Custom Interval (optional)</label>
-              <input value={form.recurrenceInterval}
-                placeholder="e.g. 2 weeks, 3 months"
-                onChange={e => setForm(p => ({ ...p, recurrenceInterval: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
+              <div>
+                <label className="text-xs text-muted-foreground">End Date (optional)</label>
+                <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
             )}
             <div>
               <label className="text-xs text-muted-foreground">Assigned To</label>
@@ -531,6 +573,8 @@ export default function BillsPage() {
               </select>
             </div>
           </div>
+
+          {/* Checkboxes row */}
           <div className="flex flex-wrap gap-6 pt-2">
             {form.billType === 'recurring' && (
               <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -564,16 +608,43 @@ export default function BillsPage() {
               </div>
             )}
           </div>
+
+          {/* Budget toggle */}
+          <div className={cn(
+            'rounded-md border px-3 py-2.5 flex items-start gap-3',
+            form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border',
+          )}>
+            <input type="checkbox" id="addToBudget" checked={form.addToBudget}
+              onChange={e => setForm(p => ({ ...p, addToBudget: e.target.checked }))}
+              className="rounded border-input mt-0.5" />
+            <label htmlFor="addToBudget" className="cursor-pointer flex-1">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <BookmarkCheck className="h-3.5 w-3.5 text-primary" />
+                Include in budget planner
+              </div>
+              {form.addToBudget && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Creates a budget rule for{' '}
+                  <strong>{formatCurrency(toMonthlyAmount(form.amount || 0, form.frequency))}</strong>/month
+                  {form.frequency !== 'monthly' ? ` (${form.frequency} amount normalised to monthly)` : ''}.
+                  Visible on the Budget tab.
+                </p>
+              )}
+            </label>
+          </div>
+
           <div>
             <label className="text-xs text-muted-foreground">Notes</label>
             <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
           </div>
+
           <div className="flex gap-2">
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={() => { setShowForm(false); setEditing(null) }} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={() => { setShowForm(false); setEditing(null) }}
+              className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
           </div>
         </div>
       )}
@@ -590,61 +661,35 @@ export default function BillsPage() {
               <X className="h-4 w-4" />
             </button>
           </div>
-
-          {attachmentsLoading ? (
-            <p className="text-xs text-muted-foreground">Loading…</p>
-          ) : attachments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No attachments yet.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {attachments.map(att => (
-                <div key={att.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="flex-1 truncate font-medium">{att.title}</span>
-                  <span className="text-xs text-muted-foreground">{formatFileSize(att.fileSize)}</span>
-                  <a
-                    href={`/api/finance/bills/${attachmentBillId}/attachments/${att.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="View / Download"
-                    className="p-1 rounded hover:bg-accent text-primary"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                  </a>
-                  <button onClick={() => handleAttachmentDelete(attachmentBillId, att.id)}
-                    className="p-1 rounded hover:bg-accent text-red-500" title="Remove">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Upload button — limit to 2 attachments (invoice + reference doc) */}
+          {attachmentsLoading ? <p className="text-xs text-muted-foreground">Loading…</p>
+            : attachments.length === 0 ? <p className="text-xs text-muted-foreground">No attachments yet.</p>
+            : (
+              <div className="space-y-1.5">
+                {attachments.map(att => (
+                  <div key={att.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="flex-1 truncate font-medium">{att.title}</span>
+                    <span className="text-xs text-muted-foreground">{formatFileSize(att.fileSize)}</span>
+                    <a href={`/api/finance/bills/${attachmentBillId}/attachments/${att.id}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-accent text-primary">
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                    <button onClick={() => handleAttachmentDelete(attachmentBillId, att.id)} className="p-1 rounded hover:bg-accent text-red-500">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           {attachments.length < 2 && (
             <>
-              <input
-                ref={attachFileRef}
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                className="hidden"
-                onChange={async e => {
-                  const file = e.target.files?.[0]
-                  if (file) await handleAttachmentUpload(attachmentBillId, file)
-                  e.target.value = ''
-                }}
-              />
-              <button
-                onClick={() => attachFileRef.current?.click()}
-                disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
-              >
+              <input ref={attachFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden"
+                onChange={async e => { const file = e.target.files?.[0]; if (file) await handleAttachmentUpload(attachmentBillId, file); e.target.value = '' }} />
+              <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
                 <Upload className="h-3.5 w-3.5" />
                 {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
               </button>
-              <p className="text-[10px] text-muted-foreground">
-                PDF, JPG, PNG, DOC accepted · Max 2 files per bill
-              </p>
+              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC accepted · Max 2 files per bill</p>
             </>
           )}
         </div>
@@ -655,42 +700,33 @@ export default function BillsPage() {
         <p className="text-sm text-muted-foreground">No bills yet.</p>
       ) : (
         <div className="space-y-2">
-          {/* Column headers when categories selected */}
           {colCats.length > 0 && (
             <div className="grid gap-3 px-3 pb-1" style={{ gridTemplateColumns: gridTemplate, alignItems: 'end' }}>
-              <div />
-              <div />
-              {colCats.map(c => (
-                <span key={c.id} className="text-xs font-medium text-muted-foreground text-right leading-tight">{c.name}</span>
-              ))}
+              <div /><div />
+              {colCats.map(c => <span key={c.id} className="text-xs font-medium text-muted-foreground text-right leading-tight">{c.name}</span>)}
               <span className="text-xs font-medium text-muted-foreground text-right">Total</span>
               <div />
             </div>
           )}
-
           {overdue.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
+              inBudget={budgetBillIds.has(b.id)}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
-              onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit}
-              onOpenAttachments={openAttachments}
-              attachmentBillId={attachmentBillId}
-              formatCurrency={formatCurrency} />
+              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
+              attachmentBillId={attachmentBillId} formatCurrency={formatCurrency} />
           ))}
           {upcoming.map(b => (
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={false}
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
+              inBudget={budgetBillIds.has(b.id)}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
-              onToggleInvoice={handleToggleInvoice} onDoubleClick={openEdit}
-              onOpenAttachments={openAttachments}
-              attachmentBillId={attachmentBillId}
-              formatCurrency={formatCurrency} />
+              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
+              attachmentBillId={attachmentBillId} formatCurrency={formatCurrency} />
           ))}
-
-          {/* Totals row */}
           {visibleBills.length > 0 && (
             <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
-                 style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>
+              style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>
               <div />
               <div className="text-xs font-semibold text-muted-foreground">
                 {visibleBills.length} bill{visibleBills.length !== 1 ? 's' : ''}
@@ -713,18 +749,16 @@ export default function BillsPage() {
 
 function BillRow({
   bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate,
-  onEdit, onDelete, onMarkPaid, onToggleInvoice, onDoubleClick,
-  onOpenAttachments, attachmentBillId, formatCurrency,
+  inBudget, onEdit, onDelete, onMarkPaid, onToggleInvoice, onOpenAttachments,
+  attachmentBillId, formatCurrency,
 }: {
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
   billAmountForCat: (bill: Bill, catId: string) => number
   gridTemplate: string
-  onEdit: (b: Bill) => void
-  onDelete: (id: string) => void
-  onMarkPaid: (b: Bill) => void
-  onToggleInvoice: (b: Bill) => void
-  onDoubleClick: (b: Bill) => void
+  inBudget: boolean
+  onEdit: (b: Bill) => void; onDelete: (id: string) => void
+  onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
   onOpenAttachments: (b: Bill) => void
   attachmentBillId: string | null
   formatCurrency: (n: number) => string
@@ -732,22 +766,16 @@ function BillRow({
   const isOneOff = bill.billType === 'one-off'
   const hasInvoice = bill.invoiceReceived
   const isAttachmentOpen = attachmentBillId === bill.id
-
-  // Row colour priority: overdue (red) > invoice received (green) > default
   const rowClass = cn(
     'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
-    isOverdue
-      ? 'border-red-500/30 bg-red-500/5'
-      : hasInvoice
-        ? 'border-green-500/30 bg-green-500/5'
-        : 'border-border hover:bg-accent/50',
+    isOverdue ? 'border-red-500/30 bg-red-500/5'
+      : hasInvoice ? 'border-green-500/30 bg-green-500/5'
+      : 'border-border hover:bg-accent/50',
     isAttachmentOpen && 'ring-1 ring-green-500/40',
   )
-
   return (
-    <div className={rowClass}
-      style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
-      onDoubleClick={() => onDoubleClick(bill)}>
+    <div className={rowClass} style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
+      onDoubleClick={() => onEdit(bill)}>
       <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
         isOverdue ? 'bg-red-500/10' : hasInvoice ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
         {isOneOff
@@ -764,9 +792,15 @@ function BillRow({
               <Receipt className="h-2.5 w-2.5" /> INVOICE
             </span>
           )}
+          {inBudget && (
+            <span className="text-[10px] bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
+              <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
           <span className="capitalize">{isOneOff ? 'One-off' : bill.frequency}</span>
+          {bill.vendor && <span className="text-purple-500">{bill.vendor.name}</span>}
           {bill.account && <span>{bill.account.name}</span>}
           {bill.member && <span className="text-primary">{bill.member.name}</span>}
           {bill.location && <span>{bill.location.name}</span>}
@@ -776,27 +810,19 @@ function BillRow({
       </div>
       {colCats.map(c => {
         const amt = billAmountForCat(bill, c.id)
-        return (
-          <span key={c.id} className="text-sm text-right text-muted-foreground">
-            {amt > 0 ? formatCurrency(amt) : '—'}
-          </span>
-        )
+        return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
       })}
       <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
       <div className="flex items-center gap-0.5 justify-end">
-        <button
-          onClick={() => onOpenAttachments(bill)}
-          title="Attachments"
-          className={cn('p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : 'text-muted-foreground')}
-        >
+        <button onClick={() => onOpenAttachments(bill)} title="Attachments"
+          className={cn('p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : 'text-muted-foreground')}>
           <Paperclip className="h-3.5 w-3.5" />
         </button>
         <button onClick={() => onToggleInvoice(bill)} title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
           className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
           <Receipt className="h-3.5 w-3.5" />
         </button>
-        <button onClick={() => onMarkPaid(bill)} title="Mark as paid"
-          className="p-1 hover:bg-accent rounded text-green-500">
+        <button onClick={() => onMarkPaid(bill)} title="Mark as paid" className="p-1 hover:bg-accent rounded text-green-500">
           <CheckCircle2 className="h-3.5 w-3.5" />
         </button>
         <button onClick={() => onEdit(bill)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>

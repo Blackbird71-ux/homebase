@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     where.type = type
   }
   if (filter === 'mine') {
-    where.createdBy = user.id
+    where.OR = [{ createdBy: user.id }, { createdBy: '' }]
   }
 
   const lists = await prisma.list.findMany({
@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { items: { where: { isCompleted: false } } } },
+      items: { orderBy: { sortOrder: 'asc' } },
     },
   })
   return NextResponse.json(lists)

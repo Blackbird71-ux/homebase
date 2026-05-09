@@ -41,6 +41,8 @@ model Family {
   financeRecurringBills  FinanceRecurringBill[]
   financeSavingsGoals    FinanceSavingsGoal[]
   financeLocations       FinanceLocation[]
+  financeVendors         FinanceVendor[]
+  budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded}]
 }
 
 model User {
@@ -568,6 +570,7 @@ model FinanceCategory {
   transactions    FinanceTransaction[]
   budgetRules     FinanceBudget[]
   recurringBills  FinanceRecurringBill[]
+  vendors         FinanceVendor[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -591,6 +594,8 @@ model FinanceTransaction {
   isRecurring     Boolean              @default(false)
   recurringBillId String?
   recurringBill   FinanceRecurringBill? @relation(fields: [recurringBillId], references: [id], onDelete: SetNull)
+  vendorId        String?
+  vendor          FinanceVendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   tags            String?              // JSON array of tag strings
   isPrivate       Boolean              @default(false)
   isCleared       Boolean              @default(false)  // true = paid/reconciled
@@ -617,6 +622,7 @@ model FinanceTransaction {
   @@index([recurringBillId])
   @@index([memberId])
   @@index([locationId])
+  @@index([vendorId])
 }
 
 model FinanceRecurringBill {
@@ -648,6 +654,8 @@ model FinanceRecurringBill {
   location        FinanceLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   // Self-referential: when a recurring bill is paid, the spawned next-occurrence stores the paid bill's id here.
   // This allows "undo payment" to cleanly remove the orphaned future occurrence.
+  vendorId        String?
+  vendor          FinanceVendor?         @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   parentBillId    String?
   parentBill      FinanceRecurringBill?  @relation("BillOccurrences", fields: [parentBillId], references: [id], onDelete: SetNull)
   childBills      FinanceRecurringBill[] @relation("BillOccurrences")
@@ -655,6 +663,7 @@ model FinanceRecurringBill {
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
   attachments     BillAttachment[]
+  budgetRules     FinanceBudget[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -665,6 +674,7 @@ model FinanceRecurringBill {
   @@index([memberId])
   @@index([locationId])
   @@index([parentBillId])
+  @@index([vendorId])
 }
 
 model BillAttachment {
@@ -684,25 +694,29 @@ model BillAttachment {
 }
 
 model FinanceBudget {
-  id              String             @id @default(cuid())
-  name            String             // e.g. "Groceries – May 2026"
-  categoryId      String?
-  category        FinanceCategory?   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  amount          Float              // Budget limit for the period
-  period          String             @default("monthly")  // monthly | custom
-  startDate       DateTime           // Period start
-  endDate         DateTime           // Period end
-  rollover        Boolean            @default(false)
-  alertThreshold  Int                @default(80)  // Notify at X% spent
-  emailAlert      Boolean            @default(false)
-  familyId        String
-  family          Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id                  String             @id @default(cuid())
+  name                String             // e.g. "Groceries – monthly"
+  categoryId          String?
+  category            FinanceCategory?   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  amount              Float              // Budget limit for the period
+  period              String             @default("monthly")  // weekly | monthly | yearly
+  startDate           DateTime           // Period start
+  endDate             DateTime           // Period end
+  rollover            Boolean            @default(false)
+  alertThreshold      Int                @default(80)  // Notify at X% spent
+  emailAlert          Boolean            @default(false)
+  billId              String?            // FK to bill that auto-created this rule
+  bill                FinanceRecurringBill? @relation(fields: [billId], references: [id], onDelete: SetNull)
+  isIncludedInPlanner Boolean            @default(true)  // Show in budget planner cashflow
+  familyId            String
+  family              Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@index([familyId])
   @@index([familyId, startDate, endDate])
   @@index([categoryId])
+  @@index([billId])
 }
 
 model FinanceLocation {
@@ -744,4 +758,24 @@ model FinanceSavingsGoal {
 
   @@index([familyId])
   @@index([familyId, isComplete])
+}
+
+model FinanceVendor {
+  id                  String               @id @default(cuid())
+  name                String
+  website             String?
+  phone               String?
+  accountRef          String?              // e.g. customer / account number
+  notes               String?
+  defaultCategoryId   String?
+  defaultCategory     FinanceCategory?     @relation(fields: [defaultCategoryId], references: [id], onDelete: SetNull)
+  familyId            String
+  family              Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  recurringBills      FinanceRecurringBill[]
+  transactions        FinanceTransaction[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([familyId, name])
+  @@index([familyId])
 }
