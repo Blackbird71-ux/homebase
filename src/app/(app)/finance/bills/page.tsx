@@ -10,6 +10,13 @@ import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
@@ -234,6 +241,8 @@ export default function BillsPage() {
     setShowForm(true)
   }
 
+  function closeForm() { setShowForm(false); setEditing(null) }
+
   function getFormPayload() {
     return {
       ...form,
@@ -269,7 +278,8 @@ export default function BillsPage() {
     // Sync budget rule
     await syncBudgetRule(savedBill, form.addToBudget)
 
-    setShowForm(false); setEditing(null); load()
+    closeForm()
+    load()
   }
 
   async function handleDelete(id: string) {
@@ -453,10 +463,15 @@ export default function BillsPage() {
         </div>
       )}
 
-      {/* Form */}
-      {showForm && (
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <h3 className="font-semibold">{editing ? 'Edit Bill' : 'New Bill'}</h3>
+      {/* ── Bill Editor Modal ──────────────────────────────────────────────── */}
+      <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
+        <DialogContent
+          className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          showCloseButton={true}
+        >
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle>
+          </DialogHeader>
 
           {/* Bill type */}
           <div className="flex gap-4 pb-1">
@@ -471,7 +486,7 @@ export default function BillsPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Name *</label>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
@@ -575,7 +590,7 @@ export default function BillsPage() {
           </div>
 
           {/* Checkboxes row */}
-          <div className="flex flex-wrap gap-6 pt-2">
+          <div className="flex flex-wrap gap-6 pt-1">
             {form.billType === 'recurring' && (
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={form.autoPay} onChange={e => setForm(p => ({ ...p, autoPay: e.target.checked }))} className="rounded border-input" />
@@ -639,15 +654,18 @@ export default function BillsPage() {
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
           </div>
 
-          <div className="flex gap-2">
-            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
+          <DialogFooter>
+            <button onClick={closeForm}
+              className="rounded-md border border-border px-4 py-1.5 text-sm">
+              Cancel
+            </button>
+            <button onClick={handleSave}
+              className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={() => { setShowForm(false); setEditing(null) }}
-              className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Attachment panel */}
       {attachmentBillId && attachmentBill && (
