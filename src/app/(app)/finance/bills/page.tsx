@@ -21,7 +21,7 @@ import {
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
 interface Vendor { id: string; name: string; defaultCategory?: { id: string; name: string } | null }
-interface Entity { id: string; name: string; color: string | null; type: string }
+interface Entity { id: string; name: string; color: string | null; type: string; isDefault: boolean }
 interface BillAttachment {
   id: string; billId: string; title: string; fileName: string
   fileSize: number; mimeType: string; createdAt: string
