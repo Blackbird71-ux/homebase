@@ -8,7 +8,35 @@ export async function GET() {
     where: { familyId: session.familyId },
     orderBy: { sortOrder: 'asc' },
   })
-  return NextResponse.json(accounts)
+
+  // Compute cleared balance from cleared transactions only
+  // currentBalance = all transactions (including uncleared/pending)
+  // clearedBalance = only isCleared=true transactions
+  const enriched = await Promise.all(accounts.map(async (acct) => {
+    const clearedSum = await prisma.financeTransaction.aggregate({
+      where: { accountId: acct.id, familyId: session.familyId, isCleared: true },
+      _sum: { amount: true },
+    })
+    const pendingExpenseSum = await prisma.financeTransaction.aggregate({
+      where: { accountId: acct.id, familyId: session.familyId, isCleared: false, type: 'expense' },
+      _sum: { amount: true },
+    })
+    const pendingIncomeSum = await prisma.financeTransaction.aggregate({
+      where: { accountId: acct.id, familyId: session.familyId, isCleared: false, type: 'income' },
+      _sum: { amount: true },
+    })
+    const pendingCount = await prisma.financeTransaction.count({
+      where: { accountId: acct.id, familyId: session.familyId, isCleared: false },
+    })
+    return {
+      ...acct,
+      pendingCount,
+      pendingExpense: pendingExpenseSum._sum.amount ?? 0,
+      pendingIncome: pendingIncomeSum._sum.amount ?? 0,
+    }
+  }))
+
+  return NextResponse.json(enriched)
 }
 
 export async function POST(request: NextRequest) {

@@ -12,15 +12,17 @@ interface Category { id: string; name: string; type: string; parentId: string | 
 interface Account { id: string; name: string; type: string }
 interface Member { id: string; name: string }
 interface Location { id: string; name: string }
+interface Entity { id: string; name: string; color: string | null; isDefault: boolean }
 
 interface Transaction {
   id: string; accountId: string | null; categoryId: string | null
   type: string; amount: number; payee: string | null; description: string | null
   date: string; isRecurring: boolean; isCleared: boolean; isPrivate: boolean
-  memberId: string | null; locationId: string | null
+  memberId: string | null; locationId: string | null; entityId: string | null
   category: Category | null; account: Account | null
   member: Member | null
   location: Location | null
+  entity: Entity | null
 }
 
 export default function TransactionsPage() {
@@ -29,6 +31,7 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [locations, setLocations] = useState<Location[]>([])
+  const [entities, setEntities] = useState<Entity[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -37,11 +40,12 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState('')
   const [filterMemberId, setFilterMemberId] = useState('')
   const [filterLocationId, setFilterLocationId] = useState('')
+  const [filterEntityId, setFilterEntityId] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [form, setForm] = useState({
     accountId: '', categoryId: '', type: 'expense', amount: 0,
     payee: '', description: '', date: new Date().toISOString().split('T')[0],
-    isCleared: false, isPrivate: false, memberId: '', locationId: '',
+    isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '',
   })
 
   const limit = 50
@@ -53,10 +57,10 @@ export default function TransactionsPage() {
       if (filterType) params.set('type', filterType)
       if (filterMemberId) params.set('memberId', filterMemberId)
       if (filterLocationId) params.set('locationId', filterLocationId)
+      if (filterEntityId) params.set('entityId', filterEntityId)
       const res = await fetch(`/api/finance/transactions?${params}`)
       if (res.ok) {
         const d = await res.json()
-        // Enrich transactions with member name from members list
         setTransactions(d.transactions.map((t: any) => ({
           ...t,
           member: t.memberId ? (members.find((m: Member) => m.id === t.memberId) ?? null) : null,
@@ -67,24 +71,26 @@ export default function TransactionsPage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, mRes, lRes] = await Promise.all([
+    const [aRes, cRes, mRes, lRes, eRes] = await Promise.all([
       fetch('/api/finance/accounts'), fetch('/api/finance/categories'),
       fetch('/api/finance/members'), fetch('/api/finance/locations'),
+      fetch('/api/finance/entities'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) setCategories(await cRes.json())
     if (mRes.ok) setMembers(await mRes.json())
     if (lRes.ok) setLocations(await lRes.json())
+    if (eRes.ok) setEntities(await eRes.json())
   }
 
   useEffect(() => { loadRefs() }, [])
-  useEffect(() => { load() }, [page, filterType, filterMemberId, filterLocationId])
+  useEffect(() => { load() }, [page, filterType, filterMemberId, filterLocationId, filterEntityId])
 
   const totalPages = Math.ceil(total / limit)
 
   function openNew() {
     setEditing(null)
-    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '' })
+    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '' })
     setShowForm(true)
   }
 
@@ -94,15 +100,15 @@ export default function TransactionsPage() {
       accountId: t.accountId ?? '', categoryId: t.categoryId ?? '', type: t.type,
       amount: t.amount, payee: t.payee ?? '', description: t.description ?? '',
       date: t.date.split('T')[0], isCleared: t.isCleared, isPrivate: t.isPrivate,
-      memberId: t.memberId ?? '', locationId: t.location?.id ?? '',
+      memberId: t.memberId ?? '', locationId: t.location?.id ?? '', entityId: t.entityId ?? '',
     })
     setShowForm(true)
   }
 
   async function handleSave() {
     const body = editing
-      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null }
-      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null }
+      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null }
+      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null }
     const res = await fetch('/api/finance/transactions', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -144,7 +150,7 @@ export default function TransactionsPage() {
         <div className="rounded-lg border border-border p-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Filters</span>
-            <button onClick={() => { setFilterMemberId(''); setFilterLocationId(''); setFilterType(''); setPage(1) }}
+            <button onClick={() => { setFilterMemberId(''); setFilterLocationId(''); setFilterType(''); setFilterEntityId(''); setPage(1) }}
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
               <X className="h-3 w-3" /> Clear
             </button>
@@ -174,6 +180,14 @@ export default function TransactionsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">All locations</option>
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Entity</label>
+              <select value={filterEntityId} onChange={e => { setFilterEntityId(e.target.value); setPage(1) }}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">All entities</option>
+                {entities.map(en => <option key={en.id} value={en.id}>{en.name}</option>)}
               </select>
             </div>
           </div>
@@ -247,6 +261,14 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div>
+              <label className="text-xs text-muted-foreground">Entity</label>
+              <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">No entity</option>
+                {entities.map(en => <option key={en.id} value={en.id}>{en.name}{en.isDefault ? ' (default)' : ''}</option>)}
+              </select>
+            </div>
+            <div>
               <label className="text-xs text-muted-foreground">Description</label>
               <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
@@ -294,6 +316,12 @@ export default function TransactionsPage() {
                   {t.account && <span>{t.account.name}</span>}
                   {t.member && <span>{t.member.name}</span>}
                   {t.location && <span>{t.location.name}</span>}
+                  {t.entity && !t.entity.isDefault && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                      style={{ backgroundColor: t.entity.color ? `${t.entity.color}20` : undefined, color: t.entity.color ?? undefined }}>
+                      {t.entity.name}
+                    </span>
+                  )}
                   <span>{format(new Date(t.date), 'd MMM yyyy')}</span>
                 </div>
               </div>

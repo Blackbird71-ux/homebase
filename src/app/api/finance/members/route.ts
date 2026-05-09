@@ -9,7 +9,18 @@ export async function GET() {
     select: { id: true, name: true, email: true },
     orderBy: { name: 'asc' },
   })
-  return NextResponse.json(members)
+
+  // Add usage counts across bills, income, and transactions
+  const enriched = await Promise.all(members.map(async (m) => {
+    const [bills, income, transactions] = await Promise.all([
+      prisma.financeRecurringBill.count({ where: { memberId: m.id, familyId: session.familyId } }),
+      prisma.financeIncomeEntry.count({ where: { memberId: m.id, familyId: session.familyId } }),
+      prisma.financeTransaction.count({ where: { memberId: m.id, familyId: session.familyId } }),
+    ])
+    return { ...m, _count: { bills, income, transactions } }
+  }))
+
+  return NextResponse.json(enriched)
 }
 
 export async function POST(request: NextRequest) {

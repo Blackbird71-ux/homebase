@@ -9,6 +9,7 @@ interface Account {
   id: string; name: string; type: string; institution: string | null
   currency: string; currentBalance: number; creditLimit: number | null
   isActive: boolean; color: string | null; icon: string | null; sortOrder: number
+  pendingCount: number; pendingExpense: number; pendingIncome: number
 }
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'investment', 'loan', 'entity_account', 'external_account', 'other'] as const
@@ -148,7 +149,14 @@ export default function AccountsPage() {
                 {!a.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
               </div>
               {a.institution && <p className="text-xs text-muted-foreground mb-1">{a.institution}</p>}
-              <p className="text-xl font-bold mb-2">{formatCurrency(a.currentBalance, a.currency)}</p>
+              <p className="text-xl font-bold mb-1">{formatCurrency(a.currentBalance, a.currency)}</p>
+              {a.pendingCount > 0 && (
+                <div className="text-xs text-muted-foreground mb-2 space-y-0.5">
+                  <p className="text-amber-500 font-medium">{a.pendingCount} pending transaction{a.pendingCount !== 1 ? 's' : ''}</p>
+                  {a.pendingExpense > 0 && <p>-{formatCurrency(a.pendingExpense, a.currency)} uncleared expenses</p>}
+                  {a.pendingIncome > 0 && <p>+{formatCurrency(a.pendingIncome, a.currency)} uncleared income</p>}
+                </div>
+              )}
               <div className="flex items-center gap-2 text-xs">
                 <span className="bg-muted px-2 py-0.5 rounded-full">{a.type}</span>
                 {a.type === 'credit' && a.creditLimit && (

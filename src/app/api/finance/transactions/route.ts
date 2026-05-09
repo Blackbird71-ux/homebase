@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
   if (memberId) where.memberId = memberId
   if (locationId) where.locationId = locationId
   if (type) where.type = type
+  if (searchParams.get('entityId')) where.entityId = searchParams.get('entityId')
   if (startDate) where.date = { ...(where.date || {}), gte: new Date(startDate) }
   if (endDate) where.date = { ...(where.date || {}), lte: new Date(endDate) }
   if (isCleared !== null) where.isCleared = isCleared === 'true'
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
         category: true,
         account: true,
         location: { select: { id: true, name: true } },
+        entity: { select: { id: true, name: true, color: true, isDefault: true } },
       },
       orderBy: { date: 'desc' },
       skip: (page - 1) * limit,
@@ -76,6 +78,7 @@ export async function POST(request: NextRequest) {
       isPrivate: isPrivate ?? false,
       memberId: memberId ?? null,
       locationId: locationId ?? null,
+      entityId: json.entityId ?? null,
       createdBy: session.id,
       familyId: session.familyId,
     },
@@ -83,6 +86,7 @@ export async function POST(request: NextRequest) {
       category: true,
       account: true,
       location: { select: { id: true, name: true } },
+      entity: { select: { id: true, name: true, color: true, isDefault: true } },
     },
   })
 
@@ -146,11 +150,13 @@ export async function PUT(request: NextRequest) {
       ...(isPrivate !== undefined && { isPrivate }),
       ...(memberId !== undefined && { memberId: memberId ?? null }),
       ...(locationId !== undefined && { locationId: locationId ?? null }),
+      ...(json.entityId !== undefined && { entityId: json.entityId ?? null }),
     },
     include: {
       category: true,
       account: true,
       location: { select: { id: true, name: true } },
+      entity: { select: { id: true, name: true, color: true, isDefault: true } },
     },
   })
 

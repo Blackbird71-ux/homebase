@@ -616,6 +616,8 @@ model FinanceTransaction {
   createdBy       String
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  entityId        String?              // FK -> FinanceEntity; null = personal/default
+  entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -630,6 +632,7 @@ model FinanceTransaction {
   @@index([memberId])
   @@index([locationId])
   @@index([vendorId])
+  @@index([entityId])
 }
 
 model FinanceRecurringBill {
@@ -880,6 +883,7 @@ model FinanceEntity {
   budgetRules     FinanceBudget[]
   recurringBills  FinanceRecurringBill[]
   incomeEntries   FinanceIncomeEntry[]
+  transactions    FinanceTransaction[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

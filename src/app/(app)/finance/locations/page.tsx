@@ -9,6 +9,7 @@ interface Location {
   id: string; name: string; address: string | null
   type: string; color: string | null; icon: string | null
   isActive: boolean; sortOrder: number
+  _count?: { transactions: number; recurringBills: number; incomeEntries: number }
 }
 
 const LOCATION_TYPES = ['primary', 'secondary', 'vacation', 'business', 'other']
@@ -119,7 +120,14 @@ export default function LocationsPage() {
                 {!loc.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
               </div>
               {loc.address && <p className="text-xs text-muted-foreground mb-1">{loc.address}</p>}
-              <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{loc.type}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{loc.type}</span>
+                {loc._count && (loc._count.transactions + loc._count.recurringBills + loc._count.incomeEntries) > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {[loc._count.recurringBills > 0 && `${loc._count.recurringBills} bill${loc._count.recurringBills !== 1 ? 's' : ''}`, loc._count.incomeEntries > 0 && `${loc._count.incomeEntries} income`, loc._count.transactions > 0 && `${loc._count.transactions} txn${loc._count.transactions !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </div>
               <div className="flex gap-1 mt-3">
                 <button onClick={() => openEdit(loc)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
                 <button onClick={() => handleDelete(loc.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>

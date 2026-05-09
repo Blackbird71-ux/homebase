@@ -7,6 +7,15 @@ export async function GET() {
   const categories = await prisma.financeCategory.findMany({
     where: { familyId: session.familyId },
     orderBy: [{ sortOrder: 'asc' }, { level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
+    include: {
+      _count: {
+        select: {
+          transactions: true,
+          recurringBills: true,
+          incomeEntries: true,
+        },
+      },
+    },
   })
   return NextResponse.json(categories)
 }

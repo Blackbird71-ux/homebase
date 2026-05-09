@@ -59,9 +59,9 @@ export default async function FinanceOverviewPage() {
     }) as Promise<(FinanceRecurringBill & { account: Pick<FinanceAccount, 'id' | 'name'> | null; category: FinanceCategory | null; location: { id: string; name: string } | null })[]>,
     prisma.financeSavingsGoal.findMany({
       where: { familyId, isComplete: false },
-      include: { account: true },
+      include: { account: { select: { id: true, name: true, currentBalance: true } } },
       orderBy: { createdAt: 'asc' },
-    }) as Promise<(FinanceSavingsGoal & { account: Pick<FinanceAccount, 'id' | 'name'> | null })[]>,
+    }) as Promise<(FinanceSavingsGoal & { account: Pick<FinanceAccount, 'id' | 'name' | 'currentBalance'> | null })[]>,
     prisma.financeCategory.findMany({ where: { familyId } }),
     prisma.user.findMany({
       where: { familyId },
@@ -167,6 +167,8 @@ export default async function FinanceOverviewPage() {
       }))}
       savingsGoals={savingsGoals.map((g) => ({
         ...g,
+        // Auto-derive currentAmount from linked account balance if account is set
+        currentAmount: g.accountId && g.account ? g.account.currentBalance : g.currentAmount,
         targetDate: g.targetDate?.toISOString() ?? null,
         createdAt: g.createdAt.toISOString(),
         updatedAt: g.updatedAt.toISOString(),

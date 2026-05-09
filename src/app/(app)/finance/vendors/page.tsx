@@ -103,7 +103,7 @@ export default function VendorsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Vendors</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Companies and services you pay bills to.</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Companies and contacts you pay bills to or receive income from.</p>
         </div>
         <button onClick={openNew}
           className="inline-flex items-center gap-1 text-sm text-primary hover:underline">

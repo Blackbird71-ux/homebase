@@ -9,6 +9,7 @@ interface Member {
   id: string
   name: string
   email: string
+  _count?: { bills: number; income: number; transactions: number }
 }
 
 export default function FinanceMembersPage() {
@@ -148,6 +149,11 @@ export default function FinanceMembersPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">{m.name}</p>
                 <p className="text-xs text-muted-foreground">{m.email}</p>
+                {m._count && (m._count.bills + m._count.income + m._count.transactions) > 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {[m._count.bills > 0 && `${m._count.bills} bill${m._count.bills !== 1 ? 's' : ''}`, m._count.income > 0 && `${m._count.income} income`, m._count.transactions > 0 && `${m._count.transactions} transaction${m._count.transactions !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => openEdit(m)}

@@ -6,10 +6,19 @@ export async function GET() {
   const session = await requireSession()
   const goals = await prisma.financeSavingsGoal.findMany({
     where: { familyId: session.familyId },
-    include: { account: { select: { id: true, name: true } } },
+    include: { account: { select: { id: true, name: true, currentBalance: true } } },
     orderBy: { createdAt: 'desc' },
   })
-  return NextResponse.json(goals)
+
+  // Auto-derive currentAmount from linked account balance if account is set
+  const enriched = goals.map(g => ({
+    ...g,
+    currentAmount: g.accountId && g.account
+      ? g.account.currentBalance
+      : g.currentAmount,
+  }))
+
+  return NextResponse.json(enriched)
 }
 
 export async function POST(request: NextRequest) {
@@ -29,10 +38,15 @@ export async function POST(request: NextRequest) {
       accountId: accountId ?? null, color: color ?? null, icon: icon ?? null,
       familyId: session.familyId,
     },
-    include: { account: { select: { id: true, name: true } } },
+    include: { account: { select: { id: true, name: true, currentBalance: true } } },
   })
 
-  return NextResponse.json(goal, { status: 201 })
+  const result = {
+    ...goal,
+    currentAmount: goal.accountId && goal.account ? goal.account.currentBalance : goal.currentAmount,
+  }
+
+  return NextResponse.json(result, { status: 201 })
 }
 
 export async function PUT(request: NextRequest) {
@@ -54,17 +68,23 @@ export async function PUT(request: NextRequest) {
     data: {
       ...(name !== undefined && { name }),
       ...(targetAmount !== undefined && { targetAmount }),
-      ...(currentAmount !== undefined && { currentAmount }),
+      // Only update stored currentAmount if no account is linked (account-linked goals derive from balance)
+      ...(currentAmount !== undefined && !accountId && { currentAmount }),
       ...(targetDate !== undefined && { targetDate: targetDate ? new Date(targetDate) : null }),
       ...(accountId !== undefined && { accountId }),
       ...(color !== undefined && { color }),
       ...(icon !== undefined && { icon }),
       ...(isComplete !== undefined && { isComplete }),
     },
-    include: { account: { select: { id: true, name: true } } },
+    include: { account: { select: { id: true, name: true, currentBalance: true } } },
   })
 
-  return NextResponse.json(goal)
+  const result = {
+    ...goal,
+    currentAmount: goal.accountId && goal.account ? goal.account.currentBalance : goal.currentAmount,
+  }
+
+  return NextResponse.json(result)
 }
 
 export async function DELETE(request: NextRequest) {

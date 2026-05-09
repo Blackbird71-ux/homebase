@@ -7,6 +7,15 @@ export async function GET() {
   const locations = await prisma.financeLocation.findMany({
     where: { familyId: session.familyId },
     orderBy: { sortOrder: 'asc' },
+    include: {
+      _count: {
+        select: {
+          transactions: true,
+          recurringBills: true,
+          incomeEntries: true,
+        },
+      },
+    },
   })
   return NextResponse.json(locations)
 }

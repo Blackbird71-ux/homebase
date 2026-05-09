@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PeriodMode = 'month' | 'quarter' | 'year'
+type ViewMode = 'cash' | 'forecast'
 
 interface Bill {
   id: string; name: string; amount: number; frequency: string
@@ -80,6 +81,7 @@ export default function ProfitLossPage() {
   const [incomeEntries, setIncome]  = useState<IncomeEntry[]>([])
   const [loading, setLoading]       = useState(true)
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
+  const [viewMode, setViewMode]     = useState<ViewMode>('cash')
   const [anchor, setAnchor]         = useState<Date>(new Date())
   const [drillSide, setDrillSide]   = useState<'income' | 'expense' | null>(null)
   const [drillKey, setDrillKey]     = useState<string | null>(null)
@@ -98,34 +100,38 @@ export default function ProfitLossPage() {
 
   useEffect(() => { load() }, [])
 
-  // Reset drill when period changes
-  useEffect(() => { setDrillSide(null); setDrillKey(null) }, [periodMode, anchor])
+  // Reset drill when period or view changes
+  useEffect(() => { setDrillSide(null); setDrillKey(null) }, [periodMode, anchor, viewMode])
 
   const { start, end, label } = getPeriodBounds(periodMode, anchor)
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
 
   // ── Filter income entries within this period ──────────────────────────────
-  // Cash-basis: received entries use receivedDate; pending use nextExpectedDate.
+  // Cash mode:     only received=true entries, slotted by receivedDate.
+  // Forecast mode: received entries by receivedDate, pending by nextExpectedDate.
   const relevantIncome = useMemo(() => {
     const startTs = start.getTime()
     const endTs   = end.getTime()
     return incomeEntries.filter(e => {
       if (!e.isActive) return false
-      // For received income, slot by the actual date money arrived
+      // Received income — always slot by actual received date
       if (e.received && e.receivedDate) {
         const ts = new Date(e.receivedDate).getTime()
         return ts >= startTs && ts <= endTs
       }
-      // For pending income, slot by expected date (forward-looking forecast)
+      // In cash mode, exclude unconfirmed income entirely
+      if (viewMode === 'cash') return false
+      // Forecast mode: slot pending income by expected date
       const dueTs = new Date(e.nextExpectedDate).getTime()
       if (e.incomeType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
     })
-  }, [incomeEntries, start, end])
+  }, [incomeEntries, start, end, viewMode])
 
   // ── Filter bills within this period ───────────────────────────────────────
-  // Cash-basis: paid bills use paidDate; unpaid use nextDueDate.
-  // Exclude transfers and income-category items
+  // Cash mode:     only paid=true bills, slotted by paidDate.
+  // Forecast mode: paid bills by paidDate, unpaid bills by nextDueDate.
+  // Exclude transfers and income-category items always.
   const relevantExpenses = useMemo(() => {
     const startTs = start.getTime()
     const endTs   = end.getTime()
@@ -134,17 +140,19 @@ export default function ProfitLossPage() {
       // Exclude transfers and income-type category
       if ((b.category as any)?.type === 'transfer' || (b.category as any)?.type === 'income') return false
       if (b.billType === 'transfer') return false
-      // For paid bills, slot by actual payment date
+      // Paid bills — always slot by actual payment date
       if (b.paid && b.paidDate) {
         const ts = new Date(b.paidDate).getTime()
         return ts >= startTs && ts <= endTs
       }
-      // For unpaid bills, slot by due date (forward-looking forecast)
+      // In cash mode, exclude unpaid bills entirely
+      if (viewMode === 'cash') return false
+      // Forecast mode: slot unpaid bills by due date
       const dueTs = new Date(b.nextDueDate).getTime()
       if (b.billType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
     })
-  }, [bills, start, end])
+  }, [bills, start, end, viewMode])
 
   // ── Group income by category ──────────────────────────────────────────────
   const incomeGroups = useMemo((): GroupRow[] => {
@@ -201,6 +209,7 @@ export default function ProfitLossPage() {
     <div className="space-y-5">
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Period selector */}
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           {(['month', 'quarter', 'year'] as const).map(p => (
             <button key={p} onClick={() => setPeriodMode(p)}
@@ -211,6 +220,21 @@ export default function ProfitLossPage() {
           ))}
         </div>
 
+        {/* Cash / Forecast toggle */}
+        <div className="flex items-center gap-1 rounded-lg border border-border p-1" title="Cash only shows confirmed paid transactions. Forecast includes upcoming expected items.">
+          <button onClick={() => setViewMode('cash')}
+            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
+              viewMode === 'cash' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            Cash
+          </button>
+          <button onClick={() => setViewMode('forecast')}
+            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
+              viewMode === 'forecast' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            + Forecast
+          </button>
+        </div>
+
+        {/* Period navigator */}
         <div className="flex items-center gap-1 rounded-lg border border-border px-2 py-1">
           <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, -1))}
             className="p-1 hover:bg-accent rounded text-muted-foreground">
@@ -223,6 +247,18 @@ export default function ProfitLossPage() {
           </button>
         </div>
       </div>
+
+      {/* Cash/Forecast mode indicator */}
+      {viewMode === 'cash' && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          <span className="font-medium text-primary">Cash basis</span> — showing only confirmed paid bills and received income within this period.
+        </p>
+      )}
+      {viewMode === 'forecast' && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          <span className="font-medium text-amber-500">Forecast included</span> — paid/received items use actual dates; upcoming items use scheduled dates. Figures may not match your bank.
+        </p>
+      )}
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">

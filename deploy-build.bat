@@ -11,7 +11,7 @@ if exist homebase.tar del homebase.tar
 :: and could save a broken container state into the tar.
 echo.
 echo === Building image (this may take a few minutes)...
-docker build -t homebase:latest .
+docker build --no-cache -t homebase:latest .
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo ✗ Docker build failed - check output above

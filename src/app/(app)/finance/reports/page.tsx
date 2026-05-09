@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 
 type ViewMode = 'category' | 'vendor'
 type PeriodMode = 'month' | 'quarter' | 'year'
+type DataMode = 'forecast' | 'cash'
 
 interface Bill {
   id: string; name: string; amount: number; frequency: string
@@ -93,6 +94,7 @@ export default function ReportsPage() {
   const [loading, setLoading]     = useState(true)
   const [viewMode, setViewMode]   = useState<ViewMode>('category')
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
+  const [dataMode, setDataMode]   = useState<DataMode>('forecast')
   const [anchor, setAnchor]       = useState<Date>(new Date())
   const [drillKey, setDrillKey]   = useState<string | null>(null)
 
@@ -107,7 +109,7 @@ export default function ReportsPage() {
   useEffect(() => { load() }, [])
 
   // Reset drill when period/view changes
-  useEffect(() => { setDrillKey(null) }, [periodMode, viewMode, anchor])
+  useEffect(() => { setDrillKey(null) }, [periodMode, viewMode, anchor, dataMode])
 
   const { start, end, label } = getPeriodBounds(periodMode, anchor)
 
@@ -124,18 +126,22 @@ export default function ReportsPage() {
     const endTs   = end.getTime()
     return bills.filter(b => {
       if (!b.isActive) return false
-      // Exclude transfers and income – only show actual costs
       if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
       if (b.billType === 'transfer') return false
-      const dueTs = new Date(b.nextDueDate).getTime()
-      if (b.billType === 'one-off') {
-        // One-off: only show in the period it actually falls in
-        return dueTs >= startTs && dueTs <= endTs
+
+      if (dataMode === 'cash') {
+        // Cash mode: only paid bills, slotted by paidDate
+        if (!b.paid || !b.paidDate) return false
+        const ts = new Date(b.paidDate).getTime()
+        return ts >= startTs && ts <= endTs
       }
-      // Recurring: show if due any time up to end of this period
+
+      // Forecast mode: slot by nextDueDate
+      const dueTs = new Date(b.nextDueDate).getTime()
+      if (b.billType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
     })
-  }, [bills, start, end])
+  }, [bills, start, end, dataMode])
 
   // ── Group by category or vendor ───────────────────────────────────────────
 
@@ -205,6 +211,20 @@ export default function ReportsPage() {
           ))}
         </div>
 
+        {/* Cash/Forecast toggle */}
+        <div className="flex items-center gap-1 rounded-lg border border-border p-1" title="Cash: only paid bills by payment date. Forecast: all active bills by due date.">
+          <button onClick={() => setDataMode('forecast')}
+            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
+              dataMode === 'forecast' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            Forecast
+          </button>
+          <button onClick={() => setDataMode('cash')}
+            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
+              dataMode === 'cash' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            Cash (paid)
+          </button>
+        </div>
+
         {/* View toggle */}
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           <button onClick={() => setViewMode('category')}
@@ -237,9 +257,9 @@ export default function ReportsPage() {
       <div className="grid grid-cols-3 gap-3">
         <SummaryCard
           icon={<TrendingDown className="h-4 w-4 text-red-500" />}
-          label="Expected bills"
+          label={dataMode === 'cash' ? 'Paid bills' : 'Expected bills'}
           value={fmtCurrency(totalPeriod)}
-          sub={periodMode !== 'month' ? `${fmtCurrency(recurringMonthly)}/mo recurring` : undefined}
+          sub={periodMode !== 'month' ? `${fmtCurrency(recurringMonthly)}/mo recurring` : dataMode === 'cash' ? 'confirmed payments' : undefined}
           colorClass="text-red-600"
         />
         <SummaryCard

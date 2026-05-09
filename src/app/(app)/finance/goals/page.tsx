@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 interface Goal {
   id: string; name: string; targetAmount: number; currentAmount: number
   targetDate: string | null; isComplete: boolean; color: string | null; icon: string | null
-  account: { id: string; name: string } | null
+  account: { id: string; name: string; currentBalance: number } | null
 }
 
 export default function GoalsPage() {
@@ -36,19 +36,24 @@ export default function GoalsPage() {
   useEffect(() => { loadRefs(); load() }, [])
 
   function openNew() {
-    setEditing(null); setForm({ name: '', targetAmount: 0, currentAmount: 0, targetDate: '', accountId: '', color: '#10B981', icon: '' })
+    setEditing(null)
+    setForm({ name: '', targetAmount: 0, currentAmount: 0, targetDate: '', accountId: '', color: '#10B981', icon: '' })
     setShowForm(true)
   }
   function openEdit(g: Goal) {
-    setEditing(g); setForm({
+    setEditing(g)
+    setForm({
       name: g.name, targetAmount: g.targetAmount, currentAmount: g.currentAmount,
       targetDate: g.targetDate ? new Date(g.targetDate).toISOString().split('T')[0] : '',
       accountId: g.account?.id ?? '', color: g.color ?? '#10B981', icon: g.icon ?? '',
-    }); setShowForm(true)
+    })
+    setShowForm(true)
   }
 
   async function handleSave() {
-    const body = editing ? { id: editing.id, ...form, accountId: form.accountId || null, targetDate: form.targetDate || null } : { ...form, accountId: form.accountId || null, targetDate: form.targetDate || null }
+    const body = editing
+      ? { id: editing.id, ...form, accountId: form.accountId || null, targetDate: form.targetDate || null }
+      : { ...form, accountId: form.accountId || null, targetDate: form.targetDate || null }
     const res = await fetch('/api/finance/goals', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -65,7 +70,9 @@ export default function GoalsPage() {
     else toast.error('Failed to delete')
   }
 
-  function formatCurrency(amount: number) { return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(amount) }
+  function formatCurrency(amount: number) {
+    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(amount)
+  }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading goals…</div>
 
@@ -96,10 +103,16 @@ export default function GoalsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Current Amount</label>
+              <label className="text-xs text-muted-foreground">
+                Current Amount
+                {form.accountId && <span className="ml-1 text-muted-foreground/60">(auto from account balance)</span>}
+              </label>
               <input type="number" step="0.01" value={form.currentAmount}
                 onChange={e => setForm(p => ({ ...p, currentAmount: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                disabled={!!form.accountId}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                title={form.accountId ? 'Progress is auto-derived from the linked account balance' : undefined}
+              />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Target Date</label>
@@ -111,9 +124,12 @@ export default function GoalsPage() {
               <label className="text-xs text-muted-foreground">Linked Account</label>
               <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No account</option>
+                <option value="">No account (manual tracking)</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
+              {form.accountId && (
+                <p className="text-xs text-muted-foreground mt-1">Progress will auto-update from this account's balance.</p>
+              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Color</label>
@@ -136,9 +152,11 @@ export default function GoalsPage() {
           {goals.map(g => {
             const percentage = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0
             const isComplete = g.isComplete || percentage >= 100
+            const isLinked = !!g.account
 
             return (
-              <div key={g.id} className={cn('rounded-lg border p-5 cursor-default', isComplete ? 'border-green-500/30 bg-green-500/5' : 'border-border')}
+              <div key={g.id}
+                className={cn('rounded-lg border p-5 cursor-default', isComplete ? 'border-green-500/30 bg-green-500/5' : 'border-border')}
                 onDoubleClick={() => openEdit(g)}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -166,6 +184,12 @@ export default function GoalsPage() {
                   <span>{percentage}% complete</span>
                   {g.targetDate && <span>By {format(new Date(g.targetDate), 'MMM yyyy')}</span>}
                 </div>
+
+                {isLinked && (
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    📊 Balance from <span className="font-medium">{g.account!.name}</span>
+                  </p>
+                )}
 
                 {isComplete && (
                   <div className="mt-2 text-xs text-green-600 font-medium">🎉 Goal completed!</div>

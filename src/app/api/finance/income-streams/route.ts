@@ -1,25 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
-import { randomBytes } from 'crypto'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+// The budget page uses IncomeStream objects. We derive them from FinanceIncomeEntry
+// records so there is a single source of truth — the budgetIncomeStreams JSON
+// blob on the Family table is no longer used for anything.
 
 export interface IncomeStream {
   id: string
   name: string
   amount: number
   frequency: 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'yearly' | 'custom'
-  // Custom frequency fields – only used when frequency === 'custom'
-  customInterval?: number | null   // e.g. 6
-  customUnit?: 'days' | 'weeks' | 'months' | 'years' | null  // e.g. 'months' → every 6 months
+  customInterval?: number | null
+  customUnit?: 'days' | 'weeks' | 'months' | 'years' | null
   isIncluded: boolean
-  entityId?: string | null  // null/undefined = personal/family entity
-}
-
-const VALID_FREQUENCIES = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'custom']
-const VALID_UNITS = ['days', 'weeks', 'months', 'years']
-
-function generateId() {
-  return randomBytes(8).toString('hex')
+  entityId?: string | null
 }
 
 /** Convert a stream's amount to a monthly equivalent for budget summaries. */
@@ -33,7 +29,6 @@ export function streamToMonthly(s: IncomeStream): number {
     case 'yearly':      return amount / 12
     case 'custom': {
       if (!customInterval || !customUnit || customInterval <= 0) return amount
-      // Convert custom period to months-equivalent, then compute monthly rate
       let periodsPerYear: number
       switch (customUnit) {
         case 'days':   periodsPerYear = 365 / customInterval; break
@@ -48,41 +43,104 @@ export function streamToMonthly(s: IncomeStream): number {
   }
 }
 
+// ─── Map FinanceIncomeEntry frequency to IncomeStream frequency ───────────────
+function mapFrequency(freq: string): IncomeStream['frequency'] {
+  const valid = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly']
+  if (valid.includes(freq)) return freq as IncomeStream['frequency']
+  // one-off / custom → treat as monthly for the budget planner
+  return 'monthly'
+}
+
+/**
+ * GET /api/finance/income-streams
+ * Returns active FinanceIncomeEntry records shaped as IncomeStream objects.
+ * Only the most-recent (non-received parent) entry per income name/entity is
+ * returned — i.e. we deduplicate by (name + entityId) so recurring series
+ * appear as a single stream rather than every occurrence.
+ */
 export async function GET() {
   const session = await requireSession()
-  const family = await prisma.family.findUnique({
-    where: { id: session.familyId },
-    select: { budgetIncomeStreams: true },
+
+  // Fetch all active, non-received entries without a parent (root of each series)
+  // A root entry has no parentIncomeId — it's the original recurring entry.
+  // Child occurrences spawned by mark-received also have no parent-level context
+  // in the budget planner, so we show the latest pending child per series.
+  const entries = await prisma.financeIncomeEntry.findMany({
+    where: {
+      familyId: session.familyId,
+      isActive: true,
+      received: false,  // Only pending/upcoming entries for forward-looking budget
+    },
+    select: {
+      id: true,
+      name: true,
+      amount: true,
+      frequency: true,
+      incomeType: true,
+      entityId: true,
+      isActive: true,
+      parentIncomeId: true,
+      nextExpectedDate: true,
+    },
+    orderBy: { nextExpectedDate: 'asc' },
   })
-  const streams: IncomeStream[] = family?.budgetIncomeStreams
-    ? JSON.parse(family.budgetIncomeStreams)
-    : []
+
+  // Deduplicate: for each unique (name, entityId) pair, keep one entry.
+  // Prefer child occurrences (latest) over the original root if it's been spent.
+  const seen = new Map<string, typeof entries[0]>()
+  for (const e of entries) {
+    const key = `${e.name}__${e.entityId ?? ''}`
+    if (!seen.has(key)) {
+      seen.set(key, e)
+    } else {
+      // Keep the one with the earlier nextExpectedDate (i.e. next in line)
+      const existing = seen.get(key)!
+      if (new Date(e.nextExpectedDate) < new Date(existing.nextExpectedDate)) {
+        seen.set(key, e)
+      }
+    }
+  }
+
+  const streams: IncomeStream[] = Array.from(seen.values()).map(e => ({
+    id: e.id,
+    name: e.name,
+    amount: e.amount,
+    frequency: mapFrequency(e.frequency),
+    customInterval: null,
+    customUnit: null,
+    isIncluded: true,  // All active income entries are included by default
+    entityId: e.entityId ?? null,
+  }))
+
   return NextResponse.json(streams)
 }
 
-export async function PUT(request: NextRequest) {
+/**
+ * PUT /api/finance/income-streams
+ * Previously persisted streams as a JSON blob on the Family table.
+ * This endpoint is now a no-op stub — the budget page reads directly from
+ * FinanceIncomeEntry via GET above. We keep the endpoint so existing client
+ * code that calls PUT doesn't break; it returns the current stream list.
+ */
+export async function PUT(_request: NextRequest) {
+  // Re-read and return the current live list (ignore the request body)
   const session = await requireSession()
-  const streams: IncomeStream[] = await request.json()
-
-  const sanitised = streams.map((s) => {
-    const freq = VALID_FREQUENCIES.includes(s.frequency) ? s.frequency : 'monthly'
-    const isCustom = freq === 'custom'
-    return {
-      id: s.id || generateId(),
-      name: String(s.name || '').trim(),
-      amount: parseFloat(String(s.amount)) || 0,
-      frequency: freq as IncomeStream['frequency'],
-      customInterval: isCustom && s.customInterval ? Math.max(1, parseInt(String(s.customInterval))) : null,
-      customUnit: isCustom && s.customUnit && VALID_UNITS.includes(s.customUnit) ? s.customUnit : null,
-      isIncluded: Boolean(s.isIncluded),
-      entityId: s.entityId ?? null,
-    }
-  }).filter((s) => s.name)
-
-  await prisma.family.update({
-    where: { id: session.familyId },
-    data: { budgetIncomeStreams: JSON.stringify(sanitised) },
+  const entries = await prisma.financeIncomeEntry.findMany({
+    where: { familyId: session.familyId, isActive: true, received: false },
+    select: { id: true, name: true, amount: true, frequency: true, incomeType: true, entityId: true, isActive: true, parentIncomeId: true, nextExpectedDate: true },
+    orderBy: { nextExpectedDate: 'asc' },
   })
-
-  return NextResponse.json(sanitised)
+  const seen = new Map<string, typeof entries[0]>()
+  for (const e of entries) {
+    const key = `${e.name}__${e.entityId ?? ''}`
+    if (!seen.has(key)) { seen.set(key, e) } else {
+      const existing = seen.get(key)!
+      if (new Date(e.nextExpectedDate) < new Date(existing.nextExpectedDate)) { seen.set(key, e) }
+    }
+  }
+  const streams: IncomeStream[] = Array.from(seen.values()).map(e => ({
+    id: e.id, name: e.name, amount: e.amount, frequency: mapFrequency(e.frequency),
+    customInterval: null, customUnit: null, isIncluded: true, entityId: e.entityId ?? null,
+  }))
+  return NextResponse.json(streams)
 }

@@ -46,26 +46,14 @@ export interface Bill {
   attachments?: BillAttachment[]
 }
 
+type QuickFilter = { type: 'member' | 'vendor' | 'location' | 'entity'; id: string; label: string }
+
 function toMonthlyAmount(amount: number, frequency: string): number {
   if (frequency === 'weekly')      return amount * 52 / 12
   if (frequency === 'fortnightly') return amount * 26 / 12
   if (frequency === 'quarterly')   return amount / 3
   if (frequency === 'yearly')      return amount / 12
   return amount
-}
-
-// Entity colour badge helper
-function entityChip(entity: Entity | null) {
-  if (!entity) return null
-  const bg = entity.color ?? '#6B7280'
-  return (
-    <span
-      className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
-      style={{ backgroundColor: bg }}
-    >
-      {entity.name}
-    </span>
-  )
 }
 
 export default function BillsPage() {
@@ -80,7 +68,6 @@ export default function BillsPage() {
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
   const [editing, setEditing]       = useState<Bill | null>(null)
-  // ── Date-paid confirmation state ───────────────────────────────────────
   const [paidConfirm, setPaidConfirm] = useState<{ bill: Bill } | null>(null)
   const [paidConfirmDate, setPaidConfirmDate] = useState<string>('')
   const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
@@ -105,6 +92,7 @@ export default function BillsPage() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null)
+  const [quickFilter, setQuickFilter] = useState<QuickFilter | null>(null)
   const attachFileRef = useRef<HTMLInputElement>(null)
 
   const emptyForm = {
@@ -165,12 +153,9 @@ export default function BillsPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          upsertFromBill: true,
-          billId: bill.id,
-          name: bill.name,
+          upsertFromBill: true, billId: bill.id, name: bill.name,
           amount: toMonthlyAmount(bill.amount, bill.frequency),
-          categoryId: bill.category?.id ?? null,
-          period: 'monthly',
+          categoryId: bill.category?.id ?? null, period: 'monthly',
           entityId: bill.entity?.id ?? null,
         }),
       })
@@ -186,8 +171,7 @@ export default function BillsPage() {
   }
 
   async function openAttachments(bill: Bill) {
-    setAttachmentBillId(bill.id)
-    setAttachmentsLoading(true)
+    setAttachmentBillId(bill.id); setAttachmentsLoading(true)
     try {
       const res = await fetch(`/api/finance/bills/${bill.id}/attachments`)
       if (res.ok) setAttachments(await res.json())
@@ -195,18 +179,9 @@ export default function BillsPage() {
   }
 
   function closeAttachments() { setAttachmentBillId(null); setAttachments([]); setPreviewAttachmentId(null) }
-
-  function togglePreview(attId: string) {
-    setPreviewAttachmentId(prev => prev === attId ? null : attId)
-  }
-
-  function isImageMime(mime: string) {
-    return mime.startsWith('image/')
-  }
-
-  function isPdfMime(mime: string) {
-    return mime === 'application/pdf'
-  }
+  function togglePreview(attId: string) { setPreviewAttachmentId(prev => prev === attId ? null : attId) }
+  function isImageMime(mime: string) { return mime.startsWith('image/') }
+  function isPdfMime(mime: string) { return mime === 'application/pdf' }
 
   async function handleAttachmentUpload(billId: string, file: File) {
     setUploadingAttachment(true)
@@ -259,12 +234,10 @@ export default function BillsPage() {
       autoPay: b.autoPay, emailReminder: b.emailReminder, reminderDays: b.reminderDays,
       notes: b.notes ?? '', memberId: b.memberId ?? '',
       locationId: b.location?.id ?? '', vendorId: b.vendor?.id ?? '',
-      // If no entity is set, default to the first entity with isDefault=true
       entityId: b.entity?.id ?? entities.find(e => e.isDefault)?.id ?? '',
       billType: b.billType ?? 'recurring', recurrenceInterval: b.recurrenceInterval ?? '',
       invoiceReceived: b.invoiceReceived ?? false,
-      invoiceReceivedDate: b.invoiceReceivedDate
-        ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
+      invoiceReceivedDate: b.invoiceReceivedDate ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
       addToBudget: budgetBillIds.has(b.id),
     })
     setShowForm(true)
@@ -274,20 +247,13 @@ export default function BillsPage() {
 
   function getFormPayload() {
     return {
-      ...form,
-      amount: form.amount || 0,
-      accountId: form.accountId || null,
-      categoryId: form.categoryId || null,
-      vendorId: form.vendorId || null,
-      entityId: form.entityId || null,
-      dayOfMonth: form.dayOfMonth || null,
-      monthOfYear: form.monthOfYear || null,
-      endDate: form.endDate || null,
-      notes: form.notes || null,
-      memberId: form.memberId || null,
-      locationId: form.locationId || null,
-      billType: form.billType || 'recurring',
-      recurrenceInterval: form.recurrenceInterval || null,
+      ...form, amount: form.amount || 0,
+      accountId: form.accountId || null, categoryId: form.categoryId || null,
+      vendorId: form.vendorId || null, entityId: form.entityId || null,
+      dayOfMonth: form.dayOfMonth || null, monthOfYear: form.monthOfYear || null,
+      endDate: form.endDate || null, notes: form.notes || null,
+      memberId: form.memberId || null, locationId: form.locationId || null,
+      billType: form.billType || 'recurring', recurrenceInterval: form.recurrenceInterval || null,
       invoiceReceived: form.invoiceReceived,
       invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
     }
@@ -305,15 +271,13 @@ export default function BillsPage() {
     const savedBill: Bill = await res.json()
     toast.success(editing ? 'Bill updated' : 'Bill created')
     await syncBudgetRule(savedBill, form.addToBudget)
-    closeForm()
-    load()
+    closeForm(); load()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this bill?')) return
     await fetch('/api/finance/budget', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ removeFromBill: true, billId: id }),
     })
     const res = await fetch(`/api/finance/bills?id=${id}`, { method: 'DELETE' })
@@ -322,18 +286,15 @@ export default function BillsPage() {
   }
 
   async function handleMarkPaid(bill: Bill) {
-    const today = new Date().toISOString().split('T')[0]
-    setPaidConfirmDate(today)
+    setPaidConfirmDate(new Date().toISOString().split('T')[0])
     setPaidConfirm({ bill })
   }
 
   async function confirmMarkPaid() {
     if (!paidConfirm) return
-    const { bill } = paidConfirm
     const res = await fetch('/api/finance/bills', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bill.id, paid: true, paidDate: paidConfirmDate }),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: paidConfirm.bill.id, paid: true, paidDate: paidConfirmDate }),
     })
     if (res.ok) { toast.success('Bill marked as paid'); setPaidConfirm(null); load() }
     else toast.error('Failed to mark as paid')
@@ -342,8 +303,7 @@ export default function BillsPage() {
   async function handleToggleInvoice(bill: Bill) {
     const newVal = !bill.invoiceReceived
     const res = await fetch('/api/finance/bills', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: bill.id, invoiceReceived: newVal }),
     })
     if (res.ok) { toast.success(newVal ? 'Invoice marked received' : 'Invoice unmarked'); load() }
@@ -360,11 +320,11 @@ export default function BillsPage() {
   function getNextDue(bill: Bill): Date {
     const due = new Date(bill.nextDueDate)
     if (isPast(due)) {
-      if (bill.frequency === 'monthly')      return addMonths(due, 1)
-      if (bill.frequency === 'fortnightly')  return addWeeks(due, 2)
-      if (bill.frequency === 'weekly')       return addWeeks(due, 1)
-      if (bill.frequency === 'quarterly')    return addMonths(due, 3)
-      if (bill.frequency === 'yearly')       return addMonths(due, 12)
+      if (bill.frequency === 'monthly')     return addMonths(due, 1)
+      if (bill.frequency === 'fortnightly') return addWeeks(due, 2)
+      if (bill.frequency === 'weekly')      return addWeeks(due, 1)
+      if (bill.frequency === 'quarterly')   return addMonths(due, 3)
+      if (bill.frequency === 'yearly')      return addMonths(due, 12)
     }
     return due
   }
@@ -393,22 +353,36 @@ export default function BillsPage() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
   }
 
-  const activeBills     = bills.filter(b => b.isActive && !b.paid)
-  const overdue         = activeBills.filter(b => b.billType !== 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
-  const overdueOneOff   = activeBills.filter(b => b.billType === 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
-  const upcoming        = activeBills.filter(b => {
+  // Quick-filter applies on top of the active/unpaid filter
+  const activeBills = bills.filter(b => {
+    if (!b.isActive || b.paid) return false
+    if (quickFilter) {
+      if (quickFilter.type === 'member'   && b.member?.id   !== quickFilter.id) return false
+      if (quickFilter.type === 'vendor'   && b.vendor?.id   !== quickFilter.id) return false
+      if (quickFilter.type === 'location' && b.location?.id !== quickFilter.id) return false
+      if (quickFilter.type === 'entity'   && b.entity?.id   !== quickFilter.id) return false
+    }
+    return true
+  })
+
+  const overdue       = activeBills.filter(b => b.billType !== 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
+  const overdueOneOff = activeBills.filter(b => b.billType === 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
+  const upcoming      = activeBills.filter(b => {
     const due = toLocalMidnight(new Date(b.nextDueDate))
     return due >= todayStart && due <= rangeEnd
   })
-  const visibleBills    = [...overdue, ...upcoming]
-  const colCats         = rootCategories.filter(c => selectedCatIds.includes(c.id))
-  const grandTotal      = visibleBills.reduce((s, b) => s + b.amount, 0)
+  const visibleBills  = [...overdue, ...upcoming]
+  const colCats       = rootCategories.filter(c => selectedCatIds.includes(c.id))
+  const grandTotal    = visibleBills.reduce((s, b) => s + b.amount, 0)
   const catTotals: Record<string, number> = {}
   for (const catId of selectedCatIds) {
     catTotals[catId] = visibleBills.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
   const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 7rem 8.5rem`
-  const attachmentBill = attachmentBillId ? bills.find(b => b.id === attachmentBillId) ?? null : null
+
+  function handleQuickFilter(f: QuickFilter) {
+    setQuickFilter(q => q?.id === f.id ? null : f)
+  }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading bills…</div>
 
@@ -437,6 +411,18 @@ export default function BillsPage() {
             </button>
           ))}
         </div>
+
+        {/* Active quick-filter badge — click to clear */}
+        {quickFilter && (
+          <button
+            onClick={() => setQuickFilter(null)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+          >
+            <span className="capitalize">{quickFilter.type}:</span>
+            <span>{quickFilter.label}</span>
+            <X className="h-3 w-3 ml-0.5" />
+          </button>
+        )}
 
         {rootCategories.length > 0 && (
           <div className="relative">
@@ -472,18 +458,9 @@ export default function BillsPage() {
                 <span className="truncate min-w-0 flex-1">{b.name}</span>
                 <span className="font-medium shrink-0">{formatCurrency(b.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button onClick={() => handleMarkPaid(b)} title="Mark as paid"
-                    className="p-1 hover:bg-red-500/10 rounded text-green-500">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => openEdit(b)} title="Edit"
-                    className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-foreground">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(b.id)} title="Delete"
-                    className="p-1 hover:bg-red-500/10 rounded text-red-500">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <button onClick={() => handleMarkPaid(b)} className="p-1 hover:bg-red-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEdit(b)} className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleDelete(b.id)} className="p-1 hover:bg-red-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             ))}
@@ -505,18 +482,9 @@ export default function BillsPage() {
                 </div>
                 <span className="font-medium shrink-0">{formatCurrency(b.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button onClick={() => handleMarkPaid(b)} title="Mark as paid"
-                    className="p-1 hover:bg-orange-500/10 rounded text-green-500">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => openEdit(b)} title="Edit"
-                    className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(b.id)} title="Delete"
-                    className="p-1 hover:bg-orange-500/10 rounded text-red-500">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <button onClick={() => handleMarkPaid(b)} className="p-1 hover:bg-orange-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEdit(b)} className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleDelete(b.id)} className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             ))}
@@ -524,25 +492,19 @@ export default function BillsPage() {
         </div>
       )}
 
-      {/* Bill Editor Modal */}
+      {/* Bill form dialog */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
         <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle>
-          </DialogHeader>
-
+          <DialogHeader><DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle></DialogHeader>
           <div className="flex gap-4 pb-1">
             {(['recurring', 'one-off'] as const).map(bt => (
               <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="radio" name="billType" value={bt} checked={form.billType === bt}
                   onChange={() => setForm(p => ({ ...p, billType: bt }))} className="accent-primary" />
-                {bt === 'recurring'
-                  ? <><RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring</>
-                  : <><Layers className="h-3.5 w-3.5 text-orange-500" /> One-off</>}
+                {bt === 'recurring' ? <><RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring</> : <><Layers className="h-3.5 w-3.5 text-orange-500" /> One-off</>}
               </label>
             ))}
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Name *</label>
@@ -578,9 +540,7 @@ export default function BillsPage() {
                 </select>
                 <Link href="/finance/vendors"
                   className="shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-muted-foreground hover:text-foreground"
-                  title="Manage vendors">
-                  <Building2 className="h-3.5 w-3.5" />
-                </Link>
+                  title="Manage vendors"><Building2 className="h-3.5 w-3.5" /></Link>
               </div>
             </div>
             <div>
@@ -602,22 +562,6 @@ export default function BillsPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Day of Month</label>
-              <input type="number" min={1} max={31} value={form.dayOfMonth}
-                onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Month of Year (for annual)</label>
-              <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">None</option>
-                {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-                  <option key={i+1} value={i+1}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="text-xs text-muted-foreground">{form.billType === 'one-off' ? 'Due Date *' : 'Next Due Date *'}</label>
               <input type="date" value={form.nextDueDate} onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
@@ -629,7 +573,6 @@ export default function BillsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
               </div>
             )}
-            {/* Assign To: members + entity separator */}
             <div>
               <label className="text-xs text-muted-foreground">Assigned To (person)</label>
               <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
@@ -638,21 +581,13 @@ export default function BillsPage() {
                 {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-            {/* Entity selector */}
             <div>
-              <label className="text-xs text-muted-foreground flex items-center gap-1">
-                <Briefcase className="h-3 w-3" /> Entity / Fund
-              </label>
+              <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
               <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">Select entity…</option>
                 {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
               </select>
-              {entities.length === 0 && (
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Add entities (Super Fund, etc.) in the Budget Planner → Entities tab.
-                </p>
-              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Location</label>
@@ -663,7 +598,6 @@ export default function BillsPage() {
               </select>
             </div>
           </div>
-
           <div className="flex flex-wrap gap-6 pt-1">
             {form.billType === 'recurring' && (
               <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -697,38 +631,26 @@ export default function BillsPage() {
               </div>
             )}
           </div>
-
-          <div className={cn(
-            'rounded-md border px-3 py-2.5 flex items-start gap-3',
-            form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border',
-          )}>
+          <div className={cn('rounded-md border px-3 py-2.5 flex items-start gap-3', form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border')}>
             <input type="checkbox" id="addToBudget" checked={form.addToBudget}
-              onChange={e => setForm(p => ({ ...p, addToBudget: e.target.checked }))}
-              className="rounded border-input mt-0.5" />
+              onChange={e => setForm(p => ({ ...p, addToBudget: e.target.checked }))} className="rounded border-input mt-0.5" />
             <label htmlFor="addToBudget" className="cursor-pointer flex-1">
               <div className="flex items-center gap-1.5 text-sm font-medium">
-                <BookmarkCheck className="h-3.5 w-3.5 text-primary" />
-                Include in budget planner
+                <BookmarkCheck className="h-3.5 w-3.5 text-primary" /> Include in budget planner
               </div>
               {form.addToBudget && (
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Creates a budget rule for{' '}
-                  <strong>{formatCurrency(toMonthlyAmount(form.amount || 0, form.frequency))}</strong>/month
-                  {form.frequency !== 'monthly' ? ` (${form.frequency} amount normalised to monthly)` : ''}.
-                  {form.entityId && entities.find(e => e.id === form.entityId) && (
-                    <> Appears under <strong>{entities.find(e => e.id === form.entityId)!.name}</strong> tab.</>
-                  )}
+                  Creates a budget rule for <strong>{formatCurrency(toMonthlyAmount(form.amount || 0, form.frequency))}</strong>/month
+                  {form.frequency !== 'monthly' ? ` (${form.frequency} normalised to monthly)` : ''}.
                 </p>
               )}
             </label>
           </div>
-
           <div>
             <label className="text-xs text-muted-foreground">Notes</label>
             <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
           </div>
-
           <DialogFooter>
             <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
@@ -738,41 +660,28 @@ export default function BillsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Date paid confirmation dialog ──────────────────────────────────────────── */}
+      {/* Date paid confirmation */}
       <Dialog open={!!paidConfirm} onOpenChange={open => { if (!open) setPaidConfirm(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>Confirm bill paid</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Confirm bill paid</DialogTitle></DialogHeader>
           {paidConfirm && (
             <div className="space-y-3 py-1">
               <p className="text-sm text-muted-foreground">
-                Mark <span className="font-medium text-foreground">{paidConfirm.bill.name}</span> as paid.
-                What date did you make the payment?
+                Mark <span className="font-medium text-foreground">{paidConfirm.bill.name}</span> as paid. What date was the payment?
               </p>
               <div>
                 <label className="text-xs text-muted-foreground">Date paid</label>
-                <input
-                  type="date"
-                  value={paidConfirmDate}
-                  onChange={e => setPaidConfirmDate(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1"
-                />
+                <input type="date" value={paidConfirmDate} onChange={e => setPaidConfirmDate(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
               <p className="text-xs text-muted-foreground">
-                An expense transaction of{' '}
-                <span className="font-medium text-foreground">
-                  {formatCurrency(paidConfirm.bill.amount)}
-                </span>{' '}
-                will be added to your transaction feed on this date.
+                An expense transaction of <span className="font-medium text-foreground">{formatCurrency(paidConfirm.bill.amount)}</span> will be added on this date.
               </p>
             </div>
           )}
           <DialogFooter>
             <button onClick={() => setPaidConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            <button onClick={confirmMarkPaid} className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium">
-              Mark as paid
-            </button>
+            <button onClick={confirmMarkPaid} className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium">Mark as paid</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -790,27 +699,13 @@ export default function BillsPage() {
               <div />
             </div>
           )}
-          {overdue.map(b => (
-            <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue
+          {[...overdue, ...upcoming].map(b => (
+            <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={overdue.includes(b)}
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
               inBudget={budgetBillIds.has(b.id)}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
               onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
-              attachmentBillId={attachmentBillId}
-              attachments={attachments} attachmentsLoading={attachmentsLoading}
-              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
-              previewAttachmentId={previewAttachmentId}
-              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
-              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
-              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
-              formatCurrency={formatCurrency} />
-          ))}
-          {upcoming.map(b => (
-            <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={false}
-              colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
-              inBudget={budgetBillIds.has(b.id)}
-              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
-              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
+              onQuickFilter={handleQuickFilter}
               attachmentBillId={attachmentBillId}
               attachments={attachments} attachmentsLoading={attachmentsLoading}
               uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
@@ -827,6 +722,7 @@ export default function BillsPage() {
               <div className="text-xs font-semibold text-muted-foreground">
                 {visibleBills.length} bill{visibleBills.length !== 1 ? 's' : ''}
                 {overdue.length > 0 && <span className="text-red-500 ml-1">({overdue.length} overdue)</span>}
+                {quickFilter && <span className="text-primary ml-1">· filtered</span>}
               </div>
               {colCats.map(c => (
                 <span key={c.id} className="text-xs font-semibold text-right">
@@ -845,11 +741,10 @@ export default function BillsPage() {
 
 function BillRow({
   bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate,
-  inBudget, onEdit, onDelete, onMarkPaid, onToggleInvoice, onOpenAttachments,
+  inBudget, onEdit, onDelete, onMarkPaid, onToggleInvoice, onOpenAttachments, onQuickFilter,
   attachmentBillId, attachments, attachmentsLoading, uploadingAttachment, attachFileRef,
   previewAttachmentId, onCloseAttachments, onTogglePreview,
-  onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize,
-  formatCurrency,
+  onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize, formatCurrency,
 }: {
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
@@ -858,39 +753,41 @@ function BillRow({
   onEdit: (b: Bill) => void; onDelete: (id: string) => void
   onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
   onOpenAttachments: (b: Bill) => void
+  onQuickFilter: (f: QuickFilter) => void
   attachmentBillId: string | null
   attachments: BillAttachment[]; attachmentsLoading: boolean
   uploadingAttachment: boolean; attachFileRef: React.RefObject<HTMLInputElement | null>
   previewAttachmentId: string | null
-  onCloseAttachments: () => void
-  onTogglePreview: (id: string) => void
+  onCloseAttachments: () => void; onTogglePreview: (id: string) => void
   onAttachmentUpload: (billId: string, file: File) => Promise<void>
   onAttachmentDelete: (billId: string, attachmentId: string) => Promise<void>
   isImageMime: (mime: string) => boolean; isPdfMime: (mime: string) => boolean
-  formatFileSize: (bytes: number) => string
-  formatCurrency: (n: number) => string
+  formatFileSize: (bytes: number) => string; formatCurrency: (n: number) => string
 }) {
   const isOneOff         = bill.billType === 'one-off'
   const hasInvoice       = bill.invoiceReceived
   const isAttachmentOpen = attachmentBillId === bill.id
-  const rowClass = cn(
-    'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
-    isOverdue    ? 'border-red-500/30 bg-red-500/5'
-    : hasInvoice ? 'border-green-500/30 bg-green-500/5'
-    :              'border-border hover:bg-accent/50',
-    isAttachmentOpen && 'ring-1 ring-green-500/40 rounded-b-none',
-  )
+
   return (
     <div>
-      {/* Bill row */}
-      <div className={rowClass} style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
-        onDoubleClick={() => onEdit(bill)}>
+      <div
+        className={cn(
+          'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
+          isOverdue    ? 'border-red-500/30 bg-red-500/5'
+          : hasInvoice ? 'border-green-500/30 bg-green-500/5'
+          :              'border-border hover:bg-accent/50',
+          isAttachmentOpen && 'ring-1 ring-green-500/40 rounded-b-none',
+        )}
+        style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
+        onDoubleClick={() => onEdit(bill)}
+      >
         <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
           isOverdue ? 'bg-red-500/10' : hasInvoice ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
           {isOneOff
             ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-orange-500')} />
             : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : hasInvoice ? 'text-green-600' : 'text-muted-foreground')} />}
         </div>
+
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{bill.name}</span>
@@ -913,24 +810,48 @@ function BillRow({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-0.5">
             <span className="capitalize">{isOneOff ? 'One-off' : bill.frequency}</span>
-            {bill.vendor   && <span className="text-purple-500">{bill.vendor.name}</span>}
-            {bill.account  && <span>{bill.account.name}</span>}
-            {bill.member   && <span className="text-primary">{bill.member.name}</span>}
-            {bill.location && <span>{bill.location.name}</span>}
+            {/* Clickable reference data — click to quick-filter the list */}
+            {bill.vendor && (
+              <button className="text-purple-500 hover:underline"
+                onClick={e => { e.stopPropagation(); onQuickFilter({ type: 'vendor', id: bill.vendor!.id, label: bill.vendor!.name }) }}
+                title={`Filter by vendor: ${bill.vendor.name}`}>
+                {bill.vendor.name}
+              </button>
+            )}
+            {bill.account && <span>{bill.account.name}</span>}
+            {bill.member && (
+              <button className="text-primary hover:underline"
+                onClick={e => { e.stopPropagation(); onQuickFilter({ type: 'member', id: bill.member!.id, label: bill.member!.name }) }}
+                title={`Filter by member: ${bill.member.name}`}>
+                {bill.member.name}
+              </button>
+            )}
+            {bill.location && (
+              <button className="hover:underline"
+                onClick={e => { e.stopPropagation(); onQuickFilter({ type: 'location', id: bill.location!.id, label: bill.location!.name }) }}
+                title={`Filter by location: ${bill.location.name}`}>
+                {bill.location.name}
+              </button>
+            )}
             <span>Due {format(nextDue, 'd MMM yyyy')}</span>
             {bill.notes && <span className="italic truncate max-w-[120px]" title={bill.notes}>· {bill.notes}</span>}
           </div>
         </div>
+
         {colCats.map(c => {
           const amt = billAmountForCat(bill, c.id)
           return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
         })}
+
         <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
+
         <div className="flex items-center gap-0.5 justify-end">
-          <button onClick={() => onOpenAttachments(bill)} title={bill.attachments && bill.attachments.length > 0 ? `${bill.attachments.length} attachment${bill.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
-            className={cn('relative p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : bill.attachments && bill.attachments.length > 0 ? 'text-green-600' : 'text-muted-foreground')}>
+          <button onClick={() => onOpenAttachments(bill)}
+            title={bill.attachments && bill.attachments.length > 0 ? `${bill.attachments.length} attachment${bill.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
+            className={cn('relative p-1 hover:bg-accent rounded',
+              isAttachmentOpen || (bill.attachments && bill.attachments.length > 0) ? 'text-green-600' : 'text-muted-foreground')}>
             <Paperclip className="h-3.5 w-3.5" />
             {!isAttachmentOpen && bill.attachments && bill.attachments.length > 0 && (
               <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-green-500 text-white text-[9px] font-bold flex items-center justify-center leading-none px-0.5">
@@ -938,7 +859,8 @@ function BillRow({
               </span>
             )}
           </button>
-          <button onClick={() => onToggleInvoice(bill)} title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
+          <button onClick={() => onToggleInvoice(bill)}
+            title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
             className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
             <Receipt className="h-3.5 w-3.5" />
           </button>
@@ -950,27 +872,25 @@ function BillRow({
         </div>
       </div>
 
-      {/* Attachment panel — renders directly below this bill row when open */}
+      {/* Attachment panel */}
       {isAttachmentOpen && (
         <div className="rounded-b-lg border border-t-0 border-green-500/30 bg-green-500/5 px-4 py-3 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-medium">
-              <Paperclip className="h-3.5 w-3.5 text-green-600" />
-              Attachments
+              <Paperclip className="h-3.5 w-3.5 text-green-600" /> Attachments
             </div>
-            <button onClick={onCloseAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground" title="Close">
+            <button onClick={onCloseAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>
-
           {attachmentsLoading ? (
             <p className="text-xs text-muted-foreground">Loading…</p>
           ) : attachments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No attachments yet — upload an invoice or reference document below.</p>
+            <p className="text-xs text-muted-foreground">No attachments yet.</p>
           ) : (
             <div className="space-y-1.5">
               {attachments.map(att => {
-                const attUrl      = `/api/finance/bills/${bill.id}/attachments/${att.id}`
+                const attUrl = `/api/finance/bills/${bill.id}/attachments/${att.id}`
                 const isPreviewing = previewAttachmentId === att.id
                 const canPreview  = isImageMime(att.mimeType) || isPdfMime(att.mimeType)
                 return (
@@ -980,31 +900,22 @@ function BillRow({
                       <span className="flex-1 truncate font-medium">{att.title}</span>
                       <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(att.fileSize)}</span>
                       {canPreview && (
-                        <button
-                          onClick={() => onTogglePreview(att.id)}
-                          title={isPreviewing ? 'Hide preview' : 'View inline'}
-                          className={cn('p-1 rounded hover:bg-accent transition-colors', isPreviewing ? 'text-primary' : 'text-muted-foreground')}
-                        >
+                        <button onClick={() => onTogglePreview(att.id)}
+                          className={cn('p-1 rounded hover:bg-accent', isPreviewing ? 'text-primary' : 'text-muted-foreground')}>
                           {isPreviewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                         </button>
                       )}
                       <a href={attUrl} target="_blank" rel="noopener noreferrer"
-                        className="p-1 rounded hover:bg-accent text-primary" title="Open / download">
-                        <Download className="h-3.5 w-3.5" />
-                      </a>
+                        className="p-1 rounded hover:bg-accent text-primary"><Download className="h-3.5 w-3.5" /></a>
                       <button onClick={() => onAttachmentDelete(bill.id, att.id)}
-                        className="p-1 rounded hover:bg-accent text-red-500" title="Remove">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                        className="p-1 rounded hover:bg-accent text-red-500"><X className="h-3.5 w-3.5" /></button>
                     </div>
                     {isPreviewing && (
                       <div className="mt-1 rounded-md border border-border bg-background overflow-hidden">
-                        {isImageMime(att.mimeType) ? (
+                        {isImageMime(att.mimeType)
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
-                        ) : (
-                          <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />
-                        )}
+                          ? <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
+                          : <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />}
                       </div>
                     )}
                   </div>
@@ -1012,25 +923,16 @@ function BillRow({
               })}
             </div>
           )}
-
           {attachments.length < 2 && (
             <div className="flex items-center gap-3">
-              <input
-                ref={attachFileRef}
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                className="hidden"
+              <input ref={attachFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden"
                 onChange={async e => {
                   const file = e.target.files?.[0]
                   if (file) await onAttachmentUpload(bill.id, file)
                   e.target.value = ''
-                }}
-              />
-              <button
-                onClick={() => attachFileRef.current?.click()}
-                disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
-              >
+                }} />
+              <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
                 <Upload className="h-3.5 w-3.5" />
                 {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
               </button>

@@ -20,6 +20,7 @@ interface Category {
   isTaxDeduction: boolean
   parent?: { id: string; name: string } | null
   children?: Category[]
+  _count?: { transactions: number; recurringBills: number; incomeEntries: number }
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -294,6 +295,11 @@ function CategoryRow({
               </span>
             )}
           </div>
+          {cat._count && (cat._count.transactions + cat._count.recurringBills + cat._count.incomeEntries) > 0 && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {[cat._count.transactions > 0 && `${cat._count.transactions} txn${cat._count.transactions !== 1 ? 's' : ''}`, cat._count.recurringBills > 0 && `${cat._count.recurringBills} bill${cat._count.recurringBills !== 1 ? 's' : ''}`, cat._count.incomeEntries > 0 && `${cat._count.incomeEntries} income`].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
         {getTypeBadge(cat.type)}
         <div className="flex items-center gap-1">
