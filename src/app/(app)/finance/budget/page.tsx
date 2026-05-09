@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet,
-  Check, Briefcase, ChevronDown, ChevronRight, BarChart3, List, ExternalLink,
+  Check, Briefcase, ChevronDown, ChevronRight, BarChart3, List, ExternalLink, CalendarDays,
 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -270,6 +270,9 @@ export default function BudgetPage() {
   // View mode: 'list' | 'category'
   const [expenseView, setExpenseView] = useState<'list' | 'category'>('list')
 
+  // Summary card period toggle
+  const [showYearly, setShowYearly] = useState(false)
+
   // Income editing
   const [editingIncome, setEditingIncome]   = useState<IncomeStream | null>(null)
   const [incomeForm, setIncomeForm]         = useState<{
@@ -524,37 +527,84 @@ export default function BudgetPage() {
       )}
 
       {/* ── Summary strip ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border border-border bg-green-500/5 p-4">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <TrendingUp className="h-3.5 w-3.5 text-green-500" /> Monthly income
+      <div className="space-y-2">
+        {/* Period toggle */}
+        <div className="flex justify-end">
+          <div className="flex items-center rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setShowYearly(false)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors',
+                !showYearly ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              )}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setShowYearly(true)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors border-l border-border',
+                showYearly ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              )}
+            >
+              <CalendarDays className="h-3.5 w-3.5" /> Yearly
+            </button>
           </div>
-          <p className="text-2xl font-bold text-green-600">{fmtCurrency(monthlyIncome)}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {includedStreams.length} stream{includedStreams.length !== 1 ? 's' : ''} included
-          </p>
         </div>
-        <div className="rounded-lg border border-border bg-red-500/5 p-4">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <TrendingDown className="h-3.5 w-3.5 text-red-500" /> Monthly expenses
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border bg-green-500/5 p-4">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <TrendingUp className="h-3.5 w-3.5 text-green-500" />
+              {showYearly ? 'Yearly income' : 'Monthly income'}
+            </div>
+            <p className="text-2xl font-bold text-green-600">
+              {fmtCurrency(showYearly ? monthlyIncome * 12 : monthlyIncome)}
+            </p>
+            <div className="flex items-center justify-between mt-0.5">
+              <p className="text-xs text-muted-foreground">
+                {includedStreams.length} stream{includedStreams.length !== 1 ? 's' : ''} included
+              </p>
+              {showYearly && (
+                <p className="text-xs text-muted-foreground">{fmtCurrency(monthlyIncome)}/mo</p>
+              )}
+            </div>
           </div>
-          <p className="text-2xl font-bold text-red-600">{fmtCurrency(monthlyExpenses)}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {activeRules.filter(r => r.isIncludedInPlanner).length} rule{activeRules.filter(r => r.isIncludedInPlanner).length !== 1 ? 's' : ''} included
-          </p>
-        </div>
-        <div className={cn('rounded-lg border p-4',
-          surplus >= 0 ? 'border-primary/30 bg-primary/5' : 'border-red-500/30 bg-red-500/5')}>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Wallet className="h-3.5 w-3.5" style={{ color: surplus >= 0 ? 'var(--primary)' : '#ef4444' }} />
-            Monthly surplus
+          <div className="rounded-lg border border-border bg-red-500/5 p-4">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+              {showYearly ? 'Yearly expenses' : 'Monthly expenses'}
+            </div>
+            <p className="text-2xl font-bold text-red-600">
+              {fmtCurrency(showYearly ? monthlyExpenses * 12 : monthlyExpenses)}
+            </p>
+            <div className="flex items-center justify-between mt-0.5">
+              <p className="text-xs text-muted-foreground">
+                {activeRules.filter(r => r.isIncludedInPlanner).length} rule{activeRules.filter(r => r.isIncludedInPlanner).length !== 1 ? 's' : ''} included
+              </p>
+              {showYearly && (
+                <p className="text-xs text-muted-foreground">{fmtCurrency(monthlyExpenses)}/mo</p>
+              )}
+            </div>
           </div>
-          <p className={cn('text-2xl font-bold', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
-            {fmtCurrency(surplus)}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {surplus >= 0 ? 'Left over after expenses' : 'Expenses exceed income'}
-          </p>
+          <div className={cn('rounded-lg border p-4',
+            surplus >= 0 ? 'border-primary/30 bg-primary/5' : 'border-red-500/30 bg-red-500/5')}>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Wallet className="h-3.5 w-3.5" style={{ color: surplus >= 0 ? 'var(--primary)' : '#ef4444' }} />
+              {showYearly ? 'Yearly surplus' : 'Monthly surplus'}
+            </div>
+            <p className={cn('text-2xl font-bold', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
+              {fmtCurrency(showYearly ? surplus * 12 : surplus)}
+            </p>
+            <div className="flex items-center justify-between mt-0.5">
+              <p className="text-xs text-muted-foreground">
+                {surplus >= 0 ? 'Left over after expenses' : 'Expenses exceed income'}
+              </p>
+              {showYearly && (
+                <p className="text-xs text-muted-foreground">{fmtCurrency(surplus)}/mo</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -924,16 +974,26 @@ export default function BudgetPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">
-                {surplus >= 0 ? 'Estimated monthly surplus' : 'Estimated monthly shortfall'}
+                {surplus >= 0
+                  ? (showYearly ? 'Estimated yearly surplus' : 'Estimated monthly surplus')
+                  : (showYearly ? 'Estimated yearly shortfall' : 'Estimated monthly shortfall')}
                 {activeEntity && <span className="text-muted-foreground font-normal"> — {activeEntity.name}</span>}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {fmtCurrency(monthlyIncome)} income − {fmtCurrency(monthlyExpenses)} expenses
+                {showYearly
+                  ? <>{fmtCurrency(monthlyIncome * 12)} income − {fmtCurrency(monthlyExpenses * 12)} expenses (yearly)</>
+                  : <>{fmtCurrency(monthlyIncome)} income − {fmtCurrency(monthlyExpenses)} expenses</>
+                }
               </p>
             </div>
-            <p className={cn('text-3xl font-bold', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
-              {fmtCurrency(Math.abs(surplus))}
-            </p>
+            <div className="text-right">
+              <p className={cn('text-3xl font-bold', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
+                {fmtCurrency(Math.abs(showYearly ? surplus * 12 : surplus))}
+              </p>
+              {showYearly && (
+                <p className="text-xs text-muted-foreground mt-0.5">{fmtCurrency(Math.abs(surplus))}/mo</p>
+              )}
+            </div>
           </div>
         </div>
       )}
