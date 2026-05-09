@@ -468,7 +468,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'The Finance dashboard gives you a real-time snapshot of your household money — total balance across all accounts, this month\'s income and expenses, active budgets, upcoming bills, and savings goals.',
           'Summary cards show Monthly Income, Monthly Expenses, Total Balance, Active Budgets, and Upcoming Bills at a glance.',
-          'Use the sub-navigation at the top to move between Transactions, Bills, Budget, Reports, and the setup pages (Accounts, Categories, Goals, Locations, Members).',
+          'Use the sub-navigation at the top to move between Transactions, Bills, Budget, Reports, and the setup pages (Accounts, Categories, Goals, Locations, Members, Vendors, Entities).',
         ],
       },
       {
@@ -489,10 +489,25 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         ],
       },
       {
+        title: 'Budget Progress',
+        items: [
+          'Active budget rules appear as progress bars showing how much has been spent versus the budgeted amount.',
+          'Each bar changes colour: green while under budget, amber when nearing the alert threshold, red when over.',
+          'A surplus or shortfall callout shows the total remaining or overspent across all budgets.',
+        ],
+      },
+      {
         title: 'Recent Transactions',
         items: [
           'The five most recent transactions for the current month are shown on the dashboard.',
           'Click "View All" or go to Finance → Transactions to see the full transaction list.',
+        ],
+      },
+      {
+        title: 'Members & Locations Summary',
+        items: [
+          'When family members or locations are set up, summary chips appear at the bottom of the dashboard.',
+          'Click a member chip to see their assigned spending; click a location chip to see property-specific costs.',
         ],
       },
       {
@@ -503,6 +518,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Add recurring bills under Finance → Bills so overdue payments are flagged automatically.',
           'Create budget rules under Finance → Budget to track spending against limits.',
           'Set savings goals under Finance → Goals to monitor progress toward targets.',
+          'Set up Vendors and Entities under Finance → Vendors and Finance → Entities to organise bills and transactions by payee and legal structure.',
         ],
       },
     ],
@@ -564,6 +580,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Set "Next Due Date" to the next payment date. For monthly or annual bills you can also set "Day of Month" and "Month of Year" for reference.',
           'Assign the bill to an Account and Category to keep spending organised.',
           'Optionally set an End Date for subscriptions with a known expiry.',
+          'Tick "Invoice" to flag that an invoice document is expected for this bill — useful for bills that need proof of payment.',
+          'Tick "Include in budget planner" to automatically create a corresponding budget rule for this bill\'s category.',
         ],
       },
       {
@@ -583,11 +601,29 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         ],
       },
       {
+        title: 'Attachments',
+        items: [
+          'Click the paperclip icon on any bill to open the attachments panel and upload PDFs, images, or documents.',
+          'Uploaded files are displayed inline as preview cards — click to download or view the original.',
+          'Delete individual attachments using the X icon on each preview card.',
+          'Use the "Invoice" toggle on the bill form to flag bills that require an invoice attachment.',
+        ],
+      },
+      {
         title: 'Overdue Bills',
         items: [
           'A bill turns overdue once its Next Due Date has passed. It moves to the red "Overdue" section at the top.',
           'To clear an overdue bill: edit it and update the Next Due Date to the next upcoming date.',
           'The Finance dashboard shows an overdue count badge when bills are outstanding.',
+          'Date range filters (14 days / 30 days / Quarter / 12 months) let you control how far ahead to look for upcoming bills.',
+        ],
+      },
+      {
+        title: 'Category Column Picker',
+        items: [
+          'Toggle root category columns on/off using the checkboxes above the bill list.',
+          'Each active category shows a mini-amount in that column, giving you a quick category breakdown without switching to Reports.',
+          'The column total appears at the bottom of each column.',
         ],
       },
     ],
@@ -601,6 +637,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Budget rules let you set spending limits per category (or across all expenses) for a given period.',
           'Each budget card shows a progress bar: green while under budget, amber when nearing the alert threshold, and red when over.',
           'Spending is pulled live from this month\'s expense transactions.',
+          'Entity tabs at the top let you filter the budget view by entity (Personal/Family, Super Fund, Trust, Business, etc.).',
         ],
       },
       {
@@ -611,6 +648,18 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Leave Category blank to create an overall household spending cap across all expense categories.',
           'Assign a specific category (e.g., Groceries, Fuel) to track that category\'s spending independently.',
           'Set "Alert at %" to choose when the bar turns amber — default is 80%.',
+          'Assign an Entity to isolate this budget rule to a specific entity\'s spending.',
+        ],
+      },
+      {
+        title: 'Income Streams',
+        items: [
+          'Income Streams let you define regular income sources (salary, rental income, dividends, etc.) that contribute to your monthly budget.',
+          'Click "Add Income Stream" and set the name, amount, and frequency (Weekly, Fortnightly, Monthly, Quarterly, Yearly, or Custom).',
+          'Custom frequency lets you set a custom unit (Daily, Weekly, Monthly, Yearly) and interval.',
+          'Assign an income stream to an Entity to track income per legal structure.',
+          'Each stream shows its calculated monthly equivalent amount so you can compare across different frequencies at a glance.',
+          'Toggle a stream on/off using the switch — disabled streams are excluded from budget calculations.',
         ],
       },
       {
@@ -787,9 +836,9 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       {
         title: 'Overview',
         items: [
-          'Reports gives you a summarised view of your financial health for the current month or full year.',
-          'Use the period selector (top-right) to switch between "This Month" and "This Year".',
-          'The page automatically recalculates when you change the period.',
+          'Reports gives you a summarised view of your financial health across different time periods.',
+          'Use the period selector (top-right) to switch between Month, Quarter, or Year view.',
+          'The page automatically recalculates when you change the period or navigate to previous/next periods using the arrow buttons.',
         ],
       },
       {
@@ -803,12 +852,20 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         ],
       },
       {
-        title: 'Spending by Category',
+        title: 'View Options',
         items: [
-          'A breakdown of expense transactions grouped by category, sorted from highest to lowest spend.',
-          'Each row shows the category name, total amount, and percentage of total spending.',
-          'The progress bar gives a quick visual sense of each category\'s share.',
-          'Categories with no transactions in the period are omitted.',
+          'Toggle between "By Category" and "By Vendor" views to see spending grouped either by expense category or by payee.',
+          'By Category — a breakdown of expense transactions grouped by category, sorted from highest to lowest spend with percentage of total.',
+          'By Vendor — shows spending grouped by vendor/payee, useful for seeing which businesses receive the most of your money.',
+          'Each row shows a proportional bar for quick visual comparison.',
+        ],
+      },
+      {
+        title: 'Drill-Down',
+        items: [
+          'Click on any category or vendor row to drill down and see the individual bills and transactions that make up that total.',
+          'The drill-down panel shows each bill\'s name, amount, due date, and status.',
+          'Click "Back to overview" to return to the full report.',
         ],
       },
       {
@@ -865,6 +922,97 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           '"PENDING" — the transaction is not yet cleared (reconciled with your bank statement).',
           '"PRIVATE" — the transaction is only visible to the person who created it.',
+        ],
+      },
+    ],
+  },
+  '/finance/vendors': {
+    title: 'Finance — Vendors',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Vendors stores the people and businesses you pay — utilities, landlords, subscriptions, tradespeople, and any other payee.',
+          'Each vendor card shows the vendor name (with an avatar), default category, contact details, and counts of linked bills and transactions.',
+          'Vendors are shared across the whole family and can be assigned as the payee on bills and transactions.',
+        ],
+      },
+      {
+        title: 'Adding & Editing',
+        items: [
+          'Click "Add Vendor" and enter the vendor\'s name — this is the only required field.',
+          'Optionally set a Default Category so every new bill or transaction using this vendor automatically gets that category.',
+          'Add website, phone number, and account reference (e.g., your customer or member number) for quick access when paying.',
+          'Use the Notes field to store any additional information about the vendor.',
+        ],
+      },
+      {
+        title: 'Using Vendors',
+        items: [
+          'When adding a bill or transaction, the vendor picker shows all vendors. Selecting one auto-fills the category if the vendor has a default category set.',
+          'The vendor card shows how many bills and transactions are linked, letting you see at a glance which vendors are most active.',
+          'Delete a vendor to unlink it from all associated bills and transactions — the records themselves are preserved.',
+        ],
+      },
+    ],
+  },
+  '/finance/entities': {
+    title: 'Finance — Entities',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Entities represent legal or accounting structures within your household — Personal/Family, Superannuation Fund, Trust, Business, Investment Fund, or Other.',
+          'Entity-based isolation lets you track spending and budgets separately for each entity, so superannuation contributions don\'t get mixed with daily household expenses.',
+          'Each entity has a preset colour and type badge for quick visual identification throughout the Finance module.',
+        ],
+      },
+      {
+        title: 'Setting Up an Entity',
+        items: [
+          'Click "Add Entity". Name and Type are required. The name appears in entity selectors across bills, transactions, and budgets.',
+          'Entity types: Personal/Family, Super Fund, Trust, Business, Investment, Other — choose the one that best describes the structure.',
+          'Pick a preset colour to visually identify the entity in cards and lists.',
+          'Set an entity as Default to have it pre-selected in relevant forms.',
+        ],
+      },
+      {
+        title: 'Managing Entities',
+        items: [
+          'Use the drag handle to reorder entities — the order is reflected in entity tabs and selectors.',
+          'Deactivate an entity to hide it from selectors without losing its historical transactions and budgets.',
+          'Reactivate a deactivated entity at any time — it reappears in selectors with all its history intact.',
+          'Inactive entities are displayed in a separate collapsed section below the active list.',
+          'Delete an entity to permanently remove it and unlink its transactions and budget rules.',
+        ],
+      },
+    ],
+  },
+  '/finance/paid-bills': {
+    title: 'Finance — Paid Bills',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Paid Bills page shows a history of all bills that have been marked as paid — a record of what was paid, when, and for how much.',
+          'Paid bills are listed chronologically by their paid date, newest first.',
+          'Use this page to review past payments, verify amounts, or undo a payment if it was marked in error.',
+        ],
+      },
+      {
+        title: 'Filtering Paid Bills',
+        items: [
+          'Use the "Show last" dropdown to choose the lookback period: 1 month, 3 months, 6 months, or 12 months.',
+          'Toggle root category columns on/off to see a category breakdown of paid amounts at a glance.',
+          'Active category columns show mini-amounts for each bill, with column totals at the bottom.',
+        ],
+      },
+      {
+        title: 'Undoing a Payment',
+        items: [
+          'Click the "Undo" icon on any paid bill to move it back to the active Bills list.',
+          'The bill returns to its original state with the original Next Due Date — you can then edit the date or mark it paid again later.',
+          'Undo is useful if a bill was accidentally marked as paid or if the payment failed.',
         ],
       },
     ],
