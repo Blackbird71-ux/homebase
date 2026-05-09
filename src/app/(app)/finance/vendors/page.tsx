@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Building2, Globe, Phone, Hash } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 interface Category { id: string; name: string; color: string | null }
 interface Vendor {
@@ -108,10 +109,12 @@ export default function VendorsPage() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <h3 className="font-semibold">{editing ? 'Edit Vendor' : 'New Vendor'}</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Vendor' : 'New Vendor'}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Name *</label>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
@@ -152,16 +155,14 @@ export default function VendorsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
           </div>
-          <div className="flex gap-2">
+          <DialogFooter>
             <button onClick={handleSave}
               className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={() => { setShowForm(false); setEditing(null) }}
-              className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {vendors.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center">
@@ -176,7 +177,8 @@ export default function VendorsPage() {
             const color = avatarColor(v.name)
             return (
               <div key={v.id}
-                className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 transition-colors">
+                className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 transition-colors cursor-default"
+                onDoubleClick={() => openEdit(v)}>
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
                   style={{ backgroundColor: color }}>
                   {initials}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Briefcase, Star, StarOff, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 interface Entity {
   id: string
@@ -168,10 +169,11 @@ export default function EntitiesPage() {
         </button>
       </div>
 
-      {/* Inline form */}
-      {showForm && (
-        <div className="rounded-lg border border-border p-4 space-y-4 bg-card">
-          <h3 className="font-semibold text-base">{editing ? 'Edit Entity' : 'New Entity'}</h3>
+      <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
+        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Entity' : 'New Entity'}</DialogTitle>
+          </DialogHeader>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -259,7 +261,7 @@ export default function EntitiesPage() {
             <span className="text-xs text-muted-foreground">(shown first / pre-selected in dropdowns)</span>
           </label>
 
-          <div className="flex gap-2 pt-1">
+          <DialogFooter>
             <button
               onClick={handleSave}
               disabled={saving}
@@ -267,12 +269,9 @@ export default function EntitiesPage() {
             >
               {saving ? 'Saving…' : editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Empty state */}
       {activeEntities.length === 0 && !showForm && (

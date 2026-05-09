@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 interface Member {
   id: string
@@ -91,9 +92,11 @@ export default function FinanceMembersPage() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <h3 className="font-semibold">{editing ? 'Edit Member' : 'Add Family Member'}</h3>
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Member' : 'Add Family Member'}</DialogTitle>
+          </DialogHeader>
           <p className="text-xs text-muted-foreground">
             {editing
               ? 'Update the member name.'
@@ -120,22 +123,14 @@ export default function FinanceMembersPage() {
               />
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium"
-            >
+          <DialogFooter>
+            <button onClick={handleSave}
+              className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Add'}
             </button>
-            <button
-              onClick={() => { setShowForm(false); setEditing(null) }}
-              className="rounded-md border border-border px-4 py-1.5 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {members.length === 0 ? (
         <p className="text-sm text-muted-foreground">No family members found.</p>
@@ -144,7 +139,8 @@ export default function FinanceMembersPage() {
           {members.map(m => (
             <div
               key={m.id}
-              className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50"
+              className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 cursor-default"
+              onDoubleClick={() => openEdit(m)}
             >
               <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold shrink-0">
                 {m.name.charAt(0).toUpperCase()}

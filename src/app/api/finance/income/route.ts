@@ -7,7 +7,12 @@ const INCOME_INCLUDE = {
   account: { select: { id: true, name: true } },
   category: true,
   location: { select: { id: true, name: true } },
-  entity: { select: { id: true, name: true, color: true, type: true } },
+  vendor: { select: { id: true, name: true } },
+  entity: { select: { id: true, name: true, color: true, type: true, isDefault: true } },
+  attachments: {
+    select: { id: true, incomeId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
 }
 
 export async function GET() {
@@ -27,7 +32,10 @@ export async function POST(request: NextRequest) {
     name, amount, accountId, categoryId, frequency,
     incomeType, nextExpectedDate, endDate,
     isActive, received, receivedDate,
-    notes, memberId, locationId, entityId,
+    autoPay, emailReminder, reminderDays,
+    dayOfMonth, monthOfYear, recurrenceInterval,
+    invoiceReceived, invoiceReceivedDate,
+    notes, memberId, locationId, entityId, vendorId,
   } = json
 
   if (!name || !amount || !frequency) {
@@ -40,6 +48,7 @@ export async function POST(request: NextRequest) {
       amount: parseFloat(amount),
       accountId: accountId ?? null,
       categoryId: categoryId ?? null,
+      vendorId: vendorId ?? null,
       frequency,
       incomeType: incomeType ?? 'recurring',
       nextExpectedDate: new Date(nextExpectedDate ?? new Date()),
@@ -47,6 +56,14 @@ export async function POST(request: NextRequest) {
       isActive: isActive ?? true,
       received: received ?? false,
       receivedDate: receivedDate ? new Date(receivedDate) : null,
+      autoPay: autoPay ?? false,
+      emailReminder: emailReminder ?? false,
+      reminderDays: reminderDays != null ? parseInt(reminderDays, 10) : 3,
+      dayOfMonth: dayOfMonth != null ? parseInt(dayOfMonth, 10) : null,
+      monthOfYear: monthOfYear != null ? parseInt(monthOfYear, 10) : null,
+      recurrenceInterval: recurrenceInterval ?? null,
+      invoiceReceived: invoiceReceived ?? false,
+      invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null,
       notes: notes ?? null,
       memberId: memberId ?? null,
       locationId: locationId ?? null,
@@ -66,7 +83,10 @@ export async function PUT(request: NextRequest) {
     id, name, amount, accountId, categoryId, frequency,
     incomeType, nextExpectedDate, endDate,
     isActive, received, receivedDate,
-    notes, memberId, locationId, entityId,
+    autoPay, emailReminder, reminderDays,
+    dayOfMonth, monthOfYear, recurrenceInterval,
+    invoiceReceived, invoiceReceivedDate,
+    notes, memberId, locationId, entityId, vendorId,
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -81,6 +101,7 @@ export async function PUT(request: NextRequest) {
       ...(amount !== undefined && { amount: parseFloat(amount) }),
       ...(accountId !== undefined && { accountId: accountId ?? null }),
       ...(categoryId !== undefined && { categoryId: categoryId ?? null }),
+      ...(vendorId !== undefined && { vendorId: vendorId ?? null }),
       ...(frequency !== undefined && { frequency }),
       ...(incomeType !== undefined && { incomeType }),
       ...(nextExpectedDate !== undefined && { nextExpectedDate: new Date(nextExpectedDate) }),
@@ -88,6 +109,14 @@ export async function PUT(request: NextRequest) {
       ...(isActive !== undefined && { isActive }),
       ...(received !== undefined && { received }),
       ...(receivedDate !== undefined && { receivedDate: receivedDate ? new Date(receivedDate) : null }),
+      ...(autoPay !== undefined && { autoPay }),
+      ...(emailReminder !== undefined && { emailReminder }),
+      ...(reminderDays !== undefined && { reminderDays: parseInt(reminderDays, 10) }),
+      ...(dayOfMonth !== undefined && { dayOfMonth: dayOfMonth != null ? parseInt(dayOfMonth, 10) : null }),
+      ...(monthOfYear !== undefined && { monthOfYear: monthOfYear != null ? parseInt(monthOfYear, 10) : null }),
+      ...(recurrenceInterval !== undefined && { recurrenceInterval: recurrenceInterval ?? null }),
+      ...(invoiceReceived !== undefined && { invoiceReceived }),
+      ...(invoiceReceivedDate !== undefined && { invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null }),
       ...(notes !== undefined && { notes: notes ?? null }),
       ...(memberId !== undefined && { memberId: memberId ?? null }),
       ...(locationId !== undefined && { locationId: locationId ?? null }),
@@ -124,7 +153,7 @@ function advanceNextExpectedDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, received } = json
+  const { id, received, invoiceReceived, invoiceReceivedDate } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -135,6 +164,12 @@ export async function PATCH(request: NextRequest) {
   if (received !== undefined) {
     updateData.received = received
     updateData.receivedDate = received ? new Date() : null
+  }
+  if (invoiceReceived !== undefined) {
+    updateData.invoiceReceived = invoiceReceived
+    updateData.invoiceReceivedDate = invoiceReceived
+      ? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
+      : null
   }
 
   // If undoing a received entry, delete child occurrences that were spawned
@@ -160,6 +195,7 @@ export async function PATCH(request: NextRequest) {
           amount: existing.amount,
           accountId: existing.accountId,
           categoryId: existing.categoryId,
+          vendorId: existing.vendorId,
           frequency: existing.frequency,
           incomeType: existing.incomeType,
           nextExpectedDate: newExpectedDate,
@@ -167,6 +203,14 @@ export async function PATCH(request: NextRequest) {
           isActive: existing.isActive,
           received: false,
           receivedDate: null,
+          autoPay: existing.autoPay,
+          emailReminder: existing.emailReminder,
+          reminderDays: existing.reminderDays,
+          dayOfMonth: existing.dayOfMonth,
+          monthOfYear: existing.monthOfYear,
+          recurrenceInterval: existing.recurrenceInterval,
+          invoiceReceived: false,
+          invoiceReceivedDate: null,
           notes: existing.notes,
           memberId: existing.memberId,
           locationId: existing.locationId,

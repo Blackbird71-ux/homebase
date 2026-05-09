@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2,
-  RefreshCw, Layers, Briefcase,
+  RefreshCw, Layers, Briefcase, Paperclip, Upload, X,
+  FileText, Download, Building2, BookmarkCheck, Receipt,
+  Eye, EyeOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
@@ -19,20 +21,31 @@ import {
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
+interface Vendor { id: string; name: string; defaultCategory?: { id: string; name: string } | null }
 interface Entity { id: string; name: string; color: string | null; type: string; isDefault: boolean }
+interface IncomeAttachment {
+  id: string; incomeId: string; title: string; fileName: string
+  fileSize: number; mimeType: string; createdAt: string
+}
 
 export interface IncomeEntry {
   id: string; name: string; amount: number; frequency: string
   incomeType: string
   nextExpectedDate: string; endDate: string | null; isActive: boolean
   received: boolean; receivedDate: string | null
+  autoPay: boolean; emailReminder: boolean; reminderDays: number
+  dayOfMonth: number | null; monthOfYear: number | null
+  recurrenceInterval: string | null
+  invoiceReceived: boolean; invoiceReceivedDate: string | null
   notes: string | null; memberId: string | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
+  vendor: { id: string; name: string } | null
   member: Member | null
   location: Location | null
   entity: Entity | null
   parentIncomeId: string | null
+  attachments?: IncomeAttachment[]
 }
 
 function toMonthlyAmount(amount: number, frequency: string): number {
@@ -43,25 +56,13 @@ function toMonthlyAmount(amount: number, frequency: string): number {
   return amount
 }
 
-function entityChip(entity: Entity | null) {
-  if (!entity) return null
-  const bg = entity.color ?? '#6B7280'
-  return (
-    <span
-      className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
-      style={{ backgroundColor: bg }}
-    >
-      {entity.name}
-    </span>
-  )
-}
-
 export default function IncomePage() {
   const [entries, setEntries]         = useState<IncomeEntry[]>([])
   const [accounts, setAccounts]       = useState<{ id: string; name: string }[]>([])
   const [categories, setCategories]   = useState<{ id: string; name: string; parentId: string | null }[]>([])
   const [members, setMembers]         = useState<Member[]>([])
   const [locations, setLocations]     = useState<Location[]>([])
+  const [vendors, setVendors]         = useState<Vendor[]>([])
   const [entities, setEntities]       = useState<Entity[]>([])
   const [loading, setLoading]         = useState(true)
   const [showForm, setShowForm]       = useState(false)
@@ -84,12 +85,24 @@ export default function IncomePage() {
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
 
+  // Attachment panel state
+  const [attachmentIncomeId, setAttachmentIncomeId]     = useState<string | null>(null)
+  const [attachments, setAttachments]                   = useState<IncomeAttachment[]>([])
+  const [attachmentsLoading, setAttachmentsLoading]     = useState(false)
+  const [uploadingAttachment, setUploadingAttachment]   = useState(false)
+  const [previewAttachmentId, setPreviewAttachmentId]   = useState<string | null>(null)
+  const attachFileRef = useRef<HTMLInputElement>(null)
+
   const emptyForm = {
     name: '', amount: 0, frequency: 'monthly', incomeType: 'recurring',
-    accountId: '', categoryId: '',
+    accountId: '', categoryId: '', vendorId: '',
+    dayOfMonth: '', monthOfYear: '',
     nextExpectedDate: new Date().toISOString().split('T')[0],
-    endDate: '', notes: '', memberId: '', locationId: '',
+    endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
+    notes: '', memberId: '', locationId: '',
     entityId: '',
+    invoiceReceived: false, invoiceReceivedDate: '',
+    recurrenceInterval: '',
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -109,22 +122,71 @@ export default function IncomePage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, mRes, lRes, eRes] = await Promise.all([
+    const [aRes, cRes, mRes, lRes, vRes, eRes] = await Promise.all([
       fetch('/api/finance/accounts'),
       fetch('/api/finance/categories'),
       fetch('/api/finance/members'),
       fetch('/api/finance/locations'),
+      fetch('/api/finance/vendors'),
       fetch('/api/finance/entities'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) setCategories(await cRes.json())
     if (mRes.ok) setMembers(await mRes.json())
     if (lRes.ok) setLocations(await lRes.json())
+    if (vRes.ok) setVendors(await vRes.json())
     if (eRes.ok) setEntities(await eRes.json())
   }
 
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
+
+  // ── Attachment helpers ────────────────────────────────────────────────────
+
+  async function openAttachments(entry: IncomeEntry) {
+    setAttachmentIncomeId(entry.id)
+    setAttachmentsLoading(true)
+    try {
+      const res = await fetch(`/api/finance/income/${entry.id}/attachments`)
+      if (res.ok) setAttachments(await res.json())
+    } finally { setAttachmentsLoading(false) }
+  }
+
+  function closeAttachments() { setAttachmentIncomeId(null); setAttachments([]); setPreviewAttachmentId(null) }
+
+  function togglePreview(attId: string) {
+    setPreviewAttachmentId(prev => prev === attId ? null : attId)
+  }
+
+  function isImageMime(mime: string) { return mime.startsWith('image/') }
+  function isPdfMime(mime: string)   { return mime === 'application/pdf' }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  async function handleAttachmentUpload(incomeId: string, file: File) {
+    setUploadingAttachment(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('title', file.name.replace(/\.[^/.]+$/, ''))
+      const res = await fetch(`/api/finance/income/${incomeId}/attachments`, { method: 'POST', body: fd })
+      if (res.ok) { const a = await res.json(); setAttachments(prev => [...prev, a]); toast.success('Attachment uploaded') }
+      else toast.error('Failed to upload attachment')
+    } finally { setUploadingAttachment(false) }
+  }
+
+  async function handleAttachmentDelete(incomeId: string, attachmentId: string) {
+    if (!confirm('Remove this attachment?')) return
+    const res = await fetch(`/api/finance/income/${incomeId}/attachments/${attachmentId}`, { method: 'DELETE' })
+    if (res.ok) { setAttachments(prev => prev.filter(a => a.id !== attachmentId)); toast.success('Attachment removed') }
+    else toast.error('Failed to remove attachment')
+  }
+
+  // ── Filters / helpers ─────────────────────────────────────────────────────
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
     sessionStorage.setItem('income-dateRange', r); setDateRange(r)
@@ -146,16 +208,33 @@ export default function IncomePage() {
       name: e.name, amount: e.amount, frequency: e.frequency,
       incomeType: e.incomeType ?? 'recurring',
       accountId: e.account?.id ?? '', categoryId: e.category?.id ?? '',
+      vendorId: e.vendor?.id ?? '',
+      dayOfMonth: e.dayOfMonth?.toString() ?? '',
+      monthOfYear: e.monthOfYear?.toString() ?? '',
       nextExpectedDate: new Date(e.nextExpectedDate).toISOString().split('T')[0],
       endDate: e.endDate ? new Date(e.endDate).toISOString().split('T')[0] : '',
+      autoPay: e.autoPay ?? false,
+      emailReminder: e.emailReminder ?? false,
+      reminderDays: e.reminderDays ?? 3,
       notes: e.notes ?? '', memberId: e.memberId ?? '',
       locationId: e.location?.id ?? '',
       entityId: e.entity?.id ?? '',
+      invoiceReceived: e.invoiceReceived ?? false,
+      invoiceReceivedDate: e.invoiceReceivedDate
+        ? new Date(e.invoiceReceivedDate).toISOString().split('T')[0] : '',
+      recurrenceInterval: e.recurrenceInterval ?? '',
     })
     setShowForm(true)
   }
 
   function closeForm() { setShowForm(false); setEditing(null) }
+
+  function handleVendorChange(vendorId: string) {
+    const vendor = vendors.find(v => v.id === vendorId)
+    const update: any = { vendorId }
+    if (vendor?.defaultCategory && !form.categoryId) update.categoryId = vendor.defaultCategory.id
+    setForm(p => ({ ...p, ...update }))
+  }
 
   function getFormPayload() {
     return {
@@ -163,12 +242,18 @@ export default function IncomePage() {
       amount: form.amount || 0,
       accountId: form.accountId || null,
       categoryId: form.categoryId || null,
+      vendorId: form.vendorId || null,
       entityId: form.entityId || null,
+      dayOfMonth: form.dayOfMonth || null,
+      monthOfYear: form.monthOfYear || null,
       endDate: form.endDate || null,
       notes: form.notes || null,
       memberId: form.memberId || null,
       locationId: form.locationId || null,
       incomeType: form.incomeType || 'recurring',
+      recurrenceInterval: form.recurrenceInterval || null,
+      invoiceReceived: form.invoiceReceived,
+      invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
     }
   }
 
@@ -201,6 +286,17 @@ export default function IncomePage() {
     })
     if (res.ok) { toast.success('Income marked as received'); load() }
     else toast.error('Failed to mark as received')
+  }
+
+  async function handleToggleInvoice(entry: IncomeEntry) {
+    const newVal = !entry.invoiceReceived
+    const res = await fetch('/api/finance/income', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: entry.id, invoiceReceived: newVal }),
+    })
+    if (res.ok) { toast.success(newVal ? 'Remittance marked received' : 'Remittance unmarked'); load() }
+    else toast.error('Failed to update remittance status')
   }
 
   function getNextExpected(entry: IncomeEntry): Date {
@@ -371,13 +467,14 @@ export default function IncomePage() {
         </div>
       )}
 
-      {/* Income Editor Modal */}
+      {/* ── Income Editor Modal ─────────────────────────────────────────────── */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
         <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Income' : 'New Income'}</DialogTitle>
           </DialogHeader>
 
+          {/* Income type */}
           <div className="flex gap-4 pb-1">
             {(['recurring', 'one-off'] as const).map(bt => (
               <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -415,6 +512,22 @@ export default function IncomePage() {
                 </select>
               </div>
             )}
+            {/* Vendor / Payer */}
+            <div>
+              <label className="text-xs text-muted-foreground">Payer / Source</label>
+              <div className="flex gap-1">
+                <select value={form.vendorId} onChange={e => handleVendorChange(e.target.value)}
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No payer</option>
+                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+                <Link href="/finance/vendors"
+                  className="shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-muted-foreground hover:text-foreground"
+                  title="Manage vendors/payers">
+                  <Building2 className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </div>
             <div>
               <label className="text-xs text-muted-foreground">Category</label>
               <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
@@ -429,6 +542,23 @@ export default function IncomePage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">No account</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Day of Month</label>
+              <input type="number" min={1} max={31} value={form.dayOfMonth}
+                onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                placeholder="e.g. 15" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Month of Year (for annual)</label>
+              <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">None</option>
+                {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                  <option key={i+1} value={i+1}>{m}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -452,7 +582,7 @@ export default function IncomePage() {
                 {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-            {/* Entity selector */}
+            {/* Entity */}
             <div>
               <label className="text-xs text-muted-foreground flex items-center gap-1">
                 <Briefcase className="h-3 w-3" /> Entity / Fund
@@ -478,6 +608,41 @@ export default function IncomePage() {
             </div>
           </div>
 
+          {/* Flags row */}
+          <div className="flex flex-wrap gap-6 pt-1">
+            {form.incomeType === 'recurring' && (
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.autoPay} onChange={e => setForm(p => ({ ...p, autoPay: e.target.checked }))} className="rounded border-input" />
+                Direct deposit
+              </label>
+            )}
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={form.emailReminder} onChange={e => setForm(p => ({ ...p, emailReminder: e.target.checked }))} className="rounded border-input" />
+              Email reminder
+            </label>
+            {form.emailReminder && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">Remind</label>
+                <input type="number" min={0} max={30} value={form.reminderDays}
+                  onChange={e => setForm(p => ({ ...p, reminderDays: parseInt(e.target.value) || 0 }))}
+                  className="w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center" />
+                <span className="text-xs text-muted-foreground">days before</span>
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
+              <Receipt className="h-3.5 w-3.5 text-green-500" /> Remittance received
+            </label>
+            {form.invoiceReceived && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">Remittance date</label>
+                <input type="date" value={form.invoiceReceivedDate}
+                  onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
+                  className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-xs text-muted-foreground">Notes</label>
             <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
@@ -493,7 +658,7 @@ export default function IncomePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Income list */}
+      {/* ── Income list ─────────────────────────────────────────────────────── */}
       {entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">No income entries yet.</p>
       ) : (
@@ -510,12 +675,28 @@ export default function IncomePage() {
             <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue
               colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
               onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
+              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
+              attachmentIncomeId={attachmentIncomeId}
+              attachments={attachments} attachmentsLoading={attachmentsLoading}
+              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
+              previewAttachmentId={previewAttachmentId}
+              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
+              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
+              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
               formatCurrency={formatCurrency} />
           ))}
           {upcoming.map(e => (
             <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue={false}
               colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
               onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
+              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
+              attachmentIncomeId={attachmentIncomeId}
+              attachments={attachments} attachmentsLoading={attachmentsLoading}
+              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
+              previewAttachmentId={previewAttachmentId}
+              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
+              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
+              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
               formatCurrency={formatCurrency} />
           ))}
           {visibleEntries.length > 0 && (
@@ -543,7 +724,11 @@ export default function IncomePage() {
 
 function IncomeRow({
   entry, nextExpected, isOverdue, colCats, entryAmountForCat, gridTemplate,
-  onEdit, onDelete, onMarkReceived, formatCurrency,
+  onEdit, onDelete, onMarkReceived, onToggleInvoice, onOpenAttachments,
+  attachmentIncomeId, attachments, attachmentsLoading, uploadingAttachment, attachFileRef,
+  previewAttachmentId, onCloseAttachments, onTogglePreview,
+  onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize,
+  formatCurrency,
 }: {
   entry: IncomeEntry; nextExpected: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
@@ -551,55 +736,181 @@ function IncomeRow({
   gridTemplate: string
   onEdit: (e: IncomeEntry) => void; onDelete: (id: string) => void
   onMarkReceived: (e: IncomeEntry) => void
+  onToggleInvoice: (e: IncomeEntry) => void
+  onOpenAttachments: (e: IncomeEntry) => void
+  attachmentIncomeId: string | null
+  attachments: IncomeAttachment[]; attachmentsLoading: boolean
+  uploadingAttachment: boolean; attachFileRef: React.RefObject<HTMLInputElement | null>
+  previewAttachmentId: string | null
+  onCloseAttachments: () => void; onTogglePreview: (id: string) => void
+  onAttachmentUpload: (incomeId: string, file: File) => Promise<void>
+  onAttachmentDelete: (incomeId: string, attachmentId: string) => Promise<void>
+  isImageMime: (mime: string) => boolean; isPdfMime: (mime: string) => boolean
+  formatFileSize: (bytes: number) => string
   formatCurrency: (n: number) => string
 }) {
-  const isOneOff = entry.incomeType === 'one-off'
+  const isOneOff         = entry.incomeType === 'one-off'
+  const hasRemittance    = entry.invoiceReceived
+  const isAttachmentOpen = attachmentIncomeId === entry.id
   const rowClass = cn(
     'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
-    isOverdue  ? 'border-amber-500/30 bg-amber-500/5'
-    :            'border-border hover:bg-accent/50',
+    isOverdue       ? 'border-amber-500/30 bg-amber-500/5'
+    : hasRemittance ? 'border-green-500/30 bg-green-500/5'
+    :                 'border-border hover:bg-accent/50',
+    isAttachmentOpen && 'ring-1 ring-green-500/40 rounded-b-none',
   )
   return (
-    <div className={rowClass} style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
-      onDoubleClick={() => onEdit(entry)}>
-      <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
-        isOverdue ? 'bg-amber-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
-        {isOneOff
-          ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-amber-500' : 'text-orange-500')} />
-          : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-amber-500' : 'text-muted-foreground')} />}
+    <div>
+      <div className={rowClass} style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}
+        onDoubleClick={() => onEdit(entry)}>
+        <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
+          isOverdue ? 'bg-amber-500/10' : hasRemittance ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
+          {isOneOff
+            ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-amber-500' : 'text-orange-500')} />
+            : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-amber-500' : hasRemittance ? 'text-green-600' : 'text-muted-foreground')} />}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{entry.name}</span>
+            {!entry.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
+            {entry.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">DIRECT</span>}
+            {hasRemittance && (
+              <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
+                <Receipt className="h-2.5 w-2.5" /> REMITTANCE
+              </span>
+            )}
+            {entry.entity && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+                style={{ backgroundColor: entry.entity.color ?? '#6B7280' }}>
+                {entry.entity.name}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+            <span className="capitalize">{isOneOff ? 'One-off' : entry.frequency}</span>
+            {entry.vendor   && <span className="text-purple-500">{entry.vendor.name}</span>}
+            {entry.account  && <span>{entry.account.name}</span>}
+            {entry.member   && <span className="text-primary">{entry.member.name}</span>}
+            {entry.location && <span>{entry.location.name}</span>}
+            <span>Expected {format(nextExpected, 'd MMM yyyy')}</span>
+            {entry.notes && <span className="italic truncate max-w-[120px]" title={entry.notes}>· {entry.notes}</span>}
+          </div>
+        </div>
+        {colCats.map(c => {
+          const amt = entryAmountForCat(entry, c.id)
+          return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
+        })}
+        <p className="text-sm font-semibold text-right">{formatCurrency(entry.amount)}</p>
+        <div className="flex items-center gap-0.5 justify-end">
+          <button onClick={() => onOpenAttachments(entry)}
+            title={entry.attachments && entry.attachments.length > 0 ? `${entry.attachments.length} attachment${entry.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
+            className={cn('relative p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : entry.attachments && entry.attachments.length > 0 ? 'text-green-600' : 'text-muted-foreground')}>
+            <Paperclip className="h-3.5 w-3.5" />
+            {!isAttachmentOpen && entry.attachments && entry.attachments.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-green-500 text-white text-[9px] font-bold flex items-center justify-center leading-none px-0.5">
+                {entry.attachments.length}
+              </span>
+            )}
+          </button>
+          <button onClick={() => onToggleInvoice(entry)} title={entry.invoiceReceived ? 'Remove remittance' : 'Mark remittance received'}
+            className={cn('p-1 hover:bg-accent rounded', entry.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
+            <Receipt className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => onMarkReceived(entry)} title="Mark as received" className="p-1 hover:bg-accent rounded text-green-500">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => onEdit(entry)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
+          <button onClick={() => onDelete(entry.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+        </div>
       </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium">{entry.name}</span>
-          {!entry.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
-          {entry.entity && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
-              style={{ backgroundColor: entry.entity.color ?? '#6B7280' }}>
-              {entry.entity.name}
-            </span>
+
+      {/* Attachment panel */}
+      {isAttachmentOpen && (
+        <div className="rounded-b-lg border border-t-0 border-green-500/30 bg-green-500/5 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Paperclip className="h-3.5 w-3.5 text-green-600" />
+              Attachments
+            </div>
+            <button onClick={onCloseAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground" title="Close">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {attachmentsLoading ? (
+            <p className="text-xs text-muted-foreground">Loading…</p>
+          ) : attachments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No attachments yet — upload a payslip or remittance advice below.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {attachments.map(att => {
+                const attUrl       = `/api/finance/income/${entry.id}/attachments/${att.id}`
+                const isPreviewing = previewAttachmentId === att.id
+                const canPreview   = isImageMime(att.mimeType) || isPdfMime(att.mimeType)
+                return (
+                  <div key={att.id}>
+                    <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="flex-1 truncate font-medium">{att.title}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(att.fileSize)}</span>
+                      {canPreview && (
+                        <button onClick={() => onTogglePreview(att.id)}
+                          title={isPreviewing ? 'Hide preview' : 'View inline'}
+                          className={cn('p-1 rounded hover:bg-accent transition-colors', isPreviewing ? 'text-primary' : 'text-muted-foreground')}>
+                          {isPreviewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                      <a href={attUrl} target="_blank" rel="noopener noreferrer"
+                        className="p-1 rounded hover:bg-accent text-primary" title="Open / download">
+                        <Download className="h-3.5 w-3.5" />
+                      </a>
+                      <button onClick={() => onAttachmentDelete(entry.id, att.id)}
+                        className="p-1 rounded hover:bg-accent text-red-500" title="Remove">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {isPreviewing && (
+                      <div className="mt-1 rounded-md border border-border bg-background overflow-hidden">
+                        {isImageMime(att.mimeType) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
+                        ) : (
+                          <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {attachments.length < 2 && (
+            <div className="flex items-center gap-3">
+              <input
+                ref={attachFileRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                className="hidden"
+                onChange={async e => {
+                  const file = e.target.files?.[0]
+                  if (file) await onAttachmentUpload(entry.id, file)
+                  e.target.value = ''
+                }}
+              />
+              <button
+                onClick={() => attachFileRef.current?.click()}
+                disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Payslip' : 'Upload Reference Doc'}
+              </button>
+              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC · Max 2 files</p>
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-          <span className="capitalize">{isOneOff ? 'One-off' : entry.frequency}</span>
-          {entry.account  && <span>{entry.account.name}</span>}
-          {entry.member   && <span className="text-primary">{entry.member.name}</span>}
-          {entry.location && <span>{entry.location.name}</span>}
-          <span>Expected {format(nextExpected, 'd MMM yyyy')}</span>
-          {entry.notes && <span className="italic truncate max-w-[120px]" title={entry.notes}>· {entry.notes}</span>}
-        </div>
-      </div>
-      {colCats.map(c => {
-        const amt = entryAmountForCat(entry, c.id)
-        return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
-      })}
-      <p className="text-sm font-semibold text-right">{formatCurrency(entry.amount)}</p>
-      <div className="flex items-center gap-0.5 justify-end">
-        <button onClick={() => onMarkReceived(entry)} title="Mark as received" className="p-1 hover:bg-accent rounded text-green-500">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => onEdit(entry)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-        <button onClick={() => onDelete(entry.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
-      </div>
+      )}
     </div>
   )
 }

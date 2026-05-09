@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, Filter, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 interface Category { id: string; name: string; type: string; color: string | null; isPersonal: boolean; isLocationBased: boolean; isExternal: boolean; isTaxDeduction: boolean }
 interface Account { id: string; name: string; type: string }
@@ -178,9 +179,11 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {showForm && (
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <h3 className="font-semibold">{editing ? 'Edit Transaction' : 'New Transaction'}</h3>
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
+          </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Type *</label>
@@ -258,22 +261,21 @@ export default function TransactionsPage() {
               </label>
             </div>
           </div>
-          <div className="flex gap-2">
+          <DialogFooter>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={() => { setShowForm(false); setEditing(null) }}
-              className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {transactions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No transactions found.</p>
       ) : (
         <div className="space-y-2">
           {transactions.map(t => (
-            <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50">
+            <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 cursor-default"
+              onDoubleClick={() => openEdit(t)}>
               <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0',
                 t.type === 'income' ? 'bg-green-500/10 text-green-500' : t.type === 'transfer' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500')}>
                 {t.type === 'income' ? '+' : t.type === 'transfer' ? '↔' : '-'}

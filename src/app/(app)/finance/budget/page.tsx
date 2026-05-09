@@ -8,6 +8,7 @@ import {
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -651,9 +652,11 @@ export default function BudgetPage() {
         {/* Income body — only shown when expanded */}
         {!incomeCollapsed && (
           <>
-            {showIncomeForm && (
-              <div className="rounded-lg border border-border p-4 space-y-3 mb-3">
-                <h3 className="font-semibold text-sm">{editingIncome ? 'Edit income stream' : 'New income stream'}</h3>
+            <Dialog open={showIncomeForm} onOpenChange={open => { if (!open) { setShowIncomeForm(false); setEditingIncome(null) } }}>
+              <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
+                <DialogHeader>
+                  <DialogTitle>{editingIncome ? 'Edit income stream' : 'New income stream'}</DialogTitle>
+                </DialogHeader>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Name *</label>
@@ -725,16 +728,14 @@ export default function BudgetPage() {
                       }))}</strong>/month
                   </p>
                 )}
-                <div className="flex gap-2">
+                <DialogFooter>
                   <button onClick={handleSaveIncome} disabled={savingIncome}
                     className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50">
                     {savingIncome ? 'Saving…' : editingIncome ? 'Update' : 'Add'}
                   </button>
-                  <button onClick={() => { setShowIncomeForm(false); setEditingIncome(null) }}
-                    className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-                </div>
-              </div>
-            )}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {activeStreams.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-6 text-center">
@@ -747,9 +748,9 @@ export default function BudgetPage() {
                   const monthly = streamToMonthly(s)
                   return (
                     <div key={s.id} className={cn(
-                      'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                      'flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-default',
                       s.isIncluded ? 'border-green-500/20 bg-green-500/5' : 'border-border opacity-60',
-                    )}>
+                    )} onDoubleClick={() => openEditIncome(s)}>
                       <button onClick={() => toggleIncomeIncluded(s.id)}
                         className={cn('w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
                           s.isIncluded ? 'bg-green-500 border-green-500' : 'border-muted-foreground')}
@@ -835,9 +836,11 @@ export default function BudgetPage() {
           </div>
         </div>
 
-        {showRuleForm && (
-          <div className="rounded-lg border border-border p-4 space-y-3 mb-3">
-            <h3 className="font-semibold text-sm">{editingRule ? 'Edit budget rule' : 'New budget rule'}</h3>
+        <Dialog open={showRuleForm} onOpenChange={open => { if (!open) { setShowRuleForm(false); setEditingRule(null) } }}>
+          <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
+            <DialogHeader>
+              <DialogTitle>{editingRule ? 'Edit budget rule' : 'New budget rule'}</DialogTitle>
+            </DialogHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Name *</label>
@@ -876,16 +879,14 @@ export default function BudgetPage() {
                 </select>
               </div>
             </div>
-            <div className="flex gap-2">
+            <DialogFooter>
               <button onClick={handleSaveRule}
                 className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
                 {editingRule ? 'Update' : 'Add rule'}
               </button>
-              <button onClick={() => { setShowRuleForm(false); setEditingRule(null) }}
-                className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            </div>
-          </div>
-        )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {activeRules.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-6 text-center">
@@ -904,9 +905,9 @@ export default function BudgetPage() {
               const fromBill = !!r.billId
               return (
                 <div key={r.id} className={cn(
-                  'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                  'flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-default',
                   r.isIncludedInPlanner ? 'border-border' : 'border-border opacity-50',
-                )}>
+                )} onDoubleClick={() => openEditRule(r)}>
                   <button onClick={() => toggleRuleIncluded(r)}
                     className={cn('w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
                       r.isIncludedInPlanner ? 'bg-primary border-primary' : 'border-muted-foreground')}

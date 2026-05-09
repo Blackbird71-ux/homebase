@@ -265,7 +265,7 @@ function CategoryRow({
       <div className={cn(
         'flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 transition-colors',
         cat.name === NOT_IN_USE_NAME && 'border-dashed border-muted-foreground/30',
-      )} style={{ marginLeft: depth * 24 }}>
+      )} style={{ marginLeft: depth * 24 }} onDoubleClick={() => onEdit(cat)}>
         {/* Collapse toggle for "Not In Use" */}
         {showToggle && hasChildren && (
           <button

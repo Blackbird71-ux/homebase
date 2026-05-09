@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 interface Account {
   id: string; name: string; type: string; institution: string | null
@@ -78,10 +79,12 @@ export default function AccountsPage() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <h3 className="font-semibold">{editing ? 'Edit Account' : 'New Account'}</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Account' : 'New Account'}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Name *</label>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
@@ -124,22 +127,21 @@ export default function AccountsPage() {
                 className="h-8 w-8 rounded cursor-pointer" />
             </div>
           </div>
-          <div className="flex gap-2">
+          <DialogFooter>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={() => { setShowForm(false); setEditing(null) }}
-              className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {accounts.length === 0 ? (
         <p className="text-sm text-muted-foreground">No accounts yet. Add your first account above.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {accounts.map(a => (
-            <div key={a.id} className="rounded-lg border border-border p-4">
+            <div key={a.id} className="rounded-lg border border-border p-4 cursor-default"
+              onDoubleClick={() => openEdit(a)}>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: a.color ?? '#6B7280' }} />
                 <span className="font-medium truncate">{a.name}</span>

@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 interface Goal {
   id: string; name: string; targetAmount: number; currentAmount: number
@@ -77,10 +78,12 @@ export default function GoalsPage() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <h3 className="font-semibold">{editing ? 'Edit Goal' : 'New Savings Goal'}</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Goal' : 'New Savings Goal'}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Name *</label>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
@@ -118,15 +121,13 @@ export default function GoalsPage() {
                 className="h-8 w-8 rounded cursor-pointer" />
             </div>
           </div>
-          <div className="flex gap-2">
+          <DialogFooter>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={() => { setShowForm(false); setEditing(null) }}
-              className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {goals.length === 0 ? (
         <p className="text-sm text-muted-foreground">No savings goals yet. Start saving by adding a goal!</p>
@@ -137,7 +138,8 @@ export default function GoalsPage() {
             const isComplete = g.isComplete || percentage >= 100
 
             return (
-              <div key={g.id} className={cn('rounded-lg border p-5', isComplete ? 'border-green-500/30 bg-green-500/5' : 'border-border')}>
+              <div key={g.id} className={cn('rounded-lg border p-5 cursor-default', isComplete ? 'border-green-500/30 bg-green-500/5' : 'border-border')}
+                onDoubleClick={() => openEdit(g)}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: g.color ?? '#10B981' }} />
