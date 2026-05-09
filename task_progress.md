@@ -12,5 +12,18 @@
 - [x] Add weather location to uiPreferences / settings
 - [x] Add OPENWEATHER_API_KEY to env.example
 
+## Finance Module — Accounting Fixes & UX Parity
+- [x] P&L cash/forecast toggle (cash=confirmed only; forecast=includes pending)
+- [x] Reports cash/forecast toggle (same semantics)
+- [x] Budget income → single source of truth (reads FinanceIncomeEntry, retired JSON blob)
+- [x] Goals auto-progress from linked account balance (disabled field when account linked)
+- [x] Entity field on transactions — CRUD, filter, chip on row
+- [x] Migration: 20260515000000_add_transaction_entity
+- [x] Pending vs cleared balance shown on account cards
+- [x] Usage counts on Categories, Members, Locations pages
+- [x] Vendor description updated to mention income payers
+- [x] Clickable vendor/member/location chips on bills → quick-filter badge
+
 ## Done
-- [ ] Test both features
+- [ ] Full regression test of finance module after all changes
+- [ ] Commit to git once confirmed solid
