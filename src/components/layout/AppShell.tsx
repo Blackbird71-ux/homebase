@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from './Sidebar'
 import { QuickAdd } from './QuickAdd'
 import { UniversalFAB } from './UniversalFAB'
-import { TopBarActions } from './TopBarActions'
 import { OfflineBanner } from './OfflineBanner'
 import { HelpButton } from './HelpButton'
 import { AIAssistant } from '@/components/ai/AIAssistant'
@@ -16,6 +15,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   })
   const [helpOpen, setHelpOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+
+  // Listen for custom events from QuickAdd dialog or UniversalFAB sheet
+  useEffect(() => {
+    function handleOpenAI() { setAiOpen(true) }
+    function handleOpenHelp() { setHelpOpen(true) }
+    window.addEventListener('homebase:open-ai', handleOpenAI)
+    window.addEventListener('homebase:open-help', handleOpenHelp)
+    return () => {
+      window.removeEventListener('homebase:open-ai', handleOpenAI)
+      window.removeEventListener('homebase:open-help', handleOpenHelp)
+    }
+  }, [])
 
   function toggleSidebar() {
     setSidebarCollapsed((prev) => {
@@ -31,12 +42,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
       <main className="flex-1 overflow-hidden flex flex-col min-w-0 relative">
-        {/* Top-right AI + Help buttons */}
-        <TopBarActions
-          onOpenAI={() => setAiOpen(true)}
-          onOpenHelp={() => setHelpOpen(true)}
-        />
-
         {/* pb-16 gives clearance for the universal FAB on all screen sizes */}
         <div className="flex-1 overflow-hidden pb-16">
           {children}

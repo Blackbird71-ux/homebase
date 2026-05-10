@@ -21,10 +21,12 @@ import {
   DollarSign,
   ShoppingCart,
   Utensils,
+  Bot,
+  HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note'
+type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
 
 const navItems = [
   { href: '/home',      label: 'Home',     icon: Home },
@@ -49,6 +51,8 @@ const quickActions: { id: QuickAction; label: string; icon: React.ReactNode; des
   { id: 'recipe',        label: 'Recipe',        icon: <ChefHat className="h-5 w-5" />,       description: 'Add a recipe' },
   { id: 'meal',          label: 'Meal',          icon: <Utensils className="h-5 w-5" />,      description: 'Plan a meal' },
   { id: 'note',          label: 'Note',          icon: <StickyNote className="h-5 w-5" />,    description: 'Write a note' },
+  { id: 'ai',            label: 'AI Assistant',  icon: <Bot className="h-5 w-5" />,           description: 'Voice or chat commands' },
+  { id: 'help',          label: 'Help',           icon: <HelpCircle className="h-5 w-5" />,   description: 'How to use this page' },
 ]
 
 interface UniversalFABProps {
@@ -100,6 +104,16 @@ export function UniversalFAB({ onQuickAction }: UniversalFABProps) {
   }
 
   function handleActionSelect(action: QuickAction) {
+    // AI and Help are modal/dialog-only actions — dispatch directly
+    if (action === 'ai' || action === 'help') {
+      setOpen(false)
+      const eventName = action === 'ai' ? 'homebase:open-ai' : 'homebase:open-help'
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent(eventName))
+      }, 200)
+      return
+    }
+
     if (window.innerWidth >= 768) {
       // Desktop — notify parent to open QuickAdd dialog with the selected action
       onQuickAction?.(action)

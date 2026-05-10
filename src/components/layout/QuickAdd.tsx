@@ -14,6 +14,8 @@ import {
   ShoppingCart,
   CheckSquare,
   Utensils,
+  Bot,
+  HelpCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,7 +35,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 
-type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note'
+type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
 
 interface ListMeta {
   id: string
@@ -63,6 +65,8 @@ const actions: { id: QuickAction; label: string; icon: React.ReactNode; descript
   { id: 'recipe',        label: 'Recipe',        icon: <ChefHat className="h-5 w-5" />,       description: 'Add a recipe' },
   { id: 'meal',          label: 'Meal',          icon: <Utensils className="h-5 w-5" />,      description: 'Plan a meal' },
   { id: 'note',          label: 'Note',          icon: <StickyNote className="h-5 w-5" />,    description: 'Write a note' },
+  { id: 'ai',            label: 'AI Assistant',  icon: <Bot className="h-5 w-5" />,           description: 'Voice or chat commands' },
+  { id: 'help',          label: 'Help',           icon: <HelpCircle className="h-5 w-5" />,   description: 'How to use this page' },
 ]
 
 function todayLocal() {
@@ -208,6 +212,16 @@ export function QuickAdd() {
   }
 
   function selectMode(m: QuickAction) {
+    // AI and Help open their own dialogs — close QuickAdd and dispatch events
+    if (m === 'ai' || m === 'help') {
+      const eventName = m === 'ai' ? 'homebase:open-ai' : 'homebase:open-help'
+      handleOpenChange(false)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent(eventName))
+      }, 200)
+      return
+    }
+
     setMode(m)
     if (m === 'event') setEventDate(todayLocal())
     if (m === 'meal' || m === 'expense') setDate(todayLocal())
