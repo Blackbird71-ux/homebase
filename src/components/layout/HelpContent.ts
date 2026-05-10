@@ -926,32 +926,32 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       },
     ],
   },
-  '/finance/vendors': {
-    title: 'Finance — Vendors',
+  '/finance/contacts': {
+    title: 'Finance — Financial Contacts',
     sections: [
       {
         title: 'Overview',
         items: [
-          'Vendors stores the people and businesses you pay — utilities, landlords, subscriptions, tradespeople, and any other payee.',
-          'Each vendor card shows the vendor name (with an avatar), default category, contact details, and counts of linked bills and transactions.',
-          'Vendors are shared across the whole family and can be assigned as the payee on bills and transactions.',
+          'Financial Contacts stores the people and businesses you transact with — creditors you pay (utilities, landlords, subscriptions, tradespeople) and debtors who pay you (clients, employers, tenants).',
+          'Each contact card shows the name (with an avatar), default category, contact details, and counts of linked bills and transactions.',
+          'Contacts are shared across the whole family and can be assigned on bills, income entries, and transactions.',
         ],
       },
       {
         title: 'Adding & Editing',
         items: [
-          'Click "Add Vendor" and enter the vendor\'s name — this is the only required field.',
-          'Optionally set a Default Category so every new bill or transaction using this vendor automatically gets that category.',
-          'Add website, phone number, and account reference (e.g., your customer or member number) for quick access when paying.',
-          'Use the Notes field to store any additional information about the vendor.',
+          'Click "Add Contact" and enter the name — this is the only required field.',
+          'Optionally set a Default Category so every new bill or transaction using this contact automatically gets that category.',
+          'Add website, phone number, and account reference (e.g., your customer or member number) for quick access.',
+          'Use the Notes field to store any additional information about the contact.',
         ],
       },
       {
-        title: 'Using Vendors',
+        title: 'Using Contacts',
         items: [
-          'When adding a bill or transaction, the vendor picker shows all vendors. Selecting one auto-fills the category if the vendor has a default category set.',
-          'The vendor card shows how many bills and transactions are linked, letting you see at a glance which vendors are most active.',
-          'Delete a vendor to unlink it from all associated bills and transactions — the records themselves are preserved.',
+          'When adding a bill or income entry, the contact picker shows all contacts. Selecting one auto-fills the category if the contact has a default category set.',
+          'The contact card shows how many bills and transactions are linked, letting you see at a glance which contacts are most active.',
+          'Delete a contact to unlink it from all associated bills and transactions — the records themselves are preserved.',
         ],
       },
     ],

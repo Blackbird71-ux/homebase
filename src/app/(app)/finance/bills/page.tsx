@@ -140,7 +140,7 @@ export default function BillsPage() {
       fetch('/api/finance/categories'),
       fetch('/api/finance/members'),
       fetch('/api/finance/locations'),
-      fetch('/api/finance/vendors'),
+      fetch('/api/finance/contacts'),
       fetch('/api/finance/budget'),
       fetch('/api/finance/entities'),
     ])
@@ -557,16 +557,16 @@ export default function BillsPage() {
               </div>
             )}
             <div>
-              <label className="text-xs text-muted-foreground">Vendor</label>
+              <label className="text-xs text-muted-foreground">Financial Contact</label>
               <div className="flex gap-1">
                 <select value={form.vendorId} onChange={e => handleVendorChange(e.target.value)}
                   className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="">No vendor</option>
+                  <option value="">No contact</option>
                   {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
-                <Link href="/finance/vendors"
+                <Link href="/finance/contacts"
                   className="shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-muted-foreground hover:text-foreground"
-                  title="Manage vendors"><Building2 className="h-3.5 w-3.5" /></Link>
+                  title="Manage contacts"><Building2 className="h-3.5 w-3.5" /></Link>
               </div>
             </div>
             <div>

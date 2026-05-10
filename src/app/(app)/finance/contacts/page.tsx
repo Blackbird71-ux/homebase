@@ -39,7 +39,7 @@ export default function VendorsPage() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/api/finance/vendors')
+      const res = await fetch('/api/finance/contacts')
       if (res.ok) setVendors(await res.json())
     } finally { setLoading(false) }
   }
@@ -75,13 +75,13 @@ export default function VendorsPage() {
     const body = editing
       ? { id: editing.id, ...form, defaultCategoryId: form.defaultCategoryId || null }
       : { ...form, defaultCategoryId: form.defaultCategoryId || null }
-    const res = await fetch('/api/finance/vendors', {
+    const res = await fetch('/api/finance/contacts', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     if (res.ok) {
-      toast.success(editing ? 'Vendor updated' : 'Vendor created')
+      toast.success(editing ? 'Contact updated' : 'Contact created')
       setShowForm(false); setEditing(null); load()
     } else {
       const err = await res.json()
@@ -90,31 +90,31 @@ export default function VendorsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this vendor? Bills and transactions will keep their data but lose the vendor link.')) return
-    const res = await fetch(`/api/finance/vendors?id=${id}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Vendor deleted'); load() }
+    if (!confirm('Delete this contact? Bills and transactions will keep their data but lose the contact link.')) return
+    const res = await fetch(`/api/finance/contacts?id=${id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Contact deleted'); load() }
     else toast.error('Failed to delete')
   }
 
-  if (loading) return <div className="p-4 text-muted-foreground">Loading vendors…</div>
+  if (loading) return <div className="p-4 text-muted-foreground">Loading contacts…</div>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Vendors</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Companies and contacts you pay bills to or receive income from.</p>
+          <h1 className="text-2xl font-bold">Financial Contacts</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Companies and people you pay bills to or receive income from.</p>
         </div>
         <button onClick={openNew}
           className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-          <Plus className="h-4 w-4" /> Add Vendor
+          <Plus className="h-4 w-4" /> Add Contact
         </button>
       </div>
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
         <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Vendor' : 'New Vendor'}</DialogTitle>
+            <DialogTitle>{editing ? 'Edit Contact' : 'New Contact'}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -182,8 +182,8 @@ export default function VendorsPage() {
       {vendors.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center">
           <Building2 className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">No vendors yet.</p>
-          <p className="text-xs text-muted-foreground mt-1">Add vendors to assign to bills and track spending by supplier.</p>
+          <p className="text-sm text-muted-foreground">No contacts yet.</p>
+          <p className="text-xs text-muted-foreground mt-1">Add contacts to assign to bills and income entries.</p>
         </div>
       ) : (
         <div className="space-y-2">
