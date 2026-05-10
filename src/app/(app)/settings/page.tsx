@@ -127,7 +127,7 @@ export default async function SettingsPage() {
           <TabsContent value="integrations">
             <IntegrationsTab
               googleConnected={user.googleConnected}
-              googleEmail={user.googleEmail ?? undefined}
+              googleEmail={user.googleEmail ?? null}
             />
           </TabsContent>
 
