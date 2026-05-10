@@ -91,12 +91,12 @@ echo "   Prisma  : $(node_modules/.bin/prisma --version 2>/dev/null | head -1 ||
 # Remove any migrations that are recorded as failed so `migrate deploy`
 # will retry them with the corrected SQL.
 #
-# Previously this marked them as "finished" which caused migrate deploy to
-# skip them, leaving the columns absent from the database but recorded as
-# applied. This was broken for cases like `ALTER TABLE ... ADD COLUMN ... UNIQUE`
-# which SQLite rejects — the migration failed, columns were never created,
-# but marking it finished told Prisma "all good" when it wasn't.
+# We also detect "phantom applied" migrations — where Prisma recorded a migration
+# as successfully finished but the actual SQL never ran (e.g. a previous container
+# crash mid-migration, or a SQLite constraint error that was swallowed). We verify
+# key schema columns actually exist in the DB and reset the migration record if not.
 if [ -f "$DB_PATH" ]; then
+  # --- Remove genuinely failed / in-progress migration records ---
   STALE=$(sqlite3 "$DB_PATH" \
     "SELECT count(*) FROM _prisma_migrations WHERE logs IS NOT NULL OR (finished_at IS NULL AND rolled_back_at IS NULL);" 2>/dev/null || echo "0")
   if [ "$STALE" -gt 0 ]; then
@@ -105,6 +105,31 @@ if [ -f "$DB_PATH" ]; then
       "DELETE FROM _prisma_migrations WHERE logs IS NOT NULL OR (finished_at IS NULL AND rolled_back_at IS NULL);"
     echo "   ✓ Stale records removed"
   fi
+
+  # --- Verify key columns actually exist; reset migration if they don't ---
+  # This catches the "phantom applied" case: migration recorded as finished but
+  # the ALTER TABLE never actually ran against the live database.
+  #
+  # Format: "MigrationName|TableName|ColumnName"
+  COLUMN_CHECKS="
+20260521000000_add_invoice_tx_id|FinanceRecurringBill|invoiceTxId
+20260521000000_add_invoice_tx_id|FinanceIncomeEntry|invoiceTxId
+20260523000000_add_coa_opening_balance|FinanceCategory|glCode
+20260523000000_add_coa_opening_balance|FinanceCategory|openingBalance
+"
+  echo "$COLUMN_CHECKS" | while IFS='|' read -r MIGRATION TABLE COLUMN; do
+    # Skip blank lines
+    [ -z "$MIGRATION" ] && continue
+    # Check if column exists in the table
+    COL_EXISTS=$(sqlite3 "$DB_PATH" \
+      "SELECT count(*) FROM pragma_table_info('$TABLE') WHERE name='$COLUMN';" 2>/dev/null || echo "0")
+    if [ "$COL_EXISTS" = "0" ]; then
+      echo "   ! Column '$COLUMN' missing from '$TABLE' — resetting migration '$MIGRATION' so it re-runs..."
+      sqlite3 "$DB_PATH" \
+        "DELETE FROM _prisma_migrations WHERE migration_name = '$MIGRATION';" 2>/dev/null || true
+      echo "   ✓ Migration record reset"
+    fi
+  done
 fi
 
 if node_modules/.bin/prisma migrate deploy; then

@@ -51,3 +51,6 @@ dist/
 
 # docker build artifacts
 homebase.tar
+
+# standalone build artifacts (stale copies of source files, never used directly)
+/.next/standalone/
