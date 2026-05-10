@@ -36,10 +36,20 @@ When the new container starts, `docker/entrypoint.sh` automatically runs:
 node_modules/.bin/prisma migrate deploy
 ```
 
-This applies **only pending** migrations — already-applied ones are skipped. The 3 migration files affected in the current build cycle are:
-- `20260519000000_add_is_transfer`
-- `20260520000000_add_finance_year_start`
-- `20260520100000_add_opening_balances`
+This applies **only pending** migrations — already-applied ones are skipped.
+
+#### ⚠️ SQLite Compatibility Warning
+SQLite does NOT support `ALTER TABLE ... ADD COLUMN ... UNIQUE`. If a migration needs a unique column, split it into:
+```sql
+ALTER TABLE "TableName" ADD COLUMN "columnName" TEXT;
+CREATE UNIQUE INDEX "TableName_columnName_key" ON "TableName"("columnName");
+```
+This avoids `prisma migrate deploy` failing on the NAS at startup.
+
+The pending migrations in the current build cycle are:
+- `20260521000000_add_invoice_tx_id` — adds invoiceTxId to recurring bills + income entries (has separate UNIQUE index for SQLite compatibility)
+- `20260522000000_fix_opening_balance_sign` — fixes opening balance transaction sign for liability accounts
+- `20260523000000_add_coa_opening_balance` — adds glCode, openingBalance, openingBalanceDate to FinanceCategory
 
 ### 4. Rollback
 The entrypoint auto-creates a pre-migration backup before running `prisma migrate deploy`:
