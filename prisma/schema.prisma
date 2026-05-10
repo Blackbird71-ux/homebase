@@ -564,7 +564,7 @@ model FinanceAccount {
 model FinanceCategory {
   id              String            @id @default(cuid())
   name            String
-  type            String            @default("expense")  // expense | income | transfer
+  type            String            @default("expense")  // expense | income | transfer | asset | liability | equity
   parentId        String?
   parent          FinanceCategory?  @relation("FinanceCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children        FinanceCategory[] @relation("FinanceCategoryHierarchy")
@@ -684,12 +684,13 @@ model FinanceRecurringBill {
   parentBillId    String?
   parentBill      FinanceRecurringBill?  @relation("BillOccurrences", fields: [parentBillId], references: [id], onDelete: SetNull)
   childBills      FinanceRecurringBill[] @relation("BillOccurrences")
-  transactionId   String?               @unique // FK -> FinanceTransaction created on payment
-  invoiceTxId     String?               @unique // FK -> FinanceTransaction created when invoice received (DR expense / CR AP)
+  transactionId   String?               @unique // FK -> FinanceTransaction (legacy: first tx created; prefer invoiceTxId/paymentTxId)
+  invoiceTxId     String?               @unique // FK -> expense transaction created when invoice received (stage 1: DR expense)
+  paymentTxId     String?               @unique // FK -> payment transaction created when bill paid (stage 2: DR AP / CR bank)
   transaction     FinanceTransaction?   @relation("BillTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  taxClassification String?            // personal | business | investment | super; null = not classified
+  taxClassification String?            // tax_deduction | tax_payment | null
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -732,7 +733,8 @@ model FinanceIncomeEntry {
   recurrenceInterval  String?              // Custom recurrence detail
   invoiceReceived     Boolean              @default(false)  // Invoice/remittance advice received
   invoiceReceivedDate DateTime?
-  invoiceTxId         String?              @unique // FK -> FinanceTransaction when remittance received (DR AR / CR income)
+  invoiceTxId         String?              @unique // FK -> income transaction when remittance received (stage 1: CR income / DR AR)
+  receiptTxId         String?              @unique // FK -> bank transaction when cash received (stage 2: DR bank / CR AR)
   notes               String?
   memberId            String?              // Which family member earns this
   accountId           String?
@@ -748,7 +750,7 @@ model FinanceIncomeEntry {
   parentIncomeId      String?
   parentIncome        FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
   childEntries        FinanceIncomeEntry[] @relation("IncomeOccurrences")
-  transactionId       String?              @unique // FK -> FinanceTransaction created on receipt
+  transactionId       String?              @unique // FK -> FinanceTransaction (legacy: first tx created; prefer invoiceTxId/receiptTxId)
   transaction         FinanceTransaction?  @relation("IncomeTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   attachments         IncomeAttachment[]
   familyId            String

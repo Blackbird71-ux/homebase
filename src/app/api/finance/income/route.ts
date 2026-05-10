@@ -151,12 +151,12 @@ export async function DELETE(request: NextRequest) {
 }
 
 function advanceNextExpectedDate(date: Date, frequency: string): Date {
-  if (frequency === 'monthly') return addMonths(date, 1)
+  if (frequency === 'monthly')     return addMonths(date, 1)
   if (frequency === 'fortnightly') return addWeeks(date, 2)
-  if (frequency === 'weekly') return addWeeks(date, 1)
-  if (frequency === 'quarterly') return addMonths(date, 3)
-  if (frequency === 'halfyearly') return addMonths(date, 6)
-  if (frequency === 'yearly') return addMonths(date, 12)
+  if (frequency === 'weekly')      return addWeeks(date, 1)
+  if (frequency === 'quarterly')   return addMonths(date, 3)
+  if (frequency === 'halfyearly')  return addMonths(date, 6)
+  if (frequency === 'yearly')      return addMonths(date, 12)
   return addMonths(date, 1)
 }
 
@@ -170,11 +170,11 @@ export async function PATCH(request: NextRequest) {
   const existing = await prisma.financeIncomeEntry.findFirst({ where: { id, familyId: session.familyId } })
   if (!existing) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
 
+  const existingAny = existing as any
   const updateData: Record<string, any> = {}
 
   if (received !== undefined) {
     updateData.received = received
-    // Use the caller-supplied date (which may be backdated) or fall back to now
     const stampDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
     updateData.receivedDate = received ? stampDate : null
   }
@@ -186,43 +186,82 @@ export async function PATCH(request: NextRequest) {
       : null
   }
 
-  // ── Undo invoiceReceived (remittance): delete the AR staging transaction ────
-  const existingAny = existing as any
-  if (invoiceReceived === false && existing.invoiceReceived === true && existingAny.invoiceTxId) {
-    await prisma.financeTransaction.deleteMany({
-      where: { id: existingAny.invoiceTxId, familyId: session.familyId },
-    })
-    updateData.invoiceTxId = null
+  // ── Undo remittance: delete the stage-1 income transaction ────────────────
+  if (invoiceReceived === false && existing.invoiceReceived === true) {
+    const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+    if (invoiceTxId) {
+      await prisma.financeTransaction.deleteMany({
+        where: { id: invoiceTxId, familyId: session.familyId },
+      })
+      updateData.invoiceTxId = null
+      if (existingAny.transactionId === invoiceTxId) updateData.transactionId = null
+    }
+    // Undo received too if it was set
+    if (existing.received) {
+      const receiptTxId: string | null = existingAny.receiptTxId ?? null
+      if (receiptTxId) {
+        await prisma.financeTransaction.deleteMany({
+          where: { id: receiptTxId, familyId: session.familyId },
+        })
+        updateData.receiptTxId = null
+        if (existingAny.transactionId === receiptTxId) updateData.transactionId = null
+      }
+      updateData.received = false
+      updateData.receivedDate = null
+      await prisma.financeIncomeEntry.deleteMany({
+        where: { parentIncomeId: id, familyId: session.familyId, received: false },
+      })
+    }
   }
 
-  // ── Undo received: delete spawned child occurrences & the auto-transaction ──
+  // ── Undo received: delete stage-2 receipt transaction + spawned children ──
   if (received === false && existing.received === true) {
-    // Delete the auto-created transaction if one exists
-    if (existing.transactionId) {
+    const receiptTxId: string | null = existingAny.receiptTxId ?? null
+    if (receiptTxId) {
       await prisma.financeTransaction.deleteMany({
-        where: { id: existing.transactionId, familyId: session.familyId },
+        where: { id: receiptTxId, familyId: session.familyId },
+      })
+      updateData.receiptTxId = null
+      if (existingAny.transactionId === receiptTxId) updateData.transactionId = null
+    } else if (existingAny.transactionId) {
+      // Legacy: older records stored receipt in transactionId directly
+      await prisma.financeTransaction.deleteMany({
+        where: { id: existingAny.transactionId, familyId: session.familyId },
       })
       updateData.transactionId = null
     }
-    // Remove pending child occurrences that were spawned when marked received
+    // Re-open stage-1 remittance tx (income still recognised, just not yet received)
+    const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+    if (invoiceTxId) {
+      await prisma.financeTransaction.updateMany({
+        where: { id: invoiceTxId, familyId: session.familyId },
+        data: { isCleared: false, reconciledDate: null },
+      })
+    }
     await prisma.financeIncomeEntry.deleteMany({
       where: { parentIncomeId: id, familyId: session.familyId, received: false },
     })
   }
 
+  // Apply status field updates
   const entry = await prisma.financeIncomeEntry.update({
     where: { id },
     data: updateData,
     include: INCOME_INCLUDE,
   })
 
-  // ── Mark remittance received: create uncleared income transaction ────────────
-  // Per finance notes: remittance received → income is recognised (DR AR / CR income account)
-  // When cash actually arrives, that transaction is cleared.
+  // ── Stage 1: Remittance received → create income transaction (CR income) ──
+  //
+  // Accounting: when remittance advice arrives, income is recognised (accrual).
+  // Creates an uncleared income transaction. The AR asset side is tracked
+  // implicitly — the uncleared income tx represents money owed to us.
+  //
+  // P&L effect: income appears from this point forward.
+  // Balance sheet: uncleared income tx increases net worth (AR asset).
   if (invoiceReceived === true && !existing.invoiceReceived) {
     const remittanceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
     try {
-      await ensureAccountsReceivableCategory(session.familyId)
+      const arCategoryId = await ensureAccountsReceivableCategory(session.familyId)
       const remittanceTx = await prisma.financeTransaction.create({
         data: {
           type: 'income',
@@ -236,32 +275,47 @@ export async function PATCH(request: NextRequest) {
           notes: existing.notes,
           memberId: existing.memberId,
           locationId: existing.locationId,
-          isCleared: false,  // Not yet cleared — cleared when cash arrives
+          isCleared: false,   // Uncleared = awaiting cash (AR outstanding)
           isTransfer: false,
           createdBy: session.id,
           familyId: session.familyId,
           entityId: existing.entityId,
+          // Reference encodes the AR category for the balance sheet to read
+          reference: `AR:${arCategoryId}`,
         },
       })
       await prisma.financeIncomeEntry.update({
         where: { id },
-        data: { invoiceTxId: remittanceTx.id } as any,
+        data: {
+          invoiceTxId: remittanceTx.id,
+          transactionId: remittanceTx.id,  // keep legacy pointer
+        } as any,
       })
-    } catch {
-      // Best-effort
+    } catch (err) {
+      console.error('[income PATCH] Failed to create remittance transaction:', err)
     }
   }
 
-  // ── Mark received: clear the existing remittance tx or create new income tx ──
+  // ── Stage 2: Cash received → create receipt transaction (DR bank) ─────────
+  //
+  // Accounting: cash arrives in the bank account. If a stage-1 remittance tx
+  // exists it is marked cleared (income already on P&L); otherwise a fresh
+  // income tx is created and immediately cleared.
+  //
+  // P&L effect: no change if remittance was already received.
+  // Balance sheet effect: bank account balance increases; AR asset clears.
   if (received === true && !existing.received) {
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
+    // Re-read to get latest invoiceTxId (may have just been written above)
+    const freshEntry = await prisma.financeIncomeEntry.findFirst({
+      where: { id, familyId: session.familyId },
+    }) as any
 
-    let newTransactionId: string | null = null
     try {
-      const invoiceTxId = (existing as any).invoiceTxId
+      const invoiceTxId: string | null = freshEntry?.invoiceTxId ?? null
 
       if (invoiceTxId) {
-        // Remittance already received — clear that transaction (cash is now in hand)
+        // ── Case A: remittance was received — mark that tx cleared (cash in) ─
         await prisma.financeTransaction.update({
           where: { id: invoiceTxId },
           data: {
@@ -271,16 +325,19 @@ export async function PATCH(request: NextRequest) {
             accountId: existing.accountId,
           },
         })
-        newTransactionId = invoiceTxId
+        // receiptTxId points to the same tx
+        await prisma.financeIncomeEntry.update({
+          where: { id },
+          data: { receiptTxId: invoiceTxId, transactionId: invoiceTxId } as any,
+        })
       } else {
-        // No prior remittance transaction — create income transaction now
+        // ── Case B: no prior remittance — create cleared income tx now ────────
         const tx = await prisma.financeTransaction.create({
           data: {
             type: 'income',
             amount: existing.amount,
             accountId: existing.accountId,
             categoryId: existing.categoryId,
-            payee: null,
             description: existing.name,
             date: actualReceivedDate,
             isRecurring: existing.incomeType !== 'one-off',
@@ -290,19 +347,22 @@ export async function PATCH(request: NextRequest) {
             locationId: existing.locationId,
             isCleared: true,
             reconciledDate: actualReceivedDate,
+            isTransfer: false,
             createdBy: session.id,
             familyId: session.familyId,
+            entityId: existing.entityId,
           },
         })
-        newTransactionId = tx.id
+        await prisma.financeIncomeEntry.update({
+          where: { id },
+          data: {
+            receiptTxId: tx.id,
+            transactionId: tx.id,
+          } as any,
+        })
       }
-
-      await prisma.financeIncomeEntry.update({
-        where: { id },
-        data: { transactionId: newTransactionId },
-      })
-    } catch {
-      // Best-effort
+    } catch (err) {
+      console.error('[income PATCH] Failed to create receipt transaction:', err)
     }
 
     // Spawn the next occurrence for recurring income
@@ -344,5 +404,10 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(entry)
+  // Re-fetch with includes so the response is fresh
+  const finalEntry = await prisma.financeIncomeEntry.findFirst({
+    where: { id, familyId: session.familyId },
+    include: INCOME_INCLUDE,
+  })
+  return NextResponse.json(finalEntry ?? entry)
 }

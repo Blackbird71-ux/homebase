@@ -19,20 +19,34 @@ interface COARow {
   isSystem: boolean; source: 'coa'
 }
 
-interface BalanceSheetSection<T> {
-  bankAccounts: BankRow[]
-  coaAccounts: T[]
-  totalBank: number
-  totalCOA: number
-  total: number
+interface AssetSection {
+  bankAccounts:       BankRow[]
+  accountsReceivable: number
+  coaAccounts:        COARow[]
+  totalBank:          number
+  totalAR:            number
+  totalCOA:           number
+  total:              number
+}
+
+interface LiabilitySection {
+  bankAccounts:      BankRow[]
+  overdraftAccounts: BankRow[]
+  accountsPayable:   number
+  coaAccounts:       COARow[]
+  totalBank:         number
+  totalOverdraft:    number
+  totalAP:           number
+  totalCOA:          number
+  total:             number
 }
 
 interface BalanceSheetResponse {
-  asAt: string
-  assets:      BalanceSheetSection<COARow>
-  liabilities: BalanceSheetSection<COARow>
-  equity: { coaAccounts: COARow[]; total: number }
-  netWorth: number
+  asAt:       string
+  assets:     AssetSection
+  liabilities: LiabilitySection
+  equity:     { coaAccounts: COARow[]; total: number }
+  netWorth:   number
   equityMatchesNetWorth: boolean
 }
 
@@ -47,15 +61,16 @@ function fmt(n: number, currency = 'AUD') {
   }).format(n)
 }
 
-function SectionRow({ label, amount, indent, bold, glCode }: {
-  label: string; amount: number; indent?: boolean; bold?: boolean; glCode?: string | null
+function SectionRow({ label, amount, indent, bold, glCode, muted }: {
+  label: string; amount: number; indent?: boolean; bold?: boolean
+  glCode?: string | null; muted?: boolean
 }) {
   return (
-    <div className={cn(
-      'flex items-center justify-between py-1 text-sm',
-      indent && 'pl-4',
-    )}>
-      <span className={cn('flex items-center gap-2 text-muted-foreground', bold && 'font-semibold text-foreground')}>
+    <div className={cn('flex items-center justify-between py-1 text-sm', indent && 'pl-4')}>
+      <span className={cn(
+        'flex items-center gap-2',
+        bold ? 'font-semibold text-foreground' : muted ? 'text-muted-foreground/70 italic' : 'text-muted-foreground',
+      )}>
         {glCode && (
           <span className="text-[10px] font-mono bg-muted px-1 rounded text-muted-foreground/70">
             {glCode}
@@ -63,7 +78,7 @@ function SectionRow({ label, amount, indent, bold, glCode }: {
         )}
         {label}
       </span>
-      <span className={cn('tabular-nums font-medium', bold && 'font-bold')}>
+      <span className={cn('tabular-nums font-medium', bold && 'font-bold', muted && 'text-muted-foreground/70')}>
         {fmt(amount)}
       </span>
     </div>
@@ -78,6 +93,14 @@ function SectionHeader({ label, icon }: { label: string; icon?: React.ReactNode 
       {icon}
       <h2 className="text-base font-bold">{label}</h2>
     </div>
+  )
+}
+
+function SubHeading({ label }: { label: string }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-1">
+      {label}
+    </p>
   )
 }
 
@@ -115,10 +138,12 @@ export default function BalanceSheetPage() {
   }
   if (!data) return null
 
-  const hasEquityEntries = data.equity.coaAccounts.length > 0
-  const hasCOAAssets     = data.assets.coaAccounts.length > 0
-  const hasCOALiabilities = data.liabilities.coaAccounts.length > 0
-  const showSetupGuide   = !hasCOAAssets && !hasCOALiabilities && !hasEquityEntries
+  const hasEquityEntries   = data.equity.coaAccounts.length > 0
+  const hasCOAAssets       = data.assets.coaAccounts.length > 0
+  const hasCOALiabilities  = data.liabilities.coaAccounts.length > 0
+  const hasAP              = data.liabilities.accountsPayable > 0
+  const hasAR              = data.assets.accountsReceivable > 0
+  const showSetupGuide     = !hasCOAAssets && !hasCOALiabilities && !hasEquityEntries && !hasAP && !hasAR
 
   return (
     <div className="space-y-6 pb-8">
@@ -178,7 +203,7 @@ export default function BalanceSheetPage() {
         </div>
       )}
 
-      {/* Setup guide — shown when no COA opening balances set yet */}
+      {/* Setup guide */}
       {showSetupGuide && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-5 space-y-3">
           <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -201,29 +226,21 @@ export default function BalanceSheetPage() {
               its opening balance and as-at date.
             </li>
             <li>
-              Return here and the Balance Sheet will populate automatically.
+              Return here — the Balance Sheet populates automatically. Bills with a received
+              invoice also appear under Accounts Payable automatically.
             </li>
           </ol>
-          <p className="text-xs text-muted-foreground">
-            Examples: Property — 12 Oak St (Asset, $750,000) · Mortgage (Liability, $350,000) ·
-            Investment Portfolio (Asset, $180,000)
-          </p>
         </div>
       )}
 
       {/* ── ASSETS ────────────────────────────────────────────────────────── */}
       <div className="rounded-lg border border-border p-4 space-y-1">
-        <SectionHeader
-          label="ASSETS"
-          icon={<TrendingUp className="h-4 w-4 text-green-500" />}
-        />
+        <SectionHeader label="ASSETS" icon={<TrendingUp className="h-4 w-4 text-green-500" />} />
 
-        {/* Bank accounts (derived from transactions) */}
+        {/* Bank accounts with positive balance */}
         {data.assets.bankAccounts.length > 0 && (
           <>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Bank & Cash Accounts
-            </p>
+            <SubHeading label="Bank & Cash Accounts" />
             {data.assets.bankAccounts.map(a => (
               <SectionRow
                 key={a.id}
@@ -232,18 +249,29 @@ export default function BalanceSheetPage() {
                 indent
               />
             ))}
-            {data.assets.coaAccounts.length > 0 && (
+            {(hasAR || hasCOAAssets) && (
               <SectionRow label="Subtotal — Bank & Cash" amount={data.assets.totalBank} bold />
             )}
           </>
         )}
 
-        {/* COA asset accounts (opening balance) */}
-        {data.assets.coaAccounts.length > 0 && (
+        {/* Accounts Receivable (uncleared income txs) */}
+        {hasAR && (
           <>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-1">
-              Other Assets
-            </p>
+            <SubHeading label="Accounts Receivable" />
+            <SectionRow
+              label="Invoiced income not yet received"
+              amount={data.assets.accountsReceivable}
+              indent
+              muted
+            />
+          </>
+        )}
+
+        {/* COA asset accounts */}
+        {hasCOAAssets && (
+          <>
+            <SubHeading label="Other Assets" />
             {data.assets.coaAccounts.map(c => (
               <SectionRow
                 key={c.id}
@@ -253,9 +281,6 @@ export default function BalanceSheetPage() {
                 indent
               />
             ))}
-            {data.assets.bankAccounts.length > 0 && (
-              <SectionRow label="Subtotal — Other Assets" amount={data.assets.totalCOA} bold />
-            )}
           </>
         )}
 
@@ -265,37 +290,55 @@ export default function BalanceSheetPage() {
 
       {/* ── LIABILITIES ───────────────────────────────────────────────────── */}
       <div className="rounded-lg border border-border p-4 space-y-1">
-        <SectionHeader
-          label="LIABILITIES"
-          icon={<TrendingDown className="h-4 w-4 text-red-500" />}
-        />
+        <SectionHeader label="LIABILITIES" icon={<TrendingDown className="h-4 w-4 text-red-500" />} />
 
-        {/* Credit card / loan accounts from bank accounts */}
+        {/* Credit cards / loans */}
         {data.liabilities.bankAccounts.length > 0 && (
           <>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Credit Cards & Loans (from Accounts)
-            </p>
+            <SubHeading label="Credit Cards & Loans" />
             {data.liabilities.bankAccounts.map(a => (
               <SectionRow
                 key={a.id}
                 label={a.institution ? `${a.name} (${a.institution})` : a.name}
+                amount={Math.max(0, a.balance)}
+                indent
+              />
+            ))}
+          </>
+        )}
+
+        {/* Overdrawn accounts */}
+        {data.liabilities.overdraftAccounts.length > 0 && (
+          <>
+            <SubHeading label="Overdrawn Accounts" />
+            {data.liabilities.overdraftAccounts.map(a => (
+              <SectionRow
+                key={a.id}
+                label={`${a.institution ? `${a.name} (${a.institution})` : a.name} — overdrawn`}
                 amount={Math.abs(a.balance)}
                 indent
               />
             ))}
-            {data.liabilities.coaAccounts.length > 0 && (
-              <SectionRow label="Subtotal — Credit & Loans" amount={data.liabilities.totalBank} bold />
-            )}
+          </>
+        )}
+
+        {/* Accounts Payable (uncleared expense txs tagged AP) */}
+        {hasAP && (
+          <>
+            <SubHeading label="Accounts Payable" />
+            <SectionRow
+              label="Invoices received but not yet paid"
+              amount={data.liabilities.accountsPayable}
+              indent
+              muted
+            />
           </>
         )}
 
         {/* COA liability accounts */}
-        {data.liabilities.coaAccounts.length > 0 && (
+        {hasCOALiabilities && (
           <>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-1">
-              Other Liabilities
-            </p>
+            <SubHeading label="Other Liabilities" />
             {data.liabilities.coaAccounts.map(c => (
               <SectionRow
                 key={c.id}
@@ -305,15 +348,12 @@ export default function BalanceSheetPage() {
                 indent
               />
             ))}
-            {data.liabilities.bankAccounts.length > 0 && (
-              <SectionRow label="Subtotal — Other Liabilities" amount={data.liabilities.totalCOA} bold />
-            )}
           </>
         )}
 
         {data.assets.total === 0 && data.liabilities.total === 0 && (
           <p className="text-sm text-muted-foreground py-2">
-            No liabilities recorded yet. Add liability accounts in Chart of Accounts.
+            No liabilities recorded yet.
           </p>
         )}
 
@@ -371,17 +411,17 @@ export default function BalanceSheetPage() {
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>
             Equity ({fmt(data.equity.total)}) does not equal Net Worth ({fmt(data.netWorth)}).
-            This is expected until all assets, liabilities, and income/expense history are
-            recorded with journal entries. Set opening balances on all COA accounts to
-            bring these into alignment.
+            This is expected until opening balances on all COA accounts sum to your actual
+            net worth. Update them in Chart of Accounts.
           </span>
         </div>
       )}
 
       <p className="text-xs text-muted-foreground">
-        Bank account balances are derived from cleared transactions recorded in Homebase.
-        Property, investments, mortgages, and other items are based on the opening balances
-        set in Chart of Accounts. Update these manually when values change.
+        Bank balances are derived from cleared transactions. Accounts Payable shows bills
+        with invoice received but not yet paid. Accounts Receivable shows income with
+        remittance received but not yet in your bank. Property, investments, and mortgages
+        use opening balances from Chart of Accounts — update these manually when values change.
       </p>
     </div>
   )

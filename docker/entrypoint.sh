@@ -116,6 +116,8 @@ if [ -f "$DB_PATH" ]; then
 20260521000000_add_invoice_tx_id|FinanceIncomeEntry|invoiceTxId
 20260523000000_add_coa_opening_balance|FinanceCategory|glCode
 20260523000000_add_coa_opening_balance|FinanceCategory|openingBalance
+20260525000000_add_payment_tx_id|FinanceRecurringBill|paymentTxId
+20260525000000_add_payment_tx_id|FinanceIncomeEntry|receiptTxId
 "
   echo "$COLUMN_CHECKS" | while IFS='|' read -r MIGRATION TABLE COLUMN; do
     # Skip blank lines
