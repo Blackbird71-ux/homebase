@@ -97,19 +97,29 @@ export function executeTool(name: string, args, context): Promise<HandlerResult>
 
 Each feature area defines its own tool(s) in a self-contained module:
 
-- [`src/lib/ai/tools/meal-plan.tool.ts`](src/lib/ai/tools/meal-plan.tool.ts)
-- [`src/lib/ai/tools/shopping.tool.ts`](src/lib/ai/tools/shopping.tool.ts)
-- [`src/lib/ai/tools/todo.tool.ts`](src/lib/ai/tools/todo.tool.ts)
-- [`src/lib/ai/tools/calendar.tool.ts`](src/lib/ai/tools/calendar.tool.ts)
-- [`src/lib/ai/tools/chores.tool.ts`](src/lib/ai/tools/chores.tool.ts)
-- [`src/lib/ai/tools/recipes.tool.ts`](src/lib/ai/tools/recipes.tool.ts)
-- [`src/lib/ai/tools/notes.tool.ts`](src/lib/ai/tools/notes.tool.ts)
-- [`src/lib/ai/tools/contacts.tool.ts`](src/lib/ai/tools/contacts.tool.ts)
-- [`src/lib/ai/tools/documents.tool.ts`](src/lib/ai/tools/documents.tool.ts)
-- [`src/lib/ai/tools/birthdays.tool.ts`](src/lib/ai/tools/birthdays.tool.ts)
-- *Future:* [`src/lib/ai/tools/finance.tool.ts`](src/lib/ai/tools/finance.tool.ts)
-- *Future:* [`src/lib/ai/tools/bills.tool.ts`](src/lib/ai/tools/bills.tool.ts)
-- *Future:* [`src/lib/ai/tools/weather.tool.ts`](src/lib/ai/tools/weather.tool.ts)
+- [`src/lib/ai/tools/meal-plan.tool.ts`](src/lib/ai/tools/meal-plan.tool.ts) — 4 tools: `setMealPlan`, `queryMealPlan`, `queryMealSuggestions`, `toggleMealPlanRecipe`
+- [`src/lib/ai/tools/shopping.tool.ts`](src/lib/ai/tools/shopping.tool.ts) — 5 tools: `addShoppingListItem`, `queryShoppingList`, `completeListItem`, `categorizeShoppingItems`, `combineDuplicateItems`
+- [`src/lib/ai/tools/todo.tool.ts`](src/lib/ai/tools/todo.tool.ts) — 1 tool: `addTodoItem`
+- [`src/lib/ai/tools/calendar.tool.ts`](src/lib/ai/tools/calendar.tool.ts) — 2 tools: `createEvent`, `queryEvents`
+- [`src/lib/ai/tools/chores.tool.ts`](src/lib/ai/tools/chores.tool.ts) — 2 tools: `completeChore`, `queryChores`
+- [`src/lib/ai/tools/recipes.tool.ts`](src/lib/ai/tools/recipes.tool.ts) — 2 tools: `searchRecipes`, `getRecipeDetails`
+- [`src/lib/ai/tools/notes.tool.ts`](src/lib/ai/tools/notes.tool.ts) — 2 tools: `queryNotes`, `createNote`
+- [`src/lib/ai/tools/contacts.tool.ts`](src/lib/ai/tools/contacts.tool.ts) — 1 tool: `searchContacts`
+- [`src/lib/ai/tools/documents.tool.ts`](src/lib/ai/tools/documents.tool.ts) — 1 tool: `searchDocuments`
+- [`src/lib/ai/tools/birthdays.tool.ts`](src/lib/ai/tools/birthdays.tool.ts) — 1 tool: `queryUpcomingBirthdays`
+- [`src/lib/ai/tools/finance-bills.tool.ts`](src/lib/ai/tools/finance-bills.tool.ts) — 3 tools: `queryBills`, `markBillPaid`, `queryBillDetails`
+- [`src/lib/ai/tools/finance-accounts.tool.ts`](src/lib/ai/tools/finance-accounts.tool.ts) — 3 tools: `queryBalances`, `querySpendingByCategory`, `queryMonthlySummary`
+- [`src/lib/ai/tools/calendar-summary.tool.ts`](src/lib/ai/tools/calendar-summary.tool.ts) — 1 tool: `queryWeekSummary` (aggregates events, chores, meals, bills, birthdays)
+- [`src/lib/ai/tools/finance-goals.tool.ts`](src/lib/ai/tools/finance-goals.tool.ts) — 2 tools: `queryBudgetStatus`, `querySavingsGoals`
+- [`src/lib/ai/tools/meal-plan-suggest.tool.ts`](src/lib/ai/tools/meal-plan-suggest.tool.ts) — 1 tool: `suggestMeals` (recency & mood-based scoring)
+- [`src/lib/ai/tools/finance-income.tool.ts`](src/lib/ai/tools/finance-income.tool.ts) — 2 tools: `queryIncome`, `markIncomeReceived`
+- [`src/lib/ai/tools/family.tool.ts`](src/lib/ai/tools/family.tool.ts) — 2 tools: `queryFamilyMembers`, `queryFamilyOverview`
+- [`src/lib/ai/tools/finance-tax.tool.ts`](src/lib/ai/tools/finance-tax.tool.ts) — 2 tools: `queryTaxSummary`, `queryDeductibleExpenses`
+- [`src/lib/ai/tools/memory.tool.ts`](src/lib/ai/tools/memory.tool.ts) — 1 tool: `queryMealHistory`
+- [`src/lib/ai/tools/reports.tool.ts`](src/lib/ai/tools/reports.tool.ts) — 1 tool: `generateFinanceReport`
+- [`src/lib/ai/tools/reminders.tool.ts`](src/lib/ai/tools/reminders.tool.ts) — 2 tools: `queryUpcomingReminders`, `setReminder`
+- [`src/lib/ai/tools/finance-nl-transaction.tool.ts`](src/lib/ai/tools/finance-nl-transaction.tool.ts) — 1 tool: `quickAddTransaction`
+- [`src/lib/ai/tools/digest.tool.ts`](src/lib/ai/tools/digest.tool.ts) — 1 tool: `generateDailyDigest`
 
 Each tool module exports a `register()` function that calls `registerTool()`:
 
@@ -195,46 +205,58 @@ Extract each functional area from the monolithic route into its own tool file:
 19. Update [`src/components/ai/AIAssistant.tsx`](src/components/ai/AIAssistant.tsx) to use registry-driven event mapping
 20. Update [`src/components/settings/AISettingsTab.tsx`](src/components/settings/AISettingsTab.tsx) to reflect new capabilities dynamically
 
-### Phase 5: New Tools and Polish
-21. Add natural language chat mode (remove forced tool calling for general questions)
-22. Add finance/bills AI tools as a demo of the new extensibility
-23. Implement smart context selection (only provide context for relevant tools)
+### Phase 5: New Tools and Polish (Completed)
+21. ✅ Natural language transaction entry via [`quickAddTransaction`](src/lib/ai/tools/finance-nl-transaction.tool.ts)
+22. ✅ All 14 suggested AI tool modules implemented — see module listing above
+23. 🔲 Smart context selection (only provide context for relevant tools) — still pending optimization
 
 ---
 
-## 4. File Structure After Refactor
+## 4. Current File Structure
 
 ```
 src/
   lib/
     ai/
-      types.ts                    # Shared types
-      tool-registry.ts            # Singleton registry
-      provider.ts                 # LLM provider adapter (Gemini + OpenAI)
-      context-builder.ts          # Smart context aggregation
-      orchestrator.ts             # Main orchestration logic
+      types.ts                    # Shared types (AiTool, HandlerContext, HandlerResult, etc.)
+      tool-registry.ts            # Singleton registry (registerTool, executeTool, getActionEventMap)
+      provider.ts                 # LLM provider adapter (Gemini + OpenAI-compatible)
+      context-builder.ts          # Context aggregation (buildSystemPrompt)
+      orchestrator.ts             # Main orchestration logic (orchestrate)
       tools/
-        index.ts                  # Barrel: registers all tools
-        meal-plan.tool.ts         # Meal plan tools
-        shopping.tool.ts          # Shopping list tools
-        todo.tool.ts              # Todo list tools
-        calendar.tool.ts          # Calendar event tools
-        chores.tool.ts            # Chore tools
-        recipes.tool.ts           # Recipe search tools
-        notes.tool.ts             # Note tools
-        contacts.tool.ts          # Contact lookup tools
-        documents.tool.ts         # Document query tools
-        birthdays.tool.ts         # Birthday query tools
-        finance.tool.ts           # FUTURE: Finance tools
-        bills.tool.ts             # FUTURE: Bills tools
+        index.ts                  # Barrel: registers all 24 tools across 14 modules
+        meal-plan.tool.ts         # 4 tools: setMealPlan, queryMealPlan, queryMealSuggestions, toggleMealPlanRecipe
+        shopping.tool.ts          # 5 tools: addShoppingListItem, queryShoppingList, completeListItem,
+                                  #          categorizeShoppingItems, combineDuplicateItems
+        todo.tool.ts              # 1 tool: addTodoItem
+        calendar.tool.ts          # 2 tools: createEvent, queryEvents
+        chores.tool.ts            # 2 tools: completeChore, queryChores
+        recipes.tool.ts           # 2 tools: searchRecipes, getRecipeDetails
+        notes.tool.ts             # 2 tools: queryNotes, createNote
+        contacts.tool.ts          # 1 tool: searchContacts
+        documents.tool.ts         # 1 tool: searchDocuments
+        birthdays.tool.ts         # 1 tool: queryUpcomingBirthdays
+        finance-bills.tool.ts     # 3 tools: queryBills, markBillPaid, queryBillDetails
+        finance-accounts.tool.ts  # 3 tools: queryBalances, querySpendingByCategory, queryMonthlySummary
+        calendar-summary.tool.ts  # 1 tool: queryWeekSummary (aggregates events/chores/meals/bills/birthdays)
+        finance-goals.tool.ts     # 2 tools: queryBudgetStatus, querySavingsGoals
+        meal-plan-suggest.tool.ts # 1 tool: suggestMeals (recency & mood-based scoring)
+        finance-income.tool.ts    # 2 tools: queryIncome, markIncomeReceived
+        family.tool.ts            # 2 tools: queryFamilyMembers, queryFamilyOverview
+        finance-tax.tool.ts       # 2 tools: queryTaxSummary, queryDeductibleExpenses
+        memory.tool.ts            # 1 tool: queryMealHistory
+        reports.tool.ts           # 1 tool: generateFinanceReport
+        reminders.tool.ts         # 2 tools: queryUpcomingReminders, setReminder
+        finance-nl-transaction.tool.ts  # 1 tool: quickAddTransaction
+        digest.tool.ts            # 1 tool: generateDailyDigest
   app/
     api/
       ai/
         command/
-          route.ts                # Reduced to thin orchestrator call
+          route.ts                # 122 lines — thin orchestrator + GET diagnostic endpoint
   components/
     ai/
-      AIAssistant.tsx             # Updated with registry-driven events
+      AIAssistant.tsx             # Registry-driven event dispatch (no hardcoded switch)
 ```
 
 ---
@@ -261,38 +283,57 @@ Keep `tool_choice: required` / `FunctionCallingMode.ANY` for now (backward compa
 
 ## 6. Adding a New Tool (the Developer Experience)
 
-To add AI support for a new feature (e.g., Finance), a developer would:
+To add AI support for a new feature, a developer creates a tool module and registers it:
 
 ```typescript
-// src/lib/ai/tools/finance.tool.ts
-import { registerTool } from '../tool-registry'
-import { AppEvents } from '@/lib/app-events'
+// src/lib/ai/tools/my-feature.tool.ts
+import { registerTool } from '@/lib/ai/tool-registry'
+import { prisma } from '@/lib/prisma'
+import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
-export function registerFinanceTools(): void {
-  registerTool('queryAccountBalance', {
-    definition: {
-      name: 'queryAccountBalance',
-      description: 'Check the current balance of a specific account or all accounts',
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          accountName: { type: SchemaType.STRING, description: 'Optional account name to filter by' },
-        },
-      },
+// 1. Define the tool schema
+const myToolDefinition: FunctionDeclaration = {
+  name: 'myNewTool',
+  description: 'Describe what this tool does for the LLM',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      searchTerm: { type: SchemaType.STRING, description: 'What to search for' },
     },
-    contextProvider: async (familyId) => {
-      const accounts = await prisma.financeAccount.findMany({ where: { familyId } })
-      return `Accounts: ${accounts.map(a => `${a.name}: $${a.balance}`).join(', ')}`
-    },
-    handler: async (args, { prisma, user }) => {
-      // handler logic
-    },
-    actionEvents: {},
-  })
+    required: ['searchTerm'],
+  },
 }
 
-// Then add to src/lib/ai/tools/index.ts:
-// export { registerFinanceTools } from './finance.tool'
+// 2. Optional: provide dynamic context to the system prompt
+async function myContextProvider(familyId: string, _userId: string): Promise<string> {
+  const items = await prisma.myModel.findMany({ where: { familyId }, take: 5 })
+  return `Available items: ${items.map(i => i.name).join(', ')}`
+}
+
+// 3. Implement the handler
+async function myHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
+  const { searchTerm } = args as { searchTerm: string }
+  // ... business logic using ctx.familyId, ctx.user ...
+  return { message: 'Result description', action: 'myNewTool' }
+}
+
+// 4. Register the tool
+export function registerMyFeatureTools(): void {
+  registerTool('myNewTool', {
+    definition: myToolDefinition,
+    contextProvider: myContextProvider,   // optional
+    handler: myHandler,
+    actionEvents: { myNewTool: 'app:shoppingListUpdated' },  // optional — triggers UI refresh
+  })
+}
 ```
 
-The developer **never needs to touch** the central route, the AI assistant component, or the settings page.
+Then add one import and one call to [`src/lib/ai/tools/index.ts`](src/lib/ai/tools/index.ts):
+```typescript
+import { registerMyFeatureTools } from './my-feature.tool'
+// ... in registerAllTools():
+registerMyFeatureTools()
+```
+
+The developer **never needs to touch** the central route [`route.ts`](src/app/api/ai/command/route.ts), the AI assistant component [`AIAssistant.tsx`](src/components/ai/AIAssistant.tsx), or the settings page. The registry pattern handles everything automatically.
