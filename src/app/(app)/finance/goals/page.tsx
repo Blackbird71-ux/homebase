@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { ColorPicker } from '@/components/ui/color-picker'
 
 interface Goal {
   id: string; name: string; targetAmount: number; currentAmount: number
@@ -132,9 +133,11 @@ export default function GoalsPage() {
               )}
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Color</label>
-              <input type="color" value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))}
-                className="h-8 w-8 rounded cursor-pointer" />
+              <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
+              <ColorPicker
+                value={form.color}
+                onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
+              />
             </div>
           </div>
           <DialogFooter>

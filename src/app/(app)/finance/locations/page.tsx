@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { ColorPicker } from '@/components/ui/color-picker'
 
 interface Location {
   id: string; name: string; address: string | null
@@ -93,9 +94,11 @@ export default function LocationsPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Color</label>
-              <input type="color" value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))}
-                className="h-8 w-8 rounded cursor-pointer" />
+              <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
+              <ColorPicker
+                value={form.color}
+                onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
+              />
             </div>
           </div>
           <DialogFooter>
