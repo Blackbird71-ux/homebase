@@ -231,7 +231,10 @@ Complete ATO tax compliance support:
 | `20260515000000_add_transaction_entity` | `entityId` on FinanceTransaction |
 | `20260516000000_add_income_tax_tracking` | `isTaxTracked`/`taxRate` on FinanceIncomeEntry |
 | `20260517000000_add_tax_classification` | `taxClassification` on Transaction/Bill/Income; `taxIncludeInReporting`/`taxDisplayLabel` on Category |
-| `20260519000000_add_is_transfer` | `isTransfer BOOLEAN NOT NULL DEFAULT false` on FinanceTransaction *(latest)* |
+| `20260519000000_add_is_transfer` | `isTransfer BOOLEAN NOT NULL DEFAULT false` on FinanceTransaction |
+| `20260520000000_add_finance_year_start` | `financeYearStartMonth` on Family |
+| `20260520100000_add_opening_balances` | `openingBalanceTxId` on FinanceAccount, `openingBalancesCategoryId` on Family |
+| `20260520200000_add_opening_balance_columns` | `openingBalance REAL`, `openingBalanceDate DATETIME` on FinanceAccount *(latest)* |
 
 #### API Routes
 | Route | Key behaviours |
@@ -300,6 +303,7 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 - `20260519000000_add_is_transfer` — adds `isTransfer BOOLEAN NOT NULL DEFAULT false` to FinanceTransaction
 - `20260520000000_add_finance_year_start` — adds `financeYearStartMonth` to Family model
 - `20260520100000_add_opening_balances` — adds `openingBalanceTxId` to FinanceAccount, `openingBalancesCategoryId` to Family
+- `20260520200000_add_opening_balance_columns` — adds `openingBalance REAL` and `openingBalanceDate DATETIME` to FinanceAccount (missing from original migration — was only applied via "partial run" on dev DB)
 
 > **Build/deploy reference guide saved at [`.roo/prompts/build-deploy-guide.md`](.roo/prompts/build-deploy-guide.md)** — always check this when schema changes are involved.
 
@@ -346,5 +350,5 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 - ✅ **Opening Balance Exclusion** — All P&L/report queries filter `type: { not: 'opening_balance' }`; transactions page shows "Opening Balance" badge with purple indicator
 - ✅ **Email & Excel Reports** — `buildYtdReport` receives `fyStartMonth` from family settings
 - ✅ **Build** — `prisma generate` ✓, `prisma migrate deploy` ✓ (both migrations: `20260520000000_add_finance_year_start`, `20260520100000_add_opening_balances`), `tsc --noEmit` ✓
-- ✅ **Migrations** — 3 new migrations total: `20260519000000_add_is_transfer`, `20260520000000_add_finance_year_start`, `20260520100000_add_opening_balances` (UNIQUE index fixed for SQLite compat)
+- ✅ **Migrations** — 4 new migrations total: `20260519000000_add_is_transfer`, `20260520000000_add_finance_year_start`, `20260520100000_add_opening_balances`, `20260520200000_add_opening_balance_columns` (UNIQUE index fixed for SQLite compat)
 - ✅ **Docker/NAS** — `docker/entrypoint.sh` unchanged (runs `prisma migrate deploy` on startup)
