@@ -128,31 +128,11 @@ export function AIAssistant({ open, onOpenChange }: AIAssistantProps) {
           text: data.message ?? 'Done.',
         }])
 
-        // Dispatch events so other components (meal plan grid, etc.) refresh
-        if (data.action) {
-          switch (data.action) {
-            case 'addRecipeToMealPlan':
-            case 'clearMealPlanSlot':
-              dispatchAppEvent(AppEvents.MEAL_PLAN_UPDATED)
-              break
-            case 'createNote':
-              dispatchAppEvent(AppEvents.NOTES_UPDATED)
-              break
-            case 'addShoppingListItem':
-            case 'generateShoppingList':
-            case 'completeListItem':
-              dispatchAppEvent(AppEvents.SHOPPING_LIST_UPDATED)
-              break
-            case 'addTodoItem':
-              dispatchAppEvent(AppEvents.TODO_LIST_UPDATED)
-              break
-            case 'createCalendarEvent':
-              dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
-              break
-            case 'completeChore':
-              dispatchAppEvent(AppEvents.CHORES_UPDATED)
-              break
-          }
+        // Dispatch the event returned by the API — the server determines which
+        // event to fire based on the tool registry's action-to-event map.
+        // This eliminates the need to keep the frontend switch in sync with tools.
+        if (data.event) {
+          dispatchAppEvent(data.event as typeof AppEvents[keyof typeof AppEvents])
         }
       }
     } catch {

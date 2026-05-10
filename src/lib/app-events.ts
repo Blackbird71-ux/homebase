@@ -10,6 +10,7 @@ export const AppEvents = {
   NOTES_UPDATED: 'app:notesUpdated',
   CHORES_UPDATED: 'app:choresUpdated',
   CALENDAR_UPDATED: 'app:calendarUpdated',
+  FINANCE_UPDATED: 'app:financeUpdated',
 } as const
 
 export type AppEventName = (typeof AppEvents)[keyof typeof AppEvents]
