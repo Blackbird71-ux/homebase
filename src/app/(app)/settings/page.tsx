@@ -46,6 +46,7 @@ export default async function SettingsPage() {
             umamiSiteId: true,
             loginTagline: true,
             appVersion: true,
+            financeYearStartMonth: true,  // Spec §2.7 — needed by AccountTab
           },
         },
       },
@@ -73,7 +74,7 @@ export default async function SettingsPage() {
 
       <div className="flex-1 p-4 md:p-6">
         <Tabs defaultValue="account" className="w-full">
-          {/* Scrollable tab bar — 11 tabs would wrap on mobile without this */}
+          {/* Scrollable tab bar — 14 tabs would wrap on mobile without overflow-x-auto */}
           <div className="mb-6 overflow-x-auto">
             <TabsList className="w-max min-w-full">
               <TabsTrigger value="account">Account</TabsTrigger>
@@ -104,7 +105,7 @@ export default async function SettingsPage() {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                family: user.family,
+                family: user.family,  // now includes financeYearStartMonth
               }}
               supportedTimezones={[...SUPPORTED_TIMEZONES]}
             />
@@ -118,29 +119,22 @@ export default async function SettingsPage() {
               initialFontWeight={user.fontWeight}
               initialWeekStartsOn={user.weekStartsOn}
               initialDoneItemColor={user.doneItemColor || 'RED'}
-              initialSecureCardStyle={user.uiPreferences ? (JSON.parse(user.uiPreferences)?.secureCardStyle ?? 'blur') : 'blur'}
-              initialSecureCardColor={user.uiPreferences ? (JSON.parse(user.uiPreferences)?.secureCardColor ?? 'default') : 'default'}
+              initialUiPreferences={user.uiPreferences ?? undefined}
             />
           </TabsContent>
 
           <TabsContent value="integrations">
             <IntegrationsTab
-              isAdmin={user.role === 'admin'}
-              initialUmamiScriptUrl={user.family.umamiScriptUrl}
-              initialUmamiSiteId={user.family.umamiSiteId}
               googleConnected={user.googleConnected}
-              googleEmail={user.googleEmail}
+              googleEmail={user.googleEmail ?? undefined}
             />
           </TabsContent>
 
           <TabsContent value="data">
-            <DataTab
-              coziImports={coziImports.map(c => ({
-                ...c,
-                importedAt: c.importedAt instanceof Date ? c.importedAt.toISOString() : String(c.importedAt),
-              }))}
-              userEmail={user.email}
-            />
+            <DataTab coziImports={coziImports.map(i => ({
+              ...i,
+              importedAt: i.importedAt.toISOString(),
+            }))} />
           </TabsContent>
 
           <TabsContent value="import">

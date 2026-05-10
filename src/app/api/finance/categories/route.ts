@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 
+// Valid Chart of Accounts types — includes balance-sheet types (asset, liability, equity)
+// as well as the original P&L types (income, expense, transfer).
+const VALID_TYPES = ['income', 'expense', 'transfer', 'asset', 'liability', 'equity'] as const
+
 export async function GET() {
   const session = await requireSession()
   const categories = await prisma.financeCategory.findMany({
@@ -28,8 +32,8 @@ export async function POST(request: NextRequest) {
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
   }
-  if (!['income', 'expense', 'transfer'].includes(type)) {
-    return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
+  if (!VALID_TYPES.includes(type)) {
+    return NextResponse.json({ error: `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}` }, { status: 400 })
   }
 
   // Validate parent exists if provided
@@ -82,6 +86,10 @@ export async function PUT(request: NextRequest) {
   })
   if (!existing) {
     return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+  }
+
+  if (type !== undefined && !VALID_TYPES.includes(type)) {
+    return NextResponse.json({ error: `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}` }, { status: 400 })
   }
 
   // Calculate new level if parentId changed

@@ -35,6 +35,7 @@ interface AccountTabProps {
       id: string
       name: string
       timezone: string
+      financeYearStartMonth?: number  // Spec §2.7 — 1=Jan … 12=Dec, default 7=July (AU)
     }
   }
   supportedTimezones: string[]
@@ -67,6 +68,11 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
   const [timezone, setTimezone] = useState(user.family.timezone)
   const [timezoneStatus, setTimezoneStatus] = useState<Status>(null)
   const [timezoneSaving, setTimezoneSaving] = useState(false)
+
+  // Financial Year Start Month (admin only) — Spec §2.7
+  const [fyStartMonth, setFyStartMonth] = useState<number>(user.family.financeYearStartMonth ?? 7)
+  const [fyStartMonthStatus, setFyStartMonthStatus] = useState<Status>(null)
+  const [fyStartMonthSaving, setFyStartMonthSaving] = useState(false)
 
   // Invite codes (admin only)
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([])
@@ -192,6 +198,29 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
     }
   }
 
+  // Spec §2.7 — save financial year start month
+  async function saveFyStartMonth() {
+    setFyStartMonthSaving(true)
+    setFyStartMonthStatus(null)
+    try {
+      const res = await fetch('/api/settings/family', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ financeYearStartMonth: fyStartMonth }),
+      })
+      if (res.ok) {
+        setFyStartMonthStatus({ type: 'success', message: 'Financial year start month updated. All reports, P&L, and tax pages will now use this setting.' })
+      } else {
+        const data = await res.json()
+        setFyStartMonthStatus({ type: 'error', message: data.error ?? 'Failed to update financial year start month.' })
+      }
+    } catch {
+      setFyStartMonthStatus({ type: 'error', message: 'Network error.' })
+    } finally {
+      setFyStartMonthSaving(false)
+    }
+  }
+
   async function loadInviteCodes() {
     try {
       const res = await fetch('/api/invite')
@@ -214,7 +243,6 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
       if (res.ok) {
         const newCode = await res.json()
         setInviteStatus({ type: 'success', message: `Invite code generated: ${newCode.code}` })
-        // Refresh the full list so we have proper IDs from the database
         setInviteCodesLoaded(true)
         const listRes = await fetch('/api/invite')
         if (listRes.ok) setInviteCodes(await listRes.json())
@@ -304,9 +332,7 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
           <Button onClick={saveName} disabled={nameSaving || !name.trim()}>
             {nameSaving ? 'Saving...' : 'Save Name'}
           </Button>
-          {nameStatus && (
-            <StatusMessage status={nameStatus} />
-          )}
+          {nameStatus && <StatusMessage status={nameStatus} />}
         </CardContent>
       </Card>
 
@@ -319,33 +345,18 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="current-password">Current Password</Label>
-            <Input
-              id="current-password"
-              type="password"
-              value={currentPassword}
-              onChange={e => setCurrentPassword(e.target.value)}
-              placeholder="Current password"
-            />
+            <Input id="current-password" type="password" value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="new-password">New Password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              placeholder="New password (min 8 chars)"
-            />
+            <Input id="new-password" type="password" value={newPassword}
+              onChange={e => setNewPassword(e.target.value)} placeholder="New password (min 8 chars)" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="confirm-password">Confirm New Password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-            />
+            <Input id="confirm-password" type="password" value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm new password" />
           </div>
           <Button onClick={savePassword} disabled={passwordSaving}>
             {passwordSaving ? 'Updating...' : 'Update Password'}
@@ -364,12 +375,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="family-name">Family Name</Label>
-              <Input
-                id="family-name"
-                value={familyName}
-                onChange={e => setFamilyName(e.target.value)}
-                placeholder="Family name"
-              />
+              <Input id="family-name" value={familyName} onChange={e => setFamilyName(e.target.value)}
+                placeholder="Family name" />
             </div>
             <Button onClick={saveFamilyName} disabled={familyNameSaving || !familyName.trim()}>
               {familyNameSaving ? 'Saving...' : 'Save Family Name'}
@@ -394,12 +401,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="timezone">Timezone</Label>
-                <select
-                  id="timezone"
-                  value={timezone}
-                  onChange={e => setTimezone(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
-                >
+                <select id="timezone" value={timezone} onChange={e => setTimezone(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm">
                   {supportedTimezones.map(tz => (
                     <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
                   ))}
@@ -416,6 +419,46 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         </CardContent>
       </Card>
 
+      {/* ── Spec §2.7: Financial Year Start Month ──────────────────────────────
+          Admin-only. Controls the FY start used by P&L, Annual P&L,
+          Tax Report, Snapshots, and Budget pages.
+          Australian default is 1 July (month 7). ────────────────────────── */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Financial Year Start Month</CardTitle>
+            <CardDescription>
+              Admin only — sets the start of the financial year used by P&amp;L reports,
+              Tax Report, Annual P&amp;L, and Snapshots. Australian default is 1 July.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="fy-start-month">Financial Year Start Month</Label>
+              <select
+                id="fy-start-month"
+                value={fyStartMonth}
+                onChange={e => setFyStartMonth(parseInt(e.target.value, 10))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+              >
+                <option value={1}>January (calendar year)</option>
+                <option value={4}>April</option>
+                <option value={7}>July (Australian FY — default)</option>
+                <option value={10}>October</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Changing this affects all finance reports, budgets, and the Tax Report date range.
+                Australian financial year runs 1 July – 30 June.
+              </p>
+            </div>
+            <Button onClick={saveFyStartMonth} disabled={fyStartMonthSaving}>
+              {fyStartMonthSaving ? 'Saving...' : 'Save Financial Year Setting'}
+            </Button>
+            {fyStartMonthStatus && <StatusMessage status={fyStartMonthStatus} />}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Admin: Invite Codes */}
       {isAdmin && (
         <Card>
@@ -430,9 +473,7 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
                 {inviteLoading ? 'Generating...' : 'Generate Invite Code'}
               </Button>
               {!inviteCodesLoaded && (
-                <Button variant="outline" onClick={loadInviteCodes}>
-                  Load History
-                </Button>
+                <Button variant="outline" onClick={loadInviteCodes}>Load History</Button>
               )}
             </div>
             {inviteStatus && <StatusMessage status={inviteStatus} />}
@@ -453,11 +494,9 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
                         </span>
                       )}
                       {!code.used && (
-                        <button
-                          onClick={() => copyToClipboard(code.code)}
+                        <button onClick={() => copyToClipboard(code.code)}
                           className="text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label="Copy invite code"
-                        >
+                          aria-label="Copy invite code">
                           {copiedCode === code.code
                             ? <Check className="h-3.5 w-3.5 text-green-500" />
                             : <Copy className="h-3.5 w-3.5" />}
@@ -483,66 +522,54 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
             <CardDescription>All accounts with access to your family&apos;s Homebase.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {membersError && (
-              <p className="text-sm text-destructive">{membersError}</p>
-            )}
+            {membersError && <p className="text-sm text-destructive">{membersError}</p>}
             {!membersLoaded && (
               <Button variant="outline" onClick={loadMembers}>
                 {membersError ? 'Retry' : 'Load Members'}
               </Button>
             )}
             {membersLoaded && members.length > 0 && (
-              <div className="space-y-2">
-                <div className="border border-border rounded-md divide-y divide-border">
-                  {members.map(member => (
-                    <div key={member.id}>
-                      <div className="flex items-center justify-between px-3 py-2">
-                        <div>
-                          <p className="text-sm font-medium">{member.name}</p>
-                          <p className="text-xs text-muted-foreground">{member.email}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${member.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                            {member.role}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-xs h-7"
-                            onClick={() => {
-                              setResetTarget(resetTarget?.id === member.id ? null : member)
-                              setResetPassword('')
-                              setResetStatus(null)
-                            }}
-                          >
-                            Reset Password
+              <div className="border border-border rounded-md divide-y divide-border">
+                {members.map(member => (
+                  <div key={member.id}>
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">{member.name}</p>
+                        <p className="text-xs text-muted-foreground">{member.email}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${member.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                          {member.role}
+                        </span>
+                        <Button size="sm" variant="outline" className="text-xs h-7"
+                          onClick={() => {
+                            setResetTarget(resetTarget?.id === member.id ? null : member)
+                            setResetPassword('')
+                            setResetStatus(null)
+                          }}>
+                          Reset Password
+                        </Button>
+                      </div>
+                    </div>
+                    {resetTarget?.id === member.id && (
+                      <div className="px-3 pb-3 space-y-2 bg-muted/30">
+                        <p className="text-xs text-muted-foreground pt-2">Set a new password for {member.name}:</p>
+                        <div className="flex gap-2">
+                          <Input type="password" value={resetPassword}
+                            onChange={e => setResetPassword(e.target.value)}
+                            placeholder="New password (min 8 chars)" className="h-8 text-sm" />
+                          <Button size="sm" onClick={resetMemberPassword} disabled={resetSaving || !resetPassword}>
+                            {resetSaving ? 'Saving...' : 'Set'}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setResetTarget(null); setResetStatus(null) }}>
+                            Cancel
                           </Button>
                         </div>
+                        {resetStatus && <StatusMessage status={resetStatus} />}
                       </div>
-                      {resetTarget?.id === member.id && (
-                        <div className="px-3 pb-3 space-y-2 bg-muted/30">
-                          <p className="text-xs text-muted-foreground pt-2">Set a new password for {member.name}:</p>
-                          <div className="flex gap-2">
-                            <Input
-                              type="password"
-                              value={resetPassword}
-                              onChange={e => setResetPassword(e.target.value)}
-                              placeholder="New password (min 8 chars)"
-                              className="h-8 text-sm"
-                            />
-                            <Button size="sm" onClick={resetMemberPassword} disabled={resetSaving || !resetPassword}>
-                              {resetSaving ? 'Saving...' : 'Set'}
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => { setResetTarget(null); setResetStatus(null) }}>
-                              Cancel
-                            </Button>
-                          </div>
-                          {resetStatus && <StatusMessage status={resetStatus} />}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>

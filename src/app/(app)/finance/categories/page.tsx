@@ -14,6 +14,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { ColorPicker } from '@/components/ui/color-picker'
 
+// ─── Types ────────────────────────────────────────────────────────────
+// "Category" is the internal DB model name; users see "Chart of Accounts" / "Account".
+// Do NOT rename the TypeScript interface or DB field names — the route path and
+// Prisma schema keep "category" as the internal implementation detail.
+
 interface Category {
   id: string; name: string; type: string; parentId: string | null
   color: string | null; icon: string | null; isSystem: boolean
@@ -26,18 +31,20 @@ interface Category {
   _count?: { transactions: number; recurringBills: number; incomeEntries: number }
 }
 
+// ─── Badge colours per COA type ───────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
-  income: 'text-green-500 bg-green-500/10',
-  expense: 'text-red-500 bg-red-500/10',
-  transfer: 'text-blue-500 bg-blue-500/10',
-  asset: 'text-purple-500 bg-purple-500/10',
+  income:    'text-green-500 bg-green-500/10',
+  expense:   'text-red-500 bg-red-500/10',
+  transfer:  'text-blue-500 bg-blue-500/10',
+  asset:     'text-purple-500 bg-purple-500/10',    // Workstream 2 — new types
   liability: 'text-orange-500 bg-orange-500/10',
-  equity: 'text-cyan-500 bg-cyan-500/10',
+  equity:    'text-cyan-500 bg-cyan-500/10',
 }
 
 const NOT_IN_USE_NAME = 'Not In Use'
 
-// ─── Category Dialog (Modal) ──────────────────────────────────────────
+// ─── Account Dialog (Modal) ───────────────────────────────────────────
+// User-visible strings use "Account" per spec §3.1; internal code keeps "Category".
 
 function CategoryDialog({
   open,
@@ -99,6 +106,7 @@ function CategoryDialog({
           taxDisplayLabel: '',
         })
       }
+      setErrors({})
     }
   }, [open, editing])
 
@@ -122,12 +130,13 @@ function CategoryDialog({
         body: JSON.stringify(payload),
       })
       if (res.ok) {
-        toast.success(editing ? 'Category updated' : 'Category created')
+        // Spec §3.1: toast messages say "Account saved" / "Account deleted"
+        toast.success(editing ? 'Account updated' : 'Account created')
         onOpenChange(false)
         onSaved()
       } else {
         const err = await res.json()
-        toast.error(err.error ?? 'Failed to save category')
+        toast.error(err.error ?? 'Failed to save account')
       }
     } finally {
       setSaving(false)
@@ -145,7 +154,8 @@ function CategoryDialog({
     <Dialog open={open} onOpenChange={open => { if (!open) { onOpenChange(false); setErrors({}) } }}>
       <DialogContent className="sm:max-w-lg" showCloseButton>
         <DialogHeader>
-          <DialogTitle>{editing ? 'Edit Category' : 'New Category'}</DialogTitle>
+          {/* Spec §3.1: dialog titles "Add Account" / "Edit Account" */}
+          <DialogTitle>{editing ? 'Edit Account' : 'Add Account'}</DialogTitle>
         </DialogHeader>
 
         {Object.keys(errors).length > 0 && (
@@ -164,9 +174,9 @@ function CategoryDialog({
             <label className="text-xs text-muted-foreground">Name</label>
             <input
               value={form.name}
-              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              onChange={e => { setForm(p => ({ ...p, name: e.target.value })); if (errors.name) setErrors(p => ({ ...p, name: '' })) }}
               onKeyDown={handleKeyDown}
-              className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.name ? 'border-red-500' : 'border-input')}
+              className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.name ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}
               autoFocus
               disabled={saving}
             />
@@ -189,7 +199,7 @@ function CategoryDialog({
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Parent Category</label>
+            <label className="text-xs text-muted-foreground">Parent Account</label>
             <select
               value={form.parentId}
               onChange={e => setForm(p => ({ ...p, parentId: e.target.value }))}
@@ -224,7 +234,7 @@ function CategoryDialog({
               </label>
             )}
 
-            {/* Include in Tax Report — all types (expense, income, transfer) */}
+            {/* Include in Tax Report — all types */}
             <label className="flex items-center gap-1.5 text-sm cursor-pointer">
               <input type="checkbox" checked={form.taxIncludeInReporting}
                 onChange={e => setForm(p => ({ ...p, taxIncludeInReporting: e.target.checked }))}
@@ -409,7 +419,7 @@ export default function CategoriesPage() {
     })
   }
 
-  function openNew()           { setEditing(null); setDialogOpen(true) }
+  function openNew()             { setEditing(null); setDialogOpen(true) }
   function openEdit(c: Category) { setEditing(c);   setDialogOpen(true) }
 
   function handleDialogClose(open: boolean) {
@@ -418,9 +428,10 @@ export default function CategoriesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this category?')) return
+    if (!confirm('Delete this account?')) return
     const res = await fetch(`/api/finance/categories?id=${id}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Category deleted'); load() }
+    // Spec §3.1: toast says "Account deleted"
+    if (res.ok) { toast.success('Account deleted'); load() }
     else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
   }
 
@@ -447,14 +458,16 @@ export default function CategoriesPage() {
   const orderedRoots     = notInUseCategory ? [...regularRoots, notInUseCategory] : regularRoots
   const availableParents = rootCategories.filter(c => editing ? c.id !== editing.id : true)
 
-  if (loading) return <div className="p-4 text-muted-foreground">Loading categories…</div>
+  if (loading) return <div className="p-4 text-muted-foreground">Loading accounts…</div>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
+        {/* Spec §3.1: page title "Chart of Accounts" */}
         <h1 className="text-2xl font-bold">Chart of Accounts</h1>
+        {/* Spec §3.1: button label "Add Account" */}
         <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-          <Plus className="h-4 w-4" /> Add Category
+          <Plus className="h-4 w-4" /> Add Account
         </button>
       </div>
 
@@ -467,7 +480,7 @@ export default function CategoriesPage() {
       />
 
       {categories.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No categories yet. Create your first category above.</p>
+        <p className="text-sm text-muted-foreground">No accounts yet. Create your first account above.</p>
       ) : (
         <div className="space-y-1">
           {orderedRoots.map(cat => (

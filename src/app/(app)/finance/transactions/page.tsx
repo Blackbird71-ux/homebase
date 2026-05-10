@@ -57,7 +57,6 @@ export default function TransactionsPage() {
     const errs: Record<string, string> = {}
     if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
     if (!form.type) errs.type = 'Type is required'
-    // taxClassification is intentionally optional
     return errs
   }
 
@@ -97,7 +96,7 @@ export default function TransactionsPage() {
   }
 
   useEffect(() => { loadRefs() }, [])
-  useEffect(() => { load() }, [page, filterType, filterMemberId, filterLocationId, filterEntityId])
+  useEffect(() => { load() }, [page, filterType, filterMemberId, filterLocationId, filterEntityId])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPages = Math.ceil(total / limit)
 
@@ -109,6 +108,11 @@ export default function TransactionsPage() {
   }
 
   function openEdit(t: Transaction) {
+    // Opening balance transactions are system-created; editing is disallowed
+    if (t.type === 'opening_balance') {
+      toast.info('Opening balance transactions are managed via the Accounts page.')
+      return
+    }
     setEditing(t)
     setErrors({})
     setForm({
@@ -156,7 +160,7 @@ export default function TransactionsPage() {
           <button onClick={() => setShowFilters(!showFilters)}
             className="inline-flex items-center gap-1 text-xs rounded-md border border-input px-2 py-1 hover:bg-accent">
             <Filter className="h-3.5 w-3.5" /> Filters
-            {(filterMemberId || filterLocationId) && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+            {(filterMemberId || filterLocationId || filterType || filterEntityId) && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
           </button>
           <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             <Plus className="h-4 w-4" /> Add Transaction
@@ -173,7 +177,7 @@ export default function TransactionsPage() {
               <X className="h-3 w-3" /> Clear
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Type</label>
               <select value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1) }}
@@ -240,13 +244,12 @@ export default function TransactionsPage() {
               <label className="text-xs text-muted-foreground">Amount *</label>
               <input type="number" step="0.01" value={form.amount}
                 onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
+                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500 ring-1 ring-red-500' : 'border-input')} />
               {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Date</label>
-              <input type="date" value={form.date}
-                onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
+              <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
             <div>
@@ -296,8 +299,7 @@ export default function TransactionsPage() {
                 {entities.map(en => <option key={en.id} value={en.id}>{en.name}{en.isDefault ? ' (default)' : ''}</option>)}
               </select>
             </div>
-
-            {/* Tax Classification — shown for all types, options vary by type */}
+            {/* Tax Classification — spec §4.4; options depend on transaction type */}
             <div>
               <label className="text-xs text-muted-foreground flex items-center gap-1">
                 <Receipt className="h-3 w-3 text-amber-500" /> Tax Classification
@@ -305,10 +307,10 @@ export default function TransactionsPage() {
               <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">Not classified</option>
-                {form.type === 'expense' && (
+                {(form.type === 'expense' || form.type === 'transfer') && (
                   <>
-                    <option value="tax_deduction">Tax Deduction</option>
-                    <option value="tax_payment">Tax Payment (PAYG)</option>
+                    <option value="tax_deduction">Tax Deduction (ATO deductible)</option>
+                    <option value="tax_payment">Tax Payment (PAYG, BAS)</option>
                   </>
                 )}
                 {form.type === 'income' && (
@@ -317,15 +319,8 @@ export default function TransactionsPage() {
                     <option value="exempt_income">Exempt Income</option>
                   </>
                 )}
-                {form.type === 'transfer' && (
-                  <>
-                    <option value="tax_deduction">Tax Deduction (e.g. voluntary super)</option>
-                    <option value="tax_payment">Tax Payment (PAYG, BAS)</option>
-                  </>
-                )}
               </select>
             </div>
-
             <div>
               <label className="text-xs text-muted-foreground">Description</label>
               <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
@@ -333,18 +328,15 @@ export default function TransactionsPage() {
             </div>
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-1.5 text-sm">
-                <input type="checkbox" checked={form.isCleared}
-                  onChange={e => setForm(p => ({ ...p, isCleared: e.target.checked }))} />
+                <input type="checkbox" checked={form.isCleared} onChange={e => setForm(p => ({ ...p, isCleared: e.target.checked }))} />
                 Cleared
               </label>
               <label className="flex items-center gap-1.5 text-sm">
-                <input type="checkbox" checked={form.isPrivate}
-                  onChange={e => setForm(p => ({ ...p, isPrivate: e.target.checked }))} />
+                <input type="checkbox" checked={form.isPrivate} onChange={e => setForm(p => ({ ...p, isPrivate: e.target.checked }))} />
                 Private
               </label>
               <label className="flex items-center gap-1.5 text-sm">
-                <input type="checkbox" checked={form.isTransfer}
-                  onChange={e => setForm(p => ({ ...p, isTransfer: e.target.checked }))} />
+                <input type="checkbox" checked={form.isTransfer} onChange={e => setForm(p => ({ ...p, isTransfer: e.target.checked }))} />
                 Transfer
               </label>
             </div>
@@ -361,42 +353,68 @@ export default function TransactionsPage() {
         <p className="text-sm text-muted-foreground">No transactions found.</p>
       ) : (
         <div className="space-y-2">
-          {transactions.map(t => (
-            <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 cursor-default"
-              onDoubleClick={() => openEdit(t)}>
-              <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0',
-                t.type === 'income' ? 'bg-green-500/10 text-green-500' : t.type === 'transfer' ? 'bg-blue-500/10 text-blue-500' : t.type === 'opening_balance' ? 'bg-purple-500/10 text-purple-500' : 'bg-red-500/10 text-red-500')}>
-                {t.type === 'income' ? '+' : t.type === 'transfer' ? '↔' : t.type === 'opening_balance' ? '⚖' : '-'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">{t.payee ?? t.description ?? 'Transaction'}</span>
-                  {!t.isCleared && <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-1.5 rounded">PENDING</span>}
-                  {t.isPrivate && <span className="text-[10px] bg-muted px-1.5 rounded">PRIVATE</span>}
-                  {t.isTransfer && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">TRANSFER</span>}
-                  {t.type === 'opening_balance' && <span className="text-[10px] bg-purple-500/10 text-purple-500 px-1.5 rounded">OPENING BALANCE</span>}
+          {transactions.map(t => {
+            const isOpeningBalance = t.type === 'opening_balance'
+            return (
+              <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 cursor-default"
+                onDoubleClick={() => openEdit(t)}>
+                {/* Type icon — opening_balance gets its own colour */}
+                <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0',
+                  isOpeningBalance          ? 'bg-purple-500/10 text-purple-500' :
+                  t.type === 'income'       ? 'bg-green-500/10  text-green-500' :
+                  t.type === 'transfer'     ? 'bg-blue-500/10   text-blue-500'  :
+                                              'bg-red-500/10    text-red-500')}>
+                  {isOpeningBalance ? '⚖' : t.type === 'income' ? '+' : t.type === 'transfer' ? '↔' : '-'}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                  {t.category && <span>{t.category.name}</span>}
-                  {t.account && <span>{t.account.name}</span>}
-                  {t.member && <span>{t.member.name}</span>}
-                  {t.location && <span>{t.location.name}</span>}
-                  {t.entity && !t.entity.isDefault && (
-                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-                      style={{ backgroundColor: t.entity.color ? `${t.entity.color}20` : undefined, color: t.entity.color ?? undefined }}>
-                      {t.entity.name}
-                    </span>
-                  )}
-                  <span>{format(new Date(t.date), 'd MMM yyyy')}</span>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium truncate">{t.payee ?? t.description ?? 'Transaction'}</span>
+                    {!t.isCleared    && <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-1.5 rounded">PENDING</span>}
+                    {t.isPrivate     && <span className="text-[10px] bg-muted px-1.5 rounded">PRIVATE</span>}
+                    {t.isTransfer    && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">TRANSFER</span>}
+                    {/* Spec §6.4: show "Opening Balance" badge instead of normal type badge */}
+                    {isOpeningBalance && (
+                      <span className="text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
+                        OPENING BALANCE
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                    {t.category && <span>{t.category.name}</span>}
+                    {t.account  && <span>{t.account.name}</span>}
+                    {t.member   && <span>{t.member.name}</span>}
+                    {t.location && <span>{t.location.name}</span>}
+                    {t.entity && !t.entity.isDefault && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                        style={{ backgroundColor: t.entity.color ? `${t.entity.color}20` : undefined, color: t.entity.color ?? undefined }}>
+                        {t.entity.name}
+                      </span>
+                    )}
+                    <span>{format(new Date(t.date), 'd MMM yyyy')}</span>
+                  </div>
                 </div>
+
+                <p className={cn('text-sm font-semibold shrink-0',
+                  isOpeningBalance      ? 'text-purple-500' :
+                  t.type === 'income'   ? 'text-green-500'  :
+                  t.type === 'transfer' ? 'text-blue-500'   :
+                                          'text-red-500')}>
+                  {t.type === 'expense' ? '-' : '+'}{formatCurrency(t.amount)}
+                </p>
+
+                {/* Opening balance rows are read-only; other rows allow edit/delete */}
+                {!isOpeningBalance ? (
+                  <>
+                    <button onClick={() => openEdit(t)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => handleDelete(t.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground/60 italic px-2">via Accounts</span>
+                )}
               </div>
-              <p className={cn('text-sm font-semibold shrink-0', t.type === 'income' ? 'text-green-500' : t.type === 'transfer' ? 'text-blue-500' : t.type === 'opening_balance' ? 'text-purple-500' : 'text-red-500')}>
-                {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : t.type === 'opening_balance' ? '+' : '-'}{formatCurrency(t.amount)}
-              </p>
-              <button onClick={() => openEdit(t)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-              <button onClick={() => handleDelete(t.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

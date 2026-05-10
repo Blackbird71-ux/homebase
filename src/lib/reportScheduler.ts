@@ -3,7 +3,8 @@
 
 import cron from 'node-cron'
 import { prisma } from '@/lib/prisma'
-import { buildYtdReport, getCurrentFY } from '@/lib/financeReport'
+import { buildYtdReport } from '@/lib/financeReport'
+import { currentFyYear, fyLabel } from '@/lib/finance-fy'
 import { sendReportEmail } from '@/lib/emailReportService'
 
 declare global {
@@ -15,6 +16,9 @@ declare global {
  * Start the monthly report cron scheduler.
  * Runs on the 1st of every month at 00:05 (Australia/Brisbane time).
  * Only runs if REPORT_EMAIL_RECIPIENTS env var is set.
+ *
+ * Spec §7.1: All calls to buildYtdReport must load financeYearStartMonth
+ * from the family record and pass it as the third argument.
  */
 export function startReportScheduler(): void {
   if (global.__reportSchedulerInitialized) return
@@ -49,15 +53,15 @@ export function startReportScheduler(): void {
       console.log('[reportScheduler] Running monthly report generation...')
 
       try {
-        const year = getCurrentFY()
         const now = new Date()
 
-        // Find all families that have finance data
+        // Spec §7.1: fetch financeYearStartMonth per family so each family's
+        // FY setting is respected rather than hardcoding July for everyone.
         const families = await prisma.family.findMany({
           where: {
             financeIncomeEntries: { some: {} },
           },
-          select: { id: true },
+          select: { id: true, financeYearStartMonth: true },
         })
 
         if (families.length === 0) {
@@ -67,6 +71,11 @@ export function startReportScheduler(): void {
 
         for (const family of families) {
           try {
+            // Use each family's configured FY start month (default 7 = July)
+            const fyStartMonth = family.financeYearStartMonth ?? 7
+            const fyStartYr    = currentFyYear(fyStartMonth)
+            const year         = fyLabel(fyStartYr, fyStartMonth) // e.g. "2025-26"
+
             // Check if a snapshot already exists for this period
             const existing = await prisma.financeSnapshot.findFirst({
               where: {
@@ -82,8 +91,8 @@ export function startReportScheduler(): void {
               continue
             }
 
-            // Build report
-            const report = await buildYtdReport(family.id, year)
+            // Build report — pass fyStartMonth so the report uses the correct FY bounds
+            const report = await buildYtdReport(family.id, year, fyStartMonth)
 
             // Save snapshot
             const snapshot = await prisma.financeSnapshot.create({
@@ -107,12 +116,11 @@ export function startReportScheduler(): void {
             })
 
             if (emailResult.success) {
-              // Mark all ReportEmail records for this snapshot as sent
               await prisma.reportEmail.updateMany({
                 where: { snapshotId: snapshot.id },
                 data: { status: 'sent', sentAt: new Date() },
               })
-              console.log(`[reportScheduler] Report sent for family ${family.id} to ${recipients.length} recipient(s)`)
+              console.log(`[reportScheduler] Report sent for family ${family.id} (FY ${year}, start month ${fyStartMonth}) to ${recipients.length} recipient(s)`)
             } else {
               console.error(`[reportScheduler] Email failed for family ${family.id}: ${emailResult.error}`)
               await prisma.reportEmail.updateMany({
