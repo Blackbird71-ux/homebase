@@ -12,7 +12,7 @@ import {
 } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { getCurrentFY } from '@/lib/financeReport'
+import { getCurrentFY } from '@/lib/financeShared'
 import EmailReportModal from '@/components/finance/EmailReportModal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────

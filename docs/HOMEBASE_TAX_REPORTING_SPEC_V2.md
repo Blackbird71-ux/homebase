@@ -580,74 +580,499 @@ src/app/api/finance/pnl/route.ts         ← new API (built in §3.5)
 
 ### 5.2 What this page shows
 
-This mirrors the NETT sheet of 2027_BUDGET.xlsx. For each entity, it shows income and expenses by category with a column for each month of the financial year (Jul–Jun) plus an annual total column. A NET row shows income minus expenses for each month and for the year.
+This mirrors the NETT sheet of 2027_BUDGET.xlsx. For each entity it shows income and expenses by category with a column for each month of the financial year (Jul–Jun) plus an annual total column. A NET row shows income minus expenses for each month and for the year.
 
-The user selects a financial year and optionally filters by entity tab.
+The user selects a financial year from a dropdown and an entity from a tab row. Changing either control re-fetches data and re-renders the table.
 
-### 5.3 Page structure
+**Two modes:**
+- **All tab** — fetches all records, renders one P&L table per entity (Personal, Super, Unitrak, Hopevale) stacked vertically on the page. Each entity section is visually separated with a heading.
+- **Single entity tab** — fetches only that entity's records, renders exactly one P&L table filling the full page width.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  P&L Report   FY [2025-26 ▼]                                │
-│  ──────────────────────────────────────────────────────────  │
-│  [All] [Personal] [Super] [Unitrak] [Hopevale]               │
-│                                                              │
-│  PERSONAL                                                    │
-│  ┌────────────────┬───┬───┬───┬───┬───┬───┬───┬───┬───┬─── │
-│  │                │JUL│AUG│SEP│OCT│NOV│DEC│JAN│FEB│MAR│TOTAL│
-│  ├ INCOME ────────┼───┼───┼───┼───┼───┼───┼───┼───┼───┼─── │
-│  │ Me Salary      │5,330│6,663│...                   │69,293│
-│  │ Mark Salary    │3,672│3,672│...                   │51,405│
-│  │ NAB Term Dep.  │  — │8,083│...                   │49,306│
-│  │ Savings Int    │1,500│1,500│...                   │18,000│
-│  │ Total Income   │10,502│19,918│...                │188,004│
-│  ├ EXPENSES ──────┼───┼───┼───┼───┼───┼───┼───┼───┼───┼─── │
-│  │ PAYG - Me      │1,392│1,392│...                   │20,816│
-│  │ PAYG - Mark    │  958│1,052│...                   │13,326│
-│  │ House Insurance│  311│  311│...                    │3,732│
-│  │ ... all rows   │                                         │
-│  │ Total Expenses │14,085│15,530│...                │170,245│
-│  ├ NET ───────────┼───┼───┼───┼───┼───┼───┼───┼───┼───┼─── │
-│  │ NET            │-3,583│4,388│... [green/red]      │17,759│
-│  └────────────────┴───┴───┴───┴───┴───┴───┴───┴───┴───┴─── │
-│                                                              │
-│  SUPER                                                       │
-│  [same table]                                                │
-│                                                              │
-│  UNITRAK / HOPEVALE                                          │
-│  [same table]                                                │
-└─────────────────────────────────────────────────────────────┘
+### 5.3 Page component state and data flow
+
+```typescript
+// State in the page component
+const [fy, setFy] = useState<string>('2025-26')
+const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null)
+// null = All tab selected
+
+const [data, setData] = useState<PnlApiResponse | null>(null)
+const [loading, setLoading] = useState(false)
 ```
 
-### 5.4 Data aggregation rules
+**On mount and whenever `fy` or `selectedEntityId` changes**, fetch from the API:
 
-All aggregation happens in the page component, not the API.
+```typescript
+useEffect(() => {
+  setLoading(true)
+  const params = new URLSearchParams({ year: fy })
+  // When All tab: do NOT pass entityId — fetch everything
+  // When single entity: pass the entity's id
+  if (selectedEntityId) params.set('entityId', selectedEntityId)
 
-**Monthly buckets:** Create 12 buckets, one per month Jul–Jun. Key by `YYYY-MM` string (e.g. `"2025-07"`).
+  fetch(`/api/finance/pnl?${params}`)
+    .then(r => r.json())
+    .then(setData)
+    .catch(() => toast.error('Failed to load P&L data'))
+    .finally(() => setLoading(false))
+}, [fy, selectedEntityId])
+```
 
-**Income rows:** From `incomeEntries`. Group records by `category.taxDisplayLabel ?? category.name`. Place each record's `amount` into the bucket matching its `nextExpectedDate` month. One row per unique category label.
+**When the user changes the FY dropdown:** call `setFy(newValue)`. This triggers the useEffect above.
 
-**Expense rows:** From `transactions` (where `type = 'expense'` and `isTransfer = false`) and `bills`. Group by `category.taxDisplayLabel ?? category.name`. Place into bucket matching `date` (transactions) or `nextDueDate` (bills).
+**When the user clicks an entity tab:** call `setSelectedEntityId(entity.id)` for a named entity, or `setSelectedEntityId(null)` for the All tab. This triggers the useEffect above.
 
-**Exclude:** Any `transaction` where `isTransfer = true`. Do not show these anywhere in the P&L.
+### 5.4 Page structure and tab rendering
 
-**Entity filter:** When an entity tab is selected, only include records where `entityId` matches. The "All" tab shows each entity as a separate named section stacked vertically.
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  P&L Report   FY [2025-26 ▼]                                       │
+│  ─────────────────────────────────────────────────────────────────  │
+│  [All]  [Personal]  [Super]  [Unitrak]  [Hopevale]                 │
+│         ↑ active tab has border-b-2 border-primary underline style  │
+│                                                                     │
+│  ── All tab selected ───────────────────────────────────────────── │
+│                                                                     │
+│  PERSONAL                                                           │
+│  ┌──────────────┬─────┬─────┬─────┬─────┬─────┬─────┬──────────┐  │
+│  │              │ JUL │ AUG │ SEP │ ... │ JUN │     │  TOTAL   │  │
+│  ├──────────────┼─────┼─────┼─────┼─────┼─────┼─────┼──────────┤  │
+│  │ INCOME       │     │     │     │     │     │     │          │  │
+│  │  Me Salary   │5,330│6,663│5,330│ ... │5,330│     │  69,293  │  │
+│  │  Mark Salary │3,672│3,672│5,508│ ... │5,508│     │  51,405  │  │
+│  │  NAB Term Dep│  —  │8,083│  —  │ ... │8,000│     │  49,306  │  │
+│  │  Savings Int │1,500│1,500│1,500│ ... │1,500│     │  18,000  │  │
+│  ├──────────────┼─────┼─────┼─────┼─────┼─────┼─────┼──────────┤  │
+│  │ Total Income │10,502│19,918│...│ ... │20,338│    │ 188,004  │  │
+│  ├──────────────┼─────┼─────┼─────┼─────┼─────┼─────┼──────────┤  │
+│  │ EXPENSES     │     │     │     │     │     │     │          │  │
+│  │  PAYG - Me   │1,392│1,392│1,740│ ... │1,805│     │  20,816  │  │
+│  │  PAYG - Mark │  958│1,052│  864│ ... │  912│     │  13,326  │  │
+│  │  House Ins   │  311│  311│  311│ ... │  311│     │   3,732  │  │
+│  │  ... rows    │     │     │     │     │     │     │          │  │
+│  ├──────────────┼─────┼─────┼─────┼─────┼─────┼─────┼──────────┤  │
+│  │ Total Expense│14,085│15,530│...│ ... │13,132│    │ 170,245  │  │
+│  ├──────────────┼─────┼─────┼─────┼─────┼─────┼─────┼──────────┤  │
+│  │ NET          │-3,583│4,388│-146│ ... │7,206│     │  17,759  │  │
+│  │              │(red)│(grn)│(red)│ ... │(grn)│     │  (green) │  │
+│  └──────────────┴─────┴─────┴─────┴─────┴─────┴─────┴──────────┘  │
+│                                                                     │
+│  SUPER                                                              │
+│  [same table structure, Super entity records only]                  │
+│                                                                     │
+│  UNITRAK                                                            │
+│  [same table structure, Unitrak records only]                       │
+│                                                                     │
+│  HOPEVALE                                                           │
+│  [same table structure, Hopevale records only]                      │
+│                                                                     │
+│  ── Single entity tab selected (e.g. Super) ──────────────────── │
+│                                                                     │
+│  SUPER                                                              │
+│  ┌──────────────┬─────┬─────┬─────┬─────┬─────┬─────┬──────────┐  │
+│  │              │ JUL │ AUG │ SEP │ ... │ JUN │     │  TOTAL   │  │
+│  │ (full width single table — no other entities shown)           │  │
+│  └──────────────┴─────┴─────┴─────┴─────┴─────┴─────┴──────────┘  │
+└────────────────────────────────────────────────────────────────────┘
+```
 
-**Totals:**
-- `Total Income` row = sum of all income rows for that month
-- `Total Expenses` row = sum of all expense rows for that month
-- `NET` row = Total Income − Total Expenses
-- Annual total column = sum of the 12 monthly values for each row
+### 5.5 Tab component implementation
 
-### 5.5 Display rules
+Build the entity tabs as a plain flex row of buttons. Tabs are driven by the `entities` array returned by the API. Always include an "All" tab first, hardcoded.
 
-- Currency: whole dollars, formatted `$#,##0`. Use `—` (em dash) for months with no value — never show `$0`.
-- NET row: green text if positive (`text-green-600 dark:text-green-400`), red if negative (`text-red-600 dark:text-red-400`).
-- Total column: bold.
-- Table must be horizontally scrollable — wrap in `<div className="overflow-x-auto">`.
-- Month header abbreviations: JUL AUG SEP OCT NOV DEC JAN FEB MAR APR MAY JUN.
-- Row labels: left-aligned. Amounts: right-aligned (`text-right`).
-- Section headers (INCOME, EXPENSES, NET): slightly larger or bold, visually separated.
+```tsx
+// Tab row JSX
+<div className="flex gap-1 border-b border-border mb-4 overflow-x-auto">
+  {/* All tab — always first */}
+  <button
+    onClick={() => setSelectedEntityId(null)}
+    className={cn(
+      'px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors',
+      selectedEntityId === null
+        ? 'border-b-2 border-primary text-primary'
+        : 'text-muted-foreground hover:text-foreground'
+    )}
+  >
+    All
+  </button>
+
+  {/* One tab per entity, sorted by name */}
+  {data?.entities
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(entity => (
+      <button
+        key={entity.id}
+        onClick={() => setSelectedEntityId(entity.id)}
+        className={cn(
+          'px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors',
+          selectedEntityId === entity.id
+            ? 'border-b-2 border-primary text-primary'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        {entity.name}
+      </button>
+    ))}
+</div>
+```
+
+**Important:** The tab row itself must be `overflow-x-auto` and `whitespace-nowrap` per button so it scrolls horizontally if there are many entities, rather than wrapping onto multiple lines.
+
+### 5.6 FY selector implementation
+
+The FY dropdown sits to the right of the page heading in the same header row. Build the options programmatically from a fixed range — do not hardcode one option:
+
+```tsx
+// Generate FY options from 2022-23 up to next FY
+function getFyOptions(): string[] {
+  const currentYear = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() // 0-based; July = 6
+  // If we're past June, current FY has started (e.g. Aug 2025 → 2025-26)
+  const latestStartYear = currentMonth >= 6 ? currentYear : currentYear - 1
+  const options: string[] = []
+  for (let y = 2022; y <= latestStartYear + 1; y++) {
+    options.push(`${y}-${String(y + 1).slice(-2)}`)
+  }
+  return options.reverse() // most recent first
+}
+
+// JSX
+<select
+  value={fy}
+  onChange={e => setFy(e.target.value)}
+  className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+>
+  {getFyOptions().map(opt => (
+    <option key={opt} value={opt}>{opt}</option>
+  ))}
+</select>
+```
+
+### 5.7 Data aggregation logic in the page component
+
+All of this runs in the page — the API returns raw records, the page builds the table rows.
+
+**Step 1 — Build the month key array (always 12 months, Jul–Jun):**
+```typescript
+const MONTH_KEYS: string[] = (() => {
+  const [startYStr] = fy.split('-')
+  const startYear = parseInt(startYStr)
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(startYear, 6 + i)) // Jul = month 6
+    return d.toISOString().slice(0, 7) // "2025-07", "2025-08", ..., "2026-06"
+  })
+})()
+```
+
+**Step 2 — Determine which entities to render:**
+```typescript
+// All tab: render every entity that has at least one record
+// Single entity tab: render only the selected entity
+const entitiesToRender = selectedEntityId === null
+  ? data.entities  // API returned all entities
+  : data.entities.filter(e => e.id === selectedEntityId)
+```
+
+**Step 3 — For each entity, aggregate income and expense rows:**
+
+```typescript
+type MonthMap = Record<string, number> // key = "YYYY-MM", value = amount
+type PnlRow = { label: string; months: MonthMap; total: number }
+
+function buildEntityPnl(entityId: string): { incomeRows: PnlRow[]; expenseRows: PnlRow[] } {
+  // ── INCOME ────────────────────────────────────────────────────────────
+  // Source: incomeEntries where entityId matches
+  const incomeMap: Record<string, MonthMap> = {}
+
+  data.incomeEntries
+    .filter(e => e.entityId === entityId)
+    .forEach(e => {
+      const label = e.category.taxDisplayLabel ?? e.category.name
+      const key = e.nextExpectedDate.slice(0, 7) // "YYYY-MM"
+      if (!incomeMap[label]) incomeMap[label] = {}
+      incomeMap[label][key] = (incomeMap[label][key] ?? 0) + e.amount
+    })
+
+  const incomeRows: PnlRow[] = Object.entries(incomeMap).map(([label, months]) => ({
+    label,
+    months,
+    total: Object.values(months).reduce((a, b) => a + b, 0),
+  }))
+
+  // ── EXPENSES ───────────────────────────────────────────────────────────
+  // Source 1: transactions where entityId matches AND isTransfer = false AND type = 'expense'
+  // Source 2: bills where entityId matches
+  const expenseMap: Record<string, MonthMap> = {}
+
+  data.transactions
+    .filter(t => t.entityId === entityId && !t.isTransfer && t.type === 'expense')
+    .forEach(t => {
+      const label = t.category.taxDisplayLabel ?? t.category.name
+      const key = t.date.slice(0, 7)
+      if (!expenseMap[label]) expenseMap[label] = {}
+      expenseMap[label][key] = (expenseMap[label][key] ?? 0) + t.amount
+    })
+
+  data.bills
+    .filter(b => b.entityId === entityId)
+    .forEach(b => {
+      const label = b.category.taxDisplayLabel ?? b.category.name
+      const key = b.nextDueDate.slice(0, 7)
+      if (!expenseMap[label]) expenseMap[label] = {}
+      expenseMap[label][key] = (expenseMap[label][key] ?? 0) + b.amount
+    })
+
+  const expenseRows: PnlRow[] = Object.entries(expenseMap).map(([label, months]) => ({
+    label,
+    months,
+    total: Object.values(months).reduce((a, b) => a + b, 0),
+  }))
+
+  return { incomeRows, expenseRows }
+}
+```
+
+**Step 4 — Compute totals for Total Income, Total Expenses, and NET rows:**
+
+```typescript
+function sumRows(rows: PnlRow[], monthKey: string): number {
+  return rows.reduce((acc, row) => acc + (row.months[monthKey] ?? 0), 0)
+}
+
+// For each month key:
+const totalIncomeByMonth = MONTH_KEYS.map(k => sumRows(incomeRows, k))
+const totalExpenseByMonth = MONTH_KEYS.map(k => sumRows(expenseRows, k))
+const netByMonth = MONTH_KEYS.map((_, i) => totalIncomeByMonth[i] - totalExpenseByMonth[i])
+
+const totalIncomeAnnual = totalIncomeByMonth.reduce((a, b) => a + b, 0)
+const totalExpenseAnnual = totalExpenseByMonth.reduce((a, b) => a + b, 0)
+const netAnnual = totalIncomeAnnual - totalExpenseAnnual
+```
+
+### 5.8 P&L table component
+
+Extract the table into a reusable component `PnlTable` so it can be rendered for each entity without duplicating JSX.
+
+```typescript
+interface PnlTableProps {
+  entityName: string
+  incomeRows: PnlRow[]
+  expenseRows: PnlRow[]
+  monthKeys: string[]  // ["2025-07", ..., "2026-06"]
+}
+```
+
+**Table structure JSX (implement inside `PnlTable`):**
+
+```tsx
+function PnlTable({ entityName, incomeRows, expenseRows, monthKeys }: PnlTableProps) {
+  const MONTH_LABELS = ['JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR','APR','MAY','JUN']
+
+  const sumRows = (rows: PnlRow[], key: string) =>
+    rows.reduce((a, r) => a + (r.months[key] ?? 0), 0)
+
+  const fmt = (n: number | undefined) =>
+    n ? `$${Math.round(n).toLocaleString()}` : '—'
+
+  const totalIncome  = monthKeys.map(k => sumRows(incomeRows, k))
+  const totalExpense = monthKeys.map(k => sumRows(expenseRows, k))
+  const net          = monthKeys.map((_, i) => totalIncome[i] - totalExpense[i])
+
+  const annualIncome  = totalIncome.reduce((a, b) => a + b, 0)
+  const annualExpense = totalExpense.reduce((a, b) => a + b, 0)
+  const annualNet     = annualIncome - annualExpense
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-base font-semibold mb-2">{entityName}</h2>
+      <div className="overflow-x-auto rounded-md border border-border">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-muted/50">
+              <th className="text-left px-3 py-2 font-medium w-48 min-w-[12rem]">Category</th>
+              {MONTH_LABELS.map(m => (
+                <th key={m} className="text-right px-3 py-2 font-medium min-w-[5rem]">{m}</th>
+              ))}
+              <th className="text-right px-3 py-2 font-bold min-w-[6rem]">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* ── INCOME section header ── */}
+            <tr className="bg-muted/30">
+              <td colSpan={14} className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Income
+              </td>
+            </tr>
+
+            {/* Income rows */}
+            {incomeRows.map(row => (
+              <tr key={row.label} className="border-t border-border/50 hover:bg-muted/20">
+                <td className="px-3 py-1.5 text-left">{row.label}</td>
+                {monthKeys.map(k => (
+                  <td key={k} className="px-3 py-1.5 text-right tabular-nums">
+                    {fmt(row.months[k])}
+                  </td>
+                ))}
+                <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
+                  {fmt(row.total)}
+                </td>
+              </tr>
+            ))}
+
+            {/* Total Income row */}
+            <tr className="border-t-2 border-border bg-muted/40 font-semibold">
+              <td className="px-3 py-2">Total Income</td>
+              {totalIncome.map((v, i) => (
+                <td key={i} className="px-3 py-2 text-right tabular-nums">{fmt(v)}</td>
+              ))}
+              <td className="px-3 py-2 text-right font-bold tabular-nums">{fmt(annualIncome)}</td>
+            </tr>
+
+            {/* ── EXPENSES section header ── */}
+            <tr className="bg-muted/30">
+              <td colSpan={14} className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Expenses
+              </td>
+            </tr>
+
+            {/* Expense rows */}
+            {expenseRows.map(row => (
+              <tr key={row.label} className="border-t border-border/50 hover:bg-muted/20">
+                <td className="px-3 py-1.5 text-left">{row.label}</td>
+                {monthKeys.map(k => (
+                  <td key={k} className="px-3 py-1.5 text-right tabular-nums">
+                    {fmt(row.months[k])}
+                  </td>
+                ))}
+                <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
+                  {fmt(row.total)}
+                </td>
+              </tr>
+            ))}
+
+            {/* Total Expenses row */}
+            <tr className="border-t-2 border-border bg-muted/40 font-semibold">
+              <td className="px-3 py-2">Total Expenses</td>
+              {totalExpense.map((v, i) => (
+                <td key={i} className="px-3 py-2 text-right tabular-nums">{fmt(v)}</td>
+              ))}
+              <td className="px-3 py-2 text-right font-bold tabular-nums">{fmt(annualExpense)}</td>
+            </tr>
+
+            {/* ── NET row ── */}
+            <tr className="border-t-2 border-border font-bold">
+              <td className="px-3 py-2">NET</td>
+              {net.map((v, i) => (
+                <td
+                  key={i}
+                  className={cn(
+                    'px-3 py-2 text-right tabular-nums',
+                    v >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                  )}
+                >
+                  {v === 0 ? '—' : (v >= 0 ? `$${Math.round(v).toLocaleString()}` : `($${Math.round(Math.abs(v)).toLocaleString()})`)}
+                </td>
+              ))}
+              <td
+                className={cn(
+                  'px-3 py-2 text-right font-bold tabular-nums',
+                  annualNet >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                )}
+              >
+                {annualNet >= 0
+                  ? `$${Math.round(annualNet).toLocaleString()}`
+                  : `($${Math.round(Math.abs(annualNet)).toLocaleString()})`}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+```
+
+### 5.9 Main page render logic
+
+```tsx
+export default function PnlPage() {
+  // ... state and useEffect from §5.3 ...
+
+  return (
+    <div className="p-6 space-y-4">
+
+      {/* Header row with title and FY selector */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-xl font-bold">P&amp;L Report</h1>
+        <select value={fy} onChange={e => setFy(e.target.value)} className="...">
+          {getFyOptions().map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      </div>
+
+      {/* Entity tabs */}
+      <div className="flex gap-1 border-b border-border overflow-x-auto">
+        {/* All tab + entity tabs from §5.5 */}
+      </div>
+
+      {/* Loading state */}
+      {loading && <div className="text-muted-foreground text-sm">Loading...</div>}
+
+      {/* Tables */}
+      {!loading && data && (() => {
+        // Determine which entities to show
+        const entitiesToRender = selectedEntityId === null
+          ? data.entities
+          : data.entities.filter(e => e.id === selectedEntityId)
+
+        if (entitiesToRender.length === 0) {
+          return <p className="text-muted-foreground text-sm">No data for this entity.</p>
+        }
+
+        return entitiesToRender.map(entity => {
+          const { incomeRows, expenseRows } = buildEntityPnl(entity.id)
+
+          // Skip entities that have no income and no expenses — don't render empty tables
+          if (incomeRows.length === 0 && expenseRows.length === 0) return null
+
+          return (
+            <PnlTable
+              key={entity.id}
+              entityName={entity.name}
+              incomeRows={incomeRows}
+              expenseRows={expenseRows}
+              monthKeys={MONTH_KEYS}
+            />
+          )
+        })
+      })()}
+
+    </div>
+  )
+}
+```
+
+### 5.10 Edge cases the agent must handle
+
+**Entity with no records for selected FY:** Skip rendering — do not show an empty table with just headers.
+
+**Records with `entityId = null`:** These are personal records with no entity assigned. In the "All" view, bucket them into a "Personal" section. In a single-entity filter view, they appear only when the Personal entity tab is active — filter by `entityId === selectedEntityId` strictly, so null-entity records only show in the All view or when Personal is selected.
+
+**Same category name appearing in both income entries and transactions:** They end up in the same P&L row — amounts are summed into the same label bucket. This is correct (e.g. "Bank Interest" from both an income entry and a one-off transaction both belong under "Bank Interest").
+
+**Negative NET month:** Display as `($3,583)` in parentheses, red. Do not use a minus sign — accountancy convention uses parentheses for negatives.
+
+**Tabs reflect actual data:** Tabs are driven by `data.entities` from the API. If an entity has no records it still appears as a tab (the user may want to confirm it's empty). The table simply won't render for it (§5.9 skips empty entities in the All view).
+
+### 5.11 Display rules summary
+
+- Currency: whole dollars. Positive: `$#,##0`. Negative: `($#,##0)`. Zero/null: `—`.
+- NET row: green (`text-green-600 dark:text-green-400`) if positive, red (`text-red-600 dark:text-red-400`) if negative.
+- Annual TOTAL column: bold.
+- Table: `overflow-x-auto` wrapper, `min-w-full` table, `min-w-[5rem]` per month column so columns don't collapse.
+- Month headers: JUL AUG SEP OCT NOV DEC JAN FEB MAR APR MAY JUN.
+- Numbers: `tabular-nums` class for aligned columns.
+- Row labels: left-aligned. Amounts: right-aligned.
+- Section headers (Income / Expenses): small, uppercase, muted — `text-xs font-semibold uppercase tracking-wide text-muted-foreground`.
 
 ---
 

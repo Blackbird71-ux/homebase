@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Loader2, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { getCurrentFY } from '@/lib/financeReport'
+import { getCurrentFY } from '@/lib/financeShared'
 
 interface EmailReportModalProps {
   open: boolean
