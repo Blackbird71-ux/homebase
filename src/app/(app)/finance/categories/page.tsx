@@ -26,20 +26,33 @@ interface Category {
   isTaxDeduction: boolean
   taxIncludeInReporting: boolean
   taxDisplayLabel: string | null
-  glCode: string | null              // NEW
-  openingBalance: number | null      // NEW
-  openingBalanceDate: string | null  // NEW
+  glCode: string | null
+  openingBalance: number | null
+  openingBalanceDate: string | null
   parent?: { id: string; name: string } | null
   children?: Category[]
   _count?: { transactions: number; recurringBills: number; incomeEntries: number }
 }
+
+// ─── Filter types ─────────────────────────────────────────────────────
+type FilterType = 'all' | 'asset' | 'liability' | 'equity' | 'income' | 'expense' | 'transfer'
+
+const FILTER_OPTIONS: { value: FilterType; label: string; color: string }[] = [
+  { value: 'all',       label: 'All',       color: 'text-foreground border-border' },
+  { value: 'asset',     label: 'Assets',    color: 'text-purple-600 dark:text-purple-400 border-purple-500/40 bg-purple-500/10' },
+  { value: 'liability', label: 'Liabilities', color: 'text-orange-600 dark:text-orange-400 border-orange-500/40 bg-orange-500/10' },
+  { value: 'equity',    label: 'Equity',    color: 'text-cyan-600 dark:text-cyan-400 border-cyan-500/40 bg-cyan-500/10' },
+  { value: 'income',    label: 'Income',    color: 'text-green-600 dark:text-green-400 border-green-500/40 bg-green-500/10' },
+  { value: 'expense',   label: 'Expenses',  color: 'text-red-600 dark:text-red-400 border-red-500/40 bg-red-500/10' },
+  { value: 'transfer',  label: 'Transfer',  color: 'text-blue-600 dark:text-blue-400 border-blue-500/40 bg-blue-500/10' },
+]
 
 // ─── Badge colours per COA type ───────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
   income:    'text-green-500 bg-green-500/10',
   expense:   'text-red-500 bg-red-500/10',
   transfer:  'text-blue-500 bg-blue-500/10',
-  asset:     'text-purple-500 bg-purple-500/10',    // Workstream 2 — new types
+  asset:     'text-purple-500 bg-purple-500/10',
   liability: 'text-orange-500 bg-orange-500/10',
   equity:    'text-cyan-500 bg-cyan-500/10',
 }
@@ -47,7 +60,6 @@ const TYPE_COLORS: Record<string, string> = {
 const NOT_IN_USE_NAME = 'Not In Use'
 
 // ─── Account Dialog (Modal) ───────────────────────────────────────────
-// User-visible strings use "Account" per spec §3.1; internal code keeps "Category".
 
 function CategoryDialog({
   open,
@@ -74,7 +86,7 @@ function CategoryDialog({
     isTaxDeduction: false,
     taxIncludeInReporting: false,
     taxDisplayLabel: '',
-    glCode: '',  // NEW
+    glCode: '',
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -136,7 +148,6 @@ function CategoryDialog({
         body: JSON.stringify(payload),
       })
       if (res.ok) {
-        // Spec §3.1: toast messages say "Account saved" / "Account deleted"
         toast.success(editing ? 'Account updated' : 'Account created')
         onOpenChange(false)
         onSaved()
@@ -160,7 +171,6 @@ function CategoryDialog({
     <Dialog open={open} onOpenChange={open => { if (!open) { onOpenChange(false); setErrors({}) } }}>
       <DialogContent className="sm:max-w-lg" showCloseButton>
         <DialogHeader>
-          {/* Spec §3.1: dialog titles "Add Account" / "Edit Account" */}
           <DialogTitle>{editing ? 'Edit Account' : 'Add Account'}</DialogTitle>
         </DialogHeader>
 
@@ -241,7 +251,6 @@ function CategoryDialog({
           {/* ── Tax & flags ─────────────────────────────────────────── */}
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
 
-            {/* Tax Deduction — expense and transfer only */}
             {(form.type === 'expense' || form.type === 'transfer') && (
               <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                 <input type="checkbox" checked={form.isTaxDeduction}
@@ -251,7 +260,6 @@ function CategoryDialog({
               </label>
             )}
 
-            {/* Include in Tax Report — all types */}
             <label className="flex items-center gap-1.5 text-sm cursor-pointer">
               <input type="checkbox" checked={form.taxIncludeInReporting}
                 onChange={e => setForm(p => ({ ...p, taxIncludeInReporting: e.target.checked }))}
@@ -259,7 +267,6 @@ function CategoryDialog({
               <span className="text-amber-600 dark:text-amber-400 font-medium">Include in Tax Report</span>
             </label>
 
-            {/* Tax display label — shown when taxIncludeInReporting is checked */}
             {form.taxIncludeInReporting && (
               <div className="flex items-center gap-1.5 w-full sm:w-auto">
                 <label className="text-xs text-muted-foreground whitespace-nowrap">Display label:</label>
@@ -314,6 +321,7 @@ function CategoryRow({
   cat, childrenMap, depth, onEdit, onDelete, getTypeBadge,
   isCollapsed, onToggleCollapse, showToggle,
   onSetOpeningBalance,
+  activeFilter,
 }: {
   cat: Category
   childrenMap: Map<string, Category[]>
@@ -325,6 +333,7 @@ function CategoryRow({
   onToggleCollapse?: () => void
   showToggle?: boolean
   onSetOpeningBalance: (c: Category) => void
+  activeFilter: FilterType
 }) {
   const children = childrenMap.get(cat.id) || []
   const hasChildren = children.length > 0
@@ -335,12 +344,26 @@ function CategoryRow({
   if (cat.isLocationBased)       flags.push('LOCATION')
   if (cat.isExternal)            flags.push('EXTERNAL')
 
+  // When filtering, recursively check if this node or any descendant matches
+  function hasMatchingDescendant(c: Category): boolean {
+    if (activeFilter === 'all' || c.type === activeFilter) return true
+    const kids = childrenMap.get(c.id) ?? []
+    return kids.some(k => hasMatchingDescendant(k))
+  }
+
+  if (!hasMatchingDescendant(cat)) return null
+
+  // When filtering, show children even if collapsed
+  const effectivelyCollapsed = activeFilter !== 'all' ? false : (isCollapsed ?? false)
+
   return (
     <>
       <div
         className={cn(
           'flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 transition-colors',
           cat.name === NOT_IN_USE_NAME && 'border-dashed border-muted-foreground/30',
+          // Dim rows that don't match the active filter but are shown as parents
+          activeFilter !== 'all' && cat.type !== activeFilter && 'opacity-50',
         )}
         style={{ marginLeft: depth * 24 }}
         onDoubleClick={() => onEdit(cat)}
@@ -348,7 +371,7 @@ function CategoryRow({
         {showToggle && hasChildren ? (
           <button onClick={onToggleCollapse} className="p-0.5 hover:bg-accent rounded shrink-0"
             title={isCollapsed ? 'Show subcategories' : 'Hide subcategories'}>
-            {isCollapsed
+            {effectivelyCollapsed
               ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
               : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
@@ -373,7 +396,7 @@ function CategoryRow({
                 'bg-muted text-muted-foreground border-border'
               )}>{f}</span>
             ))}
-            {showToggle && isCollapsed && hasChildren && (
+            {showToggle && effectivelyCollapsed && hasChildren && (
               <span className="text-[10px] text-muted-foreground">
                 {children.length} subcategor{children.length === 1 ? 'y' : 'ies'} (hidden)
               </span>
@@ -393,7 +416,6 @@ function CategoryRow({
         {getTypeBadge(cat.type)}
         <div className="flex items-center gap-1">
           <button onClick={() => onEdit(cat)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-          {/* Set OB button — only for balance sheet account types */}
           {(cat.type === 'asset' || cat.type === 'liability' || cat.type === 'equity') && !cat.isSystem && (
             <button
               onClick={() => onSetOpeningBalance(cat)}
@@ -416,10 +438,11 @@ function CategoryRow({
         </div>
       </div>
 
-      {hasChildren && !isCollapsed && children.map(child => (
+      {hasChildren && !effectivelyCollapsed && children.map(child => (
         <CategoryRow key={child.id} cat={child} childrenMap={childrenMap} depth={depth + 1}
           onEdit={onEdit} onDelete={onDelete} getTypeBadge={getTypeBadge}
-          onSetOpeningBalance={onSetOpeningBalance} />
+          onSetOpeningBalance={onSetOpeningBalance}
+          activeFilter={activeFilter} />
       ))}
     </>
   )
@@ -433,6 +456,8 @@ export default function CategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing]       = useState<Category | null>(null)
   const [collapsedRootIds, setCollapsedRootIds] = useState<Set<string>>(new Set())
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+
   // Opening balance edit dialog state
   const [obEdit, setObEdit] = useState<{
     cat: Category
@@ -479,7 +504,6 @@ export default function CategoriesPage() {
   async function handleDelete(id: string) {
     if (!confirm('Delete this account?')) return
     const res = await fetch(`/api/finance/categories?id=${id}`, { method: 'DELETE' })
-    // Spec §3.1: toast says "Account deleted"
     if (res.ok) { toast.success('Account deleted'); load() }
     else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
   }
@@ -536,20 +560,52 @@ export default function CategoriesPage() {
   const orderedRoots     = notInUseCategory ? [...regularRoots, notInUseCategory] : regularRoots
   const availableParents = rootCategories.filter(c => editing ? c.id !== editing.id : true)
 
+  // Count per type for filter badges
+  const typeCounts = categories.reduce<Record<string, number>>((acc, c) => {
+    acc[c.type] = (acc[c.type] ?? 0) + 1
+    return acc
+  }, {})
+
   if (loading) return <div className="p-4 text-muted-foreground">Loading accounts…</div>
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        {/* Spec §3.1: page title "Chart of Accounts" */}
         <h1 className="text-2xl font-bold">Chart of Accounts</h1>
-        {/* Spec §3.1: button label "Add Account" */}
         <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
           <Plus className="h-4 w-4" /> Add Account
         </button>
       </div>
 
-      {/* Opening Balance Dialog — for asset, liability, equity accounts only */}
+      {/* ── Type filter pills ────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-1.5">
+        {FILTER_OPTIONS.map(opt => {
+          const count = opt.value === 'all' ? categories.length : (typeCounts[opt.value] ?? 0)
+          const isActive = activeFilter === opt.value
+          return (
+            <button
+              key={opt.value}
+              onClick={() => setActiveFilter(opt.value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+                isActive
+                  ? opt.color
+                  : 'text-muted-foreground border-border hover:text-foreground hover:border-foreground/30',
+              )}
+            >
+              {opt.label}
+              <span className={cn(
+                'text-[10px] px-1.5 py-0.5 rounded-full font-semibold',
+                isActive ? 'bg-black/10 dark:bg-white/20' : 'bg-muted',
+              )}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Opening Balance Dialog */}
       <Dialog open={!!obEdit} onOpenChange={open => { if (!open) setObEdit(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton>
           <DialogHeader>
@@ -649,8 +705,20 @@ export default function CategoriesPage() {
                     : new Date().toISOString().split('T')[0],
                 })
               }}
+              activeFilter={activeFilter}
             />
           ))}
+          {activeFilter !== 'all' && !orderedRoots.some(r => {
+            function hasMatch(c: Category): boolean {
+              if (c.type === activeFilter) return true
+              return (childMap.get(c.id) ?? []).some(hasMatch)
+            }
+            return hasMatch(r)
+          }) && (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No {FILTER_OPTIONS.find(o => o.value === activeFilter)?.label.toLowerCase()} accounts yet.
+            </p>
+          )}
         </div>
       )}
     </div>
