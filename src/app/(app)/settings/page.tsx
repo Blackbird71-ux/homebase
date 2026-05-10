@@ -126,6 +126,9 @@ export default async function SettingsPage() {
 
           <TabsContent value="integrations">
             <IntegrationsTab
+              isAdmin={user.role === 'admin'}
+              initialUmamiScriptUrl={user.family.umamiScriptUrl}
+              initialUmamiSiteId={user.family.umamiSiteId}
               googleConnected={user.googleConnected}
               googleEmail={user.googleEmail ?? null}
             />
