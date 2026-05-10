@@ -298,6 +298,10 @@ sudo sh deploy-nas.sh     # NAS SSH: load image, restart container
 Migrations run automatically at container start via `docker/entrypoint.sh`. The latest migrations are:
 - `20260517000000_add_tax_classification` — adds `taxClassification` to Transaction/Bill/Income; `taxIncludeInReporting`/`taxDisplayLabel` to Category
 - `20260519000000_add_is_transfer` — adds `isTransfer BOOLEAN NOT NULL DEFAULT false` to FinanceTransaction
+- `20260520000000_add_finance_year_start` — adds `financeYearStartMonth` to Family model
+- `20260520100000_add_opening_balances` — adds `openingBalanceTxId` to FinanceAccount, `openingBalancesCategoryId` to Family
+
+> **Build/deploy reference guide saved at [`.roo/prompts/build-deploy-guide.md`](.roo/prompts/build-deploy-guide.md)** — always check this when schema changes are involved.
 
 ---
 
@@ -305,7 +309,8 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 
 | Commit | Description |
 |--------|-------------|
-| **Tax Reporting, Annual P&L & ATO Workings** *(current)* | Per-person Tax Report with ATO brackets in page component; Annual FY P&L 12-column table; P&L includes actual transactions; transfer taxClassification; entity type hints; data tagging guide. Migrations: `20260517000000_add_tax_classification`, `20260519000000_add_is_transfer`. |
+| **Build/deploy guide & migration checklist** | Added `.roo/prompts/build-deploy-guide.md` documenting the Docker build pipeline and auto-migration flow to prevent schema drift between dev and production. |
+| **Tax Reporting, Annual P&L & ATO Workings** | Per-person Tax Report with ATO brackets in page component; Annual FY P&L 12-column table; P&L includes actual transactions; transfer taxClassification; entity type hints; data tagging guide. Migrations: `20260517000000_add_tax_classification`, `20260519000000_add_is_transfer`. |
 | **Half-Yearly Income Frequency** | Added `halfyearly` frequency option to recurring income entries |
 | **Income Tax Tracking — ATO Compliance** | `isTaxTracked`/`taxRate` on FinanceIncomeEntry; tax toggle + rate in income form; estimated tax in P&L |
 | **Finance — Accounting Fixes & UX Parity** | P&L cash/forecast; budget single source of truth; goals auto-progress; entity on transactions; pending balances; usage counts |
