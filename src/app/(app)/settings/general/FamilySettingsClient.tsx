@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { signOut } from 'next-auth/react'
 
 interface FamilySettingsClientProps {
-  family: { name: string; timezone: string; loginTagline: string }
+  family: { name: string; timezone: string; loginTagline: string; financeYearStartMonth: number }
   isAdmin: boolean
   supportedTimezones: string[]
 }
@@ -21,6 +21,7 @@ export function FamilySettingsClient({
   const [name, setName] = useState(family.name)
   const [timezone, setTimezone] = useState(family.timezone)
   const [loginTagline, setLoginTagline] = useState(family.loginTagline)
+  const [financeYearStartMonth, setFinanceYearStartMonth] = useState(family.financeYearStartMonth)
   const [saving, setSaving] = useState(false)
 
   async function handleSave(e: React.FormEvent) {
@@ -30,7 +31,7 @@ export function FamilySettingsClient({
       const res = await fetch('/api/settings/family', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, timezone, loginTagline }),
+        body: JSON.stringify({ name, timezone, loginTagline, financeYearStartMonth }),
       })
       if (res.ok) {
         toast.success('Settings saved. Sign out and back in to apply timezone changes.')
@@ -57,6 +58,12 @@ export function FamilySettingsClient({
         <div>
           <p className="text-muted-foreground text-xs mb-1">Login tagline</p>
           <p>{family.loginTagline || <span className="italic text-muted-foreground">(default)</span>}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground text-xs mb-1">Financial Year Start Month</p>
+          <p>{family.financeYearStartMonth === 1 ? 'January (calendar year)' :
+              family.financeYearStartMonth === 7 ? 'July (Australian FY)' :
+              `Month ${family.financeYearStartMonth}`}</p>
         </div>
         <p className="text-xs text-muted-foreground">Only admins can change family settings.</p>
       </div>
@@ -106,6 +113,29 @@ export function FamilySettingsClient({
           placeholder="The calm command centre for the people who share your roof."
         />
         <p className="text-xs text-muted-foreground">Shown on the login page. Max 200 characters.</p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="finance-year-start-month">Financial Year Start Month</Label>
+        <select
+          id="finance-year-start-month"
+          value={financeYearStartMonth}
+          onChange={(e) => setFinanceYearStartMonth(parseInt(e.target.value))}
+          className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
+        >
+          {[
+            { value: 1,  label: 'January (calendar year)' },
+            { value: 4,  label: 'April' },
+            { value: 7,  label: 'July (Australian FY — default)' },
+            { value: 10, label: 'October' },
+          ].map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Sets the start of the financial year for P&L, tax reports, budgets, and annual reporting.
+          Australian default is 1 July.
+        </p>
       </div>
 
       <div className="flex gap-2">

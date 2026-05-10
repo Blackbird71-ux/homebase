@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/prisma'
 import { buildYtdReport, getCurrentFY, fyDateRange } from '@/lib/financeReport'
 import * as XLSX from 'xlsx'
 
@@ -22,13 +23,21 @@ export async function GET(req: NextRequest) {
     }
 
     const familyId = session.familyId
+
+    // Load FY start month from family settings
+    const family = await prisma.family.findUnique({
+      where: { id: familyId },
+      select: { financeYearStartMonth: true },
+    })
+    const fyStartMonth = family?.financeYearStartMonth ?? 7
+
     const { searchParams } = new URL(req.url)
     const mode = searchParams.get('mode') ?? 'budget' // budget | tax
     const year = searchParams.get('year') ?? getCurrentFY()
     const snapshotId = searchParams.get('snapshotId')
 
     // Build or load report data
-    const report = await buildYtdReport(familyId, year)
+    const report = await buildYtdReport(familyId, year, fyStartMonth)
 
     const wb = XLSX.utils.book_new()
     const dateStr = year.replace('/', '-')

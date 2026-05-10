@@ -1,383 +1,528 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Receipt, TrendingUp, TrendingDown, Calculator, PiggyBank, ChevronDown, ChevronRight, DollarSign, Briefcase, FileDown, Printer } from 'lucide-react'
+import { useEffect, useState, useMemo } from 'react'
+import {
+  Receipt, AlertTriangle, ChevronLeft, ChevronRight,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { currentFyYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-fy'
 
-// ── Types matching the API response ─────────────────────────────────────
-
-interface TransactionRow {
-  id: string
-  date: string
-  description: string | null
-  amount: number
-  type: string
-  categoryName: string | null
-  categoryTaxDisplayLabel: string | null
-  entityName: string | null
-  memberName: string | null
+// ── Australian Tax Brackets 2025-26 ──────────────────────────────────────────
+// Update thresholds here each July — no API redeployment needed.
+function calcIncomeTax(income: number): number {
+  if (income <= 0)       return 0
+  if (income <= 18_200)  return 0
+  if (income <= 45_000)  return (income - 18_200) * 0.16
+  if (income <= 135_000) return 4_288 + (income - 45_000) * 0.30
+  if (income <= 190_000) return 31_288 + (income - 135_000) * 0.37
+  return 51_638 + (income - 190_000) * 0.45
 }
 
-interface IncomeEntryRow {
-  id: string
-  name: string
-  amount: number
-  frequency: string
-  estimatedAnnual: number
-  taxRate: number | null
-  entityName: string | null
-  memberName: string | null
+function calcMedicare(income: number): number {
+  if (income <= 26_000) return 0
+  return income * 0.02
 }
 
-interface ClassificationDetail {
-  classification: string
-  displayName: string
-  totalIncome: number
-  totalDeductions: number
-  netTaxable: number
-  estimatedTax: number
-  estimatedMedicare: number
-  estimatedTotalTax: number
-  transactions: TransactionRow[]
-  incomeEntries: IncomeEntryRow[]
+function calcPersonalTax(taxableIncome: number): { incomeTax: number; medicare: number; total: number } {
+  const incomeTax = Math.round(calcIncomeTax(taxableIncome))
+  const medicare  = Math.round(calcMedicare(taxableIncome))
+  return { incomeTax, medicare, total: incomeTax + medicare }
 }
+
+const SUPER_CAP: Record<string, number> = {
+  '2022-23': 27_500,
+  '2023-24': 27_500,
+  '2024-25': 29_932,
+  '2025-26': 30_000,
+  '2026-27': 30_000,
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface TxRow {
+  id: string; date: string; description: string | null; amount: number; type: string
+  taxClassification: string | null; categoryId: string | null
+  categoryName: string | null; categoryTaxDisplayLabel: string | null
+  categoryIsTaxDeduction: boolean
+  entityId: string | null; entityName: string | null
+  memberId: string | null; memberName: string | null
+}
+
+interface IncomeRow {
+  id: string; name: string; amount: number; frequency: string
+  estimatedAnnual: number; isTaxTracked: boolean; taxRate: number | null
+  taxClassification: string | null
+  categoryId: string | null; categoryName: string | null; categoryTaxDisplayLabel: string | null
+  entityId: string | null; entityName: string | null
+  memberId: string | null; memberName: string | null
+}
+
+interface Member  { id: string; name: string }
+interface Entity  { id: string; name: string; type: string; isDefault: boolean }
+interface TaxCat  { id: string; name: string; displayLabel: string | null; isTaxDeduction: boolean; taxIncludeInReporting: boolean }
 
 interface ApiResponse {
-  financialYear: string
-  from: string
-  to: string
-  classifications: ClassificationDetail[]
-  taxCategories: { id: string; name: string; displayLabel: string | null; isTaxDeduction: boolean; taxIncludeInReporting: boolean }[]
+  financialYear: string; from: string; to: string
+  members: Member[]; entities: Entity[]
+  transactions: TxRow[]; incomeEntries: IncomeRow[]
+  taxCategories: TaxCat[]
 }
 
-interface Entity { id: string; name: string; color: string | null; type: string; isDefault: boolean }
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// ── Helpers ────────────────────────────────────────────────────────────
-
-const CLASSIFICATION_COLORS: Record<string, string> = {
-  taxable_income: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-  exempt_income:  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-  tax_deduction:  'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-  tax_payment:    'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+function fmt(n: number): string {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
 }
 
-const CLASSIFICATION_ICONS: Record<string, React.ReactNode> = {
-  taxable_income: <DollarSign className="h-4 w-4" />,
-  exempt_income:  <TrendingUp className="h-4 w-4" />,
-  tax_deduction:  <PiggyBank className="h-4 w-4" />,
-  tax_payment:    <Receipt className="h-4 w-4" />,
+// ── Per-person aggregation ────────────────────────────────────────────────────
+
+interface PersonTax {
+  wages: number; bankInterest: number; otherIncome: number; frankingCredits: number
+  grossIncome: number; voluntarySuper: number; charity: number; otherDeductions: number
+  totalDeductions: number; taxableIncome: number; perWeek: number
+  incomeTax: number; medicare: number; totalTaxPayable: number
+  paygWithheld: number; paygInstalments: number; frankingOffset: number
+  totalCredits: number; refundOrOwing: number
+  sgcAmount: number; voluntarySuperForCap: number
+  incomeLines: { label: string; amount: number }[]
+  deductionLines: { label: string; amount: number }[]
+  creditLines: { label: string; amount: number }[]
 }
 
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
+function buildPersonTax(memberId: string, data: ApiResponse, jointInterestHalf: number): PersonTax {
+  const txs = data.transactions.filter(t => t.memberId === memberId)
+  const inc = data.incomeEntries.filter(e => e.memberId === memberId)
+
+  const matchLabel = (e: IncomeRow, p: RegExp) =>
+    p.test(e.name + ' ' + (e.categoryName ?? '') + ' ' + (e.categoryTaxDisplayLabel ?? ''))
+  const matchTxLabel = (t: TxRow, p: RegExp) =>
+    p.test((t.categoryName ?? '') + ' ' + (t.categoryTaxDisplayLabel ?? '') + ' ' + (t.description ?? ''))
+
+  const wageEntries        = inc.filter(e => matchLabel(e, /salary|wages/i))
+  const frankingEntries    = inc.filter(e => matchLabel(e, /franking|input credit/i))
+  const otherIncomeEntries = inc.filter(e => !matchLabel(e, /salary|wages|franking|input credit/i))
+
+  const wages           = wageEntries.reduce((s, e) => s + e.estimatedAnnual, 0)
+  const frankingCredits = frankingEntries.reduce((s, e) => s + e.estimatedAnnual, 0)
+  const otherIncome     = otherIncomeEntries.reduce((s, e) => s + e.estimatedAnnual, 0)
+    + txs.filter(t => t.type === 'income' && (t.taxClassification === 'taxable_income' || t.taxClassification === 'exempt_income')).reduce((s, t) => s + t.amount, 0)
+  const grossIncome = wages + jointInterestHalf + otherIncome + frankingCredits
+
+  const voluntarySuper  = txs.filter(t => t.taxClassification === 'tax_deduction' && matchTxLabel(t, /super/i)).reduce((s, t) => s + t.amount, 0)
+  const charity         = txs.filter(t => t.taxClassification === 'tax_deduction' && matchTxLabel(t, /charity|gift|donation/i)).reduce((s, t) => s + t.amount, 0)
+  const otherDeductions = txs.filter(t => t.taxClassification === 'tax_deduction' && !matchTxLabel(t, /super|charity|gift|donation/i)).reduce((s, t) => s + t.amount, 0)
+  const totalDeductions = voluntarySuper + charity + otherDeductions
+  const taxableIncome   = Math.max(0, grossIncome - totalDeductions)
+  const perWeek         = Math.round(taxableIncome / 52)
+
+  const { incomeTax, medicare, total: totalTaxBeforeFranking } = calcPersonalTax(taxableIncome)
+  const totalTaxPayable = Math.max(0, totalTaxBeforeFranking - frankingCredits)
+
+  const paygWithheld    = txs.filter(t => t.taxClassification === 'tax_payment' && matchTxLabel(t, /payg|withh/i)).reduce((s, t) => s + t.amount, 0)
+  const paygInstalments = txs.filter(t => t.taxClassification === 'tax_payment' && !matchTxLabel(t, /payg|withh/i)).reduce((s, t) => s + t.amount, 0)
+  const totalCredits    = paygWithheld + paygInstalments + frankingCredits
+  const refundOrOwing   = totalCredits - totalTaxPayable
+
+  const sgcAmount = data.incomeEntries
+    .filter(e => e.memberId === memberId && /sgc|employer.*super/i.test(e.name + ' ' + (e.categoryName ?? '')))
+    .reduce((s, e) => s + e.estimatedAnnual, 0)
+
+  const incomeLines: { label: string; amount: number }[] = []
+  if (wages > 0)             incomeLines.push({ label: 'Wages / Salary', amount: wages })
+  if (jointInterestHalf > 0) incomeLines.push({ label: 'Bank Interest (joint ÷2)', amount: jointInterestHalf })
+  otherIncomeEntries.forEach(e => { if (e.estimatedAnnual > 0) incomeLines.push({ label: e.categoryTaxDisplayLabel ?? e.name, amount: e.estimatedAnnual }) })
+  if (frankingCredits > 0)   incomeLines.push({ label: 'Franking Credits', amount: frankingCredits })
+
+  const deductionLines: { label: string; amount: number }[] = []
+  if (voluntarySuper > 0)  deductionLines.push({ label: 'Voluntary Super', amount: voluntarySuper })
+  if (charity > 0)         deductionLines.push({ label: 'Charity / Gifts', amount: charity })
+  if (otherDeductions > 0) deductionLines.push({ label: 'Other Deductions', amount: otherDeductions })
+
+  const creditLines: { label: string; amount: number }[] = []
+  if (paygWithheld > 0)    creditLines.push({ label: 'PAYG Withheld', amount: paygWithheld })
+  if (paygInstalments > 0) creditLines.push({ label: 'PAYG Instalments', amount: paygInstalments })
+  if (frankingCredits > 0) creditLines.push({ label: 'Franking Credit Offset', amount: frankingCredits })
+
+  return {
+    wages, bankInterest: jointInterestHalf, otherIncome, frankingCredits, grossIncome,
+    voluntarySuper, charity, otherDeductions, totalDeductions, taxableIncome, perWeek,
+    incomeTax, medicare, totalTaxPayable, paygWithheld, paygInstalments,
+    frankingOffset: frankingCredits, totalCredits, refundOrOwing,
+    sgcAmount, voluntarySuperForCap: voluntarySuper,
+    incomeLines, deductionLines, creditLines,
+  }
 }
 
-function frequencyLabel(freq: string): string {
-  const labels: Record<string, string> = { weekly: '/wk', fortnightly: '/fn', monthly: '/mo', quarterly: '/qtr', halfyearly: '/hy', yearly: '/yr', 'one-off': '' }
-  return labels[freq] ?? ''
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function LineRow({ label, amount, color, bold, indent }: { label: string; amount: number; color?: string; bold?: boolean; indent?: boolean }) {
+  return (
+    <div className={cn('flex items-center justify-between py-0.5 text-sm', indent && 'pl-4')}>
+      <span className={cn('text-muted-foreground', bold && 'font-semibold text-foreground')}>{label}</span>
+      <span className={cn('tabular-nums font-medium', color ?? 'text-foreground', bold && 'font-bold')}>{fmt(amount)}</span>
+    </div>
+  )
 }
 
+function Divider() { return <div className="border-t border-border my-1" /> }
+function SectionHeader({ label }: { label: string }) {
+  return <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-1">{label}</p>
+}
 
-// ── Page ───────────────────────────────────────────────────────────────
+function PersonPanel({ name, p, fy }: { name: string; p: PersonTax; fy: string }) {
+  const cap = SUPER_CAP[fy] ?? 30_000
+  const totalSuper   = p.sgcAmount + p.voluntarySuperForCap
+  const superPct     = Math.min(100, Math.round((totalSuper / cap) * 100))
+  const superExceeds = totalSuper > cap
+  const isRefund     = p.refundOrOwing >= 0
+
+  return (
+    <div className="rounded-lg border border-border p-4 space-y-0.5 flex-1 min-w-0">
+      <h3 className="font-bold text-base mb-2">{name}</h3>
+      <SectionHeader label="Gross Income" />
+      {p.incomeLines.map(l => <LineRow key={l.label} label={l.label} amount={l.amount} indent />)}
+      <Divider />
+      <LineRow label="Total Gross Income" amount={p.grossIncome} bold color="text-green-600 dark:text-green-400" />
+
+      {p.totalDeductions > 0 && (<>
+        <SectionHeader label="Deductions" />
+        {p.deductionLines.map(l => <LineRow key={l.label} label={l.label} amount={l.amount} indent />)}
+        <Divider />
+        <LineRow label="Total Deductions" amount={p.totalDeductions} bold color="text-red-600 dark:text-red-400" />
+      </>)}
+
+      <Divider />
+      <LineRow label="Total Taxable Income" amount={p.taxableIncome} bold />
+      <div className="flex items-center justify-between text-xs text-muted-foreground pl-4">
+        <span>Per week</span><span className="tabular-nums">{fmt(p.perWeek)}</span>
+      </div>
+
+      <SectionHeader label="Tax Calculation" />
+      <LineRow label="Income tax (brackets)" amount={p.incomeTax} indent />
+      <LineRow label="Medicare levy (2%)" amount={p.medicare} indent />
+      {p.frankingOffset > 0 && <LineRow label="Less: Franking credits" amount={-p.frankingOffset} indent color="text-green-600 dark:text-green-400" />}
+      <Divider />
+      <LineRow label="Tax Payable" amount={p.totalTaxPayable} bold color="text-orange-600 dark:text-orange-400" />
+
+      <SectionHeader label="Tax Already Paid" />
+      {p.creditLines.length > 0
+        ? p.creditLines.map(l => <LineRow key={l.label} label={l.label} amount={l.amount} indent color="text-green-600 dark:text-green-400" />)
+        : <p className="text-xs text-muted-foreground pl-4">No credits recorded</p>}
+      <Divider />
+      <LineRow label="Total Credits" amount={p.totalCredits} bold color="text-green-600 dark:text-green-400" />
+
+      <div className={cn('mt-3 rounded-md p-3 flex items-center justify-between',
+        isRefund ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30')}>
+        <span className={cn('text-sm font-bold', isRefund ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+          {isRefund ? '← REFUND' : 'OWING →'}
+        </span>
+        <span className={cn('text-lg font-bold tabular-nums', isRefund ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+          {fmt(Math.abs(p.refundOrOwing))}
+        </span>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-border space-y-1">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground font-medium">Super cap ({fmt(cap)})</span>
+          <span className={cn('font-semibold tabular-nums',
+            superExceeds ? 'text-red-500' : superPct >= 90 ? 'text-amber-500' : 'text-green-600 dark:text-green-400')}>
+            {fmt(totalSuper)} used
+          </span>
+        </div>
+        {p.sgcAmount > 0 && <div className="flex justify-between text-xs text-muted-foreground pl-3"><span>SGC (employer)</span><span>{fmt(p.sgcAmount)}</span></div>}
+        {p.voluntarySuperForCap > 0 && <div className="flex justify-between text-xs text-muted-foreground pl-3"><span>Voluntary</span><span>{fmt(p.voluntarySuperForCap)}</span></div>}
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className={cn('h-full rounded-full', superExceeds ? 'bg-red-500' : superPct >= 90 ? 'bg-amber-500' : 'bg-green-500')}
+            style={{ width: `${superPct}%` }} />
+        </div>
+        {superExceeds
+          ? <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Exceeds cap by {fmt(totalSuper - cap)}</p>
+          : <p className="text-[10px] text-muted-foreground">{fmt(cap - totalSuper)} remaining</p>}
+      </div>
+    </div>
+  )
+}
+
+function EntitySection({ entityName, taxRate, data, entityId }: { entityName: string; taxRate: number; data: ApiResponse; entityId: string }) {
+  const incomeEntries = data.incomeEntries.filter(e => e.entityId === entityId)
+  const txExpenses    = data.transactions.filter(t => t.entityId === entityId && t.type === 'expense' && t.taxClassification !== 'tax_payment')
+  const txPayments    = data.transactions.filter(t => t.entityId === entityId && t.taxClassification === 'tax_payment')
+  const totalIncome   = incomeEntries.reduce((s, e) => s + e.estimatedAnnual, 0)
+  const totalExpenses = txExpenses.reduce((s, t) => s + t.amount, 0)
+  const taxableIncome = Math.max(0, totalIncome - totalExpenses)
+  const taxPayable    = Math.round(taxableIncome * taxRate)
+  const paygPaid      = txPayments.reduce((s, t) => s + t.amount, 0)
+  const owing         = taxPayable - paygPaid
+  const quarterly     = Math.round(taxPayable / 4)
+  if (totalIncome === 0 && totalExpenses === 0) return null
+  const isRefund = owing <= 0
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="bg-muted/40 px-4 py-2 flex items-center justify-between">
+        <h3 className="font-semibold text-sm">{entityName}</h3>
+        <span className="text-xs text-muted-foreground">{taxRate * 100}% tax rate</span>
+      </div>
+      <div className="p-4 space-y-0.5">
+        <SectionHeader label="Income" />
+        {incomeEntries.map(e => <LineRow key={e.id} label={e.categoryTaxDisplayLabel ?? e.name} amount={e.estimatedAnnual} indent />)}
+        <Divider />
+        <LineRow label="Total Income" amount={totalIncome} bold color="text-green-600 dark:text-green-400" />
+        {totalExpenses > 0 && (<>
+          <SectionHeader label="Operating Expenses" />
+          {txExpenses.map(t => <LineRow key={t.id} label={t.categoryTaxDisplayLabel ?? t.categoryName ?? t.description ?? 'Expense'} amount={t.amount} indent />)}
+          <Divider />
+          <LineRow label="Total Expenses" amount={totalExpenses} bold color="text-red-600 dark:text-red-400" />
+        </>)}
+        <Divider />
+        <LineRow label="Taxable Income" amount={taxableIncome} bold />
+        <LineRow label={`Tax @ ${taxRate * 100}%`} amount={taxPayable} color="text-orange-600 dark:text-orange-400" />
+        {paygPaid > 0 && <LineRow label="Less: PAYG Instalments Paid" amount={paygPaid} color="text-green-600 dark:text-green-400" />}
+        <div className={cn('mt-3 rounded-md p-3 flex items-center justify-between',
+          isRefund ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30')}>
+          <span className={cn('text-sm font-bold', isRefund ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+            {isRefund ? '← REFUND' : 'OWING →'}
+          </span>
+          <span className={cn('text-lg font-bold tabular-nums', isRefund ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+            {fmt(Math.abs(owing))}
+          </span>
+        </div>
+        {quarterly > 0 && <p className="text-xs text-muted-foreground mt-2">Quarterly BAS instalment estimate: <strong>{fmt(quarterly)}</strong></p>}
+      </div>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TaxReportPage() {
-  const [data, setData] = useState<ApiResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [entities, setEntities] = useState<Entity[]>([])
-  const [selectedEntityId, setSelectedEntityId] = useState<string>('')
-  const [expandedClassifications, setExpandedClassifications] = useState<Set<string>>(new Set(['taxable_income', 'exempt_income', 'tax_deduction', 'tax_payment']))
+  const [data, setData]             = useState<ApiResponse | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [entityFilter, setEntityFilter] = useState<string>('')
+  const [fyStartMonth, setFyStartMonth] = useState<number>(7)
+  const [fyStartYear, setFyStartYear]   = useState<number>(() => currentFyYear(7))
 
-  // ── Fetch entities ──────────────────────────────────────────────────
+  // Load settings for FY start month
   useEffect(() => {
-    async function loadEntities() {
+    async function loadSettings() {
       try {
-        const res = await fetch('/api/finance/entities')
-        if (res.ok) setEntities(await res.json())
-      } catch {}
+        const familyRes = await fetch('/api/settings/family')
+        if (familyRes.ok) {
+          const family = await familyRes.json()
+          const fsm = family.financeYearStartMonth ?? 7
+          setFyStartMonth(fsm)
+          setFyStartYear(currentFyYear(fsm))
+        }
+      } catch { /* ignore */ }
     }
-    loadEntities()
+    loadSettings()
   }, [])
 
-  // ── Fetch tax report data ───────────────────────────────────────────
   useEffect(() => {
-    async function loadData() {
+    async function load() {
       setLoading(true)
       try {
         const params = new URLSearchParams()
-        if (selectedEntityId) params.set('entityId', selectedEntityId)
+        if (entityFilter) params.set('entityId', entityFilter)
+        // Pass FY date range
+        const { start, end } = fyDateRange(fyStartYear, fyStartMonth)
+        params.set('from', start.toISOString().split('T')[0])
+        params.set('to', end.toISOString().split('T')[0])
         const res = await fetch(`/api/finance/tax-report?${params}`)
         if (!res.ok) { toast.error('Failed to load tax report'); return }
-        const json: ApiResponse = await res.json()
-        setData(json)
-        // Auto-expand any classification that has data
-        const expanded = new Set<string>()
-        json.classifications.forEach(c => { if (c.totalIncome > 0 || c.totalDeductions > 0) expanded.add(c.classification) })
-        setExpandedClassifications(expanded)
+        setData(await res.json())
       } catch { toast.error('Failed to load tax report') }
       finally { setLoading(false) }
     }
-    loadData()
-  }, [selectedEntityId])
+    load()
+  }, [entityFilter, fyStartYear, fyStartMonth])
 
-  function toggleClassification(key: string) {
-    setExpandedClassifications(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key); else next.add(key)
-      return next
-    })
-  }
+  const jointIncome = useMemo(() => {
+    if (!data) return 0
+    const defaultEntityIds = new Set(data.entities.filter(e => e.isDefault).map(e => e.id))
+    return data.incomeEntries
+      .filter(e => !e.memberId && (!e.entityId || defaultEntityIds.has(e.entityId)))
+      .reduce((s, e) => s + e.estimatedAnnual, 0)
+      + data.transactions
+      .filter(t => t.type === 'income' && !t.memberId && (!t.entityId || defaultEntityIds.has(t.entityId)))
+      .reduce((s, t) => s + t.amount, 0)
+  }, [data])
 
-  // ── Derived totals ──────────────────────────────────────────────────
-  const totals = data?.classifications.reduce((acc, c) => ({
-    totalIncome: acc.totalIncome + c.totalIncome,
-    totalDeductions: acc.totalDeductions + c.totalDeductions,
-    totalTax: acc.totalTax + c.estimatedTotalTax,
-    netTaxable: acc.netTaxable + c.netTaxable,
-  }), { totalIncome: 0, totalDeductions: 0, totalTax: 0, netTaxable: 0 }) ?? { totalIncome: 0, totalDeductions: 0, totalTax: 0, netTaxable: 0 }
+  const jointPerPerson = jointIncome / Math.max(1, data?.members.length ?? 1)
 
-  // ── Super cap check ─────────────────────────────────────────────────
-  const superClass = data?.classifications.find(c => c.classification === 'tax_deduction')
-  const SUPER_CAP = 30_000
-  const superTotal = superClass?.totalIncome ?? 0
-  const superExceedsCap = superTotal > SUPER_CAP
+  const personData = useMemo(() => {
+    if (!data) return []
+    return data.members.map(m => ({ member: m, tax: buildPersonTax(m.id, data, jointPerPerson) }))
+  }, [data, jointPerPerson])
+
+  const combinedRefund  = personData.reduce((s, p) => s + p.tax.refundOrOwing, 0)
+  const superEntities   = data?.entities.filter(e => e.type === 'superfund') ?? []
+  const companyEntities = data?.entities.filter(e => e.type === 'business' || e.type === 'trust') ?? []
+  const fy = data?.financialYear ?? '2025-26'
+  const hasAnyData = personData.length > 0 || superEntities.length > 0 || companyEntities.length > 0
+
+  if (loading) return <div className="p-6 text-muted-foreground text-sm">Loading tax report…</div>
+  if (!data)   return null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-orange-500" />
-            Tax Report
-          </h2>
-          {data && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Financial year {data.financialYear} &middot; {data.from} &ndash; {data.to}
-            </p>
-          )}
+          <div className="flex items-center gap-2 mb-1">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-orange-500" /> Tax Report
+            </h2>
+            <div className="flex items-center gap-1 rounded-lg border border-border px-2 py-0.5">
+              <button onClick={() => setFyStartYear(y => y - 1)} className="p-0.5 hover:bg-accent rounded text-muted-foreground">
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <span className="text-xs font-semibold px-1 min-w-[70px] text-center">{fyLabelUtil(fyStartYear, fyStartMonth)}</span>
+              <button onClick={() => setFyStartYear(y => y + 1)} className="p-0.5 hover:bg-accent rounded text-muted-foreground">
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">{data.from} – {data.to}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => window.open(`/api/finance/export/excel?mode=tax&year=${data?.financialYear ?? ''}`, '_blank')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-            title="Download Excel report with tax summary"
-          >
-            <FileDown className="h-3.5 w-3.5" /> Excel
-          </button>
-          <button
-            onClick={() => window.open(`/api/finance/export/print?mode=tax&year=${data?.financialYear ?? ''}`, '_blank')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-            title="Open print-friendly view with tax summary"
-          >
-            <Printer className="h-3.5 w-3.5" /> Print
-          </button>
-        </div>
+        <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-1.5 max-w-sm">
+          Estimated only — based on 2025-26 ATO brackets. Consult your accountant for final figures.
+        </p>
       </div>
 
-      {/* Entity filter tabs */}
-      {entities.length > 0 && (
+      {/* Entity filter */}
+      {data.entities.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setSelectedEntityId('')}
-            className={cn(
-              'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
-              !selectedEntityId
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'border-border text-muted-foreground hover:text-foreground'
-            )}
-          >
-            All Entities
+          <button onClick={() => setEntityFilter('')}
+            className={cn('px-3 py-1 text-xs font-medium rounded-full border transition-colors',
+              !entityFilter ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
+            All
           </button>
-          {entities.map(en => (
-            <button
-              key={en.id}
-              onClick={() => setSelectedEntityId(en.id)}
-              className={cn(
-                'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
-                selectedEntityId === en.id
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border text-muted-foreground hover:text-foreground'
-              )}
-            >
+          {data.entities.map(en => (
+            <button key={en.id} onClick={() => setEntityFilter(entityFilter === en.id ? '' : en.id)}
+              className={cn('px-3 py-1 text-xs font-medium rounded-full border transition-colors',
+                entityFilter === en.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
               {en.name}
             </button>
           ))}
         </div>
       )}
 
-      {/* Loading state */}
-      {loading && (
-        <div className="text-center py-12 text-muted-foreground text-sm">
-          Loading tax report data…
-        </div>
-      )}
-
-      {/* No data state */}
-      {!loading && (!data || data.classifications.length === 0) && (
-        <div className="text-center py-12">
-          <Receipt className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground text-sm">No tax-tracked data found for this period.</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">
-            Assign tax classifications to bills, income, and transactions to see them here.
-          </p>
-        </div>
-      )}
-
-      {/* Summary cards */}
-      {data && data.classifications.length > 0 && (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <SummaryCard label="Total Income" value={formatCurrency(totals.totalIncome)} icon={<TrendingUp className="h-4 w-4" />} color="text-green-600 dark:text-green-400" />
-            <SummaryCard label="Total Deductions" value={formatCurrency(totals.totalDeductions)} icon={<TrendingDown className="h-4 w-4" />} color="text-red-600 dark:text-red-400" />
-            <SummaryCard label="Net Taxable Income" value={formatCurrency(totals.netTaxable)} icon={<Calculator className="h-4 w-4" />} color="text-blue-600 dark:text-blue-400" />
-            <SummaryCard label="Estimated Tax + Medicare" value={formatCurrency(totals.totalTax)} icon={<Receipt className="h-4 w-4" />} color="text-orange-600 dark:text-orange-400" />
-          </div>
-
-          {/* Super contributions cap indicator */}
-          {superClass && (
-            <div className={cn(
-              'rounded-lg border p-3 flex items-start gap-3',
-              superExceedsCap ? 'border-red-500/30 bg-red-500/5' : 'border-amber-500/20 bg-amber-500/5'
-            )}>
-              <PiggyBank className={cn('h-5 w-5 shrink-0 mt-0.5', superExceedsCap ? 'text-red-500' : 'text-amber-500')} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
-                  Superannuation Contributions
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {formatCurrency(superTotal)} contributed of {formatCurrency(SUPER_CAP)} cap
-                  {superExceedsCap
-                    ? <span className="text-red-500 font-medium"> &middot; EXCEEDS CAP by {formatCurrency(superTotal - SUPER_CAP)}</span>
-                    : <span className="text-muted-foreground"> &middot; {formatCurrency(SUPER_CAP - superTotal)} remaining</span>
-                  }
-                </p>
-                {/* Progress bar */}
-                <div className="mt-2 h-1.5 w-full max-w-xs bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={cn('h-full rounded-full transition-all', superExceedsCap ? 'bg-red-500' : 'bg-amber-500')}
-                    style={{ width: `${Math.min(100, (superTotal / SUPER_CAP) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
+      {/* Joint income */}
+      {jointIncome > 0 && (
+        <div className="rounded-lg border border-border p-4">
+          <h3 className="font-semibold text-sm mb-2">Joint Income</h3>
+          {data.incomeEntries
+            .filter(e => !e.memberId && (!e.entityId || data.entities.find(en => en.id === e.entityId)?.isDefault))
+            .map(e => <LineRow key={e.id} label={e.categoryTaxDisplayLabel ?? e.name} amount={e.estimatedAnnual} />)}
+          <Divider />
+          <LineRow label="Total Joint Income" amount={jointIncome} bold color="text-green-600 dark:text-green-400" />
+          {data.members.length > 1 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Split equally: {data.members.map(m => `${m.name} ${fmt(jointPerPerson)}`).join(' · ')}
+            </p>
           )}
-
-          {/* Per-classification breakdown */}
-          <div className="space-y-4">
-            {data.classifications.map(c => {
-              const isExpanded = expandedClassifications.has(c.classification)
-              const hasTransactions = c.transactions.length > 0
-              const hasIncomeEntries = c.incomeEntries.length > 0
-              const hasItems = hasTransactions || hasIncomeEntries
-
-              return (
-                <div key={c.classification} className="rounded-lg border border-border overflow-hidden">
-                  {/* Classification header */}
-                  <button
-                    onClick={() => toggleClassification(c.classification)}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left"
-                  >
-                    <div className={cn('flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border', CLASSIFICATION_COLORS[c.classification] ?? 'bg-muted text-muted-foreground')}>
-                      {CLASSIFICATION_ICONS[c.classification]}
-                      {c.displayName}
-                    </div>
-                    <div className="flex-1" />
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>Income: <strong className="text-green-600 dark:text-green-400">{formatCurrency(c.totalIncome)}</strong></span>
-                      <span>Deductions: <strong className="text-red-600 dark:text-red-400">{formatCurrency(c.totalDeductions)}</strong></span>
-                      <span>Net: <strong className={cn(c.netTaxable > 0 ? 'text-foreground' : 'text-muted-foreground')}>{formatCurrency(c.netTaxable)}</strong></span>
-                      <span>Tax: <strong className="text-orange-600 dark:text-orange-400">{formatCurrency(c.estimatedTotalTax)}</strong></span>
-                    </div>
-                    {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                  </button>
-
-                  {/* Expanded detail */}
-                  {isExpanded && hasItems && (
-                    <div className="border-t border-border">
-                      {/* Income entries */}
-                      {c.incomeEntries.length > 0 && (
-                        <div className="p-3 space-y-2">
-                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Income Streams</h4>
-                          <div className="space-y-1">
-                            {c.incomeEntries.map(inc => (
-                              <div key={inc.id} className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-accent/30">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="font-medium truncate">{inc.name}</span>
-                                  <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(inc.amount)}{frequencyLabel(inc.frequency)}</span>
-                                  {inc.entityName && <span className="text-xs text-muted-foreground shrink-0">&middot; {inc.entityName}</span>}
-                                  {inc.memberName && <span className="text-xs text-muted-foreground shrink-0">&middot; {inc.memberName}</span>}
-                                </div>
-                                <span className="text-green-600 dark:text-green-400 font-medium shrink-0 ml-2">{formatCurrency(inc.estimatedAnnual)}/yr</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Transactions */}
-                      {c.transactions.length > 0 && (
-                        <div className={cn('p-3 space-y-2', c.incomeEntries.length > 0 && 'border-t border-border')}>
-                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Transactions</h4>
-                          <div className="space-y-1">
-                            {c.transactions.map(tx => (
-                              <div key={tx.id} className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-accent/30">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className={cn(
-                                    'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
-                                    tx.type === 'income' ? 'text-green-600 dark:text-green-400 bg-green-500/10' :
-                                    tx.type === 'expense' ? 'text-red-600 dark:text-red-400 bg-red-500/10' :
-                                    'text-blue-600 dark:text-blue-400 bg-blue-500/10'
-                                  )}>
-                                    {tx.type === 'income' ? 'INC' : tx.type === 'expense' ? 'EXP' : 'TRF'}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground shrink-0">{tx.date}</span>
-                                  <span className="truncate">{tx.description}</span>
-                                  {tx.categoryName && <span className="text-xs text-muted-foreground shrink-0">&middot; {tx.categoryTaxDisplayLabel ?? tx.categoryName}</span>}
-                                  {tx.memberName && <span className="text-xs text-muted-foreground shrink-0">&middot; {tx.memberName}</span>}
-                                </div>
-                                <span className={cn(
-                                  'font-medium shrink-0 ml-2',
-                                  tx.type === 'income' ? 'text-green-600 dark:text-green-400' :
-                                  tx.type === 'expense' ? 'text-red-600 dark:text-red-400' :
-                                  'text-muted-foreground'
-                                )}>
-                                  {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Empty state */}
-                  {isExpanded && !hasItems && (
-                    <div className="border-t border-border p-6 text-center text-xs text-muted-foreground">
-                      No items in this classification.
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </>
+        </div>
       )}
-    </div>
-  )
-}
 
-// ── Sub-components ─────────────────────────────────────────────────────
+      {/* Per-person panels */}
+      {personData.length > 0 && (<>
+        <div className="flex gap-4 flex-wrap lg:flex-nowrap">
+          {personData.map(({ member, tax }) => <PersonPanel key={member.id} name={member.name} p={tax} fy={fy} />)}
+        </div>
+        {personData.length > 1 && (
+          <div className={cn('rounded-lg border p-4 flex items-center justify-between',
+            combinedRefund >= 0 ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5')}>
+            <span className={cn('font-bold', combinedRefund >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+              Combined {combinedRefund >= 0 ? 'Refund' : 'Owing'}
+            </span>
+            <span className={cn('text-2xl font-bold tabular-nums', combinedRefund >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+              {fmt(Math.abs(combinedRefund))}
+            </span>
+          </div>
+        )}
+      </>)}
 
-function SummaryCard({ label, value, icon, color }: { label: string; value: string; icon: React.ReactNode; color: string }) {
-  return (
-    <div className="rounded-lg border border-border p-3 space-y-1">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className={color}>{icon}</span>
-        {label}
-      </div>
-      <p className={cn('text-lg font-bold', color)}>{value}</p>
+      {/* Super fund entities */}
+      {superEntities.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-semibold text-sm border-b border-border pb-2">Super Fund Entities</h3>
+          {superEntities.map(en => <EntitySection key={en.id} entityName={en.name} taxRate={0.15} data={data} entityId={en.id} />)}
+        </div>
+      )}
+
+      {/* Company / trust entities */}
+      {companyEntities.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-semibold text-sm border-b border-border pb-2">Company / Trust Entities</h3>
+          {companyEntities.map(en => <EntitySection key={en.id} entityName={en.name} taxRate={0.30} data={data} entityId={en.id} />)}
+        </div>
+      )}
+
+      {/* No data state — full tagging guide */}
+      {!hasAnyData && (
+        <div className="space-y-4">
+          <div className="text-center py-6">
+            <Receipt className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-muted-foreground text-sm font-medium">No tax-tracked data found for this FY.</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Follow the steps below to tag your data.</p>
+          </div>
+
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-5 space-y-4">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-amber-500" />
+              How to populate your Tax Report — data tagging checklist
+            </h3>
+            <ol className="space-y-4 text-sm">
+              <li className="flex gap-3">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+                <div>
+                  <p className="font-medium">Income entries — <span className="text-primary">Finance → Income</span></p>
+                  <ul className="text-xs text-muted-foreground mt-1 space-y-0.5 list-disc list-inside">
+                    <li>Open each entry, set <strong className="text-foreground">Assigned To</strong> (Mark or Michelle) for personal income; leave blank for joint (bank interest)</li>
+                    <li>Tick <strong className="text-foreground">Track for tax</strong> and set <strong className="text-foreground">Tax Classification</strong> → Taxable Income or Exempt Income</li>
+                    <li>Name salary entries to contain "Salary" or "Wages" so they appear on the Wages line</li>
+                  </ul>
+                </div>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+                <div>
+                  <p className="font-medium">PAYG withholding — <span className="text-primary">Finance → Transactions</span></p>
+                  <ul className="text-xs text-muted-foreground mt-1 space-y-0.5 list-disc list-inside">
+                    <li>Set <strong className="text-foreground">Tax Classification</strong> → Tax Payment (PAYG) on each PAYG transaction</li>
+                    <li>Set <strong className="text-foreground">Member</strong> → Mark or Michelle so it credits the right person</li>
+                  </ul>
+                </div>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+                <div>
+                  <p className="font-medium">Deductions — <span className="text-primary">Finance → Bills</span> or <span className="text-primary">Transactions</span></p>
+                  <ul className="text-xs text-muted-foreground mt-1 space-y-0.5 list-disc list-inside">
+                    <li>Voluntary super: <strong className="text-foreground">Tax Classification</strong> → Tax Deduction, and category name contains "Super"</li>
+                    <li>Work expenses, donations: <strong className="text-foreground">Tax Classification</strong> → Tax Deduction</li>
+                  </ul>
+                </div>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center mt-0.5">4</span>
+                <div>
+                  <p className="font-medium">Entity types — <span className="text-primary">Finance → Entities</span></p>
+                  <ul className="text-xs text-muted-foreground mt-1 space-y-0.5 list-disc list-inside">
+                    <li>Super Fund entity → type <strong className="text-foreground">Super Fund</strong> (15% tax)</li>
+                    <li>Unitrak / company → type <strong className="text-foreground">Business</strong> or <strong className="text-foreground">Trust</strong> (30% tax)</li>
+                  </ul>
+                </div>
+              </li>
+            </ol>
+            <p className="text-xs text-muted-foreground border-t border-amber-500/20 pt-3">
+              Once tagged, reload this page. The Tax Report automatically reads the current financial year (1 Jul – 30 Jun).
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

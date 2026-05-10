@@ -1,5 +1,5 @@
 # HomeBase — Project Summary
-## Current Build: Tax Reporting & ATO Compliance
+## Current Build: Finance Module Completion — FY Setting, COA, Opening Balances, Balance Derivation
 
 ### Project Overview
 HomeBase is a comprehensive family management platform built with Next.js 16, TypeScript, Prisma, and SQLite. The application provides a centralised hub for family organisation including calendar management, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
@@ -62,10 +62,17 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - 19 actions across meal plan, shopping, todo, calendar, chores, notes, recipes, contacts, documents, birthdays
 - Context-aware: AI receives family data in system prompt; PWA-compatible
 
-#### 12. Finance Module ← *most recently enhanced — Tax Reporting*
+#### 12. Finance Module ← *most recently enhanced — Tax Reporting & Annual P&L*
 
-Full household finance tracking — bills, income, transactions, accounts, budget, P&L, reports, vendors, categories, entities, locations, members.
-Income tax tracking with ATO compliance support including Australian tax brackets (2025-26), per-classification reporting (Personal/Business/Investment/Super), Medicare levy, and super contributions cap monitoring.
+Full household finance tracking — bills, income, transactions, accounts, budget, P&L, annual P&L, tax report, reports, vendors, categories, entities, locations, members.
+
+Complete ATO tax compliance support:
+- Australian tax brackets (2025-26) + Medicare levy calculated in the page component (easy to update each July without redeployment)
+- Per-person tax workings (Mark / Michelle) — wages, joint interest split, deductions, PAYG credits, refund/owing
+- Super contributions cap tracker per person (SGC + voluntary)
+- Super entity P&L at 15% flat rate; Company/Trust entity P&L at 30% flat rate
+- Quarterly BAS instalment estimates for business entities
+- Data tagging guide shown when no tax data is set up yet
 
 ---
 
@@ -74,8 +81,7 @@ Income tax tracking with ATO compliance support including Australian tax bracket
 #### Accounts
 - Checking, savings, credit, cash, investment, loan, entity accounts
 - `currentBalance` updates automatically on every transaction create/edit/delete
-- **Pending vs cleared split**: account cards now show pending transaction count, uncleared expense total, and uncleared income total in amber — so you can see what the bank shows vs what the app holds
-- Accounts API returns `pendingCount`, `pendingExpense`, `pendingIncome` derived from `isCleared=false` transactions
+- **Pending vs cleared split**: account cards show pending transaction count, uncleared expense total, and uncleared income total in amber
 
 #### Bills & Recurring Expenses
 - Recurring and one-off bill tracking with due-date management
@@ -84,126 +90,125 @@ Income tax tracking with ATO compliance support including Australian tax bracket
 - Undo paid: reverses the auto-created transaction and removes the spawned next occurrence
 - Invoice/document attachment support (PDF, JPG, PNG, DOC — max 2 per bill)
 - Budget planner integration via "Include in budget" checkbox on form
-- Fields: entity/fund, category, vendor, account, member, location, notes, email reminder, **tax classification** (Personal/Business/Investment/Super)
-- **Clickable reference data**: vendor, member, and location names in each bill row are now clickable — clicking one activates a quick-filter badge that narrows the list to that value; click again or press × to clear
+- Fields: entity/fund, category, vendor, account, member, location, notes, email reminder
+- **Tax Classification** (tax_deduction / tax_payment / null) — optional, never blocks saving
+- **Clickable reference data**: vendor, member, and location names are clickable quick-filter badges
 
 #### Income Tracking
 - Recurring and one-off income entries
-- Frequency options: weekly, fortnightly, monthly, quarterly, **6 Monthly / Half-Yearly**, yearly
+- Frequency options: weekly, fortnightly, monthly, quarterly, 6 Monthly / Half-Yearly, yearly
 - Mark as received — **date-received confirmation dialog** (defaults to today, fully backdatable)
-  - **Auto-creates a `FinanceTransaction` (income)** on receipt so account balances stay accurate
-  - Undo receipt: reverses the auto-created transaction and removes the spawned next occurrence
-- Fixed overdue logic: freshly-spawned child entries get a grace period equal to one full pay cycle before being flagged overdue
+- **Auto-creates a `FinanceTransaction` (income)** on receipt so account balances stay accurate
+- Fixed overdue logic: freshly-spawned child entries get a grace period before being flagged overdue
 - Remittance/payslip attachment support (max 2 per entry)
-- Payer/source via the Vendors list — same vendor can appear on both bills (payee) and income (payer)
 - Fields: entity/fund, category, vendor, account, member, location, notes, email reminder
-- **Income Tax Tracking** — each income entry can be flagged for ATO/tax tracking with an optional estimated tax rate and classification:
-  - Toggle per income entry in the add/edit dialog
-  - Orange "TAX TRACKED" pill displayed on income rows with rate shown when set
-  - Tax rate percentage input (e.g. 30% for corporate, marginal rate for individuals)
-  - Orange-themed tax tracking section in the form dialog with ReceiptText icon
-  - **Tax Classification dropdown** (Personal / Business / Investment / Super) inside the tax tracking section
-  - Amber warning displayed when tax-tracked income has no assigned person (member)
+- **Income Tax Tracking**: `isTaxTracked`, `taxRate`, `taxClassification` — orange "TAX TRACKED" pill on rows; amber warning when member not assigned for tax-tracked income
 
 #### Transactions
-- Full CRUD; filters by type, member, location, **entity** (new)
-- **Entity field added**: transactions can now be tagged to a FinanceEntity just like bills and income — complete field parity across all three
-- **Tax Classification field** (Personal/Business/Investment/Super) — full parity with bills and income
+- Full CRUD; filters by type, member, location, entity
+- **Tax Classification** (tax_deduction / tax_payment / taxable_income / exempt_income / null) — shown for all types including transfer, with type-appropriate options; never blocks saving
+- **isTransfer flag**: marks inter-entity fund movements excluded from P&L totals and tax calculations
 - Entity chip displayed on transaction row (non-default entities only)
-- Auto-created transactions from bill payment / income receipt remain linked via `sourceBill` / `sourceIncomeEntry` reverse relations
+- Auto-created transactions from bill payment / income receipt linked via `recurringBillId` / source relations
 
 #### Budget Planner
 - Entity tabs isolate income and expenses per fund/entity
-- **Single source of truth for income**: income streams are now derived live from `FinanceIncomeEntry` records — the old `budgetIncomeStreams` JSON blob on the Family table is retired
-  - Budget page shows active, not-yet-received income entries per entity
-  - "Manage income →" link takes user to the Income page to add/edit/delete
-  - An info callout explains the link between Budget and Income data
-  - Zero double-entry: the figure on the Budget page and the P&L page now come from the same records
-- Expected costs section: bills flagged "include in budget" appear here automatically as budget rules
-- Monthly / Yearly toggle on summary cards
-- List and By Category views for expense rules
+- **Single source of truth for income**: derived live from `FinanceIncomeEntry` records — no double-entry
+- Expected costs section: bills flagged "include in budget" appear automatically
+- Monthly / Yearly toggle on summary cards; List and By Category views
 
-#### Profit & Loss
-- **Cash / Forecast toggle** (new):
-  - **Cash mode** (default): only paid bills slotted by `paidDate` + received income slotted by `receivedDate` — matches what actually hit the bank in the period; figures are meaningful as a true cash statement
-  - **Forecast mode**: adds pending bills (by `nextDueDate`) and pending income (by `nextExpectedDate`) — useful for planning but clearly labelled as a mixed view
+#### Profit & Loss (Monthly/Quarterly/Yearly)
+- **Cash / Forecast toggle**:
+  - **Cash mode**: paid bills by `paidDate` + received income by `receivedDate` + actual transactions — true cash statement
+  - **Forecast mode**: adds pending bills by `nextDueDate` + pending income by `nextExpectedDate`
+- **Actual transactions now included** — income-type and expense-type transactions always appear regardless of mode; transfers excluded
 - Period controls: month / quarter / year with prev/next navigation
-- Category breakdown with bar-chart percentages; drill-down to individual items
-- Drill-down items show actual paid/received dates (cash mode) or scheduled dates (forecast mode)
-- **Estimated Tax (ATO)** — auto-calculates tax liability from tax-tracked income:
-  - Estimates use `periodAmount × taxRate / 100` for each tax-tracked income entry
-  - Orange "Estimated Tax" summary card shows the ATO estimate for the period
-  - "Estimated Tax (ATO)" line displayed in the expenses breakdown
-  - Net Profit / Loss calculation now subtracts estimated tax
-  - Works in both Cash and Forecast modes
+- Category breakdown with bar-chart percentages; drill-down to individual items showing source (bill, income entry, or transaction)
+- **Estimated Tax (ATO)** — auto-calculates from tax-tracked income entries; orange summary card; net profit subtracts estimated tax
+
+#### Annual P&L — NEW
+- **12-column Jul–Jun financial year table** matching the NETT budget spreadsheet layout
+- FY navigator (← FY2025–26 →) to browse historical years
+- Cash mode: only confirmed paid/received items populate each month column
+- Forecast mode: recurring bills/income spread as monthly equivalents; actual transactions always show
+- Income section + expense section each with category rows and colour dots
+- **NET row** at bottom — green/positive, red/negative per month
+- Current month column highlighted in the table
+- Entity filter pills; compact `$12k` / `$1.2M` formatting for column values
+- Footer note explaining Cash vs Forecast behaviour
+
+#### Tax Report — NEW
+- **Per-person ATO workings** (Mark / Michelle panels side by side):
+  - Gross income lines: wages/salary, joint bank interest (split equally), other income, franking credits
+  - Deductions: voluntary super, charity/gifts, other deductions
+  - Total Taxable Income + per-week equivalent
+  - Tax Calculation: income tax (2025-26 brackets), Medicare levy, less franking credits offset
+  - Tax Already Paid: PAYG withheld, PAYG instalments, franking offset
+  - **Refund / Owing box** (green = refund, red = owing)
+  - **Super cap tracker**: SGC + voluntary vs $30,000 cap with progress bar; amber at 90%, red if over
+- **Combined refund/owing** row below panels (sum of all members)
+- **Joint income section**: income entries with no member assigned, split equally across all members
+- **Super fund entity section** (15% flat rate): income, expenses, taxable income, tax payable, PAYG paid, refund/owing, quarterly BAS estimate
+- **Company/trust entity section** (30% flat rate): same layout
+- Tax brackets live in the page component — update one file each July, no redeployment needed
+- ATO disclaimer banner; FY label from API
+- **Data tagging guide**: full 4-step numbered checklist shown when no tax data is found, linking to relevant pages
 
 #### Reports
-- **Cash / Forecast toggle** (new): matches P&L semantics — Cash shows only paid bills by `paidDate`; Forecast shows all active bills by `nextDueDate`
-- Summary card label changes: "Paid bills" in cash mode, "Expected bills" in forecast mode
-- View by Category or by Vendor
-- Period controls: month / quarter / year with prev/next navigation
-- Drill-down to individual bills within a group
+- **Cash / Forecast toggle**: matches P&L semantics
+- View by Category or by Vendor; period controls with drill-down
 
 #### Savings Goals
-- **Auto-progress from account balance** (new): when a goal is linked to an account, `currentAmount` is automatically derived from `account.currentBalance` — no more manual typing
-  - Current Amount field is disabled and greyed out when an account is linked
-  - A "📊 Balance from AccountName" indicator appears on the goal card
-  - Works on both the Goals page and the Finance Overview page
-- Manual tracking still available for goals without a linked account
-
-#### Vendors
-- Shared across bills (payee) and income (payer)
-- **Description updated**: "Companies and contacts you pay bills to or receive income from" (was misleading: "companies you pay bills to")
-- Usage counts: bills + transactions shown per vendor (same as before)
+- **Auto-progress from account balance**: `currentAmount` derived from `account.currentBalance` when linked
+- Manual tracking for goals without a linked account
 
 #### Categories
 - Hierarchical (parent / child, 2 levels); income / expense / transfer types
-- Tax deduction flag for expense and transfer categories
-- **Tax reporting flag** (`taxIncludeInReporting`): marks categories for inclusion in the Tax Report (expense and income types)
-- **Tax display label** (`taxDisplayLabel`): custom label override for the Tax Report (e.g. "Rental Income", "Interest")
-- **"TAX REPORT" badge** displayed on category rows when `taxIncludeInReporting` is enabled
-- **Usage counts** (new): each category row now shows transaction, bill, and income entry counts inline
-- "Not In Use" root auto-collapsed on page load
-
-#### Members
-- Family members linked from User accounts
-- **Usage counts** (new): each member row now shows bill, income, and transaction counts inline
-
-#### Locations
-- Property/address tags for bills, income, transactions
-- **Usage counts** (new): each location card now shows bill, income, and transaction counts inline
+- **Tax deduction flag**: expense and transfer categories
+- **Tax reporting flag** (`taxIncludeInReporting`): **all types** including transfer — marks categories for Tax Report inclusion
+- **Tax display label** (`taxDisplayLabel`): custom override label in Tax Report
+- **TAX DED / TAX RPT badges** with distinct colours (orange/amber) on category rows
+- Usage counts per category
 
 #### Entities
-- Funds/entities (Personal, Super Fund, Trust, Business, etc.)
-- Bills, income, budget rules all filter by entity
-- **Transactions now support entity** (new) — full parity with bills and income
+- **Type controls tax rate in Tax Report**: superfund → 15%, business/trust → 30%, personal → individual brackets
+- **Amber info banner** on Entities page explaining tax rate impact
+- **Type hint** shown below Type dropdown in edit dialog when a taxed type is selected
+- **Tax rate badge** on each entity card in the list
+- Deactivate/reactivate; sort order; colour picker
+
+#### Members / Locations / Vendors
+- Usage counts displayed inline; vendor description covers both payees and payers
 
 ---
 
 ### Technical Architecture
 
 #### Database Schema (Prisma) — Finance Models
-- **FinanceAccount**: Bank accounts, credit cards, savings, investment accounts; `currentBalance` maintained by transaction events
-- **FinanceCategory**: Hierarchical income/expense/transfer categories (parent/child, 2 levels); usage counts via `_count`; `taxIncludeInReporting` (boolean) and `taxDisplayLabel` (nullable string) for Tax Report integration
-- **FinanceTransaction**: Individual transactions; auto-created on bill payment / income receipt; `sourceIncomeEntry` and `sourceBill` reverse relations; **`entityId` FK** (new) for multi-entity support
-- **FinanceRecurringBill**: Bills with `transactionId` FK → auto-created expense transaction; `parentBillId` for occurrence chaining
-- **FinanceIncomeEntry**: Income with `parentIncomeId` self-reference for occurrence chaining and `transactionId` FK → auto-created income transaction; `isTaxTracked` (boolean), `taxRate` (nullable float), and `taxClassification` (nullable string) for ATO tax tracking; frequency supports `weekly | fortnightly | monthly | quarterly | halfyearly | yearly | one-off`
-- **FinanceBudget**: Budget rules linked to bills and categories
-- **FinanceSavingsGoal**: Savings goals linked to accounts; `currentAmount` auto-derived from account balance in API layer
-- **FinanceVendor**: Vendors/payers shared across bills and income; `_count` for usage stats
-- **FinanceEntity**: Funds/entities; now has `transactions` back-relation (new)
-- **FinanceLocation**: Property/location tags for bills, income, and transactions; `_count` for usage stats
-- **BillAttachment / IncomeAttachment**: File attachments
+- **FinanceCategory**: `taxIncludeInReporting` (boolean, all types), `taxDisplayLabel` (nullable string)
+- **FinanceTransaction**: `taxClassification` (nullable string), `isTransfer` (boolean, default false)
+- **FinanceRecurringBill**: `taxClassification` (nullable string)
+- **FinanceIncomeEntry**: `isTaxTracked` (boolean), `taxRate` (nullable float), `taxClassification` (nullable string)
+- All others unchanged from previous build
+
+#### Tax Classification Values
+| Record type | Valid values |
+|---|---|
+| `FinanceTransaction` (expense/transfer) | `tax_deduction`, `tax_payment`, null |
+| `FinanceTransaction` (income) | `taxable_income`, `exempt_income`, null |
+| `FinanceRecurringBill` | `tax_deduction`, `tax_payment`, null |
+| `FinanceIncomeEntry` | `taxable_income`, `exempt_income`, null |
 
 #### Key Design Decisions
-- **One income source of truth**: `budgetIncomeStreams` JSON blob on `Family` is retired. `GET /api/finance/income-streams` now reads live `FinanceIncomeEntry` records, deduplicated by `(name, entityId)`. `PUT /api/finance/income-streams` is a no-op stub kept for client compatibility.
-- **Goals currentAmount**: derived server-side in the API layer (`account.currentBalance` when linked) — `FinanceSavingsGoal.currentAmount` remains the stored fallback for manual goals, untouched by the API when an account is linked.
-- **Pending balance**: computed at query time in the accounts API using `financeTransaction.aggregate` — not stored, always fresh.
-- **Cash vs forecast**: purely a client-side filter on the already-fetched bill/income lists — no separate API endpoints needed.
-- **Quick-filter on bills**: local state in the bills page component; `QuickFilter` type defined at module level so `BillRow` (child component) can reference it via the `onQuickFilter` prop.
+- **Tax brackets in page component, not API**: `calcIncomeTax()`, `calcMedicare()`, `SUPER_CAP` all live in `tax-report/page.tsx`. Update one file each July, no API change or redeployment needed.
+- **isTransfer = false filter on P&L**: transfers excluded from all income/expense totals to avoid double-counting. Transfers can still carry `taxClassification` (e.g. voluntary super contributions recorded as a transfer).
+- **Joint income split**: income entries with no `memberId` on a default/personal entity are split equally across all family members in the Tax Report.
+- **Entity type → tax rate**: detected by `entity.type` field. `superfund` → 15%, `business`/`trust` → 30%, others → individual brackets. Set via Finance → Entities.
+- **taxClassification always optional**: removed from all `validate()` functions across Bills, Income, Transactions modals. None block saving if unset.
+- **Annual P&L data flow**: fetches all bills + income on mount (static), fetches transactions for the full FY on FY/entity change (dynamic). Recurring items spread as monthly equivalents in Forecast; actual transactions always appear in their actual month.
 
 #### Shared Finance Utilities
-- `src/lib/finance-categories.ts`: `sortedCategoryList(cats)` — returns flat array sorted parents-then-children alphabetically; consumed by income, bills, transactions, and vendors pages
+- `src/lib/finance-categories.ts`: `sortedCategoryList()` — alphabetically sorted parents-then-children
 
 ---
 
@@ -225,53 +230,51 @@ Income tax tracking with ATO compliance support including Australian tax bracket
 | `20260514000000_add_income_transaction_link` | Income/bill → transaction FK |
 | `20260515000000_add_transaction_entity` | `entityId` on FinanceTransaction |
 | `20260516000000_add_income_tax_tracking` | `isTaxTracked`/`taxRate` on FinanceIncomeEntry |
-| `20260517000000_add_tax_classification` | `taxClassification` on FinanceTransaction/RecurringBill/IncomeEntry; `taxIncludeInReporting`/`taxDisplayLabel` on FinanceCategory *(latest)* |
+| `20260517000000_add_tax_classification` | `taxClassification` on Transaction/Bill/Income; `taxIncludeInReporting`/`taxDisplayLabel` on Category |
+| `20260519000000_add_is_transfer` | `isTransfer BOOLEAN NOT NULL DEFAULT false` on FinanceTransaction *(latest)* |
 
 #### API Routes
 | Route | Key behaviours |
 |-------|----------------|
-| `api/finance/accounts/route.ts` | GET enriches each account with `pendingCount`, `pendingExpense`, `pendingIncome` |
-| `api/finance/income/route.ts` | POST/PUT accept `isTaxTracked`/`taxRate`/`taxClassification`; PATCH propagates tax fields to spawned entries |
-| `api/finance/income-streams/route.ts` | GET derives streams from live `FinanceIncomeEntry` records (includes `isTaxTracked`/`taxRate`); PUT is no-op stub |
-| `api/finance/bills/route.ts` | PATCH accepts backdatable `paidDate`; auto-creates/deletes expense transaction; POST/PUT/PATCH accept `taxClassification` |
-| `api/finance/transactions/route.ts` | CRUD; GET filters by `entityId`; POST/PUT accept `taxClassification`; all responses include `entity` relation |
-| `api/finance/categories/route.ts` | GET includes `_count` for transactions, recurringBills, incomeEntries; POST/PUT accept `taxIncludeInReporting`/`taxDisplayLabel` |
-| `api/finance/tax-report/route.ts` | **NEW** — GET aggregates tax data by classification; ATO 2025-26 bracket calculation + Medicare levy; entity filter; financial year detection |
+| `api/finance/accounts/route.ts` | GET enriches with `pendingCount`, `pendingExpense`, `pendingIncome` |
+| `api/finance/bills/route.ts` | `taxClassification` in POST/PUT/PATCH; PATCH auto-creates expense transaction, spawns next occurrence |
+| `api/finance/income/route.ts` | `taxClassification`, `isTaxTracked`, `taxRate` in POST/PUT/PATCH; PATCH auto-creates income transaction |
+| `api/finance/transactions/route.ts` | `taxClassification`, `isTransfer` in GET/POST/PUT; entity filter; `startDate`/`endDate` query params for P&L/annual-pnl |
+| `api/finance/categories/route.ts` | `taxIncludeInReporting`, `taxDisplayLabel` in POST/PUT; `_count` in GET |
+| `api/finance/tax-report/route.ts` | Returns raw financial data only — members, entities, transactions (with `category` include), income entries (with `category` include), taxCategories. No bracket calculations — all done in page. |
+| `api/finance/pnl/route.ts` | GET fetches bills + income entries + actual transactions for period; merges income-type and expense-type transactions into category groups |
 | `api/finance/goals/route.ts` | GET/PUT derive `currentAmount` from `account.currentBalance` when account linked |
-| `api/finance/members/route.ts` | GET includes `_count` for bills, income, transactions |
-| `api/finance/locations/route.ts` | GET includes `_count` for transactions, recurringBills, incomeEntries |
-| `api/finance/vendors/route.ts` | Vendor CRUD; `_count` for recurringBills and transactions |
+| `api/finance/members/route.ts` | `_count` for bills, income, transactions |
+| `api/finance/locations/route.ts` | `_count` for transactions, recurringBills, incomeEntries |
 
 #### Pages
-| Page | Key changes in this build |
-|------|--------------------------|
-| `finance/tax-report/page.tsx` | **NEW** — Full tax report with summary cards (Income/Deductions/Net Tax/Tax+Medicare); entity filter tabs; per-classification expandable breakdown; super contributions cap indicator |
-| `finance/income/page.tsx` | Tax tracking toggle + rate input + **tax classification dropdown** in form; orange "TAX TRACKED" pill on rows; amber member warning |
-| `finance/bills/page.tsx` | **Tax Classification dropdown** added to form; interface/form/payload all updated |
-| `finance/transactions/page.tsx` | **Tax Classification dropdown** added to form; interface/form/payload all updated |
-| `finance/categories/page.tsx` | **Tax reporting checkbox** + display label input added; "TAX REPORT" badge on category rows |
-| `finance/profit-loss/page.tsx` | Estimated Tax card (orange); auto-calculated ATO liability from tax-tracked income; net profit subtracts estimated tax |
-| `finance/reports/page.tsx` | Cash/Forecast toggle; label changes between "Paid bills" and "Expected bills" |
-| `finance/budget/page.tsx` | Income section reads from Income page (read-only); removed all income CRUD |
-| `finance/goals/page.tsx` | Account-linked goals show live balance; current amount field disabled when linked |
-| `finance/accounts/page.tsx` | Pending transaction count and amounts shown on account cards |
-| `finance/vendors/page.tsx` | Description text updated |
-| `finance/members/page.tsx` | Usage counts displayed under each member email |
-| `finance/locations/page.tsx` | Usage counts displayed in each location card |
-
-#### Shared Utilities
-- `src/lib/finance-categories.ts`: `sortedCategoryList()` — alphabetically sorted parents-then-children
+| Page | Status / Key changes |
+|------|----------------------|
+| `finance/tax-report/page.tsx` | **Full rewrite** — per-person panels (Mark/Michelle); joint income split; tax brackets in page; super cap per person; entity sections (15%/30%); combined refund/owing; data tagging guide on empty state |
+| `finance/annual-pnl/page.tsx` | **NEW** — 12-column Jul–Jun FY table; FY navigator; Cash/Forecast toggle; Income + Expense sections by category; NET row; current month highlight; entity filter |
+| `finance/profit-loss/page.tsx` | **Updated** — now fetches actual transactions separately (keyed on period dates + entity); income-type and expense-type transactions always included in both Cash and Forecast modes; transactions loading indicator |
+| `finance/entities/page.tsx` | **Updated** — amber Tax Report type hint banner; tax rate hint in edit dialog; tax rate badge on entity cards |
+| `finance/categories/page.tsx` | **Updated** — `taxIncludeInReporting` now shows for ALL types including transfer; TAX DED/TAX RPT badges with distinct colours |
+| `finance/transactions/page.tsx` | **Updated** — Tax Classification dropdown shows for all types including transfer; type change clears taxClassification; TRANSFER badge in list |
+| `finance/income/page.tsx` | `taxClassification` optional (removed from validate); tax tracking UI unchanged |
+| `finance/bills/page.tsx` | `taxClassification` optional (removed from validate) |
+| `finance/layout.tsx` | **Annual P&L** tab added between P&L and Tax Report |
 
 ---
 
-### What Was Intentionally Not Changed
+### Tax Report — Data Setup Requirements
 
-| Item | Reason |
-|------|--------|
-| Account balance = all transactions (not cleared-only) | Clearing individual transactions is the correct workflow; clearing balance is shown as a diff, not the primary figure |
-| `budgetIncomeStreams` column on Family table | Left in schema as nullable; no longer written to; safe to ignore or remove in a future migration if desired |
-| Custom date range on Reports/P&L | Scope was limited to the priority fixes; calendar month/quarter/year remains |
-| Income page "Add income" form removed from Budget | By design — single entry point is the Income page; Budget is read-only for income |
+For the Tax Report to show meaningful figures, the following data must be tagged:
+
+| Data | Where to tag | What to set |
+|---|---|---|
+| Salary/wages | Finance → Income | `isTaxTracked=true`, `taxClassification=taxable_income`, `memberId` set, name contains "Salary" or "Wages" |
+| Other personal income | Finance → Income | `isTaxTracked=true`, `taxClassification=taxable_income`, `memberId` set |
+| Joint bank interest | Finance → Income | `isTaxTracked=true`, no `memberId` (joint split happens automatically) |
+| PAYG withholding | Finance → Transactions | `taxClassification=tax_payment`, `memberId` set |
+| Voluntary super | Finance → Transactions or Bills | `taxClassification=tax_deduction`, category name contains "Super" |
+| Super fund income | Finance → Income | `entityId` = super fund entity |
+| Entity types | Finance → Entities | superfund → "Super Fund"; Unitrak → "Business" or "Trust" |
 
 ---
 
@@ -292,7 +295,9 @@ deploy-build.bat          # Windows: build image, save tar, SCP to NAS
 sudo sh deploy-nas.sh     # NAS SSH: load image, restart container
 ```
 
-Migrations run automatically at container start via `docker/entrypoint.sh` — this includes the new `20260516000000_add_income_tax_tracking` migration which adds `isTaxTracked` and `taxRate` to `FinanceIncomeEntry`, and the `20260515000000_add_transaction_entity` migration which adds `entityId` to `FinanceTransaction`.
+Migrations run automatically at container start via `docker/entrypoint.sh`. The latest migrations are:
+- `20260517000000_add_tax_classification` — adds `taxClassification` to Transaction/Bill/Income; `taxIncludeInReporting`/`taxDisplayLabel` to Category
+- `20260519000000_add_is_transfer` — adds `isTransfer BOOLEAN NOT NULL DEFAULT false` to FinanceTransaction
 
 ---
 
@@ -300,24 +305,41 @@ Migrations run automatically at container start via `docker/entrypoint.sh` — t
 
 | Commit | Description |
 |--------|-------------|
-| **Half-Yearly Income Frequency** *(current)* | Added `halfyearly` frequency option to recurring income entries — schema docs, API helpers (`advanceNextExpectedDate`, `streamToMonthly`, `mapFrequency`), UI dropdown, budget planner, and P&L report all updated. Value `halfyearly` consistent with existing Chore model. |
-| **Income Tax Tracking — ATO Compliance** | `isTaxTracked`/`taxRate` on FinanceIncomeEntry (migration `20260516000000`); tax toggle + rate input in income form; orange "TAX TRACKED" pill on income rows; auto-calculated estimated tax in P&L report; orange Estimated Tax card and expenses line |
-| **Finance — Accounting Fixes & UX Parity** | P&L cash/forecast toggle; Reports cash/forecast toggle; budget income → single source of truth (FinanceIncomeEntry); goals auto-progress from account balance; entity field on transactions (migration `20260515000000`); pending vs cleared balance on accounts; usage counts on categories/members/locations; vendor description fix; clickable reference data on bills (quick-filter) |
-| Finance — Income Accuracy & Category Sorting | Date-received/date-paid dialogs with backdating; auto-create FinanceTransaction on receipt/payment with undo; fixed overdue grace-period logic; cash-basis P&L; sorted+grouped category dropdowns; migration `20260514000000` |
-| Finance — Income Tracking & P&L | FinanceIncomeEntry model, income CRUD API, income page, received history, P&L report |
-| Collapsible Root Categories | Per-root collapse/expand toggle; "Not In Use" auto-collapsed |
-| Dashboard Rolling Forward | Chore schedule card, todo per-user assignment, scope selectors |
+| **Tax Reporting, Annual P&L & ATO Workings** *(current)* | Per-person Tax Report with ATO brackets in page component; Annual FY P&L 12-column table; P&L includes actual transactions; transfer taxClassification; entity type hints; data tagging guide. Migrations: `20260517000000_add_tax_classification`, `20260519000000_add_is_transfer`. |
+| **Half-Yearly Income Frequency** | Added `halfyearly` frequency option to recurring income entries |
+| **Income Tax Tracking — ATO Compliance** | `isTaxTracked`/`taxRate` on FinanceIncomeEntry; tax toggle + rate in income form; estimated tax in P&L |
+| **Finance — Accounting Fixes & UX Parity** | P&L cash/forecast; budget single source of truth; goals auto-progress; entity on transactions; pending balances; usage counts |
+| **Finance Module Completion (FY Setting, COA, Opening Balances)** | Financial Year start month setting; Chart of Accounts rename + new types (asset/liability/equity); opening balances double-entry; currentBalance derivation from transactions |
+| Finance — Income Accuracy & Category Sorting | Date dialogs; auto-create transactions; overdue grace period; cash-basis P&L |
+| Finance — Income Tracking & P&L | FinanceIncomeEntry model, income CRUD, P&L report |
+| Collapsible Root Categories | Per-root collapse/expand; "Not In Use" auto-collapsed |
+| Dashboard Rolling Forward | Chore schedule card, todo per-user assignment |
 | AI Voice & Chat Assistant | Multi-provider (Gemini + DeepSeek), 19 actions, PWA support |
 | Apple Themes | 5 additive Apple-system themes |
-| Phase 7 | Tags, categories, notes, PIN protection, audit log, UI enhancements |
+| Phase 7 | Tags, categories, notes, PIN protection, audit log |
 | Phases 1–6 | Calendar, lists, recipes, meal planning, auth, Docker deployment |
 
 ---
 
 ### Project Status
-- ✅ Finance — cash/forecast P&L and Reports, single-source income, goals from account balance, entity on transactions, pending balances, usage counts, clickable quick-filter on bills
-- ✅ Income Tax Tracking — `isTaxTracked`/`taxRate` on income entries; tax toggle + rate in UI; "TAX TRACKED" pill; auto-calculated estimated tax in P&L
-- ✅ Half-Yearly Income Frequency — `halfyearly` option added across income entry schema, all APIs, UI dropdown, budget planner, and P&L report calculations
-- ✅ Migration `20260516000000_add_income_tax_tracking` created and applied (runs automatically via entrypoint)
-- ✅ TypeScript: no breaking type changes introduced
-- ✅ Docker/NAS: no new `/data` subdirectories required; existing entrypoint unchanged
+- ✅ Tax Report — per-person ATO workings, joint income split, super cap, entity sections (15%/30%), data tagging guide
+- ✅ Annual P&L — 12-column FY table, FY navigator, Cash/Forecast, NET row, entity filter
+- ✅ P&L — actual transactions included alongside bills/income entries
+- ✅ Transfer taxClassification — dropdown now shows for all transaction types including transfers
+- ✅ Categories — taxIncludeInReporting available for all types including transfer
+- ✅ Entities — tax rate hints and type guide on page and in dialog
+- ✅ taxClassification optional in all modals — no longer blocks saving on Bills, Income, Transactions
+- ✅ Migrations `20260517000000` and `20260519000000` created; deploy automatically via entrypoint
+- ✅ TypeScript: build passes, no breaking type changes
+- ✅ Docker/NAS: entrypoint runs both new migrations on startup
+
+### Finance Module Completion (2026-05-10)
+- ✅ **Financial Year Start Setting** — Configurable FY start month (1-12) stored on Family; shared FY utility library (`finance-fy.ts`) with `fyDateRange`, `fyLabel`, `fyMonthLabels`, `currentFyYear` etc.; all P&L, tax-report, annual-pnl pages consume the setting
+- ✅ **Chart of Accounts** — Nav tab renamed "Categories" → "Chart of Accounts"; new COA types `asset`, `liability`, `equity` with badge colours; internal code still uses `category`/`categoryId`
+- ✅ **Opening Balances (Double-Entry)** — New equity "Opening Balances" system category; `setOpeningBalance()` creates/updates/deletes `opening_balance` type transactions; opening balance fields on account creation form
+- ✅ **currentBalance Derivation** — `deriveAccountBalance()` and `deriveAllAccountBalances()` compute balance from cleared transactions; all Overview/goals/accounts pages use derived balance; stored `currentBalance` field no longer trusted
+- ✅ **Opening Balance Exclusion** — All P&L/report queries filter `type: { not: 'opening_balance' }`; transactions page shows "Opening Balance" badge with purple indicator
+- ✅ **Email & Excel Reports** — `buildYtdReport` receives `fyStartMonth` from family settings
+- ✅ **Build** — `prisma generate` ✓, `prisma migrate deploy` ✓ (both migrations: `20260520000000_add_finance_year_start`, `20260520100000_add_opening_balances`), `tsc --noEmit` ✓
+- ✅ **Migrations** — 3 new migrations total: `20260519000000_add_is_transfer`, `20260520000000_add_finance_year_start`, `20260520100000_add_opening_balances` (UNIQUE index fixed for SQLite compat)
+- ✅ **Docker/NAS** — `docker/entrypoint.sh` unchanged (runs `prisma migrate deploy` on startup)

@@ -15,6 +15,8 @@ model Family {
   birthdays            String?               // JSON array: [{name, type, date}]
   loginTagline         String?
   appVersion           String?
+  financeYearStartMonth  Int  @default(7)  // 1=Jan … 12=Dec. Default 7 = Australian 1 July FY start.
+  openingBalancesCategoryId  String?  // FK → FinanceCategory (equity type, system, "Opening Balances")
   users                User[]
   events               Event[]
   lists                List[]
@@ -532,7 +534,11 @@ model FinanceAccount {
   type            String   @default("checking")  // checking | savings | credit | cash | investment | loan | entity
   institution     String?
   currency        String   @default("AUD")
-  currentBalance  Float    @default(0)
+  currentBalance      Float    @default(0)         // Derived from transactions. Overridden in API response.
+  openingBalance      Float?                       // The opening balance amount (positive = asset/debit; negative = liability/credit)
+  openingBalanceDate  DateTime?                    // The date as-at which the opening balance applies
+  openingBalanceTxId  String?   @unique            // FK → FinanceTransaction created for this opening balance
+  openingBalanceTx    FinanceTransaction? @relation("AccountOpeningBalance", fields: [openingBalanceTxId], references: [id], onDelete: SetNull)
   creditLimit     Float?   // For credit cards
   isActive        Boolean  @default(true)
   color           String?  // Display colour hex
@@ -594,7 +600,7 @@ model FinanceTransaction {
   account         FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
   categoryId      String?
   category        FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  type            String               @default("expense")  // expense | income | transfer
+  type            String               @default("expense")  // expense | income | transfer | opening_balance
   amount          Float                // Always positive; sign implied by type
   sourceIncomeEntry   FinanceIncomeEntry?   @relation("IncomeTransaction")
   sourceBill          FinanceRecurringBill? @relation("BillTransaction")
@@ -623,6 +629,7 @@ model FinanceTransaction {
   entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
   taxClassification String?           // tax_deduction | taxable_income | exempt_income | tax_payment; null = not classified
   isTransfer          Boolean              @default(false)
+  openingBalanceAccount FinanceAccount? @relation("AccountOpeningBalance")  // Reverse relation for opening balance tx
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 

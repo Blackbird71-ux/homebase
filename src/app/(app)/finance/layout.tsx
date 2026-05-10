@@ -5,21 +5,22 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const tabs = [
-  { href: '/finance',            label: 'Overview',     exact: true },
-  { href: '/finance/accounts',   label: 'Accounts',     exact: false },
-  { href: '/finance/transactions', label: 'Transactions', exact: false },
-  { href: '/finance/bills',      label: 'Bills',        exact: false },
-  { href: '/finance/income',     label: 'Income',       exact: false },
-  { href: '/finance/tax-report', label: 'Tax Report',  exact: false },
-  { href: '/finance/budget',     label: 'Budget',       exact: false },
-  { href: '/finance/goals',      label: 'Goals',        exact: false },
-  { href: '/finance/reports',    label: 'Reports',      exact: false },
+  { href: '/finance',             label: 'Overview',    exact: true },
+  { href: '/finance/accounts',    label: 'Accounts',    exact: false },
+  { href: '/finance/transactions',label: 'Transactions',exact: false },
+  { href: '/finance/bills',       label: 'Bills',       exact: false },
+  { href: '/finance/income',      label: 'Income',      exact: false },
   { href: '/finance/profit-loss', label: 'P&L',         exact: false },
-  { href: '/finance/vendors',    label: 'Vendors',      exact: false },
-  { href: '/finance/entities',   label: 'Entities',     exact: false },
-  { href: '/finance/members',    label: 'Members',      exact: false },
-  { href: '/finance/locations',  label: 'Locations',    exact: false },
-  { href: '/finance/categories', label: 'Categories',   exact: false },
+  { href: '/finance/annual-pnl',  label: 'Annual P&L',  exact: false },
+  { href: '/finance/tax-report',  label: 'Tax Report',  exact: false },
+  { href: '/finance/budget',      label: 'Budget',      exact: false },
+  { href: '/finance/goals',       label: 'Goals',       exact: false },
+  { href: '/finance/reports',     label: 'Reports',     exact: false },
+  { href: '/finance/vendors',     label: 'Vendors',     exact: false },
+  { href: '/finance/entities',    label: 'Entities',    exact: false },
+  { href: '/finance/members',     label: 'Members',     exact: false },
+  { href: '/finance/locations',   label: 'Locations',   exact: false },
+  { href: '/finance/categories',  label: 'Categories',  exact: false },
 ]
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {
@@ -27,13 +28,11 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
       <div className="p-6 pb-0 shrink-0">
         <h1 className="text-2xl font-bold">Finance</h1>
         <p className="text-muted-foreground mt-1">Track income, expenses, budgets and savings.</p>
       </div>
 
-      {/* Sub-navigation tabs */}
       <div className="px-6 pt-4 pb-0 shrink-0 overflow-x-auto">
         <nav className="flex gap-1 border-b border-border min-w-max">
           {tabs.map((tab) => {
@@ -58,7 +57,6 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
         </nav>
       </div>
 
-      {/* Page content */}
       <div className="flex-1 overflow-y-auto p-6 pt-4">
         {children}
       </div>

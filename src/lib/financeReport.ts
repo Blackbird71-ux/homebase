@@ -1,7 +1,13 @@
 // src/lib/financeReport.ts
 // Report data aggregation service — builds YTD report payload for Excel, Print, Email
-
 import { prisma } from '@/lib/prisma'
+import {
+  fyDateRange as fyDateRangeUtil,
+  parseFyLabel,
+  fyMonthLabels,
+  fyMonthsComplete,
+  fyMonthIndex as fyMonthIndexUtil,
+} from './finance-fy'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,42 +88,28 @@ export interface ReportPayload {
   } | null
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-const MONTH_LABELS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-
-/**
- * Convert "2026-27" → { start: 2026-07-01, end: 2027-06-30 }
- */
-export function fyDateRange(fy: string): { start: Date; end: Date } {
-  const startYear = parseInt(fy.split('-')[0])
-  return {
-    start: new Date(`${startYear}-07-01T00:00:00.000Z`),
-    end: new Date(`${startYear + 1}-06-30T23:59:59.999Z`),
-  }
-}
+// ─── Re-export getCurrentFY for backward compatibility ─────────────────────────
+import { currentFyYear, fyLabel } from './finance-fy'
 
 /**
- * Get current financial year string e.g. "2026-27"
+ * Get current financial year string e.g. "2026-27" (uses default July FY).
+ * Callers that need to support a configurable FY start month should compute
+ * the FY label themselves using currentFyYear(fyStartMonth) + fyLabel().
  */
 export function getCurrentFY(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  return now.getMonth() >= 6
-    ? `${y}-${String(y + 1).slice(2)}`
-    : `${y - 1}-${String(y).slice(2)}`
+  return fyLabel(currentFyYear(7), 7)
 }
 
 /**
- * Get the month index (0-11) within the FY for a given date.
- * Jul=0, Aug=1, ..., Jun=11
+ * Legacy fyDateRange that takes a label string.
+ * New code should use fyDateRange(fyYear, fyStartMonth) from finance-fy.ts.
  */
-function fyMonthIndex(date: Date, fyStartYear: number): number {
-  const m = date.getMonth()
-  // Australian FY: Jul(6) = 0, Aug(7)=1, ..., Dec(11)=5, Jan(0)=6, ..., Jun(5)=11
-  if (m >= 6) return m - 6
-  return m + 6
+export function fyDateRange(fy: string): { start: Date; end: Date } {
+  const fyYear = parseFyLabel(fy)
+  return fyDateRangeUtil(fyYear, 7)
 }
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Calculate how many times a given frequency fires within a month.
@@ -136,41 +128,36 @@ function timesPerMonth(frequency: string): number {
 }
 
 /**
- * Determine which FY month index a date falls in.
+ * Determine which FY month index a date falls in (AU FY default).
  */
 function monthIndexInFY(date: Date, fyStartYear: number): number {
-  const month = date.getMonth()
-  const year = date.getFullYear()
-  const isAfterJuly = month >= 6
-  if (isAfterJuly && year === fyStartYear) return month - 6
-  if (!isAfterJuly && year === fyStartYear + 1) return month + 6
-  return -1 // outside FY
+  return fyMonthIndexUtil(date, fyStartYear, 7)
 }
 
 // ─── Main Builder ──────────────────────────────────────────────────────────────
 
 /**
  * Build a complete YTD report payload for the given family and financial year.
+ * @param fyStartMonth The family's financial year start month (1-12). Default 7 (July).
  */
 export async function buildYtdReport(
   familyId: string,
-  year: string
+  year: string,
+  fyStartMonth: number = 7
 ): Promise<ReportPayload> {
-  const { start, end } = fyDateRange(year)
-  const fyStartYear = parseInt(year.split('-')[0])
+  const fyYear = parseFyLabel(year)
+  const { start, end } = fyDateRangeUtil(fyYear, fyStartMonth)
   const now = new Date()
 
   // Determine months completed so far in this FY
-  const monthsComplete = Math.min(
-    fyMonthIndex(now, fyStartYear) + 1,
-    12
-  )
+  const monthsComplete = fyMonthsComplete(now, fyYear, fyStartMonth)
 
   // Months display labels
-  const months = MONTH_LABELS.slice(0, monthsComplete)
+  const monthLabels = fyMonthLabels(fyStartMonth)
+  const months = monthLabels.slice(0, monthsComplete)
 
   const periodLabel = months.length > 0
-    ? `${months[0]} ${fyStartYear} – ${months[months.length - 1]} ${months.length >= 6 ? fyStartYear + 1 : fyStartYear}`
+    ? `${months[0]} ${fyYear} – ${months[months.length - 1]} ${months.length >= 6 ? fyYear + 1 : fyYear}`
     : `${year}`
 
   // ── Fetch entities for grouping ──────────────────────────────────────────
@@ -239,6 +226,7 @@ export async function buildYtdReport(
       familyId,
       date: { gte: start, lte: end },
       isCleared: true,
+      type: { not: 'opening_balance' }, // Exclude opening balance entries from P&L
     },
     select: {
       id: true,
@@ -377,14 +365,14 @@ export async function buildYtdReport(
         const rows = expenseByCategory.get(catName)!
         const existingRow = rows.find(r => r.label === label)
         if (existingRow) {
-          const mi = monthIndexInFY(tx.date, fyStartYear)
+          const mi = monthIndexInFY(tx.date, fyYear)
           if (mi >= 0 && mi < monthsComplete) {
             existingRow.monthly[mi] = Math.round((existingRow.monthly[mi] + tx.amount) * 100) / 100
           }
           existingRow.total = Math.round((existingRow.total + tx.amount) * 100) / 100
         } else {
           const monthly = new Array(monthsComplete).fill(0)
-          const mi = monthIndexInFY(tx.date, fyStartYear)
+          const mi = monthIndexInFY(tx.date, fyYear)
           if (mi >= 0 && mi < monthsComplete) {
             monthly[mi] = Math.round(tx.amount * 100) / 100
           }

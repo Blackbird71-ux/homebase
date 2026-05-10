@@ -30,6 +30,9 @@ const TYPE_COLORS: Record<string, string> = {
   income: 'text-green-500 bg-green-500/10',
   expense: 'text-red-500 bg-red-500/10',
   transfer: 'text-blue-500 bg-blue-500/10',
+  asset: 'text-purple-500 bg-purple-500/10',
+  liability: 'text-orange-500 bg-orange-500/10',
+  equity: 'text-cyan-500 bg-cyan-500/10',
 }
 
 const NOT_IN_USE_NAME = 'Not In Use'
@@ -180,6 +183,9 @@ function CategoryDialog({
               <option value="expense">Expense</option>
               <option value="income">Income</option>
               <option value="transfer">Transfer</option>
+              <option value="asset">Asset</option>
+              <option value="liability">Liability</option>
+              <option value="equity">Equity</option>
             </select>
           </div>
           <div>
@@ -446,7 +452,7 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Categories</h1>
+        <h1 className="text-2xl font-bold">Chart of Accounts</h1>
         <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
           <Plus className="h-4 w-4" /> Add Category
         </button>

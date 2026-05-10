@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { deriveAccountBalance, setOpeningBalance } from '@/lib/finance-opening-balance'
 
 export async function GET() {
   const session = await requireSession()
@@ -28,8 +29,11 @@ export async function GET() {
     const pendingCount = await prisma.financeTransaction.count({
       where: { accountId: acct.id, familyId: session.familyId, isCleared: false },
     })
+    // Derive current balance from cleared transactions (source of truth)
+    const derivedBalance = await deriveAccountBalance(acct.id)
     return {
       ...acct,
+      currentBalance: derivedBalance,
       pendingCount,
       pendingExpense: pendingExpenseSum._sum.amount ?? 0,
       pendingIncome: pendingIncomeSum._sum.amount ?? 0,
@@ -42,7 +46,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { name, type, institution, currency, currentBalance, creditLimit, color, icon } = json
+  const { name, type, institution, currency, creditLimit, color, icon, openingBalance, openingBalanceDate } = json
 
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
@@ -64,7 +68,7 @@ export async function POST(request: NextRequest) {
       type,
       institution: institution ?? null,
       currency: currency ?? 'AUD',
-      currentBalance: currentBalance ?? 0,
+      currentBalance: 0,
       creditLimit: creditLimit ?? null,
       color: color ?? null,
       icon: icon ?? null,
@@ -73,13 +77,24 @@ export async function POST(request: NextRequest) {
     },
   })
 
+  // If opening balance provided, create the double-entry opening balance transaction
+  if (openingBalance != null && openingBalance !== 0) {
+    await setOpeningBalance(
+      account.id,
+      session.familyId,
+      session.id,
+      openingBalance,
+      openingBalanceDate ? new Date(openingBalanceDate) : new Date()
+    )
+  }
+
   return NextResponse.json(account, { status: 201 })
 }
 
 export async function PUT(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, name, type, institution, currency, currentBalance, creditLimit, color, icon, isActive } = json
+  const { id, name, type, institution, currency, creditLimit, color, icon, isActive } = json
 
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -99,7 +114,6 @@ export async function PUT(request: NextRequest) {
       ...(type !== undefined && { type }),
       ...(institution !== undefined && { institution }),
       ...(currency !== undefined && { currency }),
-      ...(currentBalance !== undefined && { currentBalance }),
       ...(creditLimit !== undefined && { creditLimit }),
       ...(color !== undefined && { color }),
       ...(icon !== undefined && { icon }),

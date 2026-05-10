@@ -51,14 +51,13 @@ export default function TransactionsPage() {
     taxClassification: '', isTransfer: false,
   })
 
-  // ── Validation state ──────────────────────────────────────────────────
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   function validate(): Record<string, string> {
     const errs: Record<string, string> = {}
     if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
     if (!form.type) errs.type = 'Type is required'
-    if (form.type !== 'transfer' && !form.taxClassification) errs.taxClassification = 'Tax classification is required for non-transfer transactions'
+    // taxClassification is intentionally optional
     return errs
   }
 
@@ -165,7 +164,6 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Advanced filters */}
       {showFilters && (
         <div className="rounded-lg border border-border p-3 space-y-3">
           <div className="flex items-center justify-between">
@@ -184,6 +182,7 @@ export default function TransactionsPage() {
                 <option value="expense">Expense</option>
                 <option value="income">Income</option>
                 <option value="transfer">Transfer</option>
+                <option value="opening_balance">Opening Balance</option>
               </select>
             </div>
             <div>
@@ -230,7 +229,7 @@ export default function TransactionsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Type *</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value, taxClassification: '' }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="expense">Expense</option>
                 <option value="income">Income</option>
@@ -241,7 +240,8 @@ export default function TransactionsPage() {
               <label className="text-xs text-muted-foreground">Amount *</label>
               <input type="number" step="0.01" value={form.amount}
                 onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
+              {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Date</label>
@@ -296,28 +296,36 @@ export default function TransactionsPage() {
                 {entities.map(en => <option key={en.id} value={en.id}>{en.name}{en.isDefault ? ' (default)' : ''}</option>)}
               </select>
             </div>
-            {form.type !== 'transfer' && (
-              <div>
-                <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
-                <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                  className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.taxClassification && 'border-red-500')}>
-                  <option value="">Not classified</option>
-                  {form.type === 'expense' && (
-                    <>
-                      <option value="tax_deduction">Tax Deduction</option>
-                      <option value="tax_payment">Tax Payment (PAYG)</option>
-                    </>
-                  )}
-                  {form.type === 'income' && (
-                    <>
-                      <option value="taxable_income">Taxable Income</option>
-                      <option value="exempt_income">Exempt Income</option>
-                    </>
-                  )}
-                </select>
-                {errors.taxClassification && <p className="text-xs text-red-500 mt-0.5">{errors.taxClassification}</p>}
-              </div>
-            )}
+
+            {/* Tax Classification — shown for all types, options vary by type */}
+            <div>
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                <Receipt className="h-3 w-3 text-amber-500" /> Tax Classification
+              </label>
+              <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">Not classified</option>
+                {form.type === 'expense' && (
+                  <>
+                    <option value="tax_deduction">Tax Deduction</option>
+                    <option value="tax_payment">Tax Payment (PAYG)</option>
+                  </>
+                )}
+                {form.type === 'income' && (
+                  <>
+                    <option value="taxable_income">Taxable Income</option>
+                    <option value="exempt_income">Exempt Income</option>
+                  </>
+                )}
+                {form.type === 'transfer' && (
+                  <>
+                    <option value="tax_deduction">Tax Deduction (e.g. voluntary super)</option>
+                    <option value="tax_payment">Tax Payment (PAYG, BAS)</option>
+                  </>
+                )}
+              </select>
+            </div>
+
             <div>
               <label className="text-xs text-muted-foreground">Description</label>
               <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
@@ -357,14 +365,16 @@ export default function TransactionsPage() {
             <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 cursor-default"
               onDoubleClick={() => openEdit(t)}>
               <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0',
-                t.type === 'income' ? 'bg-green-500/10 text-green-500' : t.type === 'transfer' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500')}>
-                {t.type === 'income' ? '+' : t.type === 'transfer' ? '↔' : '-'}
+                t.type === 'income' ? 'bg-green-500/10 text-green-500' : t.type === 'transfer' ? 'bg-blue-500/10 text-blue-500' : t.type === 'opening_balance' ? 'bg-purple-500/10 text-purple-500' : 'bg-red-500/10 text-red-500')}>
+                {t.type === 'income' ? '+' : t.type === 'transfer' ? '↔' : t.type === 'opening_balance' ? '⚖' : '-'}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium truncate">{t.payee ?? t.description ?? 'Transaction'}</span>
                   {!t.isCleared && <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-1.5 rounded">PENDING</span>}
                   {t.isPrivate && <span className="text-[10px] bg-muted px-1.5 rounded">PRIVATE</span>}
+                  {t.isTransfer && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">TRANSFER</span>}
+                  {t.type === 'opening_balance' && <span className="text-[10px] bg-purple-500/10 text-purple-500 px-1.5 rounded">OPENING BALANCE</span>}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                   {t.category && <span>{t.category.name}</span>}
@@ -380,8 +390,8 @@ export default function TransactionsPage() {
                   <span>{format(new Date(t.date), 'd MMM yyyy')}</span>
                 </div>
               </div>
-              <p className={cn('text-sm font-semibold shrink-0', t.type === 'income' ? 'text-green-500' : t.type === 'transfer' ? 'text-blue-500' : 'text-red-500')}>
-                {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{formatCurrency(t.amount)}
+              <p className={cn('text-sm font-semibold shrink-0', t.type === 'income' ? 'text-green-500' : t.type === 'transfer' ? 'text-blue-500' : t.type === 'opening_balance' ? 'text-purple-500' : 'text-red-500')}>
+                {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : t.type === 'opening_balance' ? '+' : '-'}{formatCurrency(t.amount)}
               </p>
               <button onClick={() => openEdit(t)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
               <button onClick={() => handleDelete(t.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -390,7 +400,6 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}

@@ -11,6 +11,7 @@ interface Account {
   currency: string; currentBalance: number; creditLimit: number | null
   isActive: boolean; color: string | null; icon: string | null; sortOrder: number
   pendingCount: number; pendingExpense: number; pendingIncome: number
+  openingBalance: number | null; openingBalanceDate: string | null
 }
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'investment', 'loan', 'entity_account', 'external_account', 'other'] as const
@@ -22,7 +23,8 @@ export default function AccountsPage() {
   const [editing, setEditing] = useState<Account | null>(null)
   const [form, setForm] = useState({
     name: '', type: 'checking', institution: '', currency: 'AUD',
-    currentBalance: 0, creditLimit: '', color: '#6366F1', icon: '',
+    creditLimit: '', color: '#6366F1', icon: '',
+    openingBalance: '', openingBalanceDate: '',
   })
 
   async function load() {
@@ -33,22 +35,33 @@ export default function AccountsPage() {
   useEffect(() => { load() }, [])
 
   function openNew() {
-    setEditing(null); setForm({ name: '', type: 'checking', institution: '', currency: 'AUD', currentBalance: 0, creditLimit: '', color: '#6366F1', icon: '' })
+    setEditing(null); setForm({ name: '', type: 'checking', institution: '', currency: 'AUD', creditLimit: '', color: '#6366F1', icon: '', openingBalance: '', openingBalanceDate: '' })
     setShowForm(true)
   }
   function openEdit(acct: Account) {
     setEditing(acct); setForm({
       name: acct.name, type: acct.type, institution: acct.institution ?? '',
-      currency: acct.currency, currentBalance: acct.currentBalance,
+      currency: acct.currency,
       creditLimit: acct.creditLimit?.toString() ?? '', color: acct.color ?? '#6366F1', icon: acct.icon ?? '',
+      openingBalance: acct.openingBalance?.toString() ?? '', openingBalanceDate: acct.openingBalanceDate ?? '',
     }); setShowForm(true)
   }
 
   async function handleSave() {
-    const body = {
+    const body: Record<string, any> = {
       ...(editing ? { id: editing.id } : {}),
-      ...form,
+      name: form.name,
+      type: form.type,
+      institution: form.institution,
+      currency: form.currency,
       creditLimit: form.type === 'credit' ? parseFloat(form.creditLimit) || 0 : null,
+      color: form.color,
+      icon: form.icon,
+    }
+    // Only send opening balance on new accounts
+    if (!editing) {
+      body.openingBalance = form.openingBalance ? parseFloat(form.openingBalance) : null
+      body.openingBalanceDate = form.openingBalanceDate || null
     }
     const res = await fetch('/api/finance/accounts', {
       method: editing ? 'PUT' : 'POST',
@@ -109,12 +122,23 @@ export default function AccountsPage() {
               <input value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Current Balance</label>
-              <input type="number" step="0.01" value={form.currentBalance}
-                onChange={e => setForm(p => ({ ...p, currentBalance: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
+            {!editing && (
+              <div>
+                <label className="text-xs text-muted-foreground">Opening Balance</label>
+                <input type="number" step="0.01" value={form.openingBalance}
+                  onChange={e => setForm(p => ({ ...p, openingBalance: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  placeholder="0.00" />
+              </div>
+            )}
+            {!editing && (
+              <div>
+                <label className="text-xs text-muted-foreground">Opening Balance Date</label>
+                <input type="date" value={form.openingBalanceDate}
+                  onChange={e => setForm(p => ({ ...p, openingBalanceDate: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+            )}
             {form.type === 'credit' && (
               <div>
                 <label className="text-xs text-muted-foreground">Credit Limit</label>

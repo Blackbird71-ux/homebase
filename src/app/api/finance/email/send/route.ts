@@ -14,6 +14,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Load FY start month from family settings
+    const family = await prisma.family.findUnique({
+      where: { id: session.familyId },
+      select: { financeYearStartMonth: true },
+    })
+    const fyStartMonth = family?.financeYearStartMonth ?? 7
+
     const body = await request.json()
     const {
       year,
@@ -44,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     // Build the report (or could load from snapshot JSON, but we rebuild for freshness)
-    const report = await buildYtdReport(session.familyId, reportYear)
+    const report = await buildYtdReport(session.familyId, reportYear, fyStartMonth)
 
     // Save snapshot if not using an existing one
     let actualSnapshotId = snapshotId

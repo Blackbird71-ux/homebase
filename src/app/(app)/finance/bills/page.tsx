@@ -115,7 +115,7 @@ export default function BillsPage() {
     if (!form.name.trim()) errs.name = 'Name is required'
     if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
     if (!form.nextDueDate) errs.nextDueDate = 'Due date is required'
-    if (!form.taxClassification) errs.taxClassification = 'Tax classification is required'
+    // taxClassification is intentionally optional — most bills don't need ATO classification
     return errs
   }
 
@@ -371,7 +371,6 @@ export default function BillsPage() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
   }
 
-  // Quick-filter applies on top of the active/unpaid filter
   const activeBills = bills.filter(b => {
     if (!b.isActive || b.paid) return false
     if (quickFilter) {
@@ -430,7 +429,6 @@ export default function BillsPage() {
           ))}
         </div>
 
-        {/* Active quick-filter badge — click to clear */}
         {quickFilter && (
           <button
             onClick={() => setQuickFilter(null)}
@@ -621,12 +619,11 @@ export default function BillsPage() {
             <div>
               <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
               <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.taxClassification && 'border-red-500')}>
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                 <option value="">Not classified</option>
                 <option value="tax_deduction">Tax Deduction</option>
                 <option value="tax_payment">Tax Payment (PAYG)</option>
               </select>
-              {errors.taxClassification && <p className="text-xs text-red-500 mt-0.5">{errors.taxClassification}</p>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Location</label>
@@ -851,7 +848,6 @@ function BillRow({
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-0.5">
             <span className="capitalize">{isOneOff ? 'One-off' : bill.frequency}</span>
-            {/* Clickable reference data — click to quick-filter the list */}
             {bill.vendor && (
               <button className="text-purple-500 hover:underline"
                 onClick={e => { e.stopPropagation(); onQuickFilter({ type: 'vendor', id: bill.vendor!.id, label: bill.vendor!.name }) }}

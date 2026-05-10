@@ -1,6 +1,7 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { seedFinanceCategories } from '@/lib/finance-seed'
+import { deriveAllAccountBalances } from '@/lib/finance-opening-balance'
 import { OverviewClient } from './OverviewClient'
 import { startOfMonth, endOfMonth } from 'date-fns'
 import type {
@@ -29,6 +30,7 @@ export default async function FinanceOverviewPage() {
     categories,
     familyUsers,
     locations,
+    balanceMap,
   ] = await Promise.all([
     prisma.financeAccount.findMany({
       where: { familyId, isActive: true },
@@ -59,9 +61,9 @@ export default async function FinanceOverviewPage() {
     }) as Promise<(FinanceRecurringBill & { account: Pick<FinanceAccount, 'id' | 'name'> | null; category: FinanceCategory | null; location: { id: string; name: string } | null })[]>,
     prisma.financeSavingsGoal.findMany({
       where: { familyId, isComplete: false },
-      include: { account: { select: { id: true, name: true, currentBalance: true } } },
+      include: { account: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'asc' },
-    }) as Promise<(FinanceSavingsGoal & { account: Pick<FinanceAccount, 'id' | 'name' | 'currentBalance'> | null })[]>,
+    }) as Promise<(FinanceSavingsGoal & { account: Pick<FinanceAccount, 'id' | 'name'> | null })[]>,
     prisma.financeCategory.findMany({ where: { familyId } }),
     prisma.user.findMany({
       where: { familyId },
@@ -71,6 +73,7 @@ export default async function FinanceOverviewPage() {
     prisma.financeLocation.findMany({
       where: { familyId, isActive: true },
     }),
+    deriveAllAccountBalances(familyId),
   ])
 
   // Build member lookup from family users
@@ -87,8 +90,8 @@ export default async function FinanceOverviewPage() {
     .filter((t) => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0)
 
-  // Compute total balance
-  const totalBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0)
+  // Compute total balance from derived balances
+  const totalBalance = accounts.reduce((sum, a) => sum + (balanceMap.get(a.id) ?? 0), 0)
 
   // Category type breakdowns
   const personalCategories = categories.filter((c) => c.isPersonal)
@@ -124,7 +127,7 @@ export default async function FinanceOverviewPage() {
     <OverviewClient
       accounts={accounts.map((a) => ({
         id: a.id, name: a.name, type: a.type, institution: a.institution,
-        currency: a.currency, currentBalance: a.currentBalance, creditLimit: a.creditLimit,
+        currency: a.currency, currentBalance: balanceMap.get(a.id) ?? 0, creditLimit: a.creditLimit,
         isActive: a.isActive, color: a.color, icon: a.icon,
         sortOrder: a.sortOrder, familyId: a.familyId, createdAt: a.createdAt.toISOString(), updatedAt: a.updatedAt.toISOString(),
         isBudget: false, isSavings: false, accountNumber: null, entityName: null, entityABN: null,
@@ -167,8 +170,8 @@ export default async function FinanceOverviewPage() {
       }))}
       savingsGoals={savingsGoals.map((g) => ({
         ...g,
-        // Auto-derive currentAmount from linked account balance if account is set
-        currentAmount: g.accountId && g.account ? g.account.currentBalance : g.currentAmount,
+        // Auto-derive currentAmount from linked account balance via derived balance map
+        currentAmount: g.accountId ? (balanceMap.get(g.accountId) ?? g.currentAmount) : g.currentAmount,
         targetDate: g.targetDate?.toISOString() ?? null,
         createdAt: g.createdAt.toISOString(),
         updatedAt: g.updatedAt.toISOString(),

@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { deriveAccountBalance } from '@/lib/finance-opening-balance'
 
 export async function GET() {
   const session = await requireSession()
   const goals = await prisma.financeSavingsGoal.findMany({
     where: { familyId: session.familyId },
-    include: { account: { select: { id: true, name: true, currentBalance: true } } },
+    include: { account: { select: { id: true, name: true } } },
     orderBy: { createdAt: 'desc' },
   })
 
   // Auto-derive currentAmount from linked account balance if account is set
-  const enriched = goals.map(g => ({
-    ...g,
-    currentAmount: g.accountId && g.account
-      ? g.account.currentBalance
-      : g.currentAmount,
+  const enriched = await Promise.all(goals.map(async (g) => {
+    let derived = g.currentAmount
+    if (g.accountId && g.account) {
+      derived = await deriveAccountBalance(g.accountId)
+    }
+    return { ...g, currentAmount: derived }
   }))
 
   return NextResponse.json(enriched)
@@ -38,12 +40,14 @@ export async function POST(request: NextRequest) {
       accountId: accountId ?? null, color: color ?? null, icon: icon ?? null,
       familyId: session.familyId,
     },
-    include: { account: { select: { id: true, name: true, currentBalance: true } } },
+    include: { account: { select: { id: true, name: true } } },
   })
 
   const result = {
     ...goal,
-    currentAmount: goal.accountId && goal.account ? goal.account.currentBalance : goal.currentAmount,
+    currentAmount: goal.accountId && goal.account
+      ? await deriveAccountBalance(goal.accountId)
+      : goal.currentAmount,
   }
 
   return NextResponse.json(result, { status: 201 })
@@ -76,12 +80,14 @@ export async function PUT(request: NextRequest) {
       ...(icon !== undefined && { icon }),
       ...(isComplete !== undefined && { isComplete }),
     },
-    include: { account: { select: { id: true, name: true, currentBalance: true } } },
+    include: { account: { select: { id: true, name: true } } },
   })
 
   const result = {
     ...goal,
-    currentAmount: goal.accountId && goal.account ? goal.account.currentBalance : goal.currentAmount,
+    currentAmount: goal.accountId && goal.account
+      ? await deriveAccountBalance(goal.accountId)
+      : goal.currentAmount,
   }
 
   return NextResponse.json(result)

@@ -73,7 +73,6 @@ export default function IncomePage() {
   const [showForm, setShowForm]       = useState(false)
   const [editing, setEditing]         = useState<IncomeEntry | null>(null)
   const [errors, setErrors]           = useState<Record<string, string>>({})
-  // ── Date-received confirmation state ─────────────────────────────────────
   const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
   const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
   const [dateRange, setDateRange]     = useState<'14' | '30' | 'quarter' | '12months'>(() => {
@@ -94,7 +93,6 @@ export default function IncomePage() {
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
 
-  // Attachment panel state
   const [attachmentIncomeId, setAttachmentIncomeId]     = useState<string | null>(null)
   const [attachments, setAttachments]                   = useState<IncomeAttachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading]     = useState(false)
@@ -153,8 +151,6 @@ export default function IncomePage() {
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
 
-  // ── Attachment helpers ────────────────────────────────────────────────────
-
   async function openAttachments(entry: IncomeEntry) {
     setAttachmentIncomeId(entry.id)
     setAttachmentsLoading(true)
@@ -165,11 +161,7 @@ export default function IncomePage() {
   }
 
   function closeAttachments() { setAttachmentIncomeId(null); setAttachments([]); setPreviewAttachmentId(null) }
-
-  function togglePreview(attId: string) {
-    setPreviewAttachmentId(prev => prev === attId ? null : attId)
-  }
-
+  function togglePreview(attId: string) { setPreviewAttachmentId(prev => prev === attId ? null : attId) }
   function isImageMime(mime: string) { return mime.startsWith('image/') }
   function isPdfMime(mime: string)   { return mime === 'application/pdf' }
 
@@ -197,8 +189,6 @@ export default function IncomePage() {
     if (res.ok) { setAttachments(prev => prev.filter(a => a.id !== attachmentId)); toast.success('Attachment removed') }
     else toast.error('Failed to remove attachment')
   }
-
-  // ── Filters / helpers ─────────────────────────────────────────────────────
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
     sessionStorage.setItem('income-dateRange', r); setDateRange(r)
@@ -249,7 +239,7 @@ export default function IncomePage() {
     if (!form.name.trim()) errs.name = 'Name is required'
     if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
     if (!form.nextExpectedDate) errs.nextExpectedDate = 'Expected date is required'
-    if (form.isTaxTracked && !form.taxClassification) errs.taxClassification = 'Tax classification is required when tax tracking is enabled'
+    // taxClassification is intentionally optional — warn via amber UI but do not block save
     return errs
   }
 
@@ -308,7 +298,6 @@ export default function IncomePage() {
   }
 
   async function handleMarkReceived(entry: IncomeEntry) {
-    // Open the date-confirmation mini-dialog instead of firing immediately
     const today = new Date().toISOString().split('T')[0]
     setReceivedConfirmDate(today)
     setReceivedConfirm({ entry })
@@ -374,19 +363,13 @@ export default function IncomePage() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
   }
 
-  const activeEntries     = entries.filter(e => e.isActive && !e.received)
+  const activeEntries = entries.filter(e => e.isActive && !e.received)
 
-  // An entry is truly overdue only if its nextExpectedDate is in the past AND
-  // it is not a freshly-spawned child (parentIncomeId set means it was just
-  // created by a mark-received action — give it until the end of the window).
   function isTrulyOverdue(e: IncomeEntry): boolean {
     const due = toLocalMidnight(new Date(e.nextExpectedDate))
-    if (due >= todayStart) return false          // not past yet
-    if (e.incomeType === 'one-off') return false // one-off handled separately
-    // Child entries: only overdue if the expected date passed by more than one
-    // full cycle (i.e. the parent has been received but we’ve missed ANOTHER pay)
+    if (due >= todayStart) return false
+    if (e.incomeType === 'one-off') return false
     if (e.parentIncomeId) {
-      // Allow a grace period equal to the cycle length before flagging overdue
       const graceMs = cycleMs(e.frequency)
       return (todayStart.getTime() - due.getTime()) > graceMs
     }
@@ -404,15 +387,15 @@ export default function IncomePage() {
     return 31 * day
   }
 
-  const overdue           = activeEntries.filter(isTrulyOverdue)
-  const overdueOneOff     = activeEntries.filter(e => e.incomeType === 'one-off' && toLocalMidnight(new Date(e.nextExpectedDate)) < todayStart)
-  const upcoming          = activeEntries.filter(e => {
+  const overdue       = activeEntries.filter(isTrulyOverdue)
+  const overdueOneOff = activeEntries.filter(e => e.incomeType === 'one-off' && toLocalMidnight(new Date(e.nextExpectedDate)) < todayStart)
+  const upcoming      = activeEntries.filter(e => {
     const due = toLocalMidnight(new Date(e.nextExpectedDate))
     return due >= todayStart && due <= rangeEnd
   })
-  const visibleEntries    = [...overdue, ...upcoming]
-  const colCats           = rootCategories.filter(c => selectedCatIds.includes(c.id))
-  const grandTotal        = visibleEntries.reduce((s, e) => s + e.amount, 0)
+  const visibleEntries = [...overdue, ...upcoming]
+  const colCats        = rootCategories.filter(c => selectedCatIds.includes(c.id))
+  const grandTotal     = visibleEntries.reduce((s, e) => s + e.amount, 0)
   const catTotals: Record<string, number> = {}
   for (const catId of selectedCatIds) {
     catTotals[catId] = visibleEntries.reduce((s, e) => s + entryAmountForCat(e, catId), 0)
@@ -435,7 +418,6 @@ export default function IncomePage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           {(['14', '30', 'quarter', '12months'] as const).map(r => (
@@ -470,7 +452,6 @@ export default function IncomePage() {
         )}
       </div>
 
-      {/* Overdue recurring income */}
       {overdue.length > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
           <div className="flex items-center gap-2 text-amber-600 font-medium mb-2">
@@ -482,18 +463,9 @@ export default function IncomePage() {
                 <span className="truncate min-w-0 flex-1">{e.name}</span>
                 <span className="font-medium shrink-0">{formatCurrency(e.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button onClick={() => handleMarkReceived(e)} title="Mark as received"
-                    className="p-1 hover:bg-amber-500/10 rounded text-green-500">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => openEdit(e)} title="Edit"
-                    className="p-1 hover:bg-amber-500/10 rounded text-muted-foreground hover:text-foreground">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(e.id)} title="Delete"
-                    className="p-1 hover:bg-amber-500/10 rounded text-red-500">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <button onClick={() => handleMarkReceived(e)} title="Mark as received" className="p-1 hover:bg-amber-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEdit(e)} title="Edit" className="p-1 hover:bg-amber-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleDelete(e.id)} title="Delete" className="p-1 hover:bg-amber-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             ))}
@@ -501,7 +473,6 @@ export default function IncomePage() {
         </div>
       )}
 
-      {/* Overdue one-off income */}
       {overdueOneOff.length > 0 && (
         <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-4">
           <div className="flex items-center gap-2 text-orange-500 font-medium mb-2">
@@ -516,18 +487,9 @@ export default function IncomePage() {
                 </div>
                 <span className="font-medium shrink-0">{formatCurrency(e.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button onClick={() => handleMarkReceived(e)} title="Mark as received"
-                    className="p-1 hover:bg-orange-500/10 rounded text-green-500">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => openEdit(e)} title="Edit"
-                    className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(e.id)} title="Delete"
-                    className="p-1 hover:bg-orange-500/10 rounded text-red-500">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <button onClick={() => handleMarkReceived(e)} title="Mark as received" className="p-1 hover:bg-orange-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEdit(e)} title="Edit" className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleDelete(e.id)} title="Delete" className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             ))}
@@ -535,7 +497,6 @@ export default function IncomePage() {
         </div>
       )}
 
-      {/* ── Income Editor Modal ─────────────────────────────────────────────── */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
         <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
           <DialogHeader>
@@ -553,7 +514,6 @@ export default function IncomePage() {
             </div>
           )}
 
-          {/* Income type */}
           <div className="flex gap-4 pb-1">
             {(['recurring', 'one-off'] as const).map(bt => (
               <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -570,13 +530,15 @@ export default function IncomePage() {
             <div>
               <label className="text-xs text-muted-foreground">Name *</label>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.name ? 'border-red-500' : 'border-input')} />
+              {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Amount *</label>
               <input type="number" step="0.01" value={form.amount}
                 onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
+              {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
             </div>
             {form.incomeType === 'recurring' && (
               <div>
@@ -592,7 +554,6 @@ export default function IncomePage() {
                 </select>
               </div>
             )}
-            {/* Vendor / Payer */}
             <div>
               <label className="text-xs text-muted-foreground">Payer / Source</label>
               <div className="flex gap-1">
@@ -646,7 +607,8 @@ export default function IncomePage() {
             <div>
               <label className="text-xs text-muted-foreground">{form.incomeType === 'one-off' ? 'Expected Date *' : 'Next Expected Date *'}</label>
               <input type="date" value={form.nextExpectedDate} onChange={e => setForm(p => ({ ...p, nextExpectedDate: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.nextExpectedDate ? 'border-red-500' : 'border-input')} />
+              {errors.nextExpectedDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextExpectedDate}</p>}
             </div>
             {form.incomeType === 'recurring' && (
               <div>
@@ -655,7 +617,6 @@ export default function IncomePage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
               </div>
             )}
-            {/* Assigned To */}
             <div>
               <label className="text-xs text-muted-foreground">Assigned To (person)</label>
               <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
@@ -664,7 +625,6 @@ export default function IncomePage() {
                 {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-            {/* Entity */}
             <div>
               <label className="text-xs text-muted-foreground flex items-center gap-1">
                 <Briefcase className="h-3 w-3" /> Entity / Fund
@@ -674,11 +634,6 @@ export default function IncomePage() {
                 <option value="">Select entity…</option>
                 {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
               </select>
-              {entities.length === 0 && (
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Add entities (Super Fund, etc.) in the Budget Planner → Entities tab.
-                </p>
-              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Location</label>
@@ -690,7 +645,6 @@ export default function IncomePage() {
             </div>
           </div>
 
-          {/* Flags row */}
           <div className="flex flex-wrap gap-6 pt-1">
             {form.incomeType === 'recurring' && (
               <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -725,7 +679,6 @@ export default function IncomePage() {
             )}
           </div>
 
-          {/* Tax Tracking */}
           <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -759,7 +712,7 @@ export default function IncomePage() {
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
                   <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                    className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.taxClassification ? 'border-red-500' : 'border-input')}>
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                     <option value="">Not classified</option>
                     <option value="taxable_income">Taxable Income</option>
                     <option value="exempt_income">Exempt Income</option>
@@ -790,7 +743,6 @@ export default function IncomePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Date received confirmation dialog ─────────────────────────────────── */}
       <Dialog open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton={true}>
           <DialogHeader>
@@ -804,12 +756,8 @@ export default function IncomePage() {
               </p>
               <div>
                 <label className="text-xs text-muted-foreground">Date received</label>
-                <input
-                  type="date"
-                  value={receivedConfirmDate}
-                  onChange={e => setReceivedConfirmDate(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1"
-                />
+                <input type="date" value={receivedConfirmDate} onChange={e => setReceivedConfirmDate(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
               <p className="text-xs text-muted-foreground">
                 An income transaction of{' '}
@@ -829,7 +777,6 @@ export default function IncomePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Income list ─────────────────────────────────────────────────────── */}
       {entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">No income entries yet.</p>
       ) : (
@@ -953,9 +900,7 @@ function IncomeRow({
             {entry.isTaxTracked && (
               <span className="text-[10px] bg-orange-500/10 text-orange-600 px-1.5 rounded flex items-center gap-0.5">
                 <ReceiptText className="h-2.5 w-2.5" /> TAX TRACKED
-                {entry.taxRate != null && (
-                  <span className="font-medium">{entry.taxRate}%</span>
-                )}
+                {entry.taxRate != null && <span className="font-medium">{entry.taxRate}%</span>}
               </span>
             )}
             {entry.entity && (
@@ -1003,7 +948,6 @@ function IncomeRow({
         </div>
       </div>
 
-      {/* Attachment panel */}
       {isAttachmentOpen && (
         <div className="rounded-b-lg border border-t-0 border-green-500/30 bg-green-500/5 px-4 py-3 space-y-3">
           <div className="flex items-center justify-between">
@@ -1015,7 +959,6 @@ function IncomeRow({
               <X className="h-4 w-4" />
             </button>
           </div>
-
           {attachmentsLoading ? (
             <p className="text-xs text-muted-foreground">Loading…</p>
           ) : attachments.length === 0 ? (
@@ -1050,12 +993,10 @@ function IncomeRow({
                     </div>
                     {isPreviewing && (
                       <div className="mt-1 rounded-md border border-border bg-background overflow-hidden">
-                        {isImageMime(att.mimeType) ? (
+                        {isImageMime(att.mimeType)
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
-                        ) : (
-                          <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />
-                        )}
+                          ? <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
+                          : <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />}
                       </div>
                     )}
                   </div>
@@ -1063,25 +1004,16 @@ function IncomeRow({
               })}
             </div>
           )}
-
           {attachments.length < 2 && (
             <div className="flex items-center gap-3">
-              <input
-                ref={attachFileRef}
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                className="hidden"
+              <input ref={attachFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden"
                 onChange={async e => {
                   const file = e.target.files?.[0]
                   if (file) await onAttachmentUpload(entry.id, file)
                   e.target.value = ''
-                }}
-              />
-              <button
-                onClick={() => attachFileRef.current?.click()}
-                disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
-              >
+                }} />
+              <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
                 <Upload className="h-3.5 w-3.5" />
                 {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Payslip' : 'Upload Reference Doc'}
               </button>
