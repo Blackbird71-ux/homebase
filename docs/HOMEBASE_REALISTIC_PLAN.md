@@ -101,11 +101,27 @@ If it returns nothing, someone already removed them — skip Section 2.
 
 ## PART 2 — THE ACTUAL PLAN
 
+> **STATUS (as at 2026-05-10): ALL STEPS COMPLETE ✅**
+>
+> | Step | Description | Status |
+> |------|-------------|--------|
+> | 1 | Fix stale `currentBalance` mutations in transactions route | ✅ Done |
+> | 2 | Add opening balance + GL Code to Chart of Accounts | ✅ Done |
+> | 3 | Balance Sheet API route | ✅ Done |
+> | 4 | Balance Sheet page | ✅ Done |
+> | 5 | Add Balance Sheet to finance navigation | ✅ Done |
+> | 6 | Journal Entries (schema, API, page) | ✅ Done |
+>
+> Opening balances on COA entries are set via the **"Set OB"** button (far right of each
+> row, visible only on Asset / Liability / Equity accounts). Journals are accessible at
+> `/finance/journals`. The editor dialog does not yet include an opening balance field —
+> OB must be set separately via the "Set OB" button in the list view.
+
 Build in this exact order. Do not skip ahead. Each step is self-contained.
 
 ---
 
-## STEP 1 — Fix the stale currentBalance bug (30 minutes)
+## STEP 1 — Fix the stale currentBalance bug (30 minutes) ✅ DONE
 
 **File:** `src/app/api/finance/transactions/route.ts`
 
@@ -163,7 +179,7 @@ Must return `0`.
 
 ---
 
-## STEP 2 — Add opening balance to Chart of Accounts (2 hours)
+## STEP 2 — Add opening balance to Chart of Accounts (2 hours) ✅ DONE
 
 This is what the user was actually asking for. It is straightforward.
 
@@ -604,7 +620,7 @@ In `CategoryRow`, in the row's name/flags section, show the GL code if present:
 
 ---
 
-## STEP 3 — Balance Sheet API (2 hours)
+## STEP 3 — Balance Sheet API (2 hours) ✅ DONE
 
 **Create:** `src/app/api/finance/balance-sheet/route.ts`
 
@@ -789,7 +805,7 @@ export async function GET(request: NextRequest) {
 
 ---
 
-## STEP 4 — Balance Sheet page (3 hours)
+## STEP 4 — Balance Sheet page (3 hours) ✅ DONE
 
 **Create:** `src/app/(app)/finance/balance-sheet/page.tsx`
 
@@ -1240,7 +1256,7 @@ export default function BalanceSheetPage() {
 
 ---
 
-## STEP 5 — Add Balance Sheet to navigation (5 minutes)
+## STEP 5 — Add Balance Sheet to navigation (5 minutes) ✅ DONE
 
 **File:** `src/app/(app)/finance/layout.tsx`
 
@@ -1254,19 +1270,19 @@ That is the complete change to this file.
 
 ---
 
-## STEP 6 — Journal Entries (Build AFTER steps 1-5 are verified working)
+## STEP 6 — Journal Entries ✅ DONE
 
-**Do not build this until the Balance Sheet is working and confirmed correct.**
-Journals are an enhancement, not a fix. The system works correctly without them.
+The journal system was built as a clean additive layer. No existing APIs were touched.
 
-The journal system requires:
-- Two new Prisma models (`JournalEntry`, `JournalLine`)
-- One new migration file
-- One new API route (`/api/finance/journals`)
-- One new page (`/finance/journals`)
-- No changes to existing APIs (journals are additive, not invasive)
+What was built:
+- `prisma/schema.prisma` — `FinanceJournalEntry` + `FinanceJournalLine` models with back-relations on `Family`, `FinanceEntity`, `FinanceCategory`
+- `prisma/migrations/20260524000000_add_journal_entries/migration.sql` — SQLite-compatible CREATE TABLE + indexes
+- `src/app/api/finance/journals/route.ts` — full REST API: GET (paginated, filterable), POST (create draft or post immediately), PUT (edit draft), PATCH (post draft / reverse posted), DELETE (draft only)
+- `src/app/(app)/finance/journals/page.tsx` — full UI per `HOMEBASE_JOURNALS_PAGE_SPEC.md`
 
-A separate detailed spec will be written for this step after the balance sheet is confirmed.
+Reference numbers auto-generate as `JE-0001`, `JE-0002`, etc. per family.
+Reversal uses `prisma.$transaction` for atomicity.
+See `docs/HOMEBASE_JOURNALS_PAGE_SPEC.md` for full UI spec.
 
 ---
 

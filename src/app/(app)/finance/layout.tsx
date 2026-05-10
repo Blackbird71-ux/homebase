@@ -12,6 +12,7 @@ const tabs = [
   { href: '/finance/income',      label: 'Income',            exact: false },
   { href: '/finance/profit-loss', label: 'P&L',               exact: false },
   { href: '/finance/annual-pnl',  label: 'Annual P&L',        exact: false },
+  { href: '/finance/journals',    label: 'Journals',          exact: false },
   { href: '/finance/balance-sheet', label: 'Balance Sheet',    exact: false },
   { href: '/finance/tax-report',  label: 'Tax Report',        exact: false },
   { href: '/finance/budget',      label: 'Budget',            exact: false },

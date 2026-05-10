@@ -47,6 +47,7 @@ model Family {
   financeEntities        FinanceEntity[]
   financeIncomeEntries   FinanceIncomeEntry[]
   financeSnapshots       FinanceSnapshot[]
+  financeJournalEntries  FinanceJournalEntry[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
 }
 
@@ -588,6 +589,7 @@ model FinanceCategory {
   recurringBills  FinanceRecurringBill[]
   incomeEntries   FinanceIncomeEntry[]
   vendors         FinanceVendor[]
+  journalLines    FinanceJournalLine[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -905,6 +907,7 @@ model FinanceEntity {
   recurringBills  FinanceRecurringBill[]
   incomeEntries   FinanceIncomeEntry[]
   transactions    FinanceTransaction[]
+  journalEntries  FinanceJournalEntry[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -945,4 +948,48 @@ model ReportEmail {
 
   @@index([snapshotId])
   @@map("report_emails")
+}
+
+// ─── Journal Entries ──────────────────────────────────────────────────────────
+
+model FinanceJournalEntry {
+  id            String   @id @default(cuid())
+  reference     String?  // e.g. "JE-0012" — auto-assigned on create
+  date          DateTime
+  description   String
+  type          String   @default("manual")  // manual | adjustment | reversal | opening_balance | auto_transaction
+  isPosted      Boolean  @default(false)
+  isReversed    Boolean  @default(false)
+  reversalOfId  String?  // FK to the entry this reverses
+  reversalOf    FinanceJournalEntry?  @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversals     FinanceJournalEntry[] @relation("JournalReversal")
+  entityId      String?
+  entity        FinanceEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  familyId      String
+  family        Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  lines         FinanceJournalLine[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, date(sort: Desc)])
+  @@index([familyId, isPosted])
+  @@index([entityId])
+  @@index([reversalOfId])
+}
+
+model FinanceJournalLine {
+  id             String              @id @default(cuid())
+  journalEntryId String
+  journalEntry   FinanceJournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  glAccountId    String
+  glAccount      FinanceCategory     @relation(fields: [glAccountId], references: [id], onDelete: Restrict)
+  side           String              // 'debit' | 'credit'
+  amount         Float
+  description    String?
+  memberId       String?             // FK -> User (optional)
+  createdAt      DateTime            @default(now())
+
+  @@index([journalEntryId])
+  @@index([glAccountId])
 }
