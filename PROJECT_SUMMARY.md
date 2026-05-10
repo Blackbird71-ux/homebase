@@ -1,5 +1,5 @@
 # HomeBase — Project Summary
-## Current Build: Finance Module Completion — FY Setting, COA, Opening Balances, Balance Derivation
+## Current Build: Balance Sheet, COA Opening Balances, Stale currentBalance Fix
 
 ### Project Overview
 HomeBase is a comprehensive family management platform built with Next.js 16, TypeScript, Prisma, and SQLite. The application provides a centralised hub for family organisation including calendar management, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
@@ -62,9 +62,9 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - 19 actions across meal plan, shopping, todo, calendar, chores, notes, recipes, contacts, documents, birthdays
 - Context-aware: AI receives family data in system prompt; PWA-compatible
 
-#### 12. Finance Module ← *most recently enhanced — Tax Reporting & Annual P&L*
+#### 12. Finance Module ← *most recently enhanced — Balance Sheet & COA Opening Balances*
 
-Full household finance tracking — bills, income, transactions, accounts, budget, P&L, annual P&L, tax report, reports, vendors, categories, entities, locations, members.
+Full household finance tracking — bills, income, transactions, accounts, budget, P&L, annual P&L, balance sheet, tax report, reports, vendors, categories, entities, locations, members.
 
 Complete ATO tax compliance support:
 - Australian tax brackets (2025-26) + Medicare levy calculated in the page component (easy to update each July without redeployment)
@@ -78,9 +78,19 @@ Complete ATO tax compliance support:
 
 ### Finance Module — Full Feature Reference
 
+#### Balance Sheet — NEW
+- Hybrid approach: bank account balances derived from cleared transactions + COA opening balances stored directly on category records
+- GET endpoint at `/api/finance/balance-sheet?asAt=&entityId=` combining both data sources
+- Four sections: Assets (Bank & Cash + COA), Liabilities (Credit Cards & Loans + COA), Equity (COA)
+- Net Worth calculation with `equityMatchesNetWorth` validation flag
+- Entity filter and as-at date picker on the page
+- Setup guide shown when no COA opening balances exist; equity mismatch warning when `equity ≠ netWorth`
+- Bank accounts split: `!['credit', 'loan']` = asset bank rows, `['credit', 'loan']` = liability bank rows
+- COA entries filtered by `openingBalanceDate <= asAt` (no date = always included)
+
 #### Accounts
 - Checking, savings, credit, cash, investment, loan, entity accounts
-- `currentBalance` updates automatically on every transaction create/edit/delete
+- `currentBalance` is now **derived from cleared transactions** — the stale stored-field `currentBalance.increment` mutations have been removed from the transactions API route (POST/PUT/DELETE)
 - **Pending vs cleared split**: account cards show pending transaction count, uncleared expense total, and uncleared income total in amber
 
 #### Bills & Recurring Expenses
@@ -126,7 +136,7 @@ Complete ATO tax compliance support:
 - Category breakdown with bar-chart percentages; drill-down to individual items showing source (bill, income entry, or transaction)
 - **Estimated Tax (ATO)** — auto-calculates from tax-tracked income entries; orange summary card; net profit subtracts estimated tax
 
-#### Annual P&L — NEW
+#### Annual P&L
 - **12-column Jul–Jun financial year table** matching the NETT budget spreadsheet layout
 - FY navigator (← FY2025–26 →) to browse historical years
 - Cash mode: only confirmed paid/received items populate each month column
@@ -137,7 +147,7 @@ Complete ATO tax compliance support:
 - Entity filter pills; compact `$12k` / `$1.2M` formatting for column values
 - Footer note explaining Cash vs Forecast behaviour
 
-#### Tax Report — NEW
+#### Tax Report
 - **Per-person ATO workings** (Mark / Michelle panels side by side):
   - Gross income lines: wages/salary, joint bank interest (split equally), other income, franking credits
   - Deductions: voluntary super, charity/gifts, other deductions
@@ -163,10 +173,12 @@ Complete ATO tax compliance support:
 - Manual tracking for goals without a linked account
 
 #### Categories
-- Hierarchical (parent / child, 2 levels); income / expense / transfer types
+- Hierarchical (parent / child, 2 levels); income / expense / transfer / asset / liability / equity types
 - **Tax deduction flag**: expense and transfer categories
 - **Tax reporting flag** (`taxIncludeInReporting`): **all types** including transfer — marks categories for Tax Report inclusion
-- **Tax display label** (`taxDisplayLabel`): custom override label in Tax Report
+- **GL Code** (`glCode`): optional Chart of Accounts numbering (e.g. "1001", "2100")
+- **Opening Balances** (`openingBalance`, `openingBalanceDate`): starting balances for asset/liability/equity categories used in the Balance Sheet
+- Set opening balance via new "Set OB" button on category rows (asset/liability/equity only)
 - **TAX DED / TAX RPT badges** with distinct colours (orange/amber) on category rows
 - Usage counts per category
 
@@ -185,7 +197,7 @@ Complete ATO tax compliance support:
 ### Technical Architecture
 
 #### Database Schema (Prisma) — Finance Models
-- **FinanceCategory**: `taxIncludeInReporting` (boolean, all types), `taxDisplayLabel` (nullable string)
+- **FinanceCategory**: `taxIncludeInReporting` (boolean, all types), `taxDisplayLabel` (nullable string), `glCode` (nullable string), `openingBalance` (nullable float), `openingBalanceDate` (nullable DateTime)
 - **FinanceTransaction**: `taxClassification` (nullable string), `isTransfer` (boolean, default false)
 - **FinanceRecurringBill**: `taxClassification` (nullable string)
 - **FinanceIncomeEntry**: `isTaxTracked` (boolean), `taxRate` (nullable float), `taxClassification` (nullable string)
@@ -206,6 +218,7 @@ Complete ATO tax compliance support:
 - **Entity type → tax rate**: detected by `entity.type` field. `superfund` → 15%, `business`/`trust` → 30%, others → individual brackets. Set via Finance → Entities.
 - **taxClassification always optional**: removed from all `validate()` functions across Bills, Income, Transactions modals. None block saving if unset.
 - **Annual P&L data flow**: fetches all bills + income on mount (static), fetches transactions for the full FY on FY/entity change (dynamic). Recurring items spread as monthly equivalents in Forecast; actual transactions always appear in their actual month.
+- **Balance Sheet hybrid approach**: bank account balances derived from cleared transactions (not stored), COA opening balances stored directly on category records. No double-entry accounting for COA — opening balances are set manually via the UI.
 
 #### Shared Finance Utilities
 - `src/lib/finance-categories.ts`: `sortedCategoryList()` — alphabetically sorted parents-then-children
@@ -230,11 +243,12 @@ Complete ATO tax compliance support:
 | `20260514000000_add_income_transaction_link` | Income/bill → transaction FK |
 | `20260515000000_add_transaction_entity` | `entityId` on FinanceTransaction |
 | `20260516000000_add_income_tax_tracking` | `isTaxTracked`/`taxRate` on FinanceIncomeEntry |
-| `20260517000000_add_tax_classification` | `taxClassification` on Transaction/Bill/Income; `taxIncludeInReporting`/`taxDisplayLabel` on Category |
+| `20260517000000_add_tax_classification` | `taxClassification` on Transaction/Bill/Income; `taxIncludeInReporting` on Category |
 | `20260519000000_add_is_transfer` | `isTransfer BOOLEAN NOT NULL DEFAULT false` on FinanceTransaction |
 | `20260520000000_add_finance_year_start` | `financeYearStartMonth` on Family |
 | `20260520100000_add_opening_balances` | `openingBalanceTxId` on FinanceAccount, `openingBalancesCategoryId` on Family |
-| `20260520200000_add_opening_balance_columns` | `openingBalance REAL`, `openingBalanceDate DATETIME` on FinanceAccount *(latest)* |
+| `20260520200000_add_opening_balance_columns` | `openingBalance REAL`, `openingBalanceDate DATETIME` on FinanceAccount |
+| `20260523000000_add_coa_opening_balance` | `glCode`, `openingBalance`, `openingBalanceDate` on FinanceCategory *(latest)* |
 
 #### API Routes
 | Route | Key behaviours |
@@ -242,8 +256,10 @@ Complete ATO tax compliance support:
 | `api/finance/accounts/route.ts` | GET enriches with `pendingCount`, `pendingExpense`, `pendingIncome` |
 | `api/finance/bills/route.ts` | `taxClassification` in POST/PUT/PATCH; PATCH auto-creates expense transaction, spawns next occurrence |
 | `api/finance/income/route.ts` | `taxClassification`, `isTaxTracked`, `taxRate` in POST/PUT/PATCH; PATCH auto-creates income transaction |
-| `api/finance/transactions/route.ts` | `taxClassification`, `isTransfer` in GET/POST/PUT; entity filter; `startDate`/`endDate` query params for P&L/annual-pnl |
-| `api/finance/categories/route.ts` | `taxIncludeInReporting`, `taxDisplayLabel` in POST/PUT; `_count` in GET |
+| `api/finance/transactions/route.ts` | `taxClassification`, `isTransfer` in GET/POST/PUT; entity filter; `startDate`/`endDate` query params for P&L/annual-pnl; **stale `currentBalance.increment` mutations removed** from POST/PUT/DELETE |
+| `api/finance/categories/route.ts` | `taxIncludeInReporting`, `glCode` in POST/PUT; `_count` in GET |
+| `api/finance/categories/opening-balance/route.ts` | **NEW** — POST to set/clear opening balance on a category (validates type must be asset/liability/equity) |
+| `api/finance/balance-sheet/route.ts` | **NEW** — GET hybrid balance sheet from bank account cleared balances + COA opening balances; `?asAt=` and `?entityId=` params |
 | `api/finance/tax-report/route.ts` | Returns raw financial data only — members, entities, transactions (with `category` include), income entries (with `category` include), taxCategories. No bracket calculations — all done in page. |
 | `api/finance/pnl/route.ts` | GET fetches bills + income entries + actual transactions for period; merges income-type and expense-type transactions into category groups |
 | `api/finance/goals/route.ts` | GET/PUT derive `currentAmount` from `account.currentBalance` when account linked |
@@ -253,15 +269,16 @@ Complete ATO tax compliance support:
 #### Pages
 | Page | Status / Key changes |
 |------|----------------------|
+| `finance/balance-sheet/page.tsx` | **NEW** — Hybrid balance sheet with entity filter, as-at date picker; assets, liabilities, equity sections; net worth card; setup guide and equity mismatch warning |
 | `finance/tax-report/page.tsx` | **Full rewrite** — per-person panels (Mark/Michelle); joint income split; tax brackets in page; super cap per person; entity sections (15%/30%); combined refund/owing; data tagging guide on empty state |
 | `finance/annual-pnl/page.tsx` | **NEW** — 12-column Jul–Jun FY table; FY navigator; Cash/Forecast toggle; Income + Expense sections by category; NET row; current month highlight; entity filter |
 | `finance/profit-loss/page.tsx` | **Updated** — now fetches actual transactions separately (keyed on period dates + entity); income-type and expense-type transactions always included in both Cash and Forecast modes; transactions loading indicator |
 | `finance/entities/page.tsx` | **Updated** — amber Tax Report type hint banner; tax rate hint in edit dialog; tax rate badge on entity cards |
-| `finance/categories/page.tsx` | **Updated** — `taxIncludeInReporting` now shows for ALL types including transfer; TAX DED/TAX RPT badges with distinct colours |
+| `finance/categories/page.tsx` | **Updated** — `taxIncludeInReporting` now shows for ALL types including transfer; TAX DED/TAX RPT badges with distinct colours; **GL Code field + Set OB button + Opening Balance dialog added** |
 | `finance/transactions/page.tsx` | **Updated** — Tax Classification dropdown shows for all types including transfer; type change clears taxClassification; TRANSFER badge in list |
 | `finance/income/page.tsx` | `taxClassification` optional (removed from validate); tax tracking UI unchanged |
 | `finance/bills/page.tsx` | `taxClassification` optional (removed from validate) |
-| `finance/layout.tsx` | **Annual P&L** tab added between P&L and Tax Report |
+| `finance/layout.tsx` | **Annual P&L** and **Balance Sheet** tabs added |
 
 ---
 
@@ -298,12 +315,8 @@ deploy-build.bat          # Windows: build image, save tar, SCP to NAS
 sudo sh deploy-nas.sh     # NAS SSH: load image, restart container
 ```
 
-Migrations run automatically at container start via `docker/entrypoint.sh`. The latest migrations are:
-- `20260517000000_add_tax_classification` — adds `taxClassification` to Transaction/Bill/Income; `taxIncludeInReporting`/`taxDisplayLabel` to Category
-- `20260519000000_add_is_transfer` — adds `isTransfer BOOLEAN NOT NULL DEFAULT false` to FinanceTransaction
-- `20260520000000_add_finance_year_start` — adds `financeYearStartMonth` to Family model
-- `20260520100000_add_opening_balances` — adds `openingBalanceTxId` to FinanceAccount, `openingBalancesCategoryId` to Family
-- `20260520200000_add_opening_balance_columns` — adds `openingBalance REAL` and `openingBalanceDate DATETIME` to FinanceAccount (missing from original migration — was only applied via "partial run" on dev DB)
+Migrations run automatically at container start via `docker/entrypoint.sh`. The latest migration is:
+- `20260523000000_add_coa_opening_balance` — adds `glCode`, `openingBalance`, `openingBalanceDate` to FinanceCategory
 
 > **Build/deploy reference guide saved at [`.roo/prompts/build-deploy-guide.md`](.roo/prompts/build-deploy-guide.md)** — always check this when schema changes are involved.
 
@@ -313,6 +326,7 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 
 | Commit | Description |
 |--------|-------------|
+| **Balance Sheet, COA Opening Balances & Stale currentBalance Fix** | Balance Sheet API + page; COA opening balances (glCode/openingBalance/openingBalanceDate on FinanceCategory + migration + UI); removed stale currentBalance.increment from transactions route; categories API cleanup. Migration: `20260523000000_add_coa_opening_balance`. |
 | **Build/deploy guide & migration checklist** | Added `.roo/prompts/build-deploy-guide.md` documenting the Docker build pipeline and auto-migration flow to prevent schema drift between dev and production. |
 | **Tax Reporting, Annual P&L & ATO Workings** | Per-person Tax Report with ATO brackets in page component; Annual FY P&L 12-column table; P&L includes actual transactions; transfer taxClassification; entity type hints; data tagging guide. Migrations: `20260517000000_add_tax_classification`, `20260519000000_add_is_transfer`. |
 | **Half-Yearly Income Frequency** | Added `halfyearly` frequency option to recurring income entries |
@@ -331,24 +345,26 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 ---
 
 ### Project Status
+- ✅ **Balance Sheet** — Hybrid bank + COA balance sheet with entity filter, as-at date picker, net worth card, setup guide, equity mismatch warning
+- ✅ **COA Opening Balances** — `glCode`, `openingBalance`, `openingBalanceDate` on FinanceCategory; Set OB button in UI; opening-balance API endpoint with type validation
+- ✅ **Stale currentBalance Fix** — All 4 `currentBalance.increment` mutation blocks removed from transactions route (POST/PUT/DELETE)
 - ✅ Tax Report — per-person ATO workings, joint income split, super cap, entity sections (15%/30%), data tagging guide
 - ✅ Annual P&L — 12-column FY table, FY navigator, Cash/Forecast, NET row, entity filter
 - ✅ P&L — actual transactions included alongside bills/income entries
 - ✅ Transfer taxClassification — dropdown now shows for all transaction types including transfers
-- ✅ Categories — taxIncludeInReporting available for all types including transfer
+- ✅ Categories — taxIncludeInReporting available for all types including transfer; GL Code and opening balance fields added
 - ✅ Entities — tax rate hints and type guide on page and in dialog
 - ✅ taxClassification optional in all modals — no longer blocks saving on Bills, Income, Transactions
-- ✅ Migrations `20260517000000` and `20260519000000` created; deploy automatically via entrypoint
-- ✅ TypeScript: build passes, no breaking type changes
-- ✅ Docker/NAS: entrypoint runs both new migrations on startup
+- ✅ Migration `20260523000000_add_coa_opening_balance` created; deploys automatically via entrypoint
+- ✅ Prisma generate passes; categories route TypeScript error fixed (stale `taxDisplayLabel` references removed)
+- ✅ Docker/NAS: entrypoint runs all migrations on startup
 
-### Finance Module Completion (2026-05-10)
-- ✅ **Financial Year Start Setting** — Configurable FY start month (1-12) stored on Family; shared FY utility library (`finance-fy.ts`) with `fyDateRange`, `fyLabel`, `fyMonthLabels`, `currentFyYear` etc.; all P&L, tax-report, annual-pnl pages consume the setting
-- ✅ **Chart of Accounts** — Nav tab renamed "Categories" → "Chart of Accounts"; new COA types `asset`, `liability`, `equity` with badge colours; internal code still uses `category`/`categoryId`
-- ✅ **Opening Balances (Double-Entry)** — New equity "Opening Balances" system category; `setOpeningBalance()` creates/updates/deletes `opening_balance` type transactions; opening balance fields on account creation form
-- ✅ **currentBalance Derivation** — `deriveAccountBalance()` and `deriveAllAccountBalances()` compute balance from cleared transactions; all Overview/goals/accounts pages use derived balance; stored `currentBalance` field no longer trusted
-- ✅ **Opening Balance Exclusion** — All P&L/report queries filter `type: { not: 'opening_balance' }`; transactions page shows "Opening Balance" badge with purple indicator
-- ✅ **Email & Excel Reports** — `buildYtdReport` receives `fyStartMonth` from family settings
-- ✅ **Build** — `prisma generate` ✓, `prisma migrate deploy` ✓ (both migrations: `20260520000000_add_finance_year_start`, `20260520100000_add_opening_balances`), `tsc --noEmit` ✓
-- ✅ **Migrations** — 4 new migrations total: `20260519000000_add_is_transfer`, `20260520000000_add_finance_year_start`, `20260520100000_add_opening_balances`, `20260520200000_add_opening_balance_columns` (UNIQUE index fixed for SQLite compat)
-- ✅ **Docker/NAS** — `docker/entrypoint.sh` unchanged (runs `prisma migrate deploy` on startup)
+### Finance Module — Balance Sheet & COA Opening Balances (2026-05-10)
+- ✅ **Stale currentBalance Fix** — Removed all 4 `currentBalance.increment` mutation blocks from transactions route POST/PUT/DELETE handlers. Balances are now purely derived from cleared transactions.
+- ✅ **COA Opening Balances** — Added `glCode` (optional Chart of Accounts numbering), `openingBalance` (starting balance as-at date), and `openingBalanceDate` fields to the `FinanceCategory` model. Migration `20260523000000_add_coa_opening_balance` creates the columns.
+- ✅ **Opening Balance API** — New `POST /api/finance/categories/opening-balance` endpoint that validates category type (must be asset/liability/equity) and sets/clears the opening balance and date.
+- ✅ **Categories UI** — GL Code input field in the category dialog; GL Code badge on category rows; "Set OB" button on asset/liability/equity category rows with a dedicated opening balance dialog (pre-fills existing values).
+- ✅ **Balance Sheet API** — `GET /api/finance/balance-sheet?asAt=&entityId=` hybrid endpoint combining bank account balances (derived from cleared FinanceTransactions up to `asAt`) with COA opening balances (from FinanceCategory where `openingBalanceDate <= asAt`). Splits bank accounts into asset (`!['credit', 'loan']`) and liability (`['credit', 'loan']`) groups. Returns `assets`, `liabilities`, `equity` sections with totals and `equityMatchesNetWorth` flag.
+- ✅ **Balance Sheet Page** — Full client component at `/finance/balance-sheet` with entity filter pills, as-at date picker, sections for Assets (Bank & Cash, Other Assets), Liabilities (Credit Cards & Loans, Other Liabilities), and Equity. Net Worth card with green/red styling. Setup guide shown when no COA opening balances exist. Equity mismatch warning.
+- ✅ **Navigation** — Balance Sheet tab added to the finance layout sidebar.
+- ✅ **Migration** — `20260523000000_add_coa_opening_balance` created but pending deploy (runs automatically on next Docker startup via entrypoint).

@@ -92,17 +92,6 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  // Update account balance
-  if (accountId) {
-    const balanceChange = type === 'income' ? amount : type === 'expense' ? -amount : 0
-    if (balanceChange !== 0) {
-      await prisma.financeAccount.update({
-        where: { id: accountId },
-        data: { currentBalance: { increment: balanceChange } },
-      })
-    }
-  }
-
   return NextResponse.json(transaction, { status: 201 })
 }
 
@@ -124,17 +113,6 @@ export async function PUT(request: NextRequest) {
   })
   if (!existing) {
     return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
-  }
-
-  // Reverse old balance change if account changed or amount/type changed
-  if (existing.accountId && (existing.accountId !== accountId || existing.amount !== amount || existing.type !== type)) {
-    const oldChange = existing.type === 'income' ? -existing.amount : existing.type === 'expense' ? existing.amount : 0
-    if (oldChange !== 0) {
-      await prisma.financeAccount.update({
-        where: { id: existing.accountId },
-        data: { currentBalance: { increment: oldChange } },
-      })
-    }
   }
 
   const transaction = await prisma.financeTransaction.update({
@@ -164,17 +142,6 @@ export async function PUT(request: NextRequest) {
     },
   })
 
-  // Apply new balance change
-  if (transaction.accountId) {
-    const newChange = transaction.type === 'income' ? transaction.amount : transaction.type === 'expense' ? -transaction.amount : 0
-    if (newChange !== 0) {
-      await prisma.financeAccount.update({
-        where: { id: transaction.accountId },
-        data: { currentBalance: { increment: newChange } },
-      })
-    }
-  }
-
   return NextResponse.json(transaction)
 }
 
@@ -192,17 +159,6 @@ export async function DELETE(request: NextRequest) {
   })
   if (!existing) {
     return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
-  }
-
-  // Reverse balance
-  if (existing.accountId) {
-    const change = existing.type === 'income' ? -existing.amount : existing.type === 'expense' ? existing.amount : 0
-    if (change !== 0) {
-      await prisma.financeAccount.update({
-        where: { id: existing.accountId },
-        data: { currentBalance: { increment: change } },
-      })
-    }
   }
 
   await prisma.financeTransaction.delete({ where: { id } })

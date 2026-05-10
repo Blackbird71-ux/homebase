@@ -577,7 +577,10 @@ model FinanceCategory {
   isExternal      Boolean           @default(false)  // Belongs to external entity account
   isTaxDeduction     Boolean          @default(false)   // Expense/Transfer category that is tax deductible
   taxIncludeInReporting Boolean        @default(false)   // Include this category's amounts in tax reports
-  taxDisplayLabel    String?                            // Override label shown on tax report (e.g. "Rental Property Expenses")
+  taxDisplayLabel      String?   // Custom override label shown in Tax Report (e.g. "Work from Home")
+  glCode              String?   // Optional account code e.g. "1001", "2100" (for Chart of Accounts numbering)
+  openingBalance      Float?    // Starting balance as at openingBalanceDate (asset/liability/equity only)
+  openingBalanceDate  DateTime? // As-at date for the opening balance
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]

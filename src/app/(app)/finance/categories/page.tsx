@@ -26,6 +26,9 @@ interface Category {
   isTaxDeduction: boolean
   taxIncludeInReporting: boolean
   taxDisplayLabel: string | null
+  glCode: string | null              // NEW
+  openingBalance: number | null      // NEW
+  openingBalanceDate: string | null  // NEW
   parent?: { id: string; name: string } | null
   children?: Category[]
   _count?: { transactions: number; recurringBills: number; incomeEntries: number }
@@ -71,6 +74,7 @@ function CategoryDialog({
     isTaxDeduction: false,
     taxIncludeInReporting: false,
     taxDisplayLabel: '',
+    glCode: '',  // NEW
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -90,6 +94,7 @@ function CategoryDialog({
           isTaxDeduction: editing.isTaxDeduction,
           taxIncludeInReporting: editing.taxIncludeInReporting,
           taxDisplayLabel: editing.taxDisplayLabel ?? '',
+          glCode: editing.glCode ?? '',
         })
       } else {
         setForm({
@@ -104,6 +109,7 @@ function CategoryDialog({
           isTaxDeduction: false,
           taxIncludeInReporting: false,
           taxDisplayLabel: '',
+          glCode: '',
         })
       }
       setErrors({})
@@ -122,8 +128,8 @@ function CategoryDialog({
     setSaving(true)
     try {
       const payload = editing
-        ? { id: editing.id, ...form, parentId: form.parentId || null }
-        : { ...form, parentId: form.parentId || null }
+        ? { id: editing.id, ...form, parentId: form.parentId || null, glCode: form.glCode || null }
+        : { ...form, parentId: form.parentId || null, glCode: form.glCode || null }
       const res = await fetch('/api/finance/categories', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,6 +187,17 @@ function CategoryDialog({
               disabled={saving}
             />
             {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">GL Code (optional)</label>
+            <input
+              value={form.glCode}
+              onChange={e => setForm(p => ({ ...p, glCode: e.target.value }))}
+              onKeyDown={handleKeyDown}
+              placeholder="e.g. 1001, 2100, 4000"
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              disabled={saving}
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Type</label>
@@ -296,6 +313,7 @@ function CategoryDialog({
 function CategoryRow({
   cat, childrenMap, depth, onEdit, onDelete, getTypeBadge,
   isCollapsed, onToggleCollapse, showToggle,
+  onSetOpeningBalance,
 }: {
   cat: Category
   childrenMap: Map<string, Category[]>
@@ -306,6 +324,7 @@ function CategoryRow({
   isCollapsed?: boolean
   onToggleCollapse?: () => void
   showToggle?: boolean
+  onSetOpeningBalance: (c: Category) => void
 }) {
   const children = childrenMap.get(cat.id) || []
   const hasChildren = children.length > 0
@@ -339,6 +358,11 @@ function CategoryRow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            {cat.glCode && (
+              <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                {cat.glCode}
+              </span>
+            )}
             <span className="text-sm font-medium">{cat.name}</span>
             {cat.isSystem && <span className="text-[10px] bg-muted px-1.5 rounded">SYSTEM</span>}
             {flags.map(f => (
@@ -369,6 +393,23 @@ function CategoryRow({
         {getTypeBadge(cat.type)}
         <div className="flex items-center gap-1">
           <button onClick={() => onEdit(cat)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
+          {/* Set OB button — only for balance sheet account types */}
+          {(cat.type === 'asset' || cat.type === 'liability' || cat.type === 'equity') && !cat.isSystem && (
+            <button
+              onClick={() => onSetOpeningBalance(cat)}
+              title="Set opening balance"
+              className={cn(
+                'px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors',
+                cat.openingBalance != null
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                  : 'text-muted-foreground border-border hover:border-primary hover:text-primary'
+              )}
+            >
+              {cat.openingBalance != null
+                ? `OB: ${new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(cat.openingBalance)}`
+                : 'Set OB'}
+            </button>
+          )}
           {!cat.isSystem && (
             <button onClick={() => onDelete(cat.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
           )}
@@ -377,7 +418,8 @@ function CategoryRow({
 
       {hasChildren && !isCollapsed && children.map(child => (
         <CategoryRow key={child.id} cat={child} childrenMap={childrenMap} depth={depth + 1}
-          onEdit={onEdit} onDelete={onDelete} getTypeBadge={getTypeBadge} />
+          onEdit={onEdit} onDelete={onDelete} getTypeBadge={getTypeBadge}
+          onSetOpeningBalance={onSetOpeningBalance} />
       ))}
     </>
   )
@@ -391,6 +433,13 @@ export default function CategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing]       = useState<Category | null>(null)
   const [collapsedRootIds, setCollapsedRootIds] = useState<Set<string>>(new Set())
+  // Opening balance edit dialog state
+  const [obEdit, setObEdit] = useState<{
+    cat: Category
+    amount: string
+    date: string
+  } | null>(null)
+  const [obSaving, setObSaving] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -435,6 +484,35 @@ export default function CategoriesPage() {
     else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
   }
 
+  async function handleObSave() {
+    if (!obEdit) return
+    const rawAmount = obEdit.amount.trim()
+    const amount = rawAmount !== '' && rawAmount !== '0' ? parseFloat(rawAmount) : null
+    setObSaving(true)
+    try {
+      const res = await fetch('/api/finance/categories/opening-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryId: obEdit.cat.id,
+          amount: amount ?? 0,
+          date: obEdit.date || new Date().toISOString().split('T')[0],
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(data.message)
+        setObEdit(null)
+        load()
+      } else {
+        const err = await res.json()
+        toast.error(err.error ?? 'Failed to update opening balance')
+      }
+    } finally {
+      setObSaving(false)
+    }
+  }
+
   function getTypeBadge(type: string) {
     return (
       <span className={cn('text-xs px-2 py-0.5 rounded-full', TYPE_COLORS[type] ?? TYPE_COLORS.expense)}>
@@ -471,6 +549,73 @@ export default function CategoriesPage() {
         </button>
       </div>
 
+      {/* Opening Balance Dialog — for asset, liability, equity accounts only */}
+      <Dialog open={!!obEdit} onOpenChange={open => { if (!open) setObEdit(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>Opening Balance — {obEdit?.cat.name}</DialogTitle>
+          </DialogHeader>
+          {obEdit && (
+            <div className="space-y-4">
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                {obEdit.cat.type === 'asset' && 'Enter the balance this asset account held as at the date below. Positive = funds/value held. Negative = unusual (e.g. overdrawn asset).'}
+                {obEdit.cat.type === 'liability' && 'Enter the amount owed as at the date below. Positive = debt outstanding. Negative = unusual (creditor paid more than owed).'}
+                {obEdit.cat.type === 'equity' && 'Enter the equity balance as at the date below. Positive = equity in your favour.'}
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Opening Balance ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={obEdit.amount}
+                  onChange={e => setObEdit(p => p ? { ...p, amount: e.target.value } : p)}
+                  placeholder={
+                    obEdit.cat.type === 'liability' ? 'e.g. 350000 for a $350k mortgage' :
+                    obEdit.cat.type === 'asset'     ? 'e.g. 45000 for $45k in this account' :
+                    'e.g. 10000'
+                  }
+                  className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  disabled={obSaving}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                  Leave blank or 0 to clear the opening balance.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">As at Date</label>
+                <input
+                  type="date"
+                  value={obEdit.date}
+                  onChange={e => setObEdit(p => p ? { ...p, date: e.target.value } : p)}
+                  className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  disabled={obSaving}
+                />
+                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                  The date from which this balance applies (usually 1 July of the FY start).
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button
+              onClick={() => setObEdit(null)}
+              className="rounded-md border border-border px-4 py-1.5 text-sm"
+              disabled={obSaving}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleObSave}
+              disabled={obSaving}
+              className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50"
+            >
+              {obSaving ? 'Saving…' : 'Save Opening Balance'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <CategoryDialog
         open={dialogOpen}
         onOpenChange={handleDialogClose}
@@ -495,6 +640,15 @@ export default function CategoriesPage() {
               isCollapsed={collapsedRootIds.has(cat.id)}
               onToggleCollapse={() => toggleCollapse(cat.id)}
               showToggle={(childMap.get(cat.id) ?? []).length > 0}
+              onSetOpeningBalance={cat => {
+                setObEdit({
+                  cat,
+                  amount: cat.openingBalance?.toString() ?? '',
+                  date: cat.openingBalanceDate
+                    ? new Date(cat.openingBalanceDate).toISOString().split('T')[0]
+                    : new Date().toISOString().split('T')[0],
+                })
+              }}
             />
           ))}
         </div>
