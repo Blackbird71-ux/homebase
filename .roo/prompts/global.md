@@ -5,26 +5,32 @@
 ### One-Shot Delivery (No In-Task Questions)
 - Read EVERYTHING you need first in ONE parallel batch of read_file calls
 - Present the full plan in ONE message (max 5 sentences). No "shall I proceed?" or "does this look good?"
-- Implement EVERYTHING in ONE batch of apply_diff calls (multiple SEARCH/REPLACE blocks per call)
+- Implement EVERYTHING in as FEW apply_diff calls as possible (aim for 1-3 total). Pack multiple SEARCH/REPLACE blocks into each call.
 - Run build/test ONCE at the end. Only stop if there's a compilation error.
 - NEVER ask for permission between steps. The user gave you a task — do it.
 
-### No Per-Phase Checkpoints
+### No Per-Phase Checkpoints — ZERO EXCEPTIONS
 - DO NOT break work into phases that each require approval
 - DO NOT ask "phase X complete, proceed to phase Y?"
 - DO NOT wait for confirmation between successive edits
+- DO NOT present intermediate results for feedback
+- DO NOT use `update_todo_list` during active implementation (saves 1+ prompts per step)
+- DO NOT call `attempt_completion` until the ENTIRE task is done
 - If a change is complex, just batch it into fewer, larger apply_diff calls
 
 ### Tool Call Batching Rules
-- **read_file**: Call ALL reads in a single parallel batch. No sequential reads.
-- **apply_diff**: Use MULTIPLE SEARCH/REPLACE blocks per call. Never one block per call.
-- **execute_command**: Run at most 2-3 commands total (generate, build, maybe test). No intermediate commands.
+- **read_file**: Call ALL reads in a single parallel batch. Never more than 2 read_file batches total for the entire task.
+- **apply_diff**: NEVER call with only 1 SEARCH/REPLACE block. Minimum 3-5 blocks per call. Target 1-3 apply_diff calls total.
+- **execute_command**: Max 2-3 commands total (generate, build, maybe test). Chain commands with && when possible:
+  - `git add -A && git commit -m "..."` — never separate add and commit
+  - `npx prisma generate && npx next build` — combine generation and build
 - **search_files**: Only use if you genuinely cannot find what you need via read_file.
 
-### When You Truly Need Input
-- Only ask a question if the task is literally ambiguous (e.g., "which port?" or "what API key?")
-- Never ask for permission to proceed. Never ask "is this approach OK?"
-- If there are multiple valid approaches, pick the best one based on project patterns and move forward
+### Self-Healing on Tool Failures (CRITICAL)
+- If `apply_diff` fails due to SEARCH mismatch: **IMMEDIATELY re-read the file** and retry with the exact content. Do NOT expose the error to the user.
+- If `execute_command` fails: re-read the error, fix the issue, retry silently. Do NOT ask "what should I do?"
+- The user should **never see tool errors**. Every failure must be silently recovered and retried in the next message.
+- Exception: only ask for help if the task is genuinely blocked on missing information the user must provide.
 
 ## Universal Rules
 

@@ -8,25 +8,40 @@ Writing, modifying, and refactoring code. One-shot delivery — no per-phase pro
 ### The Pattern
 1. **Read all relevant files** in ONE parallel batch of read_file calls
 2. **State the plan** in max 5 bullet points — what files, what changes, why
-3. **Implement everything** in ONE batch of apply_diff calls (multiple SEARCH/REPLACE blocks per call)
+3. **Implement everything** in as FEW tool calls as possible
 4. **Verify once** — run build (or relevant command) at the very end
-5. **Commit** if applicable
+5. **Commit** if applicable (chain add + commit into one command)
 
 No waiting for approval between reads, plan, and implementation. The only approval needed is the user's initial message giving you the task.
 
-### What NOT to do
+### What NOT to do — ZERO EXCEPTIONS
 - ❌ Do NOT break work into phases that each need approval
 - ❌ Do NOT ask "shall I proceed?" between edits
 - ❌ Do NOT ask "does this look good?" mid-implementation
 - ❌ Do NOT present multiple approaches and ask which to pick (pick the best one)
-- ❌ Do NOT use update_todo_list during implementation (too many prompts)
-- ❌ Do NOT use ask_followup_question unless the task is truly ambiguous
+- ❌ Do NOT use `update_todo_list` during implementation — use it only once at the very start to show the plan, if at all
+- ❌ Do NOT use `ask_followup_question` unless the task is truly ambiguous
+- ❌ Do NOT use `attempt_completion` until the ENTIRE task is done
+- ❌ Do NOT expose tool errors to the user — silently recover and retry
 
-### Batching Rules
-- **read_file**: All files in ONE parallel call. Never sequential.
-- **apply_diff**: Multiple SEARCH/REPLACE blocks per call. Edit schema + API routes + pages + test in as few calls as possible.
-- **execute_command**: Max 2-3 commands total (generate, build, maybe test). No intermediate progress checks.
+### Batching Rules — STRICT
+- **read_file**: All files in ONE parallel call. Max 2 batches total for the whole task.
+- **apply_diff**: NEVER call with only 1 SEARCH/REPLACE block. Minimum 3-5 blocks per call. Target 1-3 apply_diff calls TOTAL.
+- **execute_command**: Max 2-3 commands total (generate, build, maybe test). Chain with `&&`:
+  - `git add -A && git commit -m "..."` — never separate
+  - `npx prisma generate && npx next build` — combine
 - **search_files**: Only if you genuinely can't find what you need.
+
+### Self-Healing on Tool Failures
+- If `apply_diff` SEARCH fails: **immediately re-read the file** and retry with the exact content. Do not show the error to the user.
+- If a build fails: read the error, fix it, rebuild. No "what should I do?"
+- The user sees tool results — so make every tool call count. No wasted prompts.
+
+### SEARCH Block Accuracy (CRITICAL)
+- Before any `apply_diff`, re-read the file to get the EXACT current content for SEARCH blocks
+- Do NOT construct SEARCH blocks from memory or truncated earlier reads
+- Use `read_file` with offset/limit targeting the exact lines you need to replace
+- If the file was just created (via write_to_file), you already know the content — no need to re-read
 
 ## Code Quality Requirements
 
