@@ -56,17 +56,17 @@ interface Entity { id: string; name: string; color: string | null; type: string;
 // ── Helpers ────────────────────────────────────────────────────────────
 
 const CLASSIFICATION_COLORS: Record<string, string> = {
-  personal:   'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-  business:   'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
-  investment: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-  super:      'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+  taxable_income: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  exempt_income:  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  tax_deduction:  'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+  tax_payment:    'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
 }
 
 const CLASSIFICATION_ICONS: Record<string, React.ReactNode> = {
-  personal:   <DollarSign className="h-4 w-4" />,
-  business:   <Briefcase className="h-4 w-4" />,
-  investment: <TrendingUp className="h-4 w-4" />,
-  super:      <PiggyBank className="h-4 w-4" />,
+  taxable_income: <DollarSign className="h-4 w-4" />,
+  exempt_income:  <TrendingUp className="h-4 w-4" />,
+  tax_deduction:  <PiggyBank className="h-4 w-4" />,
+  tax_payment:    <Receipt className="h-4 w-4" />,
 }
 
 function formatCurrency(n: number): string {
@@ -86,7 +86,7 @@ export default function TaxReportPage() {
   const [loading, setLoading] = useState(true)
   const [entities, setEntities] = useState<Entity[]>([])
   const [selectedEntityId, setSelectedEntityId] = useState<string>('')
-  const [expandedClassifications, setExpandedClassifications] = useState<Set<string>>(new Set(['personal', 'business', 'investment', 'super']))
+  const [expandedClassifications, setExpandedClassifications] = useState<Set<string>>(new Set(['taxable_income', 'exempt_income', 'tax_deduction', 'tax_payment']))
 
   // ── Fetch entities ──────────────────────────────────────────────────
   useEffect(() => {
@@ -137,7 +137,7 @@ export default function TaxReportPage() {
   }), { totalIncome: 0, totalDeductions: 0, totalTax: 0, netTaxable: 0 }) ?? { totalIncome: 0, totalDeductions: 0, totalTax: 0, netTaxable: 0 }
 
   // ── Super cap check ─────────────────────────────────────────────────
-  const superClass = data?.classifications.find(c => c.classification === 'super')
+  const superClass = data?.classifications.find(c => c.classification === 'tax_deduction')
   const SUPER_CAP = 30_000
   const superTotal = superClass?.totalIncome ?? 0
   const superExceedsCap = superTotal > SUPER_CAP

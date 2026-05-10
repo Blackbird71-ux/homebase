@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
   ReceiptText,
@@ -45,6 +45,14 @@ interface GroupRow {
   totalPeriod: number; count: number; items: DrillItem[]
 }
 
+interface Entity {
+  id: string
+  name: string
+  type: string
+  isDefault: boolean
+  color: string | null
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toPeriodAmount(amount: number, frequency: string, periodMonths: number): number {
@@ -83,6 +91,8 @@ function navigateAnchor(mode: PeriodMode, anchor: Date, dir: -1 | 1): Date {
 export default function ProfitLossPage() {
   const [bills, setBills]           = useState<Bill[]>([])
   const [incomeEntries, setIncome]  = useState<IncomeEntry[]>([])
+  const [entities, setEntities]     = useState<Entity[]>([])
+  const [selectedEntityId, setSelectedEntityId] = useState<string>('')
   const [loading, setLoading]       = useState(true)
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
   const [viewMode, setViewMode]     = useState<ViewMode>('cash')
@@ -93,19 +103,22 @@ export default function ProfitLossPage() {
   async function load() {
     setLoading(true)
     try {
-      const [billsRes, incomeRes] = await Promise.all([
+      const [billsRes, incomeRes, entitiesRes] = await Promise.all([
         fetch('/api/finance/bills?includeAll=true'),
         fetch('/api/finance/income'),
+        fetch('/api/finance/entities'),
       ])
       if (billsRes.ok) setBills(await billsRes.json())
       if (incomeRes.ok) setIncome(await incomeRes.json())
+      if (entitiesRes.ok) setEntities(await entitiesRes.json())
     } finally { setLoading(false) }
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => { setDrillSide(null); setDrillKey(null) }, [selectedEntityId])
 
   // Reset drill when period or view changes
-  useEffect(() => { setDrillSide(null); setDrillKey(null) }, [periodMode, anchor, viewMode])
+  useEffect(() => { setDrillSide(null); setDrillKey(null) }, [periodMode, anchor, viewMode, selectedEntityId])
 
   const { start, end, label } = getPeriodBounds(periodMode, anchor)
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
@@ -118,6 +131,7 @@ export default function ProfitLossPage() {
     const endTs   = end.getTime()
     return incomeEntries.filter(e => {
       if (!e.isActive) return false
+      if (selectedEntityId && (e as any).entityId !== selectedEntityId) return false
       // Received income — always slot by actual received date
       if (e.received && e.receivedDate) {
         const ts = new Date(e.receivedDate).getTime()
@@ -130,7 +144,7 @@ export default function ProfitLossPage() {
       if (e.incomeType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
     })
-  }, [incomeEntries, start, end, viewMode])
+  }, [incomeEntries, start, end, viewMode, selectedEntityId])
 
   // ── Filter bills within this period ───────────────────────────────────────
   // Cash mode:     only paid=true bills, slotted by paidDate.
@@ -141,6 +155,7 @@ export default function ProfitLossPage() {
     const endTs   = end.getTime()
     return bills.filter(b => {
       if (!b.isActive) return false
+      if (selectedEntityId && (b as any).entityId !== selectedEntityId) return false
       // Exclude transfers and income-type category
       if ((b.category as any)?.type === 'transfer' || (b.category as any)?.type === 'income') return false
       if (b.billType === 'transfer') return false
@@ -156,7 +171,7 @@ export default function ProfitLossPage() {
       if (b.billType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
     })
-  }, [bills, start, end, viewMode])
+  }, [bills, start, end, viewMode, selectedEntityId])
 
   // ── Group income by category ──────────────────────────────────────────────
   const incomeGroups = useMemo((): GroupRow[] => {
@@ -251,6 +266,37 @@ export default function ProfitLossPage() {
             + Forecast
           </button>
         </div>
+
+        {/* Entity filter */}
+        {entities.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setSelectedEntityId('')}
+              className={cn(
+                'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+                !selectedEntityId
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              )}
+            >
+              All
+            </button>
+            {entities.map(en => (
+              <button
+                key={en.id}
+                onClick={() => setSelectedEntityId(en.id)}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+                  selectedEntityId === en.id
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {en.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Period navigator */}
         <div className="flex items-center gap-1 rounded-lg border border-border px-2 py-1">

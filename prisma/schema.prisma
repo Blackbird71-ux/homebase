@@ -621,7 +621,8 @@ model FinanceTransaction {
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   entityId        String?              // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  taxClassification String?           // personal | business | investment | super; null = not classified
+  taxClassification String?           // tax_deduction | taxable_income | exempt_income | tax_payment; null = not classified
+  isTransfer          Boolean              @default(false)
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 

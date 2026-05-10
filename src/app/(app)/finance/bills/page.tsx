@@ -101,13 +101,23 @@ export default function BillsPage() {
     dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
     endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
     notes: '', memberId: '', locationId: '', vendorId: '',
-    entityId: entities.find(e => e.isDefault)?.id ?? '',
+    entityId: '',
     billType: 'recurring', recurrenceInterval: '',
     invoiceReceived: false, invoiceReceivedDate: '',
     taxClassification: '',
     addToBudget: false,
   }
   const [form, setForm] = useState(emptyForm)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  function validate(): Record<string, string> {
+    const errs: Record<string, string> = {}
+    if (!form.name.trim()) errs.name = 'Name is required'
+    if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
+    if (!form.nextDueDate) errs.nextDueDate = 'Due date is required'
+    if (!form.taxClassification) errs.taxClassification = 'Tax classification is required'
+    return errs
+  }
 
   function enrichBills(data: any[]): Bill[] {
     return data.map((b: any) => ({
@@ -222,10 +232,11 @@ export default function BillsPage() {
     })
   }
 
-  function openNew() { setEditing(null); setForm(emptyForm); setShowForm(true) }
+  function openNew() { setEditing(null); setErrors({}); setForm(emptyForm); setShowForm(true) }
 
   function openEdit(b: Bill) {
     setEditing(b)
+    setErrors({})
     setForm({
       name: b.name, amount: b.amount, frequency: b.frequency,
       accountId: b.account?.id ?? '', categoryId: b.category?.id ?? '',
@@ -264,6 +275,9 @@ export default function BillsPage() {
   }
 
   async function handleSave() {
+    const errs = validate()
+    setErrors(errs)
+    if (Object.keys(errs).length > 0) return
     const { addToBudget, ...payload } = getFormPayload() as any
     const body = editing ? { id: editing.id, ...payload } : payload
     const res = await fetch('/api/finance/bills', {
@@ -497,9 +511,17 @@ export default function BillsPage() {
       )}
 
       {/* Bill form dialog */}
-      <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
         <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
           <DialogHeader><DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle></DialogHeader>
+          {Object.keys(errors).length > 0 && (
+            <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mb-3">
+              <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
+              <ul className="list-disc list-inside text-xs text-red-500/80 mt-1">
+                {Object.values(errors).map((err, i) => <li key={i}>{err}</li>)}
+              </ul>
+            </div>
+          )}
           <div className="flex gap-4 pb-1">
             {(['recurring', 'one-off'] as const).map(bt => (
               <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -513,13 +535,15 @@ export default function BillsPage() {
             <div>
               <label className="text-xs text-muted-foreground">Name *</label>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.name && 'border-red-500')} />
+              {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Amount *</label>
               <input type="number" step="0.01" value={form.amount}
                 onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.amount && 'border-red-500')} />
+              {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
             </div>
             {form.billType === 'recurring' && (
               <div>
@@ -568,7 +592,8 @@ export default function BillsPage() {
             <div>
               <label className="text-xs text-muted-foreground">{form.billType === 'one-off' ? 'Due Date *' : 'Next Due Date *'}</label>
               <input type="date" value={form.nextDueDate} onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.nextDueDate && 'border-red-500')} />
+              {errors.nextDueDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextDueDate}</p>}
             </div>
             {form.billType === 'recurring' && (
               <div>
@@ -596,13 +621,12 @@ export default function BillsPage() {
             <div>
               <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
               <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.taxClassification && 'border-red-500')}>
                 <option value="">Not classified</option>
-                <option value="personal">Personal</option>
-                <option value="business">Business</option>
-                <option value="investment">Investment</option>
-                <option value="super">Super</option>
+                <option value="tax_deduction">Tax Deduction</option>
+                <option value="tax_payment">Tax Payment (PAYG)</option>
               </select>
+              {errors.taxClassification && <p className="text-xs text-red-500 mt-0.5">{errors.taxClassification}</p>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Location</label>

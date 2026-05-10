@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   const {
     accountId, categoryId, type, amount, payee,
     description, date, isRecurring, isCleared, isPrivate,
-    memberId, locationId, taxClassification,
+    memberId, locationId, taxClassification, isTransfer,
   } = json
 
   if (!type || amount === undefined) {
@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       locationId: locationId ?? null,
       entityId: json.entityId ?? null,
       taxClassification: taxClassification ?? null,
+      isTransfer: isTransfer ?? false,
       createdBy: session.id,
       familyId: session.familyId,
     },
@@ -111,7 +112,7 @@ export async function PUT(request: NextRequest) {
   const {
     id, accountId, categoryId, type, amount, payee,
     description, date, isRecurring, isCleared, isPrivate,
-    memberId, locationId, taxClassification,
+    memberId, locationId, taxClassification, isTransfer,
   } = json
 
   if (!id) {
@@ -153,6 +154,7 @@ export async function PUT(request: NextRequest) {
       ...(locationId !== undefined && { locationId: locationId ?? null }),
       ...(json.entityId !== undefined && { entityId: json.entityId ?? null }),
       ...(taxClassification !== undefined && { taxClassification: taxClassification ?? null }),
+      ...(isTransfer !== undefined && { isTransfer }),
     },
     include: {
       category: true,

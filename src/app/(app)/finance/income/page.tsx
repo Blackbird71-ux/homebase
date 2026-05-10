@@ -72,6 +72,7 @@ export default function IncomePage() {
   const [loading, setLoading]         = useState(true)
   const [showForm, setShowForm]       = useState(false)
   const [editing, setEditing]         = useState<IncomeEntry | null>(null)
+  const [errors, setErrors]           = useState<Record<string, string>>({})
   // ── Date-received confirmation state ─────────────────────────────────────
   const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
   const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
@@ -211,7 +212,7 @@ export default function IncomePage() {
     })
   }
 
-  function openNew() { setEditing(null); setForm(emptyForm); setShowForm(true) }
+  function openNew() { setEditing(null); setForm(emptyForm); setErrors({}); setShowForm(true) }
 
   function openEdit(e: IncomeEntry) {
     setEditing(e)
@@ -241,7 +242,16 @@ export default function IncomePage() {
     setShowForm(true)
   }
 
-  function closeForm() { setShowForm(false); setEditing(null) }
+  function closeForm() { setShowForm(false); setEditing(null); setErrors({}) }
+
+  function validate(): Record<string, string> {
+    const errs: Record<string, string> = {}
+    if (!form.name.trim()) errs.name = 'Name is required'
+    if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
+    if (!form.nextExpectedDate) errs.nextExpectedDate = 'Expected date is required'
+    if (form.isTaxTracked && !form.taxClassification) errs.taxClassification = 'Tax classification is required when tax tracking is enabled'
+    return errs
+  }
 
   function handleVendorChange(vendorId: string) {
     const vendor = vendors.find(v => v.id === vendorId)
@@ -275,6 +285,8 @@ export default function IncomePage() {
   }
 
   async function handleSave() {
+    const errs = validate()
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
     const payload = getFormPayload()
     const body = editing ? { id: editing.id, ...payload } : payload
     const res = await fetch('/api/finance/income', {
@@ -524,11 +536,22 @@ export default function IncomePage() {
       )}
 
       {/* ── Income Editor Modal ─────────────────────────────────────────────── */}
-      <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
         <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Income' : 'New Income'}</DialogTitle>
           </DialogHeader>
+
+          {Object.keys(errors).length > 0 && (
+            <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 mb-2">
+              <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Please fix the following errors:</p>
+              <ul className="list-disc list-inside text-xs text-red-600/80 dark:text-red-400/80 space-y-0.5">
+                {Object.entries(errors).map(([key, msg]) => (
+                  <li key={key}>{msg}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Income type */}
           <div className="flex gap-4 pb-1">
@@ -736,12 +759,10 @@ export default function IncomePage() {
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
                   <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.taxClassification ? 'border-red-500' : 'border-input')}>
                     <option value="">Not classified</option>
-                    <option value="personal">Personal</option>
-                    <option value="business">Business</option>
-                    <option value="investment">Investment</option>
-                    <option value="super">Super</option>
+                    <option value="taxable_income">Taxable Income</option>
+                    <option value="exempt_income">Exempt Income</option>
                   </select>
                 </div>
                 {!form.memberId && (

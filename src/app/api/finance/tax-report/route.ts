@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
   const txWhere: any = {
     familyId: session.familyId,
     date: { gte: from, lte: to },
+    isTransfer: false,
     OR: [
       { taxClassification: { not: null } },
       { categoryId: { in: [...taxCategoryIds] } },
@@ -140,12 +141,12 @@ export async function GET(request: NextRequest) {
   const memberMap = new Map(members.map(m => [m.id, m.name]))
 
   // ── 5. Aggregate by classification ─────────────────────────────────────
-  const classificationOrder = ['personal', 'business', 'investment', 'super']
+  const classificationOrder = ['taxable_income', 'exempt_income', 'tax_deduction', 'tax_payment']
   const classificationDisplay: Record<string, string> = {
-    personal: 'Personal',
-    business: 'Business',
-    investment: 'Investment',
-    super: 'Superannuation',
+    taxable_income: 'Taxable Income',
+    exempt_income: 'Exempt Income',
+    tax_deduction: 'Tax Deduction',
+    tax_payment: 'Tax Payment',
   }
 
   // Determine classification for each transaction
@@ -157,8 +158,8 @@ export async function GET(request: NextRequest) {
   ): string {
     if (taxClassification) return taxClassification
     if (categoryId && taxCategoryIds.has(categoryId)) {
-      // If category has taxIncludeInReporting but no specific classification, use "personal" as default
-      return 'personal'
+      // If category has taxIncludeInReporting but no specific classification, use "taxable_income" as default
+      return 'taxable_income'
     }
     return 'unclassified'
   }
@@ -212,7 +213,7 @@ export async function GET(request: NextRequest) {
   // Process income entries
   for (const inc of incomeEntries) {
     // Determine classification: use explicit taxClassification if set, otherwise infer
-    let classification = inc.taxClassification ?? 'personal'
+    let classification = inc.taxClassification ?? 'taxable_income'
     if (!classificationOrder.includes(classification)) classification = 'unclassified'
 
     const entry = classifiedData.get(classification)

@@ -20,6 +20,7 @@ interface Transaction {
   date: string; isRecurring: boolean; isCleared: boolean; isPrivate: boolean
   memberId: string | null; locationId: string | null; entityId: string | null
   taxClassification: string | null
+  isTransfer: boolean
   category: Category | null; account: Account | null
   member: Member | null
   location: Location | null
@@ -47,8 +48,19 @@ export default function TransactionsPage() {
     accountId: '', categoryId: '', type: 'expense', amount: 0,
     payee: '', description: '', date: new Date().toISOString().split('T')[0],
     isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '',
-    taxClassification: '',
+    taxClassification: '', isTransfer: false,
   })
+
+  // ── Validation state ──────────────────────────────────────────────────
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  function validate(): Record<string, string> {
+    const errs: Record<string, string> = {}
+    if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
+    if (!form.type) errs.type = 'Type is required'
+    if (form.type !== 'transfer' && !form.taxClassification) errs.taxClassification = 'Tax classification is required for non-transfer transactions'
+    return errs
+  }
 
   const limit = 50
 
@@ -92,26 +104,31 @@ export default function TransactionsPage() {
 
   function openNew() {
     setEditing(null)
-    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '', taxClassification: '' })
+    setErrors({})
+    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '', taxClassification: '', isTransfer: false })
     setShowForm(true)
   }
 
   function openEdit(t: Transaction) {
     setEditing(t)
+    setErrors({})
     setForm({
       accountId: t.accountId ?? '', categoryId: t.categoryId ?? '', type: t.type,
       amount: t.amount, payee: t.payee ?? '', description: t.description ?? '',
       date: t.date.split('T')[0], isCleared: t.isCleared, isPrivate: t.isPrivate,
       memberId: t.memberId ?? '', locationId: t.location?.id ?? '', entityId: t.entityId ?? '',
-      taxClassification: t.taxClassification ?? '',
+      taxClassification: t.taxClassification ?? '', isTransfer: t.isTransfer ?? false,
     })
     setShowForm(true)
   }
 
   async function handleSave() {
+    const errs = validate()
+    setErrors(errs)
+    if (Object.keys(errs).length > 0) return
     const body = editing
-      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null }
-      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null }
+      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null, isTransfer: form.isTransfer }
+      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null, isTransfer: form.isTransfer }
     const res = await fetch('/api/finance/transactions', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -197,11 +214,19 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null); setErrors({}) } }}>
         <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
           </DialogHeader>
+          {Object.keys(errors).length > 0 && (
+            <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mb-3">
+              <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
+              <ul className="list-disc list-inside text-xs text-red-500/80 mt-1">
+                {Object.values(errors).map((err, i) => <li key={i}>{err}</li>)}
+              </ul>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Type *</label>
@@ -271,17 +296,28 @@ export default function TransactionsPage() {
                 {entities.map(en => <option key={en.id} value={en.id}>{en.name}{en.isDefault ? ' (default)' : ''}</option>)}
               </select>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
-              <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">Not classified</option>
-                <option value="personal">Personal</option>
-                <option value="business">Business</option>
-                <option value="investment">Investment</option>
-                <option value="super">Super</option>
-              </select>
-            </div>
+            {form.type !== 'transfer' && (
+              <div>
+                <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+                <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                  className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.taxClassification && 'border-red-500')}>
+                  <option value="">Not classified</option>
+                  {form.type === 'expense' && (
+                    <>
+                      <option value="tax_deduction">Tax Deduction</option>
+                      <option value="tax_payment">Tax Payment (PAYG)</option>
+                    </>
+                  )}
+                  {form.type === 'income' && (
+                    <>
+                      <option value="taxable_income">Taxable Income</option>
+                      <option value="exempt_income">Exempt Income</option>
+                    </>
+                  )}
+                </select>
+                {errors.taxClassification && <p className="text-xs text-red-500 mt-0.5">{errors.taxClassification}</p>}
+              </div>
+            )}
             <div>
               <label className="text-xs text-muted-foreground">Description</label>
               <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
@@ -297,6 +333,11 @@ export default function TransactionsPage() {
                 <input type="checkbox" checked={form.isPrivate}
                   onChange={e => setForm(p => ({ ...p, isPrivate: e.target.checked }))} />
                 Private
+              </label>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input type="checkbox" checked={form.isTransfer}
+                  onChange={e => setForm(p => ({ ...p, isTransfer: e.target.checked }))} />
+                Transfer
               </label>
             </div>
           </div>

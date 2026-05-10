@@ -62,6 +62,7 @@ function CategoryDialog({
     taxDisplayLabel: '',
   })
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -98,11 +99,15 @@ function CategoryDialog({
     }
   }, [open, editing])
 
+  function validate(): Record<string, string> {
+    const errs: Record<string, string> = {}
+    if (!form.name.trim()) errs.name = 'Name is required'
+    return errs
+  }
+
   async function handleSave() {
-    if (!form.name.trim()) {
-      toast.error('Name is required')
-      return
-    }
+    const errs = validate()
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setSaving(true)
     try {
       const payload = editing
@@ -134,11 +139,22 @@ function CategoryDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={open => { if (!open) { onOpenChange(false); setErrors({}) } }}>
       <DialogContent className="sm:max-w-lg" showCloseButton>
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit Category' : 'New Category'}</DialogTitle>
         </DialogHeader>
+
+        {Object.keys(errors).length > 0 && (
+          <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 mb-2">
+            <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Please fix the following errors:</p>
+            <ul className="list-disc list-inside text-xs text-red-600/80 dark:text-red-400/80 space-y-0.5">
+              {Object.entries(errors).map(([key, msg]) => (
+                <li key={key}>{msg}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
           <div>
@@ -147,10 +163,11 @@ function CategoryDialog({
               value={form.name}
               onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
               onKeyDown={handleKeyDown}
-              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.name ? 'border-red-500' : 'border-input')}
               autoFocus
               disabled={saving}
             />
+            {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Type</label>
