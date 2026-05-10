@@ -16,7 +16,7 @@ const ENTRY_INCLUDE = {
   entity: {
     select: { id: true, name: true, color: true },
   },
-} as const
+}
 
 // ── Auto-generate reference (JE-XXXX) ────────────────────────────────────────
 
