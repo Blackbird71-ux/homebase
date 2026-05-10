@@ -57,14 +57,23 @@ interface Entity { id: string; name: string; type: string; isDefault: boolean; c
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toPeriodAmount(amount: number, frequency: string, periodMonths: number): number {
+  // Converts a recurring amount to the period equivalent — used ONLY for
+  // weekly / fortnightly / monthly which genuinely recur within any period.
+  // quarterly / halfyearly / yearly are lump-sum payments that land on a
+  // specific date; they must NOT be averaged — they are handled separately.
   let tpm: number
   if (frequency === 'weekly')           tpm = 52 / 12
   else if (frequency === 'fortnightly') tpm = 26 / 12
-  else if (frequency === 'quarterly')   tpm = 1 / 3
-  else if (frequency === 'halfyearly')  tpm = 1 / 6
-  else if (frequency === 'yearly')      tpm = 1 / 12
-  else                                   tpm = 1
+  else                                   tpm = 1   // monthly and fallback
   return amount * tpm * periodMonths
+}
+
+/**
+ * Returns true for frequencies where the full amount arrives as a lump sum
+ * on a specific date rather than recurring within every period.
+ */
+function isLumpSum(frequency: string): boolean {
+  return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
 }
 
 function fmtCurrency(n: number) {
@@ -159,20 +168,32 @@ export default function ProfitLossPage() {
       if (!e.isActive) return false
       if (selectedEntityId && e.entityId !== selectedEntityId) return false
       if (e.received && e.receivedDate) {
+        // Confirmed received — show only in the period the money actually landed
         const ts = new Date(e.receivedDate).getTime()
         return ts >= startTs && ts <= endTs
       }
       if (viewMode === 'cash') return false
+      // Forecast: one-off and lump-sum frequencies must fall within the period window
+      if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
+        const dueTs = new Date(e.nextExpectedDate).getTime()
+        return dueTs >= startTs && dueTs <= endTs
+      }
+      // Genuinely recurring (weekly / fortnightly / monthly): include if due date
+      // is on or before period end (it will recur within the period)
       const dueTs = new Date(e.nextExpectedDate).getTime()
-      return e.incomeType === 'one-off' ? (dueTs >= startTs && dueTs <= endTs) : dueTs <= endTs
+      return dueTs <= endTs
     }).map(e => ({
       key:   e.category?.id ?? '__none__',
       label: e.category?.name ?? 'Uncategorised',
       color: e.category?.color ?? null,
       item: {
         id: e.id, name: e.name, amount: e.amount,
-        periodAmount: e.incomeType === 'one-off' ? e.amount : toPeriodAmount(e.amount, e.frequency, periodMonths),
-        isOneOff: e.incomeType === 'one-off',
+        // Lump-sum and one-off always show the full amount — never prorate.
+        // Weekly/fortnightly/monthly get their period equivalent.
+        periodAmount: (e.incomeType === 'one-off' || isLumpSum(e.frequency))
+          ? e.amount
+          : toPeriodAmount(e.amount, e.frequency, periodMonths),
+        isOneOff: e.incomeType === 'one-off' || isLumpSum(e.frequency),
         received: e.received,
         date: e.received && e.receivedDate ? e.receivedDate : e.nextExpectedDate,
       },
@@ -204,20 +225,31 @@ export default function ProfitLossPage() {
       if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
       if (b.billType === 'transfer') return false
       if (b.paid && b.paidDate) {
+        // Confirmed paid — show only in the period the payment actually occurred
         const ts = new Date(b.paidDate).getTime()
         return ts >= startTs && ts <= endTs
       }
       if (viewMode === 'cash') return false
+      // Forecast: one-off and lump-sum frequencies must fall within the period window
+      if (b.billType === 'one-off' || isLumpSum(b.frequency)) {
+        const dueTs = new Date(b.nextDueDate).getTime()
+        return dueTs >= startTs && dueTs <= endTs
+      }
+      // Genuinely recurring (weekly / fortnightly / monthly): include if due date
+      // is on or before period end
       const dueTs = new Date(b.nextDueDate).getTime()
-      return b.billType === 'one-off' ? (dueTs >= startTs && dueTs <= endTs) : dueTs <= endTs
+      return dueTs <= endTs
     }).map(b => ({
       key:   b.category?.id ?? '__none__',
       label: b.category?.name ?? 'Uncategorised',
       color: b.category?.color ?? null,
       item: {
         id: b.id, name: b.name, amount: b.amount,
-        periodAmount: b.billType === 'one-off' ? b.amount : toPeriodAmount(b.amount, b.frequency, periodMonths),
-        isOneOff: b.billType === 'one-off',
+        // Lump-sum bills always show their full amount — never prorate.
+        periodAmount: (b.billType === 'one-off' || isLumpSum(b.frequency))
+          ? b.amount
+          : toPeriodAmount(b.amount, b.frequency, periodMonths),
+        isOneOff: b.billType === 'one-off' || isLumpSum(b.frequency),
         paid: b.paid,
         date: b.paid && b.paidDate ? b.paidDate : b.nextDueDate,
       },
@@ -278,12 +310,19 @@ export default function ProfitLossPage() {
       if (e.received && e.receivedDate) {
         const ts = new Date(e.receivedDate).getTime()
         if (ts >= startTs && ts <= endTs) {
+          // Tax on the actual amount received (never prorate)
           total += e.amount * (e.taxRate / 100)
         }
       } else if (viewMode === 'forecast') {
         const dueTs = new Date(e.nextExpectedDate).getTime()
-        if (dueTs <= endTs) {
-          const pa = e.incomeType === 'one-off' ? e.amount : toPeriodAmount(e.amount, e.frequency, periodMonths)
+        if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
+          // Lump-sum: tax applies if the due date falls within this period
+          if (dueTs >= startTs && dueTs <= endTs) {
+            total += e.amount * (e.taxRate / 100)
+          }
+        } else if (dueTs <= endTs) {
+          // Recurring: tax on the period equivalent
+          const pa = toPeriodAmount(e.amount, e.frequency, periodMonths)
           total += pa * (e.taxRate / 100)
         }
       }

@@ -62,13 +62,54 @@ interface Entity { id: string; name: string; type: string; isDefault: boolean }
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toPeriodAmount(amount: number, frequency: string): number {
-  // Return monthly equivalent
+  // Return monthly equivalent — used ONLY for weekly/fortnightly/monthly
+  // which genuinely recur within any given month.
+  // yearly / halfyearly / quarterly are lump-sum payments — they must land
+  // in the specific month(s) they arrive, not be spread across all 12 months.
   if (frequency === 'weekly')       return amount * 52 / 12
   if (frequency === 'fortnightly')  return amount * 26 / 12
-  if (frequency === 'quarterly')    return amount / 3
-  if (frequency === 'halfyearly')   return amount / 6
-  if (frequency === 'yearly')       return amount / 12
-  return amount // monthly default
+  return amount // monthly (and fallback)
+}
+
+/**
+ * Frequencies that pay a lump sum on specific dates, not every month.
+ * These must be slotted to the month(s) they land in, never averaged/spread.
+ */
+function isLumpSumFrequency(frequency: string): boolean {
+  return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
+}
+
+/**
+ * For lump-sum frequencies, return the column indices (0-11) within this FY
+ * where the payment is expected to land.
+ *
+ * @param frequency  'yearly' | 'halfyearly' | 'quarterly'
+ * @param baseDate   nextExpectedDate — anchors the first occurrence in the FY window
+ * @param fyMonths   Array of 12 Date objects for the FY columns (col 0 = FY start month)
+ */
+function lumpSumColumns(frequency: string, baseDate: Date, fyMonths: Date[]): number[] {
+  const baseMonth = baseDate.getMonth()   // 0-based calendar month of first hit
+  const baseYear  = baseDate.getFullYear()
+
+  const cols: number[] = []
+  for (let col = 0; col < 12; col++) {
+    const colM = fyMonths[col].getMonth()
+    const colY = fyMonths[col].getFullYear()
+
+    if (frequency === 'yearly') {
+      // Hits once per year — same calendar month as baseDate
+      if (colM === baseMonth) cols.push(col)
+    } else if (frequency === 'halfyearly') {
+      // Hits every 6 months from base
+      const diff = (colY - baseYear) * 12 + (colM - baseMonth)
+      if (diff >= 0 && diff % 6 === 0) cols.push(col)
+    } else if (frequency === 'quarterly') {
+      // Hits every 3 months from base
+      const diff = (colY - baseYear) * 12 + (colM - baseMonth)
+      if (diff >= 0 && diff % 3 === 0) cols.push(col)
+    }
+  }
+  return cols
 }
 
 function isInMonth(dateStr: string, colDate: Date): boolean {
@@ -178,23 +219,34 @@ export default function AnnualPnLPage() {
       const row   = getRow(key, label, color)
 
       if (e.received && e.receivedDate) {
-        // Slot by actual received date
+        // Confirmed received — slot by actual received date (always a lump sum on that day)
         for (let col = 0; col < 12; col++) {
           if (isInMonth(e.receivedDate, fyMonths[col])) {
             row.monthly[col] += e.amount
           }
         }
       } else if (viewMode === 'forecast') {
-        // Distribute recurring income across months based on expected cadence
-        if (e.incomeType === 'one-off') {
-          // One-off: slot to expected month if in FY
-          for (let col = 0; col < 12; col++) {
-            if (isInMonth(e.nextExpectedDate, fyMonths[col])) {
+        // Forecast — slot to the month(s) the income is actually expected to arrive
+        if (e.incomeType === 'one-off' || isLumpSumFrequency(e.frequency)) {
+          // One-off or annual/half-yearly/quarterly: show full amount in the specific month(s)
+          // it lands — never divide it across all 12 months.
+          if (e.incomeType === 'one-off') {
+            for (let col = 0; col < 12; col++) {
+              if (isInMonth(e.nextExpectedDate, fyMonths[col])) {
+                row.monthly[col] += e.amount
+              }
+            }
+          } else {
+            // Lump-sum recurring: place full payment amount in each occurrence month
+            const hitCols = lumpSumColumns(e.frequency, new Date(e.nextExpectedDate), fyMonths)
+            for (const col of hitCols) {
               row.monthly[col] += e.amount
             }
           }
         } else {
-          // Recurring: spread monthly equivalent across all 12 months
+          // Genuinely recurring within a month (weekly / fortnightly / monthly):
+          // spread the monthly equivalent evenly — this is correct because they
+          // actually do receive money every month.
           const monthlyAmt = toPeriodAmount(e.amount, e.frequency)
           for (let col = 0; col < 12; col++) {
             row.monthly[col] += monthlyAmt
@@ -246,19 +298,31 @@ export default function AnnualPnLPage() {
       const row   = getRow(key, label, color)
 
       if (b.paid && b.paidDate) {
+        // Confirmed paid — slot to the actual payment date (always a lump sum)
         for (let col = 0; col < 12; col++) {
           if (isInMonth(b.paidDate, fyMonths[col])) {
             row.monthly[col] += b.amount
           }
         }
       } else if (viewMode === 'forecast') {
-        if (b.billType === 'one-off') {
-          for (let col = 0; col < 12; col++) {
-            if (isInMonth(b.nextDueDate, fyMonths[col])) {
+        if (b.billType === 'one-off' || isLumpSumFrequency(b.frequency)) {
+          // One-off or annual/half-yearly/quarterly bill: show full amount in the
+          // specific month(s) it is due — do not divide across all months.
+          if (b.billType === 'one-off') {
+            for (let col = 0; col < 12; col++) {
+              if (isInMonth(b.nextDueDate, fyMonths[col])) {
+                row.monthly[col] += b.amount
+              }
+            }
+          } else {
+            const hitCols = lumpSumColumns(b.frequency, new Date(b.nextDueDate), fyMonths)
+            for (const col of hitCols) {
               row.monthly[col] += b.amount
             }
           }
         } else {
+          // Genuinely recurring within a month (weekly / fortnightly / monthly):
+          // spread the monthly equivalent — correct because they recur every month.
           const monthlyAmt = toPeriodAmount(b.amount, b.frequency)
           for (let col = 0; col < 12; col++) {
             row.monthly[col] += monthlyAmt

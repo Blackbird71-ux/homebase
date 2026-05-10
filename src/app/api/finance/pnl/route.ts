@@ -6,14 +6,19 @@ import { currentFyYear } from '@/lib/finance-fy'
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 function toPeriodAmount(amount: number, frequency: string, periodMonths: number): number {
+  // Used ONLY for weekly / fortnightly / monthly — frequencies that genuinely
+  // recur within any given period. Lump-sum frequencies (yearly, halfyearly,
+  // quarterly) must NOT be averaged; they are filtered separately.
   let timesPerMonth: number
   if (frequency === 'weekly')           timesPerMonth = 52 / 12
   else if (frequency === 'fortnightly') timesPerMonth = 26 / 12
-  else if (frequency === 'quarterly')   timesPerMonth = 1 / 3
-  else if (frequency === 'halfyearly')  timesPerMonth = 1 / 6
-  else if (frequency === 'yearly')      timesPerMonth = 1 / 12
-  else                                   timesPerMonth = 1
+  else                                   timesPerMonth = 1  // monthly and fallback
   return amount * timesPerMonth * periodMonths
+}
+
+/** True for frequencies that deliver a lump sum on a specific date, not every period. */
+function isLumpSum(frequency: string): boolean {
+  return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
 }
 
 function getPeriodBounds(period: string, anchor: Date, fyStartMonth: number = 7): { start: Date; end: Date; periodMonths: number } {
@@ -107,11 +112,17 @@ export async function GET(request: NextRequest) {
   const relevantIncome = incomeEntries.filter(e => {
     if (!e.isActive) return false
     if (e.received && e.receivedDate) {
+      // Confirmed received — include only when the money actually landed in this period
       const ts = new Date(e.receivedDate).getTime()
       return ts >= startTs && ts <= endTs
     }
+    // Forecast path
     const dueTs = new Date(e.nextExpectedDate).getTime()
-    if (e.incomeType === 'one-off') return dueTs >= startTs && dueTs <= endTs
+    if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
+      // Lump-sum: only include when the expected date falls within this period
+      return dueTs >= startTs && dueTs <= endTs
+    }
+    // Genuinely recurring (weekly / fortnightly / monthly): include if due ≤ end
     return dueTs <= endTs
   })
 
@@ -121,11 +132,16 @@ export async function GET(request: NextRequest) {
     if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
     if (b.billType === 'transfer') return false
     if (b.paid && b.paidDate) {
+      // Confirmed paid — include only in the period the payment actually occurred
       const ts = new Date(b.paidDate).getTime()
       return ts >= startTs && ts <= endTs
     }
     const dueTs = new Date(b.nextDueDate).getTime()
-    if (b.billType === 'one-off') return dueTs >= startTs && dueTs <= endTs
+    if (b.billType === 'one-off' || isLumpSum(b.frequency)) {
+      // Lump-sum: only include when the due date falls within this period
+      return dueTs >= startTs && dueTs <= endTs
+    }
+    // Genuinely recurring: include if due <= end
     return dueTs <= endTs
   })
 
@@ -139,7 +155,9 @@ export async function GET(request: NextRequest) {
     const color = e.category?.color ?? null
     if (!incomeMap.has(key)) incomeMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
     const g = incomeMap.get(key)!
-    const isOneOff = e.incomeType === 'one-off'
+    const isOneOff = e.incomeType === 'one-off' || isLumpSum(e.frequency)
+    // Lump-sum and one-off: always show the full amount (never prorate across the period).
+    // Genuinely recurring (weekly/fortnightly/monthly): show the period equivalent.
     const periodAmt = isOneOff ? e.amount : toPeriodAmount(e.amount, e.frequency, periodMonths)
     g.totalPeriod += periodAmt
     g.count++
@@ -181,7 +199,8 @@ export async function GET(request: NextRequest) {
     const color = b.category?.color ?? null
     if (!expenseMap.has(key)) expenseMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
     const g = expenseMap.get(key)!
-    const isOneOff = b.billType === 'one-off'
+    const isOneOff = b.billType === 'one-off' || isLumpSum(b.frequency)
+    // Lump-sum bills: always show full amount. Recurring: period equivalent.
     const periodAmt = isOneOff ? b.amount : toPeriodAmount(b.amount, b.frequency, periodMonths)
     g.totalPeriod += periodAmt
     g.count++
