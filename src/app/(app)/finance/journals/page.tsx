@@ -1203,6 +1203,6 @@ export default function JournalsPage() {
         </div>
       )}
 
-    </div>  {/* end space-y-4 */}
+    </div>
   )
 }
