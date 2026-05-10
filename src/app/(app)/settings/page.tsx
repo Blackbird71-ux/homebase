@@ -135,10 +135,13 @@ export default async function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="data">
-            <DataTab coziImports={coziImports.map(i => ({
-              ...i,
-              importedAt: i.importedAt.toISOString(),
-            }))} />
+            <DataTab
+              coziImports={coziImports.map(i => ({
+                ...i,
+                importedAt: i.importedAt.toISOString(),
+              }))}
+              userEmail={user.email}
+            />
           </TabsContent>
 
           <TabsContent value="import">
