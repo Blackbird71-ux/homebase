@@ -3,14 +3,17 @@
 import { useEffect, useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
-  BarChart2, Building2,
+  BarChart2, Building2, FileDown, Printer, Send, History, Clock,
 } from 'lucide-react'
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
   startOfYear, endOfYear, subMonths, addMonths, subQuarters, addQuarters,
   subYears, addYears, getQuarter, getYear,
 } from 'date-fns'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { getCurrentFY } from '@/lib/financeReport'
+import EmailReportModal from '@/components/finance/EmailReportModal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,6 +100,10 @@ export default function ReportsPage() {
   const [dataMode, setDataMode]   = useState<DataMode>('forecast')
   const [anchor, setAnchor]       = useState<Date>(new Date())
   const [drillKey, setDrillKey]   = useState<string | null>(null)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [showHistory, setShowHistory]       = useState(false)
+  const [snapshots, setSnapshots]           = useState<any[]>([])
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -110,6 +117,20 @@ export default function ReportsPage() {
 
   // Reset drill when period/view changes
   useEffect(() => { setDrillKey(null) }, [periodMode, viewMode, anchor, dataMode])
+
+  // ── Snapshot history loader ───────────────────────────────────────────
+  async function loadSnapshots() {
+    setSnapshotsLoading(true)
+    try {
+      const res = await fetch('/api/finance/snapshots')
+      if (res.ok) setSnapshots(await res.json())
+    } catch { /* ignore */ }
+    finally { setSnapshotsLoading(false) }
+  }
+
+  useEffect(() => {
+    if (showHistory) loadSnapshots()
+  }, [showHistory])
 
   const { start, end, label } = getPeriodBounds(periodMode, anchor)
 
@@ -197,6 +218,7 @@ export default function ReportsPage() {
   if (loading) return <div className="p-4 text-muted-foreground">Loading reports…</div>
 
   return (
+    <>
     <div className="space-y-5">
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
@@ -249,6 +271,43 @@ export default function ReportsPage() {
           <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, 1))}
             className="p-1 hover:bg-accent rounded text-muted-foreground">
             <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* ── Action buttons ─────────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => window.open(`/api/finance/export/excel?year=${getCurrentFY()}`, '_blank')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+            title="Download Excel report"
+          >
+            <FileDown className="h-3.5 w-3.5" /> Excel
+          </button>
+          <button
+            onClick={() => window.open(`/api/finance/export/print?year=${getCurrentFY()}`, '_blank')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+            title="Open print-friendly view"
+          >
+            <Printer className="h-3.5 w-3.5" /> Print
+          </button>
+          <button
+            onClick={() => setEmailModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+            title="Email report"
+          >
+            <Send className="h-3.5 w-3.5" /> Email
+          </button>
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors',
+              showHistory
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border hover:bg-accent'
+            )}
+            title="View snapshot history"
+          >
+            <History className="h-3.5 w-3.5" /> History
           </button>
         </div>
       </div>
@@ -367,7 +426,60 @@ export default function ReportsPage() {
           </div>
         )
       )}
+
+      {/* ── Snapshot history panel ──────────────────────────────────────────── */}
+      {showHistory && (
+        <div className="rounded-lg border border-border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              Snapshot History
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              {snapshots.length} snapshot{snapshots.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {snapshotsLoading ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Loading snapshots…</p>
+          ) : snapshots.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No snapshots yet. Snapshots are created automatically when you email a report or the monthly scheduler runs.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {snapshots.map((s: any) => (
+                <div key={s.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <div>
+                    <p className="text-sm font-medium">{s.periodLabel}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.financialYear} &middot; {s.monthsComplete} of 12 months
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{s._count?.emails ?? 0} email(s)</span>
+                    <button
+                      onClick={() => window.open(`/api/finance/export/excel?snapshotId=${s.id}`, '_blank')}
+                      className="p-1.5 hover:bg-accent rounded text-xs text-muted-foreground"
+                      title="Download snapshot as Excel"
+                    >
+                      <FileDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
+
+    <EmailReportModal
+      open={emailModalOpen}
+      onClose={() => setEmailModalOpen(false)}
+      familyId=""
+    />
+    </>
   )
 }
 

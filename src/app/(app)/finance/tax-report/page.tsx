@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Receipt, TrendingUp, TrendingDown, Calculator, PiggyBank, ChevronDown, ChevronRight, DollarSign, Briefcase } from 'lucide-react'
+import { Receipt, TrendingUp, TrendingDown, Calculator, PiggyBank, ChevronDown, ChevronRight, DollarSign, Briefcase, FileDown, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -156,6 +156,22 @@ export default function TaxReportPage() {
               Financial year {data.financialYear} &middot; {data.from} &ndash; {data.to}
             </p>
           )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.open(`/api/finance/export/excel?mode=tax&year=${data?.financialYear ?? ''}`, '_blank')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+            title="Download Excel report with tax summary"
+          >
+            <FileDown className="h-3.5 w-3.5" /> Excel
+          </button>
+          <button
+            onClick={() => window.open(`/api/finance/export/print?mode=tax&year=${data?.financialYear ?? ''}`, '_blank')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+            title="Open print-friendly view with tax summary"
+          >
+            <Printer className="h-3.5 w-3.5" /> Print
+          </button>
         </div>
       </div>
 

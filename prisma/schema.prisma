@@ -44,6 +44,7 @@ model Family {
   financeVendors         FinanceVendor[]
   financeEntities        FinanceEntity[]
   financeIncomeEntries   FinanceIncomeEntry[]
+  financeSnapshots       FinanceSnapshot[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
 }
 
@@ -897,4 +898,38 @@ model FinanceEntity {
   @@unique([familyId, name])
   @@index([familyId])
   @@index([familyId, isActive])
+}
+
+model FinanceSnapshot {
+  id             String        @id @default(cuid())
+  financialYear  String        // "2026-27"
+  snapshotMonth  Int           // calendar month snapshot was taken (1-12)
+  snapshotYear   Int           // calendar year snapshot was taken
+  periodLabel    String        // "Jul 2026 – Jan 2027"
+  monthsComplete Int           @default(0)
+  reportJson     String        // JSON stringified — SQLite has no Json column type
+  createdAt      DateTime      @default(now())
+  emails         ReportEmail[]
+
+  familyId       String
+  family         Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, financialYear, snapshotMonth, snapshotYear])
+  @@index([familyId, financialYear])
+  @@map("finance_snapshots")
+}
+
+model ReportEmail {
+  id             String          @id @default(cuid())
+  snapshotId     String
+  snapshot       FinanceSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  recipientEmail String
+  subject        String
+  status         String          @default("pending") // pending | sent | failed
+  errorMessage   String?
+  sentAt         DateTime?
+  createdAt      DateTime        @default(now())
+
+  @@index([snapshotId])
+  @@map("report_emails")
 }
