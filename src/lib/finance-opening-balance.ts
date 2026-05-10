@@ -50,6 +50,10 @@ export async function ensureOpeningBalancesCategory(familyId: string): Promise<s
  * - The transaction type is 'opening_balance'.
  * - Positive amount = asset/debit (e.g. bank account with funds).
  * - Negative amount = liability/credit (e.g. credit card debt).
+ *
+ * IMPORTANT: The signed amount is stored directly in the transaction record.
+ * deriveAccountBalance() adds positive opening_balance amounts and subtracts
+ * negative ones, so the sign is preserved through the full balance derivation.
  */
 export async function setOpeningBalance(
   accountId: string,
@@ -65,38 +69,48 @@ export async function setOpeningBalance(
   if (!account) throw new Error('Account not found')
 
   // Clear existing opening balance transaction if amount is null/zero
-  if (!amount || amount === 0) {
+  if (amount == null || amount === 0) {
     if (account.openingBalanceTxId) {
+      // Null out the FK on the account first to avoid FK constraint issues,
+      // then delete the transaction.
+      await prisma.financeAccount.update({
+        where: { id: accountId },
+        data: { openingBalance: null, openingBalanceDate: null, openingBalanceTxId: null },
+      })
       await prisma.financeTransaction.delete({ where: { id: account.openingBalanceTxId } })
+    } else {
+      await prisma.financeAccount.update({
+        where: { id: accountId },
+        data: { openingBalance: null, openingBalanceDate: null, openingBalanceTxId: null },
+      })
     }
-    await prisma.financeAccount.update({
-      where: { id: accountId },
-      data: { openingBalance: null, openingBalanceDate: null, openingBalanceTxId: null },
-    })
     return
   }
 
   const categoryId = await ensureOpeningBalancesCategory(familyId)
   const txDate = date ?? new Date()
+  // Store the signed amount directly — negative for liabilities, positive for assets.
+  // deriveAccountBalance handles the sign when computing the running balance.
+  const signedAmount = amount
 
   if (account.openingBalanceTxId) {
-    // Update existing transaction
+    // Update existing transaction and sync account fields in a single round-trip each.
     await prisma.financeTransaction.update({
       where: { id: account.openingBalanceTxId },
-      data: {
-        amount: Math.abs(amount),
-        date: txDate,
-        categoryId,
-      },
+      data: { amount: signedAmount, date: txDate, categoryId },
+    })
+    await prisma.financeAccount.update({
+      where: { id: accountId },
+      data: { openingBalance: amount, openingBalanceDate: txDate },
     })
   } else {
-    // Create new transaction
+    // Create new opening balance transaction.
     const tx = await prisma.financeTransaction.create({
       data: {
         accountId,
         categoryId,
         type: 'opening_balance',
-        amount: Math.abs(amount),
+        amount: signedAmount,
         date: txDate,
         description: 'Opening Balance',
         isCleared: true,
@@ -106,27 +120,22 @@ export async function setOpeningBalance(
       },
       select: { id: true },
     })
+    // Link the transaction back to the account.
     await prisma.financeAccount.update({
       where: { id: accountId },
-      data: {
-        openingBalance: amount,
-        openingBalanceDate: txDate,
-        openingBalanceTxId: tx.id,
-      },
+      data: { openingBalance: amount, openingBalanceDate: txDate, openingBalanceTxId: tx.id },
     })
-    return
   }
-
-  // Always keep FinanceAccount.openingBalance in sync
-  await prisma.financeAccount.update({
-    where: { id: accountId },
-    data: { openingBalance: amount, openingBalanceDate: txDate },
-  })
 }
 
 /**
  * Derive the current balance for a single account from its cleared transactions.
  * Call this anywhere you need an account balance in a server component or API route.
+ *
+ * Balance rules:
+ *   income / positive opening_balance → adds to balance
+ *   expense / negative opening_balance → subtracts from balance
+ *   transfer → should appear as paired transactions that cancel out
  */
 export async function deriveAccountBalance(accountId: string): Promise<number> {
   const txs = await prisma.financeTransaction.findMany({
@@ -135,16 +144,68 @@ export async function deriveAccountBalance(accountId: string): Promise<number> {
   })
   let balance = 0
   for (const tx of txs) {
-    if (tx.type === 'income' || tx.type === 'opening_balance') balance += tx.amount
-    else if (tx.type === 'expense') balance -= tx.amount
-    // transfers: handled as paired transactions so they cancel out
+    if (tx.type === 'income') {
+      balance += tx.amount
+    } else if (tx.type === 'expense') {
+      balance -= tx.amount
+    } else if (tx.type === 'opening_balance') {
+      // Opening balance transactions store the signed amount directly.
+      // Positive = asset (adds to balance), negative = liability (subtracts).
+      balance += tx.amount
+    }
+    // transfers: paired entries cancel out across two accounts
   }
   return balance
+}
+
+// ─── Accounts Payable / Receivable helpers ──────────────────────────────────
+// The finance notes describe a proper AP/AR double-entry flow:
+//  Bills:   invoiceReceived → DR expense / CR Accounts Payable
+//           paid           → DR Accounts Payable / CR bank account
+//  Income:  remittanceReceived → DR Accounts Receivable / CR income account
+//           received           → DR bank account / CR Accounts Receivable
+
+/**
+ * Ensure the family has a system "Accounts Payable" liability category.
+ * Returns the category ID.
+ */
+export async function ensureAccountsPayableCategory(familyId: string): Promise<string> {
+  const existing = await prisma.financeCategory.findFirst({
+    where: { familyId, name: 'Accounts Payable', type: 'liability', isSystem: true },
+    select: { id: true },
+  })
+  if (existing) return existing.id
+  const created = await prisma.financeCategory.create({
+    data: { name: 'Accounts Payable', type: 'liability', isSystem: true, level: 0, familyId },
+    select: { id: true },
+  })
+  return created.id
+}
+
+/**
+ * Ensure the family has a system "Accounts Receivable" asset category.
+ * Returns the category ID.
+ */
+export async function ensureAccountsReceivableCategory(familyId: string): Promise<string> {
+  const existing = await prisma.financeCategory.findFirst({
+    where: { familyId, name: 'Accounts Receivable', type: 'asset', isSystem: true },
+    select: { id: true },
+  })
+  if (existing) return existing.id
+  const created = await prisma.financeCategory.create({
+    data: { name: 'Accounts Receivable', type: 'asset', isSystem: true, level: 0, familyId },
+    select: { id: true },
+  })
+  return created.id
 }
 
 /**
  * Derive balances for all accounts in a family in one efficient query.
  * Returns a Map<accountId, derivedBalance>.
+ *
+ * Uses the same sign rules as deriveAccountBalance:
+ *   income / positive opening_balance → adds
+ *   expense / negative opening_balance → subtracts
  */
 export async function deriveAllAccountBalances(familyId: string): Promise<Map<string, number>> {
   const txs = await prisma.financeTransaction.findMany({
@@ -155,8 +216,15 @@ export async function deriveAllAccountBalances(familyId: string): Promise<Map<st
   for (const tx of txs) {
     if (!tx.accountId) continue
     const current = map.get(tx.accountId) ?? 0
-    if (tx.type === 'income' || tx.type === 'opening_balance') map.set(tx.accountId, current + tx.amount)
-    else if (tx.type === 'expense') map.set(tx.accountId, current - tx.amount)
+    if (tx.type === 'income') {
+      map.set(tx.accountId, current + tx.amount)
+    } else if (tx.type === 'expense') {
+      map.set(tx.accountId, current - tx.amount)
+    } else if (tx.type === 'opening_balance') {
+      // Signed amount: positive for assets, negative for liabilities.
+      map.set(tx.accountId, current + tx.amount)
+    }
+    // transfers cancel out across paired accounts
   }
   return map
 }

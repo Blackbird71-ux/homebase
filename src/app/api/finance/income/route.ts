@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks } from 'date-fns'
+import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 
 const INCOME_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -185,6 +186,15 @@ export async function PATCH(request: NextRequest) {
       : null
   }
 
+  // ── Undo invoiceReceived (remittance): delete the AR staging transaction ────
+  const existingAny = existing as any
+  if (invoiceReceived === false && existing.invoiceReceived === true && existingAny.invoiceTxId) {
+    await prisma.financeTransaction.deleteMany({
+      where: { id: existingAny.invoiceTxId, familyId: session.familyId },
+    })
+    updateData.invoiceTxId = null
+  }
+
   // ── Undo received: delete spawned child occurrences & the auto-transaction ──
   if (received === false && existing.received === true) {
     // Delete the auto-created transaction if one exists
@@ -206,41 +216,93 @@ export async function PATCH(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
-  // ── Mark received: create income transaction + spawn next occurrence ────────
-  if (received === true && !existing.received) {
-    const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
-
-    // Auto-create a FinanceTransaction so account balances and the transaction
-    // feed stay accurate (cash-basis accounting — income recorded on receipt)
-    let newTransactionId: string | null = null
+  // ── Mark remittance received: create uncleared income transaction ────────────
+  // Per finance notes: remittance received → income is recognised (DR AR / CR income account)
+  // When cash actually arrives, that transaction is cleared.
+  if (invoiceReceived === true && !existing.invoiceReceived) {
+    const remittanceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
     try {
-      const tx = await prisma.financeTransaction.create({
+      await ensureAccountsReceivableCategory(session.familyId)
+      const remittanceTx = await prisma.financeTransaction.create({
         data: {
           type: 'income',
           amount: existing.amount,
           accountId: existing.accountId,
           categoryId: existing.categoryId,
-          payee: null,           // income has a vendor/payer, not a payee
-          description: existing.name,
-          date: actualReceivedDate,
+          description: `${existing.name} (remittance received)`,
+          date: remittanceDate,
           isRecurring: existing.incomeType !== 'one-off',
           vendorId: existing.vendorId,
           notes: existing.notes,
           memberId: existing.memberId,
           locationId: existing.locationId,
-          isCleared: true,       // money is already in hand
-          reconciledDate: actualReceivedDate,
+          isCleared: false,  // Not yet cleared — cleared when cash arrives
+          isTransfer: false,
           createdBy: session.id,
           familyId: session.familyId,
+          entityId: existing.entityId,
         },
       })
-      newTransactionId = tx.id
+      await prisma.financeIncomeEntry.update({
+        where: { id },
+        data: { invoiceTxId: remittanceTx.id } as any,
+      })
+    } catch {
+      // Best-effort
+    }
+  }
+
+  // ── Mark received: clear the existing remittance tx or create new income tx ──
+  if (received === true && !existing.received) {
+    const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
+
+    let newTransactionId: string | null = null
+    try {
+      const invoiceTxId = (existing as any).invoiceTxId
+
+      if (invoiceTxId) {
+        // Remittance already received — clear that transaction (cash is now in hand)
+        await prisma.financeTransaction.update({
+          where: { id: invoiceTxId },
+          data: {
+            isCleared: true,
+            reconciledDate: actualReceivedDate,
+            date: actualReceivedDate,
+            accountId: existing.accountId,
+          },
+        })
+        newTransactionId = invoiceTxId
+      } else {
+        // No prior remittance transaction — create income transaction now
+        const tx = await prisma.financeTransaction.create({
+          data: {
+            type: 'income',
+            amount: existing.amount,
+            accountId: existing.accountId,
+            categoryId: existing.categoryId,
+            payee: null,
+            description: existing.name,
+            date: actualReceivedDate,
+            isRecurring: existing.incomeType !== 'one-off',
+            vendorId: existing.vendorId,
+            notes: existing.notes,
+            memberId: existing.memberId,
+            locationId: existing.locationId,
+            isCleared: true,
+            reconciledDate: actualReceivedDate,
+            createdBy: session.id,
+            familyId: session.familyId,
+          },
+        })
+        newTransactionId = tx.id
+      }
+
       await prisma.financeIncomeEntry.update({
         where: { id },
         data: { transactionId: newTransactionId },
       })
     } catch {
-      // Transaction creation is best-effort; don't fail the whole mark-received
+      // Best-effort
     }
 
     // Spawn the next occurrence for recurring income

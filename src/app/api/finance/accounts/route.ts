@@ -1,43 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
-import { deriveAccountBalance, setOpeningBalance } from '@/lib/finance-opening-balance'
+import { deriveAllAccountBalances, setOpeningBalance } from '@/lib/finance-opening-balance'
 
 export async function GET() {
   const session = await requireSession()
-  const accounts = await prisma.financeAccount.findMany({
-    where: { familyId: session.familyId },
-    orderBy: { sortOrder: 'asc' },
-  })
+  const familyId = session.familyId
 
-  // Compute cleared balance from cleared transactions only
-  // currentBalance = all transactions (including uncleared/pending)
-  // clearedBalance = only isCleared=true transactions
-  const enriched = await Promise.all(accounts.map(async (acct) => {
-    const clearedSum = await prisma.financeTransaction.aggregate({
-      where: { accountId: acct.id, familyId: session.familyId, isCleared: true },
-      _sum: { amount: true },
-    })
-    const pendingExpenseSum = await prisma.financeTransaction.aggregate({
-      where: { accountId: acct.id, familyId: session.familyId, isCleared: false, type: 'expense' },
-      _sum: { amount: true },
-    })
-    const pendingIncomeSum = await prisma.financeTransaction.aggregate({
-      where: { accountId: acct.id, familyId: session.familyId, isCleared: false, type: 'income' },
-      _sum: { amount: true },
-    })
-    const pendingCount = await prisma.financeTransaction.count({
-      where: { accountId: acct.id, familyId: session.familyId, isCleared: false },
-    })
-    // Derive current balance from cleared transactions (source of truth)
-    const derivedBalance = await deriveAccountBalance(acct.id)
-    return {
-      ...acct,
-      currentBalance: derivedBalance,
-      pendingCount,
-      pendingExpense: pendingExpenseSum._sum.amount ?? 0,
-      pendingIncome: pendingIncomeSum._sum.amount ?? 0,
+  // Fetch accounts and all cleared/pending transactions in two queries (not N+1).
+  const [accounts, allTxs] = await Promise.all([
+    prisma.financeAccount.findMany({
+      where: { familyId },
+      orderBy: { sortOrder: 'asc' },
+    }),
+    prisma.financeTransaction.findMany({
+      where: { familyId },
+      select: { accountId: true, type: true, amount: true, isCleared: true },
+    }),
+  ])
+
+  // Build derived balance map from cleared transactions (single pass).
+  const clearedBalanceMap = new Map<string, number>()
+  const pendingCountMap = new Map<string, number>()
+  const pendingExpenseMap = new Map<string, number>()
+  const pendingIncomeMap = new Map<string, number>()
+
+  for (const tx of allTxs) {
+    if (!tx.accountId) continue
+    if (tx.isCleared) {
+      const cur = clearedBalanceMap.get(tx.accountId) ?? 0
+      if (tx.type === 'income') {
+        clearedBalanceMap.set(tx.accountId, cur + tx.amount)
+      } else if (tx.type === 'expense') {
+        clearedBalanceMap.set(tx.accountId, cur - tx.amount)
+      } else if (tx.type === 'opening_balance') {
+        // Signed amount: positive for assets, negative for liabilities.
+        clearedBalanceMap.set(tx.accountId, cur + tx.amount)
+      }
+    } else {
+      pendingCountMap.set(tx.accountId, (pendingCountMap.get(tx.accountId) ?? 0) + 1)
+      if (tx.type === 'expense') {
+        pendingExpenseMap.set(tx.accountId, (pendingExpenseMap.get(tx.accountId) ?? 0) + tx.amount)
+      } else if (tx.type === 'income') {
+        pendingIncomeMap.set(tx.accountId, (pendingIncomeMap.get(tx.accountId) ?? 0) + tx.amount)
+      }
     }
+  }
+
+  const enriched = accounts.map((acct) => ({
+    ...acct,
+    currentBalance: clearedBalanceMap.get(acct.id) ?? 0,
+    pendingCount: pendingCountMap.get(acct.id) ?? 0,
+    pendingExpense: pendingExpenseMap.get(acct.id) ?? 0,
+    pendingIncome: pendingIncomeMap.get(acct.id) ?? 0,
   }))
 
   return NextResponse.json(enriched)

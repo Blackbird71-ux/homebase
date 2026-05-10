@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks } from 'date-fns'
+import { ensureAccountsPayableCategory } from '@/lib/finance-opening-balance'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -177,6 +178,15 @@ export async function PATCH(request: NextRequest) {
       : null
   }
 
+  // ── Undo invoiceReceived: delete the AP staging transaction if it exists ────
+  const existingAny = existing as any
+  if (invoiceReceived === false && existing.invoiceReceived === true && existingAny.invoiceTxId) {
+    await prisma.financeTransaction.deleteMany({
+      where: { id: existingAny.invoiceTxId, familyId: session.familyId },
+    })
+    updateData.invoiceTxId = null
+  }
+
   // ── Undo paid: delete spawned child bills & the auto-transaction ────────────
   if (paid === false && existing.paid === true) {
     if (existing.transactionId) {
@@ -196,36 +206,96 @@ export async function PATCH(request: NextRequest) {
     include: BILL_INCLUDE,
   })
 
-  // ── Mark paid: create expense transaction + spawn next occurrence ──────────
-  if (paid === true && !existing.paid) {
-    const actualPaidDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
-
-    // Auto-create an expense transaction so account balances stay accurate
+  // ── Mark invoice received: create expense transaction (DR expense / notation) ──
+  // Per finance notes: when invoice is received, the expense is recognised.
+  // This creates the expense transaction so P&L shows the cost.
+  // When subsequently paid, the payment transaction records cash leaving the bank.
+  if (invoiceReceived === true && !existing.invoiceReceived) {
+    const invoiceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
     try {
-      const tx = await prisma.financeTransaction.create({
+      const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
+      const invoiceTx = await prisma.financeTransaction.create({
         data: {
           type: 'expense',
           amount: existing.amount,
           accountId: existing.accountId,
           categoryId: existing.categoryId,
-          payee: null,
-          description: existing.name,
-          date: actualPaidDate,
+          description: `${existing.name} (invoice received)`,
+          date: invoiceDate,
           isRecurring: existing.billType !== 'one-off',
           recurringBillId: existing.id,
           vendorId: existing.vendorId,
           notes: existing.notes,
           memberId: existing.memberId,
           locationId: existing.locationId,
-          isCleared: true,
-          reconciledDate: actualPaidDate,
+          isCleared: false,  // Not yet cleared — cleared when actually paid
+          isTransfer: false,
           createdBy: session.id,
           familyId: session.familyId,
+          entityId: existing.entityId,
+          taxClassification: (existing as any).taxClassification ?? null,
+          reference: `AP:${apCategoryId}`,  // Tag as AP-linked for future reconciliation
         },
       })
       await prisma.financeRecurringBill.update({
         where: { id },
-        data: { transactionId: tx.id },
+        data: { invoiceTxId: invoiceTx.id } as any,
+      })
+    } catch {
+      // Best-effort; don't fail the whole invoice toggle
+    }
+  }
+
+  // ── Mark paid: create/clear expense transaction + spawn next occurrence ────
+  if (paid === true && !existing.paid) {
+    const actualPaidDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
+
+    // If invoice was already received, there's an existing expense transaction to clear.
+    // If not, create a new one. Either way, mark it cleared (cash has left the bank).
+    try {
+      const invoiceTxId = (existing as any).invoiceTxId
+      let txId: string | null = invoiceTxId ?? null
+
+      if (invoiceTxId) {
+        // Invoice was already received — just mark that transaction as cleared
+        await prisma.financeTransaction.update({
+          where: { id: invoiceTxId },
+          data: {
+            isCleared: true,
+            reconciledDate: actualPaidDate,
+            date: actualPaidDate,
+            accountId: existing.accountId,  // ensure linked to bank account
+          },
+        })
+      } else {
+        // No prior invoice transaction — create expense transaction now
+        const tx = await prisma.financeTransaction.create({
+          data: {
+            type: 'expense',
+            amount: existing.amount,
+            accountId: existing.accountId,
+            categoryId: existing.categoryId,
+            payee: null,
+            description: existing.name,
+            date: actualPaidDate,
+            isRecurring: existing.billType !== 'one-off',
+            recurringBillId: existing.id,
+            vendorId: existing.vendorId,
+            notes: existing.notes,
+            memberId: existing.memberId,
+            locationId: existing.locationId,
+            isCleared: true,
+            reconciledDate: actualPaidDate,
+            createdBy: session.id,
+            familyId: session.familyId,
+          },
+        })
+        txId = tx.id
+      }
+
+      await prisma.financeRecurringBill.update({
+        where: { id },
+        data: { transactionId: txId },
       })
     } catch {
       // Best-effort; don't fail the whole mark-paid

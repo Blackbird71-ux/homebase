@@ -26,6 +26,9 @@ export default function AccountsPage() {
     creditLimit: '', color: '#6366F1', icon: '',
     openingBalance: '', openingBalanceDate: '',
   })
+  // Opening balance edit for existing accounts
+  const [obEdit, setObEdit] = useState<{ account: Account; amount: string; date: string } | null>(null)
+  const [obSaving, setObSaving] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -72,6 +75,47 @@ export default function AccountsPage() {
     else { const err = await res.json(); toast.error(err.error ?? 'Failed') }
   }
 
+  function openObEdit(acct: Account) {
+    setObEdit({
+      account: acct,
+      amount: acct.openingBalance?.toString() ?? '',
+      date: acct.openingBalanceDate
+        ? new Date(acct.openingBalanceDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+    })
+  }
+
+  async function handleObSave() {
+    if (!obEdit) return
+    const amount = obEdit.amount !== '' ? parseFloat(obEdit.amount) : null
+    setObSaving(true)
+    try {
+      const res = await fetch('/api/finance/accounts/opening-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: obEdit.account.id,
+          amount,
+          date: obEdit.date || null,
+        }),
+      })
+      if (res.ok) {
+        toast.success(
+          amount == null || amount === 0
+            ? 'Opening balance cleared'
+            : `Opening balance set to ${formatCurrency(amount)}`
+        )
+        setObEdit(null)
+        load()
+      } else {
+        const err = await res.json()
+        toast.error(err.error ?? 'Failed to update opening balance')
+      }
+    } finally {
+      setObSaving(false)
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this account? Transactions will be unlinked.')) return
     const res = await fetch(`/api/finance/accounts?id=${id}`, { method: 'DELETE' })
@@ -93,6 +137,55 @@ export default function AccountsPage() {
           <Plus className="h-4 w-4" /> Add Account
         </button>
       </div>
+
+      {/* Opening Balance Edit Dialog */}
+      <Dialog open={!!obEdit} onOpenChange={open => { if (!open) setObEdit(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>Edit Opening Balance — {obEdit?.account.name}</DialogTitle>
+          </DialogHeader>
+          {obEdit && (
+            <div className="space-y-4">
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                This will create or update a double-entry opening balance transaction.
+                The balance shown for this account will change immediately.
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Opening Balance ($)</label>
+                <input
+                  type="number" step="0.01"
+                  value={obEdit.amount}
+                  onChange={e => setObEdit(p => p ? { ...p, amount: e.target.value } : p)}
+                  placeholder="e.g. 10000.00 or -4500.00 for a liability"
+                  className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  disabled={obSaving}
+                />
+                <p className="text-xs text-muted-foreground/70 mt-0.5">
+                  Positive = asset (funds you hold). Negative = liability (debt owed).
+                  Leave blank or 0 to clear.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">As at Date</label>
+                <input
+                  type="date"
+                  value={obEdit.date}
+                  onChange={e => setObEdit(p => p ? { ...p, date: e.target.value } : p)}
+                  className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  disabled={obSaving}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setObEdit(null)} className="rounded-md border border-border px-4 py-1.5 text-sm" disabled={obSaving}>Cancel</button>
+            <button onClick={handleObSave} disabled={obSaving}
+              className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50">
+              {obSaving ? 'Saving…' : 'Save Opening Balance'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
         <DialogContent className="sm:max-w-lg" showCloseButton={true}>
@@ -191,8 +284,17 @@ export default function AccountsPage() {
                 )}
               </div>
               <div className="flex gap-1 mt-3">
-                <button onClick={() => openEdit(a)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-                <button onClick={() => handleDelete(a.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button onClick={() => openEdit(a)} title="Edit account" className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
+                <button
+                  onClick={() => openObEdit(a)}
+                  title="Set opening balance"
+                  className={`p-1 hover:bg-accent rounded text-xs font-medium px-2 py-0.5 rounded-full ${
+                    a.openingBalance != null ? 'text-amber-600 bg-amber-500/10' : 'text-muted-foreground'
+                  }`}
+                >
+                  {a.openingBalance != null ? `OB: ${formatCurrency(a.openingBalance)}` : 'Set OB'}
+                </button>
+                <button onClick={() => handleDelete(a.id)} title="Delete account" className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             </div>
           ))}

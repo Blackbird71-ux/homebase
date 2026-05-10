@@ -680,6 +680,7 @@ model FinanceRecurringBill {
   parentBill      FinanceRecurringBill?  @relation("BillOccurrences", fields: [parentBillId], references: [id], onDelete: SetNull)
   childBills      FinanceRecurringBill[] @relation("BillOccurrences")
   transactionId   String?               @unique // FK -> FinanceTransaction created on payment
+  invoiceTxId     String?               @unique // FK -> FinanceTransaction created when invoice received (DR expense / CR AP)
   transaction     FinanceTransaction?   @relation("BillTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
@@ -726,6 +727,7 @@ model FinanceIncomeEntry {
   recurrenceInterval  String?              // Custom recurrence detail
   invoiceReceived     Boolean              @default(false)  // Invoice/remittance advice received
   invoiceReceivedDate DateTime?
+  invoiceTxId         String?              @unique // FK -> FinanceTransaction when remittance received (DR AR / CR income)
   notes               String?
   memberId            String?              // Which family member earns this
   accountId           String?
