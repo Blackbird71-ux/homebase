@@ -48,6 +48,7 @@ model Family {
   financeIncomeEntries   FinanceIncomeEntry[]
   financeSnapshots       FinanceSnapshot[]
   financeJournalEntries  FinanceJournalEntry[]
+  financeBillPayments    FinanceBillPayment[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
 }
 
@@ -553,6 +554,7 @@ model FinanceAccount {
   savingsGoals    FinanceSavingsGoal[]
   recurringBills  FinanceRecurringBill[]
   incomeEntries   FinanceIncomeEntry[]
+  billPayments    FinanceBillPayment[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -589,6 +591,7 @@ model FinanceCategory {
   budgetRules     FinanceBudget[]
   recurringBills  FinanceRecurringBill[]
   incomeEntries   FinanceIncomeEntry[]
+  billPayments    FinanceBillPayment[]
   vendors         FinanceVendor[]
   journalLines    FinanceJournalLine[]
   createdAt       DateTime          @default(now())
@@ -638,6 +641,7 @@ model FinanceTransaction {
   glAccountId         String?              // FK → FinanceCategory (asset/liability type). The GL account debited/credited at payment or receipt.
   glAccount           FinanceCategory?     @relation("TransactionGlAccount", fields: [glAccountId], references: [id], onDelete: SetNull)
   openingBalanceAccount FinanceAccount? @relation("AccountOpeningBalance")  // Reverse relation for opening balance tx
+  billPayment         FinanceBillPayment?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
