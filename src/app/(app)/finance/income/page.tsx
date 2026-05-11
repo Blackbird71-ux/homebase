@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, todayAU } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import Link from 'next/link'
 import {
@@ -106,11 +106,12 @@ export default function IncomePage() {
   const [previewAttachmentId, setPreviewAttachmentId]   = useState<string | null>(null)
   const attachFileRef = useRef<HTMLInputElement>(null)
 
+  // ── FIX: Use todayAU() instead of new Date().toISOString().split('T')[0] ──
   const emptyForm = {
     name: '', amount: 0, frequency: 'monthly', incomeType: 'recurring',
     accountId: '', categoryId: '', vendorId: '',
     dayOfMonth: '', monthOfYear: '',
-    nextExpectedDate: new Date().toISOString().split('T')[0],
+    nextExpectedDate: todayAU(),
     endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
     notes: '', memberId: '', locationId: '',
     entityId: '',
@@ -223,18 +224,15 @@ export default function IncomePage() {
   }
 
   // ── Pre-seed journal lines for income ───────────────────────────────────
-  // DR: Accounts Receivable (locked) / CR: blank income line (user selects)
-  // Amount pre-filled when editing an existing entry.
   function defaultIncomeLines(amount?: number): JournalFormLine[] {
     const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
     const ar = glAccounts.find(a => a.name === 'Accounts Receivable' && a.type === 'asset')
     return [
       { glAccountId: ar?.id ?? '', side: 'debit',  amount: amtStr, description: '' },
-      { glAccountId: '',           side: 'credit', amount: amtStr, description: '' },  // user picks income GL
+      { glAccountId: '',           side: 'credit', amount: amtStr, description: '' },
     ]
   }
 
-  // Load existing journal lines when editing an entry that already has a JE
   async function loadExistingJournalLines(journalEntryId: string): Promise<JournalFormLine[]> {
     try {
       const res = await fetch(`/api/finance/journals/${journalEntryId}`)
@@ -258,9 +256,8 @@ export default function IncomePage() {
     setEditing(e)
     setErrors({})
     setJournalErrors({})
-    // Pre-seed journal lines: load existing JE lines if present, else defaults
     if (e.journalEntryId) {
-      setJournalLines(defaultIncomeLines(e.amount))  // show defaults immediately
+      setJournalLines(defaultIncomeLines(e.amount))
       loadExistingJournalLines(e.journalEntryId).then(setJournalLines)
     } else {
       setJournalLines(defaultIncomeLines(e.amount))
@@ -272,8 +269,9 @@ export default function IncomePage() {
       vendorId: e.vendor?.id ?? '',
       dayOfMonth: e.dayOfMonth?.toString() ?? '',
       monthOfYear: e.monthOfYear?.toString() ?? '',
-      nextExpectedDate: new Date(e.nextExpectedDate).toISOString().split('T')[0],
-      endDate: e.endDate ? new Date(e.endDate).toISOString().split('T')[0] : '',
+      // ── FIX: use date part only, not full ISO string (works correctly in AU tz for display) ──
+      nextExpectedDate: e.nextExpectedDate.split('T')[0],
+      endDate: e.endDate ? e.endDate.split('T')[0] : '',
       autoPay: e.autoPay ?? false,
       emailReminder: e.emailReminder ?? false,
       reminderDays: e.reminderDays ?? 3,
@@ -282,7 +280,7 @@ export default function IncomePage() {
       entityId: e.entity?.id ?? '',
       invoiceReceived: e.invoiceReceived ?? false,
       invoiceReceivedDate: e.invoiceReceivedDate
-        ? new Date(e.invoiceReceivedDate).toISOString().split('T')[0] : '',
+        ? e.invoiceReceivedDate.split('T')[0] : '',
       recurrenceInterval: e.recurrenceInterval ?? '',
       isTaxTracked: e.isTaxTracked ?? false,
       taxRate: e.taxRate != null ? e.taxRate.toString() : '',
@@ -298,7 +296,6 @@ export default function IncomePage() {
     if (!form.name.trim()) errs.name = 'Name is required'
     if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
     if (!form.nextExpectedDate) errs.nextExpectedDate = 'Expected date is required'
-    // taxClassification is intentionally optional — warn via amber UI but do not block save
     return errs
   }
 
@@ -346,7 +343,11 @@ export default function IncomePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (!res.ok) { const err = await res.json(); toast.error(err.error ?? 'Failed'); return }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
+      toast.error(err.error ?? `Failed to ${editing ? 'update' : 'create'} income`)
+      return
+    }
     toast.success(editing ? 'Income updated' : 'Income created')
     closeForm()
     load()
@@ -359,9 +360,9 @@ export default function IncomePage() {
     else toast.error('Failed to delete')
   }
 
+  // ── FIX: use todayAU() for the date default ──
   async function handleMarkReceived(entry: IncomeEntry) {
-    const today = new Date().toISOString().split('T')[0]
-    setReceivedConfirmDate(today)
+    setReceivedConfirmDate(todayAU())
     setReceivedConfirmGlAccountId('')
     setReceivedConfirm({ entry })
   }
@@ -380,7 +381,10 @@ export default function IncomePage() {
       }),
     })
     if (res.ok) { toast.success('Income marked as received'); setReceivedConfirm(null); load() }
-    else toast.error('Failed to mark as received')
+    else {
+      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
+      toast.error(err.error ?? 'Failed to mark as received')
+    }
   }
 
   async function handleToggleInvoice(entry: IncomeEntry) {
@@ -695,7 +699,7 @@ export default function IncomePage() {
             </div>
           </div>
 
-          {/* Journal Lines — double-entry accrual (replaces Category + GL Account fields) */}
+          {/* Journal Lines */}
           <div className="rounded-md border border-border bg-muted/20 p-3">
             <JournalLinesEditor
               lines={journalLines}

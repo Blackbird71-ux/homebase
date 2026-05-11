@@ -403,7 +403,10 @@ export default function BillsPage() {
       }),
     })
     if (res.ok) { toast.success('Bill marked as paid'); setPaidConfirm(null); load() }
-    else toast.error('Failed to mark as paid')
+    else {
+      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
+      toast.error(err.error ?? 'Failed to mark as paid')
+    }
   }
 
   async function handleToggleInvoice(bill: Bill) {
@@ -413,7 +416,10 @@ export default function BillsPage() {
       body: JSON.stringify({ id: bill.id, invoiceReceived: newVal }),
     })
     if (res.ok) { toast.success(newVal ? 'Invoice marked received' : 'Invoice unmarked'); load() }
-    else toast.error('Failed to update invoice status')
+    else {
+      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
+      toast.error(err.error ?? 'Failed to update invoice status')
+    }
   }
 
   async function handleUnmarkPaid(bill: Bill) {
@@ -1020,7 +1026,7 @@ function BillRow({
 
         {colCats.map(c => {
           const amt = billAmountForCat(bill, c.id)
-          return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '&mdash;'}</span>
+          return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
         })}
 
         <div className="text-right">
@@ -1169,7 +1175,7 @@ function BillRow({
               <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
                 <Upload className="h-3.5 w-3.5" />
-                {uploadingAttachment ? 'Uploading&hellip;' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
+                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
               </button>
               <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC &middot; Max 2 files</p>
             </div>

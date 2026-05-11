@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
-  ReceiptText,
+  ReceiptText, List, X,
 } from 'lucide-react'
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
@@ -34,6 +34,8 @@ interface IncomeEntry {
   isTaxTracked: boolean; taxRate: number | null
   entityId: string | null
   receiptTxId: string | null
+  invoiceTxId: string | null
+  transactionId: string | null
   category: { id: string; name: string; color: string | null } | null
 }
 
@@ -48,6 +50,7 @@ interface Tx {
 interface DrillItem {
   id: string; name: string; amount: number; periodAmount: number
   isOneOff: boolean; received?: boolean; paid?: boolean; date: string
+  source?: string
 }
 
 interface GroupRow {
@@ -57,24 +60,25 @@ interface GroupRow {
 
 interface Entity { id: string; name: string; type: string; isDefault: boolean; color: string | null }
 
+// ─── Ledger modal types ───────────────────────────────────────────────────────
+
+interface LedgerTx {
+  id: string; date: string; description: string | null; payee: string | null
+  amount: number; type: string; isCleared: boolean
+  category: { name: string } | null
+  account: { name: string } | null
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toPeriodAmount(amount: number, frequency: string, periodMonths: number): number {
-  // Converts a recurring amount to the period equivalent — used ONLY for
-  // weekly / fortnightly / monthly which genuinely recur within any period.
-  // quarterly / halfyearly / yearly are lump-sum payments that land on a
-  // specific date; they must NOT be averaged — they are handled separately.
   let tpm: number
   if (frequency === 'weekly')           tpm = 52 / 12
   else if (frequency === 'fortnightly') tpm = 26 / 12
-  else                                   tpm = 1   // monthly and fallback
+  else                                   tpm = 1
   return amount * tpm * periodMonths
 }
 
-/**
- * Returns true for frequencies where the full amount arrives as a lump sum
- * on a specific date rather than recurring within every period.
- */
 function isLumpSum(frequency: string): boolean {
   return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
 }
@@ -86,7 +90,6 @@ function fmtCurrency(n: number) {
 function getPeriodBounds(mode: PeriodMode, anchor: Date, fyStartMonth: number = 7): { start: Date; end: Date; label: string } {
   if (mode === 'month')   return { start: startOfMonth(anchor),   end: endOfMonth(anchor),   label: format(anchor, 'MMMM yyyy') }
   if (mode === 'quarter') return { start: startOfQuarter(anchor), end: endOfQuarter(anchor), label: `Q${getQuarter(anchor)} ${getYear(anchor)}` }
-  // FY-aware year mode
   const fYear = fyStartYear(anchor, fyStartMonth)
   const { start, end } = fyDateRange(fYear, fyStartMonth)
   return { start, end, label: fyLabelUtil(fYear, fyStartMonth) }
@@ -115,20 +118,23 @@ export default function ProfitLossPage() {
   const [drillSide, setDrillSide] = useState<'income' | 'expense' | null>(null)
   const [drillKey, setDrillKey]   = useState<string | null>(null)
 
+  // Ledger panel state
+  const [ledgerOpen, setLedgerOpen]   = useState(false)
+  const [ledgerLabel, setLedgerLabel] = useState('')
+  const [ledgerTxs, setLedgerTxs]    = useState<LedgerTx[]>([])
+  const [ledgerLoading, setLedgerLoading] = useState(false)
+
   const { start, end, label } = getPeriodBounds(periodMode, anchor, fyStartMonth)
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
 
-  // ── Load static data (bills + income + entities) once ─────────────────────
   async function loadStatic() {
     setLoading(true)
     try {
-      // Load FY start month from settings
       const familyRes = await fetch('/api/settings/family')
       if (familyRes.ok) {
         const family = await familyRes.json()
         setFyStartMonth(family.financeYearStartMonth ?? 7)
       }
-
       const [bRes, iRes, eRes] = await Promise.all([
         fetch('/api/finance/bills?includeAll=true'),
         fetch('/api/finance/income'),
@@ -140,17 +146,14 @@ export default function ProfitLossPage() {
     } finally { setLoading(false) }
   }
 
-  // ── Load transactions for the current period ──────────────────────────────
-  // P2 fix #3: always request isCleared=true — only settled transactions belong
-  // in a P&L. Pending/uncleared amounts are not yet recognised income or expense.
   async function loadTransactions(from: Date, to: Date) {
     setTxLoading(true)
     try {
       const params = new URLSearchParams({
-        startDate:  from.toISOString().split('T')[0],
-        endDate:    to.toISOString().split('T')[0],
-        isCleared:  'true',
-        limit:      '500',
+        startDate: from.toISOString().split('T')[0],
+        endDate:   to.toISOString().split('T')[0],
+        isCleared: 'true',
+        limit:     '500',
       })
       const res = await fetch(`/api/finance/transactions?${params}`)
       if (res.ok) {
@@ -167,55 +170,65 @@ export default function ProfitLossPage() {
   const startTs = start.getTime()
   const endTs   = end.getTime()
 
-  // ── The default entity ID for the "null = personal/default" semantics ─────
   const defaultEntityId = useMemo(
     () => entities.find(en => en.isDefault)?.id ?? null,
     [entities],
   )
 
-  /** True when the item's entity matches the current filter (or the item is unassigned and the default entity is selected). */
   function matchesEntity(itemEntityId: string | null): boolean {
-    if (!selectedEntityId) return true   // "All" tab — include everything
-    if (!itemEntityId) return selectedEntityId === defaultEntityId   // unassigned → only on default entity tab
+    if (!selectedEntityId) return true
+    if (!itemEntityId) return selectedEntityId === defaultEntityId
     return itemEntityId === selectedEntityId
   }
 
-  // ── Dedup: transaction IDs linked to bills/income (avoid double-counting) ──
-  // When a bill is paid or income received, the PATCH endpoint creates a cleared
-  // transaction. Without dedup, the P&L counts the amount twice — once from the
-  // bill/income entry and once from the transaction.
-  /** Set of transaction IDs that are linked to bills via recurringBillId. */
+  // ── FIXED dedup logic ───────────────────────────────────────────────────────
+  // P&L double-count fix: only exclude a transaction if it was specifically
+  // created by the bill/income PATCH flow (i.e. it has recurringBillId set,
+  // OR it matches the receiptTxId/invoiceTxId on an income entry).
+  //
+  // OLD (BROKEN): excluded ALL income-type transactions — this incorrectly
+  // removed standalone QuickAdd income entries.
+  //
+  // NEW (CORRECT): only exclude transactions that are already represented by
+  // a bill/income entry in the P&L (via recurringBillId or receipt linkage).
+  
   const billLinkedTxIds = useMemo(
     () => new Set(transactions.filter(t => t.recurringBillId).map(t => t.id)),
     [transactions],
   )
-  /** Set of cleared income transaction IDs that have a corresponding receiptTxId on the income entry. */
-  const receiptLinkedTxIds = useMemo(
-    () => new Set(transactions.filter(t => t.type === 'income').map(t => t.id)),
-    [transactions],
-  )
 
-  // ── Relevant income: entries + income-type transactions ───────────────────
+  // Transactions that are linked to income entries via receiptTxId, invoiceTxId, or transactionId (legacy)
+  // This prevents double-counting when income is marked received and a transaction is created.
+  const incomeLinkedTxIds = useMemo(() => {
+    const linked = new Set<string>()
+    for (const entry of income) {
+      if (entry.receiptTxId) linked.add(entry.receiptTxId)
+      if (entry.invoiceTxId) linked.add(entry.invoiceTxId)
+      if (entry.transactionId) linked.add(entry.transactionId)
+    }
+    return linked
+  }, [income])
+
+  // ── Relevant income ────────────────────────────────────────────────────────
   const relevantIncome = useMemo(() => {
+    // Income entries: skip if a linked receipt/invoice tx is already in the period
+    // (the tx will be counted in the txItems below)
     const entryItems = income.filter(e => {
       if (!e.isActive) return false
       if (!matchesEntity(e.entityId)) return false
-      // If this income entry has a receipt transaction that's already loaded,
-      // skip the entry (the transaction already represents the cash inflow)
-      if (e.receiptTxId && receiptLinkedTxIds.has(e.receiptTxId)) return false
+      // Skip if this entry's receipt/invoice/legacy transaction already appears in this period's transactions
+      if (e.receiptTxId && transactions.some(t => t.id === e.receiptTxId)) return false
+      if (e.invoiceTxId && transactions.some(t => t.id === e.invoiceTxId)) return false
+      if (e.transactionId && transactions.some(t => t.id === e.transactionId)) return false
       if (e.received && e.receivedDate) {
-        // Confirmed received — show only in the period the money actually landed
         const ts = new Date(e.receivedDate).getTime()
         return ts >= startTs && ts <= endTs
       }
       if (viewMode === 'cash') return false
-      // Forecast: one-off and lump-sum frequencies must fall within the period window
       if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
         const dueTs = new Date(e.nextExpectedDate).getTime()
         return dueTs >= startTs && dueTs <= endTs
       }
-      // Genuinely recurring (weekly / fortnightly / monthly): include if due date
-      // is on or before period end (it will recur within the period)
       const dueTs = new Date(e.nextExpectedDate).getTime()
       return dueTs <= endTs
     }).map(e => ({
@@ -224,20 +237,20 @@ export default function ProfitLossPage() {
       color: e.category?.color ?? null,
       item: {
         id: e.id, name: e.name, amount: e.amount,
-        // Lump-sum and one-off always show the full amount — never prorate.
-        // Weekly/fortnightly/monthly get their period equivalent.
         periodAmount: (e.incomeType === 'one-off' || isLumpSum(e.frequency))
           ? e.amount
           : toPeriodAmount(e.amount, e.frequency, periodMonths),
         isOneOff: e.incomeType === 'one-off' || isLumpSum(e.frequency),
         received: e.received,
         date: e.received && e.receivedDate ? e.receivedDate : e.nextExpectedDate,
+        source: 'entry',
       },
     }))
 
-    // Actual income-type transactions are always cash — include in both modes
+    // Actual income-type transactions: exclude any that are already linked to
+    // income entries (avoiding double-count) but include standalone ones (QuickAdd)
     const txItems = transactions
-      .filter(t => t.type === 'income' && matchesEntity(t.entityId))
+      .filter(t => t.type === 'income' && matchesEntity(t.entityId) && !incomeLinkedTxIds.has(t.id))
       .map(t => ({
         key:   t.category?.id ?? '__tx_none__',
         label: t.category?.name ?? 'Uncategorised',
@@ -247,35 +260,31 @@ export default function ProfitLossPage() {
           name: t.description ?? t.payee ?? 'Income',
           amount: t.amount, periodAmount: t.amount,
           isOneOff: true, received: true, date: t.date,
+          source: 'transaction',
         },
       }))
 
     return [...entryItems, ...txItems]
-  }, [income, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths, receiptLinkedTxIds])
+  }, [income, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths, incomeLinkedTxIds])
 
-  // ── Relevant expenses: bills + expense-type transactions ──────────────────
+  // ── Relevant expenses ──────────────────────────────────────────────────────
   const relevantExpenses = useMemo(() => {
     const billItems = bills.filter(b => {
       if (!b.isActive) return false
       if (!matchesEntity(b.entityId)) return false
       if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
       if (b.billType === 'transfer') return false
-      // If this bill has a payment transaction that's already loaded, skip the bill
-      // (the transaction already represents the cash outflow)
+      // Skip bill if a linked transaction is already in the period tx list
       if (b.paymentTxId && billLinkedTxIds.has(b.paymentTxId)) return false
       if (b.paid && b.paidDate) {
-        // Confirmed paid — show only in the period the payment actually occurred
         const ts = new Date(b.paidDate).getTime()
         return ts >= startTs && ts <= endTs
       }
       if (viewMode === 'cash') return false
-      // Forecast: one-off and lump-sum frequencies must fall within the period window
       if (b.billType === 'one-off' || isLumpSum(b.frequency)) {
         const dueTs = new Date(b.nextDueDate).getTime()
         return dueTs >= startTs && dueTs <= endTs
       }
-      // Genuinely recurring (weekly / fortnightly / monthly): include if due date
-      // is on or before period end
       const dueTs = new Date(b.nextDueDate).getTime()
       return dueTs <= endTs
     }).map(b => ({
@@ -284,19 +293,19 @@ export default function ProfitLossPage() {
       color: b.category?.color ?? null,
       item: {
         id: b.id, name: b.name, amount: b.amount,
-        // Lump-sum bills always show their full amount — never prorate.
         periodAmount: (b.billType === 'one-off' || isLumpSum(b.frequency))
           ? b.amount
           : toPeriodAmount(b.amount, b.frequency, periodMonths),
         isOneOff: b.billType === 'one-off' || isLumpSum(b.frequency),
         paid: b.paid,
         date: b.paid && b.paidDate ? b.paidDate : b.nextDueDate,
+        source: 'bill',
       },
     }))
 
-    // Actual expense-type transactions are always cash — include in both modes
+    // Expense transactions: exclude those linked via recurringBillId (already in bill entries)
     const txItems = transactions
-      .filter(t => t.type === 'expense' && matchesEntity(t.entityId))
+      .filter(t => t.type === 'expense' && matchesEntity(t.entityId) && !billLinkedTxIds.has(t.id))
       .map(t => ({
         key:   t.category?.id ?? '__tx_none__',
         label: t.category?.name ?? 'Uncategorised',
@@ -306,6 +315,7 @@ export default function ProfitLossPage() {
           name: t.description ?? t.payee ?? 'Expense',
           amount: t.amount, periodAmount: t.amount,
           isOneOff: true, paid: true, date: t.date,
+          source: 'transaction',
         },
       }))
 
@@ -349,18 +359,15 @@ export default function ProfitLossPage() {
       if (e.received && e.receivedDate) {
         const ts = new Date(e.receivedDate).getTime()
         if (ts >= startTs && ts <= endTs) {
-          // Tax on the actual amount received (never prorate)
           total += e.amount * (e.taxRate / 100)
         }
       } else if (viewMode === 'forecast') {
         const dueTs = new Date(e.nextExpectedDate).getTime()
         if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
-          // Lump-sum: tax applies if the due date falls within this period
           if (dueTs >= startTs && dueTs <= endTs) {
             total += e.amount * (e.taxRate / 100)
           }
         } else if (dueTs <= endTs) {
-          // Recurring: tax on the period equivalent
           const pa = toPeriodAmount(e.amount, e.frequency, periodMonths)
           total += pa * (e.taxRate / 100)
         }
@@ -379,13 +386,37 @@ export default function ProfitLossPage() {
     ? expenseGroups.find(g => g.key === drillKey)
     : null
 
+  // ── Ledger: load transactions for a category in this period ───────────────
+  async function openLedger(categoryId: string, categoryLabel: string) {
+    setLedgerLabel(categoryLabel)
+    setLedgerOpen(true)
+    setLedgerLoading(true)
+    setLedgerTxs([])
+    try {
+      const params = new URLSearchParams({
+        startDate:  start.toISOString().split('T')[0],
+        endDate:    end.toISOString().split('T')[0],
+        isCleared:  'true',
+        limit:      '200',
+      })
+      // If it's a real category ID (not a __none__ key), filter by it
+      if (!categoryId.startsWith('__')) {
+        params.set('categoryId', categoryId)
+      }
+      const res = await fetch(`/api/finance/transactions?${params}`)
+      if (res.ok) {
+        const d = await res.json()
+        setLedgerTxs((d.transactions ?? []).filter((t: any) => !t.isTransfer))
+      }
+    } finally { setLedgerLoading(false) }
+  }
+
   if (loading) return <div className="p-4 text-muted-foreground">Loading profit & loss…</div>
 
   return (
     <div className="space-y-5">
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
-
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           {(['month', 'quarter', 'year'] as const).map(p => (
             <button key={p} onClick={() => setPeriodMode(p)}
@@ -396,8 +427,7 @@ export default function ProfitLossPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1"
-          title="Cash: confirmed transactions only. Forecast: includes upcoming scheduled items.">
+        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           <button onClick={() => setViewMode('cash')}
             className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
               viewMode === 'cash' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
@@ -439,9 +469,7 @@ export default function ProfitLossPage() {
           </button>
         </div>
 
-        {txLoading && (
-          <span className="text-xs text-muted-foreground animate-pulse">Loading transactions…</span>
-        )}
+        {txLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading transactions…</span>}
       </div>
 
       {viewMode === 'cash' && (
@@ -451,7 +479,7 @@ export default function ProfitLossPage() {
       )}
       {viewMode === 'forecast' && (
         <p className="text-xs text-muted-foreground -mt-2">
-          <span className="font-medium text-amber-500">Forecast included</span> — confirmed items use actual dates; upcoming scheduled items use due dates. Figures may not match your bank.
+          <span className="font-medium text-amber-500">Forecast included</span> — confirmed items use actual dates; upcoming scheduled items use due dates.
         </p>
       )}
 
@@ -464,7 +492,6 @@ export default function ProfitLossPage() {
           <p className="text-xl font-bold text-green-600">{fmtCurrency(totalIncome)}</p>
           <p className="text-xs text-muted-foreground mt-0.5">{incomeGroups.length} categor{incomeGroups.length !== 1 ? 'ies' : 'y'}</p>
         </div>
-
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <TrendingDown className="h-4 w-4 text-red-500" /> Total Expenses
@@ -472,7 +499,6 @@ export default function ProfitLossPage() {
           <p className="text-xl font-bold text-red-600">{fmtCurrency(totalExpenses)}</p>
           <p className="text-xs text-muted-foreground mt-0.5">{expenseGroups.length} categor{expenseGroups.length !== 1 ? 'ies' : 'y'}</p>
         </div>
-
         {estimatedTax > 0 ? (
           <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
@@ -486,7 +512,6 @@ export default function ProfitLossPage() {
             <p className="text-xs text-muted-foreground">No tax-tracked income</p>
           </div>
         )}
-
         <div className={cn('rounded-lg border p-3',
           netProfit >= 0 ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5')}>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
@@ -502,6 +527,48 @@ export default function ProfitLossPage() {
         </div>
       </div>
 
+      {/* ── Ledger panel ──────────────────────────────────────────────────── */}
+      {ledgerOpen && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <List className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm">Ledger — {ledgerLabel}</span>
+              <span className="text-xs text-muted-foreground">({start ? format(start, 'd MMM') : ''} – {end ? format(end, 'd MMM yyyy') : ''})</span>
+            </div>
+            <button onClick={() => setLedgerOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {ledgerLoading ? (
+            <p className="text-xs text-muted-foreground">Loading transactions…</p>
+          ) : ledgerTxs.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No cleared transactions found in this period for this category.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {ledgerTxs.map(t => (
+                <div key={t.id} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                  <span className="text-xs text-muted-foreground w-24 shrink-0">{format(new Date(t.date), 'd MMM yyyy')}</span>
+                  <span className="flex-1 min-w-0 truncate">{t.description ?? t.payee ?? 'Transaction'}</span>
+                  {t.category && <span className="text-xs text-muted-foreground shrink-0">{t.category.name}</span>}
+                  {t.account  && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{t.account.name}</span>}
+                  <span className={cn('font-semibold shrink-0 tabular-nums',
+                    t.type === 'income' ? 'text-green-600' : 'text-red-600')}>
+                    {t.type === 'income' ? '+' : '-'}{fmtCurrency(t.amount)}
+                  </span>
+                </div>
+              ))}
+              <div className="text-xs text-muted-foreground pt-1 border-t border-border/50">
+                {ledgerTxs.length} transaction{ledgerTxs.length !== 1 ? 's' : ''} · Total:{' '}
+                <span className="font-medium text-foreground">
+                  {fmtCurrency(ledgerTxs.reduce((s, t) => t.type === 'income' ? s + t.amount : s - t.amount, 0))}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Drill-down panel ──────────────────────────────────────────────── */}
       {drillGroup ? (
         <div className="rounded-lg border border-border p-4 space-y-3">
@@ -516,6 +583,16 @@ export default function ProfitLossPage() {
             <span className={cn('text-sm ml-auto font-medium', drillSide === 'income' ? 'text-green-600' : 'text-red-600')}>
               {fmtCurrency(drillGroup.totalPeriod)}
             </span>
+            {/* Ledger button — only for real category IDs (not __none__ virtual keys) */}
+            {!drillKey?.startsWith('__') && (
+              <button
+                onClick={() => openLedger(drillKey!, drillGroup.label)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary border border-border rounded-md px-2 py-1 ml-2"
+                title="View all transactions for this category"
+              >
+                <List className="h-3 w-3" /> Ledger
+              </button>
+            )}
           </div>
           <div className="space-y-1.5">
             {drillGroup.items.map(item => (
@@ -524,6 +601,7 @@ export default function ProfitLossPage() {
                   <span className="font-medium">{item.name}</span>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {item.isOneOff && <span className="text-orange-500 mr-2">One-off</span>}
+                    {item.source === 'transaction' && <span className="text-blue-500 mr-2">Transaction</span>}
                     {item.paid !== undefined && (
                       <span className={cn('mr-2', item.paid ? 'text-green-500' : 'text-amber-500')}>
                         {item.paid ? 'Paid' : 'Due'}
@@ -549,7 +627,7 @@ export default function ProfitLossPage() {
         </div>
       ) : (
         <>
-          {/* ── Income section ────────────────────────────────────────────── */}
+          {/* ── Income section ─────────────────────────────────────────────── */}
           <div>
             <h2 className="text-lg font-semibold text-green-600 mb-2 flex items-center gap-2">
               <TrendingUp className="h-4 w-4" /> Income
@@ -570,20 +648,30 @@ export default function ProfitLossPage() {
                 {incomeGroups.map(g => {
                   const pct = maxIncome > 0 ? (g.totalPeriod / maxIncome) * 100 : 0
                   return (
-                    <button key={g.key} onClick={() => { setDrillSide('income'); setDrillKey(g.key) }}
-                      className="w-full text-left hover:bg-accent/50 rounded-md p-1.5 -mx-1.5 transition-colors group">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: g.color ?? '#22C55E' }} />
-                        <span className="text-sm flex-1 font-medium">{g.label}</span>
-                        <span className="text-xs text-muted-foreground">{g.count} item{g.count !== 1 ? 's' : ''}</span>
-                        <span className="text-sm font-semibold min-w-[80px] text-right text-green-600">{fmtCurrency(g.totalPeriod)}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: g.color ?? '#22C55E' }} />
-                      </div>
-                    </button>
+                    <div key={g.key} className="group">
+                      <button onClick={() => { setDrillSide('income'); setDrillKey(g.key) }}
+                        className="w-full text-left hover:bg-accent/50 rounded-md p-1.5 -mx-1.5 transition-colors">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: g.color ?? '#22C55E' }} />
+                          <span className="text-sm flex-1 font-medium">{g.label}</span>
+                          <span className="text-xs text-muted-foreground">{g.count} item{g.count !== 1 ? 's' : ''}</span>
+                          <span className="text-sm font-semibold min-w-[80px] text-right text-green-600">{fmtCurrency(g.totalPeriod)}</span>
+                          {/* Ledger button for real categories */}
+                          {!g.key.startsWith('__') && (
+                            <button
+                              onClick={e => { e.stopPropagation(); openLedger(g.key, g.label) }}
+                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent rounded text-muted-foreground transition-opacity"
+                              title="View ledger"
+                            >
+                              <List className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: g.color ?? '#22C55E' }} />
+                        </div>
+                      </button>
+                    </div>
                   )
                 })}
                 <div className="flex items-center justify-between pt-2 border-t border-border text-sm">
@@ -615,20 +703,29 @@ export default function ProfitLossPage() {
                 {expenseGroups.map(g => {
                   const pct = maxExpense > 0 ? (g.totalPeriod / maxExpense) * 100 : 0
                   return (
-                    <button key={g.key} onClick={() => { setDrillSide('expense'); setDrillKey(g.key) }}
-                      className="w-full text-left hover:bg-accent/50 rounded-md p-1.5 -mx-1.5 transition-colors group">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: g.color ?? '#EF4444' }} />
-                        <span className="text-sm flex-1 font-medium">{g.label}</span>
-                        <span className="text-xs text-muted-foreground">{g.count} item{g.count !== 1 ? 's' : ''}</span>
-                        <span className="text-sm font-semibold min-w-[80px] text-right text-red-600">{fmtCurrency(g.totalPeriod)}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: g.color ?? '#EF4444' }} />
-                      </div>
-                    </button>
+                    <div key={g.key} className="group">
+                      <button onClick={() => { setDrillSide('expense'); setDrillKey(g.key) }}
+                        className="w-full text-left hover:bg-accent/50 rounded-md p-1.5 -mx-1.5 transition-colors">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: g.color ?? '#EF4444' }} />
+                          <span className="text-sm flex-1 font-medium">{g.label}</span>
+                          <span className="text-xs text-muted-foreground">{g.count} item{g.count !== 1 ? 's' : ''}</span>
+                          <span className="text-sm font-semibold min-w-[80px] text-right text-red-600">{fmtCurrency(g.totalPeriod)}</span>
+                          {!g.key.startsWith('__') && (
+                            <button
+                              onClick={e => { e.stopPropagation(); openLedger(g.key, g.label) }}
+                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent rounded text-muted-foreground transition-opacity"
+                              title="View ledger"
+                            >
+                              <List className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: g.color ?? '#EF4444' }} />
+                        </div>
+                      </button>
+                    </div>
                   )
                 })}
                 <div className="flex items-center justify-between pt-2 border-t border-border text-sm">

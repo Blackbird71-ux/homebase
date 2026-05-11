@@ -1,8 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Building2, TrendingUp, TrendingDown, Wallet, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import {
+  Building2, TrendingUp, TrendingDown, Wallet, AlertTriangle, CheckCircle2,
+  List, X,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { format } from 'date-fns'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +63,14 @@ interface BalanceSheetResponse {
 
 interface Entity { id: string; name: string; type: string; isDefault: boolean; color: string | null }
 
+// ── Ledger types ─────────────────────────────────────────────────────────────
+
+interface LedgerTx {
+  id: string; date: string; description: string | null; payee: string | null
+  amount: number; type: string; isCleared: boolean
+  category: { name: string } | null; account: { name: string } | null
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n: number, currency = 'AUD') {
@@ -68,12 +80,57 @@ function fmt(n: number, currency = 'AUD') {
   }).format(n)
 }
 
-function SectionRow({ label, amount, indent, bold, glCode, muted, positive }: {
+function fmtCurrency(n: number) {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+}
+
+/**
+ * Strip a leading "ParentName - " or "ParentName — " prefix from a name.
+ * E.g. "Property — 7 Shetland Road" → "7 Shetland Road"
+ */
+function stripParentPrefix(name: string, parentName: string | null): string {
+  if (!parentName) return name
+  // Try both dash variants: " - " and " — "
+  const dashes = [' - ', ' — ', ' – ']
+  for (const dash of dashes) {
+    const prefix = parentName + dash
+    if (name.startsWith(prefix)) return name.slice(prefix.length)
+  }
+  return name
+}
+
+/**
+ * Group COA rows by parentName (or use name as group if no parent).
+ * Returns an array of { groupName, rows } so we can render a sub-heading
+ * then indented rows beneath it.
+ */
+function groupCOAByParent(rows: COARow[]): { groupName: string; groupTotal: number; rows: COARow[] }[] {
+  const groups = new Map<string, { groupName: string; groupTotal: number; rows: COARow[] }>()
+
+  for (const row of rows) {
+    const groupKey = row.parentName ?? row.name
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, { groupName: groupKey, groupTotal: 0, rows: [] })
+    }
+    const g = groups.get(groupKey)!
+    g.rows.push(row)
+    g.groupTotal += row.openingBalance
+  }
+
+  return Array.from(groups.values())
+}
+
+function SectionRow({ label, amount, indent, bold, glCode, muted, positive, onClick }: {
   label: string; amount: number; indent?: boolean; bold?: boolean
   glCode?: string | null; muted?: boolean; positive?: boolean
+  onClick?: () => void
 }) {
-  return (
-    <div className={cn('flex items-center justify-between py-1 text-sm', indent && 'pl-4')}>
+  const content = (
+    <div className={cn(
+      'flex items-center justify-between py-1 text-sm',
+      indent && 'pl-4',
+      onClick && 'cursor-pointer hover:bg-accent/30 rounded-md px-1 -mx-1 transition-colors',
+    )}>
       <span className={cn(
         'flex items-center gap-2',
         bold ? 'font-semibold text-foreground' : muted ? 'text-muted-foreground/70 italic' : 'text-muted-foreground',
@@ -84,6 +141,7 @@ function SectionRow({ label, amount, indent, bold, glCode, muted, positive }: {
           </span>
         )}
         {label}
+        {onClick && <List className="h-3 w-3 text-muted-foreground/40 ml-1" />}
       </span>
       <span className={cn(
         'tabular-nums font-medium',
@@ -95,6 +153,7 @@ function SectionRow({ label, amount, indent, bold, glCode, muted, positive }: {
       </span>
     </div>
   )
+  return onClick ? <div onClick={onClick}>{content}</div> : content
 }
 
 function Divider() { return <div className="border-t border-border my-1" /> }
@@ -122,8 +181,22 @@ export default function BalanceSheetPage() {
   const [data, setData]         = useState<BalanceSheetResponse | null>(null)
   const [entities, setEntities] = useState<Entity[]>([])
   const [entityId, setEntityId] = useState('')
-  const [asAt, setAsAt]         = useState(() => new Date().toISOString().split('T')[0])
+  const [asAt, setAsAt]         = useState(() => {
+    // ── FIX: Use AU-timezone today as default ──
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Australia/Sydney',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date())
+  })
   const [loading, setLoading]   = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  // Ledger panel state
+  const [ledgerOpen, setLedgerOpen]     = useState(false)
+  const [ledgerLabel, setLedgerLabel]   = useState('')
+  const [ledgerCategoryId, setLedgerCategoryId] = useState('')
+  const [ledgerTxs, setLedgerTxs]      = useState<LedgerTx[]>([])
+  const [ledgerLoading, setLedgerLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/finance/entities')
@@ -135,18 +208,55 @@ export default function BalanceSheetPage() {
   useEffect(() => {
     async function load() {
       setLoading(true)
+      setFetchError(null)
       try {
         const params = new URLSearchParams({ asAt })
         if (entityId) params.set('entityId', entityId)
         const res = await fetch(`/api/finance/balance-sheet?${params}`)
-        if (res.ok) setData(await res.json())
+        if (res.ok) {
+          setData(await res.json())
+        } else {
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+          setFetchError(err.error ?? 'Failed to load balance sheet')
+        }
+      } catch (e: any) {
+        setFetchError(e.message ?? 'Network error')
       } finally { setLoading(false) }
     }
     load()
   }, [asAt, entityId])
 
+  async function openLedger(categoryId: string, label: string) {
+    setLedgerCategoryId(categoryId)
+    setLedgerLabel(label)
+    setLedgerOpen(true)
+    setLedgerLoading(true)
+    setLedgerTxs([])
+    try {
+      const params = new URLSearchParams({ categoryId, limit: '200', isCleared: 'true' })
+      const res = await fetch(`/api/finance/transactions?${params}`)
+      if (res.ok) {
+        const d = await res.json()
+        setLedgerTxs(d.transactions ?? [])
+      }
+    } finally { setLedgerLoading(false) }
+  }
+
   if (loading && !data) {
     return <div className="p-4 text-muted-foreground text-sm">Loading balance sheet…</div>
+  }
+  if (fetchError) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6 text-center space-y-2">
+        <p className="text-sm text-red-500">{fetchError}</p>
+        <button
+          onClick={() => { setFetchError(null); setLoading(true) }}
+          className="text-xs text-foreground border border-input rounded-md px-3 py-1.5 hover:bg-accent"
+        >
+          Retry
+        </button>
+      </div>
+    )
   }
   if (!data) return null
 
@@ -156,6 +266,10 @@ export default function BalanceSheetPage() {
   const hasAP              = data.liabilities.accountsPayable > 0
   const hasAR              = data.assets.accountsReceivable > 0
   const showSetupGuide     = !hasCOAAssets && !hasCOALiabilities && !data.equity.coaAccounts.length && !hasAP && !hasAR
+
+  // Group COA accounts by parent for clean hierarchical display
+  const assetGroups     = groupCOAByParent(data.assets.coaAccounts)
+  const liabilityGroups = groupCOAByParent(data.liabilities.coaAccounts)
 
   return (
     <div className="space-y-6 pb-8">
@@ -238,10 +352,47 @@ export default function BalanceSheetPage() {
               its opening balance and as-at date.
             </li>
             <li>
-              Return here — the Balance Sheet populates automatically. Bills with a received
-              invoice also appear under Accounts Payable automatically.
+              Return here — the Balance Sheet populates automatically.
             </li>
           </ol>
+        </div>
+      )}
+
+      {/* ── Ledger panel ────────────────────────────────────────────────── */}
+      {ledgerOpen && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <List className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm">Ledger — {ledgerLabel}</span>
+            </div>
+            <button onClick={() => setLedgerOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {ledgerLoading ? (
+            <p className="text-xs text-muted-foreground">Loading transactions…</p>
+          ) : ledgerTxs.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No cleared transactions found for this account.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {ledgerTxs.map(t => (
+                <div key={t.id} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                  <span className="text-xs text-muted-foreground w-24 shrink-0">{format(new Date(t.date), 'd MMM yyyy')}</span>
+                  <span className="flex-1 min-w-0 truncate">{t.description ?? t.payee ?? 'Transaction'}</span>
+                  {t.category && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{t.category.name}</span>}
+                  {!t.isCleared && <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded shrink-0">PENDING</span>}
+                  <span className={cn('font-semibold shrink-0 tabular-nums',
+                    t.type === 'income' ? 'text-green-600' : 'text-red-600')}>
+                    {t.type === 'income' ? '+' : '-'}{fmtCurrency(t.amount)}
+                  </span>
+                </div>
+              ))}
+              <div className="text-xs text-muted-foreground pt-1 border-t border-border/50">
+                {ledgerTxs.length} transaction{ledgerTxs.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -256,9 +407,10 @@ export default function BalanceSheetPage() {
             {data.assets.bankAccounts.map(a => (
               <SectionRow
                 key={a.id}
-                label={a.institution ? `${a.name} (${a.institution})` : a.name}
+                label={a.name}
                 amount={a.balance}
                 indent
+                onClick={() => openLedger(a.id, a.name)}
               />
             ))}
             {(hasAR || hasCOAAssets) && (
@@ -267,31 +419,43 @@ export default function BalanceSheetPage() {
           </>
         )}
 
-        {/* Accounts Receivable (uncleared income with invoice received) */}
+        {/* Accounts Receivable */}
         {hasAR && (
           <>
             <SubHeading label="Accounts Receivable" />
             <SectionRow
               label="Invoiced income not yet received"
               amount={data.assets.accountsReceivable}
-              indent
-              muted
+              indent muted
             />
           </>
         )}
 
-        {/* COA asset accounts */}
+        {/* COA asset accounts — grouped by parent ─────────────────────────── */}
         {hasCOAAssets && (
           <>
-            <SubHeading label="Other Assets" />
-            {data.assets.coaAccounts.map(c => (
-              <SectionRow
-                key={c.id}
-                label={c.parentName ? `${c.parentName} — ${c.name}` : c.name}
-                amount={c.openingBalance}
-                glCode={c.glCode}
-                indent
-              />
+            {assetGroups.map(group => (
+              <div key={group.groupName}>
+                <SubHeading label={group.groupName} />
+                {group.rows.map(c => (
+                  <SectionRow
+                    key={c.id}
+                    // Strip parent prefix from name for cleaner display
+                    label={stripParentPrefix(c.name, c.parentName)}
+                    amount={c.openingBalance}
+                    glCode={c.glCode}
+                    indent
+                    onClick={c.type === 'asset' ? () => openLedger(c.id, stripParentPrefix(c.name, c.parentName)) : undefined}
+                  />
+                ))}
+                {/* Show group subtotal only if there are multiple items */}
+                {group.rows.length > 1 && (
+                  <div className="flex items-center justify-between py-1 pl-4 text-xs text-muted-foreground border-t border-border/30 mt-0.5">
+                    <span className="font-medium">Subtotal</span>
+                    <span className="tabular-nums font-semibold text-sm">{fmt(group.groupTotal)}</span>
+                  </div>
+                )}
+              </div>
             ))}
           </>
         )}
@@ -311,9 +475,10 @@ export default function BalanceSheetPage() {
             {data.liabilities.bankAccounts.map(a => (
               <SectionRow
                 key={a.id}
-                label={a.institution ? `${a.name} (${a.institution})` : a.name}
+                label={a.name}
                 amount={Math.max(0, a.balance)}
                 indent
+                onClick={() => openLedger(a.id, a.name)}
               />
             ))}
           </>
@@ -326,7 +491,7 @@ export default function BalanceSheetPage() {
             {data.liabilities.overdraftAccounts.map(a => (
               <SectionRow
                 key={a.id}
-                label={`${a.institution ? `${a.name} (${a.institution})` : a.name} — overdrawn`}
+                label={`${a.name} — overdrawn`}
                 amount={Math.abs(a.balance)}
                 indent
               />
@@ -334,39 +499,46 @@ export default function BalanceSheetPage() {
           </>
         )}
 
-        {/* Accounts Payable (bills with invoice received but not paid) */}
+        {/* Accounts Payable */}
         {hasAP && (
           <>
             <SubHeading label="Accounts Payable" />
             <SectionRow
               label="Invoices received but not yet paid"
               amount={data.liabilities.accountsPayable}
-              indent
-              muted
+              indent muted
             />
           </>
         )}
 
-        {/* COA liability accounts */}
+        {/* COA liability accounts — grouped by parent */}
         {hasCOALiabilities && (
           <>
-            <SubHeading label="Other Liabilities" />
-            {data.liabilities.coaAccounts.map(c => (
-              <SectionRow
-                key={c.id}
-                label={c.parentName ? `${c.parentName} — ${c.name}` : c.name}
-                amount={c.openingBalance}
-                glCode={c.glCode}
-                indent
-              />
+            {liabilityGroups.map(group => (
+              <div key={group.groupName}>
+                <SubHeading label={group.groupName} />
+                {group.rows.map(c => (
+                  <SectionRow
+                    key={c.id}
+                    label={stripParentPrefix(c.name, c.parentName)}
+                    amount={c.openingBalance}
+                    glCode={c.glCode}
+                    indent
+                  />
+                ))}
+                {group.rows.length > 1 && (
+                  <div className="flex items-center justify-between py-1 pl-4 text-xs text-muted-foreground border-t border-border/30 mt-0.5">
+                    <span className="font-medium">Subtotal</span>
+                    <span className="tabular-nums font-semibold text-sm">{fmt(group.groupTotal)}</span>
+                  </div>
+                )}
+              </div>
             ))}
           </>
         )}
 
         {data.assets.total === 0 && data.liabilities.total === 0 && (
-          <p className="text-sm text-muted-foreground py-2">
-            No liabilities recorded yet.
-          </p>
+          <p className="text-sm text-muted-foreground py-2">No liabilities recorded yet.</p>
         )}
 
         <Divider />
@@ -378,7 +550,6 @@ export default function BalanceSheetPage() {
         <div className="rounded-lg border border-border p-4 space-y-1">
           <SectionHeader label="EQUITY" icon={<Wallet className="h-4 w-4 text-purple-500" />} />
 
-          {/* Static COA equity accounts (owner investments, share capital, etc.) */}
           {data.equity.coaAccounts.length > 0 && (
             <>
               <SubHeading label="Owner Equity / Capital" />
@@ -394,7 +565,6 @@ export default function BalanceSheetPage() {
             </>
           )}
 
-          {/* Current period net income — retained earnings (P0 fix #2) */}
           <SubHeading label="Retained Earnings / Current Period" />
           <SectionRow
             label="Net Income to date"
@@ -462,6 +632,7 @@ export default function BalanceSheetPage() {
         Accounts Receivable shows income with remittance received but not yet in your bank.
         Net Income is calculated from all cleared income and expense transactions plus posted journal adjustments.
         Property, investments, and mortgages use opening balances from Chart of Accounts — update these manually when values change.
+        Click any account name to view its transaction ledger.
       </p>
     </div>
   )
