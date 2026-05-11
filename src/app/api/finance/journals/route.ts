@@ -25,6 +25,52 @@ async function nextReference(familyId: string): Promise<string> {
   return `JE-${String(count + 1).padStart(4, '0')}`
 }
 
+/** Maximum attempts to retry a create when the unique constraint on (familyId, reference) fires (P1-5). */
+const MAX_REF_RETRIES = 10
+
+/**
+ * Generate a unique reference and attempt the create callback.
+ * If Prisma P2002 fires (duplicate reference from a concurrent request),
+ * loop and try again with a fresh reference.
+ */
+async function createEntryWithRetry(
+  buildData: (reference: string) => any,
+  familyId: string,
+): Promise<any> {
+  for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
+    const reference = await nextReference(familyId)
+    try {
+      return await prisma.financeJournalEntry.create({
+        data: buildData(reference),
+        include: ENTRY_INCLUDE,
+      })
+    } catch (err: any) {
+      if (err.code === 'P2002' && attempt < MAX_REF_RETRIES - 1) continue
+      throw err
+    }
+  }
+}
+
+/**
+ * Same as createEntryWithRetry but within a $transaction. Returns the
+ * first element of the transaction result (e.g. [createdEntry, ...]).
+ */
+async function createEntryInTxWithRetry(
+  buildTx: (reference: string) => any,
+  familyId: string,
+): Promise<any> {
+  for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
+    const reference = await nextReference(familyId)
+    try {
+      const result = await prisma.$transaction(buildTx(reference))
+      return result[0]
+    } catch (err: any) {
+      if (err.code === 'P2002' && attempt < MAX_REF_RETRIES - 1) continue
+      throw err
+    }
+  }
+}
+
 // ── GET /api/finance/journals ─────────────────────────────────────────────────
 // Query params: page, limit, isPosted
 
@@ -89,10 +135,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'One or more GL accounts not found' }, { status: 400 })
   }
 
-  const reference = await nextReference(session.familyId)
-
-  const entry = await prisma.financeJournalEntry.create({
-    data: {
+  const entry = await createEntryWithRetry(
+    (reference) => ({
       reference,
       date:        new Date(date),
       description: description.trim(),
@@ -109,9 +153,9 @@ export async function POST(request: NextRequest) {
           memberId:    l.memberId    || null,
         })),
       },
-    },
-    include: ENTRY_INCLUDE,
-  })
+    }),
+    session.familyId,
+  )
 
   return NextResponse.json(entry, { status: 201 })
 }
@@ -239,36 +283,38 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { reversalDate, reversalDescription } = json
-    const reference = await nextReference(session.familyId)
 
-    const [reversal] = await prisma.$transaction([
-      prisma.financeJournalEntry.create({
-        data: {
-          reference,
-          date:         new Date(reversalDate ?? new Date()),
-          description:  reversalDescription?.trim() ?? `Reversal of ${existing.reference}: ${existing.description}`,
-          type:         'reversal',
-          isPosted:     true,
-          reversalOfId: existing.id,
-          entityId:     existing.entityId,
-          familyId:     session.familyId,
-          lines: {
-            create: existing.lines.map(l => ({
-              glAccountId: l.glAccountId,
-              side:        l.side === 'debit' ? 'credit' : 'debit',
-              amount:      l.amount,
-              description: l.description,
-              memberId:    l.memberId,
-            })),
+    const reversal = await createEntryInTxWithRetry(
+      (reference) => [
+        prisma.financeJournalEntry.create({
+          data: {
+            reference,
+            date:         new Date(reversalDate ?? new Date()),
+            description:  reversalDescription?.trim() ?? `Reversal of ${existing.reference}: ${existing.description}`,
+            type:         'reversal',
+            isPosted:     true,
+            reversalOfId: existing.id,
+            entityId:     existing.entityId,
+            familyId:     session.familyId,
+            lines: {
+              create: existing.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side:        l.side === 'debit' ? 'credit' : 'debit',
+                amount:      l.amount,
+                description: l.description,
+                memberId:    l.memberId,
+              })),
+            },
           },
-        },
-        include: ENTRY_INCLUDE,
-      }),
-      prisma.financeJournalEntry.update({
-        where: { id: existing.id },
-        data:  { isReversed: true },
-      }),
-    ])
+          include: ENTRY_INCLUDE,
+        }),
+        prisma.financeJournalEntry.update({
+          where: { id: existing.id },
+          data:  { isReversed: true },
+        }),
+      ],
+      session.familyId,
+    )
 
     return NextResponse.json(reversal, { status: 201 })
   }
@@ -287,36 +333,38 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { voidDate } = json
-    const reference = await nextReference(session.familyId)
 
-    const [voidEntry] = await prisma.$transaction([
-      prisma.financeJournalEntry.create({
-        data: {
-          reference,
-          date:         new Date(voidDate ?? new Date()),
-          description:  `VOID: ${existing.reference ?? existing.id} — ${existing.description}`,
-          type:         'reversal',
-          isPosted:     true,
-          reversalOfId: existing.id,
-          entityId:     existing.entityId,
-          familyId:     session.familyId,
-          lines: {
-            create: existing.lines.map(l => ({
-              glAccountId: l.glAccountId,
-              side:        l.side === 'debit' ? 'credit' : 'debit',
-              amount:      l.amount,
-              description: l.description,
-              memberId:    l.memberId,
-            })),
+    const voidEntry = await createEntryInTxWithRetry(
+      (reference) => [
+        prisma.financeJournalEntry.create({
+          data: {
+            reference,
+            date:         new Date(voidDate ?? new Date()),
+            description:  `VOID: ${existing.reference ?? existing.id} — ${existing.description}`,
+            type:         'reversal',
+            isPosted:     true,
+            reversalOfId: existing.id,
+            entityId:     existing.entityId,
+            familyId:     session.familyId,
+            lines: {
+              create: existing.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side:        l.side === 'debit' ? 'credit' : 'debit',
+                amount:      l.amount,
+                description: l.description,
+                memberId:    l.memberId,
+              })),
+            },
           },
-        },
-        include: ENTRY_INCLUDE,
-      }),
-      prisma.financeJournalEntry.update({
-        where: { id: existing.id },
-        data:  { isReversed: true },
-      }),
-    ])
+          include: ENTRY_INCLUDE,
+        }),
+        prisma.financeJournalEntry.update({
+          where: { id: existing.id },
+          data:  { isReversed: true },
+        }),
+      ],
+      session.familyId,
+    )
 
     return NextResponse.json(voidEntry, { status: 201 })
   }

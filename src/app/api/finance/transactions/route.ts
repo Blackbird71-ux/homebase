@@ -28,33 +28,43 @@ async function createTransactionJournalEntry(
   })
   if (valid.length !== glIds.length) return   // silently skip if any account missing
 
-  const count = await prisma.financeJournalEntry.count({ where: { familyId } })
-  const reference = `JE-${String(count + 1).padStart(4, '0')}`
-
   // Validate balance
   const dr = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
   const cr = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
   const balanced = Math.abs(dr - cr) < 0.005
 
-  await prisma.financeJournalEntry.create({
-    data: {
-      reference,
-      date,
-      description,
-      type: 'auto_transaction',
-      isPosted: balanced,   // post immediately if balanced; save as draft otherwise
-      entityId: entityId ?? null,
-      familyId,
-      lines: {
-        create: lines.map(l => ({
-          glAccountId: l.glAccountId,
-          side: l.side,
-          amount: l.amount,
-          description: l.description ?? null,
-        })),
-      },
-    },
-  })
+  // Retry loop for unique reference (P1-5)
+  const MAX_RETRIES = 10
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const count = await prisma.financeJournalEntry.count({ where: { familyId } })
+    const reference = `JE-${String(count + 1).padStart(4, '0')}`
+
+    try {
+      await prisma.financeJournalEntry.create({
+        data: {
+          reference,
+          date,
+          description,
+          type: 'auto_transaction',
+          isPosted: balanced,   // post immediately if balanced; save as draft otherwise
+          entityId: entityId ?? null,
+          familyId,
+          lines: {
+            create: lines.map(l => ({
+              glAccountId: l.glAccountId,
+              side: l.side,
+              amount: l.amount,
+              description: l.description ?? null,
+            })),
+          },
+        },
+      })
+      return  // success
+    } catch (err: any) {
+      if (err.code === 'P2002' && attempt < MAX_RETRIES - 1) continue
+      throw err
+    }
+  }
 }
 
 export async function GET(request: NextRequest) {

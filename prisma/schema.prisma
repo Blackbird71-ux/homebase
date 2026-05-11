@@ -1007,6 +1007,7 @@ model FinanceJournalEntry {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  @@unique([familyId, reference])
   @@index([familyId])
   @@index([familyId, date(sort: Desc)])
   @@index([familyId, isPosted])
