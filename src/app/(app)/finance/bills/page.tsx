@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, todayAU } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import Link from 'next/link'
 import {
@@ -109,7 +109,7 @@ export default function BillsPage() {
 
   const emptyForm = {
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
-    dayOfMonth: '', monthOfYear: '', nextDueDate: new Date().toISOString().split('T')[0],
+    dayOfMonth: '', monthOfYear: '', nextDueDate: todayAU(),
     endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
     notes: '', memberId: '', locationId: '', vendorId: '',
     entityId: '',
@@ -382,7 +382,7 @@ export default function BillsPage() {
   }
 
   async function handleMarkPaid(bill: Bill) {
-    setPaidConfirmDate(new Date().toISOString().split('T')[0])
+    setPaidConfirmDate(todayAU())
     setPaidConfirmGlAccountId('')
     setPaidConfirmAmount(bill.amount)
     setPaidConfirm({ bill })

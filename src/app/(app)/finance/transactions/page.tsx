@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Filter, X, Receipt } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, todayAU } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
@@ -46,7 +46,7 @@ export default function TransactionsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [form, setForm] = useState({
     accountId: '', categoryId: '', type: 'expense', amount: 0,
-    payee: '', description: '', date: new Date().toISOString().split('T')[0],
+    payee: '', description: '', date: todayAU(),
     isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '',
     taxClassification: '', isTransfer: false,
   })
@@ -103,7 +103,7 @@ export default function TransactionsPage() {
   function openNew() {
     setEditing(null)
     setErrors({})
-    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: new Date().toISOString().split('T')[0], isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '', taxClassification: '', isTransfer: false })
+    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: todayAU(), isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '', taxClassification: '', isTransfer: false })
     setShowForm(true)
   }
 

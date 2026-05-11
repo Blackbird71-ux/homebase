@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, todayAU } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -122,7 +122,7 @@ function fmt(n: number): string {
 
 function emptyForm(): JournalForm {
   return {
-    date:        new Date().toISOString().split('T')[0],
+    date:        todayAU(),
     description: '',
     type:        'manual',
     entityId:    '',
@@ -430,7 +430,7 @@ export default function JournalsPage() {
 
   function openVoid(entry: JournalEntry) {
     setVoidTarget(entry)
-    setVoidDate(new Date().toISOString().split('T')[0])
+    setVoidDate(todayAU())
   }
 
   async function submitVoid() {
@@ -462,7 +462,7 @@ export default function JournalsPage() {
   function openReversal(entry: JournalEntry) {
     setReversal({
       entry,
-      date:        new Date().toISOString().split('T')[0],
+      date:        todayAU(),
       description: `Reversal of ${entry.reference ?? entry.id}: ${entry.description}`,
     })
   }
