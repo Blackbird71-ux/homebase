@@ -289,6 +289,7 @@ function advanceNextDueDate(date: Date, frequency: string): Date {
   if (frequency === 'fortnightly') return addWeeks(date, 2)
   if (frequency === 'weekly')      return addWeeks(date, 1)
   if (frequency === 'quarterly')   return addMonths(date, 3)
+  if (frequency === 'halfyearly')  return addMonths(date, 6)
   if (frequency === 'yearly')      return addMonths(date, 12)
   return addMonths(date, 1)
 }

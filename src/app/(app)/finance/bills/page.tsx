@@ -650,6 +650,7 @@ export default function BillsPage() {
                   <option value="fortnightly">Fortnightly</option>
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly</option>
+                  <option value="halfyearly">Half-Yearly</option>
                   <option value="yearly">Yearly</option>
                 </select>
               </div>
