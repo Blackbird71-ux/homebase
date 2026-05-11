@@ -12,6 +12,9 @@ const BILL_INCLUDE = {
   location: { select: { id: true, name: true } },
   vendor: { select: { id: true, name: true } },
   entity: { select: { id: true, name: true, color: true, type: true } },
+  payments: {
+    select: { amount: true },
+  },
   attachments: {
     select: { id: true, billId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
     orderBy: { createdAt: 'asc' as const },
@@ -293,7 +296,7 @@ function advanceNextDueDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, paid, paidDate: paidDateRaw, invoiceReceived, invoiceReceivedDate, payFromAccountId, payFromGlAccountId } = json
+  const { id, paid, paidDate: paidDateRaw, invoiceReceived, invoiceReceivedDate, payFromAccountId, payFromGlAccountId, paymentAmount } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -350,35 +353,79 @@ export async function PATCH(request: NextRequest) {
 
   // ── Undo paid: delete stage-2 payment transaction + spawned children ─────
   if (paid === false && existing.paid === true) {
-    const paymentTxId: string | null = existingAny.paymentTxId ?? null
-    if (paymentTxId) {
-      await prisma.financeTransaction.deleteMany({
-        where: { id: paymentTxId, familyId: session.familyId },
-      })
-      updateData.paymentTxId = null
-      if (existingAny.transactionId === paymentTxId) updateData.transactionId = null
-    } else if (existingAny.transactionId) {
-      // Legacy: older records stored payment in transactionId directly
-      await prisma.financeTransaction.deleteMany({
-        where: { id: existingAny.transactionId, familyId: session.familyId },
-      })
-      updateData.transactionId = null
-    }
-    // Re-open stage-1 invoice tx (mark uncleared again so the expense stays on P&L
-    // but is no longer treated as cash-out)
-    const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
-    if (invoiceTxId) {
-      await prisma.financeTransaction.updateMany({
-        where: { id: invoiceTxId, familyId: session.familyId },
-        data: { isCleared: false, reconciledDate: null },
-      })
-    }
-    // Ensure the bill is restored to active/visible state
-    updateData.isActive = true
-    // Remove pending child occurrences that were spawned when paid
-    await prisma.financeRecurringBill.deleteMany({
-      where: { parentBillId: id, familyId: session.familyId, paid: false },
+    // Check if there are FinanceBillPayment records (new partial-payment system)
+    const paymentCount = await prisma.financeBillPayment.count({
+      where: { billId: id, familyId: session.familyId },
     })
+
+    if (paymentCount > 0) {
+      // ── New payment system: delete all FinanceBillPayment records ─────────
+      const payments = await prisma.financeBillPayment.findMany({
+        where: { billId: id, familyId: session.familyId },
+        select: { transactionId: true },
+      })
+      const txIds = payments.map(p => p.transactionId).filter(Boolean) as string[]
+
+      // Delete linked transactions
+      if (txIds.length > 0) {
+        await prisma.financeTransaction.deleteMany({
+          where: { id: { in: txIds }, familyId: session.familyId },
+        })
+      }
+
+      // Delete payment records
+      await prisma.financeBillPayment.deleteMany({
+        where: { billId: id, familyId: session.familyId },
+      })
+
+      // Re-open stage-1 invoice tx (unc lear the AP liability tracking)
+      const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+      if (invoiceTxId) {
+        await prisma.financeTransaction.updateMany({
+          where: { id: invoiceTxId, familyId: session.familyId },
+          data: { isCleared: false, reconciledDate: null },
+        })
+      }
+
+      // Remove spawned children
+      await prisma.financeRecurringBill.deleteMany({
+        where: { parentBillId: id, familyId: session.familyId, paid: false },
+      })
+
+      updateData.paid = false
+      updateData.paidDate = null
+    } else {
+      // ── Legacy payment system (single paymentTxId) ────────────────────────
+      const paymentTxId: string | null = existingAny.paymentTxId ?? null
+      if (paymentTxId) {
+        await prisma.financeTransaction.deleteMany({
+          where: { id: paymentTxId, familyId: session.familyId },
+        })
+        updateData.paymentTxId = null
+        if (existingAny.transactionId === paymentTxId) updateData.transactionId = null
+      } else if (existingAny.transactionId) {
+        // Legacy: older records stored payment in transactionId directly
+        await prisma.financeTransaction.deleteMany({
+          where: { id: existingAny.transactionId, familyId: session.familyId },
+        })
+        updateData.transactionId = null
+      }
+      // Re-open stage-1 invoice tx (mark uncleared again so the expense stays on P&L
+      // but is no longer treated as cash-out)
+      const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+      if (invoiceTxId) {
+        await prisma.financeTransaction.updateMany({
+          where: { id: invoiceTxId, familyId: session.familyId },
+          data: { isCleared: false, reconciledDate: null },
+        })
+      }
+      // Ensure the bill is restored to active/visible state
+      updateData.isActive = true
+      // Remove pending child occurrences that were spawned when paid
+      await prisma.financeRecurringBill.deleteMany({
+        where: { parentBillId: id, familyId: session.familyId, paid: false },
+      })
+    }
   }
 
   // Apply status field updates
@@ -450,112 +497,267 @@ export async function PATCH(request: NextRequest) {
   // Balance sheet effect: bank account balance decreases; AP liability clears.
   if (paid === true && !existing.paid) {
     const actualPaidDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
-    // payFromGlAccountId (GL category) takes precedence over legacy payFromAccountId (bank account)
-    const paymentAccountId = payFromAccountId ?? existing.accountId
-    const paymentGlAccountId: string | null = payFromGlAccountId ?? null
-    // Re-read the bill to get latest invoiceTxId (may have just been written above)
-    const freshBill = await prisma.financeRecurringBill.findFirst({
-      where: { id, familyId: session.familyId },
-    }) as any
+    const payAmount = paymentAmount ?? existing.amount
+    const isPartial = payAmount < existing.amount
 
-    try {
-      const invoiceTxId: string | null = freshBill?.invoiceTxId ?? null
+    if (isPartial) {
+      // ── PARTIAL PAYMENT path ──────────────────────────────────────────────
+      // Record a partial payment via the FinanceBillPayment system, allowing
+      // multiple installments against the same bill over time.
+      const paymentAccountId = payFromAccountId ?? existing.accountId
+      const paymentGlAccountId: string | null = payFromGlAccountId ?? null
 
-      if (invoiceTxId) {
-        // ── Case A: invoice was received — mark that tx cleared (cash out) ──
-        await prisma.financeTransaction.update({
-          where: { id: invoiceTxId },
+      // Calculate total paid so far (excluding this payment)
+      const existingPaymentsAgg = await prisma.financeBillPayment.aggregate({
+        where: { billId: id, familyId: session.familyId },
+        _sum: { amount: true },
+      })
+      const totalPaidBefore = existingPaymentsAgg._sum.amount ?? 0
+
+      // Create a FinanceTransaction for this partial payment
+      let transactionId: string | null = null
+      try {
+        const freshBill = await prisma.financeRecurringBill.findFirst({
+          where: { id, familyId: session.familyId },
+        }) as any
+        const invoiceTxId: string | null = freshBill?.invoiceTxId ?? null
+
+        if (invoiceTxId) {
+          // Case A: Invoice existed — create a cleared payment transaction
+          // The uncleared invoice tx stays at full amount (expense already on P&L).
+          const tx = await prisma.financeTransaction.create({
+            data: {
+              type: 'expense',
+              amount: payAmount,
+              accountId: paymentAccountId,
+              categoryId: existing.categoryId,
+              description: `${existing.name} (partial payment)`,
+              date: actualPaidDate,
+              isRecurring: false,
+              recurringBillId: existing.id,
+              vendorId: existing.vendorId,
+              notes: existing.notes,
+              memberId: existing.memberId,
+              locationId: existing.locationId,
+              isCleared: true,
+              reconciledDate: actualPaidDate,
+              isTransfer: false,
+              glAccountId: paymentGlAccountId ?? null,
+              createdBy: session.id,
+              familyId: session.familyId,
+              entityId: existing.entityId,
+              taxClassification: existingAny.taxClassification ?? null,
+            },
+          })
+          transactionId = tx.id
+        } else {
+          // Case B: No prior invoice — create a cleared expense tx for this installment
+          const tx = await prisma.financeTransaction.create({
+            data: {
+              type: 'expense',
+              amount: payAmount,
+              accountId: paymentAccountId,
+              categoryId: existing.categoryId,
+              description: existing.name,
+              date: actualPaidDate,
+              isRecurring: false,
+              recurringBillId: existing.id,
+              vendorId: existing.vendorId,
+              notes: existing.notes,
+              memberId: existing.memberId,
+              locationId: existing.locationId,
+              isCleared: true,
+              reconciledDate: actualPaidDate,
+              isTransfer: false,
+              glAccountId: paymentGlAccountId ?? null,
+              createdBy: session.id,
+              familyId: session.familyId,
+              entityId: existing.entityId,
+              taxClassification: existingAny.taxClassification ?? null,
+            },
+          })
+          transactionId = tx.id
+        }
+      } catch (err) {
+        console.error('[bills PATCH] Failed to create partial payment transaction:', err)
+      }
+
+      // Create the FinanceBillPayment record
+      if (transactionId) {
+        await prisma.financeBillPayment.create({
           data: {
-            isCleared: true,
-            reconciledDate: actualPaidDate,
-            date: actualPaidDate,
-            // Use glAccountId when a GL category was selected; fall back to bank account
-            ...(paymentGlAccountId
-              ? { glAccountId: paymentGlAccountId, accountId: paymentAccountId }
-              : { accountId: paymentAccountId }
-            ),
-          },
-        })
-        // paymentTxId points to the same tx (cleared invoice tx IS the payment)
-        await prisma.financeRecurringBill.update({
-          where: { id },
-          data: { paymentTxId: invoiceTxId, transactionId: invoiceTxId } as any,
-        })
-      } else {
-        // ── Case B: no prior invoice — create a cleared expense tx now ──────
-        // This is the single-step path (user marks paid without ticking invoice).
-        // Expense and payment happen simultaneously.
-        const tx = await prisma.financeTransaction.create({
-          data: {
-            type: 'expense',
-            amount: existing.amount,
-            accountId: paymentAccountId,
-            categoryId: existing.categoryId,
-            description: existing.name,
-            date: actualPaidDate,
-            isRecurring: existing.billType !== 'one-off',
-            recurringBillId: existing.id,
-            vendorId: existing.vendorId,
-            notes: existing.notes,
-            memberId: existing.memberId,
-            locationId: existing.locationId,
-            isCleared: true,
-            reconciledDate: actualPaidDate,
-            isTransfer: false,
-            glAccountId: paymentGlAccountId,
+            billId: id,
+            amount: payAmount,
+            paymentDate: actualPaidDate,
+            accountId: paymentAccountId ?? null,
+            glAccountId: paymentGlAccountId ?? null,
+            transactionId,
+            notes: null,
             createdBy: session.id,
             familyId: session.familyId,
-            entityId: existing.entityId,
-            taxClassification: (existing as any).taxClassification ?? null,
           },
-        })
-        await prisma.financeRecurringBill.update({
-          where: { id },
-          data: {
-            paymentTxId: tx.id,
-            transactionId: tx.id,
-          } as any,
         })
       }
-    } catch (err) {
-      console.error('[bills PATCH] Failed to create payment transaction:', err)
-    }
 
-    // Spawn the next occurrence for recurring bills
-    if (existing.billType !== 'one-off') {
-      const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
-      if (!existing.endDate || newDueDate <= existing.endDate) {
-        await prisma.financeRecurringBill.create({
-          data: {
-            name: existing.name,
-            amount: existing.amount,
-            accountId: existing.accountId,
-            categoryId: existing.categoryId,
-            vendorId: existing.vendorId,
-            frequency: existing.frequency,
-            dayOfMonth: existing.dayOfMonth,
-            monthOfYear: existing.monthOfYear,
-            nextDueDate: newDueDate,
-            endDate: existing.endDate,
-            isActive: existing.isActive,
-            autoPay: existing.autoPay,
-            emailReminder: existing.emailReminder,
-            reminderDays: existing.reminderDays,
-            notes: existing.notes,
-            memberId: existing.memberId,
-            locationId: existing.locationId,
-            billType: existing.billType,
-            recurrenceInterval: existing.recurrenceInterval,
-            invoiceReceived: false,
-            invoiceReceivedDate: null,
-            paid: false,
-            paidDate: null,
-            parentBillId: existing.id,
-            entityId: existing.entityId,
-            taxClassification: existing.taxClassification,
-            familyId: session.familyId,
-          },
-        })
+      // Update bill paid/paidDate based on cumulative total
+      const newTotalPaid = totalPaidBefore + payAmount
+      const newPaid = newTotalPaid >= existing.amount
+
+      const latestPayment = await prisma.financeBillPayment.findFirst({
+        where: { billId: id, familyId: session.familyId },
+        orderBy: { paymentDate: 'desc' },
+        select: { paymentDate: true },
+      })
+
+      // Override the earlier updateData.paid/paidDate (may have been set at top)
+      updateData.paid = newPaid
+      updateData.paidDate = latestPayment?.paymentDate ?? null
+
+      // Only spawn next occurrence if fully paid
+      if (newPaid && existing.billType !== 'one-off') {
+        const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
+        if (!existing.endDate || newDueDate <= existing.endDate) {
+          await prisma.financeRecurringBill.create({
+            data: {
+              name: existing.name,
+              amount: existing.amount,
+              accountId: existing.accountId,
+              categoryId: existing.categoryId,
+              vendorId: existing.vendorId,
+              frequency: existing.frequency,
+              dayOfMonth: existing.dayOfMonth,
+              monthOfYear: existing.monthOfYear,
+              nextDueDate: newDueDate,
+              endDate: existing.endDate,
+              isActive: existing.isActive,
+              autoPay: existing.autoPay,
+              emailReminder: existing.emailReminder,
+              reminderDays: existing.reminderDays,
+              notes: existing.notes,
+              memberId: existing.memberId,
+              locationId: existing.locationId,
+              billType: existing.billType,
+              recurrenceInterval: existing.recurrenceInterval,
+              invoiceReceived: false,
+              invoiceReceivedDate: null,
+              paid: false,
+              paidDate: null,
+              parentBillId: existing.id,
+              entityId: existing.entityId,
+              taxClassification: existingAny.taxClassification ?? null,
+              familyId: session.familyId,
+            },
+          })
+        }
+      }
+    } else {
+      // ── FULL PAYMENT path (existing behavior) ──────────────────────────────
+      const paymentAccountId = payFromAccountId ?? existing.accountId
+      const paymentGlAccountId: string | null = payFromGlAccountId ?? null
+      // Re-read the bill to get latest invoiceTxId (may have just been written above)
+      const freshBill = await prisma.financeRecurringBill.findFirst({
+        where: { id, familyId: session.familyId },
+      }) as any
+
+      try {
+        const invoiceTxId: string | null = freshBill?.invoiceTxId ?? null
+
+        if (invoiceTxId) {
+          // ── Case A: invoice was received — mark that tx cleared (cash out) ──
+          await prisma.financeTransaction.update({
+            where: { id: invoiceTxId },
+            data: {
+              isCleared: true,
+              reconciledDate: actualPaidDate,
+              date: actualPaidDate,
+              // Use glAccountId when a GL category was selected; fall back to bank account
+              ...(paymentGlAccountId
+                ? { glAccountId: paymentGlAccountId, accountId: paymentAccountId }
+                : { accountId: paymentAccountId }
+              ),
+            },
+          })
+          // paymentTxId points to the same tx (cleared invoice tx IS the payment)
+          await prisma.financeRecurringBill.update({
+            where: { id },
+            data: { paymentTxId: invoiceTxId, transactionId: invoiceTxId } as any,
+          })
+        } else {
+          // ── Case B: no prior invoice — create a cleared expense tx now ──────
+          // This is the single-step path (user marks paid without ticking invoice).
+          // Expense and payment happen simultaneously.
+          const tx = await prisma.financeTransaction.create({
+            data: {
+              type: 'expense',
+              amount: existing.amount,
+              accountId: paymentAccountId,
+              categoryId: existing.categoryId,
+              description: existing.name,
+              date: actualPaidDate,
+              isRecurring: existing.billType !== 'one-off',
+              recurringBillId: existing.id,
+              vendorId: existing.vendorId,
+              notes: existing.notes,
+              memberId: existing.memberId,
+              locationId: existing.locationId,
+              isCleared: true,
+              reconciledDate: actualPaidDate,
+              isTransfer: false,
+              glAccountId: paymentGlAccountId,
+              createdBy: session.id,
+              familyId: session.familyId,
+              entityId: existing.entityId,
+              taxClassification: (existing as any).taxClassification ?? null,
+            },
+          })
+          await prisma.financeRecurringBill.update({
+            where: { id },
+            data: {
+              paymentTxId: tx.id,
+              transactionId: tx.id,
+            } as any,
+          })
+        }
+      } catch (err) {
+        console.error('[bills PATCH] Failed to create payment transaction:', err)
+      }
+
+      // Spawn the next occurrence for recurring bills
+      if (existing.billType !== 'one-off') {
+        const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
+        if (!existing.endDate || newDueDate <= existing.endDate) {
+          await prisma.financeRecurringBill.create({
+            data: {
+              name: existing.name,
+              amount: existing.amount,
+              accountId: existing.accountId,
+              categoryId: existing.categoryId,
+              vendorId: existing.vendorId,
+              frequency: existing.frequency,
+              dayOfMonth: existing.dayOfMonth,
+              monthOfYear: existing.monthOfYear,
+              nextDueDate: newDueDate,
+              endDate: existing.endDate,
+              isActive: existing.isActive,
+              autoPay: existing.autoPay,
+              emailReminder: existing.emailReminder,
+              reminderDays: existing.reminderDays,
+              notes: existing.notes,
+              memberId: existing.memberId,
+              locationId: existing.locationId,
+              billType: existing.billType,
+              recurrenceInterval: existing.recurrenceInterval,
+              invoiceReceived: false,
+              invoiceReceivedDate: null,
+              paid: false,
+              paidDate: null,
+              parentBillId: existing.id,
+              entityId: existing.entityId,
+              taxClassification: existing.taxClassification,
+              familyId: session.familyId,
+            },
+          })
+        }
       }
     }
   }

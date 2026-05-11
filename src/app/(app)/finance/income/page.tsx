@@ -43,6 +43,7 @@ export interface IncomeEntry {
   taxRate: number | null
   taxClassification: string | null
   notes: string | null; memberId: string | null
+  journalEntryId: string | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
   vendor: { id: string; name: string } | null
@@ -160,6 +161,16 @@ export default function IncomePage() {
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
 
+  // When amount changes and lines have blank amounts, auto-fill them
+  useEffect(() => {
+    if (!showForm || form.amount <= 0) return
+    setJournalLines(prev => prev.map(l =>
+      l.amount === '' || l.amount === '0.00'
+        ? { ...l, amount: form.amount.toFixed(2) }
+        : l
+    ))
+  }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function openAttachments(entry: IncomeEntry) {
     setAttachmentIncomeId(entry.id)
     setAttachmentsLoading(true)
@@ -211,13 +222,49 @@ export default function IncomePage() {
     })
   }
 
-  function openNew() { setEditing(null); setForm(emptyForm); setErrors({}); setJournalLines([]); setJournalErrors({}); setShowForm(true) }
+  // ── Pre-seed journal lines for income ───────────────────────────────────
+  // DR: Accounts Receivable (locked) / CR: blank income line (user selects)
+  // Amount pre-filled when editing an existing entry.
+  function defaultIncomeLines(amount?: number): JournalFormLine[] {
+    const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
+    const ar = glAccounts.find(a => a.name === 'Accounts Receivable' && a.type === 'asset')
+    return [
+      { glAccountId: ar?.id ?? '', side: 'debit',  amount: amtStr, description: '' },
+      { glAccountId: '',           side: 'credit', amount: amtStr, description: '' },  // user picks income GL
+    ]
+  }
+
+  // Load existing journal lines when editing an entry that already has a JE
+  async function loadExistingJournalLines(journalEntryId: string): Promise<JournalFormLine[]> {
+    try {
+      const res = await fetch(`/api/finance/journals/${journalEntryId}`)
+      if (!res.ok) return defaultIncomeLines()
+      const entry = await res.json()
+      if (entry?.lines?.length >= 2) {
+        return entry.lines.map((l: any) => ({
+          glAccountId: l.glAccountId,
+          side: l.side,
+          amount: l.amount.toFixed(2),
+          description: l.description ?? '',
+        }))
+      }
+    } catch { /* fall through */ }
+    return defaultIncomeLines()
+  }
+
+  function openNew() { setEditing(null); setForm(emptyForm); setErrors({}); setJournalLines(defaultIncomeLines()); setJournalErrors({}); setShowForm(true) }
 
   function openEdit(e: IncomeEntry) {
     setEditing(e)
     setErrors({})
-    setJournalLines([])
     setJournalErrors({})
+    // Pre-seed journal lines: load existing JE lines if present, else defaults
+    if (e.journalEntryId) {
+      setJournalLines(defaultIncomeLines(e.amount))  // show defaults immediately
+      loadExistingJournalLines(e.journalEntryId).then(setJournalLines)
+    } else {
+      setJournalLines(defaultIncomeLines(e.amount))
+    }
     setForm({
       name: e.name, amount: e.amount, frequency: e.frequency,
       incomeType: e.incomeType ?? 'recurring',

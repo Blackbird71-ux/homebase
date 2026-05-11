@@ -190,6 +190,9 @@ export default function PaidBillsPage() {
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                   {bill.paidDate && <span className="text-green-500">Paid {format(new Date(bill.paidDate), 'd MMM yyyy')}</span>}
+                  {bill.payments && bill.payments.length > 1 && (
+                    <span className="text-muted-foreground">{bill.payments.length} installments</span>
+                  )}
                   {bill.category && (
                     <span className="inline-flex items-center gap-1">
                       {bill.category.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: bill.category.color }} />}

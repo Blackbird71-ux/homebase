@@ -297,6 +297,9 @@ export async function buildYtdReport(
       category: {
         select: { id: true, name: true, isTaxDeduction: true },
       },
+      payments: {
+        select: { amount: true, paymentDate: true },
+      },
     },
   })
 
@@ -443,7 +446,14 @@ export async function buildYtdReport(
     }
 
     // Add bill-based expenses (P1 fix: use lumpSumMonthIndices for lump-sum bills)
+    // Bills with payment records via FinanceBillPayment are SKIPPED here because
+    // their individual payment transactions are already captured as cleared
+    // expense transactions in the transaction loop below. Skipping prevents
+    // double-counting (same logic as the PNL route's billIdWithTxInPeriod dedup).
     for (const bill of entityBills) {
+      const billPayments = (bill as any).payments
+      if (billPayments && billPayments.length > 0) continue
+
       const catName = bill.category?.name ?? 'Uncategorised'
       const monthly = new Array(monthsComplete).fill(0)
       let total = 0

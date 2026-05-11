@@ -1,0 +1,94 @@
+I need you to perform a comprehensive audit and fix of this finance system. This is critical because financial data cannot be wrong. Please follow this systematic process:
+
+## 1. DATABASE & DATA INTEGRITY FIRST
+
+- Examine the production SQLite database (homebase.db) I've placed in the source directory
+- Run integrity check: `PRAGMA integrity_check;`
+- List all tables and schemas, identify which tables store: journal entries, accounts, transactions, invoices, payments
+- Check for orphaned records, missing foreign keys, data type mismatches
+- Verify all timestamps are stored in UTC and note which columns store timezone-naive vs aware
+
+## 2. COMPLETE FUNCTIONAL TEST MATRIX
+
+Act like a real user who has advanced finance and accounting skills and test EVERY function in order. For each, document PASS/FAIL with evidence:
+
+**Transaction Creation:**
+- Create a simple expense transaction
+- Create a simple income transaction  
+- Create a transfer between accounts
+- Create a split transaction (multiple lines)
+- Create a transaction with future date
+- Create a transaction with past date
+- Create a transaction on last day of month
+- Edit an existing transaction
+- Delete a transaction (soft & hard delete if both exist)
+- Void a transaction
+
+**Calculation Verification (critical):**
+- For each transaction, manually verify: total debits = total credits (down to 0.001 precision)
+- Verify tax/GST calculations (assuming Australian 10% GST if configured)
+- Check rounding behavior on split amounts
+
+**Reporting Suite:**
+- Generate Trial Balance and verify total debits = total credits
+- Generate Balance Sheet - verify: Assets = Liabilities + Equity
+- Generate P&L (Profit & Loss) - verify: Revenue - Expenses = Net Income
+- Generate General Ledger report for a date range
+- Generate Account Transactions report
+
+**UI Components:**
+- Every form field - does it accept/validate correctly?
+- Every button - does it trigger correct action?
+- Date picker - does it handle timezone consistently across display and storage?
+- Filters (date range, account, category) - do they work?
+
+## 3. SPECIFIC TIMEZONE BUG HUNT
+
+- Search all code for: `datetime.now()`, `utcnow()`, `datetime.utcnow()`, `.astimezone()`, `pytz`, `zoneinfo`
+- Check every location where UTC → local (Australian timezone) conversion happens
+- Test report generation with transactions dated: early morning, late evening, across DST boundaries (Oct & Apr in Australia)
+- Verify that a transaction created at 11pm UTC appears on correct Australian date
+
+## 4. DOUBLE-ENTRY COMPLIANCE CHECK (Australian standards)
+
+- Verify chart of accounts follows standard structure (Assets, Liabilities, Equity, Income, Expenses)
+- Check that retained earnings calculation is correct (Net Income from P&L flows to Balance Sheet)
+- Ensure closing entries are properly handled (or not needed depending on design)
+- Verify audit trail exists (who created/modified each transaction, timestamp)
+
+## 5. AUTOMATED TEST GENERATION
+
+After understanding the issues, write pytest or Jest tests that:
+- Spin up a test copy of the database
+- Run all the above transaction scenarios
+- Verify double-entry rules mathematically
+- Check timezone consistency
+
+## 6. FIXING PHASE (in priority order)
+
+**P0 (must fix, financial data corruption risk):**
+- Any DR != CR imbalance
+- Balance sheet not balancing
+- Incorrect transaction modification/deletion
+
+**P1 (data accuracy):**
+- Timezone display bugs affecting reported dates
+- Tax calculation errors
+- Rounding errors in splits
+
+**P2 (user experience):**
+- Broken UI components
+- Filter issues
+
+## 7. DELIVERABLES
+
+Please produce:
+1. A test report with each function tested and PASS/FAIL status
+2. The specific calculation errors found with before/after numbers
+3. All code fixes applied
+4. The automated tests you wrote
+5. A final verification: run through all tests again and confirm 100% pass
+
+Start by running `SELECT * FROM sqlite_master WHERE type='table';` and then create a checklist from section 2. Do not skip any step - I need this system to be completely reliable.
+
+"If any function is too large or complex to fully test in one go, break it down into sub-steps and test each. If you find a pattern (e.g., all date display issues), fix the root cause once. Ask me for clarification if the standard account structure or tax rate isn't clear from the existing schema."

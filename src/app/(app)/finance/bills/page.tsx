@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
   RefreshCw, Layers, Paperclip, Upload, X, FileText, Download, Building2,
-  BookmarkCheck, Briefcase, Eye, EyeOff,
+  BookmarkCheck, Briefcase, Eye, EyeOff, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
@@ -35,6 +35,7 @@ export interface Bill {
   nextDueDate: string; endDate: string | null; isActive: boolean
   autoPay: boolean; emailReminder: boolean; reminderDays: number
   notes: string | null; memberId: string | null
+  journalEntryId: string | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
   vendor: { id: string; name: string } | null
@@ -46,6 +47,7 @@ export interface Bill {
   billType: string; recurrenceInterval: string | null; parentBillId: string | null
   taxClassification: string | null
   attachments?: BillAttachment[]
+  payments?: { amount: number }[]
 }
 
 type QuickFilter = { type: 'member' | 'vendor' | 'location' | 'entity'; id: string; label: string }
@@ -76,6 +78,7 @@ export default function BillsPage() {
   const [paidConfirm, setPaidConfirm] = useState<{ bill: Bill } | null>(null)
   const [paidConfirmDate, setPaidConfirmDate] = useState<string>('')
   const [paidConfirmGlAccountId, setPaidConfirmGlAccountId] = useState<string>('')
+  const [paidConfirmAmount, setPaidConfirmAmount] = useState<number>(0)
   const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('bills-dateRange')
@@ -98,6 +101,9 @@ export default function BillsPage() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null)
+  const [paymentHistoryBillId, setPaymentHistoryBillId] = useState<string | null>(null)
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([])
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false)
   const [quickFilter, setQuickFilter] = useState<QuickFilter | null>(null)
   const attachFileRef = useRef<HTMLInputElement>(null)
 
@@ -169,6 +175,45 @@ export default function BillsPage() {
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
 
+  // ── Pre-seed journal lines for bills ───────────────────────────────────────
+  // DR: blank expense line (user selects the account) / CR: Accounts Payable
+  // Amount pre-filled when editing an existing bill.
+  function defaultBillLines(amount?: number): JournalFormLine[] {
+    const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
+    const ap = glAccounts.find(a => a.name === 'Accounts Payable' && a.type === 'liability')
+    return [
+      { glAccountId: '',      side: 'debit',  amount: amtStr, description: '' },  // user picks expense GL
+      { glAccountId: ap?.id ?? '', side: 'credit', amount: amtStr, description: '' },
+    ]
+  }
+
+  async function loadExistingBillJournalLines(journalEntryId: string): Promise<JournalFormLine[]> {
+    try {
+      const res = await fetch(`/api/finance/journals/${journalEntryId}`)
+      if (!res.ok) return defaultBillLines()
+      const entry = await res.json()
+      if (entry?.lines?.length >= 2) {
+        return entry.lines.map((l: any) => ({
+          glAccountId: l.glAccountId,
+          side: l.side,
+          amount: l.amount.toFixed(2),
+          description: l.description ?? '',
+        }))
+      }
+    } catch { /* fall through */ }
+    return defaultBillLines()
+  }
+
+  // Auto-fill journal line amounts when bill amount changes
+  useEffect(() => {
+    if (!showForm || form.amount <= 0) return
+    setJournalLines(prev => prev.map(l =>
+      l.amount === '' || l.amount === '0.00'
+        ? { ...l, amount: (form.amount as number).toFixed(2) }
+        : l
+    ))
+  }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
     if (addToBudget) {
       await fetch('/api/finance/budget', {
@@ -201,6 +246,17 @@ export default function BillsPage() {
   }
 
   function closeAttachments() { setAttachmentBillId(null); setAttachments([]); setPreviewAttachmentId(null) }
+
+  function closePaymentHistory() { setPaymentHistoryBillId(null); setPaymentHistory([]) }
+
+  async function openPaymentHistory(bill: Bill) {
+    if (paymentHistoryBillId === bill.id) { closePaymentHistory(); return }
+    setPaymentHistoryBillId(bill.id); setPaymentHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/finance/bills/${bill.id}/payments`)
+      if (res.ok) setPaymentHistory(await res.json())
+    } finally { setPaymentHistoryLoading(false) }
+  }
   function togglePreview(attId: string) { setPreviewAttachmentId(prev => prev === attId ? null : attId) }
   function isImageMime(mime: string) { return mime.startsWith('image/') }
   function isPdfMime(mime: string) { return mime === 'application/pdf' }
@@ -242,13 +298,19 @@ export default function BillsPage() {
     })
   }
 
-  function openNew() { setEditing(null); setErrors({}); setJournalLines([]); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
+  function openNew() { setEditing(null); setErrors({}); setJournalLines(defaultBillLines()); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
 
   function openEdit(b: Bill) {
     setEditing(b)
     setErrors({})
     setJournalErrors({})
-    setJournalLines([])   // journal lines are stored on the JE, not re-loaded here for simplicity
+    // Pre-seed journal lines: load existing JE lines if present, else defaults
+    if (b.journalEntryId) {
+      setJournalLines(defaultBillLines(b.amount))  // show defaults immediately while loading
+      loadExistingBillJournalLines(b.journalEntryId).then(setJournalLines)
+    } else {
+      setJournalLines(defaultBillLines(b.amount))
+    }
     setForm({
       name: b.name, amount: b.amount, frequency: b.frequency,
       accountId: b.account?.id ?? '', categoryId: b.category?.id ?? '',
@@ -322,11 +384,14 @@ export default function BillsPage() {
   async function handleMarkPaid(bill: Bill) {
     setPaidConfirmDate(new Date().toISOString().split('T')[0])
     setPaidConfirmGlAccountId('')
+    setPaidConfirmAmount(bill.amount)
     setPaidConfirm({ bill })
   }
 
   async function confirmMarkPaid() {
     if (!paidConfirm) return
+    const payAmount = Math.min(paidConfirmAmount, paidConfirm.bill.amount)
+    if (payAmount <= 0) { toast.error('Payment amount must be greater than 0'); return }
     const res = await fetch('/api/finance/bills', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -334,6 +399,7 @@ export default function BillsPage() {
         paid: true,
         paidDate: paidConfirmDate,
         payFromGlAccountId: paidConfirmGlAccountId || null,
+        paymentAmount: payAmount < paidConfirm.bill.amount ? payAmount : undefined,
       }),
     })
     if (res.ok) { toast.success('Bill marked as paid'); setPaidConfirm(null); load() }
@@ -433,7 +499,7 @@ export default function BillsPage() {
     setQuickFilter(q => q?.id === f.id ? null : f)
   }
 
-  if (loading) return <div className="p-4 text-muted-foreground">Loading bills…</div>
+  if (loading) return <div className="p-4 text-muted-foreground">Loading bills&hellip;</div>
 
   return (
     <div className="space-y-6">
@@ -626,7 +692,7 @@ export default function BillsPage() {
               <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
               <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">Select entity…</option>
+                <option value="">Select entity&hellip;</option>
                 {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
               </select>
             </div>
@@ -724,12 +790,27 @@ export default function BillsPage() {
       {/* Date paid confirmation */}
       <Dialog open={!!paidConfirm} onOpenChange={open => { if (!open) setPaidConfirm(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton={true}>
-          <DialogHeader><DialogTitle>Confirm bill paid</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader>
           {paidConfirm && (
             <div className="space-y-3 py-1">
               <p className="text-sm text-muted-foreground">
-                Mark <span className="font-medium text-foreground">{paidConfirm.bill.name}</span> as paid. What date was the payment?
+                Record payment for <span className="font-medium text-foreground">{paidConfirm.bill.name}</span>.
               </p>
+              <div>
+                <label className="text-xs text-muted-foreground">Amount paid (this installment)</label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <input type="number" min="0.01" max={paidConfirm.bill.amount} step="0.01"
+                    value={paidConfirmAmount} onChange={e => setPaidConfirmAmount(Number(e.target.value))}
+                    className="w-full rounded-md border border-input bg-background pl-7 pr-3 py-1.5 text-sm" />
+                </div>
+                {paidConfirmAmount < paidConfirm.bill.amount && (
+                  <p className="text-xs text-amber-500 mt-1">⚠ Partial payment — remaining <span className="font-medium">{formatCurrency(paidConfirm.bill.amount - paidConfirmAmount)}</span> will stay due</p>
+                )}
+                {paidConfirmAmount > paidConfirm.bill.amount && (
+                  <p className="text-xs text-destructive mt-1">⚠ Amount exceeds bill total of {formatCurrency(paidConfirm.bill.amount)}</p>
+                )}
+              </div>
               <div>
                 <label className="text-xs text-muted-foreground">Date paid</label>
                 <input type="date" value={paidConfirmDate} onChange={e => setPaidConfirmDate(e.target.value)}
@@ -745,17 +826,20 @@ export default function BillsPage() {
                   ))}
                 </select>
                 {!paidConfirmGlAccountId && (
-                  <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won&apos;t update</p>
+                  <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won't update</p>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                An expense transaction of <span className="font-medium text-foreground">{formatCurrency(paidConfirm.bill.amount)}</span> will be recorded on this date.
+                {paidConfirmAmount < paidConfirm.bill.amount
+                  ? `A partial transaction of ${formatCurrency(paidConfirmAmount)} will be recorded.`
+                  : `An expense transaction of ${formatCurrency(paidConfirmAmount)} will be recorded on this date.`
+                }
               </p>
             </div>
           )}
           <DialogFooter>
             <button onClick={() => setPaidConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            <button onClick={confirmMarkPaid} className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium">Mark as paid</button>
+            <button onClick={confirmMarkPaid} className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium">Record payment</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -788,7 +872,12 @@ export default function BillsPage() {
               onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
               onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
               isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
-              formatCurrency={formatCurrency} />
+              formatCurrency={formatCurrency}
+              paymentHistoryBillId={paymentHistoryBillId}
+              paymentHistory={paymentHistory}
+              paymentHistoryLoading={paymentHistoryLoading}
+              onOpenPaymentHistory={openPaymentHistory}
+              onClosePaymentHistory={closePaymentHistory} />
           ))}
           {visibleBills.length > 0 && (
             <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
@@ -801,7 +890,7 @@ export default function BillsPage() {
               </div>
               {colCats.map(c => (
                 <span key={c.id} className="text-xs font-semibold text-right">
-                  {catTotals[c.id] > 0 ? formatCurrency(catTotals[c.id]) : <span className="text-muted-foreground">—</span>}
+                  {catTotals[c.id] > 0 ? formatCurrency(catTotals[c.id]) : <span className="text-muted-foreground">&mdash;</span>}
                 </span>
               ))}
               <span className="text-sm font-bold text-right">{formatCurrency(grandTotal)}</span>
@@ -820,6 +909,8 @@ function BillRow({
   attachmentBillId, attachments, attachmentsLoading, uploadingAttachment, attachFileRef,
   previewAttachmentId, onCloseAttachments, onTogglePreview,
   onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize, formatCurrency,
+  paymentHistoryBillId, paymentHistory, paymentHistoryLoading,
+  onOpenPaymentHistory, onClosePaymentHistory,
 }: {
   bill: Bill; nextDue: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
@@ -838,10 +929,16 @@ function BillRow({
   onAttachmentDelete: (billId: string, attachmentId: string) => Promise<void>
   isImageMime: (mime: string) => boolean; isPdfMime: (mime: string) => boolean
   formatFileSize: (bytes: number) => string; formatCurrency: (n: number) => string
+  paymentHistoryBillId: string | null
+  paymentHistory: any[]; paymentHistoryLoading: boolean
+  onOpenPaymentHistory: (b: Bill) => void; onClosePaymentHistory: () => void
 }) {
-  const isOneOff         = bill.billType === 'one-off'
-  const hasInvoice       = bill.invoiceReceived
-  const isAttachmentOpen = attachmentBillId === bill.id
+  const isOneOff            = bill.billType === 'one-off'
+  const hasInvoice          = bill.invoiceReceived
+  const isAttachmentOpen    = attachmentBillId === bill.id
+  const isPaymentHistoryOpen = paymentHistoryBillId === bill.id
+  const totalPaid           = bill.payments?.reduce((s, p) => s + p.amount, 0) ?? 0
+  const isPartiallyPaid     = totalPaid > 0 && totalPaid < bill.amount
 
   return (
     <div>
@@ -849,6 +946,7 @@ function BillRow({
         className={cn(
           'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
           isOverdue    ? 'border-red-500/30 bg-red-500/5'
+          : isPartiallyPaid ? 'border-amber-500/30 bg-amber-500/5'
           : hasInvoice ? 'border-green-500/30 bg-green-500/5'
           :              'border-border hover:bg-accent/50',
           isAttachmentOpen && 'ring-1 ring-green-500/40 rounded-b-none',
@@ -857,10 +955,10 @@ function BillRow({
         onDoubleClick={() => onEdit(bill)}
       >
         <div className={cn('w-9 h-9 rounded-full flex items-center justify-center',
-          isOverdue ? 'bg-red-500/10' : hasInvoice ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
+          isOverdue ? 'bg-red-500/10' : isPartiallyPaid ? 'bg-amber-500/10' : hasInvoice ? 'bg-green-500/10' : isOneOff ? 'bg-orange-500/10' : 'bg-muted')}>
           {isOneOff
             ? <Layers className={cn('h-4 w-4', isOverdue ? 'text-red-500' : 'text-orange-500')} />
-            : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : hasInvoice ? 'text-green-600' : 'text-muted-foreground')} />}
+            : <RefreshCw className={cn('h-4 w-4', isOverdue ? 'text-red-500' : isPartiallyPaid ? 'text-amber-500' : hasInvoice ? 'text-green-600' : 'text-muted-foreground')} />}
         </div>
 
         <div className="min-w-0">
@@ -876,6 +974,11 @@ function BillRow({
             {inBudget && (
               <span className="text-[10px] bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
                 <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET
+              </span>
+            )}
+            {isPartiallyPaid && (
+              <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded flex items-center gap-0.5">
+                PARTIAL
               </span>
             )}
             {bill.entity && (
@@ -916,12 +1019,24 @@ function BillRow({
 
         {colCats.map(c => {
           const amt = billAmountForCat(bill, c.id)
-          return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
+          return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '&mdash;'}</span>
         })}
 
-        <p className="text-sm font-semibold text-right">{formatCurrency(bill.amount)}</p>
+        <div className="text-right">
+          <p className="text-sm font-semibold">{formatCurrency(bill.amount)}</p>
+          {isPartiallyPaid && (
+            <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+              {formatCurrency(totalPaid)} paid
+            </p>
+          )}
+        </div>
 
         <div className="flex items-center gap-0.5 justify-end">
+          <button onClick={() => onOpenPaymentHistory(bill)}
+            title="Payment history"
+            className={cn('p-1 hover:bg-accent rounded', isPaymentHistoryOpen ? 'text-amber-600' : 'text-muted-foreground')}>
+            <Clock className="h-3.5 w-3.5" />
+          </button>
           <button onClick={() => onOpenAttachments(bill)}
             title={bill.attachments && bill.attachments.length > 0 ? `${bill.attachments.length} attachment${bill.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
             className={cn('relative p-1 hover:bg-accent rounded',
@@ -951,6 +1066,46 @@ function BillRow({
         </div>
       </div>
 
+      {/* Payment History panel */}
+      {isPaymentHistoryOpen && (
+        <div className="rounded-b-lg border border-t-0 border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <CheckCircle2 className="h-3.5 w-3.5 text-amber-600" /> Payment History
+            </div>
+            <button onClick={onClosePaymentHistory} className="p-1 rounded hover:bg-accent text-muted-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {paymentHistoryLoading ? (
+            <p className="text-xs text-muted-foreground">Loading&hellip;</p>
+          ) : paymentHistory.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No payments yet.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {paymentHistory.map((p: any) => (
+                <div key={p.id} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                  <span className="text-xs text-muted-foreground w-24 shrink-0">{format(new Date(p.paymentDate), 'd MMM yyyy')}</span>
+                  <span className="font-medium shrink-0">{formatCurrency(p.amount)}</span>
+                  {p.glAccount && <span className="text-xs text-muted-foreground truncate">{p.glAccount.name}</span>}
+                  {p.transaction && (
+                    <span className={cn('text-[10px] px-1.5 rounded ml-auto', p.transaction.isCleared ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600')}>
+                      {p.transaction.isCleared ? 'Cleared' : 'Uncleared'}
+                    </span>
+                  )}
+                </div>
+              ))}
+              <div className="text-xs text-muted-foreground pt-1 border-t border-border/50">
+                Total paid: <span className="font-medium text-foreground">{formatCurrency(totalPaid)}</span>
+                {totalPaid < bill.amount && (
+                  <> &middot; Remaining: <span className="font-medium text-amber-600">{formatCurrency(bill.amount - totalPaid)}</span></>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Attachment panel */}
       {isAttachmentOpen && (
         <div className="rounded-b-lg border border-t-0 border-green-500/30 bg-green-500/5 px-4 py-3 space-y-3">
@@ -963,7 +1118,7 @@ function BillRow({
             </button>
           </div>
           {attachmentsLoading ? (
-            <p className="text-xs text-muted-foreground">Loading…</p>
+            <p className="text-xs text-muted-foreground">Loading&hellip;</p>
           ) : attachments.length === 0 ? (
             <p className="text-xs text-muted-foreground">No attachments yet.</p>
           ) : (
@@ -1013,9 +1168,9 @@ function BillRow({
               <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
                 <Upload className="h-3.5 w-3.5" />
-                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
+                {uploadingAttachment ? 'Uploading&hellip;' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
               </button>
-              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC · Max 2 files</p>
+              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC &middot; Max 2 files</p>
             </div>
           )}
         </div>

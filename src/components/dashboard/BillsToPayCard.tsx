@@ -60,18 +60,27 @@ export function BillsToPayCard({ bills }: { bills: BillSummaryItem[] }) {
           <p className="text-sm text-muted-foreground">No bills due in the next 30 days</p>
         ) : (
           <Link href="/finance/bills" className="block space-y-2">
-            {visible.map((bill) => (
-              <div key={bill.id} className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{bill.name}</p>
-                  <p className={`text-xs ${bill.isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                    {dueDateLabel(bill)}
-                    {bill.autoPay && <span className="ml-1 text-muted-foreground">(auto)</span>}
-                  </p>
+            {visible.map((bill) => {
+              const isPartial = bill.remainingBalance != null && bill.remainingBalance > 0 && bill.remainingBalance < bill.amount
+              return (
+                <div key={bill.id} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{bill.name}</p>
+                    <p className={`text-xs ${bill.isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                      {dueDateLabel(bill)}
+                      {bill.autoPay && <span className="ml-1 text-muted-foreground">(auto)</span>}
+                      {isPartial && <span className="ml-1 text-amber-600 font-medium">· Partial</span>}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(bill.amount)}</span>
+                    {isPartial && (
+                      <p className="text-[10px] text-amber-600 font-medium leading-tight">{formatCurrency(bill.remainingBalance!)} due</p>
+                    )}
+                  </div>
                 </div>
-                <span className="text-sm font-semibold tabular-nums shrink-0">{formatCurrency(bill.amount)}</span>
-              </div>
-            ))}
+              )
+            })}
             {overflow > 0 && (
               <p className="text-xs text-muted-foreground">+{overflow} more</p>
             )}

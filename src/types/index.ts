@@ -37,6 +37,7 @@ export interface BillSummaryItem {
   isOverdue: boolean
   daysUntilDue: number
   autoPay: boolean
+  remainingBalance?: number
 }
 
 export interface DashboardData {

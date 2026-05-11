@@ -207,7 +207,7 @@ export async function GET(request: NextRequest) {
         nextDueDate: { lte: new Date(mealPlanTodayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
       },
       orderBy: { nextDueDate: 'asc' },
-      select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true },
+      select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true, payments: { select: { amount: true } } },
     }),
   ])
 
@@ -313,6 +313,8 @@ export async function GET(request: NextRequest) {
       const dueDate = new Date(bill.nextDueDate)
       const diffMs = dueDate.getTime() - mealPlanTodayStart.getTime()
       const daysUntilDue = Math.round(diffMs / (1000 * 60 * 60 * 24))
+      const totalPaid = bill.payments?.reduce((s: number, p: { amount: number }) => s + p.amount, 0) ?? 0
+      const remainingBalance = Math.max(0, bill.amount - totalPaid)
       return {
         id: bill.id,
         name: bill.name,
@@ -322,6 +324,7 @@ export async function GET(request: NextRequest) {
         isOverdue: daysUntilDue < 0,
         daysUntilDue,
         autoPay: bill.autoPay,
+        remainingBalance,
       }
     }),
   }

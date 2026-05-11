@@ -88,7 +88,10 @@ export async function GET(request: NextRequest) {
   // ── 2. Bills (recurring planned expenses) ─────────────────────────────
   const bills = await prisma.financeRecurringBill.findMany({
     where: { familyId, isActive: true, ...entityFilter },
-    include: { category: { select: { id: true, name: true, color: true, type: true } } },
+    include: {
+      category: { select: { id: true, name: true, color: true, type: true } },
+      payments: { select: { amount: true, paymentDate: true } },
+    },
   })
 
   // ── 3. Income entries (recurring planned income) ──────────────────────

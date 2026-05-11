@@ -699,6 +699,7 @@ model FinanceRecurringBill {
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
+  payments        FinanceBillPayment[]
   attachments     BillAttachment[]
   budgetRules     FinanceBudget[]
   createdAt       DateTime             @default(now())
@@ -805,6 +806,29 @@ model BillAttachment {
 
   @@index([billId])
   @@index([familyId])
+}
+
+model FinanceBillPayment {
+  id              String               @id @default(cuid())
+  billId          String
+  bill            FinanceRecurringBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  amount          Float                // Amount paid in this installment
+  paymentDate     DateTime
+  accountId       String?              // Bank account the payment came from
+  account         FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  glAccountId     String?              // GL category for balance sheet tracking
+  glAccount       FinanceCategory?     @relation(fields: [glAccountId], references: [id], onDelete: SetNull)
+  transactionId   String?              @unique // FK -> FinanceTransaction created for this payment
+  transaction     FinanceTransaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  notes           String?
+  createdBy       String
+  familyId        String
+  family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime             @default(now())
+
+  @@index([billId])
+  @@index([familyId])
+  @@index([paymentDate(sort: Desc)])
 }
 
 model FinanceBudget {
