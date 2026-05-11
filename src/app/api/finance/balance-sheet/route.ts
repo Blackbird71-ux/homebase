@@ -76,7 +76,10 @@ export async function GET(request: NextRequest) {
   // asAt: interpret the date string as end-of-day in the family's timezone
   const asAt = asAtParam
     ? asAtEndOfDay(asAtParam, tz)
-    : (() => { const d = new Date(); d.setHours(23, 59, 59, 999); return d })()
+    : asAtEndOfDay(
+        new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()),
+        tz
+      )
 
   // ── 1. All cleared transactions up to asAt → bank account balances ────────
   const txFilter: any = {
@@ -217,9 +220,9 @@ export async function GET(request: NextRequest) {
   const coaRows = filteredCOA.map(cat => ({
     id: cat.id, name: cat.name, glCode: cat.glCode, type: cat.type,
     parentId: cat.parentId, parentName: cat.parent?.name ?? null,
-    openingBalance: (bankBalanceMap.get(cat.id) !== undefined)
-      ? (bankBalanceMap.get(cat.id)! + (cat.openingBalance ?? 0))
-      : (cat.openingBalance!),
+    openingBalance: bankBalanceMap.has(cat.id)
+      ? bankBalanceMap.get(cat.id)!
+      : (cat.openingBalance ?? 0),
     openingBalanceDate: cat.openingBalanceDate?.toISOString().split('T')[0] ?? null,
     isSystem: cat.isSystem,
     source: 'coa' as const,
