@@ -140,7 +140,7 @@ export default function ProfitLossPage() {
   // ── Load transactions for the current period ──────────────────────────────
   // P2 fix #3: always request isCleared=true — only settled transactions belong
   // in a P&L. Pending/uncleared amounts are not yet recognised income or expense.
-  async function loadTransactions(from: Date, to: Date, entityId: string) {
+  async function loadTransactions(from: Date, to: Date) {
     setTxLoading(true)
     try {
       const params = new URLSearchParams({
@@ -149,7 +149,6 @@ export default function ProfitLossPage() {
         isCleared:  'true',
         limit:      '500',
       })
-      if (entityId) params.set('entityId', entityId)
       const res = await fetch(`/api/finance/transactions?${params}`)
       if (res.ok) {
         const d = await res.json()
@@ -160,16 +159,29 @@ export default function ProfitLossPage() {
 
   useEffect(() => { loadStatic() }, [])
   useEffect(() => { setDrillSide(null); setDrillKey(null) }, [periodMode, anchor, viewMode, selectedEntityId])
-  useEffect(() => { loadTransactions(start, end, selectedEntityId) }, [start.toISOString(), end.toISOString(), selectedEntityId])
+  useEffect(() => { loadTransactions(start, end) }, [start.toISOString(), end.toISOString()])
 
   const startTs = start.getTime()
   const endTs   = end.getTime()
+
+  // ── The default entity ID for the "null = personal/default" semantics ─────
+  const defaultEntityId = useMemo(
+    () => entities.find(en => en.isDefault)?.id ?? null,
+    [entities],
+  )
+
+  /** True when the item's entity matches the current filter (or the item is unassigned and the default entity is selected). */
+  function matchesEntity(itemEntityId: string | null): boolean {
+    if (!selectedEntityId) return true   // "All" tab — include everything
+    if (!itemEntityId) return selectedEntityId === defaultEntityId   // unassigned → only on default entity tab
+    return itemEntityId === selectedEntityId
+  }
 
   // ── Relevant income: entries + income-type transactions ───────────────────
   const relevantIncome = useMemo(() => {
     const entryItems = income.filter(e => {
       if (!e.isActive) return false
-      if (selectedEntityId && e.entityId !== selectedEntityId) return false
+      if (!matchesEntity(e.entityId)) return false
       if (e.received && e.receivedDate) {
         // Confirmed received — show only in the period the money actually landed
         const ts = new Date(e.receivedDate).getTime()
@@ -204,7 +216,7 @@ export default function ProfitLossPage() {
 
     // Actual income-type transactions are always cash — include in both modes
     const txItems = transactions
-      .filter(t => t.type === 'income' && (!selectedEntityId || t.entityId === selectedEntityId))
+      .filter(t => t.type === 'income' && matchesEntity(t.entityId))
       .map(t => ({
         key:   t.category?.id ?? '__tx_none__',
         label: t.category?.name ?? 'Uncategorised',
@@ -224,7 +236,7 @@ export default function ProfitLossPage() {
   const relevantExpenses = useMemo(() => {
     const billItems = bills.filter(b => {
       if (!b.isActive) return false
-      if (selectedEntityId && b.entityId !== selectedEntityId) return false
+      if (!matchesEntity(b.entityId)) return false
       if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
       if (b.billType === 'transfer') return false
       if (b.paid && b.paidDate) {
@@ -260,7 +272,7 @@ export default function ProfitLossPage() {
 
     // Actual expense-type transactions are always cash — include in both modes
     const txItems = transactions
-      .filter(t => t.type === 'expense' && (!selectedEntityId || t.entityId === selectedEntityId))
+      .filter(t => t.type === 'expense' && matchesEntity(t.entityId))
       .map(t => ({
         key:   t.category?.id ?? '__tx_none__',
         label: t.category?.name ?? 'Uncategorised',
@@ -309,7 +321,7 @@ export default function ProfitLossPage() {
     for (const e of income) {
       if (!e.isTaxTracked || e.taxRate == null) continue
       if (!e.isActive) continue
-      if (selectedEntityId && e.entityId !== selectedEntityId) continue
+      if (!matchesEntity(e.entityId)) continue
       if (e.received && e.receivedDate) {
         const ts = new Date(e.receivedDate).getTime()
         if (ts >= startTs && ts <= endTs) {
