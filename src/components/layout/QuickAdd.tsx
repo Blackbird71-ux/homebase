@@ -310,6 +310,7 @@ export function QuickAdd() {
               description: expenseDescription.trim() || null,
               categoryId: expenseCategoryId || null,
               date: date ? new Date(date).toISOString() : new Date().toISOString(),
+              isCleared: true,
               ...(validLines.length >= 2 ? {
                 journalLines: validLines.map(l => ({
                   glAccountId: l.glAccountId,

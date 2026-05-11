@@ -23,6 +23,7 @@ interface Bill {
   nextDueDate: string; paid: boolean; paidDate: string | null
   isActive: boolean; billType: string
   entityId: string | null
+  paymentTxId: string | null
   category: { id: string; name: string; color: string | null; type: string } | null
 }
 
@@ -32,6 +33,7 @@ interface IncomeEntry {
   received: boolean; receivedDate: string | null
   isTaxTracked: boolean; taxRate: number | null
   entityId: string | null
+  receiptTxId: string | null
   category: { id: string; name: string; color: string | null } | null
 }
 
@@ -39,6 +41,7 @@ interface Tx {
   id: string; amount: number; type: string; date: string
   description: string | null; payee: string | null
   isTransfer: boolean; entityId: string | null
+  recurringBillId: string | null
   category: { id: string; name: string; color: string | null; type: string } | null
 }
 
@@ -177,11 +180,29 @@ export default function ProfitLossPage() {
     return itemEntityId === selectedEntityId
   }
 
+  // ── Dedup: transaction IDs linked to bills/income (avoid double-counting) ──
+  // When a bill is paid or income received, the PATCH endpoint creates a cleared
+  // transaction. Without dedup, the P&L counts the amount twice — once from the
+  // bill/income entry and once from the transaction.
+  /** Set of transaction IDs that are linked to bills via recurringBillId. */
+  const billLinkedTxIds = useMemo(
+    () => new Set(transactions.filter(t => t.recurringBillId).map(t => t.id)),
+    [transactions],
+  )
+  /** Set of cleared income transaction IDs that have a corresponding receiptTxId on the income entry. */
+  const receiptLinkedTxIds = useMemo(
+    () => new Set(transactions.filter(t => t.type === 'income').map(t => t.id)),
+    [transactions],
+  )
+
   // ── Relevant income: entries + income-type transactions ───────────────────
   const relevantIncome = useMemo(() => {
     const entryItems = income.filter(e => {
       if (!e.isActive) return false
       if (!matchesEntity(e.entityId)) return false
+      // If this income entry has a receipt transaction that's already loaded,
+      // skip the entry (the transaction already represents the cash inflow)
+      if (e.receiptTxId && receiptLinkedTxIds.has(e.receiptTxId)) return false
       if (e.received && e.receivedDate) {
         // Confirmed received — show only in the period the money actually landed
         const ts = new Date(e.receivedDate).getTime()
@@ -230,7 +251,7 @@ export default function ProfitLossPage() {
       }))
 
     return [...entryItems, ...txItems]
-  }, [income, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths])
+  }, [income, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths, receiptLinkedTxIds])
 
   // ── Relevant expenses: bills + expense-type transactions ──────────────────
   const relevantExpenses = useMemo(() => {
@@ -239,6 +260,9 @@ export default function ProfitLossPage() {
       if (!matchesEntity(b.entityId)) return false
       if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
       if (b.billType === 'transfer') return false
+      // If this bill has a payment transaction that's already loaded, skip the bill
+      // (the transaction already represents the cash outflow)
+      if (b.paymentTxId && billLinkedTxIds.has(b.paymentTxId)) return false
       if (b.paid && b.paidDate) {
         // Confirmed paid — show only in the period the payment actually occurred
         const ts = new Date(b.paidDate).getTime()
@@ -286,7 +310,7 @@ export default function ProfitLossPage() {
       }))
 
     return [...billItems, ...txItems]
-  }, [bills, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths])
+  }, [bills, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths, billLinkedTxIds])
 
   // ── Group into category rows ───────────────────────────────────────────────
   const incomeGroups = useMemo((): GroupRow[] => {
