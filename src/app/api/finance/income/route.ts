@@ -16,6 +16,87 @@ const INCOME_INCLUDE = {
   },
 }
 
+// ── Journal lines helper ────────────────────────────────────────────────────
+// Creates or replaces the draft accrual journal entry linked to an income entry.
+// Lines: DR Accounts Receivable / CR income account(s) [+ GST Payable]
+// The entry is saved as a DRAFT and posted when remittance is received.
+
+interface JournalLine {
+  glAccountId: string
+  side: 'debit' | 'credit'
+  amount: number
+  description?: string
+}
+
+async function upsertIncomeJournalEntry(
+  incomeName: string,
+  existingJournalEntryId: string | null | undefined,
+  lines: JournalLine[],
+  date: Date,
+  familyId: string,
+  entityId: string | null,
+): Promise<string> {
+  const glIds = [...new Set(lines.map(l => l.glAccountId))]
+  const validAccounts = await prisma.financeCategory.findMany({
+    where: { id: { in: glIds }, familyId },
+    select: { id: true },
+  })
+  if (validAccounts.length !== glIds.length) {
+    throw new Error('One or more GL accounts not found')
+  }
+
+  if (existingJournalEntryId) {
+    const existing = await prisma.financeJournalEntry.findFirst({
+      where: { id: existingJournalEntryId, familyId },
+    })
+    if (existing && !existing.isPosted) {
+      await prisma.financeJournalLine.deleteMany({ where: { journalEntryId: existingJournalEntryId } })
+      await prisma.financeJournalEntry.update({
+        where: { id: existingJournalEntryId },
+        data: {
+          date,
+          description: incomeName,
+          entityId: entityId ?? null,
+          lines: {
+            create: lines.map(l => ({
+              glAccountId: l.glAccountId,
+              side: l.side,
+              amount: l.amount,
+              description: l.description ?? null,
+            })),
+          },
+        },
+      })
+      return existingJournalEntryId
+    }
+  }
+
+  const count = await prisma.financeJournalEntry.count({ where: { familyId } })
+  const reference = `JE-${String(count + 1).padStart(4, '0')}`
+
+  const entry = await prisma.financeJournalEntry.create({
+    data: {
+      reference,
+      date,
+      description: incomeName,
+      type: 'auto_transaction',
+      isPosted: false,
+      entityId: entityId ?? null,
+      familyId,
+      lines: {
+        create: lines.map(l => ({
+          glAccountId: l.glAccountId,
+          side: l.side,
+          amount: l.amount,
+          description: l.description ?? null,
+        })),
+      },
+    },
+    select: { id: true },
+  })
+  return entry.id
+}
+
 export async function GET() {
   const session = await requireSession()
   const entries = await prisma.financeIncomeEntry.findMany({
@@ -38,6 +119,7 @@ export async function POST(request: NextRequest) {
     invoiceReceived, invoiceReceivedDate,
     notes, memberId, locationId, entityId, vendorId,
     isTaxTracked, taxRate, taxClassification,
+    journalLines,   // optional: JournalLine[] for double-entry accrual
   } = json
 
   if (!name || !amount || !frequency) {
@@ -78,6 +160,26 @@ export async function POST(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
+  // If journal lines provided, create the draft accrual journal entry
+  if (Array.isArray(journalLines) && journalLines.length >= 2) {
+    try {
+      const journalEntryId = await upsertIncomeJournalEntry(
+        entry.name,
+        null,
+        journalLines,
+        new Date(nextExpectedDate ?? new Date()),
+        session.familyId,
+        entityId ?? null,
+      )
+      await prisma.financeIncomeEntry.update({
+        where: { id: entry.id },
+        data: { journalEntryId } as any,
+      })
+    } catch (err) {
+      console.error('[income POST] Failed to create journal entry:', err)
+    }
+  }
+
   return NextResponse.json(entry, { status: 201 })
 }
 
@@ -93,6 +195,7 @@ export async function PUT(request: NextRequest) {
     invoiceReceived, invoiceReceivedDate,
     notes, memberId, locationId, entityId, vendorId,
     isTaxTracked, taxRate, taxClassification,
+    journalLines,   // optional: JournalLine[] for double-entry accrual
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -134,6 +237,29 @@ export async function PUT(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
+  // Upsert journal entry if lines provided
+  if (Array.isArray(journalLines) && journalLines.length >= 2) {
+    try {
+      const existingJeId: string | null = (existing as any).journalEntryId ?? null
+      const journalEntryId = await upsertIncomeJournalEntry(
+        name ?? existing.name,
+        existingJeId,
+        journalLines,
+        nextExpectedDate ? new Date(nextExpectedDate) : existing.nextExpectedDate,
+        session.familyId,
+        entityId !== undefined ? (entityId ?? null) : existing.entityId,
+      )
+      if (journalEntryId !== existingJeId) {
+        await prisma.financeIncomeEntry.update({
+          where: { id: entry.id },
+          data: { journalEntryId } as any,
+        })
+      }
+    } catch (err) {
+      console.error('[income PUT] Failed to upsert journal entry:', err)
+    }
+  }
+
   return NextResponse.json(entry)
 }
 
@@ -163,7 +289,7 @@ function advanceNextExpectedDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId } = json
+  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId, receiveToGlAccountId } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -306,8 +432,9 @@ export async function PATCH(request: NextRequest) {
   // Balance sheet effect: bank account balance increases; AR asset clears.
   if (received === true && !existing.received) {
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
-    // Use the override account if provided in the modal, otherwise fall back to the entry's linked account
+    // receiveToGlAccountId (GL category) takes precedence over legacy receiveToAccountId (bank account)
     const receiptAccountId = receiveToAccountId ?? existing.accountId
+    const receiptGlAccountId: string | null = receiveToGlAccountId ?? null
     // Re-read to get latest invoiceTxId (may have just been written above)
     const freshEntry = await prisma.financeIncomeEntry.findFirst({
       where: { id, familyId: session.familyId },
@@ -324,7 +451,11 @@ export async function PATCH(request: NextRequest) {
             isCleared: true,
             reconciledDate: actualReceivedDate,
             date: actualReceivedDate,
-            accountId: receiptAccountId,
+            // Use glAccountId when a GL category was selected; fall back to bank account
+            ...(receiptGlAccountId
+              ? { glAccountId: receiptGlAccountId, accountId: receiptAccountId }
+              : { accountId: receiptAccountId }
+            ),
           },
         })
         // receiptTxId points to the same tx
@@ -350,6 +481,7 @@ export async function PATCH(request: NextRequest) {
             isCleared: true,
             reconciledDate: actualReceivedDate,
             isTransfer: false,
+            glAccountId: receiptGlAccountId,
             createdBy: session.id,
             familyId: session.familyId,
             entityId: existing.entityId,

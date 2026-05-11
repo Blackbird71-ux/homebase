@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, BookOpen, Send, RotateCcw,
-  CheckCircle2, Clock, AlertTriangle, ChevronDown, ChevronRight,
+  CheckCircle2, Clock, AlertTriangle, ChevronDown, ChevronRight, Ban,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -167,6 +167,14 @@ export default function JournalsPage() {
   // ── Reversal dialog state ────────────────────────────────────────────────
   const [reversal, setReversal]     = useState<ReversalState | null>(null)
   const [reversalSaving, setReversalSaving] = useState(false)
+
+  // ── Void dialog state ────────────────────────────────────────────────────
+  // Voiding a posted entry creates a reversing journal entry (zeroing the GL
+  // effect), then marks the original isReversed=true. Once voided, the entry
+  // pair can be permanently deleted via the extended DELETE handler.
+  const [voidTarget, setVoidTarget] = useState<JournalEntry | null>(null)
+  const [voidDate, setVoidDate]     = useState<string>('')
+  const [voidSaving, setVoidSaving] = useState(false)
 
   // ── Data loaders ─────────────────────────────────────────────────────────
 
@@ -400,18 +408,54 @@ export default function JournalsPage() {
   }
 
   async function handleDelete(entry: JournalEntry) {
-    if (entry.isPosted) {
-      toast.error('Posted entries cannot be deleted. Create a reversal instead.')
+    // Drafts: delete immediately
+    if (!entry.isPosted) {
+      if (!confirm(`Delete draft ${entry.reference ?? 'entry'}: "${entry.description}"?`)) return
+      const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('Draft deleted'); load() }
+      else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
       return
     }
-    if (!confirm(`Delete draft ${entry.reference ?? 'entry'}: "${entry.description}"?`)) return
+    // Voided posted entries: delete both original + its reversal atomically
+    if (entry.isPosted && entry.isReversed) {
+      if (!confirm(`Permanently delete voided entry ${entry.reference ?? ''} and its void reversal? This cannot be undone.`)) return
+      const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('Voided entry permanently deleted'); load() }
+      else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
+      return
+    }
+    // Posted, not voided — refuse
+    toast.error('Void this entry first, then delete.')
+  }
 
-    const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
-    if (res.ok) {
-      toast.success('Draft deleted')
-      load()
-    } else {
-      toast.error('Failed to delete')
+  function openVoid(entry: JournalEntry) {
+    setVoidTarget(entry)
+    setVoidDate(new Date().toISOString().split('T')[0])
+  }
+
+  async function submitVoid() {
+    if (!voidTarget) return
+    setVoidSaving(true)
+    try {
+      const res = await fetch('/api/finance/journals', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          id:       voidTarget.id,
+          action:   'void',
+          voidDate: voidDate,
+        }),
+      })
+      if (res.ok) {
+        toast.success(`${voidTarget.reference ?? 'Entry'} voided — a reversing entry has been posted`)
+        setVoidTarget(null)
+        load()
+      } else {
+        const err = await res.json()
+        toast.error(err.error ?? 'Failed to void entry')
+      }
+    } finally {
+      setVoidSaving(false)
     }
   }
 
@@ -935,6 +979,68 @@ export default function JournalsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* \u2500\u2500 Void dialog \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+      <Dialog open={!!voidTarget} onOpenChange={open => { if (!open) setVoidTarget(null) }}>
+        <DialogContent className="sm:max-w-md" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ban className="h-4 w-4 text-amber-500" />
+              Void Journal Entry
+            </DialogTitle>
+          </DialogHeader>
+
+          {voidTarget && (
+            <>
+              <div className="rounded-md bg-muted/50 border border-border px-3 py-2 text-sm">
+                <p className="text-xs text-muted-foreground mb-0.5">Voiding:</p>
+                <p className="font-medium">{voidTarget.reference} \u2014 {voidTarget.description}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {format(new Date(voidTarget.date), 'd MMM yyyy')}
+                </p>
+              </div>
+
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 flex gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  A reversing entry will be posted to zero out this entry&apos;s GL effect.
+                  The original will be marked <strong>VOIDED</strong>. You can then delete
+                  both entries permanently if needed.
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">Void date</label>
+                <input
+                  type="date"
+                  value={voidDate}
+                  onChange={e => setVoidDate(e.target.value)}
+                  className="w-full mt-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  disabled={voidSaving}
+                />
+              </div>
+            </>
+          )}
+
+          <DialogFooter>
+            <button
+              onClick={() => setVoidTarget(null)}
+              disabled={voidSaving}
+              className="rounded-md border border-border px-4 py-1.5 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submitVoid}
+              disabled={voidSaving}
+              className="rounded-md bg-amber-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              <Ban className="h-3.5 w-3.5" />
+              {voidSaving ? 'Voiding\u2026' : 'Void Entry'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Entry list ────────────────────────────────────────────────────── */}
       {entries.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center">
@@ -1086,13 +1192,33 @@ export default function JournalsPage() {
                           </button>
                         </>
                       )}
+                      {/* Posted, not yet voided: show Void + Reverse buttons */}
                       {!isDraft && !isReversed && !isReversal && (
+                        <>
+                          <button
+                            onClick={() => openVoid(entry)}
+                            title="Void this entry"
+                            className="p-1 hover:bg-accent rounded text-amber-500 hover:text-amber-600 transition-colors"
+                          >
+                            <Ban className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => openReversal(entry)}
+                            title="Reverse this entry"
+                            className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-red-500 transition-colors"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      )}
+                      {/* Voided entry: show Delete button to permanently remove */}
+                      {!isDraft && isReversed && (
                         <button
-                          onClick={() => openReversal(entry)}
-                          title="Reverse this entry"
-                          className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-red-500 transition-colors"
+                          onClick={() => handleDelete(entry)}
+                          title="Permanently delete this voided entry"
+                          className="p-1 hover:bg-accent rounded text-red-500"
                         >
-                          <RotateCcw className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
                       {isExpanded

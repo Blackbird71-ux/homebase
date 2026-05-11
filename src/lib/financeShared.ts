@@ -90,9 +90,18 @@ export function getCurrentFY(): string {
 
 /**
  * Get the month index (0-11) within the FY for a given date.
+ *
+ * IMPORTANT: This function uses a hardcoded July FY start (AU default).
+ * For configurable FY start months, use fyMonthIndex() from finance-fy.ts instead.
+ *
  * Jul=0, Aug=1, ..., Jun=11
+ *
+ * @deprecated For new code, import fyMonthIndex from '@/lib/finance-fy' and pass
+ * the family's fyStartMonth. This function is kept for backward compatibility only.
  */
-export function fyMonthIndex(date: Date, fyStartYear: number): number {
+export function fyMonthIndex(date: Date, _fyStartYear?: number): number {
+  // fyStartYear parameter is unused — this always uses July as FY start.
+  // The parameter is kept to avoid breaking existing call sites.
   const m = date.getMonth()
   return m >= 6 ? m - 6 : m + 6
 }

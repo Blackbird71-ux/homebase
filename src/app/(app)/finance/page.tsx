@@ -107,18 +107,52 @@ export default async function FinanceOverviewPage() {
     .filter((t) => t.type === 'expense' && t.categoryId && externalCategories.some((c) => c.id === t.categoryId))
     .reduce((sum, t) => sum + t.amount, 0)
 
-  // Compute budget spent values
-  const spentByCategory: Record<string, number> = {}
-  for (const tx of transactions) {
-    if (tx.type === 'expense' && tx.categoryId) {
-      spentByCategory[tx.categoryId] = (spentByCategory[tx.categoryId] || 0) + tx.amount
+  // Compute budget spent values — each budget uses ITS OWN period (P2 fix #1).
+  // Budgets can be monthly, quarterly, or annual; using the global monthStart/monthEnd
+  // window under-reported spend for budgets whose period spans multiple months.
+  //
+  // Strategy: collect the union of all distinct budget date ranges, fetch transactions
+  // for all of them in a single query, then match them back to each budget by category
+  // and date range. This avoids N+1 queries.
+  const uniquePeriods = new Map<string, { start: Date; end: Date }>()
+  for (const b of budgets) {
+    const key = `${b.startDate.toISOString()}|${b.endDate.toISOString()}`
+    if (!uniquePeriods.has(key)) {
+      uniquePeriods.set(key, { start: b.startDate, end: b.endDate })
     }
   }
-  const totalSpent = Object.values(spentByCategory).reduce((a, b) => a + b, 0)
-  const budgetsWithSpent = budgets.map((b) => ({
-    ...b,
-    spent: b.categoryId ? (spentByCategory[b.categoryId] || 0) : totalSpent,
-  }))
+
+  // Fetch all expense transactions within any budget period in a single query.
+  // The OR across date ranges is safe because budgets are typically few (< 20).
+  const budgetTxs = uniquePeriods.size > 0
+    ? await prisma.financeTransaction.findMany({
+        where: {
+          familyId,
+          type: 'expense',
+          isCleared: true,
+          categoryId: { not: null },
+          OR: Array.from(uniquePeriods.values()).map(({ start, end }) => ({
+            date: { gte: start, lte: end },
+          })),
+        },
+        select: { categoryId: true, amount: true, date: true },
+      })
+    : []
+
+  // Sum spend per budget: match transactions by categoryId AND falling within the budget's own period
+  const budgetsWithSpent = budgets.map((b) => {
+    if (!b.categoryId) {
+      // Uncategorised budget: sum ALL expense transactions within this budget's period
+      const spent = budgetTxs
+        .filter((tx) => tx.date >= b.startDate && tx.date <= b.endDate)
+        .reduce((sum, tx) => sum + tx.amount, 0)
+      return { ...b, spent }
+    }
+    const spent = budgetTxs
+      .filter((tx) => tx.categoryId === b.categoryId && tx.date >= b.startDate && tx.date <= b.endDate)
+      .reduce((sum, tx) => sum + tx.amount, 0)
+    return { ...b, spent }
+  })
 
   // Count overdue bills (exclude already paid)
   const overdueBills = bills.filter((b) => !b.paid && new Date(b.nextDueDate) < now)
@@ -170,7 +204,13 @@ export default async function FinanceOverviewPage() {
       }))}
       savingsGoals={savingsGoals.map((g) => ({
         ...g,
-        // Auto-derive currentAmount from linked account balance via derived balance map
+        // Savings goal amount derivation (P2 #4 — documented approach):
+        // - Goals WITH a linked account: currentAmount = derived account balance
+        //   (balanceMap reflects cleared transactions). The stored currentAmount
+        //   field is ignored for these goals.
+        // - Goals WITHOUT a linked account: currentAmount = the stored field value,
+        //   which the user updates manually via the goal editor (PUT /api/finance/goals).
+        //   The UI should expose a "Current amount" input for unlinked goals.
         currentAmount: g.accountId ? (balanceMap.get(g.accountId) ?? g.currentAmount) : g.currentAmount,
         targetDate: g.targetDate?.toISOString() ?? null,
         createdAt: g.createdAt.toISOString(),

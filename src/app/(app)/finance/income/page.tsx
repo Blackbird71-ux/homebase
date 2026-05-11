@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
@@ -65,6 +66,7 @@ export default function IncomePage() {
   const [entries, setEntries]         = useState<IncomeEntry[]>([])
   const [accounts, setAccounts]       = useState<{ id: string; name: string }[]>([])
   const [categories, setCategories]   = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
+  const [glAccounts, setGLAccounts]   = useState<GLAccount[]>([])
   const [members, setMembers]         = useState<Member[]>([])
   const [locations, setLocations]     = useState<Location[]>([])
   const [vendors, setVendors]         = useState<Vendor[]>([])
@@ -73,9 +75,11 @@ export default function IncomePage() {
   const [showForm, setShowForm]       = useState(false)
   const [editing, setEditing]         = useState<IncomeEntry | null>(null)
   const [errors, setErrors]           = useState<Record<string, string>>({})
+  const [journalLines, setJournalLines] = useState<JournalFormLine[]>([])
+  const [journalErrors, setJournalErrors] = useState<Record<string, string>>({})
   const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
   const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
-  const [receivedConfirmAccountId, setReceivedConfirmAccountId] = useState<string>('')
+  const [receivedConfirmGlAccountId, setReceivedConfirmGlAccountId] = useState<string>('')
   const [dateRange, setDateRange]     = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('income-dateRange')
@@ -142,7 +146,11 @@ export default function IncomePage() {
       fetch('/api/finance/entities'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
-    if (cRes.ok) setCategories(await cRes.json())
+    if (cRes.ok) {
+      const cats = await cRes.json()
+      setCategories(cats)
+      setGLAccounts(cats.filter((c: any) => c.type !== 'transfer'))
+    }
     if (mRes.ok) setMembers(await mRes.json())
     if (lRes.ok) setLocations(await lRes.json())
     if (vRes.ok) setVendors(await vRes.json())
@@ -203,10 +211,13 @@ export default function IncomePage() {
     })
   }
 
-  function openNew() { setEditing(null); setForm(emptyForm); setErrors({}); setShowForm(true) }
+  function openNew() { setEditing(null); setForm(emptyForm); setErrors({}); setJournalLines([]); setJournalErrors({}); setShowForm(true) }
 
   function openEdit(e: IncomeEntry) {
     setEditing(e)
+    setErrors({})
+    setJournalLines([])
+    setJournalErrors({})
     setForm({
       name: e.name, amount: e.amount, frequency: e.frequency,
       incomeType: e.incomeType ?? 'recurring',
@@ -233,7 +244,7 @@ export default function IncomePage() {
     setShowForm(true)
   }
 
-  function closeForm() { setShowForm(false); setEditing(null); setErrors({}) }
+  function closeForm() { setShowForm(false); setEditing(null); setErrors({}); setJournalLines([]); setJournalErrors({}) }
 
   function validate(): Record<string, string> {
     const errs: Record<string, string> = {}
@@ -279,7 +290,10 @@ export default function IncomePage() {
     const errs = validate()
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     const payload = getFormPayload()
-    const body = editing ? { id: editing.id, ...payload } : payload
+    const validLines = journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+    const body = editing
+      ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+      : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
     const res = await fetch('/api/finance/income', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,7 +315,7 @@ export default function IncomePage() {
   async function handleMarkReceived(entry: IncomeEntry) {
     const today = new Date().toISOString().split('T')[0]
     setReceivedConfirmDate(today)
-    setReceivedConfirmAccountId(entry.account?.id ?? '')
+    setReceivedConfirmGlAccountId('')
     setReceivedConfirm({ entry })
   }
 
@@ -315,7 +329,7 @@ export default function IncomePage() {
         id: entry.id,
         received: true,
         receivedDate: receivedConfirmDate,
-        receiveToAccountId: receivedConfirmAccountId || null,
+        receiveToGlAccountId: receivedConfirmGlAccountId || null,
       }),
     })
     if (res.ok) { toast.success('Income marked as received'); setReceivedConfirm(null); load() }
@@ -577,24 +591,6 @@ export default function IncomePage() {
               </div>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Category</label>
-              <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No category</option>
-                {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
-                  <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Account</label>
-              <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No account</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div>
               <label className="text-xs text-muted-foreground">Day of Month</label>
               <input type="number" min={1} max={31} value={form.dayOfMonth}
                 onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
@@ -650,6 +646,18 @@ export default function IncomePage() {
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Journal Lines — double-entry accrual (replaces Category + GL Account fields) */}
+          <div className="rounded-md border border-border bg-muted/20 p-3">
+            <JournalLinesEditor
+              lines={journalLines}
+              onChange={setJournalLines}
+              glAccounts={glAccounts}
+              expectedTotal={form.amount || 0}
+              errors={journalErrors}
+              onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
+            />
           </div>
 
           <div className="flex flex-wrap gap-6 pt-1">
@@ -767,14 +775,16 @@ export default function IncomePage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Receive into account</label>
-                <select value={receivedConfirmAccountId} onChange={e => setReceivedConfirmAccountId(e.target.value)}
+                <label className="text-xs text-muted-foreground">Receive into GL account</label>
+                <select value={receivedConfirmGlAccountId} onChange={e => setReceivedConfirmGlAccountId(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                  <option value="">No account (unlinked)</option>
-                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  <option value="">No GL account (unlinked)</option>
+                  {sortedCategoryList(categories.filter(c => c.type === 'asset')).map(c => (
+                    <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
+                  ))}
                 </select>
-                {!receivedConfirmAccountId && (
-                  <p className="text-xs text-amber-500 mt-1">⚠ No account selected — bank balance won&apos;t update</p>
+                {!receivedConfirmGlAccountId && (
+                  <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won&apos;t update</p>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">

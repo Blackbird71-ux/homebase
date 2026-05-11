@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
@@ -61,6 +62,7 @@ export default function BillsPage() {
   const [bills, setBills]           = useState<Bill[]>([])
   const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
+  const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
   const [members, setMembers]       = useState<Member[]>([])
   const [locations, setLocations]   = useState<Location[]>([])
   const [vendors, setVendors]       = useState<Vendor[]>([])
@@ -69,9 +71,11 @@ export default function BillsPage() {
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
   const [editing, setEditing]       = useState<Bill | null>(null)
+  const [journalLines, setJournalLines] = useState<JournalFormLine[]>([])
+  const [journalErrors, setJournalErrors] = useState<Record<string, string>>({})
   const [paidConfirm, setPaidConfirm] = useState<{ bill: Bill } | null>(null)
   const [paidConfirmDate, setPaidConfirmDate] = useState<string>('')
-  const [paidConfirmAccountId, setPaidConfirmAccountId] = useState<string>('')
+  const [paidConfirmGlAccountId, setPaidConfirmGlAccountId] = useState<string>('')
   const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('bills-dateRange')
@@ -146,7 +150,12 @@ export default function BillsPage() {
       fetch('/api/finance/entities'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
-    if (cRes.ok) setCategories(await cRes.json())
+    if (cRes.ok) {
+      const cats = await cRes.json()
+      setCategories(cats)
+      // GL accounts = all categories (asset, liability, equity, income, expense)
+      setGLAccounts(cats.filter((c: any) => c.type !== 'transfer'))
+    }
     if (mRes.ok) setMembers(await mRes.json())
     if (lRes.ok) setLocations(await lRes.json())
     if (vRes.ok) setVendors(await vRes.json())
@@ -233,11 +242,13 @@ export default function BillsPage() {
     })
   }
 
-  function openNew() { setEditing(null); setErrors({}); setForm(emptyForm); setShowForm(true) }
+  function openNew() { setEditing(null); setErrors({}); setJournalLines([]); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
 
   function openEdit(b: Bill) {
     setEditing(b)
     setErrors({})
+    setJournalErrors({})
+    setJournalLines([])   // journal lines are stored on the JE, not re-loaded here for simplicity
     setForm({
       name: b.name, amount: b.amount, frequency: b.frequency,
       accountId: b.account?.id ?? '', categoryId: b.category?.id ?? '',
@@ -258,7 +269,7 @@ export default function BillsPage() {
     setShowForm(true)
   }
 
-  function closeForm() { setShowForm(false); setEditing(null) }
+  function closeForm() { setShowForm(false); setEditing(null); setJournalLines([]); setJournalErrors({}) }
 
   function getFormPayload() {
     return {
@@ -280,7 +291,11 @@ export default function BillsPage() {
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
     const { addToBudget, ...payload } = getFormPayload() as any
-    const body = editing ? { id: editing.id, ...payload } : payload
+    // Include journal lines if at least 2 lines are defined with GL accounts
+    const validLines = journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+    const body = editing
+      ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+      : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
     const res = await fetch('/api/finance/bills', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -306,7 +321,7 @@ export default function BillsPage() {
 
   async function handleMarkPaid(bill: Bill) {
     setPaidConfirmDate(new Date().toISOString().split('T')[0])
-    setPaidConfirmAccountId(bill.account?.id ?? '')
+    setPaidConfirmGlAccountId('')
     setPaidConfirm({ bill })
   }
 
@@ -318,7 +333,7 @@ export default function BillsPage() {
         id: paidConfirm.bill.id,
         paid: true,
         paidDate: paidConfirmDate,
-        payFromAccountId: paidConfirmAccountId || null,
+        payFromGlAccountId: paidConfirmGlAccountId || null,
       }),
     })
     if (res.ok) { toast.success('Bill marked as paid'); setPaidConfirm(null); load() }
@@ -587,24 +602,6 @@ export default function BillsPage() {
               </div>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Category</label>
-              <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No category</option>
-                {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
-                  <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Account</label>
-              <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No account</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div>
               <label className="text-xs text-muted-foreground">{form.billType === 'one-off' ? 'Due Date *' : 'Next Due Date *'}</label>
               <input type="date" value={form.nextDueDate} onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
                 className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.nextDueDate && 'border-red-500')} />
@@ -650,6 +647,17 @@ export default function BillsPage() {
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
+          </div>
+          {/* Journal Lines — double-entry accrual (replaces Category + GL Account fields) */}
+          <div className="rounded-md border border-border bg-muted/20 p-3">
+            <JournalLinesEditor
+              lines={journalLines}
+              onChange={setJournalLines}
+              glAccounts={glAccounts}
+              expectedTotal={form.amount || 0}
+              errors={journalErrors}
+              onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
+            />
           </div>
           <div className="flex flex-wrap gap-6 pt-1">
             {form.billType === 'recurring' && (
@@ -728,14 +736,16 @@ export default function BillsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Pay from account</label>
-                <select value={paidConfirmAccountId} onChange={e => setPaidConfirmAccountId(e.target.value)}
+                <label className="text-xs text-muted-foreground">Pay from GL account</label>
+                <select value={paidConfirmGlAccountId} onChange={e => setPaidConfirmGlAccountId(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                  <option value="">No account (unlinked)</option>
-                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  <option value="">No GL account (unlinked)</option>
+                  {sortedCategoryList(categories.filter(c => c.type === 'asset')).map(c => (
+                    <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
+                  ))}
                 </select>
-                {!paidConfirmAccountId && (
-                  <p className="text-xs text-amber-500 mt-1">⚠ No account selected — bank balance won&apos;t update</p>
+                {!paidConfirmGlAccountId && (
+                  <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won&apos;t update</p>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">

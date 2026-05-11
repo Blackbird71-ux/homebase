@@ -83,8 +83,15 @@ function isLumpSumFrequency(frequency: string): boolean {
  * For lump-sum frequencies, return the column indices (0-11) within this FY
  * where the payment is expected to land.
  *
+ * The original implementation only looked forward from baseDate, so it missed
+ * occurrences where nextExpectedDate had already advanced past the FY window
+ * (e.g. a yearly bill paid in Oct 2025 whose nextExpectedDate is Oct 2026).
+ *
+ * Fix (P2): also walk backwards from baseDate by the frequency interval to find
+ * occurrences that land within this FY but predate nextExpectedDate.
+ *
  * @param frequency  'yearly' | 'halfyearly' | 'quarterly'
- * @param baseDate   nextExpectedDate — anchors the first occurrence in the FY window
+ * @param baseDate   nextExpectedDate / nextDueDate — anchors occurrence calculation
  * @param fyMonths   Array of 12 Date objects for the FY columns (col 0 = FY start month)
  */
 function lumpSumColumns(frequency: string, baseDate: Date, fyMonths: Date[]): number[] {
@@ -97,16 +104,22 @@ function lumpSumColumns(frequency: string, baseDate: Date, fyMonths: Date[]): nu
     const colY = fyMonths[col].getFullYear()
 
     if (frequency === 'yearly') {
-      // Hits once per year — same calendar month as baseDate
+      // Hits once per year — same calendar month as baseDate.
+      // Also check one year back so we catch the case where nextExpectedDate
+      // has advanced to the next FY but a hit still falls inside this FY.
       if (colM === baseMonth) cols.push(col)
     } else if (frequency === 'halfyearly') {
-      // Hits every 6 months from base
-      const diff = (colY - baseYear) * 12 + (colM - baseMonth)
-      if (diff >= 0 && diff % 6 === 0) cols.push(col)
+      // Hits every 6 months from base. Check +/- 1 full period to catch backtrack.
+      for (let offset = -12; offset <= 12; offset += 6) {
+        const diff = (colY - baseYear) * 12 + (colM - baseMonth)
+        if (diff === offset) { cols.push(col); break }
+      }
     } else if (frequency === 'quarterly') {
-      // Hits every 3 months from base
-      const diff = (colY - baseYear) * 12 + (colM - baseMonth)
-      if (diff >= 0 && diff % 3 === 0) cols.push(col)
+      // Hits every 3 months from base. Check +/- 1 full year to catch backtrack.
+      for (let offset = -12; offset <= 12; offset += 3) {
+        const diff = (colY - baseYear) * 12 + (colM - baseMonth)
+        if (diff === offset) { cols.push(col); break }
+      }
     }
   }
   return cols

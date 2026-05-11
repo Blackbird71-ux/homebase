@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Building2, TrendingUp, TrendingDown, Wallet, AlertTriangle } from 'lucide-react'
+import { Building2, TrendingUp, TrendingDown, Wallet, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -41,11 +41,18 @@ interface LiabilitySection {
   total:             number
 }
 
+interface EquitySection {
+  coaAccounts:           COARow[]
+  staticTotal:           number
+  currentPeriodNetIncome: number
+  total:                 number
+}
+
 interface BalanceSheetResponse {
   asAt:       string
   assets:     AssetSection
   liabilities: LiabilitySection
-  equity:     { coaAccounts: COARow[]; total: number }
+  equity:     EquitySection
   netWorth:   number
   equityMatchesNetWorth: boolean
 }
@@ -61,9 +68,9 @@ function fmt(n: number, currency = 'AUD') {
   }).format(n)
 }
 
-function SectionRow({ label, amount, indent, bold, glCode, muted }: {
+function SectionRow({ label, amount, indent, bold, glCode, muted, positive }: {
   label: string; amount: number; indent?: boolean; bold?: boolean
-  glCode?: string | null; muted?: boolean
+  glCode?: string | null; muted?: boolean; positive?: boolean
 }) {
   return (
     <div className={cn('flex items-center justify-between py-1 text-sm', indent && 'pl-4')}>
@@ -78,7 +85,12 @@ function SectionRow({ label, amount, indent, bold, glCode, muted }: {
         )}
         {label}
       </span>
-      <span className={cn('tabular-nums font-medium', bold && 'font-bold', muted && 'text-muted-foreground/70')}>
+      <span className={cn(
+        'tabular-nums font-medium',
+        bold && 'font-bold',
+        muted && 'text-muted-foreground/70',
+        positive !== undefined && (positive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'),
+      )}>
         {fmt(amount)}
       </span>
     </div>
@@ -138,12 +150,12 @@ export default function BalanceSheetPage() {
   }
   if (!data) return null
 
-  const hasEquityEntries   = data.equity.coaAccounts.length > 0
+  const hasEquityEntries   = data.equity.coaAccounts.length > 0 || data.equity.currentPeriodNetIncome !== 0
   const hasCOAAssets       = data.assets.coaAccounts.length > 0
   const hasCOALiabilities  = data.liabilities.coaAccounts.length > 0
   const hasAP              = data.liabilities.accountsPayable > 0
   const hasAR              = data.assets.accountsReceivable > 0
-  const showSetupGuide     = !hasCOAAssets && !hasCOALiabilities && !hasEquityEntries && !hasAP && !hasAR
+  const showSetupGuide     = !hasCOAAssets && !hasCOALiabilities && !data.equity.coaAccounts.length && !hasAP && !hasAR
 
   return (
     <div className="space-y-6 pb-8">
@@ -255,7 +267,7 @@ export default function BalanceSheetPage() {
           </>
         )}
 
-        {/* Accounts Receivable (uncleared income txs) */}
+        {/* Accounts Receivable (uncleared income with invoice received) */}
         {hasAR && (
           <>
             <SubHeading label="Accounts Receivable" />
@@ -322,7 +334,7 @@ export default function BalanceSheetPage() {
           </>
         )}
 
-        {/* Accounts Payable (uncleared expense txs tagged AP) */}
+        {/* Accounts Payable (bills with invoice received but not paid) */}
         {hasAP && (
           <>
             <SubHeading label="Accounts Payable" />
@@ -365,15 +377,32 @@ export default function BalanceSheetPage() {
       {hasEquityEntries && (
         <div className="rounded-lg border border-border p-4 space-y-1">
           <SectionHeader label="EQUITY" icon={<Wallet className="h-4 w-4 text-purple-500" />} />
-          {data.equity.coaAccounts.map(c => (
-            <SectionRow
-              key={c.id}
-              label={c.name}
-              amount={c.openingBalance}
-              glCode={c.glCode}
-              indent
-            />
-          ))}
+
+          {/* Static COA equity accounts (owner investments, share capital, etc.) */}
+          {data.equity.coaAccounts.length > 0 && (
+            <>
+              <SubHeading label="Owner Equity / Capital" />
+              {data.equity.coaAccounts.map(c => (
+                <SectionRow
+                  key={c.id}
+                  label={c.name}
+                  amount={c.openingBalance}
+                  glCode={c.glCode}
+                  indent
+                />
+              ))}
+            </>
+          )}
+
+          {/* Current period net income — retained earnings (P0 fix #2) */}
+          <SubHeading label="Retained Earnings / Current Period" />
+          <SectionRow
+            label="Net Income to date"
+            amount={data.equity.currentPeriodNetIncome}
+            indent
+            positive={data.equity.currentPeriodNetIncome >= 0}
+          />
+
           <Divider />
           <SectionRow label="TOTAL EQUITY" amount={data.equity.total} bold />
         </div>
@@ -405,23 +434,34 @@ export default function BalanceSheetPage() {
         </p>
       </div>
 
-      {/* Equity matching note */}
-      {hasEquityEntries && !data.equityMatchesNetWorth && (
-        <div className="rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+      {/* Accounting equation status */}
+      {hasEquityEntries && (
+        <div className={cn(
+          'rounded-md px-3 py-2 text-xs flex items-start gap-2',
+          data.equityMatchesNetWorth
+            ? 'bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400'
+            : 'bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400',
+        )}>
+          {data.equityMatchesNetWorth
+            ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            : <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          }
           <span>
-            Equity ({fmt(data.equity.total)}) does not equal Net Worth ({fmt(data.netWorth)}).
-            This is expected until opening balances on all COA accounts sum to your actual
-            net worth. Update them in Chart of Accounts.
+            {data.equityMatchesNetWorth
+              ? `Accounting equation checks out: Equity (${fmt(data.equity.total)}) = Net Worth (${fmt(data.netWorth)}) ✓`
+              : `Equity (${fmt(data.equity.total)}) does not yet equal Net Worth (${fmt(data.netWorth)}). ` +
+                `Add opening balances for your equity accounts in Chart of Accounts to complete the equation.`
+            }
           </span>
         </div>
       )}
 
       <p className="text-xs text-muted-foreground">
-        Bank balances are derived from cleared transactions. Accounts Payable shows bills
-        with invoice received but not yet paid. Accounts Receivable shows income with
-        remittance received but not yet in your bank. Property, investments, and mortgages
-        use opening balances from Chart of Accounts — update these manually when values change.
+        Bank balances are derived from cleared transactions and posted journal entries.
+        Accounts Payable shows bills with invoice received but not yet paid.
+        Accounts Receivable shows income with remittance received but not yet in your bank.
+        Net Income is calculated from all cleared income and expense transactions plus posted journal adjustments.
+        Property, investments, and mortgages use opening balances from Chart of Accounts — update these manually when values change.
       </p>
     </div>
   )

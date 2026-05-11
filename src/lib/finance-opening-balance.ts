@@ -201,30 +201,148 @@ export async function ensureAccountsReceivableCategory(familyId: string): Promis
 
 /**
  * Derive balances for all accounts in a family in one efficient query.
- * Returns a Map<accountId, derivedBalance>.
+ * Returns a Map<accountId | glAccountId, derivedBalance>.
  *
  * Uses the same sign rules as deriveAccountBalance:
  *   income / positive opening_balance → adds
  *   expense / negative opening_balance → subtracts
+ *
+ * Also incorporates posted journal line balances per GL account (P0 fix #3).
+ * Journal lines use standard normal-balance rules:
+ *   Asset / Expense accounts:   DR increases, CR decreases
+ *   Liability / Equity / Income: CR increases, DR decreases
  */
-export async function deriveAllAccountBalances(familyId: string): Promise<Map<string, number>> {
+export async function deriveAllAccountBalances(
+  familyId: string,
+  asAt?: Date,
+): Promise<Map<string, number>> {
+  // ── 1. Cleared transactions ─────────────────────────────────────────────
+  const txWhere: any = { familyId, isCleared: true }
+  if (asAt) txWhere.date = { lte: asAt }
+
   const txs = await prisma.financeTransaction.findMany({
-    where: { familyId, isCleared: true },
-    select: { accountId: true, type: true, amount: true },
+    where: txWhere,
+    select: { accountId: true, glAccountId: true, type: true, amount: true },
   })
+
   const map = new Map<string, number>()
+
+  function add(key: string, delta: number) {
+    map.set(key, (map.get(key) ?? 0) + delta)
+  }
+
   for (const tx of txs) {
-    if (!tx.accountId) continue
-    const current = map.get(tx.accountId) ?? 0
+    // glAccountId takes precedence over accountId for GL-routed payments/receipts
+    const bucket = tx.glAccountId ?? tx.accountId
+    if (!bucket) continue
+
     if (tx.type === 'income') {
-      map.set(tx.accountId, current + tx.amount)
+      add(bucket, tx.amount)
     } else if (tx.type === 'expense') {
-      map.set(tx.accountId, current - tx.amount)
+      add(bucket, -tx.amount)
     } else if (tx.type === 'opening_balance') {
       // Signed amount: positive for assets, negative for liabilities.
-      map.set(tx.accountId, current + tx.amount)
+      add(bucket, tx.amount)
     }
     // transfers cancel out across paired accounts
   }
+
+  // ── 2. Posted journal lines (P0 fix #3) ────────────────────────────────
+  // Fetch all GL account types we need for normal-balance rules
+  const journalLineWhere: any = {
+    journalEntry: { familyId, isPosted: true },
+  }
+  if (asAt) journalLineWhere.journalEntry = { ...journalLineWhere.journalEntry, date: { lte: asAt } }
+
+  const journalLines = await prisma.financeJournalLine.findMany({
+    where: journalLineWhere,
+    include: {
+      glAccount: { select: { id: true, type: true } },
+    },
+  })
+
+  for (const line of journalLines) {
+    const acctType = line.glAccount.type
+    const bucket   = line.glAccountId
+
+    // Normal balance rules:
+    //   Asset / Expense:             DR increases (+), CR decreases (-)
+    //   Liability / Equity / Income: CR increases (+), DR decreases (-)
+    let delta: number
+    if (acctType === 'asset' || acctType === 'expense') {
+      delta = line.side === 'debit' ? line.amount : -line.amount
+    } else {
+      // liability, equity, income
+      delta = line.side === 'credit' ? line.amount : -line.amount
+    }
+
+    add(bucket, delta)
+  }
+
   return map
+}
+
+/**
+ * Derive journal line net balances per GL account for a specific period and family.
+ * Used by the P&L and Balance Sheet APIs to incorporate posted journal entries.
+ *
+ * Returns a Map<glAccountId, { accountType, netBalance }> where netBalance follows
+ * normal balance rules (positive = the account has increased by that amount).
+ *
+ * @param familyId  Family to query
+ * @param start     Period start (inclusive). Null = no lower bound.
+ * @param end       Period end (inclusive). Null = no upper bound.
+ * @param entityId  Optional entity filter.
+ */
+export async function deriveJournalLineBalances(
+  familyId: string,
+  start: Date | null,
+  end: Date | null,
+  entityId?: string,
+): Promise<Map<string, { accountType: string; accountName: string; netBalance: number }>> {
+  const dateFilter: any = {}
+  if (start) dateFilter.gte = start
+  if (end)   dateFilter.lte = end
+
+  const journalLines = await prisma.financeJournalLine.findMany({
+    where: {
+      journalEntry: {
+        familyId,
+        isPosted: true,
+        ...(Object.keys(dateFilter).length ? { date: dateFilter } : {}),
+        ...(entityId ? { entityId } : {}),
+      },
+    },
+    include: {
+      glAccount: { select: { id: true, type: true, name: true } },
+    },
+  })
+
+  const result = new Map<string, { accountType: string; accountName: string; netBalance: number }>()
+
+  for (const line of journalLines) {
+    const acctType = line.glAccount.type
+    const bucket   = line.glAccountId
+
+    // Normal balance rules
+    let delta: number
+    if (acctType === 'asset' || acctType === 'expense') {
+      delta = line.side === 'debit' ? line.amount : -line.amount
+    } else {
+      delta = line.side === 'credit' ? line.amount : -line.amount
+    }
+
+    const existing = result.get(bucket)
+    if (existing) {
+      existing.netBalance += delta
+    } else {
+      result.set(bucket, {
+        accountType: acctType,
+        accountName: line.glAccount.name,
+        netBalance: delta,
+      })
+    }
+  }
+
+  return result
 }

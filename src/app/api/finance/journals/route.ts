@@ -273,11 +273,65 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(reversal, { status: 201 })
   }
 
+  // ── Void a posted entry (reverse + mark isReversed) ──────────────────────
+  // This is the same as reverse but the description always reads "Void of ..."
+  // and the original is labelled VOID in the UI. The voiding reversal entry
+  // can then be deleted via DELETE ?id=... (see below).
+
+  if (action === 'void') {
+    if (!existing.isPosted) {
+      return NextResponse.json({ error: 'Only posted entries can be voided' }, { status: 400 })
+    }
+    if (existing.isReversed) {
+      return NextResponse.json({ error: 'Entry has already been voided / reversed' }, { status: 400 })
+    }
+
+    const { voidDate } = json
+    const reference = await nextReference(session.familyId)
+
+    const [voidEntry] = await prisma.$transaction([
+      prisma.financeJournalEntry.create({
+        data: {
+          reference,
+          date:         new Date(voidDate ?? new Date()),
+          description:  `VOID: ${existing.reference ?? existing.id} — ${existing.description}`,
+          type:         'reversal',
+          isPosted:     true,
+          reversalOfId: existing.id,
+          entityId:     existing.entityId,
+          familyId:     session.familyId,
+          lines: {
+            create: existing.lines.map(l => ({
+              glAccountId: l.glAccountId,
+              side:        l.side === 'debit' ? 'credit' : 'debit',
+              amount:      l.amount,
+              description: l.description,
+              memberId:    l.memberId,
+            })),
+          },
+        },
+        include: ENTRY_INCLUDE,
+      }),
+      prisma.financeJournalEntry.update({
+        where: { id: existing.id },
+        data:  { isReversed: true },
+      }),
+    ])
+
+    return NextResponse.json(voidEntry, { status: 201 })
+  }
+
   return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
 }
 
 // ── DELETE /api/finance/journals ──────────────────────────────────────────────
-// Delete a draft by ?id= (posted entries cannot be deleted)
+// Allowed cases:
+//   1. Draft (isPosted=false) — delete directly.
+//   2. Voided entry (isPosted=true, isReversed=true) — delete both the original
+//      and its paired void/reversal entry atomically. This gives a clean removal
+//      with no ledger trace (the void entry already zeroed the effect).
+//
+// Posted entries that are NOT voided cannot be deleted — create a reversal.
 
 export async function DELETE(request: NextRequest) {
   const session = await requireSession()
@@ -290,14 +344,35 @@ export async function DELETE(request: NextRequest) {
 
   const existing = await prisma.financeJournalEntry.findFirst({
     where: { id, familyId: session.familyId },
+    include: { reversals: { select: { id: true } } },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 })
   }
-  if (existing.isPosted) {
-    return NextResponse.json({ error: 'Posted entries cannot be deleted. Create a reversal instead.' }, { status: 400 })
+
+  // Case 1: draft — simple delete
+  if (!existing.isPosted) {
+    await prisma.financeJournalEntry.delete({ where: { id } })
+    return NextResponse.json({ success: true })
   }
 
-  await prisma.financeJournalEntry.delete({ where: { id } })
-  return NextResponse.json({ success: true })
+  // Case 2: voided posted entry — delete original + all its reversal children atomically
+  if (existing.isPosted && existing.isReversed) {
+    const reversalIds = (existing as any).reversals.map((r: { id: string }) => r.id)
+    await prisma.$transaction([
+      // Delete the reversal entries first (they reference the original via reversalOfId)
+      prisma.financeJournalEntry.deleteMany({
+        where: { id: { in: reversalIds }, familyId: session.familyId },
+      }),
+      // Now delete the original
+      prisma.financeJournalEntry.delete({ where: { id } }),
+    ])
+    return NextResponse.json({ success: true })
+  }
+
+  // Posted, not voided — refuse
+  return NextResponse.json(
+    { error: 'Posted entries cannot be deleted. Void the entry first, then delete.' },
+    { status: 400 },
+  )
 }

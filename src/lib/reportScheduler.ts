@@ -61,7 +61,7 @@ export function startReportScheduler(): void {
           where: {
             financeIncomeEntries: { some: {} },
           },
-          select: { id: true, financeYearStartMonth: true },
+          select: { id: true, financeYearStartMonth: true, timezone: true },
         })
 
         if (families.length === 0) {
@@ -91,8 +91,8 @@ export function startReportScheduler(): void {
               continue
             }
 
-            // Build report — pass fyStartMonth so the report uses the correct FY bounds
-            const report = await buildYtdReport(family.id, year, fyStartMonth)
+            // Build report — pass fyStartMonth and timezone so the report uses correct FY bounds (P2 fix #2)
+            const report = await buildYtdReport(family.id, year, fyStartMonth, family.timezone ?? 'Australia/Sydney')
 
             // Save snapshot
             const snapshot = await prisma.financeSnapshot.create({

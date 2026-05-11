@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
-import { currentFyYear } from '@/lib/finance-fy'
+import { currentFyYear, fyDateRangeInTz, monthRangeInTz, quarterRangeInTz } from '@/lib/finance-fy'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -21,28 +21,35 @@ function isLumpSum(frequency: string): boolean {
   return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
 }
 
-function getPeriodBounds(period: string, anchor: Date, fyStartMonth: number = 7): { start: Date; end: Date; periodMonths: number } {
-  const year = anchor.getFullYear()
-  const month = anchor.getMonth()
+/**
+ * Compute period start/end using the family's IANA timezone (P2 fix #2).
+ * All boundaries are UTC instants corresponding to midnight / end-of-day in
+ * the family's timezone — correct regardless of the NAS system timezone.
+ */
+function getPeriodBounds(
+  period: string,
+  anchor: Date,
+  fyStartMonth: number,
+  tz: string,
+): { start: Date; end: Date; periodMonths: number } {
+  // Use the anchor date's local calendar year/month as the reference,
+  // but compute the actual UTC boundaries in the family's timezone.
+  const year  = anchor.getFullYear()
+  const month = anchor.getMonth() + 1 // 1-based
 
   if (period === 'month') {
-    const start = new Date(year, month, 1)
-    const end = new Date(year, month + 1, 0)
+    const { start, end } = monthRangeInTz(year, month, tz)
     return { start, end, periodMonths: 1 }
   }
   if (period === 'quarter') {
-    const q = Math.floor(month / 3)
-    const start = new Date(year, q * 3, 1)
-    const end = new Date(year, q * 3 + 3, 0)
+    const { start, end } = quarterRangeInTz(year, month, tz)
     return { start, end, periodMonths: 3 }
   }
-  // year — anchor to FY start month
-  const fyYear = currentFyYear(fyStartMonth)
-  // If anchor is in the second half of the FY (before the start month), use previous FY year
-  const fyOffset = month < (fyStartMonth - 1) ? 1 : 0
+  // year — FY-aware using the family's timezone
+  const fyYear    = currentFyYear(fyStartMonth)
+  const fyOffset  = month < fyStartMonth ? 1 : 0
   const startYear = fyYear - fyOffset
-  const start = new Date(startYear, fyStartMonth - 1, 1)
-  const end = new Date(startYear + 1, fyStartMonth - 1, 0)
+  const { start, end } = fyDateRangeInTz(startYear, fyStartMonth, tz)
   return { start, end, periodMonths: 12 }
 }
 
@@ -59,14 +66,15 @@ export async function GET(request: NextRequest) {
   const anchor = anchorRaw ? new Date(anchorRaw) : new Date()
   const familyId = session.familyId
 
-  // Load family's financial year start month setting
+  // Load family's financial year start month AND timezone (P2 fix #2)
   const family = await prisma.family.findUnique({
     where: { id: familyId },
-    select: { financeYearStartMonth: true },
+    select: { financeYearStartMonth: true, timezone: true },
   })
   const fyStartMonth = family?.financeYearStartMonth ?? 7
+  const tz = family?.timezone ?? 'Australia/Sydney'
 
-  const { start, end, periodMonths } = getPeriodBounds(period, anchor, fyStartMonth)
+  const { start, end, periodMonths } = getPeriodBounds(period, anchor, fyStartMonth, tz)
 
   const entityFilter = entityId ? { entityId } : {}
 
@@ -90,11 +98,14 @@ export async function GET(request: NextRequest) {
   })
 
   // ── 4. Actual transactions within the period ──────────────────────────
-  // These are real, confirmed transactions — the source of truth for cash P&L
+  // Only cleared (settled/reconciled) transactions are recognised.
+  // P2 fix #3: isCleared:true ensures pending transactions do not appear.
+  // P2 fix #2: start/end are now UTC instants aligned to the family's timezone.
   const transactions = await prisma.financeTransaction.findMany({
     where: {
       familyId,
       isTransfer: false,
+      isCleared: true,
       date: { gte: start, lte: end },
       type: { not: 'opening_balance' },
       ...entityFilter,
@@ -105,50 +116,122 @@ export async function GET(request: NextRequest) {
     orderBy: { date: 'desc' },
   })
 
+  // ── 5. Journal line balances for expense / income GL accounts ─────────
+  // P0 fix: posted journal entries (e.g. depreciation, accruals) now feed the P&L.
+  const journalExpenseByCategory = new Map<string, { name: string; color: string | null; total: number }>()
+  const journalIncomeByCategory  = new Map<string, { name: string; color: string | null; total: number }>()
+
+  const journalLines = await prisma.financeJournalLine.findMany({
+    where: {
+      journalEntry: {
+        familyId,
+        isPosted: true,
+        date: { gte: start, lte: end },
+        ...(entityId ? { entityId } : {}),
+      },
+      glAccount: {
+        type: { in: ['expense', 'income'] },
+      },
+    },
+    include: {
+      glAccount: { select: { id: true, name: true, type: true, color: true } },
+    },
+  })
+
+  for (const line of journalLines) {
+    const acct = line.glAccount
+    let netAmount: number
+    if (acct.type === 'expense') {
+      netAmount = line.side === 'debit' ? line.amount : -line.amount
+    } else {
+      netAmount = line.side === 'credit' ? line.amount : -line.amount
+    }
+
+    if (acct.type === 'expense') {
+      const existing = journalExpenseByCategory.get(acct.id)
+      if (existing) {
+        existing.total += netAmount
+      } else {
+        journalExpenseByCategory.set(acct.id, { name: acct.name, color: (acct as any).color ?? null, total: netAmount })
+      }
+    } else {
+      const existing = journalIncomeByCategory.get(acct.id)
+      if (existing) {
+        existing.total += netAmount
+      } else {
+        journalIncomeByCategory.set(acct.id, { name: acct.name, color: (acct as any).color ?? null, total: netAmount })
+      }
+    }
+  }
+
   const startTs = start.getTime()
   const endTs   = end.getTime()
 
-  // ── 5. Filter income entries within period ────────────────────────────
+  // ── 6. Deduplication sets (P0 fix: no double-counting) ────────────────
+  const billIdWithTxInPeriod = new Set<string>()
+  const txIdsInPeriod = new Set(transactions.map(t => t.id))
+
+  for (const tx of transactions) {
+    if (tx.recurringBillId) {
+      billIdWithTxInPeriod.add(tx.recurringBillId)
+    }
+  }
+
+  const incomeEntryIdsWithTxInPeriod = new Set<string>()
+  if (txIdsInPeriod.size > 0) {
+    const incomeEntriesWithTx = await prisma.financeIncomeEntry.findMany({
+      where: {
+        familyId,
+        OR: [
+          { invoiceTxId: { in: [...txIdsInPeriod] } },
+          { receiptTxId: { in: [...txIdsInPeriod] } },
+          { transactionId: { in: [...txIdsInPeriod] } },
+        ],
+      },
+      select: { id: true },
+    })
+    for (const ie of incomeEntriesWithTx) {
+      incomeEntryIdsWithTxInPeriod.add(ie.id)
+    }
+  }
+
+  // ── 7. Filter income entries within period ────────────────────────────
   const relevantIncome = incomeEntries.filter(e => {
     if (!e.isActive) return false
+    if (incomeEntryIdsWithTxInPeriod.has(e.id)) return false
+
     if (e.received && e.receivedDate) {
-      // Confirmed received — include only when the money actually landed in this period
       const ts = new Date(e.receivedDate).getTime()
       return ts >= startTs && ts <= endTs
     }
-    // Forecast path
     const dueTs = new Date(e.nextExpectedDate).getTime()
     if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
-      // Lump-sum: only include when the expected date falls within this period
       return dueTs >= startTs && dueTs <= endTs
     }
-    // Genuinely recurring (weekly / fortnightly / monthly): include if due ≤ end
     return dueTs <= endTs
   })
 
-  // ── 6. Filter bills within period ─────────────────────────────────────
+  // ── 8. Filter bills within period ─────────────────────────────────────
   const relevantExpenses = bills.filter(b => {
     if (!b.isActive) return false
     if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
     if (b.billType === 'transfer') return false
+    if (billIdWithTxInPeriod.has(b.id)) return false
+
     if (b.paid && b.paidDate) {
-      // Confirmed paid — include only in the period the payment actually occurred
       const ts = new Date(b.paidDate).getTime()
       return ts >= startTs && ts <= endTs
     }
     const dueTs = new Date(b.nextDueDate).getTime()
     if (b.billType === 'one-off' || isLumpSum(b.frequency)) {
-      // Lump-sum: only include when the due date falls within this period
       return dueTs >= startTs && dueTs <= endTs
     }
-    // Genuinely recurring: include if due <= end
     return dueTs <= endTs
   })
 
-  // ── 7. Group income: entries + income-type transactions ───────────────
-  const incomeMap = new Map<string, { key: string; label: string; color: string | null; totalPeriod: number; count: number; items: any[] }>()
+  // ── 9. Group income ───────────────────────────────────────────────────
+  const incomeMap = new Map<string, { key: string; label: string; color: string | null; totalPeriod: number; count: number; items: any[]; isJournal?: boolean }>()
 
-  // From income entries
   for (const e of relevantIncome) {
     const key   = e.category?.id ?? '__none__'
     const label = e.category?.name ?? 'Uncategorised'
@@ -156,8 +239,6 @@ export async function GET(request: NextRequest) {
     if (!incomeMap.has(key)) incomeMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
     const g = incomeMap.get(key)!
     const isOneOff = e.incomeType === 'one-off' || isLumpSum(e.frequency)
-    // Lump-sum and one-off: always show the full amount (never prorate across the period).
-    // Genuinely recurring (weekly/fortnightly/monthly): show the period equivalent.
     const periodAmt = isOneOff ? e.amount : toPeriodAmount(e.amount, e.frequency, periodMonths)
     g.totalPeriod += periodAmt
     g.count++
@@ -171,7 +252,6 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // From actual income-type transactions
   for (const tx of transactions) {
     if (tx.type !== 'income') continue
     const key   = tx.category?.id ?? '__none__'
@@ -189,10 +269,22 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // ── 8. Group expenses: bills + expense-type transactions ──────────────
-  const expenseMap = new Map<string, { key: string; label: string; color: string | null; totalPeriod: number; count: number; items: any[] }>()
+  for (const [catId, data] of journalIncomeByCategory) {
+    if (data.total <= 0) continue
+    const key = `__journal_income_${catId}__`
+    if (!incomeMap.has(key)) incomeMap.set(key, { key, label: data.name, color: data.color, totalPeriod: 0, count: 0, items: [], isJournal: true })
+    const g = incomeMap.get(key)!
+    g.totalPeriod += data.total
+    g.count++
+    g.items.push({
+      id: catId, name: data.name, amount: data.total, periodAmount: data.total,
+      isOneOff: true, received: true, date: start.toISOString().split('T')[0], source: 'journal',
+    })
+  }
 
-  // From bills
+  // ── 10. Group expenses ────────────────────────────────────────────────
+  const expenseMap = new Map<string, { key: string; label: string; color: string | null; totalPeriod: number; count: number; items: any[]; isJournal?: boolean }>()
+
   for (const b of relevantExpenses) {
     const key   = b.category?.id ?? '__none__'
     const label = b.category?.name ?? 'Uncategorised'
@@ -200,7 +292,6 @@ export async function GET(request: NextRequest) {
     if (!expenseMap.has(key)) expenseMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
     const g = expenseMap.get(key)!
     const isOneOff = b.billType === 'one-off' || isLumpSum(b.frequency)
-    // Lump-sum bills: always show full amount. Recurring: period equivalent.
     const periodAmt = isOneOff ? b.amount : toPeriodAmount(b.amount, b.frequency, periodMonths)
     g.totalPeriod += periodAmt
     g.count++
@@ -214,7 +305,6 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // From actual expense-type transactions
   for (const tx of transactions) {
     if (tx.type !== 'expense') continue
     const key   = tx.category?.id ?? '__none__'
@@ -232,14 +322,26 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // ── 9. Totals ─────────────────────────────────────────────────────────
+  for (const [catId, data] of journalExpenseByCategory) {
+    if (data.total <= 0) continue
+    const key = `__journal_expense_${catId}__`
+    if (!expenseMap.has(key)) expenseMap.set(key, { key, label: data.name, color: data.color, totalPeriod: 0, count: 0, items: [], isJournal: true })
+    const g = expenseMap.get(key)!
+    g.totalPeriod += data.total
+    g.count++
+    g.items.push({
+      id: catId, name: data.name, amount: data.total, periodAmount: data.total,
+      isOneOff: true, paid: true, date: start.toISOString().split('T')[0], source: 'journal',
+    })
+  }
+
+  // ── 11. Totals ─────────────────────────────────────────────────────────
   const incomeGroups  = Array.from(incomeMap.values()).sort((a, b) => b.totalPeriod - a.totalPeriod)
   const expenseGroups = Array.from(expenseMap.values()).sort((a, b) => b.totalPeriod - a.totalPeriod)
 
   const totalIncome   = incomeGroups.reduce((s, g) => s + g.totalPeriod, 0)
   const totalExpenses = expenseGroups.reduce((s, g) => s + g.totalPeriod, 0)
 
-  // Estimated tax from tax-tracked income entries
   let estimatedTax = 0
   for (const e of relevantIncome) {
     if (e.isTaxTracked && e.taxRate != null) {
@@ -251,9 +353,9 @@ export async function GET(request: NextRequest) {
 
   const netProfit = totalIncome - totalExpenses - estimatedTax
 
-  // ── 10. Label ─────────────────────────────────────────────────────────
-  const fmt = (d: Date) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
-  const label = `${fmt(start)} – ${fmt(end)}`
+  // ── 12. Label ─────────────────────────────────────────────────────────
+  const fmt = (d: Date) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: tz })
+  const label = `${fmt(start)} \u2013 ${fmt(end)}`
 
   return NextResponse.json({
     incomeGroups,

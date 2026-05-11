@@ -138,13 +138,16 @@ export default function ProfitLossPage() {
   }
 
   // ── Load transactions for the current period ──────────────────────────────
+  // P2 fix #3: always request isCleared=true — only settled transactions belong
+  // in a P&L. Pending/uncleared amounts are not yet recognised income or expense.
   async function loadTransactions(from: Date, to: Date, entityId: string) {
     setTxLoading(true)
     try {
       const params = new URLSearchParams({
-        startDate: from.toISOString().split('T')[0],
-        endDate:   to.toISOString().split('T')[0],
-        limit:     '500',
+        startDate:  from.toISOString().split('T')[0],
+        endDate:    to.toISOString().split('T')[0],
+        isCleared:  'true',
+        limit:      '500',
       })
       if (entityId) params.set('entityId', entityId)
       const res = await fetch(`/api/finance/transactions?${params}`)

@@ -24,12 +24,13 @@ export async function GET(req: NextRequest) {
 
     const familyId = session.familyId
 
-    // Load FY start month from family settings
+    // Load FY start month AND timezone from family settings
     const family = await prisma.family.findUnique({
       where: { id: familyId },
-      select: { financeYearStartMonth: true },
+      select: { financeYearStartMonth: true, timezone: true },
     })
     const fyStartMonth = family?.financeYearStartMonth ?? 7
+    const tz = family?.timezone ?? 'Australia/Sydney'
 
     const { searchParams } = new URL(req.url)
     const mode = searchParams.get('mode') ?? 'budget' // budget | tax
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     const snapshotId = searchParams.get('snapshotId')
 
     // Build or load report data
-    const report = await buildYtdReport(familyId, year, fyStartMonth)
+    const report = await buildYtdReport(familyId, year, fyStartMonth, tz)
 
     const wb = XLSX.utils.book_new()
     const dateStr = year.replace('/', '-')

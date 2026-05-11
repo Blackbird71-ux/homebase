@@ -15,7 +15,7 @@ export async function GET() {
     }),
     prisma.financeTransaction.findMany({
       where: { familyId },
-      select: { accountId: true, type: true, amount: true, isCleared: true },
+      select: { accountId: true, glAccountId: true, type: true, amount: true, isCleared: true },
     }),
   ])
 
@@ -26,23 +26,32 @@ export async function GET() {
   const pendingIncomeMap = new Map<string, number>()
 
   for (const tx of allTxs) {
-    if (!tx.accountId) continue
+    if (!tx.accountId && !tx.glAccountId) continue
+    // glAccountId takes precedence — GL-routed payments post to the GL category bucket, not accountId
+    // But the Accounts page only tracks FinanceAccount balances, so only accumulate when accountId is set
+    // and there is NO glAccountId override (glAccountId means it went to a GL category, not a bank account)
+    const bankBucket = tx.glAccountId ? null : tx.accountId
     if (tx.isCleared) {
-      const cur = clearedBalanceMap.get(tx.accountId) ?? 0
-      if (tx.type === 'income') {
-        clearedBalanceMap.set(tx.accountId, cur + tx.amount)
-      } else if (tx.type === 'expense') {
-        clearedBalanceMap.set(tx.accountId, cur - tx.amount)
-      } else if (tx.type === 'opening_balance') {
-        // Signed amount: positive for assets, negative for liabilities.
-        clearedBalanceMap.set(tx.accountId, cur + tx.amount)
+      if (bankBucket) {
+        const cur = clearedBalanceMap.get(bankBucket) ?? 0
+        if (tx.type === 'income') {
+          clearedBalanceMap.set(bankBucket, cur + tx.amount)
+        } else if (tx.type === 'expense') {
+          clearedBalanceMap.set(bankBucket, cur - tx.amount)
+        } else if (tx.type === 'opening_balance') {
+          // Signed amount: positive for assets, negative for liabilities.
+          clearedBalanceMap.set(bankBucket, cur + tx.amount)
+        }
       }
     } else {
-      pendingCountMap.set(tx.accountId, (pendingCountMap.get(tx.accountId) ?? 0) + 1)
+      // Pending — still track by accountId (GL-pending transactions are rare)
+      const pendingBucket = tx.accountId
+      if (!pendingBucket) continue
+      pendingCountMap.set(pendingBucket, (pendingCountMap.get(pendingBucket) ?? 0) + 1)
       if (tx.type === 'expense') {
-        pendingExpenseMap.set(tx.accountId, (pendingExpenseMap.get(tx.accountId) ?? 0) + tx.amount)
+        pendingExpenseMap.set(pendingBucket, (pendingExpenseMap.get(pendingBucket) ?? 0) + tx.amount)
       } else if (tx.type === 'income') {
-        pendingIncomeMap.set(tx.accountId, (pendingIncomeMap.get(tx.accountId) ?? 0) + tx.amount)
+        pendingIncomeMap.set(pendingBucket, (pendingIncomeMap.get(pendingBucket) ?? 0) + tx.amount)
       }
     }
   }

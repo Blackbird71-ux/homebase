@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/prisma'
 import { buildYtdReport, getCurrentFY } from '@/lib/financeReport'
 
 function fmt(n: number): string {
@@ -21,7 +22,14 @@ export async function GET(req: NextRequest) {
     const mode = searchParams.get('mode') ?? 'budget'
     const year = searchParams.get('year') ?? getCurrentFY()
 
-    const report = await buildYtdReport(familyId, year)
+    const family = await prisma.family.findUnique({
+      where: { id: familyId },
+      select: { financeYearStartMonth: true, timezone: true },
+    })
+    const fyStartMonth = family?.financeYearStartMonth ?? 7
+    const tz = family?.timezone ?? 'Australia/Sydney'
+
+    const report = await buildYtdReport(familyId, year, fyStartMonth, tz)
 
     function monthTable(label: string, rows: { label: string; monthly: number[]; total: number }[], subtotal: number) {
       return `

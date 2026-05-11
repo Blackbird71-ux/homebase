@@ -585,6 +585,7 @@ model FinanceCategory {
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
+  glTransactions  FinanceTransaction[] @relation("TransactionGlAccount")
   budgetRules     FinanceBudget[]
   recurringBills  FinanceRecurringBill[]
   incomeEntries   FinanceIncomeEntry[]
@@ -634,6 +635,8 @@ model FinanceTransaction {
   entity          FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
   taxClassification String?           // tax_deduction | taxable_income | exempt_income | tax_payment; null = not classified
   isTransfer          Boolean              @default(false)
+  glAccountId         String?              // FK → FinanceCategory (asset/liability type). The GL account debited/credited at payment or receipt.
+  glAccount           FinanceCategory?     @relation("TransactionGlAccount", fields: [glAccountId], references: [id], onDelete: SetNull)
   openingBalanceAccount FinanceAccount? @relation("AccountOpeningBalance")  // Reverse relation for opening balance tx
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
@@ -650,6 +653,7 @@ model FinanceTransaction {
   @@index([locationId])
   @@index([vendorId])
   @@index([entityId])
+  @@index([glAccountId])
 }
 
 model FinanceRecurringBill {
@@ -687,6 +691,7 @@ model FinanceRecurringBill {
   transactionId   String?               @unique // FK -> FinanceTransaction (legacy: first tx created; prefer invoiceTxId/paymentTxId)
   invoiceTxId     String?               @unique // FK -> expense transaction created when invoice received (stage 1: DR expense)
   paymentTxId     String?               @unique // FK -> payment transaction created when bill paid (stage 2: DR AP / CR bank)
+  journalEntryId  String?               // FK -> FinanceJournalEntry — the accrual journal entry (DR expense lines / CR AP) created at save
   transaction     FinanceTransaction?   @relation("BillTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
@@ -735,6 +740,7 @@ model FinanceIncomeEntry {
   invoiceReceivedDate DateTime?
   invoiceTxId         String?              @unique // FK -> income transaction when remittance received (stage 1: CR income / DR AR)
   receiptTxId         String?              @unique // FK -> bank transaction when cash received (stage 2: DR bank / CR AR)
+  journalEntryId      String?              // FK -> FinanceJournalEntry — the accrual journal entry (DR AR / CR income lines) created at save
   notes               String?
   memberId            String?              // Which family member earns this
   accountId           String?
