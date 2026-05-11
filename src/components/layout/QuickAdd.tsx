@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
 
@@ -97,6 +98,8 @@ export function QuickAdd() {
   const [expenseDescription, setExpenseDescription] = useState('')
   const [expenseCategoryId, setExpenseCategoryId] = useState('')
   const [categories, setCategories] = useState<CategoryMeta[]>([])
+  const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
+  const [expenseJournalLines, setExpenseJournalLines] = useState<JournalFormLine[]>([])
 
   // List-specific
   const [listName, setListName] = useState('')
@@ -165,7 +168,10 @@ export function QuickAdd() {
     if (mode === 'expense' && categories.length === 0) {
       fetch('/api/finance/categories')
         .then((r) => r.json())
-        .then((data: CategoryMeta[]) => setCategories(data))
+        .then((data: (CategoryMeta & { type: string })[]) => {
+          setCategories(data)
+          setGLAccounts(data.filter((c) => c.type !== 'transfer') as GLAccount[])
+        })
         .catch(() => { /* silently fail */ })
     }
   }, [mode, categories.length])
@@ -193,6 +199,7 @@ export function QuickAdd() {
     setExpenseAmount('')
     setExpenseDescription('')
     setExpenseCategoryId('')
+    setExpenseJournalLines([])
     setListName('')
     setListType('SHOPPING')
     setListItemContent('')
@@ -291,6 +298,9 @@ export function QuickAdd() {
             setSubmitting(false)
             return
           }
+          const validLines = expenseJournalLines.filter(
+            l => l.glAccountId && parseFloat(l.amount) > 0
+          )
           const res = await fetch('/api/finance/transactions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -300,6 +310,14 @@ export function QuickAdd() {
               description: expenseDescription.trim() || null,
               categoryId: expenseCategoryId || null,
               date: date ? new Date(date).toISOString() : new Date().toISOString(),
+              ...(validLines.length >= 2 ? {
+                journalLines: validLines.map(l => ({
+                  glAccountId: l.glAccountId,
+                  side: l.side,
+                  amount: parseFloat(l.amount),
+                  description: l.description || null,
+                }))
+              } : {}),
             }),
           })
           if (!res.ok) throw new Error('Failed to log expense')
@@ -570,6 +588,17 @@ export function QuickAdd() {
                 onChange={(e) => setDate(e.target.value)}
               />
             </div>
+            {/* Journal Lines — optional double-entry accrual */}
+            {glAccounts.length > 0 && (
+              <div className="rounded-md border border-border bg-muted/20 p-3">
+                <JournalLinesEditor
+                  lines={expenseJournalLines}
+                  onChange={setExpenseJournalLines}
+                  glAccounts={glAccounts}
+                  expectedTotal={parseFloat(expenseAmount) || 0}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -745,7 +774,7 @@ export function QuickAdd() {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={mode === 'expense' ? 'sm:max-w-xl max-h-[90vh] overflow-y-auto' : 'sm:max-w-md'}>
         <DialogHeader>
           <DialogTitle>
             {mode ? `New ${mode.charAt(0).toUpperCase() + mode.slice(1).replace('-', ' ')}` : 'Quick Add'}

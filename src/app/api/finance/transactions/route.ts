@@ -2,6 +2,61 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 
+// ── Journal lines helper ────────────────────────────────────────────────────
+// If journalLines are supplied with a transaction POST, create a posted
+// double-entry journal entry alongside the single-sided transaction record.
+// For a quick-add expense: DR expense GL / CR AP (or bank) — posted immediately.
+
+interface JournalLineInput {
+  glAccountId: string
+  side: 'debit' | 'credit'
+  amount: number
+  description?: string
+}
+
+async function createTransactionJournalEntry(
+  description: string,
+  lines: JournalLineInput[],
+  date: Date,
+  familyId: string,
+  entityId: string | null,
+): Promise<void> {
+  const glIds = [...new Set(lines.map(l => l.glAccountId))]
+  const valid = await prisma.financeCategory.findMany({
+    where: { id: { in: glIds }, familyId },
+    select: { id: true },
+  })
+  if (valid.length !== glIds.length) return   // silently skip if any account missing
+
+  const count = await prisma.financeJournalEntry.count({ where: { familyId } })
+  const reference = `JE-${String(count + 1).padStart(4, '0')}`
+
+  // Validate balance
+  const dr = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+  const cr = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+  const balanced = Math.abs(dr - cr) < 0.005
+
+  await prisma.financeJournalEntry.create({
+    data: {
+      reference,
+      date,
+      description,
+      type: 'auto_transaction',
+      isPosted: balanced,   // post immediately if balanced; save as draft otherwise
+      entityId: entityId ?? null,
+      familyId,
+      lines: {
+        create: lines.map(l => ({
+          glAccountId: l.glAccountId,
+          side: l.side,
+          amount: l.amount,
+          description: l.description ?? null,
+        })),
+      },
+    },
+  })
+}
+
 export async function GET(request: NextRequest) {
   const session = await requireSession()
   const { searchParams } = new URL(request.url)
@@ -55,6 +110,7 @@ export async function POST(request: NextRequest) {
     accountId, categoryId, type, amount, payee,
     description, date, isRecurring, isCleared, isPrivate,
     memberId, locationId, taxClassification, isTransfer, glAccountId,
+    journalLines,   // optional: JournalLineInput[] for double-entry accrual
   } = json
 
   if (!type || amount === undefined) {
@@ -64,6 +120,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid transaction type' }, { status: 400 })
   }
 
+  const txDate = date ? new Date(date) : new Date()
+
   const transaction = await prisma.financeTransaction.create({
     data: {
       accountId: accountId ?? null,
@@ -72,7 +130,7 @@ export async function POST(request: NextRequest) {
       amount,
       payee: payee ?? null,
       description: description ?? null,
-      date: date ? new Date(date) : new Date(),
+      date: txDate,
       isRecurring: isRecurring ?? false,
       isCleared: isCleared ?? false,
       isPrivate: isPrivate ?? false,
@@ -92,6 +150,21 @@ export async function POST(request: NextRequest) {
       entity: { select: { id: true, name: true, color: true, isDefault: true } },
     },
   })
+
+  // Create a double-entry journal entry if lines provided
+  if (Array.isArray(journalLines) && journalLines.length >= 2) {
+    try {
+      await createTransactionJournalEntry(
+        description?.trim() || payee?.trim() || type,
+        journalLines,
+        txDate,
+        session.familyId,
+        json.entityId ?? null,
+      )
+    } catch (err) {
+      console.error('[transactions POST] Failed to create journal entry:', err)
+    }
+  }
 
   return NextResponse.json(transaction, { status: 201 })
 }
