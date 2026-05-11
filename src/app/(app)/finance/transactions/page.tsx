@@ -52,6 +52,7 @@ export default function TransactionsPage() {
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   function validate(): Record<string, string> {
     const errs: Record<string, string> = {}
@@ -64,6 +65,7 @@ export default function TransactionsPage() {
 
   async function load() {
     setLoading(true)
+    setFetchError(null)
     try {
       const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() })
       if (filterType) params.set('type', filterType)
@@ -78,7 +80,12 @@ export default function TransactionsPage() {
           member: t.memberId ? (members.find((m: Member) => m.id === t.memberId) ?? null) : null,
         })))
         setTotal(d.total)
+      } else {
+        setFetchError(`Failed to load (HTTP ${res.status})`)
       }
+    } catch (err: any) {
+      setFetchError(err.message ?? 'Network error')
+      console.error('[transactions] load error:', err)
     } finally { setLoading(false) }
   }
 
@@ -349,7 +356,17 @@ export default function TransactionsPage() {
         </DialogContent>
       </Dialog>
 
-      {transactions.length === 0 ? (
+      {fetchError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6 text-center space-y-3">
+          <p className="text-sm text-red-500">{fetchError}</p>
+          <button onClick={load}
+            className="inline-flex items-center gap-1 text-xs font-medium text-foreground bg-background border border-input rounded-md px-3 py-1.5 hover:bg-accent">
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!fetchError && transactions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No transactions found.</p>
       ) : (
         <div className="space-y-2">
