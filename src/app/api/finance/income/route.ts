@@ -163,7 +163,7 @@ function advanceNextExpectedDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate } = json
+  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -306,6 +306,8 @@ export async function PATCH(request: NextRequest) {
   // Balance sheet effect: bank account balance increases; AR asset clears.
   if (received === true && !existing.received) {
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
+    // Use the override account if provided in the modal, otherwise fall back to the entry's linked account
+    const receiptAccountId = receiveToAccountId ?? existing.accountId
     // Re-read to get latest invoiceTxId (may have just been written above)
     const freshEntry = await prisma.financeIncomeEntry.findFirst({
       where: { id, familyId: session.familyId },
@@ -322,7 +324,7 @@ export async function PATCH(request: NextRequest) {
             isCleared: true,
             reconciledDate: actualReceivedDate,
             date: actualReceivedDate,
-            accountId: existing.accountId,
+            accountId: receiptAccountId,
           },
         })
         // receiptTxId points to the same tx
@@ -336,7 +338,7 @@ export async function PATCH(request: NextRequest) {
           data: {
             type: 'income',
             amount: existing.amount,
-            accountId: existing.accountId,
+            accountId: receiptAccountId,
             categoryId: existing.categoryId,
             description: existing.name,
             date: actualReceivedDate,

@@ -158,7 +158,7 @@ function advanceNextDueDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, paid, paidDate: paidDateRaw, invoiceReceived, invoiceReceivedDate } = json
+  const { id, paid, paidDate: paidDateRaw, invoiceReceived, invoiceReceivedDate, payFromAccountId } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -238,6 +238,8 @@ export async function PATCH(request: NextRequest) {
         data: { isCleared: false, reconciledDate: null },
       })
     }
+    // Ensure the bill is restored to active/visible state
+    updateData.isActive = true
     // Remove pending child occurrences that were spawned when paid
     await prisma.financeRecurringBill.deleteMany({
       where: { parentBillId: id, familyId: session.familyId, paid: false },
@@ -313,6 +315,8 @@ export async function PATCH(request: NextRequest) {
   // Balance sheet effect: bank account balance decreases; AP liability clears.
   if (paid === true && !existing.paid) {
     const actualPaidDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
+    // Use the override account if provided in the modal, otherwise fall back to the bill's linked account
+    const paymentAccountId = payFromAccountId ?? existing.accountId
     // Re-read the bill to get latest invoiceTxId (may have just been written above)
     const freshBill = await prisma.financeRecurringBill.findFirst({
       where: { id, familyId: session.familyId },
@@ -329,8 +333,8 @@ export async function PATCH(request: NextRequest) {
             isCleared: true,
             reconciledDate: actualPaidDate,
             date: actualPaidDate,
-            // Ensure linked to the correct bank account
-            accountId: existing.accountId,
+            // Use the selected payment account to debit the correct bank account
+            accountId: paymentAccountId,
           },
         })
         // paymentTxId points to the same tx (cleared invoice tx IS the payment)
@@ -346,7 +350,7 @@ export async function PATCH(request: NextRequest) {
           data: {
             type: 'expense',
             amount: existing.amount,
-            accountId: existing.accountId,
+            accountId: paymentAccountId,
             categoryId: existing.categoryId,
             description: existing.name,
             date: actualPaidDate,

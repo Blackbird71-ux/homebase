@@ -212,7 +212,12 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           where: {
             familyId,
             isActive: true,
-            nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+            // Include ALL overdue chores (no lower-bound) plus upcoming within 30 days.
+            // Using OR so chores that are past-due always show until completed.
+            OR: [
+              { nextDueDate: { lt: todayStart } },
+              { nextDueDate: { gte: todayStart, lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) } },
+            ],
           },
           select: {
             id: true,

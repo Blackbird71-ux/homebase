@@ -86,8 +86,11 @@ export function ChoreScheduleCard({
       })
       if (!res.ok) throw new Error('Failed to complete chore')
 
-      // Mark as completed in local state for strikethrough + persist
+      // Briefly show strikethrough, then re-fetch so the completed item disappears
       setCompletedIds((prev) => new Set(prev).add(choreId))
+      setTimeout(() => {
+        fetchSchedule(scope, showOnlyMine)
+      }, 600)
     } catch {
       toast.error('Failed to complete chore. Please try again.')
     } finally {

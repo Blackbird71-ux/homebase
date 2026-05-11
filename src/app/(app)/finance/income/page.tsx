@@ -75,6 +75,7 @@ export default function IncomePage() {
   const [errors, setErrors]           = useState<Record<string, string>>({})
   const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
   const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
+  const [receivedConfirmAccountId, setReceivedConfirmAccountId] = useState<string>('')
   const [dateRange, setDateRange]     = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('income-dateRange')
@@ -300,6 +301,7 @@ export default function IncomePage() {
   async function handleMarkReceived(entry: IncomeEntry) {
     const today = new Date().toISOString().split('T')[0]
     setReceivedConfirmDate(today)
+    setReceivedConfirmAccountId(entry.account?.id ?? '')
     setReceivedConfirm({ entry })
   }
 
@@ -309,7 +311,12 @@ export default function IncomePage() {
     const res = await fetch('/api/finance/income', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: entry.id, received: true, receivedDate: receivedConfirmDate }),
+      body: JSON.stringify({
+        id: entry.id,
+        received: true,
+        receivedDate: receivedConfirmDate,
+        receiveToAccountId: receivedConfirmAccountId || null,
+      }),
     })
     if (res.ok) { toast.success('Income marked as received'); setReceivedConfirm(null); load() }
     else toast.error('Failed to mark as received')
@@ -759,12 +766,23 @@ export default function IncomePage() {
                 <input type="date" value={receivedConfirmDate} onChange={e => setReceivedConfirmDate(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Receive into account</label>
+                <select value={receivedConfirmAccountId} onChange={e => setReceivedConfirmAccountId(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                  <option value="">No account (unlinked)</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                {!receivedConfirmAccountId && (
+                  <p className="text-xs text-amber-500 mt-1">⚠ No account selected — bank balance won&apos;t update</p>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 An income transaction of{' '}
                 <span className="font-medium text-foreground">
                   {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(receivedConfirm.entry.amount)}
                 </span>{' '}
-                will be added to your transaction feed on this date.
+                will be recorded on this date.
               </p>
             </div>
           )}

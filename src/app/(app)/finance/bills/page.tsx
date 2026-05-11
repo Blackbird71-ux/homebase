@@ -71,6 +71,7 @@ export default function BillsPage() {
   const [editing, setEditing]       = useState<Bill | null>(null)
   const [paidConfirm, setPaidConfirm] = useState<{ bill: Bill } | null>(null)
   const [paidConfirmDate, setPaidConfirmDate] = useState<string>('')
+  const [paidConfirmAccountId, setPaidConfirmAccountId] = useState<string>('')
   const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('bills-dateRange')
@@ -305,6 +306,7 @@ export default function BillsPage() {
 
   async function handleMarkPaid(bill: Bill) {
     setPaidConfirmDate(new Date().toISOString().split('T')[0])
+    setPaidConfirmAccountId(bill.account?.id ?? '')
     setPaidConfirm({ bill })
   }
 
@@ -312,7 +314,12 @@ export default function BillsPage() {
     if (!paidConfirm) return
     const res = await fetch('/api/finance/bills', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: paidConfirm.bill.id, paid: true, paidDate: paidConfirmDate }),
+      body: JSON.stringify({
+        id: paidConfirm.bill.id,
+        paid: true,
+        paidDate: paidConfirmDate,
+        payFromAccountId: paidConfirmAccountId || null,
+      }),
     })
     if (res.ok) { toast.success('Bill marked as paid'); setPaidConfirm(null); load() }
     else toast.error('Failed to mark as paid')
@@ -326,6 +333,16 @@ export default function BillsPage() {
     })
     if (res.ok) { toast.success(newVal ? 'Invoice marked received' : 'Invoice unmarked'); load() }
     else toast.error('Failed to update invoice status')
+  }
+
+  async function handleUnmarkPaid(bill: Bill) {
+    if (!confirm(`Undo payment for "${bill.name}"? This will reverse the payment transaction.`)) return
+    const res = await fetch('/api/finance/bills', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: bill.id, paid: false }),
+    })
+    if (res.ok) { toast.success('Payment reversed — bill restored'); load() }
+    else toast.error('Failed to reverse payment')
   }
 
   function handleVendorChange(vendorId: string) {
@@ -710,8 +727,19 @@ export default function BillsPage() {
                 <input type="date" value={paidConfirmDate} onChange={e => setPaidConfirmDate(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Pay from account</label>
+                <select value={paidConfirmAccountId} onChange={e => setPaidConfirmAccountId(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                  <option value="">No account (unlinked)</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                {!paidConfirmAccountId && (
+                  <p className="text-xs text-amber-500 mt-1">⚠ No account selected — bank balance won&apos;t update</p>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
-                An expense transaction of <span className="font-medium text-foreground">{formatCurrency(paidConfirm.bill.amount)}</span> will be added on this date.
+                An expense transaction of <span className="font-medium text-foreground">{formatCurrency(paidConfirm.bill.amount)}</span> will be recorded on this date.
               </p>
             </div>
           )}
@@ -740,6 +768,7 @@ export default function BillsPage() {
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
               inBudget={budgetBillIds.has(b.id)}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
+              onUnmarkPaid={handleUnmarkPaid}
               onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
               onQuickFilter={handleQuickFilter}
               attachmentBillId={attachmentBillId}
@@ -777,7 +806,7 @@ export default function BillsPage() {
 
 function BillRow({
   bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate,
-  inBudget, onEdit, onDelete, onMarkPaid, onToggleInvoice, onOpenAttachments, onQuickFilter,
+  inBudget, onEdit, onDelete, onMarkPaid, onUnmarkPaid, onToggleInvoice, onOpenAttachments, onQuickFilter,
   attachmentBillId, attachments, attachmentsLoading, uploadingAttachment, attachFileRef,
   previewAttachmentId, onCloseAttachments, onTogglePreview,
   onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize, formatCurrency,
@@ -787,7 +816,7 @@ function BillRow({
   billAmountForCat: (bill: Bill, catId: string) => number
   gridTemplate: string; inBudget: boolean
   onEdit: (b: Bill) => void; onDelete: (id: string) => void
-  onMarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
+  onMarkPaid: (b: Bill) => void; onUnmarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
   onOpenAttachments: (b: Bill) => void
   onQuickFilter: (f: QuickFilter) => void
   attachmentBillId: string | null
@@ -899,9 +928,14 @@ function BillRow({
             className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
             <Receipt className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => onMarkPaid(bill)} title="Mark as paid" className="p-1 hover:bg-accent rounded text-green-500">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-          </button>
+          {bill.paid
+            ? <button onClick={() => onUnmarkPaid(bill)} title="Undo payment" className="p-1 hover:bg-accent rounded text-green-500">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              </button>
+            : <button onClick={() => onMarkPaid(bill)} title="Mark as paid" className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-green-500">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              </button>
+          }
           <button onClick={() => onEdit(bill)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
           <button onClick={() => onDelete(bill.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
         </div>
