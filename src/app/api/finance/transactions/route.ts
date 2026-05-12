@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { createGstJournalEntry } from '@/lib/finance-opening-balance'
+import { nextJournalReference } from '@/lib/finance-journal-ref'
 
 // ── Journal lines helper ────────────────────────────────────────────────────
 // If journalLines are supplied with a transaction POST, create a posted
@@ -35,20 +36,9 @@ async function createTransactionJournalEntry(
   const cr = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
   const balanced = Math.abs(dr - cr) < 0.005
 
-  // Retry loop for unique reference — uses MAX not COUNT to handle gaps from deletions
   const MAX_RETRIES = 10
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const entries = await prisma.financeJournalEntry.findMany({
-      where: { familyId, reference: { not: null } },
-      select: { reference: true },
-    })
-    let max = 0
-    for (const e of entries) {
-      if (!e.reference) continue
-      const m = e.reference.match(/^JE-(\d+)$/)
-      if (m) { const n = parseInt(m[1], 10); if (n > max) max = n }
-    }
-    const reference = `JE-${String(max + 1).padStart(4, '0')}`
+    const reference = await nextJournalReference(familyId)
 
     try {
       await prisma.financeJournalEntry.create({

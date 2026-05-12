@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { nextJournalReference } from '@/lib/finance-journal-ref'
 
 // ── Include shape used for all queries ───────────────────────────────────────
 
@@ -18,27 +19,6 @@ const ENTRY_INCLUDE = {
   },
 }
 
-// ── Auto-generate reference (JE-XXXX) ────────────────────────────────────────
-// Uses MAX of existing references (not COUNT) so gaps from deleted entries
-// never produce a collision. e.g. if JE-0004 was deleted, count=5 would
-// generate JE-0006 which already exists — MAX correctly returns JE-0007.
-
-async function nextReference(familyId: string): Promise<string> {
-  const entries = await prisma.financeJournalEntry.findMany({
-    where: { familyId, reference: { not: null } },
-    select: { reference: true },
-  })
-  let max = 0
-  for (const e of entries) {
-    if (!e.reference) continue
-    const match = e.reference.match(/^JE-(\d+)$/)
-    if (match) {
-      const n = parseInt(match[1], 10)
-      if (n > max) max = n
-    }
-  }
-  return `JE-${String(max + 1).padStart(4, '0')}`
-}
 
 /** Maximum attempts to retry a create when the unique constraint on (familyId, reference) fires (P1-5). */
 const MAX_REF_RETRIES = 10
@@ -53,7 +33,7 @@ async function createEntryWithRetry(
   familyId: string,
 ): Promise<any> {
   for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
-    const reference = await nextReference(familyId)
+    const reference = await nextJournalReference(familyId)
     try {
       return await prisma.financeJournalEntry.create({
         data: buildData(reference),
@@ -75,7 +55,7 @@ async function createEntryInTxWithRetry(
   familyId: string,
 ): Promise<any> {
   for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
-    const reference = await nextReference(familyId)
+    const reference = await nextJournalReference(familyId)
     try {
       const result = await prisma.$transaction(buildTx(reference))
       return result[0]

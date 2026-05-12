@@ -6,6 +6,7 @@ import {
   ensureAccountsPayableCategory,
   createGstJournalEntry,
 } from '@/lib/finance-opening-balance'
+import { nextJournalReference } from '@/lib/finance-journal-ref'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -96,18 +97,7 @@ async function upsertBillJournalEntry(
     }
   }
 
-  // Count existing entries for reference generation
-  const refEntries = await prisma.financeJournalEntry.findMany({
-    where: { familyId, reference: { not: null } },
-    select: { reference: true },
-  })
-  let refMax = 0
-  for (const e of refEntries) {
-    if (!e.reference) continue
-    const m = e.reference.match(/^JE-(\d+)$/)
-    if (m) { const n = parseInt(m[1], 10); if (n > refMax) refMax = n }
-  }
-  const reference = `JE-${String(refMax + 1).padStart(4, '0')}`
+  const reference = await nextJournalReference(familyId)
 
   const entry = await prisma.financeJournalEntry.create({
     data: {

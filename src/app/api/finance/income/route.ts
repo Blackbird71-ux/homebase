@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks } from 'date-fns'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
+import { nextJournalReference } from '@/lib/finance-journal-ref'
 
 const INCOME_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -79,17 +80,7 @@ async function upsertIncomeJournalEntry(
     }
   }
 
-  const jeEntries = await prisma.financeJournalEntry.findMany({
-    where: { familyId, reference: { not: null } },
-    select: { reference: true },
-  })
-  let jeMax = 0
-  for (const e of jeEntries) {
-    if (!e.reference) continue
-    const m = e.reference.match(/^JE-(\d+)$/)
-    if (m) { const n = parseInt(m[1], 10); if (n > jeMax) jeMax = n }
-  }
-  const reference = `JE-${String(jeMax + 1).padStart(4, '0')}`
+  const reference = await nextJournalReference(familyId)
 
   const entry = await prisma.financeJournalEntry.create({
     data: {

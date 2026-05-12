@@ -1,6 +1,7 @@
 // src/lib/finance-opening-balance.ts
 // Opening balance helpers + account balance derivation (Workstream 3 + 4b)
 import { prisma } from '@/lib/prisma'
+import { nextJournalReference } from '@/lib/finance-journal-ref'
 
 /**
  * Ensure the family has a system "Opening Balances" equity category.
@@ -306,18 +307,7 @@ export async function createGstJournalEntry(
       return null
     }
 
-    // Generate a unique reference using MAX (not COUNT) so gaps from deleted
-    // entries never produce a collision with an existing reference.
-    const refEntries = await prisma.financeJournalEntry.findMany({
-      where: { familyId, reference: { not: null } },
-      select: { reference: true },
-    })
-    let refMax = 0
-    for (const e of refEntries) {
-      const m = e.reference?.match(/^JE-(\d+)$/)
-      if (m) { const n = parseInt(m[1], 10); if (n > refMax) refMax = n }
-    }
-    const reference = `JE-${String(refMax + 1).padStart(4, '0')}`
+    const reference = await nextJournalReference(familyId)
 
     let lines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[]
 
