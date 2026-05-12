@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { sortedCategoryList } from '@/lib/finance-categories'
+import { todayAU } from '@/lib/utils'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
 
@@ -51,6 +52,39 @@ interface CategoryMeta {
   parentId: string | null
 }
 
+interface AccountMeta {
+  id: string
+  name: string
+  type: string
+  institution: string | null
+}
+
+// localStorage key for persisting last-used expense selections
+const EXPENSE_PREFS_KEY = 'homebase:quickadd:expense:last'
+
+interface ExpensePrefs {
+  categoryId: string
+  accountId: string
+}
+
+function loadExpensePrefs(): ExpensePrefs {
+  try {
+    const raw = localStorage.getItem(EXPENSE_PREFS_KEY)
+    if (raw) return JSON.parse(raw) as ExpensePrefs
+  } catch {
+    // ignore parse errors
+  }
+  return { categoryId: '', accountId: '' }
+}
+
+function saveExpensePrefs(prefs: ExpensePrefs) {
+  try {
+    localStorage.setItem(EXPENSE_PREFS_KEY, JSON.stringify(prefs))
+  } catch {
+    // ignore storage errors (private browsing etc.)
+  }
+}
+
 const MEAL_TYPE_OPTIONS = [
   { value: 'breakfast', label: 'Breakfast' },
   { value: 'lunch', label: 'Lunch' },
@@ -63,19 +97,14 @@ const actions: { id: QuickAction; label: string; icon: React.ReactNode; descript
   { id: 'chore',         label: 'Chore',         icon: <ListChecks className="h-5 w-5" />,    description: 'Add a new chore' },
   { id: 'expense',       label: 'Expense',       icon: <DollarSign className="h-5 w-5" />,    description: 'Log a transaction' },
   { id: 'list-item',     label: 'List Item',     icon: <ListPlus className="h-5 w-5" />,      description: 'Add to a list' },
-  { id: 'shopping-list', label: 'Shopping List', icon: <ShoppingCart className="h-5 w-5" />,   description: 'New shopping list' },
+  { id: 'shopping-list', label: 'Shopping List', icon: <ShoppingCart className="h-5 w-5" />,  description: 'New shopping list' },
   { id: 'todo-list',     label: 'To-Do List',    icon: <CheckSquare className="h-5 w-5" />,   description: 'New to-do list' },
   { id: 'recipe',        label: 'Recipe',        icon: <ChefHat className="h-5 w-5" />,       description: 'Add a recipe' },
   { id: 'meal',          label: 'Meal',          icon: <Utensils className="h-5 w-5" />,      description: 'Plan a meal' },
   { id: 'note',          label: 'Note',          icon: <StickyNote className="h-5 w-5" />,    description: 'Write a note' },
   { id: 'ai',            label: 'AI Assistant',  icon: <Bot className="h-5 w-5" />,           description: 'Voice or chat commands' },
-  { id: 'help',          label: 'Help',           icon: <HelpCircle className="h-5 w-5" />,   description: 'How to use this page' },
+  { id: 'help',          label: 'Help',          icon: <HelpCircle className="h-5 w-5" />,    description: 'How to use this page' },
 ]
-
-function todayLocal() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 export function QuickAdd() {
   const router = useRouter()
@@ -86,22 +115,23 @@ export function QuickAdd() {
 
   // Shared form state
   const [title, setTitle] = useState('')
-  const [date, setDate] = useState(todayLocal())
+  const [date, setDate] = useState(todayAU())
 
   // Event-specific
   const [eventTitle, setEventTitle] = useState('')
-  const [eventDate, setEventDate] = useState(todayLocal())
+  const [eventDate, setEventDate] = useState(todayAU())
 
   // Chore-specific
   const [choreFrequency, setChoreFrequency] = useState('weekly')
 
-  // Expense-specific — simple: amount, description, GL account to debit, date
+  // Expense-specific
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseDescription, setExpenseDescription] = useState('')
   const [expenseCategoryId, setExpenseCategoryId] = useState('')
-  const [expenseGlAccountId, setExpenseGlAccountId] = useState('')
+  const [expenseAccountId, setExpenseAccountId] = useState('')
   const [categories, setCategories] = useState<CategoryMeta[]>([])
-  const [glAccounts, setGLAccounts] = useState<{id: string; name: string; type: string}[]>([])
+  const [accounts, setAccounts] = useState<AccountMeta[]>([])
+  const [expenseDataLoading, setExpenseDataLoading] = useState(false)
 
   // List-specific
   const [listName, setListName] = useState('')
@@ -165,18 +195,33 @@ export function QuickAdd() {
     }
   }, [mode])
 
-  // Fetch categories when expense mode is entered
+  // Fetch categories and accounts when expense mode is entered
   useEffect(() => {
-    if (mode === 'expense' && categories.length === 0) {
-      fetch('/api/finance/categories')
-        .then((r) => r.json())
-        .then((data: (CategoryMeta & { type: string })[]) => {
-          setCategories(data)
-          setGLAccounts(data.filter(c => c.type !== 'transfer' && ['asset','liability','equity','income','expense'].includes(c.type)))
-        })
-        .catch(() => { /* silently fail */ })
-    }
-  }, [mode, categories.length])
+    if (mode !== 'expense') return
+    if (categories.length > 0 && accounts.length > 0) return  // already loaded
+
+    setExpenseDataLoading(true)
+
+    Promise.all([
+      fetch('/api/finance/categories').then(r => r.json()),
+      fetch('/api/finance/accounts').then(r => r.json()),
+    ])
+      .then(([cats, accts]: [CategoryMeta[], AccountMeta[]]) => {
+        setCategories(cats)
+        setAccounts(accts)
+
+        // Restore last-used selections, validate they still exist in the fetched data
+        const prefs = loadExpensePrefs()
+        if (prefs.categoryId && cats.some(c => c.id === prefs.categoryId)) {
+          setExpenseCategoryId(prefs.categoryId)
+        }
+        if (prefs.accountId && accts.some(a => a.id === prefs.accountId)) {
+          setExpenseAccountId(prefs.accountId)
+        }
+      })
+      .catch(() => { /* silently fail — user can still submit without selections */ })
+      .finally(() => setExpenseDataLoading(false))
+  }, [mode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch lists when list-item mode is entered
   useEffect(() => {
@@ -194,14 +239,14 @@ export function QuickAdd() {
   const resetForm = useCallback(() => {
     setMode(null)
     setTitle('')
-    setDate(todayLocal())
+    setDate(todayAU())
     setEventTitle('')
-    setEventDate(todayLocal())
+    setEventDate(todayAU())
     setChoreFrequency('weekly')
     setExpenseAmount('')
     setExpenseDescription('')
-    setExpenseCategoryId('')
-    setExpenseGlAccountId('')
+    // Note: intentionally NOT resetting expenseCategoryId / expenseAccountId
+    // so the next open restores the remembered values via the useEffect above.
     setListName('')
     setListType('SHOPPING')
     setListItemContent('')
@@ -232,8 +277,8 @@ export function QuickAdd() {
     }
 
     setMode(m)
-    if (m === 'event') setEventDate(todayLocal())
-    if (m === 'meal' || m === 'expense') setDate(todayLocal())
+    if (m === 'event') setEventDate(todayAU())
+    if (m === 'meal' || m === 'expense') setDate(todayAU())
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -300,6 +345,10 @@ export function QuickAdd() {
             setSubmitting(false)
             return
           }
+
+          // Persist selections before posting so they survive even on error
+          saveExpensePrefs({ categoryId: expenseCategoryId, accountId: expenseAccountId })
+
           const res = await fetch('/api/finance/transactions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -308,8 +357,8 @@ export function QuickAdd() {
               amount,
               description: expenseDescription.trim() || null,
               categoryId: expenseCategoryId || null,
-              glAccountId: expenseGlAccountId || null,
-              date: date ? new Date(date).toISOString() : new Date().toISOString(),
+              accountId: expenseAccountId || null,
+              date: date ? new Date(date + 'T12:00:00').toISOString() : new Date().toISOString(),
               isCleared: true,
             }),
           })
@@ -458,6 +507,12 @@ export function QuickAdd() {
     }
   }
 
+  // ── Account display label ────────────────────────────────────────────────
+  function accountLabel(a: AccountMeta): string {
+    const inst = a.institution ? ` · ${a.institution}` : ''
+    return `${a.name}${inst}`
+  }
+
   function renderForm() {
     if (!mode) return null
 
@@ -480,7 +535,7 @@ export function QuickAdd() {
             <div className="space-y-2">
               <Label htmlFor="qa-event-title">Event Title</Label>
               <Input
-                ref={inputRef as React.Ref<HTMLInputElement>}
+                ref={inputRef}
                 id="qa-event-title"
                 value={eventTitle}
                 onChange={(e) => setEventTitle(e.target.value)}
@@ -507,7 +562,7 @@ export function QuickAdd() {
             <div className="space-y-2">
               <Label htmlFor="qa-chore-title">Chore Name</Label>
               <Input
-                ref={inputRef as React.Ref<HTMLInputElement>}
+                ref={inputRef}
                 id="qa-chore-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -532,23 +587,26 @@ export function QuickAdd() {
           </>
         )}
 
-        {/* Expense form — simple: amount, description, GL account, date */}
+        {/* Expense form */}
         {mode === 'expense' && (
           <>
+            {/* Amount — autofocused */}
             <div className="space-y-2">
               <Label htmlFor="qa-expense-amount">Amount ($)</Label>
               <Input
-                ref={inputRef as React.Ref<HTMLInputElement>}
+                ref={inputRef}
                 id="qa-expense-amount"
                 type="number"
                 step="0.01"
                 min="0.01"
                 value={expenseAmount}
                 onChange={(e) => setExpenseAmount(e.target.value)}
-                placeholder="e.g., 29.99"
+                placeholder="0.00"
                 required
               />
             </div>
+
+            {/* Date */}
             <div className="space-y-2">
               <Label htmlFor="qa-expense-date">Date</Label>
               <Input
@@ -558,6 +616,8 @@ export function QuickAdd() {
                 onChange={(e) => setDate(e.target.value)}
               />
             </div>
+
+            {/* Description */}
             <div className="space-y-2">
               <Label htmlFor="qa-expense-desc">Description</Label>
               <Input
@@ -567,23 +627,71 @@ export function QuickAdd() {
                 placeholder="e.g., Weekly groceries"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="qa-expense-cat">Category <span className="text-destructive">*</span></Label>
-              <select
-                id="qa-expense-cat"
-                value={expenseCategoryId}
-                onChange={e => setExpenseCategoryId(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-              >
-                <option value="">Select category…</option>
-                {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.parentId ? `\u2014 ${c.name}` : c.name}
-                  </option>
-                ))}
-              </select>
-              {!expenseCategoryId && (
-                <p className="text-[11px] text-amber-500">⚠ Without a category this will show as Uncategorised on P&L</p>
+
+            {/* Category (expense GL category for P&L) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-expense-cat">
+                Category
+                {expenseCategoryId && (
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">(remembered)</span>
+                )}
+              </Label>
+              {expenseDataLoading ? (
+                <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                <select
+                  id="qa-expense-cat"
+                  value={expenseCategoryId}
+                  onChange={e => setExpenseCategoryId(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="">No category…</option>
+                  {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.parentId ? `\u2014 ${c.name}` : c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {!expenseCategoryId && !expenseDataLoading && (
+                <p className="text-[11px] text-amber-500">
+                  ⚠ Without a category this will show as Uncategorised on P&amp;L
+                </p>
+              )}
+            </div>
+
+            {/* Account (bank/card the money came from) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-expense-account">
+                Account
+                {expenseAccountId && (
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">(remembered)</span>
+                )}
+              </Label>
+              {expenseDataLoading ? (
+                <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading…
+                </div>
+              ) : accounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No accounts set up yet.</p>
+              ) : (
+                <select
+                  id="qa-expense-account"
+                  value={expenseAccountId}
+                  onChange={e => setExpenseAccountId(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="">No account…</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {accountLabel(a)}
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
           </>
@@ -614,7 +722,7 @@ export function QuickAdd() {
             <div className="space-y-2">
               <Label htmlFor="qa-listitem-content">Item</Label>
               <Input
-                ref={inputRef as React.Ref<HTMLInputElement>}
+                ref={inputRef}
                 id="qa-listitem-content"
                 value={listItemContent}
                 onChange={(e) => setListItemContent(e.target.value)}
@@ -631,7 +739,7 @@ export function QuickAdd() {
             <div className="space-y-2">
               <Label htmlFor="qa-list-name">List Name</Label>
               <Input
-                ref={inputRef as React.Ref<HTMLInputElement>}
+                ref={inputRef}
                 id="qa-list-name"
                 value={listName}
                 onChange={(e) => setListName(e.target.value)}
@@ -657,7 +765,7 @@ export function QuickAdd() {
           <div className="space-y-2">
             <Label htmlFor="qa-recipe-title">Recipe Title</Label>
             <Input
-              ref={inputRef as React.Ref<HTMLInputElement>}
+              ref={inputRef}
               id="qa-recipe-title"
               value={recipeTitle}
               onChange={(e) => setRecipeTitle(e.target.value)}
@@ -702,7 +810,7 @@ export function QuickAdd() {
             <div className="space-y-2">
               <Label htmlFor="qa-meal-note">What's on the menu?</Label>
               <Input
-                ref={inputRef as React.Ref<HTMLInputElement>}
+                ref={inputRef}
                 id="qa-meal-note"
                 value={mealNote}
                 onChange={(e) => setMealNote(e.target.value)}
@@ -719,7 +827,7 @@ export function QuickAdd() {
             <div className="space-y-2">
               <Label htmlFor="qa-note-title">Note Title</Label>
               <Input
-                ref={inputRef as React.Ref<HTMLInputElement>}
+                ref={inputRef}
                 id="qa-note-title"
                 value={noteTitle}
                 onChange={(e) => setNoteTitle(e.target.value)}
