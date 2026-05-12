@@ -1,0 +1,305 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireSession } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/prisma'
+
+// GET /api/finance/trial-balance
+//
+// Query params:
+//   from=YYYY-MM-DD        — period start (optional; all-time if omitted)
+//   to=YYYY-MM-DD          — period end   (optional)
+//   entityId=              — filter to one entity (optional)
+//   glAccountId=           — if present: return General Ledger for this account
+//
+// Returns either:
+//   { mode: 'trial-balance', accounts, grandTotalDebit, grandTotalCredit, isBalanced, ... }
+//   { mode: 'general-ledger', glAccount, lines, openingBalance, closingBalance, ... }
+
+export async function GET(request: NextRequest) {
+  const session = await requireSession()
+  const { searchParams } = new URL(request.url)
+
+  const familyId    = session.familyId
+  const fromRaw     = searchParams.get('from')
+  const toRaw       = searchParams.get('to')
+  const entityId    = searchParams.get('entityId') ?? undefined
+  const glAccountId = searchParams.get('glAccountId') ?? undefined
+
+  // Build date filter for journal entries
+  const dateFilter: any = {}
+  if (fromRaw) dateFilter.gte = new Date(fromRaw)
+  if (toRaw)   dateFilter.lte = new Date(new Date(toRaw).setHours(23, 59, 59, 999))
+
+  const journalEntryFilter: any = {
+    familyId,
+    isPosted: true,
+    ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+    ...(entityId ? { entityId } : {}),
+  }
+
+  // ── GENERAL LEDGER MODE ──────────────────────────────────────────────────
+  if (glAccountId) {
+    const glAccount = await prisma.financeCategory.findFirst({
+      where: { id: glAccountId, familyId },
+      select: {
+        id: true, name: true, type: true, glCode: true,
+        openingBalance: true, openingBalanceDate: true,
+        parentId: true,
+        parent: { select: { name: true } },
+      },
+    })
+    if (!glAccount) {
+      return NextResponse.json({ error: 'GL account not found' }, { status: 404 })
+    }
+
+    // All posted journal lines for this account
+    const journalLines = await prisma.financeJournalLine.findMany({
+      where: {
+        glAccountId,
+        journalEntry: journalEntryFilter,
+      },
+      include: {
+        journalEntry: {
+          select: {
+            id: true, reference: true, date: true,
+            description: true, type: true,
+          },
+        },
+      },
+      orderBy: [
+        { journalEntry: { date: 'asc' } },
+        { journalEntry: { createdAt: 'asc' } },
+      ],
+    })
+
+    // Cleared transactions that reference this GL account
+    const txFilter: any = {
+      familyId,
+      isCleared: true,
+      glAccountId,
+      type: { not: 'opening_balance' },
+      ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+      ...(entityId ? { entityId } : {}),
+    }
+    const txLines = await prisma.financeTransaction.findMany({
+      where: txFilter,
+      include: {
+        category: { select: { name: true, glCode: true } },
+        recurringBill: { select: { name: true } },
+      },
+      orderBy: { date: 'asc' },
+    })
+
+    // Merge into unified ledger lines
+    type LedgerLine = {
+      id: string; date: string; reference: string; description: string
+      type: 'journal' | 'transaction'; entryType: string
+      debit: number; credit: number; lineDescription: string | null
+    }
+
+    const entries: LedgerLine[] = []
+
+    for (const l of journalLines) {
+      entries.push({
+        id:              l.id,
+        date:            l.journalEntry.date.toISOString(),
+        reference:       l.journalEntry.reference ?? '',
+        description:     l.journalEntry.description,
+        type:            'journal',
+        entryType:       l.journalEntry.type,
+        debit:           l.side === 'debit'  ? l.amount : 0,
+        credit:          l.side === 'credit' ? l.amount : 0,
+        lineDescription: l.description ?? null,
+      })
+    }
+
+    for (const tx of txLines) {
+      const desc = tx.description ?? tx.payee
+        ?? tx.recurringBill?.name
+        ?? tx.category?.name
+        ?? tx.type
+      entries.push({
+        id:              tx.id,
+        date:            tx.date.toISOString(),
+        reference:       '',
+        description:     desc,
+        type:            'transaction',
+        entryType:       tx.type,
+        // For the GL account side: income = credit, expense = debit
+        debit:           tx.type === 'expense' ? tx.amount : 0,
+        credit:          tx.type === 'income'  ? tx.amount : 0,
+        lineDescription: null,
+      })
+    }
+
+    // Sort by date
+    entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    // Running balance — normal balance side determines sign
+    // Assets & Expenses: DR increases, CR decreases
+    // Liabilities, Equity, Income: CR increases, DR decreases
+    const normalDebitSide = ['asset', 'expense'].includes(glAccount.type)
+    const openingBalance  = glAccount.openingBalance ?? 0
+    let running = openingBalance
+
+    const ledgerLines = entries.map(e => {
+      const movement = normalDebitSide
+        ? e.debit - e.credit
+        : e.credit - e.debit
+      running += movement
+      return {
+        ...e,
+        movement: Math.round(movement * 100) / 100,
+        balance:  Math.round(running  * 100) / 100,
+      }
+    })
+
+    const totalDebit  = Math.round(entries.reduce((s, e) => s + e.debit,  0) * 100) / 100
+    const totalCredit = Math.round(entries.reduce((s, e) => s + e.credit, 0) * 100) / 100
+
+    return NextResponse.json({
+      mode: 'general-ledger',
+      glAccount: {
+        id:           glAccount.id,
+        name:         glAccount.name,
+        type:         glAccount.type,
+        glCode:       glAccount.glCode,
+        parentName:   (glAccount as any).parent?.name ?? null,
+        openingBalance,
+      },
+      openingBalance,
+      closingBalance: Math.round(running * 100) / 100,
+      totalDebit,
+      totalCredit,
+      lines: ledgerLines,
+      from: fromRaw ?? null,
+      to:   toRaw   ?? null,
+    })
+  }
+
+  // ── TRIAL BALANCE MODE ───────────────────────────────────────────────────
+
+  // Fetch all posted journal lines in range
+  const journalLines = await prisma.financeJournalLine.findMany({
+    where: { journalEntry: journalEntryFilter },
+    include: {
+      glAccount: {
+        select: {
+          id: true, name: true, type: true, glCode: true,
+          parentId: true,
+          parent: { select: { id: true, name: true } },
+        },
+      },
+    },
+  })
+
+  // Aggregate by GL account
+  const accountMap = new Map<string, {
+    id: string; name: string; type: string; glCode: string | null
+    parentId: string | null; parentName: string | null
+    totalDebit: number; totalCredit: number
+  }>()
+
+  for (const line of journalLines) {
+    const acct = line.glAccount
+    if (!accountMap.has(acct.id)) {
+      accountMap.set(acct.id, {
+        id:          acct.id,
+        name:        acct.name,
+        type:        acct.type,
+        glCode:      acct.glCode,
+        parentId:    acct.parentId,
+        parentName:  (acct as any).parent?.name ?? null,
+        totalDebit:  0,
+        totalCredit: 0,
+      })
+    }
+    const entry = accountMap.get(acct.id)!
+    if (line.side === 'debit')  entry.totalDebit  += line.amount
+    if (line.side === 'credit') entry.totalCredit += line.amount
+  }
+
+  // Also pull in cleared transaction flows routed to GL accounts
+  // (transactions with glAccountId set represent double-entry cash movements)
+  const txAggregates = await prisma.financeTransaction.groupBy({
+    by: ['glAccountId', 'type'],
+    where: {
+      familyId,
+      isCleared: true,
+      glAccountId: { not: null },
+      type: { not: 'opening_balance' },
+      ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+      ...(entityId ? { entityId } : {}),
+    },
+    _sum: { amount: true },
+  })
+
+  const txGlIds = [...new Set(txAggregates.map(a => a.glAccountId).filter(Boolean))] as string[]
+
+  if (txGlIds.length > 0) {
+    const txGlAccounts = await prisma.financeCategory.findMany({
+      where: { id: { in: txGlIds }, familyId },
+      select: {
+        id: true, name: true, type: true, glCode: true,
+        parentId: true,
+        parent: { select: { name: true } },
+      },
+    })
+    const txGlMap = new Map(txGlAccounts.map(a => [a.id, a]))
+
+    for (const agg of txAggregates) {
+      if (!agg.glAccountId) continue
+      const glAcct = txGlMap.get(agg.glAccountId)
+      if (!glAcct) continue
+      const amount = agg._sum.amount ?? 0
+
+      if (!accountMap.has(agg.glAccountId)) {
+        accountMap.set(agg.glAccountId, {
+          id: glAcct.id, name: glAcct.name, type: glAcct.type, glCode: glAcct.glCode,
+          parentId: glAcct.parentId, parentName: (glAcct as any).parent?.name ?? null,
+          totalDebit: 0, totalCredit: 0,
+        })
+      }
+      const entry = accountMap.get(agg.glAccountId)!
+      // Income transactions credit the income GL account
+      // Expense transactions debit the expense GL account
+      if (agg.type === 'income')  entry.totalCredit += amount
+      if (agg.type === 'expense') entry.totalDebit  += amount
+    }
+  }
+
+  // Sort: asset → liability → equity → income → expense → transfer, then GL code/name
+  const typeOrder: Record<string, number> = {
+    asset: 1, liability: 2, equity: 3, income: 4, expense: 5, transfer: 6,
+  }
+
+  const accounts = Array.from(accountMap.values())
+    .filter(a => a.totalDebit > 0.005 || a.totalCredit > 0.005)
+    .sort((a, b) => {
+      const diff = (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)
+      if (diff !== 0) return diff
+      if (a.glCode && b.glCode) return a.glCode.localeCompare(b.glCode, undefined, { numeric: true })
+      return a.name.localeCompare(b.name)
+    })
+    .map(a => ({
+      ...a,
+      totalDebit:  Math.round(a.totalDebit  * 100) / 100,
+      totalCredit: Math.round(a.totalCredit * 100) / 100,
+      netBalance:  Math.round((a.totalDebit - a.totalCredit) * 100) / 100,
+    }))
+
+  const grandTotalDebit  = Math.round(accounts.reduce((s, a) => s + a.totalDebit,  0) * 100) / 100
+  const grandTotalCredit = Math.round(accounts.reduce((s, a) => s + a.totalCredit, 0) * 100) / 100
+  const difference       = Math.round(Math.abs(grandTotalDebit - grandTotalCredit) * 100) / 100
+  const isBalanced       = difference < 0.01
+
+  return NextResponse.json({
+    mode: 'trial-balance',
+    accounts,
+    grandTotalDebit,
+    grandTotalCredit,
+    isBalanced,
+    difference,
+    from: fromRaw ?? null,
+    to:   toRaw   ?? null,
+  })
+}
