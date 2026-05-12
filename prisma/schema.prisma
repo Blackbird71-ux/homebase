@@ -991,23 +991,24 @@ model ReportEmail {
 // ─── Journal Entries ──────────────────────────────────────────────────────────
 
 model FinanceJournalEntry {
-  id            String   @id @default(cuid())
-  reference     String?  // e.g. "JE-0012" — auto-assigned on create
-  date          DateTime
-  description   String
-  type          String   @default("manual")  // manual | adjustment | reversal | opening_balance | auto_transaction
-  isPosted      Boolean  @default(false)
-  isReversed    Boolean  @default(false)
-  reversalOfId  String?  // FK to the entry this reverses
-  reversalOf    FinanceJournalEntry?  @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
-  reversals     FinanceJournalEntry[] @relation("JournalReversal")
-  entityId      String?
-  entity        FinanceEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  familyId      String
-  family        Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  lines         FinanceJournalLine[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  reference             String?  // e.g. "JE-0012" — auto-assigned on create
+  date                  DateTime
+  description           String
+  type                  String   @default("manual")  // manual | adjustment | reversal | opening_balance | auto_transaction
+  isPosted              Boolean  @default(false)
+  isReversed            Boolean  @default(false)
+  reversalOfId          String?  // FK to the entry this reverses
+  reversalOf            FinanceJournalEntry?  @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversals             FinanceJournalEntry[] @relation("JournalReversal")
+  sourceTransactionId   String?  // FK to the FinanceTransaction that auto-generated this entry
+  entityId              String?
+  entity                FinanceEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  familyId              String
+  family                Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  lines                 FinanceJournalLine[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@unique([familyId, reference])
   @@index([familyId])
@@ -1015,6 +1016,7 @@ model FinanceJournalEntry {
   @@index([familyId, isPosted])
   @@index([entityId])
   @@index([reversalOfId])
+  @@index([sourceTransactionId])
 }
 
 model FinanceJournalLine {

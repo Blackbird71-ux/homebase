@@ -255,55 +255,6 @@ export async function GET(request: NextRequest) {
     if (line.side === 'credit') entry.totalCredit += line.amount
   }
 
-  // Also pull in cleared transaction flows routed to GL accounts
-  // (transactions with glAccountId set represent double-entry cash movements)
-  const txAggregates = await prisma.financeTransaction.groupBy({
-    by: ['glAccountId', 'type'],
-    where: {
-      familyId,
-      isCleared: true,
-      glAccountId: { not: null },
-      type: { not: 'opening_balance' },
-      ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
-      ...(entityId ? { entityId } : {}),
-    },
-    _sum: { amount: true },
-  })
-
-  const txGlIds = [...new Set(txAggregates.map(a => a.glAccountId).filter(Boolean))] as string[]
-
-  if (txGlIds.length > 0) {
-    const txGlAccounts = await prisma.financeCategory.findMany({
-      where: { id: { in: txGlIds }, familyId },
-      select: {
-        id: true, name: true, type: true, glCode: true,
-        parentId: true,
-        parent: { select: { name: true } },
-      },
-    })
-    const txGlMap = new Map(txGlAccounts.map(a => [a.id, a]))
-
-    for (const agg of txAggregates) {
-      if (!agg.glAccountId) continue
-      const glAcct = txGlMap.get(agg.glAccountId)
-      if (!glAcct) continue
-      const amount = agg._sum.amount ?? 0
-
-      if (!accountMap.has(agg.glAccountId)) {
-        accountMap.set(agg.glAccountId, {
-          id: glAcct.id, name: glAcct.name, type: glAcct.type, glCode: glAcct.glCode,
-          parentId: glAcct.parentId, parentName: (glAcct as any).parent?.name ?? null,
-          totalDebit: 0, totalCredit: 0,
-        })
-      }
-      const entry = accountMap.get(agg.glAccountId)!
-      // Income transactions credit the income GL account
-      // Expense transactions debit the expense GL account
-      if (agg.type === 'income')  entry.totalCredit += amount
-      if (agg.type === 'expense') entry.totalDebit  += amount
-    }
-  }
-
   // Sort: asset → liability → equity → income → expense → transfer, then GL code/name
   const typeOrder: Record<string, number> = {
     asset: 1, liability: 2, equity: 3, income: 4, expense: 5, transfer: 6,

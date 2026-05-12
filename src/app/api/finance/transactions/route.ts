@@ -21,6 +21,7 @@ async function createTransactionJournalEntry(
   date: Date,
   familyId: string,
   entityId: string | null,
+  sourceTransactionId?: string,
 ): Promise<void> {
   const glIds = [...new Set(lines.map(l => l.glAccountId))]
   const valid = await prisma.financeCategory.findMany({
@@ -59,6 +60,7 @@ async function createTransactionJournalEntry(
           isPosted: balanced,   // post immediately if balanced; save as draft otherwise
           entityId: entityId ?? null,
           familyId,
+          sourceTransactionId: sourceTransactionId ?? null,
           lines: {
             create: lines.map(l => ({
               glAccountId: l.glAccountId,
@@ -171,7 +173,17 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  // Create a double-entry journal entry if lines provided
+  // ── Journal entry for this transaction ──────────────────────────────────
+  //
+  // Priority:
+  //   1. Caller-supplied journalLines — used as-is (full control).
+  //   2. GST-applicable category — a 3-line GST journal replaces the simple
+  //      2-line auto-journal so the expense/income and GST accounts are
+  //      split correctly without double-posting.
+  //   3. Auto-generated 2-line journal — DR/CR the category and the account.
+  //
+  // Transfers are excluded: they require paired entries across two accounts
+  // and must be handled by the caller.
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
       await createTransactionJournalEntry(
@@ -180,29 +192,29 @@ export async function POST(request: NextRequest) {
         txDate,
         session.familyId,
         json.entityId ?? null,
+        transaction.id,
       )
     } catch (err) {
       console.error('[transactions POST] Failed to create journal entry:', err)
     }
-  }
-
-  // ── Auto GST split ───────────────────────────────────────────────────────
-  // If the category is marked gstApplicable and the transaction is cleared,
-  // auto-post a 3-line GST journal entry (ex-GST + ITC/Collected + cash).
-  // Only fires for expense and income types — transfers and opening balances
-  // are excluded. The user can disable this per-category in Chart of Accounts.
-  if (
-    transaction.isCleared &&
+  } else if (
     transaction.categoryId &&
+    (transaction.accountId || glAccountId) &&
     (type === 'expense' || type === 'income')
   ) {
     try {
+      // Check GST before deciding which journal to create
       const cat = await prisma.financeCategory.findFirst({
         where: { id: transaction.categoryId, familyId: session.familyId },
         select: { gstApplicable: true, gstRate: true },
       })
+
+      const desc = description?.trim() || payee?.trim() || type
+      const cashGlId = glAccountId ?? transaction.accountId!
+
       if (cat?.gstApplicable) {
-        const desc = (description?.trim() || payee?.trim() || type)
+        // GST journal (3 lines) handles both the expense split AND the GL posting.
+        // Do NOT also create a simple 2-line journal — that would double-post.
         await createGstJournalEntry(
           type as 'expense' | 'income',
           amount,
@@ -215,10 +227,30 @@ export async function POST(request: NextRequest) {
           session.familyId,
           json.entityId ?? null,
           session.id,
+          transaction.id,
+        )
+      } else {
+        // No GST: simple balanced 2-line auto-journal.
+        const autoLines: JournalLineInput[] = type === 'expense'
+          ? [
+              { glAccountId: transaction.categoryId, side: 'debit',  amount },
+              { glAccountId: cashGlId,               side: 'credit', amount },
+            ]
+          : [
+              { glAccountId: cashGlId,               side: 'debit',  amount },
+              { glAccountId: transaction.categoryId, side: 'credit', amount },
+            ]
+        await createTransactionJournalEntry(
+          desc,
+          autoLines,
+          txDate,
+          session.familyId,
+          json.entityId ?? null,
+          transaction.id,
         )
       }
     } catch (err) {
-      console.error('[transactions POST] Failed to create GST journal:', err)
+      console.error('[transactions POST] Failed to create journal entry:', err)
     }
   }
 
@@ -272,6 +304,52 @@ export async function PUT(request: NextRequest) {
       entity: { select: { id: true, name: true, color: true, isDefault: true } },
     },
   })
+
+  // ── Sync the linked auto-generated journal entry if amount/date/description changed ──
+  // Only update if the changed fields could affect the journal (amount, date, description/payee).
+  // We only sync non-GST auto journals here (type='auto_transaction'). GST journals have
+  // 3 lines with split amounts and would require a full recalculation — leave those for manual
+  // correction until a dedicated recalc path is added.
+  const amountChanged      = amount     !== undefined && amount     !== existing.amount
+  const dateChanged        = date       !== undefined && new Date(date).getTime() !== existing.date.getTime()
+  const descriptionChanged = description !== undefined && description !== existing.description
+  const payeeChanged       = payee      !== undefined && payee      !== existing.payee
+
+  if (amountChanged || dateChanged || descriptionChanged || payeeChanged) {
+    try {
+      const linkedJournal = await prisma.financeJournalEntry.findFirst({
+        where: { sourceTransactionId: id, familyId: session.familyId, type: 'auto_transaction' },
+        include: { lines: true },
+      })
+
+      if (linkedJournal && linkedJournal.lines.length === 2) {
+        // Only sync balanced 2-line auto journals. GST journals (3 lines) are skipped.
+        const newAmount      = amount      ?? existing.amount
+        const newDate        = date        ? new Date(date) : existing.date
+        const newDescription = description ?? existing.description ?? payee ?? existing.payee ?? existing.type
+
+        const updatedLines = linkedJournal.lines.map(l => ({ ...l, amount: newAmount }))
+
+        await prisma.$transaction([
+          prisma.financeJournalEntry.update({
+            where: { id: linkedJournal.id },
+            data: {
+              date:        newDate,
+              description: newDescription,
+            },
+          }),
+          ...updatedLines.map(l =>
+            prisma.financeJournalLine.update({
+              where: { id: l.id },
+              data: { amount: newAmount },
+            }),
+          ),
+        ])
+      }
+    } catch (err) {
+      console.error('[transactions PUT] Failed to sync journal entry:', err)
+    }
+  }
 
   return NextResponse.json(transaction)
 }

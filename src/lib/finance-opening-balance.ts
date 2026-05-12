@@ -266,17 +266,18 @@ export function calcGst(
  * @returns The created journal entry ID, or null if creation failed
  */
 export async function createGstJournalEntry(
-  txType:        'expense' | 'income',
-  totalAmount:   number,
-  gstRate:       number,
-  expenseCatId:  string,
-  glAccountId:   string | null,
-  accountId:     string | null,
-  date:          Date,
-  description:   string,
-  familyId:      string,
-  entityId:      string | null,
-  createdBy:     string,
+  txType:              'expense' | 'income',
+  totalAmount:         number,
+  gstRate:             number,
+  expenseCatId:        string,
+  glAccountId:         string | null,
+  accountId:           string | null,
+  date:                Date,
+  description:         string,
+  familyId:            string,
+  entityId:            string | null,
+  createdBy:           string,
+  sourceTransactionId?: string,
 ): Promise<string | null> {
   try {
     const { exGst, gst } = calcGst(totalAmount, gstRate)
@@ -305,9 +306,18 @@ export async function createGstJournalEntry(
       return null
     }
 
-    // Generate a unique reference
-    const count = await prisma.financeJournalEntry.count({ where: { familyId } })
-    const reference = `JE-${String(count + 1).padStart(4, '0')}`
+    // Generate a unique reference using MAX (not COUNT) so gaps from deleted
+    // entries never produce a collision with an existing reference.
+    const refEntries = await prisma.financeJournalEntry.findMany({
+      where: { familyId, reference: { not: null } },
+      select: { reference: true },
+    })
+    let refMax = 0
+    for (const e of refEntries) {
+      const m = e.reference?.match(/^JE-(\d+)$/)
+      if (m) { const n = parseInt(m[1], 10); if (n > refMax) refMax = n }
+    }
+    const reference = `JE-${String(refMax + 1).padStart(4, '0')}`
 
     let lines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[]
 
@@ -348,6 +358,7 @@ export async function createGstJournalEntry(
         isPosted:    true,   // Posted immediately — GST entries are factual, not provisional
         entityId:    entityId ?? null,
         familyId,
+        sourceTransactionId: sourceTransactionId ?? null,
         lines: { create: lines },
       },
       select: { id: true },

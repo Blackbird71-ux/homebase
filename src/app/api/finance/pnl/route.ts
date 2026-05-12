@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
       category: { select: { id: true, name: true, color: true, type: true } },
       payments: { select: { amount: true, paymentDate: true } },
     },
+    // journalEntryId is a scalar field on the model — include it for dedup below
   })
 
   // ── 3. Income entries (recurring planned income) ──────────────────────
@@ -105,26 +106,7 @@ export async function GET(request: NextRequest) {
     include: { category: { select: { id: true, name: true, color: true } } },
   })
 
-  // ── 4. Actual transactions within the period ──────────────────────────
-  // Only cleared (settled/reconciled) transactions are recognised.
-  // P2 fix #3: isCleared:true ensures pending transactions do not appear.
-  // P2 fix #2: start/end are now UTC instants aligned to the family's timezone.
-  const transactions = await prisma.financeTransaction.findMany({
-    where: {
-      familyId,
-      isTransfer: false,
-      isCleared: true,
-      date: { gte: start, lte: end },
-      type: { not: 'opening_balance' },
-      ...entityFilter,
-    },
-    include: {
-      category: { select: { id: true, name: true, color: true, type: true } },
-    },
-    orderBy: { date: 'desc' },
-  })
-
-  // ── 5. Journal line balances for expense / income GL accounts ─────────
+  // ── 4. Journal line balances for expense / income GL accounts ─────────
   // P0 fix: posted journal entries (e.g. depreciation, accruals) now feed the P&L.
   const journalExpenseByCategory = new Map<string, { name: string; color: string | null; total: number }>()
   const journalIncomeByCategory  = new Map<string, { name: string; color: string | null; total: number }>()
@@ -175,40 +157,14 @@ export async function GET(request: NextRequest) {
   const startTs = start.getTime()
   const endTs   = end.getTime()
 
-  // ── 6. Deduplication sets (P0 fix: no double-counting) ────────────────
-  const billIdWithTxInPeriod = new Set<string>()
-  const txIdsInPeriod = new Set(transactions.map(t => t.id))
-
-  for (const tx of transactions) {
-    if (tx.recurringBillId) {
-      billIdWithTxInPeriod.add(tx.recurringBillId)
-    }
-  }
-
-  const incomeEntryIdsWithTxInPeriod = new Set<string>()
-  if (txIdsInPeriod.size > 0) {
-    const incomeEntriesWithTx = await prisma.financeIncomeEntry.findMany({
-      where: {
-        familyId,
-        OR: [
-          { invoiceTxId: { in: [...txIdsInPeriod] } },
-          { receiptTxId: { in: [...txIdsInPeriod] } },
-          { transactionId: { in: [...txIdsInPeriod] } },
-        ],
-      },
-      select: { id: true },
-    })
-    for (const ie of incomeEntriesWithTx) {
-      incomeEntryIdsWithTxInPeriod.add(ie.id)
-    }
-  }
-
-  // Income entries that have a linked posted journal entry whose date falls in
-  // the period are handled exclusively by the journalIncomeByCategory map (step 9).
-  // Exclude them from the entries pathway to avoid double-counting.
+  // ── 6. Deduplication sets ─────────────────────────────────────────────
+  // Bills/income entries that have a linked posted journal entry in the period
+  // are handled exclusively via the journalXxxByCategory maps (step 4).
+  // Exclude them from the entries/bills pathways to avoid double-counting.
   const journalEntryIdsInPeriod = new Set(
     journalLines.map(l => l.journalEntryId)
   )
+
   const incomeEntryIdsWithJournalInPeriod = new Set<string>()
   for (const e of incomeEntries) {
     const jeId = (e as any).journalEntryId as string | null
@@ -217,41 +173,46 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const billIdsWithJournalInPeriod = new Set<string>()
+  for (const b of bills) {
+    const jeId = (b as any).journalEntryId as string | null
+    if (jeId && journalEntryIdsInPeriod.has(jeId)) {
+      billIdsWithJournalInPeriod.add(b.id)
+    }
+  }
+
   // ── 7. Filter income entries within period ────────────────────────────
+  //
+  // ACCRUAL BASIS: income is recognised when the invoice/remittance is received
+  // (invoiceReceived=true), not when cash arrives or when it is merely scheduled.
+  // Entries whose linked journal entry falls in this period are handled exclusively
+  // by journalIncomeByCategory (step 4) to avoid double-counting.
   const relevantIncome = incomeEntries.filter(e => {
     if (!e.isActive) return false
-    if (incomeEntryIdsWithTxInPeriod.has(e.id)) return false
-    // Exclude entries whose journal entry falls in this period — they appear
-    // via journalIncomeByCategory (step 9) under their GL account name/amount.
+    // Handled by journalIncomeByCategory — don't also count the entry
     if (incomeEntryIdsWithJournalInPeriod.has(e.id)) return false
-
-    if (e.received && e.receivedDate) {
-      const ts = new Date(e.receivedDate).getTime()
-      return ts >= startTs && ts <= endTs
-    }
-    const dueTs = new Date(e.nextExpectedDate).getTime()
-    if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
-      return dueTs >= startTs && dueTs <= endTs
-    }
-    return dueTs <= endTs
+    // Must have been invoice-received (accrual recognition point)
+    if (!e.invoiceReceived || !e.invoiceReceivedDate) return false
+    const recognisedTs = new Date(e.invoiceReceivedDate).getTime()
+    return recognisedTs >= startTs && recognisedTs <= endTs
   })
 
   // ── 8. Filter bills within period ─────────────────────────────────────
+  //
+  // ACCRUAL BASIS: expense is recognised when the invoice is received
+  // (invoiceReceived=true), not when payment is made or when the bill is
+  // merely scheduled. Bills that have a cleared transaction in the period
+  // are handled exclusively by journalExpenseByCategory (step 4) and excluded here.
   const relevantExpenses = bills.filter(b => {
     if (!b.isActive) return false
     if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
     if (b.billType === 'transfer') return false
-    if (billIdWithTxInPeriod.has(b.id)) return false
-
-    if (b.paid && b.paidDate) {
-      const ts = new Date(b.paidDate).getTime()
-      return ts >= startTs && ts <= endTs
-    }
-    const dueTs = new Date(b.nextDueDate).getTime()
-    if (b.billType === 'one-off' || isLumpSum(b.frequency)) {
-      return dueTs >= startTs && dueTs <= endTs
-    }
-    return dueTs <= endTs
+    // Handled by journalExpenseByCategory — don't also count the bill
+    if (billIdsWithJournalInPeriod.has(b.id)) return false
+    // Must have been invoice-received (accrual recognition point)
+    if (!b.invoiceReceived || !b.invoiceReceivedDate) return false
+    const recognisedTs = new Date(b.invoiceReceivedDate).getTime()
+    return recognisedTs >= startTs && recognisedTs <= endTs
   })
 
   // ── 9. Group income ───────────────────────────────────────────────────
@@ -263,34 +224,18 @@ export async function GET(request: NextRequest) {
     const color = e.category?.color ?? null
     if (!incomeMap.has(key)) incomeMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
     const g = incomeMap.get(key)!
-    const isOneOff = e.incomeType === 'one-off' || isLumpSum(e.frequency)
-    const periodAmt = isOneOff ? e.amount : toPeriodAmount(e.amount, e.frequency, periodMonths)
+    // Accrual basis: income is included because its invoice/remittance date falls
+    // in the period. Use the actual amount — no period-spreading.
+    const periodAmt = e.amount
     g.totalPeriod += periodAmt
     g.count++
     g.items.push({
       id: e.id, name: e.name, amount: e.amount, periodAmount: periodAmt,
-      isOneOff, received: e.received ?? false,
-      date: e.received && e.receivedDate
-        ? e.receivedDate.toISOString().split('T')[0]
+      isOneOff: true, received: e.received ?? false,
+      date: e.invoiceReceivedDate
+        ? e.invoiceReceivedDate.toISOString().split('T')[0]
         : e.nextExpectedDate.toISOString().split('T')[0],
       source: 'entry',
-    })
-  }
-
-  for (const tx of transactions) {
-    if (tx.type !== 'income') continue
-    const key   = tx.category?.id ?? '__none__'
-    const label = tx.category?.name ?? 'Uncategorised'
-    const color = tx.category?.color ?? null
-    if (!incomeMap.has(key)) incomeMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
-    const g = incomeMap.get(key)!
-    g.totalPeriod += tx.amount
-    g.count++
-    g.items.push({
-      id: tx.id, name: tx.description ?? tx.payee ?? 'Income', amount: tx.amount,
-      periodAmount: tx.amount, isOneOff: true, received: true,
-      date: tx.date.toISOString().split('T')[0],
-      source: 'transaction',
     })
   }
 
@@ -316,34 +261,19 @@ export async function GET(request: NextRequest) {
     const color = b.category?.color ?? null
     if (!expenseMap.has(key)) expenseMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
     const g = expenseMap.get(key)!
-    const isOneOff = b.billType === 'one-off' || isLumpSum(b.frequency)
-    const periodAmt = isOneOff ? b.amount : toPeriodAmount(b.amount, b.frequency, periodMonths)
+    // Accrual basis: bill is included because its invoice date falls in the period.
+    // Use the actual bill amount — no period-spreading. Each bill occurrence is one
+    // discrete recognised expense at its invoice date.
+    const periodAmt = b.amount
     g.totalPeriod += periodAmt
     g.count++
     g.items.push({
       id: b.id, name: b.name, amount: b.amount, periodAmount: periodAmt,
-      isOneOff, paid: b.paid ?? false,
-      date: b.paid && b.paidDate
-        ? b.paidDate.toISOString().split('T')[0]
+      isOneOff: true, paid: b.paid ?? false,
+      date: b.invoiceReceivedDate
+        ? b.invoiceReceivedDate.toISOString().split('T')[0]
         : b.nextDueDate.toISOString().split('T')[0],
       source: 'bill',
-    })
-  }
-
-  for (const tx of transactions) {
-    if (tx.type !== 'expense') continue
-    const key   = tx.category?.id ?? '__none__'
-    const label = tx.category?.name ?? 'Uncategorised'
-    const color = tx.category?.color ?? null
-    if (!expenseMap.has(key)) expenseMap.set(key, { key, label, color, totalPeriod: 0, count: 0, items: [] })
-    const g = expenseMap.get(key)!
-    g.totalPeriod += tx.amount
-    g.count++
-    g.items.push({
-      id: tx.id, name: tx.description ?? tx.payee ?? 'Expense', amount: tx.amount,
-      periodAmount: tx.amount, isOneOff: true, paid: true,
-      date: tx.date.toISOString().split('T')[0],
-      source: 'transaction',
     })
   }
 

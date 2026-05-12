@@ -81,68 +81,33 @@ export async function GET(request: NextRequest) {
         tz
       )
 
-  // ── 1. All cleared transactions up to asAt → bank account balances ────────
-  const txFilter: any = {
-    familyId,
-    isCleared: true,
-    date: { lte: asAt },
-    type: { not: 'opening_balance' },
-  }
-  if (entityId) txFilter.entityId = entityId
-
-  const obFilter: any = {
-    familyId,
-    isCleared: true,
-    date: { lte: asAt },
-    type: 'opening_balance',
-  }
-  if (entityId) obFilter.entityId = entityId
-
-  const [clearedTxs, obTxs] = await Promise.all([
-    prisma.financeTransaction.findMany({
-      where: txFilter,
-      select: { accountId: true, glAccountId: true, type: true, amount: true },
-    }),
-    prisma.financeTransaction.findMany({
-      where: obFilter,
-      select: { accountId: true, glAccountId: true, type: true, amount: true },
-    }),
-  ])
-
-  // Build balance map from cleared transactions
-  const bankBalanceMap = new Map<string, number>()
-
-  for (const tx of obTxs) {
-    const bucket = tx.glAccountId ?? tx.accountId
-    if (!bucket) continue
-    bankBalanceMap.set(bucket, (bankBalanceMap.get(bucket) ?? 0) + tx.amount)
-  }
-
-  for (const tx of clearedTxs) {
-    const bucket = tx.glAccountId ?? tx.accountId
-    if (!bucket) continue
-    const cur = bankBalanceMap.get(bucket) ?? 0
-    if (tx.type === 'income') {
-      bankBalanceMap.set(bucket, cur + tx.amount)
-    } else if (tx.type === 'expense') {
-      bankBalanceMap.set(bucket, cur - tx.amount)
-    }
-    // transfers cancel across paired accounts
-  }
-
-  // ── 2. Posted journal lines → apply to GL account balances (P0 fix #3) ──
+  // ── 1. Posted journal lines → all GL account balances ────────────────────
+  // Journal lines are the single source of truth. Every transaction (income,
+  // expense, opening balance) auto-generates a posted journal entry on creation,
+  // so the journal ledger reflects the full account history.
   const journalBalances = await deriveJournalLineBalances(familyId, null, asAt, entityId)
+  const bankBalanceMap = new Map<string, number>()
   for (const [glAccountId, data] of journalBalances) {
-    bankBalanceMap.set(glAccountId, (bankBalanceMap.get(glAccountId) ?? 0) + data.netBalance)
+    bankBalanceMap.set(glAccountId, data.netBalance)
   }
 
-  // ── 3. Accounts Payable: bills with invoice received but not yet paid ──────
+  // ── 3. Accounts Payable: bills with invoice received but not yet fully paid ──
+  // Deduct any partial payments already made so AP reflects the true remaining balance.
   const apFilter: any = { familyId, invoiceReceived: true, paid: false, isActive: true }
   if (entityId) apFilter.entityId = entityId
   const unpaidBills = await prisma.financeRecurringBill.findMany({
-    where: apFilter, select: { amount: true },
+    where: apFilter,
+    select: {
+      amount: true,
+      payments: { select: { amount: true } },
+    },
   })
-  const accountsPayable = Math.round(unpaidBills.reduce((s, b) => s + b.amount, 0) * 100) / 100
+  const accountsPayable = Math.round(
+    unpaidBills.reduce((s, b) => {
+      const paid = b.payments.reduce((p: number, pmt: { amount: number }) => p + pmt.amount, 0)
+      return s + Math.max(0, b.amount - paid)
+    }, 0) * 100,
+  ) / 100
 
   // ── 4. Accounts Receivable: income with invoice received but not collected ──
   // IMPORTANT: exclude entries that have a journalEntryId — those income entries
@@ -162,32 +127,16 @@ export async function GET(request: NextRequest) {
   })
   const accountsReceivable = Math.round(uncollectedIncome.reduce((s, e) => s + e.amount, 0) * 100) / 100
 
-  // ── 5. Current Period Net Income (P0 fix #2) ──────────────────────────────
-  const netIncomeFilter: any = {
-    familyId,
-    isCleared: true,
-    isTransfer: false,
-    date: { lte: asAt },
-    type: { in: ['income', 'expense'] },
-  }
-  if (entityId) netIncomeFilter.entityId = entityId
-  const netIncomeTxs = await prisma.financeTransaction.findMany({
-    where: netIncomeFilter, select: { type: true, amount: true },
-  })
-
-  let netIncomeFromTx = 0
-  for (const tx of netIncomeTxs) {
-    if (tx.type === 'income')  netIncomeFromTx += tx.amount
-    if (tx.type === 'expense') netIncomeFromTx -= tx.amount
-  }
-
-  let netIncomeFromJournals = 0
+  // ── 5. Current Period Net Income ──────────────────────────────────────────
+  // Derived exclusively from posted journal lines (income/expense GL accounts).
+  // Using FinanceTransaction here would double-count: every payment also posts a
+  // journal entry, so summing both overstates expenses and understates net income.
+  let currentPeriodNetIncome = 0
   for (const [, data] of journalBalances) {
-    if (data.accountType === 'income')  netIncomeFromJournals += data.netBalance
-    if (data.accountType === 'expense') netIncomeFromJournals -= data.netBalance
+    if (data.accountType === 'income')  currentPeriodNetIncome += data.netBalance
+    if (data.accountType === 'expense') currentPeriodNetIncome -= data.netBalance
   }
-
-  const currentPeriodNetIncome = Math.round((netIncomeFromTx + netIncomeFromJournals) * 100) / 100
+  currentPeriodNetIncome = Math.round(currentPeriodNetIncome * 100) / 100
 
   // ── 6. Fetch bank accounts ────────────────────────────────────────────────
   const bankAccounts = await prisma.financeAccount.findMany({
