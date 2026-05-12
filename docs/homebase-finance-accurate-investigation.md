@@ -440,7 +440,7 @@ Run this on the NAS to clear all transactional data while preserving config:
 
 ```bash
 # SSH to NAS, then:
-docker exec -i c18ba8ed7d9efa828783023e063f08599bedb2920a16ec89f2f3f20d5d531a84 sqlite3 /data/homebase.db << 'EOF'
+docker exec -i ce20649ce661 sqlite3 /data/homebase.db << 'EOF'
 PRAGMA foreign_keys = OFF;
 DELETE FROM FinanceBillPayment;
 DELETE FROM FinanceJournalLine;
@@ -466,6 +466,7 @@ SELECT 'FinanceJournalLine', COUNT(*) FROM FinanceJournalLine UNION ALL
 SELECT 'FinanceJournalEntry', COUNT(*) FROM FinanceJournalEntry UNION ALL
 SELECT 'FinanceTransaction', COUNT(*) FROM FinanceTransaction;
 EOF
+
 ```
 
 **This preserves:** FinanceCategory (all 118 GL accounts), FinanceVendor (38), FinanceEntity (3), FinanceBudget (46), FinanceAccount (1), FinanceRecurringBill templates (34), FinanceIncomeEntry templates (11), Family settings, all users.
@@ -508,66 +509,3 @@ EOF
 ---
 
 *Report based on direct filesystem reads of `C:\Appdev\HomeBase` source files and Python sqlite3 analysis of `data/homebase.db`. All findings are from the actual codebase, not assumptions.*
-
----
-
-## Part 6 — Fixes Applied (2026-05-12)
-
-A second-pass deep accounting review identified the root architectural problem: **two parallel data stores** (FinanceTransaction as an input register and FinanceJournalLine as the GL ledger) were both feeding reports with fragile deduplication logic between them. This caused persistent double-counting, GST miscalculation, and report inconsistencies that couldn't be reliably patched at the dedup layer.
-
-The fix was to make the GL the single source of truth and ensure every transaction generates a journal entry.
-
-### Changes Made
-
-**`src/lib/finance-opening-balance.ts`**
-- `createGstJournalEntry()`: replaced `COUNT`-based reference generation with MAX-based scan (same fix as journals/route.ts Fix 3 above) — prevents reference collisions after deletions
-- Added `sourceTransactionId` optional parameter so GST auto-journals record their source transaction
-
-**`src/app/api/finance/pnl/route.ts`**
-- Removed the `FinanceTransaction` query and both transaction grouping loops from income/expense aggregation — transactions now flow through the GL journal path only
-- Changed bills/income entry filtering to require `invoiceReceived: true` with `invoiceReceivedDate` in period (accrual basis recognition, not forecast scheduling)
-- Removed `billIdWithTxInPeriod` and `incomeEntryIdsWithTxInPeriod` dedup sets (no longer needed without the transactions path)
-- Retained `billIdsWithJournalInPeriod` / `incomeEntryIdsWithJournalInPeriod` dedup — bills and entries with a journal entry in period are excluded from the accrual path (journal path covers them)
-
-**`src/app/api/finance/trial-balance/route.ts`**
-- Deleted the `txAggregates` block that was pulling cleared transactions with `glAccountId` into the Trial Balance alongside journal lines — Trial Balance now reads exclusively from posted `FinanceJournalLine` records
-
-**`src/app/api/finance/balance-sheet/route.ts`**
-- Removed both `FinanceTransaction` queries (cleared transactions and opening balance transactions) that were building the `bankBalanceMap` — replaced with a single `deriveJournalLineBalances()` call; journal lines are the sole input
-- Current Period Net Income now derived exclusively from income/expense GL movements in journal lines (removed the previous transaction-based net income calculation)
-- Accounts Payable now deducts partial payments: fetches `payments { amount }` on each unpaid bill and subtracts the paid portion from the AP total
-
-**`src/app/api/finance/transactions/route.ts`**
-- POST handler now auto-creates a journal entry for every income/expense transaction using a 3-priority system:
-  1. Caller-supplied `journalLines` array → used as-is
-  2. GST-applicable category → creates a 3-line GST journal (DR expense ex-GST / DR GST ITC / CR cash) via `createGstJournalEntry()` — mutually exclusive with the simple 2-line journal, eliminating the previous double-count
-  3. Non-GST transaction with category + account → creates a 2-line balanced auto-journal (DR expense / CR cash for expenses; reversed for income)
-- All `createTransactionJournalEntry()` call sites now pass `transaction.id` as `sourceTransactionId`
-- PUT handler: after updating a transaction, finds the linked auto-journal via `sourceTransactionId` and syncs its date, description, and line amounts if those fields changed (only for 2-line non-GST auto-journals; GST journals are left for manual correction)
-
-**`prisma/schema.prisma`**
-- Added `sourceTransactionId String?` field and `@@index([sourceTransactionId])` to `FinanceJournalEntry` — links auto-generated journal entries back to their source transaction for PUT sync
-
-**`prisma/migrations/20260532000000_add_journal_source_transaction/migration.sql`**
-- `ALTER TABLE "FinanceJournalEntry" ADD COLUMN "sourceTransactionId" TEXT`
-- `CREATE INDEX "FinanceJournalEntry_sourceTransactionId_idx" ON "FinanceJournalEntry"("sourceTransactionId")`
-- Applied automatically on next container start via `prisma migrate deploy` in entrypoint.sh
-
-### Architecture After These Fixes
-
-```
-FinanceTransaction          ← input register only (user-facing record)
-        │
-        └─► auto-journal on POST  ──┐
-                                    ▼
-FinanceJournalLine          ← GL ledger (single source of truth for all reports)
-        │
-        ├─► P&L             reads journal lines only
-        ├─► Balance Sheet   reads journal lines only  
-        └─► Trial Balance   reads journal lines only
-```
-
-### Remaining Known Issues (not addressed in this session)
-
-- Bills and income entries created before these fixes do not have `sourceTransactionId` on their auto-journals (they may have no auto-journal at all). A backfill script would regenerate missing auto-journals for legacy data. Alternatively, wiping transactional data and starting fresh is safe — see the SQL script in Part 3 Fix 6 above.
-- GST auto-journal amounts are fixed at creation time. If a GST transaction is later edited (amount change), the 3-line GST journal is NOT synced by the PUT handler — only 2-line non-GST journals are synced. The user should void the old journal and create a correcting entry manually if a GST transaction amount changes.
