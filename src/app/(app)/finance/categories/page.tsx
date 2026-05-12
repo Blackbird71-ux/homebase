@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, EyeOff, MapPin, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, EyeOff, MapPin, ChevronDown, ChevronRight, BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ColorPicker } from '@/components/ui/color-picker'
+import AccountLedgerPanel from '@/components/finance/AccountLedgerPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────
 // "Category" is the internal DB model name; users see "Chart of Accounts" / "Account".
@@ -369,6 +370,7 @@ function CategoryRow({
   cat, childrenMap, depth, onEdit, onDelete, getTypeBadge,
   isCollapsed, onToggleCollapse, showToggle,
   onSetOpeningBalance,
+  onOpenLedger,
   activeFilter,
 }: {
   cat: Category
@@ -381,6 +383,7 @@ function CategoryRow({
   onToggleCollapse?: () => void
   showToggle?: boolean
   onSetOpeningBalance: (c: Category) => void
+  onOpenLedger: (c: Category) => void
   activeFilter: FilterType
 }) {
   const children = childrenMap.get(cat.id) || []
@@ -464,6 +467,14 @@ function CategoryRow({
 
         {getTypeBadge(cat.type)}
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => onOpenLedger(cat)}
+            title="View account ledger"
+            className="flex items-center gap-1 p-1 px-2 hover:bg-accent rounded text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            Ledger
+          </button>
           <button onClick={() => onEdit(cat)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
           {(cat.type === 'asset' || cat.type === 'liability' || cat.type === 'equity') && !cat.isSystem && (
             <button
@@ -491,6 +502,7 @@ function CategoryRow({
         <CategoryRow key={child.id} cat={child} childrenMap={childrenMap} depth={depth + 1}
           onEdit={onEdit} onDelete={onDelete} getTypeBadge={getTypeBadge}
           onSetOpeningBalance={onSetOpeningBalance}
+          onOpenLedger={onOpenLedger}
           activeFilter={activeFilter} />
       ))}
     </>
@@ -514,6 +526,9 @@ export default function CategoriesPage() {
     date: string
   } | null>(null)
   const [obSaving, setObSaving] = useState(false)
+
+  // Ledger panel state
+  const [ledgerCategory, setLedgerCategory] = useState<{ id: string; name: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -729,6 +744,14 @@ export default function CategoriesPage() {
         onSaved={load}
       />
 
+      {/* Account Ledger slide-over panel */}
+      <AccountLedgerPanel
+        categoryId={ledgerCategory?.id ?? null}
+        categoryName={ledgerCategory?.name ?? ''}
+        onClose={() => setLedgerCategory(null)}
+        fyStartMonth={7}
+      />
+
       {categories.length === 0 ? (
         <p className="text-sm text-muted-foreground">No accounts yet. Create your first account above.</p>
       ) : (
@@ -754,6 +777,7 @@ export default function CategoriesPage() {
                     : new Date().toISOString().split('T')[0],
                 })
               }}
+              onOpenLedger={cat => setLedgerCategory({ id: cat.id, name: cat.name })}
               activeFilter={activeFilter}
             />
           ))}
