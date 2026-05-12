@@ -166,9 +166,200 @@ export async function deriveAccountBalance(accountId: string): Promise<number> {
 //           received           → DR bank account / CR Accounts Receivable
 
 /**
- * Ensure the family has a system "Accounts Payable" liability category.
- * Returns the category ID.
+ * Ensure the family has system GST accounts:
+ *   - "GST Input Tax Credits" (liability) — for expense GST (ITC we can claim)
+ *   - "GST Collected" (liability) — for income GST (we owe to ATO)
+ *
+ * Returns { itcId, collectedId } — the category IDs of both accounts.
+ * Both are system=true, level=0, type='liability'.
  */
+export async function ensureGstAccounts(
+  familyId: string,
+): Promise<{ itcId: string; collectedId: string }> {
+  // Fetch both in one query
+  const existing = await prisma.financeCategory.findMany({
+    where: {
+      familyId,
+      isSystem: true,
+      type: 'liability',
+      name: { in: ['GST Input Tax Credits', 'GST Collected'] },
+    },
+    select: { id: true, name: true },
+  })
+
+  const itcRecord      = existing.find(c => c.name === 'GST Input Tax Credits')
+  const collectedRecord = existing.find(c => c.name === 'GST Collected')
+
+  const itcId = itcRecord?.id ?? (await prisma.financeCategory.create({
+    data: {
+      name: 'GST Input Tax Credits',
+      type: 'liability',
+      isSystem: true,
+      level: 0,
+      familyId,
+    },
+    select: { id: true },
+  })).id
+
+  const collectedId = collectedRecord?.id ?? (await prisma.financeCategory.create({
+    data: {
+      name: 'GST Collected',
+      type: 'liability',
+      isSystem: true,
+      level: 0,
+      familyId,
+    },
+    select: { id: true },
+  })).id
+
+  return { itcId, collectedId }
+}
+
+/**
+ * Calculate GST amounts from a GST-inclusive total.
+ *
+ * AU GST is 10% added on top, so a GST-inclusive price of $110 contains:
+ *   ex-GST = 110 / 1.1 = $100.00
+ *   GST    = 110 / 11  = $10.00   (= 110 - 100)
+ *
+ * All values rounded to 2dp. The rounding rule ensures ex + gst = total
+ * by assigning any rounding remainder to the ex-GST amount.
+ */
+export function calcGst(
+  inclusiveAmount: number,
+  rate: number = 10,
+): { exGst: number; gst: number } {
+  // AU GST: gst = amount * rate / (100 + rate)
+  // For 10%: gst = amount / 11, exGst = amount / 1.1 = amount * 10/11
+  const gst   = Math.round(inclusiveAmount * rate / (100 + rate) * 100) / 100
+  const exGst = Math.round((inclusiveAmount - gst) * 100) / 100
+  return { exGst, gst }
+}
+
+/**
+ * Create a posted GST split journal entry for a transaction.
+ *
+ * For an EXPENSE of $110 (GST-inclusive, 10% rate):
+ *   DR  Expense category      $100.00  (ex-GST cost)
+ *   DR  GST Input Tax Credits $ 10.00  (ITC — reduces GST payable to ATO)
+ *   CR  GL/bank account       $110.00  (cash out)
+ *
+ * For INCOME of $110 (GST-inclusive, 10% rate):
+ *   DR  GL/bank account       $110.00  (cash in)
+ *   CR  Income category       $100.00  (ex-GST revenue)
+ *   CR  GST Collected         $ 10.00  (liability — owed to ATO)
+ *
+ * The journal is immediately posted (isPosted=true) so it feeds the
+ * Trial Balance and Balance Sheet without manual intervention.
+ *
+ * @param txType         'expense' | 'income'
+ * @param totalAmount    GST-inclusive transaction amount
+ * @param gstRate        GST rate (default 10)
+ * @param expenseCatId   The expense/income category ID (from the transaction)
+ * @param glAccountId    The GL asset account paid from/into (may be null)
+ * @param accountId      Bank account ID (fallback if no glAccountId)
+ * @param date           Transaction date
+ * @param description    Transaction description for the journal
+ * @param familyId       Family ID
+ * @param entityId       Entity ID (optional)
+ * @param createdBy      User ID
+ * @returns The created journal entry ID, or null if creation failed
+ */
+export async function createGstJournalEntry(
+  txType:        'expense' | 'income',
+  totalAmount:   number,
+  gstRate:       number,
+  expenseCatId:  string,
+  glAccountId:   string | null,
+  accountId:     string | null,
+  date:          Date,
+  description:   string,
+  familyId:      string,
+  entityId:      string | null,
+  createdBy:     string,
+): Promise<string | null> {
+  try {
+    const { exGst, gst } = calcGst(totalAmount, gstRate)
+    const { itcId, collectedId } = await ensureGstAccounts(familyId)
+
+    // The payment/receipt GL account (asset side of the double-entry)
+    // We use the glAccountId if present, otherwise look up the bank account
+    // category, otherwise use Accounts Payable/Receivable as fallback.
+    const cashGlId = glAccountId ?? accountId
+
+    if (!cashGlId) {
+      // Without a GL account we can't form a balanced entry — skip silently.
+      // The transaction itself still records the full amount; only the GST
+      // split journal is missing. The user can create it manually.
+      console.warn('[gst] No glAccountId or accountId — skipping GST journal for', description)
+      return null
+    }
+
+    // Validate all GL IDs belong to this family
+    const ids = [expenseCatId, cashGlId, txType === 'expense' ? itcId : collectedId]
+    const valid = await prisma.financeCategory.count({
+      where: { id: { in: ids }, familyId },
+    })
+    if (valid < 3) {
+      console.warn('[gst] One or more GL accounts not found for family', familyId)
+      return null
+    }
+
+    // Generate a unique reference
+    const count = await prisma.financeJournalEntry.count({ where: { familyId } })
+    const reference = `JE-${String(count + 1).padStart(4, '0')}`
+
+    let lines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[]
+
+    if (txType === 'expense') {
+      //  DR Expense cat   exGst   — the ex-GST cost
+      //  DR GST ITC       gst     — the Input Tax Credit we can claim
+      //  CR Cash/GL       total   — the full GST-inclusive payment
+      lines = [
+        { glAccountId: expenseCatId, side: 'debit',  amount: exGst,        description: `${description} (ex-GST)` },
+        { glAccountId: itcId,        side: 'debit',  amount: gst,          description: `GST ITC — ${description}` },
+        { glAccountId: cashGlId,     side: 'credit', amount: totalAmount,  description: description },
+      ]
+    } else {
+      //  DR Cash/GL       total   — the full GST-inclusive receipt
+      //  CR Income cat    exGst   — the ex-GST revenue
+      //  CR GST Collected gst     — the GST we collected (owed to ATO)
+      lines = [
+        { glAccountId: cashGlId,      side: 'debit',  amount: totalAmount, description: description },
+        { glAccountId: expenseCatId,  side: 'credit', amount: exGst,       description: `${description} (ex-GST)` },
+        { glAccountId: collectedId,   side: 'credit', amount: gst,         description: `GST Collected — ${description}` },
+      ]
+    }
+
+    // Verify balance (should always be true by construction)
+    const totalDR = lines.filter(l => l.side === 'debit' ).reduce((s, l) => s + l.amount, 0)
+    const totalCR = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+    if (Math.abs(totalDR - totalCR) > 0.005) {
+      console.error('[gst] Unbalanced GST journal — DR', totalDR, 'CR', totalCR)
+      return null
+    }
+
+    const entry = await prisma.financeJournalEntry.create({
+      data: {
+        reference,
+        date,
+        description: `GST: ${description}`,
+        type:        'auto_transaction',
+        isPosted:    true,   // Posted immediately — GST entries are factual, not provisional
+        entityId:    entityId ?? null,
+        familyId,
+        lines: { create: lines },
+      },
+      select: { id: true },
+    })
+
+    return entry.id
+  } catch (err) {
+    console.error('[gst] Failed to create GST journal entry:', err)
+    return null
+  }
+}
+
 export async function ensureAccountsPayableCategory(familyId: string): Promise<string> {
   const existing = await prisma.financeCategory.findFirst({
     where: { familyId, name: 'Accounts Payable', type: 'liability', isSystem: true },

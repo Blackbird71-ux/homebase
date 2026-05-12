@@ -29,6 +29,8 @@ interface Category {
   glCode: string | null
   openingBalance: number | null
   openingBalanceDate: string | null
+  gstApplicable: boolean
+  gstRate: number
   parent?: { id: string; name: string } | null
   children?: Category[]
   _count?: { transactions: number; recurringBills: number; incomeEntries: number }
@@ -87,6 +89,8 @@ function CategoryDialog({
     taxIncludeInReporting: false,
     taxDisplayLabel: '',
     glCode: '',
+    gstApplicable: false,
+    gstRate: 10,
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -107,6 +111,8 @@ function CategoryDialog({
           taxIncludeInReporting: editing.taxIncludeInReporting,
           taxDisplayLabel: editing.taxDisplayLabel ?? '',
           glCode: editing.glCode ?? '',
+          gstApplicable: editing.gstApplicable ?? false,
+          gstRate: editing.gstRate ?? 10,
         })
       } else {
         setForm({
@@ -122,6 +128,8 @@ function CategoryDialog({
           taxIncludeInReporting: false,
           taxDisplayLabel: '',
           glCode: '',
+          gstApplicable: false,
+          gstRate: 10,
         })
       }
       setErrors({})
@@ -303,6 +311,46 @@ function CategoryDialog({
               External
             </label>
           </div>
+
+          {/* ── GST ─────────────────────────────────────────────────── */}
+          {(form.type === 'expense' || form.type === 'income') && (
+            <div className="sm:col-span-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-yellow-700 dark:text-yellow-400 uppercase tracking-wide">
+                  GST / Tax Settings
+                </span>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.gstApplicable}
+                    onChange={e => setForm(p => ({ ...p, gstApplicable: e.target.checked }))}
+                    disabled={saving} />
+                  <span className="font-medium">Auto-split GST on transactions</span>
+                </label>
+              </div>
+              {form.gstApplicable && (
+                <div className="flex items-center gap-3">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">GST rate (%):</label>
+                  <input
+                    type="number" min={0} max={100} step={0.1}
+                    value={form.gstRate}
+                    onChange={e => setForm(p => ({ ...p, gstRate: parseFloat(e.target.value) || 10 }))}
+                    className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm text-center"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    When a cleared transaction uses this category, HomeBase will automatically
+                    post a journal entry splitting the GST-inclusive amount into
+                    ex-GST {form.type === 'expense' ? '+ GST ITC' : '+ GST Collected'}.
+                  </p>
+                </div>
+              )}
+              {!form.gstApplicable && (
+                <p className="text-xs text-muted-foreground">
+                  Enable to have HomeBase automatically post a 3-line GST journal
+                  whenever a cleared transaction is recorded against this category.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter showCloseButton>
@@ -340,6 +388,7 @@ function CategoryRow({
   const flags: string[] = []
   if (cat.isTaxDeduction)        flags.push('TAX DED')
   if (cat.taxIncludeInReporting) flags.push('TAX RPT')
+  if (cat.gstApplicable)         flags.push(`GST ${cat.gstRate ?? 10}%`)
   if (cat.isPersonal)            flags.push('PRIVATE')
   if (cat.isLocationBased)       flags.push('LOCATION')
   if (cat.isExternal)            flags.push('EXTERNAL')

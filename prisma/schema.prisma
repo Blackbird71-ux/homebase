@@ -584,6 +584,8 @@ model FinanceCategory {
   glCode              String?   // Optional account code e.g. "1001", "2100" (for Chart of Accounts numbering)
   openingBalance      Float?    // Starting balance as at openingBalanceDate (asset/liability/equity only)
   openingBalanceDate  DateTime? // As-at date for the opening balance
+  gstApplicable       Boolean   @default(false)  // Auto-split GST on transactions in this category
+  gstRate             Float     @default(10)     // GST rate %. Default 10% (Australian standard)
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks } from 'date-fns'
 import {
   ensureAccountsPayableCategory,
+  createGstJournalEntry,
 } from '@/lib/finance-opening-balance'
 
 const BILL_INCLUDE = {
@@ -718,6 +719,32 @@ export async function PATCH(request: NextRequest) {
               transactionId: tx.id,
             } as any,
           })
+          // ── Auto GST split for Case B (direct-paid bill, no prior invoice) ────
+          if (existing.categoryId) {
+            try {
+              const cat = await prisma.financeCategory.findFirst({
+                where: { id: existing.categoryId, familyId: session.familyId },
+                select: { gstApplicable: true, gstRate: true },
+              })
+              if (cat?.gstApplicable) {
+                await createGstJournalEntry(
+                  'expense',
+                  existing.amount,
+                  cat.gstRate ?? 10,
+                  existing.categoryId,
+                  paymentGlAccountId ?? null,
+                  paymentAccountId ?? null,
+                  actualPaidDate,
+                  existing.name,
+                  session.familyId,
+                  existing.entityId ?? null,
+                  session.id,
+                )
+              }
+            } catch (err) {
+              console.error('[bills PATCH Case B] GST journal failed:', err)
+            }
+          }
         }
       } catch (err) {
         console.error('[bills PATCH] Failed to create payment transaction:', err)

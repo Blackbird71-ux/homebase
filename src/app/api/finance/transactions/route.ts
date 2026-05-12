@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { createGstJournalEntry } from '@/lib/finance-opening-balance'
 
 // ── Journal lines helper ────────────────────────────────────────────────────
 // If journalLines are supplied with a transaction POST, create a posted
@@ -173,6 +174,42 @@ export async function POST(request: NextRequest) {
       )
     } catch (err) {
       console.error('[transactions POST] Failed to create journal entry:', err)
+    }
+  }
+
+  // ── Auto GST split ───────────────────────────────────────────────────────
+  // If the category is marked gstApplicable and the transaction is cleared,
+  // auto-post a 3-line GST journal entry (ex-GST + ITC/Collected + cash).
+  // Only fires for expense and income types — transfers and opening balances
+  // are excluded. The user can disable this per-category in Chart of Accounts.
+  if (
+    transaction.isCleared &&
+    transaction.categoryId &&
+    (type === 'expense' || type === 'income')
+  ) {
+    try {
+      const cat = await prisma.financeCategory.findFirst({
+        where: { id: transaction.categoryId, familyId: session.familyId },
+        select: { gstApplicable: true, gstRate: true },
+      })
+      if (cat?.gstApplicable) {
+        const desc = (description?.trim() || payee?.trim() || type)
+        await createGstJournalEntry(
+          type as 'expense' | 'income',
+          amount,
+          cat.gstRate ?? 10,
+          transaction.categoryId,
+          glAccountId ?? null,
+          accountId ?? null,
+          txDate,
+          desc,
+          session.familyId,
+          json.entityId ?? null,
+          session.id,
+        )
+      }
+    } catch (err) {
+      console.error('[transactions POST] Failed to create GST journal:', err)
     }
   }
 
