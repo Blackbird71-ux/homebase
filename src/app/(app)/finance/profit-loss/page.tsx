@@ -250,12 +250,18 @@ export default function ProfitLossPage() {
   }, [income])
 
   // GL account IDs that are covered by journal lines for this period.
-  // Income entries whose category matches a journal-covered GL account AND
-  // who have no tx will be excluded from the entries pathway to avoid
-  // double-counting with journalItems below.
+  // Also build a set of income entry IDs that have a journalEntryId linked —
+  // those entries are represented by the journal pathway, not the entries pathway.
   const journalIncomeGlIds = useMemo(
     () => new Set(journalGroups.filter(g => g.type === 'income').map(g => g.glAccountId)),
     [journalGroups],
+  )
+
+  // Income entry IDs that have a linked journal entry — suppress from entries pathway
+  // regardless of category matching to avoid any double-count.
+  const incomeEntriesWithJournal = useMemo(
+    () => new Set(income.filter((e: any) => e.journalEntryId).map(e => e.id)),
+    [income],
   )
 
   // ── Relevant income ────────────────────────────────────────────────────────
@@ -269,9 +275,9 @@ export default function ProfitLossPage() {
       if (e.receiptTxId && transactions.some(t => t.id === e.receiptTxId)) return false
       if (e.invoiceTxId && transactions.some(t => t.id === e.invoiceTxId)) return false
       if (e.transactionId && transactions.some(t => t.id === e.transactionId)) return false
-      // Skip if this entry's income category is already covered by a journal line in this period.
-      // The journal pathway (journalItems below) will represent it correctly.
-      if (e.category?.id && journalIncomeGlIds.has(e.category.id)) return false
+      // Skip entries that have a linked journal entry — they appear via the journal
+      // lines pathway (journalItems) to avoid double-counting.
+      if (incomeEntriesWithJournal.has(e.id)) return false
       if (e.received && e.receivedDate) {
         const ts = new Date(e.receivedDate).getTime()
         return ts >= startTs && ts <= endTs
@@ -338,7 +344,7 @@ export default function ProfitLossPage() {
       }))
 
     return [...entryItems, ...txItems, ...journalItems]
-  }, [income, transactions, journalGroups, journalIncomeGlIds, startTs, endTs, start, viewMode, selectedEntityId, periodMonths, incomeLinkedTxIds])
+  }, [income, transactions, journalGroups, journalIncomeGlIds, incomeEntriesWithJournal, startTs, endTs, start, viewMode, selectedEntityId, periodMonths, incomeLinkedTxIds])
 
   // ── Relevant expenses ──────────────────────────────────────────────────────
   const relevantExpenses = useMemo(() => {

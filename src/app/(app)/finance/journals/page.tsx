@@ -432,7 +432,15 @@ export default function JournalsPage() {
       else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
       return
     }
-    // Posted, not voided, not a reversal — refuse
+    // Case 4: Posted auto_transaction (system-created from income/bill dialogs) — allow direct delete
+    if (entry.isPosted && entry.type === 'auto_transaction') {
+      if (!confirm(`Delete journal entry ${entry.reference ?? ''}: "${entry.description}"? This cannot be undone.`)) return
+      const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('Journal entry deleted'); load() }
+      else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
+      return
+    }
+    // Posted, not voided, not a reversal, not auto — refuse
     toast.error('Void this entry first, then delete.')
   }
 
@@ -1200,23 +1208,37 @@ export default function JournalsPage() {
                           </button>
                         </>
                       )}
-                      {/* Posted, not yet voided: show Void + Reverse buttons */}
+                      {/* Posted, not yet voided: show Void + Reverse (manual entries) or Delete (auto entries) */}
                       {!isDraft && !isReversed && !isReversal && (
                         <>
-                          <button
-                            onClick={() => openVoid(entry)}
-                            title="Void this entry"
-                            className="p-1 hover:bg-accent rounded text-amber-500 hover:text-amber-600 transition-colors"
-                          >
-                            <Ban className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => openReversal(entry)}
-                            title="Reverse this entry"
-                            className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-red-500 transition-colors"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          </button>
+                          {entry.type === 'auto_transaction' ? (
+                            // Auto-created journals (from income/bill dialogs) can be deleted directly
+                            <button
+                              onClick={() => handleDelete(entry)}
+                              title="Delete this auto-created journal entry"
+                              className="p-1 hover:bg-accent rounded text-red-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            // Manual journals require void first
+                            <>
+                              <button
+                                onClick={() => openVoid(entry)}
+                                title="Void this entry"
+                                className="p-1 hover:bg-accent rounded text-amber-500 hover:text-amber-600 transition-colors"
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => openReversal(entry)}
+                                title="Reverse this entry"
+                                className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-red-500 transition-colors"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
                         </>
                       )}
                       {/* Voided original: show Delete button to permanently remove the pair */}

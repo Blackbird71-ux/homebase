@@ -449,7 +449,14 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  // Posted, not voided, not a reversal — refuse
+  // Case 4: posted auto_transaction (system-created via income/bill dialogs) — allow direct deletion.
+  // These are never created manually so void-first is not required.
+  if (existing.isPosted && existing.type === 'auto_transaction') {
+    await prisma.financeJournalEntry.delete({ where: { id } })
+    return NextResponse.json({ success: true })
+  }
+
+  // Posted, not voided, not a reversal, not auto — refuse
   return NextResponse.json(
     { error: 'Posted entries cannot be deleted. Void the entry first, then delete.' },
     { status: 400 },

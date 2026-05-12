@@ -34,7 +34,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
 
@@ -93,13 +92,13 @@ export function QuickAdd() {
   // Chore-specific
   const [choreFrequency, setChoreFrequency] = useState('weekly')
 
-  // Expense-specific
+  // Expense-specific — simple: amount, description, GL account to debit, date
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseDescription, setExpenseDescription] = useState('')
   const [expenseCategoryId, setExpenseCategoryId] = useState('')
+  const [expenseGlAccountId, setExpenseGlAccountId] = useState('')
   const [categories, setCategories] = useState<CategoryMeta[]>([])
-  const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
-  const [expenseJournalLines, setExpenseJournalLines] = useState<JournalFormLine[]>([])
+  const [glAccounts, setGLAccounts] = useState<{id: string; name: string; type: string}[]>([])
 
   // List-specific
   const [listName, setListName] = useState('')
@@ -170,7 +169,7 @@ export function QuickAdd() {
         .then((r) => r.json())
         .then((data: (CategoryMeta & { type: string })[]) => {
           setCategories(data)
-          setGLAccounts(data.filter((c) => c.type !== 'transfer') as GLAccount[])
+          setGLAccounts(data.filter(c => c.type !== 'transfer' && ['asset','liability','equity','income','expense'].includes(c.type)))
         })
         .catch(() => { /* silently fail */ })
     }
@@ -199,7 +198,7 @@ export function QuickAdd() {
     setExpenseAmount('')
     setExpenseDescription('')
     setExpenseCategoryId('')
-    setExpenseJournalLines([])
+    setExpenseGlAccountId('')
     setListName('')
     setListType('SHOPPING')
     setListItemContent('')
@@ -298,9 +297,6 @@ export function QuickAdd() {
             setSubmitting(false)
             return
           }
-          const validLines = expenseJournalLines.filter(
-            l => l.glAccountId && parseFloat(l.amount) > 0
-          )
           const res = await fetch('/api/finance/transactions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -309,16 +305,9 @@ export function QuickAdd() {
               amount,
               description: expenseDescription.trim() || null,
               categoryId: expenseCategoryId || null,
+              glAccountId: expenseGlAccountId || null,
               date: date ? new Date(date).toISOString() : new Date().toISOString(),
               isCleared: true,
-              ...(validLines.length >= 2 ? {
-                journalLines: validLines.map(l => ({
-                  glAccountId: l.glAccountId,
-                  side: l.side,
-                  amount: parseFloat(l.amount),
-                  description: l.description || null,
-                }))
-              } : {}),
             }),
           })
           if (!res.ok) throw new Error('Failed to log expense')
@@ -540,7 +529,7 @@ export function QuickAdd() {
           </>
         )}
 
-        {/* Expense form */}
+        {/* Expense form — simple: amount, description, GL account, date */}
         {mode === 'expense' && (
           <>
             <div className="space-y-2">
@@ -558,6 +547,15 @@ export function QuickAdd() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="qa-expense-date">Date</Label>
+              <Input
+                id="qa-expense-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="qa-expense-desc">Description</Label>
               <Input
                 id="qa-expense-desc"
@@ -567,39 +565,19 @@ export function QuickAdd() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="qa-expense-cat">Category</Label>
-              <Select value={expenseCategoryId} onValueChange={(v) => setExpenseCategoryId(v ?? '')}>
-                <SelectTrigger id="qa-expense-cat">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">None</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="qa-expense-gl">GL Account to debit</Label>
+              <select
+                id="qa-expense-gl"
+                value={expenseGlAccountId}
+                onChange={e => setExpenseGlAccountId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              >
+                <option value="">Select account…</option>
+                {glAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
+                ))}
+              </select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="qa-expense-date">Date</Label>
-              <Input
-                id="qa-expense-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
-            {/* Journal Lines — optional double-entry accrual */}
-            {glAccounts.length > 0 && (
-              <div className="rounded-md border border-border bg-muted/20 p-3">
-                <JournalLinesEditor
-                  lines={expenseJournalLines}
-                  onChange={setExpenseJournalLines}
-                  glAccounts={glAccounts}
-                  expectedTotal={parseFloat(expenseAmount) || 0}
-                />
-              </div>
-            )}
           </>
         )}
 
@@ -775,7 +753,7 @@ export function QuickAdd() {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className={mode === 'expense' ? 'sm:max-w-xl max-h-[90vh] overflow-y-auto' : 'sm:max-w-md'}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {mode ? `New ${mode.charAt(0).toUpperCase() + mode.slice(1).replace('-', ' ')}` : 'Quick Add'}

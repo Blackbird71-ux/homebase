@@ -60,6 +60,14 @@ async function upsertBillJournalEntry(
   const totalCR = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
   const isBalanced = Math.abs(totalDR - totalCR) <= 0.005
 
+  // ACCOUNTING RULE: Bill journal entries are ALWAYS saved as drafts.
+  // They should only be posted when the invoice is actually received (invoiceReceived=true).
+  // Auto-posting a bill journal when the bill is merely created (not invoiced) would cause
+  // the expense to appear on the P&L and Balance Sheet before any liability exists.
+  // The PATCH handler for invoiceReceived=true posts the journal at the right time.
+  const shouldPost = false  // Bills: always draft until invoice received
+  void isBalanced  // balanced check kept for future use (e.g. validation)
+
   if (existingJournalEntryId) {
     // Replace lines on the existing draft entry
     const existing = await prisma.financeJournalEntry.findFirst({
@@ -73,8 +81,7 @@ async function upsertBillJournalEntry(
           date,
           description: billName,
           entityId: entityId ?? null,
-          // Post immediately if balanced — unposted journals are invisible to Trial Balance / Balance Sheet
-          isPosted: isBalanced,
+          isPosted: shouldPost,
           lines: {
             create: lines.map(l => ({
               glAccountId: l.glAccountId,
@@ -108,8 +115,7 @@ async function upsertBillJournalEntry(
       date,
       description: billName,
       type: 'auto_transaction',
-      // Post immediately when balanced — unposted journals don't feed Trial Balance / Balance Sheet
-      isPosted: isBalanced,
+      isPosted: shouldPost,
       entityId: entityId ?? null,
       familyId,
       lines: {
@@ -351,6 +357,14 @@ export async function PATCH(request: NextRequest) {
       // Also clear transactionId if it pointed to the same tx
       if (existing.transactionId === invoiceTxId) updateData.transactionId = null
     }
+    // Also revert the journal entry back to draft if it was posted with the invoice
+    const jeId: string | null = (existing as any).journalEntryId ?? null
+    if (jeId) {
+      await prisma.financeJournalEntry.updateMany({
+        where: { id: jeId, familyId: session.familyId, isPosted: true },
+        data: { isPosted: false },
+      })
+    }
     // If we undo the invoice we must also undo paid (can't be paid without invoice)
     if (existing.paid) {
       const paymentTxId: string | null = existing.paymentTxId ?? null
@@ -499,6 +513,16 @@ export async function PATCH(request: NextRequest) {
           transactionId: invoiceTx.id,  // keep legacy pointer
         },
       })
+      // Post the linked journal entry now that the invoice is confirmed.
+      // The journal was saved as a draft when the bill was created; posting it
+      // here makes the double-entry (DR expense / CR AP) visible in the ledger.
+      const jeId: string | null = (existing as any).journalEntryId ?? null
+      if (jeId) {
+        await prisma.financeJournalEntry.updateMany({
+          where: { id: jeId, familyId: session.familyId, isPosted: false },
+          data: { isPosted: true, date: invoiceDate },
+        })
+      }
     } catch (err) {
       console.error('[bills PATCH] Failed to create invoice transaction:', err)
     }
