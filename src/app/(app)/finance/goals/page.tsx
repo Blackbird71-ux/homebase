@@ -68,7 +68,7 @@ export default function GoalsPage() {
     if (!confirm('Delete this goal?')) return
     const res = await fetch(`/api/finance/goals?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Goal deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
   function formatCurrency(amount: number) {

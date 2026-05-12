@@ -56,7 +56,7 @@ export default function LocationsPage() {
     if (!confirm('Delete this location?')) return
     const res = await fetch(`/api/finance/locations?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Location deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading locations…</div>

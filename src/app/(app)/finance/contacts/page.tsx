@@ -93,7 +93,7 @@ export default function VendorsPage() {
     if (!confirm('Delete this contact? Bills and transactions will keep their data but lose the contact link.')) return
     const res = await fetch(`/api/finance/contacts?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Contact deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading contacts…</div>

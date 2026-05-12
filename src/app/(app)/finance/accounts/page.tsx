@@ -120,7 +120,7 @@ export default function AccountsPage() {
     if (!confirm('Delete this account? Transactions will be unlinked.')) return
     const res = await fetch(`/api/finance/accounts?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Account deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
   function formatCurrency(amount: number, currency = 'AUD') {

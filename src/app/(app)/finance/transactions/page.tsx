@@ -145,14 +145,14 @@ export default function TransactionsPage() {
       body: JSON.stringify(body),
     })
     if (res.ok) { toast.success(editing ? 'Transaction updated' : 'Transaction created'); setShowForm(false); setEditing(null); load() }
-    else { const err = await res.json(); toast.error(err.error ?? 'Failed') }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed') }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this transaction?')) return
     const res = await fetch(`/api/finance/transactions?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Transaction deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
   function formatCurrency(amount: number) { return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(amount) }

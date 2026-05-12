@@ -221,26 +221,30 @@ export default function BillsPage() {
   }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
-    if (addToBudget) {
-      await fetch('/api/finance/budget', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          upsertFromBill: true, billId: bill.id, name: bill.name,
-          amount: toMonthlyAmount(bill.amount, bill.frequency),
-          categoryId: bill.category?.id ?? null, period: 'monthly',
-          entityId: bill.entity?.id ?? null,
-        }),
-      })
-      setBudgetBillIds(prev => new Set([...prev, bill.id]))
-    } else {
-      await fetch('/api/finance/budget', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ removeFromBill: true, billId: bill.id }),
-      })
-      setBudgetBillIds(prev => { const s = new Set(prev); s.delete(bill.id); return s })
-    }
+    try {
+      if (addToBudget) {
+        const res = await fetch('/api/finance/budget', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            upsertFromBill: true, billId: bill.id, name: bill.name,
+            amount: toMonthlyAmount(bill.amount, bill.frequency),
+            categoryId: bill.category?.id ?? null, period: 'monthly',
+            entityId: bill.entity?.id ?? null,
+          }),
+        })
+        if (!res.ok) { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to sync budget rule'); return }
+        setBudgetBillIds(prev => new Set([...prev, bill.id]))
+      } else {
+        const res = await fetch('/api/finance/budget', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ removeFromBill: true, billId: bill.id }),
+        })
+        if (!res.ok) { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to remove from budget'); return }
+        setBudgetBillIds(prev => { const s = new Set(prev); s.delete(bill.id); return s })
+      }
+    } catch { toast.error('Network error updating budget rule') }
   }
 
   async function openAttachments(bill: Bill) {
@@ -248,6 +252,7 @@ export default function BillsPage() {
     try {
       const res = await fetch(`/api/finance/bills/${bill.id}/attachments`)
       if (res.ok) setAttachments(await res.json())
+      else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to load attachments') }
     } finally { setAttachmentsLoading(false) }
   }
 
@@ -261,6 +266,7 @@ export default function BillsPage() {
     try {
       const res = await fetch(`/api/finance/bills/${bill.id}/payments`)
       if (res.ok) setPaymentHistory(await res.json())
+      else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to load payment history') }
     } finally { setPaymentHistoryLoading(false) }
   }
   function togglePreview(attId: string) { setPreviewAttachmentId(prev => prev === attId ? null : attId) }
@@ -283,7 +289,7 @@ export default function BillsPage() {
     if (!confirm('Remove this attachment?')) return
     const res = await fetch(`/api/finance/bills/${billId}/attachments/${attachmentId}`, { method: 'DELETE' })
     if (res.ok) { setAttachments(prev => prev.filter(a => a.id !== attachmentId)); toast.success('Attachment removed') }
-    else toast.error('Failed to remove attachment')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to remove attachment') }
   }
 
   function formatFileSize(bytes: number) {
@@ -384,7 +390,7 @@ export default function BillsPage() {
     })
     const res = await fetch(`/api/finance/bills?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Bill deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
   async function handleMarkPaid(bill: Bill) {
@@ -439,7 +445,7 @@ export default function BillsPage() {
       body: JSON.stringify({ id: bill.id, paid: false }),
     })
     if (res.ok) { toast.success('Payment reversed — bill restored'); load() }
-    else toast.error('Failed to reverse payment')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to reverse payment') }
   }
 
   function handleVendorChange(vendorId: string) {

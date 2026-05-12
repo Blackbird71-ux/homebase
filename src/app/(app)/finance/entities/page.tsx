@@ -115,7 +115,7 @@ export default function EntitiesPage() {
       body: JSON.stringify({ id: entity.id, isDefault: !entity.isDefault }),
     })
     if (res.ok) { toast.success(entity.isDefault ? 'Default cleared' : 'Set as default'); load() }
-    else toast.error('Failed to update')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to update') }
   }
 
   async function handleDelete(entity: Entity) {
@@ -133,7 +133,7 @@ export default function EntitiesPage() {
       body: JSON.stringify({ id: entity.id, isActive: true }),
     })
     if (res.ok) { toast.success('Entity reactivated'); load() }
-    else toast.error('Failed to reactivate')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to reactivate') }
   }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading entities…</div>

@@ -323,7 +323,7 @@ export default function BudgetPage() {
     if (!confirm('Delete this budget rule?')) return
     const res = await fetch(`/api/finance/budget?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Rule deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const e = await res.json().catch(() => ({})); toast.error(e.error ?? 'Failed to delete') }
   }
 
   async function toggleRuleIncluded(rule: BudgetRule) {
@@ -334,6 +334,9 @@ export default function BudgetPage() {
     })
     if (res.ok) {
       setBudgetRules(prev => prev.map(r => r.id === rule.id ? { ...r, isIncludedInPlanner: !r.isIncludedInPlanner } : r))
+    } else {
+      const e = await res.json().catch(() => ({}))
+      toast.error(e.error ?? 'Failed to update rule')
     }
   }
 

@@ -213,7 +213,7 @@ export default function IncomePage() {
     if (!confirm('Remove this attachment?')) return
     const res = await fetch(`/api/finance/income/${incomeId}/attachments/${attachmentId}`, { method: 'DELETE' })
     if (res.ok) { setAttachments(prev => prev.filter(a => a.id !== attachmentId)); toast.success('Attachment removed') }
-    else toast.error('Failed to remove attachment')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to remove attachment') }
   }
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
@@ -362,7 +362,7 @@ export default function IncomePage() {
     if (!confirm('Delete this income entry?')) return
     const res = await fetch(`/api/finance/income?id=${id}`, { method: 'DELETE' })
     if (res.ok) { toast.success('Income deleted'); load() }
-    else toast.error('Failed to delete')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
   // ── FIX: use todayAU() for the date default ──
@@ -404,7 +404,7 @@ export default function IncomePage() {
       body: JSON.stringify({ id: entry.id, invoiceReceived: newVal }),
     })
     if (res.ok) { toast.success(newVal ? 'Income posted to journals' : 'Income unposted'); load() }
-    else toast.error('Failed to update posting status')
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to update posting status') }
   }
 
   function getNextExpected(entry: IncomeEntry): Date {
