@@ -260,7 +260,7 @@ export async function GET(
       rawRows.push({
         sortDate:    new Date(tx.date).getTime(),
         id:          tx.id,
-        date:        tx.date,
+        date:        new Date(tx.date).toISOString(),
         description: tx.description ?? tx.vendor?.name ?? tx.type,
         reference:   tx.reference ?? null,
         source:      'transaction',
@@ -279,7 +279,7 @@ export async function GET(
       rawRows.push({
         sortDate:    new Date(jl.journalEntry.date).getTime(),
         id:          jl.id,
-        date:        jl.journalEntry.date,
+        date:        new Date(jl.journalEntry.date).toISOString(),
         description: jl.description ?? jl.journalEntry.description ?? `Journal ${jl.journalEntry.reference ?? ''}`,
         reference:   jl.journalEntry.reference ?? null,
         source:      'journal',

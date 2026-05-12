@@ -1,16 +1,16 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2,
-  RefreshCw, Layers, Briefcase, Paperclip, Upload, X,
-  FileText, Download, Building2, BookmarkCheck, Receipt,
-  Eye, EyeOff, ReceiptText,
+  RefreshCw, Layers, Briefcase, Paperclip, X,
+  Building2, BookmarkCheck, Receipt, ReceiptText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
+import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
 import Link from 'next/link'
 import {
   Dialog,
@@ -20,6 +20,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
+import { AttachmentSection } from '@/components/finance/AttachmentSection'
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
@@ -52,15 +54,6 @@ export interface IncomeEntry {
   entity: Entity | null
   parentIncomeId: string | null
   attachments?: IncomeAttachment[]
-}
-
-function toMonthlyAmount(amount: number, frequency: string): number {
-  if (frequency === 'weekly')      return amount * 52 / 12
-  if (frequency === 'fortnightly') return amount * 26 / 12
-  if (frequency === 'quarterly')   return amount / 3
-  if (frequency === 'halfyearly')  return amount / 6
-  if (frequency === 'yearly')      return amount / 12
-  return amount
 }
 
 export default function IncomePage() {
@@ -98,13 +91,7 @@ export default function IncomePage() {
     return []
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
-
-  const [attachmentIncomeId, setAttachmentIncomeId]     = useState<string | null>(null)
-  const [attachments, setAttachments]                   = useState<IncomeAttachment[]>([])
-  const [attachmentsLoading, setAttachmentsLoading]     = useState(false)
-  const [uploadingAttachment, setUploadingAttachment]   = useState(false)
-  const [previewAttachmentId, setPreviewAttachmentId]   = useState<string | null>(null)
-  const attachFileRef = useRef<HTMLInputElement>(null)
+  const att = useAttachmentManager('/api/finance/income')
 
   // ── FIX: Use todayAU() instead of new Date().toISOString().split('T')[0] ──
   const emptyForm = {
@@ -176,45 +163,6 @@ export default function IncomePage() {
         : l
     ))
   }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function openAttachments(entry: IncomeEntry) {
-    setAttachmentIncomeId(entry.id)
-    setAttachmentsLoading(true)
-    try {
-      const res = await fetch(`/api/finance/income/${entry.id}/attachments`)
-      if (res.ok) setAttachments(await res.json())
-    } finally { setAttachmentsLoading(false) }
-  }
-
-  function closeAttachments() { setAttachmentIncomeId(null); setAttachments([]); setPreviewAttachmentId(null) }
-  function togglePreview(attId: string) { setPreviewAttachmentId(prev => prev === attId ? null : attId) }
-  function isImageMime(mime: string) { return mime.startsWith('image/') }
-  function isPdfMime(mime: string)   { return mime === 'application/pdf' }
-
-  function formatFileSize(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  async function handleAttachmentUpload(incomeId: string, file: File) {
-    setUploadingAttachment(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('title', file.name.replace(/\.[^/.]+$/, ''))
-      const res = await fetch(`/api/finance/income/${incomeId}/attachments`, { method: 'POST', body: fd })
-      if (res.ok) { const a = await res.json(); setAttachments(prev => [...prev, a]); toast.success('Attachment uploaded') }
-      else toast.error('Failed to upload attachment')
-    } finally { setUploadingAttachment(false) }
-  }
-
-  async function handleAttachmentDelete(incomeId: string, attachmentId: string) {
-    if (!confirm('Remove this attachment?')) return
-    const res = await fetch(`/api/finance/income/${incomeId}/attachments/${attachmentId}`, { method: 'DELETE' })
-    if (res.ok) { setAttachments(prev => prev.filter(a => a.id !== attachmentId)); toast.success('Attachment removed') }
-    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to remove attachment') }
-  }
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
     sessionStorage.setItem('income-dateRange', r); setDateRange(r)
@@ -418,10 +366,6 @@ export default function IncomePage() {
       if (entry.frequency === 'yearly')       return addMonths(due, 12)
     }
     return due
-  }
-
-  function formatCurrency(n: number) {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
   }
 
   function entryAmountForCat(entry: IncomeEntry, rootCatId: string): number {
@@ -881,29 +825,15 @@ export default function IncomePage() {
             <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue
               colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
               onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
-              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
-              attachmentIncomeId={attachmentIncomeId}
-              attachments={attachments} attachmentsLoading={attachmentsLoading}
-              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
-              previewAttachmentId={previewAttachmentId}
-              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
-              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
-              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
-              formatCurrency={formatCurrency} />
+              onToggleInvoice={handleToggleInvoice}
+              att={att} />
           ))}
           {upcoming.map(e => (
             <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue={false}
               colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
               onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
-              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
-              attachmentIncomeId={attachmentIncomeId}
-              attachments={attachments} attachmentsLoading={attachmentsLoading}
-              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
-              previewAttachmentId={previewAttachmentId}
-              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
-              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
-              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
-              formatCurrency={formatCurrency} />
+              onToggleInvoice={handleToggleInvoice}
+              att={att} />
           ))}
           {visibleEntries.length > 0 && (
             <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
@@ -930,11 +860,8 @@ export default function IncomePage() {
 
 function IncomeRow({
   entry, nextExpected, isOverdue, colCats, entryAmountForCat, gridTemplate,
-  onEdit, onDelete, onMarkReceived, onToggleInvoice, onOpenAttachments,
-  attachmentIncomeId, attachments, attachmentsLoading, uploadingAttachment, attachFileRef,
-  previewAttachmentId, onCloseAttachments, onTogglePreview,
-  onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize,
-  formatCurrency,
+  onEdit, onDelete, onMarkReceived, onToggleInvoice,
+  att,
 }: {
   entry: IncomeEntry; nextExpected: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
@@ -943,21 +870,11 @@ function IncomeRow({
   onEdit: (e: IncomeEntry) => void; onDelete: (id: string) => void
   onMarkReceived: (e: IncomeEntry) => void
   onToggleInvoice: (e: IncomeEntry) => void
-  onOpenAttachments: (e: IncomeEntry) => void
-  attachmentIncomeId: string | null
-  attachments: IncomeAttachment[]; attachmentsLoading: boolean
-  uploadingAttachment: boolean; attachFileRef: React.RefObject<HTMLInputElement | null>
-  previewAttachmentId: string | null
-  onCloseAttachments: () => void; onTogglePreview: (id: string) => void
-  onAttachmentUpload: (incomeId: string, file: File) => Promise<void>
-  onAttachmentDelete: (incomeId: string, attachmentId: string) => Promise<void>
-  isImageMime: (mime: string) => boolean; isPdfMime: (mime: string) => boolean
-  formatFileSize: (bytes: number) => string
-  formatCurrency: (n: number) => string
+  att: ReturnType<typeof useAttachmentManager>
 }) {
   const isOneOff         = entry.incomeType === 'one-off'
   const hasRemittance    = entry.invoiceReceived
-  const isAttachmentOpen = attachmentIncomeId === entry.id
+  const isAttachmentOpen = att.openEntityId === entry.id
   const rowClass = cn(
     'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
     isOverdue       ? 'border-amber-500/30 bg-amber-500/5'
@@ -1014,7 +931,7 @@ function IncomeRow({
         })}
         <p className="text-sm font-semibold text-right">{formatCurrency(entry.amount)}</p>
         <div className="flex items-center gap-0.5 justify-end">
-          <button onClick={() => onOpenAttachments(entry)}
+          <button onClick={() => att.open(entry.id)}
             title={entry.attachments && entry.attachments.length > 0 ? `${entry.attachments.length} attachment${entry.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
             className={cn('relative p-1 hover:bg-accent rounded', isAttachmentOpen ? 'text-green-600' : entry.attachments && entry.attachments.length > 0 ? 'text-green-600' : 'text-muted-foreground')}>
             <Paperclip className="h-3.5 w-3.5" />
@@ -1037,78 +954,20 @@ function IncomeRow({
       </div>
 
       {isAttachmentOpen && (
-        <div className="rounded-b-lg border border-t-0 border-green-500/30 bg-green-500/5 px-4 py-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Paperclip className="h-3.5 w-3.5 text-green-600" />
-              Attachments
-            </div>
-            <button onClick={onCloseAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground" title="Close">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          {attachmentsLoading ? (
-            <p className="text-xs text-muted-foreground">Loading…</p>
-          ) : attachments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No attachments yet — upload a payslip or remittance advice below.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {attachments.map(att => {
-                const attUrl       = `/api/finance/income/${entry.id}/attachments/${att.id}`
-                const isPreviewing = previewAttachmentId === att.id
-                const canPreview   = isImageMime(att.mimeType) || isPdfMime(att.mimeType)
-                return (
-                  <div key={att.id}>
-                    <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="flex-1 truncate font-medium">{att.title}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(att.fileSize)}</span>
-                      {canPreview && (
-                        <button onClick={() => onTogglePreview(att.id)}
-                          title={isPreviewing ? 'Hide preview' : 'View inline'}
-                          className={cn('p-1 rounded hover:bg-accent transition-colors', isPreviewing ? 'text-primary' : 'text-muted-foreground')}>
-                          {isPreviewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        </button>
-                      )}
-                      <a href={attUrl} target="_blank" rel="noopener noreferrer"
-                        className="p-1 rounded hover:bg-accent text-primary" title="Open / download">
-                        <Download className="h-3.5 w-3.5" />
-                      </a>
-                      <button onClick={() => onAttachmentDelete(entry.id, att.id)}
-                        className="p-1 rounded hover:bg-accent text-red-500" title="Remove">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {isPreviewing && (
-                      <div className="mt-1 rounded-md border border-border bg-background overflow-hidden">
-                        {isImageMime(att.mimeType)
-                          // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
-                          : <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          {attachments.length < 2 && (
-            <div className="flex items-center gap-3">
-              <input ref={attachFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden"
-                onChange={async e => {
-                  const file = e.target.files?.[0]
-                  if (file) await onAttachmentUpload(entry.id, file)
-                  e.target.value = ''
-                }} />
-              <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
-                <Upload className="h-3.5 w-3.5" />
-                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Payslip' : 'Upload Reference Doc'}
-              </button>
-              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC · Max 2 files</p>
-            </div>
-          )}
-        </div>
+        <AttachmentSection
+          attachments={att.attachments}
+          loading={att.loading}
+          uploading={att.uploading}
+          previewId={att.previewId}
+          fileRef={att.fileRef}
+          getAttachmentUrl={attId => `/api/finance/income/${entry.id}/attachments/${attId}`}
+          onClose={att.close}
+          onTogglePreview={att.togglePreview}
+          onUpload={file => att.upload(entry.id, file)}
+          onDelete={attId => att.remove(entry.id, attId)}
+          firstUploadLabel="Upload Payslip"
+          emptyMessage="No attachments yet — upload a payslip or remittance advice below."
+        />
       )}
     </div>
   )

@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
-  RefreshCw, Layers, Paperclip, Upload, X, FileText, Download, Building2,
-  BookmarkCheck, Briefcase, Eye, EyeOff, Clock,
+  RefreshCw, Layers, Paperclip, X, Building2,
+  BookmarkCheck, Briefcase, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
+import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
 import Link from 'next/link'
 import {
   Dialog,
@@ -19,6 +20,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
+import { AttachmentSection } from '@/components/finance/AttachmentSection'
 
 interface Member { id: string; name: string; email: string }
 interface Location { id: string; name: string }
@@ -51,16 +54,6 @@ export interface Bill {
 }
 
 type QuickFilter = { type: 'member' | 'vendor' | 'location' | 'entity'; id: string; label: string }
-
-function toMonthlyAmount(amount: number, frequency: string): number {
-  if (frequency === 'weekly')      return amount * 52 / 12
-  if (frequency === 'fortnightly') return amount * 26 / 12
-  if (frequency === 'bimonthly')   return amount / 2
-  if (frequency === 'quarterly')   return amount / 3
-  if (frequency === 'halfyearly')  return amount / 6
-  if (frequency === 'yearly')      return amount / 12
-  return amount
-}
 
 export default function BillsPage() {
   const [bills, setBills]           = useState<Bill[]>([])
@@ -98,16 +91,11 @@ export default function BillsPage() {
     return []
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
-  const [attachmentBillId, setAttachmentBillId] = useState<string | null>(null)
-  const [attachments, setAttachments]           = useState<BillAttachment[]>([])
-  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
-  const [uploadingAttachment, setUploadingAttachment] = useState(false)
-  const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null)
   const [paymentHistoryBillId, setPaymentHistoryBillId] = useState<string | null>(null)
   const [paymentHistory, setPaymentHistory] = useState<any[]>([])
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false)
   const [quickFilter, setQuickFilter] = useState<QuickFilter | null>(null)
-  const attachFileRef = useRef<HTMLInputElement>(null)
+  const att = useAttachmentManager('/api/finance/bills')
 
   const emptyForm = {
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
@@ -247,17 +235,6 @@ export default function BillsPage() {
     } catch { toast.error('Network error updating budget rule') }
   }
 
-  async function openAttachments(bill: Bill) {
-    setAttachmentBillId(bill.id); setAttachmentsLoading(true)
-    try {
-      const res = await fetch(`/api/finance/bills/${bill.id}/attachments`)
-      if (res.ok) setAttachments(await res.json())
-      else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to load attachments') }
-    } finally { setAttachmentsLoading(false) }
-  }
-
-  function closeAttachments() { setAttachmentBillId(null); setAttachments([]); setPreviewAttachmentId(null) }
-
   function closePaymentHistory() { setPaymentHistoryBillId(null); setPaymentHistory([]) }
 
   async function openPaymentHistory(bill: Bill) {
@@ -269,35 +246,6 @@ export default function BillsPage() {
       else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to load payment history') }
     } finally { setPaymentHistoryLoading(false) }
   }
-  function togglePreview(attId: string) { setPreviewAttachmentId(prev => prev === attId ? null : attId) }
-  function isImageMime(mime: string) { return mime.startsWith('image/') }
-  function isPdfMime(mime: string) { return mime === 'application/pdf' }
-
-  async function handleAttachmentUpload(billId: string, file: File) {
-    setUploadingAttachment(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('title', file.name.replace(/\.[^/.]+$/, ''))
-      const res = await fetch(`/api/finance/bills/${billId}/attachments`, { method: 'POST', body: fd })
-      if (res.ok) { const a = await res.json(); setAttachments(prev => [...prev, a]); toast.success('Attachment uploaded') }
-      else toast.error('Failed to upload attachment')
-    } finally { setUploadingAttachment(false) }
-  }
-
-  async function handleAttachmentDelete(billId: string, attachmentId: string) {
-    if (!confirm('Remove this attachment?')) return
-    const res = await fetch(`/api/finance/bills/${billId}/attachments/${attachmentId}`, { method: 'DELETE' })
-    if (res.ok) { setAttachments(prev => prev.filter(a => a.id !== attachmentId)); toast.success('Attachment removed') }
-    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to remove attachment') }
-  }
-
-  function formatFileSize(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
     sessionStorage.setItem('bills-dateRange', r); setDateRange(r)
   }
@@ -467,10 +415,6 @@ export default function BillsPage() {
       if (bill.frequency === 'yearly')      return addMonths(due, 12)
     }
     return due
-  }
-
-  function formatCurrency(n: number) {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
   }
 
   function billAmountForCat(bill: Bill, rootCatId: string): number {
@@ -889,16 +833,9 @@ export default function BillsPage() {
               inBudget={budgetBillIds.has(b.id)}
               onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
               onUnmarkPaid={handleUnmarkPaid}
-              onToggleInvoice={handleToggleInvoice} onOpenAttachments={openAttachments}
+              onToggleInvoice={handleToggleInvoice}
               onQuickFilter={handleQuickFilter}
-              attachmentBillId={attachmentBillId}
-              attachments={attachments} attachmentsLoading={attachmentsLoading}
-              uploadingAttachment={uploadingAttachment} attachFileRef={attachFileRef}
-              previewAttachmentId={previewAttachmentId}
-              onCloseAttachments={closeAttachments} onTogglePreview={togglePreview}
-              onAttachmentUpload={handleAttachmentUpload} onAttachmentDelete={handleAttachmentDelete}
-              isImageMime={isImageMime} isPdfMime={isPdfMime} formatFileSize={formatFileSize}
-              formatCurrency={formatCurrency}
+              att={att}
               paymentHistoryBillId={paymentHistoryBillId}
               paymentHistory={paymentHistory}
               paymentHistoryLoading={paymentHistoryLoading}
@@ -931,10 +868,8 @@ export default function BillsPage() {
 
 function BillRow({
   bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate,
-  inBudget, onEdit, onDelete, onMarkPaid, onUnmarkPaid, onToggleInvoice, onOpenAttachments, onQuickFilter,
-  attachmentBillId, attachments, attachmentsLoading, uploadingAttachment, attachFileRef,
-  previewAttachmentId, onCloseAttachments, onTogglePreview,
-  onAttachmentUpload, onAttachmentDelete, isImageMime, isPdfMime, formatFileSize, formatCurrency,
+  inBudget, onEdit, onDelete, onMarkPaid, onUnmarkPaid, onToggleInvoice, onQuickFilter,
+  att,
   paymentHistoryBillId, paymentHistory, paymentHistoryLoading,
   onOpenPaymentHistory, onClosePaymentHistory,
 }: {
@@ -944,24 +879,15 @@ function BillRow({
   gridTemplate: string; inBudget: boolean
   onEdit: (b: Bill) => void; onDelete: (id: string) => void
   onMarkPaid: (b: Bill) => void; onUnmarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
-  onOpenAttachments: (b: Bill) => void
   onQuickFilter: (f: QuickFilter) => void
-  attachmentBillId: string | null
-  attachments: BillAttachment[]; attachmentsLoading: boolean
-  uploadingAttachment: boolean; attachFileRef: React.RefObject<HTMLInputElement | null>
-  previewAttachmentId: string | null
-  onCloseAttachments: () => void; onTogglePreview: (id: string) => void
-  onAttachmentUpload: (billId: string, file: File) => Promise<void>
-  onAttachmentDelete: (billId: string, attachmentId: string) => Promise<void>
-  isImageMime: (mime: string) => boolean; isPdfMime: (mime: string) => boolean
-  formatFileSize: (bytes: number) => string; formatCurrency: (n: number) => string
+  att: ReturnType<typeof useAttachmentManager>
   paymentHistoryBillId: string | null
   paymentHistory: any[]; paymentHistoryLoading: boolean
   onOpenPaymentHistory: (b: Bill) => void; onClosePaymentHistory: () => void
 }) {
   const isOneOff            = bill.billType === 'one-off'
   const hasInvoice          = bill.invoiceReceived
-  const isAttachmentOpen    = attachmentBillId === bill.id
+  const isAttachmentOpen    = att.openEntityId === bill.id
   const isPaymentHistoryOpen = paymentHistoryBillId === bill.id
   const totalPaid           = bill.payments?.reduce((s, p) => s + p.amount, 0) ?? 0
   const isPartiallyPaid     = totalPaid > 0 && totalPaid < bill.amount
@@ -1063,7 +989,7 @@ function BillRow({
             className={cn('p-1 hover:bg-accent rounded', isPaymentHistoryOpen ? 'text-amber-600' : 'text-muted-foreground')}>
             <Clock className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => onOpenAttachments(bill)}
+          <button onClick={() => att.open(bill.id)}
             title={bill.attachments && bill.attachments.length > 0 ? `${bill.attachments.length} attachment${bill.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
             className={cn('relative p-1 hover:bg-accent rounded',
               isAttachmentOpen || (bill.attachments && bill.attachments.length > 0) ? 'text-green-600' : 'text-muted-foreground')}>
@@ -1132,74 +1058,20 @@ function BillRow({
         </div>
       )}
 
-      {/* Attachment panel */}
       {isAttachmentOpen && (
-        <div className="rounded-b-lg border border-t-0 border-green-500/30 bg-green-500/5 px-4 py-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Paperclip className="h-3.5 w-3.5 text-green-600" /> Attachments
-            </div>
-            <button onClick={onCloseAttachments} className="p-1 rounded hover:bg-accent text-muted-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          {attachmentsLoading ? (
-            <p className="text-xs text-muted-foreground">Loading&hellip;</p>
-          ) : attachments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No attachments yet.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {attachments.map(att => {
-                const attUrl = `/api/finance/bills/${bill.id}/attachments/${att.id}`
-                const isPreviewing = previewAttachmentId === att.id
-                const canPreview  = isImageMime(att.mimeType) || isPdfMime(att.mimeType)
-                return (
-                  <div key={att.id}>
-                    <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="flex-1 truncate font-medium">{att.title}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(att.fileSize)}</span>
-                      {canPreview && (
-                        <button onClick={() => onTogglePreview(att.id)}
-                          className={cn('p-1 rounded hover:bg-accent', isPreviewing ? 'text-primary' : 'text-muted-foreground')}>
-                          {isPreviewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        </button>
-                      )}
-                      <a href={attUrl} target="_blank" rel="noopener noreferrer"
-                        className="p-1 rounded hover:bg-accent text-primary"><Download className="h-3.5 w-3.5" /></a>
-                      <button onClick={() => onAttachmentDelete(bill.id, att.id)}
-                        className="p-1 rounded hover:bg-accent text-red-500"><X className="h-3.5 w-3.5" /></button>
-                    </div>
-                    {isPreviewing && (
-                      <div className="mt-1 rounded-md border border-border bg-background overflow-hidden">
-                        {isImageMime(att.mimeType)
-                          // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={attUrl} alt={att.title} className="max-h-[500px] w-full object-contain p-2" />
-                          : <iframe src={attUrl} title={att.title} className="w-full border-0" style={{ height: '600px' }} />}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          {attachments.length < 2 && (
-            <div className="flex items-center gap-3">
-              <input ref={attachFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden"
-                onChange={async e => {
-                  const file = e.target.files?.[0]
-                  if (file) await onAttachmentUpload(bill.id, file)
-                  e.target.value = ''
-                }} />
-              <button onClick={() => attachFileRef.current?.click()} disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50">
-                <Upload className="h-3.5 w-3.5" />
-                {uploadingAttachment ? 'Uploading…' : attachments.length === 0 ? 'Upload Invoice' : 'Upload Reference Doc'}
-              </button>
-              <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC &middot; Max 2 files</p>
-            </div>
-          )}
-        </div>
+        <AttachmentSection
+          attachments={att.attachments}
+          loading={att.loading}
+          uploading={att.uploading}
+          previewId={att.previewId}
+          fileRef={att.fileRef}
+          getAttachmentUrl={attId => `/api/finance/bills/${bill.id}/attachments/${attId}`}
+          onClose={att.close}
+          onTogglePreview={att.togglePreview}
+          onUpload={file => att.upload(bill.id, file)}
+          onDelete={attId => att.remove(bill.id, attId)}
+          firstUploadLabel="Upload Invoice"
+        />
       )}
     </div>
   )

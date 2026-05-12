@@ -126,3 +126,26 @@ export function timesPerMonth(frequency: string): number {
     default:            return 0
   }
 }
+
+/**
+ * Normalise any recurring amount to its monthly equivalent.
+ * Unknown frequencies are treated as monthly (multiplier = 1).
+ */
+export function toMonthlyAmount(amount: number, frequency: string): number {
+  switch (frequency) {
+    case 'weekly':      return amount * 52 / 12
+    case 'fortnightly': return amount * 26 / 12
+    case 'bimonthly':   return amount / 2
+    case 'quarterly':   return amount / 3
+    case 'halfyearly':  return amount / 6
+    case 'yearly':      return amount / 12
+    default:            return amount // monthly or unrecognised
+  }
+}
+
+/**
+ * Format a number as AUD currency (e.g. $1,234.56).
+ */
+export function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+}
