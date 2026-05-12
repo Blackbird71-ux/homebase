@@ -514,13 +514,31 @@ export async function PATCH(request: NextRequest) {
         },
       })
       // Post the linked journal entry now that the invoice is confirmed.
-      // The journal was saved as a draft when the bill was created; posting it
-      // here makes the double-entry (DR expense / CR AP) visible in the ledger.
+      // If no draft JE exists (bill created without journal lines), auto-create
+      // DR expense / CR Accounts Payable and post it immediately so AP and the
+      // expense account appear in the trial balance.
       const jeId: string | null = (existing as any).journalEntryId ?? null
       if (jeId) {
         await prisma.financeJournalEntry.updateMany({
           where: { id: jeId, familyId: session.familyId, isPosted: false },
           data: { isPosted: true, date: invoiceDate },
+        })
+      } else if (existing.categoryId) {
+        const autoLines: JournalLine[] = [
+          { glAccountId: existing.categoryId, side: 'debit',  amount: existing.amount },
+          { glAccountId: apCategoryId,        side: 'credit', amount: existing.amount },
+        ]
+        const newJeId = await upsertBillJournalEntry(
+          id, existing.name, null, autoLines,
+          invoiceDate, session.familyId, existing.entityId ?? null, session,
+        )
+        await prisma.financeJournalEntry.update({
+          where: { id: newJeId },
+          data: { isPosted: true },
+        })
+        await prisma.financeRecurringBill.update({
+          where: { id },
+          data: { journalEntryId: newJeId },
         })
       }
     } catch (err) {
