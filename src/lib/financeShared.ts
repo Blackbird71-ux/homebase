@@ -119,6 +119,7 @@ export function timesPerMonth(frequency: string): number {
     case 'weekly':      return 52 / 12
     case 'fortnightly': return 26 / 12
     case 'monthly':     return 1
+    case 'bimonthly':   return 1 / 2
     case 'quarterly':   return 1 / 3
     case 'halfyearly':  return 1 / 6
     case 'yearly':      return 1 / 12

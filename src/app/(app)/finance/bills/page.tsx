@@ -55,7 +55,9 @@ type QuickFilter = { type: 'member' | 'vendor' | 'location' | 'entity'; id: stri
 function toMonthlyAmount(amount: number, frequency: string): number {
   if (frequency === 'weekly')      return amount * 52 / 12
   if (frequency === 'fortnightly') return amount * 26 / 12
+  if (frequency === 'bimonthly')   return amount / 2
   if (frequency === 'quarterly')   return amount / 3
+  if (frequency === 'halfyearly')  return amount / 6
   if (frequency === 'yearly')      return amount / 12
   return amount
 }
@@ -453,7 +455,9 @@ export default function BillsPage() {
       if (bill.frequency === 'monthly')     return addMonths(due, 1)
       if (bill.frequency === 'fortnightly') return addWeeks(due, 2)
       if (bill.frequency === 'weekly')      return addWeeks(due, 1)
+      if (bill.frequency === 'bimonthly')   return addMonths(due, 2)
       if (bill.frequency === 'quarterly')   return addMonths(due, 3)
+      if (bill.frequency === 'halfyearly')  return addMonths(due, 6)
       if (bill.frequency === 'yearly')      return addMonths(due, 12)
     }
     return due
@@ -663,6 +667,7 @@ export default function BillsPage() {
                   <option value="weekly">Weekly</option>
                   <option value="fortnightly">Fortnightly</option>
                   <option value="monthly">Monthly</option>
+                  <option value="bimonthly">Bi-Monthly</option>
                   <option value="quarterly">Quarterly</option>
                   <option value="halfyearly">Half-Yearly</option>
                   <option value="yearly">Yearly</option>

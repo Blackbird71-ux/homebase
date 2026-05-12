@@ -86,7 +86,9 @@ Each bill on the Bills page displays the following, reading left to right:
 | `weekly`                   | Weekly      |
 | `fortnightly`              | Fortnightly |
 | `monthly`                  | Monthly     |
+| `bimonthly`                | Bi-Monthly  |
 | `quarterly`                | Quarterly   |
+| `halfyearly`               | Half-Yearly |
 | `annually`                 | Annually    |
 
 - Badge style: subtle background (e.g. blue-100 / blue-800 text), small font (text-xs), rounded-full.
