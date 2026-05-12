@@ -415,14 +415,18 @@ export default function BillsPage() {
 
   async function handleToggleInvoice(bill: Bill) {
     const newVal = !bill.invoiceReceived
+    // Posting requires a confirmation when un-posting (reversing the accrual)
+    if (!newVal && bill.invoiceReceived) {
+      if (!confirm(`Unpost "${bill.name}"? This will reverse the accrual journal entry and remove the pending expense transaction.`)) return
+    }
     const res = await fetch('/api/finance/bills', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: bill.id, invoiceReceived: newVal }),
     })
-    if (res.ok) { toast.success(newVal ? 'Invoice marked received' : 'Invoice unmarked'); load() }
+    if (res.ok) { toast.success(newVal ? 'Bill posted to journals' : 'Bill unposted'); load() }
     else {
       const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
-      toast.error(err.error ?? 'Failed to update invoice status')
+      toast.error(err.error ?? 'Failed to update posting status')
     }
   }
 
@@ -758,7 +762,7 @@ export default function BillsPage() {
             )}
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
-              <Receipt className="h-3.5 w-3.5 text-green-500" /> Invoice received
+              <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
             </label>
             {form.invoiceReceived && (
               <div className="flex items-center gap-2">
@@ -979,7 +983,7 @@ function BillRow({
             {bill.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
             {hasInvoice && (
               <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
-                <Receipt className="h-2.5 w-2.5" /> INVOICE
+                <Receipt className="h-2.5 w-2.5" /> POSTED
               </span>
             )}
             {inBudget && (
@@ -1060,8 +1064,8 @@ function BillRow({
             )}
           </button>
           <button onClick={() => onToggleInvoice(bill)}
-            title={bill.invoiceReceived ? 'Remove invoice' : 'Mark invoice received'}
-            className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
+            title={bill.invoiceReceived ? 'Unpost (reverse accrual)' : 'Post — post this bill to journals'}
+            className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-amber-500')}>
             <Receipt className="h-3.5 w-3.5" />
           </button>
           {bill.paid

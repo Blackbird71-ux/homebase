@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { sortedCategoryList } from '@/lib/finance-categories'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
 
@@ -46,6 +47,8 @@ interface ListMeta {
 interface CategoryMeta {
   id: string
   name: string
+  type: string
+  parentId: string | null
 }
 
 const MEAL_TYPE_OPTIONS = [
@@ -565,18 +568,23 @@ export function QuickAdd() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="qa-expense-gl">GL Account to debit</Label>
+              <Label htmlFor="qa-expense-cat">Category <span className="text-destructive">*</span></Label>
               <select
-                id="qa-expense-gl"
-                value={expenseGlAccountId}
-                onChange={e => setExpenseGlAccountId(e.target.value)}
+                id="qa-expense-cat"
+                value={expenseCategoryId}
+                onChange={e => setExpenseCategoryId(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
               >
-                <option value="">Select account…</option>
-                {glAccounts.map(a => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
+                <option value="">Select category…</option>
+                {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.parentId ? `\u2014 ${c.name}` : c.name}
+                  </option>
                 ))}
               </select>
+              {!expenseCategoryId && (
+                <p className="text-[11px] text-amber-500">⚠ Without a category this will show as Uncategorised on P&L</p>
+              )}
             </div>
           </>
         )}

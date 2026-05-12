@@ -394,13 +394,17 @@ export default function IncomePage() {
 
   async function handleToggleInvoice(entry: IncomeEntry) {
     const newVal = !entry.invoiceReceived
+    // Confirm when un-posting (reversing the accrual)
+    if (!newVal && entry.invoiceReceived) {
+      if (!confirm(`Unpost "${entry.name}"? This will reverse the accrual journal entry and remove the pending income transaction.`)) return
+    }
     const res = await fetch('/api/finance/income', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: entry.id, invoiceReceived: newVal }),
     })
-    if (res.ok) { toast.success(newVal ? 'Remittance marked received' : 'Remittance unmarked'); load() }
-    else toast.error('Failed to update remittance status')
+    if (res.ok) { toast.success(newVal ? 'Income posted to journals' : 'Income unposted'); load() }
+    else toast.error('Failed to update posting status')
   }
 
   function getNextExpected(entry: IncomeEntry): Date {
@@ -738,7 +742,7 @@ export default function IncomePage() {
             )}
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
-              <Receipt className="h-3.5 w-3.5 text-green-500" /> Remittance received
+              <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
             </label>
             {form.invoiceReceived && (
               <div className="flex items-center gap-2">
@@ -978,7 +982,7 @@ function IncomeRow({
             {entry.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">DIRECT</span>}
             {hasRemittance && (
               <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
-                <Receipt className="h-2.5 w-2.5" /> REMITTANCE
+                <Receipt className="h-2.5 w-2.5" /> POSTED
               </span>
             )}
             {entry.isTaxTracked && (
@@ -1020,8 +1024,8 @@ function IncomeRow({
               </span>
             )}
           </button>
-          <button onClick={() => onToggleInvoice(entry)} title={entry.invoiceReceived ? 'Remove remittance' : 'Mark remittance received'}
-            className={cn('p-1 hover:bg-accent rounded', entry.invoiceReceived ? 'text-green-500' : 'text-muted-foreground')}>
+          <button onClick={() => onToggleInvoice(entry)} title={entry.invoiceReceived ? 'Unpost (reverse accrual)' : 'Post — post this income to journals'}
+            className={cn('p-1 hover:bg-accent rounded', entry.invoiceReceived ? 'text-green-500' : 'text-amber-500')}>
             <Receipt className="h-3.5 w-3.5" />
           </button>
           <button onClick={() => onMarkReceived(entry)} title="Mark as received" className="p-1 hover:bg-accent rounded text-green-500">
