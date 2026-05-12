@@ -390,11 +390,13 @@ export async function PATCH(request: NextRequest) {
 // ── DELETE /api/finance/journals ──────────────────────────────────────────────
 // Allowed cases:
 //   1. Draft (isPosted=false) — delete directly.
-//   2. Voided entry (isPosted=true, isReversed=true) — delete both the original
-//      and its paired void/reversal entry atomically. This gives a clean removal
-//      with no ledger trace (the void entry already zeroed the effect).
+//   2. Voided original (isPosted=true, isReversed=true) — delete original + all
+//      its reversal children atomically.
+//   3. Reversal/void child (type='reversal', isPosted=true, reversalOfId set) —
+//      delete the reversal entry and restore isReversed=false on the parent.
+//      Lets users delete from either entry in a void pair.
 //
-// Posted entries that are NOT voided cannot be deleted — create a reversal.
+// Posted entries that are not voided and not reversals cannot be deleted.
 
 export async function DELETE(request: NextRequest) {
   const session = await requireSession()
@@ -419,9 +421,9 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  // Case 2: voided posted entry — delete original + all its reversal children atomically
+  // Case 2: voided original — delete original + all its reversal children atomically
   if (existing.isPosted && existing.isReversed) {
-    const reversalIds = (existing as any).reversals.map((r: { id: string }) => r.id)
+    const reversalIds = existing.reversals.map((r: { id: string }) => r.id)
     await prisma.$transaction([
       // Delete the reversal entries first (they reference the original via reversalOfId)
       prisma.financeJournalEntry.deleteMany({
@@ -433,7 +435,21 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  // Posted, not voided — refuse
+  // Case 3: reversal/void child — delete it and restore the parent to un-reversed.
+  // This lets users delete from either entry in the void pair.
+  if (existing.isPosted && existing.type === 'reversal' && existing.reversalOfId) {
+    const parentId = existing.reversalOfId
+    await prisma.$transaction([
+      prisma.financeJournalEntry.delete({ where: { id } }),
+      prisma.financeJournalEntry.updateMany({
+        where: { id: parentId, familyId: session.familyId },
+        data: { isReversed: false },
+      }),
+    ])
+    return NextResponse.json({ success: true })
+  }
+
+  // Posted, not voided, not a reversal — refuse
   return NextResponse.json(
     { error: 'Posted entries cannot be deleted. Void the entry first, then delete.' },
     { status: 400 },

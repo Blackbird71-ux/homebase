@@ -408,7 +408,7 @@ export default function JournalsPage() {
   }
 
   async function handleDelete(entry: JournalEntry) {
-    // Drafts: delete immediately
+    // Case 1: Drafts — delete immediately
     if (!entry.isPosted) {
       if (!confirm(`Delete draft ${entry.reference ?? 'entry'}: "${entry.description}"?`)) return
       const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
@@ -416,7 +416,7 @@ export default function JournalsPage() {
       else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
       return
     }
-    // Voided posted entries: delete both original + its reversal atomically
+    // Case 2: Voided original (isReversed=true) — delete original + its void reversal atomically
     if (entry.isPosted && entry.isReversed) {
       if (!confirm(`Permanently delete voided entry ${entry.reference ?? ''} and its void reversal? This cannot be undone.`)) return
       const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
@@ -424,7 +424,15 @@ export default function JournalsPage() {
       else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
       return
     }
-    // Posted, not voided — refuse
+    // Case 3: Reversal/void child entry (type='reversal') — delete it, restores parent
+    if (entry.isPosted && entry.type === 'reversal') {
+      if (!confirm(`Delete void/reversal entry ${entry.reference ?? ''}: "${entry.description}"? The original entry will be restored to un-voided state.`)) return
+      const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('Reversal deleted — original entry restored'); load() }
+      else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
+      return
+    }
+    // Posted, not voided, not a reversal — refuse
     toast.error('Void this entry first, then delete.')
   }
 
@@ -1211,11 +1219,21 @@ export default function JournalsPage() {
                           </button>
                         </>
                       )}
-                      {/* Voided entry: show Delete button to permanently remove */}
+                      {/* Voided original: show Delete button to permanently remove the pair */}
                       {!isDraft && isReversed && (
                         <button
                           onClick={() => handleDelete(entry)}
-                          title="Permanently delete this voided entry"
+                          title="Permanently delete this voided entry and its reversal"
+                          className="p-1 hover:bg-accent rounded text-red-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {/* Reversal/void child entry: show Delete button */}
+                      {!isDraft && isReversal && !isReversed && (
+                        <button
+                          onClick={() => handleDelete(entry)}
+                          title="Delete this reversal entry (restores the original to un-voided)"
                           className="p-1 hover:bg-accent rounded text-red-500"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
