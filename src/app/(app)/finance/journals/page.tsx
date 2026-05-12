@@ -151,9 +151,11 @@ export default function JournalsPage() {
   const [saving, setSaving]         = useState(false)
   const [posting, setPosting]       = useState<string | null>(null)  // entry id being posted
 
-  // ── Filter state ─────────────────────────────────────────────────────────
-  // 'all' | 'draft' | 'posted'
-  const [filterTab, setFilterTab]   = useState<'all' | 'draft' | 'posted'>('all')
+  // Tab logic:
+  //   'manual'     — posted manual/adjustment/reversal entries only (default, accountant view)
+  //   'draft'      — unposted manual/adjustment entries only
+  //   'all-posted' — every posted entry regardless of type (forensic catch-all)
+  const [filterTab, setFilterTab] = useState<'manual' | 'draft' | 'all-posted'>('manual')
 
   // ── Form dialog state ────────────────────────────────────────────────────
   const [showForm, setShowForm]     = useState(false)
@@ -185,8 +187,20 @@ export default function JournalsPage() {
         page:  page.toString(),
         limit: limit.toString(),
       })
-      if (filterTab === 'draft')  params.set('isPosted', 'false')
-      if (filterTab === 'posted') params.set('isPosted', 'true')
+
+      if (filterTab === 'manual') {
+        // Default view: posted manual/adjustment/reversal entries
+        params.set('isPosted',   'true')
+        params.set('typeFilter', 'manual')
+      } else if (filterTab === 'draft') {
+        // Draft view: unposted manual entries only
+        params.set('isPosted',   'false')
+        params.set('typeFilter', 'manual')
+      } else {
+        // All Posted: forensic catch-all — every posted entry, no type filter
+        params.set('isPosted',   'true')
+        params.set('typeFilter', 'all')
+      }
 
       const res = await fetch(`/api/finance/journals?${params}`)
       if (res.ok) {
@@ -565,39 +579,60 @@ export default function JournalsPage() {
 
       {/* ── Filter tabs ──────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 rounded-lg border border-border p-1 w-fit">
-        {(['all', 'draft', 'posted'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => { setFilterTab(tab); setPage(1) }}
-            className={cn(
-              'px-3 py-1 text-xs rounded-md font-medium transition-colors capitalize',
-              filterTab === tab
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab === 'all' ? 'All' : tab === 'draft' ? 'Draft' : 'Posted'}
-          </button>
-        ))}
+        <button
+          onClick={() => { setFilterTab('manual'); setPage(1) }}
+          className={cn(
+            'px-3 py-1 text-xs rounded-md font-medium transition-colors',
+            filterTab === 'manual'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          Manual
+        </button>
+        <button
+          onClick={() => { setFilterTab('draft'); setPage(1) }}
+          className={cn(
+            'px-3 py-1 text-xs rounded-md font-medium transition-colors',
+            filterTab === 'draft'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          Draft
+        </button>
+        <button
+          onClick={() => { setFilterTab('all-posted'); setPage(1) }}
+          className={cn(
+            'px-3 py-1 text-xs rounded-md font-medium transition-colors',
+            filterTab === 'all-posted'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          All Posted
+        </button>
       </div>
 
       {/* ── Summary strip ────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-border p-3 bg-muted/30">
-          <p className="text-xs text-muted-foreground mb-1">Total entries</p>
+          <p className="text-xs text-muted-foreground mb-1">
+            {filterTab === 'manual'     ? 'Posted manual entries'
+           : filterTab === 'draft'      ? 'Draft manual entries'
+           :                             'All posted entries (total)'}
+          </p>
           <p className="text-xl font-bold">{total}</p>
         </div>
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-          <p className="text-xs text-muted-foreground mb-1">Drafts (not posted)</p>
-          <p className="text-xl font-bold text-amber-600">
-            {entries.filter(e => !e.isPosted).length}
-          </p>
-        </div>
-        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
-          <p className="text-xs text-muted-foreground mb-1">Posted this page</p>
-          <p className="text-xl font-bold text-green-600">
-            {entries.filter(e => e.isPosted).length}
-          </p>
+        <div className={cn('rounded-lg border p-3',
+          filterTab === 'draft'
+            ? 'border-amber-500/30 bg-amber-500/5'
+            : 'border-green-500/30 bg-green-500/5'
+        )}>
+          <p className="text-xs text-muted-foreground mb-1">This page</p>
+          <p className={cn('text-xl font-bold',
+            filterTab === 'draft' ? 'text-amber-600' : 'text-green-600'
+          )}>{entries.length}</p>
         </div>
       </div>
 
@@ -1062,21 +1097,25 @@ export default function JournalsPage() {
         <div className="rounded-lg border border-dashed border-border p-8 text-center">
           <BookOpen className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm font-medium text-muted-foreground">
-            {filterTab === 'draft'  ? 'No draft entries' :
-             filterTab === 'posted' ? 'No posted entries' :
-             'No journal entries yet'}
+            {filterTab === 'draft'
+              ? 'No draft entries'
+              : filterTab === 'all-posted'
+              ? 'No posted entries found'
+              : 'No posted manual journal entries yet'}
           </p>
           <p className="text-xs text-muted-foreground/60 mt-1">
-            {filterTab === 'all'
-              ? 'Create entries for depreciation, adjustments, accruals, and opening balances.'
-              : 'Change the filter above to see other entries.'}
+            {filterTab === 'draft'
+              ? 'Save a new entry as a draft using the editor above, or check the Manual tab for posted entries.'
+              : filterTab === 'all-posted'
+              ? 'This forensic view shows every posted entry — nothing has been posted yet.'
+              : 'Create manual entries for depreciation, adjustments, accruals, and corrections.'}
           </p>
-          {filterTab === 'all' && (
+          {filterTab !== 'all-posted' && (
             <button
               onClick={openNew}
               className="mt-4 inline-flex items-center gap-1 text-sm text-primary hover:underline"
             >
-              <Plus className="h-4 w-4" /> Create first entry
+              <Plus className="h-4 w-4" /> New entry
             </button>
           )}
         </div>

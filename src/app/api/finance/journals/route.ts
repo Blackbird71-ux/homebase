@@ -87,7 +87,14 @@ async function createEntryInTxWithRetry(
 }
 
 // ── GET /api/finance/journals ─────────────────────────────────────────────────
-// Query params: page, limit, isPosted
+// Query params:
+//   page, limit
+//   isPosted   — 'true' | 'false' | omit for all
+//   typeFilter — 'manual' (default) | 'all'
+//               'manual' = type IN (manual, adjustment, reversal)
+//                          These are entries created via the Journals page editor.
+//               'all'    = no type restriction — forensic catch-all including
+//                          auto_transaction, opening_balance, and orphaned entries.
 
 export async function GET(request: NextRequest) {
   const session = await requireSession()
@@ -98,9 +105,22 @@ export async function GET(request: NextRequest) {
   const skip  = (page - 1) * limit
 
   const isPostedParam = searchParams.get('isPosted')
-  const where: { familyId: string; isPosted?: boolean } = { familyId: session.familyId }
+  const typeFilter    = searchParams.get('typeFilter') ?? 'manual'
+
+  const where: {
+    familyId: string
+    isPosted?: boolean
+    type?: { in: string[] }
+  } = { familyId: session.familyId }
+
   if (isPostedParam === 'true')  where.isPosted = true
   if (isPostedParam === 'false') where.isPosted = false
+
+  // 'manual' scope: only entries created via the Journals page editor
+  // 'all' scope:    everything — forensic view, no type restriction
+  if (typeFilter === 'manual') {
+    where.type = { in: ['manual', 'adjustment', 'reversal'] }
+  }
 
   const [entries, total] = await Promise.all([
     prisma.financeJournalEntry.findMany({
