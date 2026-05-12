@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef, useCallback, useEffect } from 'react'
-import { enqueueMutation, getAllMutations, removeMutation } from '@/lib/offline-queue'
-import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { useState, useTransition, useCallback, useEffect } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -38,6 +36,8 @@ import { DoneSection } from './DoneSection'
 import { ListItemRow } from './ListItemRow'
 import { EditItemDialog } from './EditItemDialog'
 import { BarcodeScanner } from './BarcodeScanner'
+import { useOfflineQueue } from '@/hooks/lists/useOfflineQueue'
+import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
 
 interface ShoppingListProps {
   listId: string
@@ -58,11 +58,9 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [newContent, setNewContent] = useState('')
   const [newCategory, setNewCategory] = useState<ShoppingCategory>('Other')
   const [categoryManuallySet, setCategoryManuallySet] = useState(false)
-  const [newUnitPrice, setNewUnitPrice] = useState('')
-  const [newQuantity, setNewQuantity] = useState('')
   const [, startTransition] = useTransition()
   const [loadingCategories, setLoadingCategories] = useState(true)
-  const [availableCategories, setAvailableCategories] = useState<Array<{id: string, name: string, aisle?: string | null}>>([])
+  const [availableCategories, setAvailableCategories] = useState<Array<{id: string; name: string; aisle?: string | null}>>([])
   const [aisleMap, setAisleMap] = useState<Record<string, string | null>>({})
   const [editItemId, setEditItemId] = useState<string | null>(null)
   const [editItemContent, setEditItemContent] = useState('')
@@ -73,239 +71,82 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
-  const catSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   // ── Offline sync ────────────────────────────────────────────────────────────
 
-  /** Register a Background Sync tag so the SW can replay the queue when connectivity returns. */
-  async function registerBackgroundSync() {
-    if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return
-    try {
-      const reg = await navigator.serviceWorker.ready
-      await (reg as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync.register('homebase-list-sync')
-    } catch {
-      // Not supported or permission denied — the online/visibilitychange fallback covers this
-    }
-  }
+  const { registerBackgroundSync, broadcastQueueCount, enqueueMutation } =
+    useOfflineQueue(listId, setItems)
 
-  /** Broadcast current queue length so OfflineBanner can show the pending count. */
-  const broadcastQueueCount = useCallback(async () => {
-    try {
-      const all = await getAllMutations()
-      const count = all.filter((m) => m.listId === listId).length
-      window.dispatchEvent(
-        new CustomEvent('offline-queue-update', { detail: { count } })
-      )
-    } catch {
-      // IndexedDB unavailable — ignore
-    }
-  }, [listId])
+  // ── Debounced saves ─────────────────────────────────────────────────────────
 
-  /**
-   * Replay any queued mutations for this list then refetch items from the
-   * server. Called both from the `online` window event (iOS/Safari) and from
-   * SW postMessages (Chrome/Android Background Sync).
-   */
-  const flushQueueAndRefetch = useCallback(async () => {
-    let mutations: Awaited<ReturnType<typeof getAllMutations>>
-    try {
-      mutations = await getAllMutations()
-    } catch {
-      return
-    }
+  const debouncedSaveCategoryOrder = useDebouncedCallback(
+    useCallback((order: string[]) => {
+      fetch(`/api/lists/${listId}/category-order`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryOrder: order }),
+      }).catch(() => toast.error('Failed to save category order.'))
+    }, [listId]),
+    500,
+  )
 
-    const mine = mutations
-      .filter((m) => m.listId === listId)
-      .sort((a, b) => a.queuedAt - b.queuedAt)
+  const debouncedSaveItemOrder = useDebouncedCallback(
+    useCallback((updates: { id: string; sortOrder: number }[]) => {
+      fetch(`/api/lists/${listId}/items/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: updates }),
+      }).catch(() => toast.error('Failed to save item order.'))
+    }, [listId]),
+    500,
+  )
 
-    if (mine.length === 0) return
+  // ── Category auto-detect ────────────────────────────────────────────────────
 
-    for (const mutation of mine) {
-      try {
-        const res = await fetch(mutation.endpoint, {
-          method: mutation.method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(mutation.body),
-        })
-        if (res.ok || res.status === 404) {
-          await removeMutation(mutation.id)
-        }
-      } catch {
-        // Still offline — stop and try again next time
-        break
-      }
-    }
-
-    // Refetch the authoritative list from the server to replace temp IDs
-    try {
-      const res = await fetch(`/api/lists/${listId}/items`)
-      if (res.ok) {
-        const serverItems = await res.json()
-        setItems(
-          serverItems.map((i: Record<string, unknown>) => ({
-            ...i,
-            dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
-            createdAt: new Date(i.createdAt as string),
-            recipeId: (i.recipeId as string | null) ?? null,
-            recipeName: (i.recipeName as string | null) ?? null,
-          }))
-        )
-      }
-    } catch {
-      // Network gone again — leave optimistic state as-is
-    }
-
-    await broadcastQueueCount()
-  }, [listId, broadcastQueueCount])
-
-  // Flush on coming back online (iOS / Safari fallback path)
-  useEffect(() => {
-    window.addEventListener('online', flushQueueAndRefetch)
-    return () => window.removeEventListener('online', flushQueueAndRefetch)
-  }, [flushQueueAndRefetch])
-
-  // Listen for SYNC_REQUESTED from the service worker Background Sync (Chrome/Android).
-  // The SW fires this after a sync event — we then do the actual replay and refetch.
-  // Also catches the case where the SW synced while the tab was backgrounded:
-  // visibilitychange fires when the user returns to the tab.
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return
-
-    function handleSWMessage(event: MessageEvent) {
-      if (event.data?.type === 'SYNC_REQUESTED') {
-        flushQueueAndRefetch()
-      }
-    }
-    navigator.serviceWorker.addEventListener('message', handleSWMessage)
-    return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage)
-  }, [flushQueueAndRefetch])
-
-  // When the user returns to the tab (from background or another app), flush any
-  // mutations that may have been queued while offline. Handles the gap between the
-  // SW Background Sync firing with no open clients and the user re-opening the tab.
-  useEffect(() => {
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible' && navigator.onLine) {
-        flushQueueAndRefetch()
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [flushQueueAndRefetch])
-
-  // Broadcast initial queue count on mount
-  useEffect(() => {
-    broadcastQueueCount()
-  }, [broadcastQueueCount])
-
-  // Listen for shopping list updates from AI assistant or other sources
-  useEffect(() => {
-    const cleanup = listenAppEvent(AppEvents.SHOPPING_LIST_UPDATED, () => {
-      // Refetch the authoritative list from the server
-      fetch(`/api/lists/${listId}/items`)
-        .then((res) => res.ok ? res.json() : null)
-        .then((serverItems) => {
-          if (serverItems) {
-            setItems(
-              serverItems.map((i: Record<string, unknown>) => ({
-                ...i,
-                dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
-                createdAt: new Date(i.createdAt as string),
-                recipeId: (i.recipeId as string | null) ?? null,
-                recipeName: (i.recipeName as string | null) ?? null,
-              }))
-            )
-          }
-        })
-        .catch(() => {})
-    })
-    return cleanup
-  }, [listId])
-
-  // ────────────────────────────────────────────────────────────────────────────
-
-  // Auto-detect category when newContent changes, but not if user manually picked one
   useEffect(() => {
     if (!categoryManuallySet && newContent.trim()) {
       const detected = autoGuessCategory(newContent.trim())
-      if (detected && detected !== newCategory) {
-        setNewCategory(detected)
-      }
+      if (detected && detected !== newCategory) setNewCategory(detected)
     }
-  }, [newContent, categoryManuallySet])
+  }, [newContent, categoryManuallySet])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch dynamic categories on mount
+  // ── Fetch dynamic categories on mount ───────────────────────────────────────
+
   useEffect(() => {
     async function fetchCategories() {
       try {
         const response = await fetch('/api/ingredient-categories')
         if (response.ok) {
           const data = await response.json()
-          const categoryNames = (data as Array<{ category: string }>).map((cat) => cat.category)
-          // Always include 'Other' category if not present
-          if (!categoryNames.includes('Other')) {
-            categoryNames.push('Other')
-          }
+          const categoryNames = (data as Array<{ category: string }>).map(c => c.category)
+          if (!categoryNames.includes('Other')) categoryNames.push('Other')
           setCategories(categoryNames)
           setAvailableCategories(data)
 
-          // Build aisle map from category data
           const aisleMapping: Record<string, string | null> = {}
           for (const cat of data) {
-            if (cat.aisle) {
-              aisleMapping[cat.category] = cat.aisle
-            }
+            if (cat.aisle) aisleMapping[cat.category] = cat.aisle
           }
           setAisleMap(aisleMapping)
 
-          // Update category order to include new categories
-          setCategoryOrder((currentOrder) => {
-            const newCategories = categoryNames.filter((cat: string) => !currentOrder.includes(cat))
-            return newCategories.length > 0 ? [...currentOrder, ...newCategories] : currentOrder
+          setCategoryOrder(current => {
+            const newCats = categoryNames.filter((c: string) => !current.includes(c))
+            return newCats.length > 0 ? [...current, ...newCats] : current
           })
         }
       } catch {
-        // Offline or network error — default categories already in state, no toast needed
+        // Offline or network error — default categories already in state
       } finally {
         setLoadingCategories(false)
       }
     }
-
     fetchCategories()
   }, [])
+
+  // ── Drag and drop ───────────────────────────────────────────────────────────
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  const debouncedSaveCategoryOrder = useCallback(
-    (order: string[]) => {
-      if (catSaveTimer.current) clearTimeout(catSaveTimer.current)
-      catSaveTimer.current = setTimeout(() => {
-        fetch(`/api/lists/${listId}/category-order`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ categoryOrder: order }),
-        }).catch(() => toast.error('Failed to save category order.'))
-      }, 500)
-    },
-    [listId]
-  )
-
-  const debouncedSaveItemOrder = useCallback(
-    (updates: { id: string; sortOrder: number }[]) => {
-      if (itemSaveTimer.current) clearTimeout(itemSaveTimer.current)
-      itemSaveTimer.current = setTimeout(() => {
-        fetch(`/api/lists/${listId}/items/reorder`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: updates }),
-        }).catch(() => toast.error('Failed to save item order.'))
-      }, 500)
-    },
-    [listId]
   )
 
   function handleDragEnd(event: DragEndEvent) {
@@ -323,23 +164,21 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
       debouncedSaveCategoryOrder(newOrder)
     } else if (activeType === 'item') {
       const activeCategory = active.data.current?.category as string | null | undefined
-      const catItems = items.filter(
-        (i) => !i.isCompleted && i.category === activeCategory
-      )
-      const oldIndex = catItems.findIndex((i) => i.id === active.id)
-      const newIndex = catItems.findIndex((i) => i.id === over.id)
+      const catItems = items.filter(i => !i.isCompleted && i.category === activeCategory)
+      const oldIndex = catItems.findIndex(i => i.id === active.id)
+      const newIndex = catItems.findIndex(i => i.id === over.id)
       if (oldIndex === -1 || newIndex === -1) return
       const reordered = arrayMove(catItems, oldIndex, newIndex)
       const updates = reordered.map((item, idx) => ({ id: item.id, sortOrder: idx }))
-      setItems((prev) =>
-        prev.map((i) => {
-          const u = updates.find((x) => x.id === i.id)
-          return u ? { ...i, sortOrder: u.sortOrder } : i
-        })
-      )
+      setItems(prev => prev.map(i => {
+        const u = updates.find(x => x.id === i.id)
+        return u ? { ...i, sortOrder: u.sortOrder } : i
+      }))
       debouncedSaveItemOrder(updates)
     }
   }
+
+  // ── Item actions ────────────────────────────────────────────────────────────
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
@@ -348,7 +187,6 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     const body = { content: newContent.trim(), category: newCategory }
 
     if (!navigator.onLine) {
-      // Offline path — optimistic add with a temporary ID
       const tempId = `tmp_${crypto.randomUUID()}`
       const optimisticItem: ListItemShape = {
         id: tempId,
@@ -367,27 +205,16 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         quantity: null,
         assignedToUserId: null,
       }
-      setItems((prev) => [...prev, optimisticItem])
+      setItems(prev => [...prev, optimisticItem])
       setNewContent('')
       setNewCategory('Other')
       setCategoryManuallySet(false)
-
-      await enqueueMutation({
-        id: crypto.randomUUID(),
-        endpoint: `/api/lists/${listId}/items`,
-        method: 'POST',
-        body,
-        tempId,
-        listId,
-        queuedAt: Date.now(),
-      })
-
+      await enqueueMutation({ id: crypto.randomUUID(), endpoint: `/api/lists/${listId}/items`, method: 'POST', body, tempId, listId, queuedAt: Date.now() })
       await registerBackgroundSync()
       await broadcastQueueCount()
       return
     }
 
-    // Online path — existing behaviour unchanged
     const res = await fetch(`/api/lists/${listId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -395,16 +222,13 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     })
     if (res.ok) {
       const item = await res.json()
-      setItems((prev) => [
-        ...prev,
-        {
-          ...item,
-          dueDate: item.dueDate ? new Date(item.dueDate) : null,
-          createdAt: new Date(item.createdAt),
-          recipeId: item.recipeId ?? null,
-          recipeName: item.recipeName ?? null,
-        },
-      ])
+      setItems(prev => [...prev, {
+        ...item,
+        dueDate:    item.dueDate    ? new Date(item.dueDate)    : null,
+        createdAt:  new Date(item.createdAt),
+        recipeId:   item.recipeId   ?? null,
+        recipeName: item.recipeName ?? null,
+      }])
       setNewContent('')
       setNewCategory('Other')
       setCategoryManuallySet(false)
@@ -414,30 +238,17 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   }
 
   async function toggleItem(id: string, isCompleted: boolean) {
-    // Optimistic update regardless of connectivity
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isCompleted } : i)))
+    setItems(prev => prev.map(i => i.id === id ? { ...i, isCompleted } : i))
 
     if (!navigator.onLine || id.startsWith('tmp_')) {
-      // Offline, or item was added offline and hasn't been synced yet —
-      // queue the toggle (for tmp_ items the sync will apply completion
-      // to the real item after the POST is replayed first)
       if (!id.startsWith('tmp_')) {
-        await enqueueMutation({
-          id: crypto.randomUUID(),
-          endpoint: `/api/lists/${listId}/items/${id}`,
-          method: 'PATCH',
-          body: { isCompleted },
-          listId,
-          queuedAt: Date.now(),
-        })
-
+        await enqueueMutation({ id: crypto.randomUUID(), endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { isCompleted }, listId, queuedAt: Date.now() })
         await registerBackgroundSync()
         await broadcastQueueCount()
       }
       return
     }
 
-    // Online path — send to server
     startTransition(async () => {
       const res = await fetch(`/api/lists/${listId}/items/${id}`, {
         method: 'PATCH',
@@ -445,8 +256,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         body: JSON.stringify({ isCompleted }),
       })
       if (!res.ok) {
-        // Revert optimistic update
-        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isCompleted: !isCompleted } : i)))
+        setItems(prev => prev.map(i => i.id === id ? { ...i, isCompleted: !isCompleted } : i))
         toast.error('Failed to save. Please try again.')
       }
     })
@@ -455,7 +265,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   async function deleteItem(id: string) {
     const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
     if (res.ok) {
-      setItems((prev) => prev.filter((i) => i.id !== id))
+      setItems(prev => prev.filter(i => i.id !== id))
     } else {
       toast.error('Failed to save. Please try again.')
     }
@@ -468,22 +278,20 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
       body: JSON.stringify({ isLocked }),
     })
     if (res.ok) {
-      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isLocked } : i)))
+      setItems(prev => prev.map(i => i.id === id ? { ...i, isLocked } : i))
     } else {
       toast.error('Failed to update item.')
     }
   }
 
-  async function changeItemCategory(id: string, newCategory: string) {
+  async function changeItemCategory(id: string, newCat: string) {
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category: newCategory }),
+      body: JSON.stringify({ category: newCat }),
     })
     if (res.ok) {
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, category: newCategory } : i))
-      )
+      setItems(prev => prev.map(i => i.id === id ? { ...i, category: newCat } : i))
       toast.success('Category updated')
     } else {
       toast.error('Failed to update category')
@@ -492,18 +300,12 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   }
 
   function handleEditItem(id: string) {
-    const item = items.find((i) => i.id === id)
-    if (item) {
-      setEditItemId(id)
-      setEditItemContent(item.content)
-      setEditItemCategory(item.category || null)
-    }
+    const item = items.find(i => i.id === id)
+    if (item) { setEditItemId(id); setEditItemContent(item.content); setEditItemCategory(item.category || null) }
   }
 
   function handleItemSaved(id: string, content: string, category: string | null) {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, content, category } : i))
-    )
+    setItems(prev => prev.map(i => i.id === id ? { ...i, content, category } : i))
   }
 
   async function handleAddShoppingCategory(name: string) {
@@ -518,9 +320,9 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
       throw new Error(data.error || 'Failed to create category')
     }
     const newCat = await res.json()
-    setCategories((prev) => [...prev, name])
-    setAvailableCategories((prev) => [...prev, { id: newCat.id, name }])
-    setCategoryOrder((prev) => [...prev, name])
+    setCategories(prev => [...prev, name])
+    setAvailableCategories(prev => [...prev, { id: newCat.id, name }])
+    setCategoryOrder(prev => [...prev, name])
   }
 
   async function handleCreateInlineCategory() {
@@ -543,80 +345,48 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   async function clearCompleted() {
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
-      // Keep locked completed items; the server only deletes unlocked ones
-      setItems((prev) => prev.filter((i) => !(i.isCompleted && !i.isLocked)))
+      setItems(prev => prev.filter(i => !(i.isCompleted && !i.isLocked)))
     } else {
       toast.error('Failed to save. Please try again.')
     }
   }
 
-  const completedItems = items.filter((i) => i.isCompleted)
-  const grouped = groupByCategory(items, categoryOrder)
-  const recipeGroups = groupByRecipe(items.filter((i) => !i.isCompleted))
+  // ── Render ──────────────────────────────────────────────────────────────────
 
-  const activeCategoryOrder = categoryOrder.filter(
-    (c) => categories.includes(c)
-  )
+  const completedItems = items.filter(i => i.isCompleted)
+  const grouped = groupByCategory(items, categoryOrder)
+  const recipeGroups = groupByRecipe(items.filter(i => !i.isCompleted))
+  const activeCategoryOrder = categoryOrder.filter(c => categories.includes(c))
 
   return (
     <div className="flex flex-col gap-2 sm:gap-4">
-      {/* View toggle + Recipe pills toggle */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-          <button
-            onClick={() => setViewMode('aisle')}
-            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'aisle'
-                ? 'bg-background shadow-sm text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
+          <button onClick={() => setViewMode('aisle')}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === 'aisle' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
             By Aisle
           </button>
-          <button
-            onClick={() => setViewMode('recipe')}
-            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'recipe'
-                ? 'bg-background shadow-sm text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
+          <button onClick={() => setViewMode('recipe')}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === 'recipe' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
             By Recipe
           </button>
         </div>
         {viewMode === 'aisle' && (
-          <button
-            onClick={() => setShowRecipePills((v) => !v)}
-            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors border ${
-              showRecipePills
-                ? 'bg-primary/10 border-primary/30 text-primary'
-                : 'bg-transparent border-border text-muted-foreground hover:text-foreground'
-            }`}
-          >
+          <button onClick={() => setShowRecipePills(v => !v)}
+            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors border ${showRecipePills ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-transparent border-border text-muted-foreground hover:text-foreground'}`}>
             {showRecipePills ? 'Hide Recipes' : 'Show Recipes'}
           </button>
         )}
       </div>
 
-      {/* Add item form */}
       <div className="flex flex-col gap-2">
         <form onSubmit={addItem} className="flex gap-2 items-center">
-          <Input
-            value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
-            placeholder="Add item..."
-            className="flex-1 min-w-0"
-          />
+          <Input value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Add item..." className="flex-1 min-w-0" />
           <select
             value={addingCategoryInline ? '__adding__' : newCategory}
-            onChange={(e) => {
-              if (e.target.value === '__new__') {
-                setAddingCategoryInline(true)
-                setInlineCatName('')
-              } else {
-                setNewCategory(e.target.value as ShoppingCategory)
-                setCategoryManuallySet(true)
-              }
+            onChange={e => {
+              if (e.target.value === '__new__') { setAddingCategoryInline(true); setInlineCatName('') }
+              else { setNewCategory(e.target.value as ShoppingCategory); setCategoryManuallySet(true) }
             }}
             className="w-24 sm:w-auto shrink-0 h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
             disabled={loadingCategories || addingCategoryInline}
@@ -627,21 +397,12 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
               <option value="__adding__">New cat...</option>
             ) : (
               <>
-                {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 <option value="__new__">+ New...</option>
               </>
             )}
           </select>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowBarcodeScanner((v) => !v)}
-            className="shrink-0"
-            title="Scan barcode"
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={() => setShowBarcodeScanner(v => !v)} className="shrink-0" title="Scan barcode">
             <BarcodeIcon className="h-4 w-4" />
           </Button>
           <Button type="submit" size="sm" className="shrink-0">
@@ -650,14 +411,9 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         </form>
         {addingCategoryInline && (
           <div className="flex gap-2">
-            <Input
-              value={inlineCatName}
-              onChange={(e) => setInlineCatName(e.target.value)}
-              placeholder="Category name"
-              className="flex-1 h-8 text-sm"
-              autoFocus
-              disabled={isSavingCat}
-              onKeyDown={(e) => {
+            <Input value={inlineCatName} onChange={e => setInlineCatName(e.target.value)} placeholder="Category name"
+              className="flex-1 h-8 text-sm" autoFocus disabled={isSavingCat}
+              onKeyDown={e => {
                 if (e.key === 'Enter') { e.preventDefault(); handleCreateInlineCategory() }
                 if (e.key === 'Escape') { setAddingCategoryInline(false); setInlineCatName('') }
               }}
@@ -672,115 +428,58 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         )}
         {showBarcodeScanner && (
           <div className="p-3 bg-muted rounded-lg">
-            <BarcodeScanner
-              onDetected={(code) => {
-                setNewContent(code)
-                setShowBarcodeScanner(false)
-              }}
-              onClose={() => setShowBarcodeScanner(false)}
-            />
+            <BarcodeScanner onDetected={code => { setNewContent(code); setShowBarcodeScanner(false) }} onClose={() => setShowBarcodeScanner(false)} />
           </div>
         )}
       </div>
 
       {completedItems.length > 0 && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowClearConfirm(true)}
-          className="self-end text-muted-foreground"
-        >
+        <Button variant="ghost" size="sm" onClick={() => setShowClearConfirm(true)} className="self-end text-muted-foreground">
           Clear {completedItems.length} completed
         </Button>
       )}
 
-      {/* Items */}
       {viewMode === 'aisle' ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={activeCategoryOrder}
-            strategy={verticalListSortingStrategy}
-          >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={activeCategoryOrder} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-2 sm:gap-4">
-              {activeCategoryOrder.map((cat) => {
+              {activeCategoryOrder.map(cat => {
                 const catItems = grouped[cat] ?? []
                 if (catItems.length === 0) return null
                 return (
-                  <CategoryGroup
-                    key={cat}
-                    category={cat}
-                    items={catItems}
-                    showDragHandle={true}
-                    showRecipePills={showRecipePills}
-                    aisle={aisleMap[cat] ?? null}
-                    onToggle={toggleItem}
-                    onDelete={deleteItem}
-                    onToggleLock={toggleLock}
-                    availableCategories={categories}
-                    onCategoryChange={changeItemCategory}
-                    onEdit={handleEditItem}
+                  <CategoryGroup key={cat} category={cat} items={catItems} showDragHandle={true}
+                    showRecipePills={showRecipePills} aisle={aisleMap[cat] ?? null}
+                    onToggle={toggleItem} onDelete={deleteItem} onToggleLock={toggleLock}
+                    availableCategories={categories} onCategoryChange={changeItemCategory} onEdit={handleEditItem}
                   />
                 )
               })}
             </div>
           </SortableContext>
-          <DoneSection
-            items={completedItems}
-            listId={listId}
-            onToggle={toggleItem}
-            onDelete={deleteItem}
-            onToggleLock={toggleLock}
-            availableCategories={categories}
-            onCategoryChange={changeItemCategory}
-            onEdit={handleEditItem}
-          />
+          <DoneSection items={completedItems} listId={listId} onToggle={toggleItem} onDelete={deleteItem}
+            onToggleLock={toggleLock} availableCategories={categories} onCategoryChange={changeItemCategory} onEdit={handleEditItem} />
         </DndContext>
       ) : (
         <div className="flex flex-col gap-2 sm:gap-4">
-          {recipeGroups.map((group) => (
+          {recipeGroups.map(group => (
             <div key={group.name}>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                {group.name}
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{group.name}</p>
               <div className="divide-y divide-border/50">
-                {group.items.map((item) => (
-                  <ListItemRow
-                    key={item.id}
-                    id={item.id}
-                    content={item.content}
-                    isCompleted={item.isCompleted}
-                    isLocked={item.isLocked}
-                    recipeName={item.recipeName}
-                    category={item.category || undefined}
-                    availableCategories={categories}
-                    onToggle={toggleItem}
-                    onDelete={deleteItem}
-                    onToggleLock={toggleLock}
-                    onCategoryChange={changeItemCategory}
-                    onEdit={handleEditItem}
+                {group.items.map(item => (
+                  <ListItemRow key={item.id} id={item.id} content={item.content} isCompleted={item.isCompleted}
+                    isLocked={item.isLocked} recipeName={item.recipeName} category={item.category || undefined}
+                    availableCategories={categories} onToggle={toggleItem} onDelete={deleteItem}
+                    onToggleLock={toggleLock} onCategoryChange={changeItemCategory} onEdit={handleEditItem}
                   />
                 ))}
               </div>
             </div>
           ))}
-          <DoneSection
-            items={completedItems}
-            listId={listId}
-            onToggle={toggleItem}
-            onDelete={deleteItem}
-            onToggleLock={toggleLock}
-            availableCategories={categories}
-            onCategoryChange={changeItemCategory}
-            onEdit={handleEditItem}
-          />
+          <DoneSection items={completedItems} listId={listId} onToggle={toggleItem} onDelete={deleteItem}
+            onToggleLock={toggleLock} availableCategories={categories} onCategoryChange={changeItemCategory} onEdit={handleEditItem} />
         </div>
       )}
 
-      {/* Confirmation dialog for clearing completed items */}
       <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
         <DialogContent>
           <DialogHeader>
@@ -790,27 +489,15 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowClearConfirm(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="default"
-              onClick={() => {
-                setShowClearConfirm(false)
-                clearCompleted()
-              }}
-            >
-              Clear
-            </Button>
+            <Button variant="outline" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
+            <Button variant="default" onClick={() => { setShowClearConfirm(false); clearCompleted() }}>Clear</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <EditItemDialog
         open={editItemId !== null}
-        onOpenChange={(open) => {
-          if (!open) setEditItemId(null)
-        }}
+        onOpenChange={open => { if (!open) setEditItemId(null) }}
         itemId={editItemId ?? ''}
         initialContent={editItemContent}
         initialCategory={editItemCategory}
@@ -818,14 +505,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
         listId={listId}
         onSaved={handleItemSaved}
         onCategoryAdded={handleAddShoppingCategory}
-        initialUnitPrice={(() => {
-          const item = items.find((i) => i.id === editItemId)
-          return item?.unitPrice ?? null
-        })()}
-        initialQuantity={(() => {
-          const item = items.find((i) => i.id === editItemId)
-          return item?.quantity ?? null
-        })()}
+        initialUnitPrice={items.find(i => i.id === editItemId)?.unitPrice ?? null}
+        initialQuantity={items.find(i => i.id === editItemId)?.quantity ?? null}
       />
     </div>
   )

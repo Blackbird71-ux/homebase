@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition, useEffect, useRef, useCallback } from 'react'
+import { useState, useTransition, useEffect, useCallback } from 'react'
+import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
 import {
   DndContext,
   closestCenter,
@@ -116,25 +117,20 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
   const [, startTransition] = useTransition()
   const [editItemId, setEditItemId] = useState<string | null>(null)
 
-  const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  const debouncedSaveItemOrder = useCallback(
-    (updates: { id: string; sortOrder: number }[]) => {
-      if (itemSaveTimer.current) clearTimeout(itemSaveTimer.current)
-      itemSaveTimer.current = setTimeout(() => {
-        fetch(`/api/lists/${listId}/items/reorder`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: updates }),
-        }).catch(() => toast.error('Failed to save item order.'))
-      }, 500)
-    },
-    [listId]
+  const debouncedSaveItemOrder = useDebouncedCallback(
+    useCallback((updates: { id: string; sortOrder: number }[]) => {
+      fetch(`/api/lists/${listId}/items/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: updates }),
+      }).catch(() => toast.error('Failed to save item order.'))
+    }, [listId]),
+    500,
   )
 
   // Listen for todo list updates from AI assistant or other sources
