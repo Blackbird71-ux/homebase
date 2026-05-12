@@ -23,9 +23,10 @@ const BILL_INCLUDE = {
 }
 
 // ── Journal lines helper ────────────────────────────────────────────────────
-// Creates or replaces the draft accrual journal entry linked to a bill.
+// Creates or replaces the accrual journal entry linked to a bill.
 // Lines: DR expense account(s) [+ GST ITC] / CR Accounts Payable
-// The entry is saved as a DRAFT and posted when the invoice is received.
+// The entry is posted immediately when balanced (DR = CR within 0.005).
+// A draft is saved only when lines are unbalanced so the user can complete them.
 
 interface JournalLine {
   glAccountId: string
@@ -54,6 +55,11 @@ async function upsertBillJournalEntry(
     throw new Error('One or more GL accounts not found')
   }
 
+  // Determine if the lines are balanced — if so, post immediately.
+  const totalDR = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+  const totalCR = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+  const isBalanced = Math.abs(totalDR - totalCR) <= 0.005
+
   if (existingJournalEntryId) {
     // Replace lines on the existing draft entry
     const existing = await prisma.financeJournalEntry.findFirst({
@@ -67,6 +73,8 @@ async function upsertBillJournalEntry(
           date,
           description: billName,
           entityId: entityId ?? null,
+          // Post immediately if balanced — unposted journals are invisible to Trial Balance / Balance Sheet
+          isPosted: isBalanced,
           lines: {
             create: lines.map(l => ({
               glAccountId: l.glAccountId,
@@ -100,7 +108,8 @@ async function upsertBillJournalEntry(
       date,
       description: billName,
       type: 'auto_transaction',
-      isPosted: false,   // Draft until invoice is received and posted
+      // Post immediately when balanced — unposted journals don't feed Trial Balance / Balance Sheet
+      isPosted: isBalanced,
       entityId: entityId ?? null,
       familyId,
       lines: {
@@ -388,8 +397,8 @@ export async function PATCH(request: NextRequest) {
         where: { billId: id, familyId: session.familyId },
       })
 
-      // Re-open stage-1 invoice tx (unc lear the AP liability tracking)
-      const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+      // Re-open stage-1 invoice tx (uncleared = AP still outstanding)
+      const invoiceTxId: string | null = existing.invoiceTxId ?? null
       if (invoiceTxId) {
         await prisma.financeTransaction.updateMany({
           where: { id: invoiceTxId, familyId: session.familyId },
@@ -478,7 +487,7 @@ export async function PATCH(request: NextRequest) {
           createdBy: session.id,
           familyId: session.familyId,
           entityId: existing.entityId,
-          taxClassification: (existing as any).taxClassification ?? null,
+          taxClassification: existing.taxClassification ?? null,
           // Reference encodes the AP category for the balance sheet to read
           reference: `AP:${apCategoryId}`,
         },

@@ -2,6 +2,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 
+// Reuse the same timezone-aware end-of-day helper as balance-sheet/route.ts.
+// setHours(23,59,59,999) uses the server's local timezone (UTC on the NAS),
+// which means entries posted after 2pm AEST are excluded from the same-day filter.
+function asAtEndOfDay(dateStr: string, tz: string): Date {
+  const [year, month1, day] = dateStr.split('-').map(Number)
+  if (!year || !month1 || !day) return new Date()
+  try {
+    const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
+    const fmt = new Intl.DateTimeFormat('en-AU', {
+      timeZone: tz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    })
+    const parts = fmt.formatToParts(new Date(noonUtc))
+    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value)
+    const tzY = get('year'), tzM = get('month'), tzD = get('day')
+    const tzH = get('hour'), tzMin = get('minute'), tzS = get('second')
+    const offsetMs = noonUtc - Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS)
+    const midnightUtc = Date.UTC(year, month1 - 1, day, 0, 0, 0, 0) + offsetMs
+    return new Date(midnightUtc + 24 * 60 * 60 * 1000 - 1)
+  } catch {
+    const d = new Date(`${dateStr}T00:00:00.000Z`)
+    d.setUTCHours(23, 59, 59, 999)
+    return d
+  }
+}
+
 // GET /api/finance/trial-balance
 //
 // Query params:
@@ -24,10 +52,19 @@ export async function GET(request: NextRequest) {
   const entityId    = searchParams.get('entityId') ?? undefined
   const glAccountId = searchParams.get('glAccountId') ?? undefined
 
-  // Build date filter for journal entries
+  // Load family timezone so date boundaries are correct for AU users.
+  // The NAS runs UTC; setHours(23,59,59) on a UTC server means 2pm AEST,
+  // cutting off same-day journal entries posted after that time.
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { timezone: true },
+  })
+  const tz = family?.timezone ?? 'Australia/Sydney'
+
+  // Build date filter for journal entries — use timezone-aware end-of-day
   const dateFilter: any = {}
   if (fromRaw) dateFilter.gte = new Date(fromRaw)
-  if (toRaw)   dateFilter.lte = new Date(new Date(toRaw).setHours(23, 59, 59, 999))
+  if (toRaw)   dateFilter.lte = asAtEndOfDay(toRaw, tz)
 
   const journalEntryFilter: any = {
     familyId,

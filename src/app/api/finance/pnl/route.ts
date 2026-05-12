@@ -95,6 +95,11 @@ export async function GET(request: NextRequest) {
   })
 
   // ── 3. Income entries (recurring planned income) ──────────────────────
+  // Include ALL active income entries. Entries that have a journal entry will also
+  // contribute via the journal lines scan in step 5. Deduplication is handled in
+  // step 6 and 7: if an income entry's linked journal entry falls in the period,
+  // the entry itself is excluded from the entries pathway (it will appear via the
+  // journalIncomeByCategory map instead, under the correct GL account name).
   const incomeEntries = await prisma.financeIncomeEntry.findMany({
     where: { familyId, isActive: true, ...entityFilter },
     include: { category: { select: { id: true, name: true, color: true } } },
@@ -198,10 +203,27 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Income entries that have a linked posted journal entry whose date falls in
+  // the period are handled exclusively by the journalIncomeByCategory map (step 9).
+  // Exclude them from the entries pathway to avoid double-counting.
+  const journalEntryIdsInPeriod = new Set(
+    journalLines.map(l => l.journalEntryId)
+  )
+  const incomeEntryIdsWithJournalInPeriod = new Set<string>()
+  for (const e of incomeEntries) {
+    const jeId = (e as any).journalEntryId as string | null
+    if (jeId && journalEntryIdsInPeriod.has(jeId)) {
+      incomeEntryIdsWithJournalInPeriod.add(e.id)
+    }
+  }
+
   // ── 7. Filter income entries within period ────────────────────────────
   const relevantIncome = incomeEntries.filter(e => {
     if (!e.isActive) return false
     if (incomeEntryIdsWithTxInPeriod.has(e.id)) return false
+    // Exclude entries whose journal entry falls in this period — they appear
+    // via journalIncomeByCategory (step 9) under their GL account name/amount.
+    if (incomeEntryIdsWithJournalInPeriod.has(e.id)) return false
 
     if (e.received && e.receivedDate) {
       const ts = new Date(e.receivedDate).getTime()

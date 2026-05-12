@@ -68,6 +68,11 @@ export const MONTH_LABELS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'F
 
 /**
  * Convert "2026-27" → { start: 2026-07-01, end: 2027-06-30 }
+ *
+ * @deprecated This function hardcodes July as the FY start month and uses raw UTC
+ * boundaries (“T00:00:00.000Z”) which are wrong for AU users after 10am AEST.
+ * Use fyDateRangeInTz() from '@/lib/finance-fy' instead, which accepts the
+ * family’s configurable fyStartMonth and computes correct timezone-aware boundaries.
  */
 export function fyDateRange(fy: string): { start: Date; end: Date } {
   const startYear = parseInt(fy.split('-')[0])

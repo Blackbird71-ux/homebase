@@ -17,9 +17,10 @@ const INCOME_INCLUDE = {
 }
 
 // ── Journal lines helper ────────────────────────────────────────────────────
-// Creates or replaces the draft accrual journal entry linked to an income entry.
+// Creates or replaces the accrual journal entry linked to an income entry.
 // Lines: DR Accounts Receivable / CR income account(s) [+ GST Payable]
-// The entry is saved as a DRAFT and posted when remittance is received.
+// The entry is posted immediately when balanced (DR = CR within 0.005).
+// A draft is saved only when lines are unbalanced so the user can complete them.
 
 interface JournalLine {
   glAccountId: string
@@ -45,6 +46,11 @@ async function upsertIncomeJournalEntry(
     throw new Error('One or more GL accounts not found')
   }
 
+  // Determine if the lines are balanced — if so, post immediately.
+  const totalDR = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+  const totalCR = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+  const isBalanced = Math.abs(totalDR - totalCR) <= 0.005
+
   if (existingJournalEntryId) {
     const existing = await prisma.financeJournalEntry.findFirst({
       where: { id: existingJournalEntryId, familyId },
@@ -57,6 +63,8 @@ async function upsertIncomeJournalEntry(
           date,
           description: incomeName,
           entityId: entityId ?? null,
+          // Post immediately if balanced — unposted journals are invisible to Trial Balance / P&L / Balance Sheet
+          isPosted: isBalanced,
           lines: {
             create: lines.map(l => ({
               glAccountId: l.glAccountId,
@@ -89,7 +97,8 @@ async function upsertIncomeJournalEntry(
       date,
       description: incomeName,
       type: 'auto_transaction',
-      isPosted: false,
+      // Post immediately when balanced — unposted journals don't feed P&L / Balance Sheet / Trial Balance
+      isPosted: isBalanced,
       entityId: entityId ?? null,
       familyId,
       lines: {

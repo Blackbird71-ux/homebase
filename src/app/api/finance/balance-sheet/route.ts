@@ -145,7 +145,17 @@ export async function GET(request: NextRequest) {
   const accountsPayable = Math.round(unpaidBills.reduce((s, b) => s + b.amount, 0) * 100) / 100
 
   // ── 4. Accounts Receivable: income with invoice received but not collected ──
-  const arFilter: any = { familyId, invoiceReceived: true, received: false, isActive: true }
+  // IMPORTANT: exclude entries that have a journalEntryId — those income entries
+  // have their AR side recorded via a DR to an Accounts Receivable GL account in
+  // the journal entry, which flows through deriveJournalLineBalances() above.
+  // Including them here too would double-count the AR on the Balance Sheet.
+  const arFilter: any = {
+    familyId,
+    invoiceReceived: true,
+    received: false,
+    isActive: true,
+    journalEntryId: null,   // journal-linked entries already have AR via GL journal line DR
+  }
   if (entityId) arFilter.entityId = entityId
   const uncollectedIncome = await prisma.financeIncomeEntry.findMany({
     where: arFilter, select: { amount: true },

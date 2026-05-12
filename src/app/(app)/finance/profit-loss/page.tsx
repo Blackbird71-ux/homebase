@@ -60,6 +60,16 @@ interface GroupRow {
 
 interface Entity { id: string; name: string; type: string; isDefault: boolean; color: string | null }
 
+// Journal line group: income or expense GL accounts from posted journal entries
+interface JournalGroup {
+  glAccountId: string
+  name: string
+  type: string   // 'income' | 'expense'
+  totalDebit: number
+  totalCredit: number
+  entityId?: string | null
+}
+
 // ─── Ledger modal types ───────────────────────────────────────────────────────
 
 interface LedgerTx {
@@ -107,6 +117,7 @@ export default function ProfitLossPage() {
   const [bills, setBills]         = useState<Bill[]>([])
   const [income, setIncome]       = useState<IncomeEntry[]>([])
   const [transactions, setTxs]    = useState<Tx[]>([])
+  const [journalGroups, setJournalGroups] = useState<JournalGroup[]>([])
   const [entities, setEntities]   = useState<Entity[]>([])
   const [fyStartMonth, setFyStartMonth] = useState<number>(7)
   const [selectedEntityId, setSelectedEntityId] = useState<string>('')
@@ -163,9 +174,38 @@ export default function ProfitLossPage() {
     } finally { setTxLoading(false) }
   }
 
+  async function loadJournalGroups(from: Date, to: Date, entityId?: string) {
+    try {
+      const params = new URLSearchParams({
+        from: from.toISOString().split('T')[0],
+        to:   to.toISOString().split('T')[0],
+      })
+      if (entityId) params.set('entityId', entityId)
+      const res = await fetch(`/api/finance/trial-balance?${params}`)
+      if (res.ok) {
+        const d = await res.json()
+        // Keep only income and expense GL accounts with non-zero net movement
+        const groups: JournalGroup[] = (d.accounts ?? [])
+          .filter((a: any) => a.type === 'income' || a.type === 'expense')
+          .map((a: any) => ({
+            glAccountId: a.id,
+            name: a.name,
+            type: a.type,
+            totalDebit: a.totalDebit,
+            totalCredit: a.totalCredit,
+            entityId: null,
+          }))
+        setJournalGroups(groups)
+      }
+    } catch { /* non-fatal */ }
+  }
+
   useEffect(() => { loadStatic() }, [])
   useEffect(() => { setDrillSide(null); setDrillKey(null) }, [periodMode, anchor, viewMode, selectedEntityId])
-  useEffect(() => { loadTransactions(start, end) }, [start.toISOString(), end.toISOString()])
+  useEffect(() => {
+    loadTransactions(start, end)
+    loadJournalGroups(start, end, selectedEntityId || undefined)
+  }, [start.toISOString(), end.toISOString(), selectedEntityId])
 
   const startTs = start.getTime()
   const endTs   = end.getTime()
@@ -209,6 +249,15 @@ export default function ProfitLossPage() {
     return linked
   }, [income])
 
+  // GL account IDs that are covered by journal lines for this period.
+  // Income entries whose category matches a journal-covered GL account AND
+  // who have no tx will be excluded from the entries pathway to avoid
+  // double-counting with journalItems below.
+  const journalIncomeGlIds = useMemo(
+    () => new Set(journalGroups.filter(g => g.type === 'income').map(g => g.glAccountId)),
+    [journalGroups],
+  )
+
   // ── Relevant income ────────────────────────────────────────────────────────
   const relevantIncome = useMemo(() => {
     // Income entries: skip if a linked receipt/invoice tx is already in the period
@@ -220,6 +269,9 @@ export default function ProfitLossPage() {
       if (e.receiptTxId && transactions.some(t => t.id === e.receiptTxId)) return false
       if (e.invoiceTxId && transactions.some(t => t.id === e.invoiceTxId)) return false
       if (e.transactionId && transactions.some(t => t.id === e.transactionId)) return false
+      // Skip if this entry's income category is already covered by a journal line in this period.
+      // The journal pathway (journalItems below) will represent it correctly.
+      if (e.category?.id && journalIncomeGlIds.has(e.category.id)) return false
       if (e.received && e.receivedDate) {
         const ts = new Date(e.receivedDate).getTime()
         return ts >= startTs && ts <= endTs
@@ -264,8 +316,29 @@ export default function ProfitLossPage() {
         },
       }))
 
-    return [...entryItems, ...txItems]
-  }, [income, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths, incomeLinkedTxIds])
+    // Journal line income items: posted journal entries with income-type GL accounts.
+    // These represent accrual income recognised via double-entry (e.g. DR AR / CR income).
+    // Net income for each GL account = total credits minus total debits (normal balance for income).
+    const journalItems = journalGroups
+      .filter(g => g.type === 'income' && (g.totalCredit - g.totalDebit) > 0.005)
+      .map(g => ({
+        key:   g.glAccountId,
+        label: g.name,
+        color: null as string | null,
+        item: {
+          id: g.glAccountId,
+          name: g.name,
+          amount: g.totalCredit - g.totalDebit,
+          periodAmount: g.totalCredit - g.totalDebit,
+          isOneOff: true,
+          received: true,
+          date: start.toISOString(),
+          source: 'journal',
+        },
+      }))
+
+    return [...entryItems, ...txItems, ...journalItems]
+  }, [income, transactions, journalGroups, journalIncomeGlIds, startTs, endTs, start, viewMode, selectedEntityId, periodMonths, incomeLinkedTxIds])
 
   // ── Relevant expenses ──────────────────────────────────────────────────────
   const relevantExpenses = useMemo(() => {
@@ -319,8 +392,30 @@ export default function ProfitLossPage() {
         },
       }))
 
-    return [...billItems, ...txItems]
-  }, [bills, transactions, startTs, endTs, viewMode, selectedEntityId, periodMonths, billLinkedTxIds])
+    // Journal line expense items: posted journal entries with expense-type GL accounts.
+    // Net expense = total debits minus total credits (normal balance for expense).
+    const journalExpenseGlIds = new Set(journalGroups.filter(g => g.type === 'expense').map(g => g.glAccountId))
+    const journalExpItems = journalGroups
+      .filter(g => g.type === 'expense' && (g.totalDebit - g.totalCredit) > 0.005)
+      .map(g => ({
+        key:   g.glAccountId,
+        label: g.name,
+        color: null as string | null,
+        item: {
+          id: g.glAccountId,
+          name: g.name,
+          amount: g.totalDebit - g.totalCredit,
+          periodAmount: g.totalDebit - g.totalCredit,
+          isOneOff: true, paid: true,
+          date: start.toISOString(),
+          source: 'journal',
+        },
+      }))
+    // Suppress bill entries whose category is covered by a journal expense line
+    const filteredBillItems = billItems.filter(b => !b.item.id || !journalExpenseGlIds.has(b.key))
+
+    return [...filteredBillItems, ...txItems, ...journalExpItems]
+  }, [bills, transactions, journalGroups, startTs, endTs, start, viewMode, selectedEntityId, periodMonths, billLinkedTxIds])
 
   // ── Group into category rows ───────────────────────────────────────────────
   const incomeGroups = useMemo((): GroupRow[] => {
