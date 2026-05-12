@@ -82,8 +82,17 @@ async function upsertBillJournalEntry(
   }
 
   // Count existing entries for reference generation
-  const count = await prisma.financeJournalEntry.count({ where: { familyId } })
-  const reference = `JE-${String(count + 1).padStart(4, '0')}`
+  const refEntries = await prisma.financeJournalEntry.findMany({
+    where: { familyId, reference: { not: null } },
+    select: { reference: true },
+  })
+  let refMax = 0
+  for (const e of refEntries) {
+    if (!e.reference) continue
+    const m = e.reference.match(/^JE-(\d+)$/)
+    if (m) { const n = parseInt(m[1], 10); if (n > refMax) refMax = n }
+  }
+  const reference = `JE-${String(refMax + 1).padStart(4, '0')}`
 
   const entry = await prisma.financeJournalEntry.create({
     data: {
@@ -183,7 +192,7 @@ export async function POST(request: NextRequest) {
       )
       await prisma.financeRecurringBill.update({
         where: { id: bill.id },
-        data: { journalEntryId } as any,
+        data: { journalEntryId },
       })
     } catch (err) {
       console.error('[bills POST] Failed to create journal entry:', err)
@@ -247,7 +256,7 @@ export async function PUT(request: NextRequest) {
   // Upsert journal entry if lines provided
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
-      const existingJeId: string | null = (existing as any).journalEntryId ?? null
+      const existingJeId: string | null = existing.journalEntryId ?? null
       const journalEntryId = await upsertBillJournalEntry(
         bill.id,
         name ?? existing.name,
@@ -261,7 +270,7 @@ export async function PUT(request: NextRequest) {
       if (journalEntryId !== existingJeId) {
         await prisma.financeRecurringBill.update({
           where: { id: bill.id },
-          data: { journalEntryId } as any,
+          data: { journalEntryId },
         })
       }
     } catch (err) {
@@ -307,7 +316,6 @@ export async function PATCH(request: NextRequest) {
   })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
-  const existingAny = existing as any
   const updateData: Record<string, any> = {}
 
   if (paid !== undefined) {
@@ -325,24 +333,24 @@ export async function PATCH(request: NextRequest) {
 
   // ── Undo invoiceReceived: delete the expense (stage-1) transaction ────────
   if (invoiceReceived === false && existing.invoiceReceived === true) {
-    const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+    const invoiceTxId: string | null = existing.invoiceTxId ?? null
     if (invoiceTxId) {
       await prisma.financeTransaction.deleteMany({
         where: { id: invoiceTxId, familyId: session.familyId },
       })
       updateData.invoiceTxId = null
       // Also clear transactionId if it pointed to the same tx
-      if (existingAny.transactionId === invoiceTxId) updateData.transactionId = null
+      if (existing.transactionId === invoiceTxId) updateData.transactionId = null
     }
     // If we undo the invoice we must also undo paid (can't be paid without invoice)
     if (existing.paid) {
-      const paymentTxId: string | null = existingAny.paymentTxId ?? null
+      const paymentTxId: string | null = existing.paymentTxId ?? null
       if (paymentTxId) {
         await prisma.financeTransaction.deleteMany({
           where: { id: paymentTxId, familyId: session.familyId },
         })
         updateData.paymentTxId = null
-        if (existingAny.transactionId === paymentTxId) updateData.transactionId = null
+        if (existing.transactionId === paymentTxId) updateData.transactionId = null
       }
       updateData.paid = false
       updateData.paidDate = null
@@ -398,23 +406,23 @@ export async function PATCH(request: NextRequest) {
       updateData.paidDate = null
     } else {
       // ── Legacy payment system (single paymentTxId) ────────────────────────
-      const paymentTxId: string | null = existingAny.paymentTxId ?? null
+      const paymentTxId: string | null = existing.paymentTxId ?? null
       if (paymentTxId) {
         await prisma.financeTransaction.deleteMany({
           where: { id: paymentTxId, familyId: session.familyId },
         })
         updateData.paymentTxId = null
-        if (existingAny.transactionId === paymentTxId) updateData.transactionId = null
-      } else if (existingAny.transactionId) {
+        if (existing.transactionId === paymentTxId) updateData.transactionId = null
+      } else if (existing.transactionId) {
         // Legacy: older records stored payment in transactionId directly
         await prisma.financeTransaction.deleteMany({
-          where: { id: existingAny.transactionId, familyId: session.familyId },
+          where: { id: existing.transactionId, familyId: session.familyId },
         })
         updateData.transactionId = null
       }
       // Re-open stage-1 invoice tx (mark uncleared again so the expense stays on P&L
       // but is no longer treated as cash-out)
-      const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+      const invoiceTxId: string | null = existing.invoiceTxId ?? null
       if (invoiceTxId) {
         await prisma.financeTransaction.updateMany({
           where: { id: invoiceTxId, familyId: session.familyId },
@@ -480,7 +488,7 @@ export async function PATCH(request: NextRequest) {
         data: {
           invoiceTxId: invoiceTx.id,
           transactionId: invoiceTx.id,  // keep legacy pointer
-        } as any,
+        },
       })
     } catch (err) {
       console.error('[bills PATCH] Failed to create invoice transaction:', err)
@@ -521,7 +529,7 @@ export async function PATCH(request: NextRequest) {
       try {
         const freshBill = await prisma.financeRecurringBill.findFirst({
           where: { id, familyId: session.familyId },
-        }) as any
+        })
         const invoiceTxId: string | null = freshBill?.invoiceTxId ?? null
 
         if (invoiceTxId) {
@@ -548,7 +556,7 @@ export async function PATCH(request: NextRequest) {
               createdBy: session.id,
               familyId: session.familyId,
               entityId: existing.entityId,
-              taxClassification: existingAny.taxClassification ?? null,
+              taxClassification: existing.taxClassification ?? null,
             },
           })
           transactionId = tx.id
@@ -575,7 +583,7 @@ export async function PATCH(request: NextRequest) {
               createdBy: session.id,
               familyId: session.familyId,
               entityId: existing.entityId,
-              taxClassification: existingAny.taxClassification ?? null,
+              taxClassification: existing.taxClassification ?? null,
             },
           })
           transactionId = tx.id
@@ -646,7 +654,7 @@ export async function PATCH(request: NextRequest) {
               paidDate: null,
               parentBillId: existing.id,
               entityId: existing.entityId,
-              taxClassification: existingAny.taxClassification ?? null,
+              taxClassification: existing.taxClassification ?? null,
               familyId: session.familyId,
             },
           })
@@ -659,7 +667,7 @@ export async function PATCH(request: NextRequest) {
       // Re-read the bill to get latest invoiceTxId (may have just been written above)
       const freshBill = await prisma.financeRecurringBill.findFirst({
         where: { id, familyId: session.familyId },
-      }) as any
+      })
 
       try {
         const invoiceTxId: string | null = freshBill?.invoiceTxId ?? null
@@ -682,7 +690,7 @@ export async function PATCH(request: NextRequest) {
           // paymentTxId points to the same tx (cleared invoice tx IS the payment)
           await prisma.financeRecurringBill.update({
             where: { id },
-            data: { paymentTxId: invoiceTxId, transactionId: invoiceTxId } as any,
+            data: { paymentTxId: invoiceTxId, transactionId: invoiceTxId },
           })
         } else {
           // ── Case B: no prior invoice — create a cleared expense tx now ──────
@@ -709,7 +717,7 @@ export async function PATCH(request: NextRequest) {
               createdBy: session.id,
               familyId: session.familyId,
               entityId: existing.entityId,
-              taxClassification: (existing as any).taxClassification ?? null,
+              taxClassification: existing.taxClassification ?? null,
             },
           })
           await prisma.financeRecurringBill.update({
@@ -717,7 +725,7 @@ export async function PATCH(request: NextRequest) {
             data: {
               paymentTxId: tx.id,
               transactionId: tx.id,
-            } as any,
+            },
           })
           // ── Auto GST split for Case B (direct-paid bill, no prior invoice) ────
           if (existing.categoryId) {

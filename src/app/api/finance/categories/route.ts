@@ -6,10 +6,18 @@ import { prisma } from '@/lib/prisma'
 // as well as the original P&L types (income, expense, transfer).
 const VALID_TYPES = ['income', 'expense', 'transfer', 'asset', 'liability', 'equity'] as const
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await requireSession()
+  const { searchParams } = new URL(request.url)
+  // forPicker=true: exclude system-seeded categories the user hasn't configured.
+  // This keeps GL account pickers clean — only showing user-created accounts.
+  const forPicker = searchParams.get('forPicker') === 'true'
+
   const categories = await prisma.financeCategory.findMany({
-    where: { familyId: session.familyId },
+    where: {
+      familyId: session.familyId,
+      ...(forPicker ? { isSystem: false } : {}),
+    },
     orderBy: [{ sortOrder: 'asc' }, { level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
     include: {
       _count: {

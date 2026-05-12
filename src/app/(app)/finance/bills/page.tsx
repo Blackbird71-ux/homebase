@@ -146,9 +146,10 @@ export default function BillsPage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, mRes, lRes, vRes, bRes, eRes] = await Promise.all([
+    const [aRes, cRes, glRes, mRes, lRes, vRes, bRes, eRes] = await Promise.all([
       fetch('/api/finance/accounts'),
-      fetch('/api/finance/categories'),
+      fetch('/api/finance/categories'),           // full list for category/P&L selector
+      fetch('/api/finance/categories?forPicker=true'), // filtered for GL journal line picker
       fetch('/api/finance/members'),
       fetch('/api/finance/locations'),
       fetch('/api/finance/contacts'),
@@ -159,8 +160,11 @@ export default function BillsPage() {
     if (cRes.ok) {
       const cats = await cRes.json()
       setCategories(cats)
-      // GL accounts = all categories (asset, liability, equity, income, expense)
-      setGLAccounts(cats.filter((c: any) => c.type !== 'transfer'))
+    }
+    if (glRes.ok) {
+      const glCats = await glRes.json()
+      // GL accounts for journal line picker = user-created categories only (no system seeds)
+      setGLAccounts(glCats.filter((c: any) => c.type !== 'transfer'))
     }
     if (mRes.ok) setMembers(await mRes.json())
     if (lRes.ok) setLocations(await lRes.json())

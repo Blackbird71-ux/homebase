@@ -71,8 +71,17 @@ async function upsertIncomeJournalEntry(
     }
   }
 
-  const count = await prisma.financeJournalEntry.count({ where: { familyId } })
-  const reference = `JE-${String(count + 1).padStart(4, '0')}`
+  const jeEntries = await prisma.financeJournalEntry.findMany({
+    where: { familyId, reference: { not: null } },
+    select: { reference: true },
+  })
+  let jeMax = 0
+  for (const e of jeEntries) {
+    if (!e.reference) continue
+    const m = e.reference.match(/^JE-(\d+)$/)
+    if (m) { const n = parseInt(m[1], 10); if (n > jeMax) jeMax = n }
+  }
+  const reference = `JE-${String(jeMax + 1).padStart(4, '0')}`
 
   const entry = await prisma.financeJournalEntry.create({
     data: {
@@ -173,7 +182,7 @@ export async function POST(request: NextRequest) {
       )
       await prisma.financeIncomeEntry.update({
         where: { id: entry.id },
-        data: { journalEntryId } as any,
+        data: { journalEntryId },
       })
     } catch (err) {
       console.error('[income POST] Failed to create journal entry:', err)
@@ -240,7 +249,7 @@ export async function PUT(request: NextRequest) {
   // Upsert journal entry if lines provided
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
-      const existingJeId: string | null = (existing as any).journalEntryId ?? null
+      const existingJeId: string | null = existing.journalEntryId ?? null
       const journalEntryId = await upsertIncomeJournalEntry(
         name ?? existing.name,
         existingJeId,
@@ -252,7 +261,7 @@ export async function PUT(request: NextRequest) {
       if (journalEntryId !== existingJeId) {
         await prisma.financeIncomeEntry.update({
           where: { id: entry.id },
-          data: { journalEntryId } as any,
+          data: { journalEntryId },
         })
       }
     } catch (err) {
@@ -296,7 +305,6 @@ export async function PATCH(request: NextRequest) {
   const existing = await prisma.financeIncomeEntry.findFirst({ where: { id, familyId: session.familyId } })
   if (!existing) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
 
-  const existingAny = existing as any
   const updateData: Record<string, any> = {}
 
   if (received !== undefined) {
@@ -314,23 +322,23 @@ export async function PATCH(request: NextRequest) {
 
   // ── Undo remittance: delete the stage-1 income transaction ────────────────
   if (invoiceReceived === false && existing.invoiceReceived === true) {
-    const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+    const invoiceTxId: string | null = existing.invoiceTxId ?? null
     if (invoiceTxId) {
       await prisma.financeTransaction.deleteMany({
         where: { id: invoiceTxId, familyId: session.familyId },
       })
       updateData.invoiceTxId = null
-      if (existingAny.transactionId === invoiceTxId) updateData.transactionId = null
+      if (existing.transactionId === invoiceTxId) updateData.transactionId = null
     }
     // Undo received too if it was set
     if (existing.received) {
-      const receiptTxId: string | null = existingAny.receiptTxId ?? null
+      const receiptTxId: string | null = existing.receiptTxId ?? null
       if (receiptTxId) {
         await prisma.financeTransaction.deleteMany({
           where: { id: receiptTxId, familyId: session.familyId },
         })
         updateData.receiptTxId = null
-        if (existingAny.transactionId === receiptTxId) updateData.transactionId = null
+        if (existing.transactionId === receiptTxId) updateData.transactionId = null
       }
       updateData.received = false
       updateData.receivedDate = null
@@ -342,22 +350,22 @@ export async function PATCH(request: NextRequest) {
 
   // ── Undo received: delete stage-2 receipt transaction + spawned children ──
   if (received === false && existing.received === true) {
-    const receiptTxId: string | null = existingAny.receiptTxId ?? null
+    const receiptTxId: string | null = existing.receiptTxId ?? null
     if (receiptTxId) {
       await prisma.financeTransaction.deleteMany({
         where: { id: receiptTxId, familyId: session.familyId },
       })
       updateData.receiptTxId = null
-      if (existingAny.transactionId === receiptTxId) updateData.transactionId = null
-    } else if (existingAny.transactionId) {
+      if (existing.transactionId === receiptTxId) updateData.transactionId = null
+    } else if (existing.transactionId) {
       // Legacy: older records stored receipt in transactionId directly
       await prisma.financeTransaction.deleteMany({
-        where: { id: existingAny.transactionId, familyId: session.familyId },
+        where: { id: existing.transactionId, familyId: session.familyId },
       })
       updateData.transactionId = null
     }
     // Re-open stage-1 remittance tx (income still recognised, just not yet received)
-    const invoiceTxId: string | null = existingAny.invoiceTxId ?? null
+    const invoiceTxId: string | null = existing.invoiceTxId ?? null
     if (invoiceTxId) {
       await prisma.financeTransaction.updateMany({
         where: { id: invoiceTxId, familyId: session.familyId },
@@ -415,7 +423,7 @@ export async function PATCH(request: NextRequest) {
         data: {
           invoiceTxId: remittanceTx.id,
           transactionId: remittanceTx.id,  // keep legacy pointer
-        } as any,
+        },
       })
     } catch (err) {
       console.error('[income PATCH] Failed to create remittance transaction:', err)
@@ -438,7 +446,7 @@ export async function PATCH(request: NextRequest) {
     // Re-read to get latest invoiceTxId (may have just been written above)
     const freshEntry = await prisma.financeIncomeEntry.findFirst({
       where: { id, familyId: session.familyId },
-    }) as any
+    })
 
     try {
       const invoiceTxId: string | null = freshEntry?.invoiceTxId ?? null
@@ -461,7 +469,7 @@ export async function PATCH(request: NextRequest) {
         // receiptTxId points to the same tx
         await prisma.financeIncomeEntry.update({
           where: { id },
-          data: { receiptTxId: invoiceTxId, transactionId: invoiceTxId } as any,
+          data: { receiptTxId: invoiceTxId, transactionId: invoiceTxId },
         })
       } else {
         // ── Case B: no prior remittance — create cleared income tx now ────────
@@ -492,7 +500,7 @@ export async function PATCH(request: NextRequest) {
           data: {
             receiptTxId: tx.id,
             transactionId: tx.id,
-          } as any,
+          },
         })
       }
     } catch (err) {

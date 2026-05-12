@@ -118,6 +118,10 @@ if [ -f "$DB_PATH" ]; then
 20260523000000_add_coa_opening_balance|FinanceCategory|openingBalance
 20260525000000_add_payment_tx_id|FinanceRecurringBill|paymentTxId
 20260525000000_add_payment_tx_id|FinanceIncomeEntry|receiptTxId
+20260527000000_add_bill_income_journal_link|FinanceRecurringBill|journalEntryId
+20260527000000_add_bill_income_journal_link|FinanceIncomeEntry|journalEntryId
+20260529000000_add_gst_fields|FinanceCategory|gstApplicable
+20260529000000_add_gst_fields|FinanceCategory|gstRate
 "
   echo "$COLUMN_CHECKS" | while IFS='|' read -r MIGRATION TABLE COLUMN; do
     # Skip blank lines
@@ -172,6 +176,14 @@ fi
 chown nextjs:nodejs "$DB_PATH" 2>/dev/null || true
 chown nextjs:nodejs "${DB_PATH}-wal" 2>/dev/null || true
 chown nextjs:nodejs "${DB_PATH}-shm" 2>/dev/null || true
+
+# Enable SQLite WAL mode for better concurrent read/write performance.
+# WAL allows the Docker healthcheck reader to proceed without blocking on
+# writes, preventing spurious health check failures and container restarts.
+if [ -f "$DB_PATH" ]; then
+  sqlite3 "$DB_PATH" "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;" > /dev/null 2>&1 || true
+  echo "   ✓ SQLite WAL mode enabled"
+fi
 
 # ---------------------------------------------------------------------------
 # 5. Set up daily backup cron job (runs at 03:00 every night)

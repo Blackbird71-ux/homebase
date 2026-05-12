@@ -201,7 +201,7 @@ export default function JournalsPage() {
 
   async function loadRefs() {
     const [cRes, eRes] = await Promise.all([
-      fetch('/api/finance/categories'),
+      fetch('/api/finance/categories?forPicker=true'),
       fetch('/api/finance/entities'),
     ])
     if (cRes.ok) {
