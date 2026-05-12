@@ -11,7 +11,6 @@ import {
   FileText,
   TrendingUp,
   BarChart2,
-  BarChart3,
   Scale,
   Receipt,
   BookOpen,
@@ -43,7 +42,6 @@ const groups = [
     label: 'Reporting',
     items: [
       { href: '/finance/profit-loss',  label: 'P&L',               icon: BarChart2,       exact: false },
-      { href: '/finance/annual-pnl',   label: 'Annual P&L',        icon: BarChart3,       exact: false },
       { href: '/finance/balance-sheet',label: 'Balance Sheet',      icon: Scale,           exact: false },
       { href: '/finance/tax-report',   label: 'Tax Report',        icon: Receipt,         exact: false },
       { href: '/finance/journals',     label: 'Journals',           icon: BookOpen,        exact: false },

@@ -509,3 +509,33 @@ EOF
 ---
 
 *Report based on direct filesystem reads of `C:\Appdev\HomeBase` source files and Python sqlite3 analysis of `data/homebase.db`. All findings are from the actual codebase, not assumptions.*
+
+---
+
+## Part 7 — Post-Deploy Cleanup (2026-05-12)
+
+### Annual P&L nav item removed
+
+The `/finance/annual-pnl` route was redundant given the 12-month date filter on the main P&L page. Removed from `src/app/(app)/finance/layout.tsx` (Reporting section). The `annual-pnl` page file remains on disk but is no longer reachable via navigation.
+
+### invoiceReceived reset on income entries
+
+The data wipe SQL (Part 6 / Fix 6) correctly reset `received = 0` on all `FinanceIncomeEntry` rows, but did not reset `invoiceReceived`. This caused `ASI - Rates` to appear as a $1,635 AR on the Balance Sheet after the wipe.
+
+Fixed with a targeted SQL on container `03330b392ed5`:
+
+```sql
+UPDATE FinanceIncomeEntry SET invoiceReceived = 0 WHERE invoiceReceived = 1;
+```
+
+**Future data wipe script should include this line** in the `FinanceIncomeEntry` reset block:
+
+```sql
+UPDATE FinanceIncomeEntry SET 
+  received = 0, receivedDate = NULL,
+  invoiceReceived = 0, invoiceReceivedDate = NULL,   -- ← add this
+  journalEntryId = NULL,
+  invoiceTxId = NULL,
+  receiptTxId = NULL,
+  transactionId = NULL;
+```
