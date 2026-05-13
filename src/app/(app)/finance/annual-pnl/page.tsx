@@ -20,7 +20,7 @@ function fyColDate(fyStartYear: number, col: number, fyStartMonth: number): Date
 
 function fmtCurrency(n: number) {
   if (n === 0) return '—'
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
 function fmtShort(n: number) {

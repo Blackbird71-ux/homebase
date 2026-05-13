@@ -94,7 +94,7 @@ function isLumpSum(frequency: string): boolean {
 }
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
 function getPeriodBounds(mode: PeriodMode, anchor: Date, fyStartMonth: number = 7): { start: Date; end: Date; label: string } {

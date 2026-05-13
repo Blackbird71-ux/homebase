@@ -76,7 +76,7 @@ interface LedgerTx {
 function fmt(n: number, currency = 'AUD') {
   return new Intl.NumberFormat('en-AU', {
     style: 'currency', currency,
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(n)
 }
 
