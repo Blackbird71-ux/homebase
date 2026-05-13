@@ -1,0 +1,222 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireSession } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/prisma'
+import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
+import { differenceInDays } from 'date-fns'
+
+// GET /api/finance/accounts-payable?asAt=YYYY-MM-DD
+//
+// AP Aging report — proper accounting approach:
+//
+//   GL control account  →  authoritative total (same source as Balance Sheet)
+//   AP subledger        →  bills where invoiceReceived=true AND not yet paid as at date
+//   Aging               →  days from invoiceReceivedDate to asAt
+//   Reconciliation      →  subledger total must equal GL control account balance
+//
+// Aging buckets (from invoice date, not due date — standard AP practice):
+//   0–30 days, 31–60 days, 61–90 days, 91+ days
+
+type AgingBucket = '0_30' | '31_60' | '61_90' | '91_plus'
+
+function ageBucket(invoiceDate: Date, asAt: Date): AgingBucket {
+  const days = differenceInDays(asAt, invoiceDate)
+  if (days <= 30)  return '0_30'
+  if (days <= 60)  return '31_60'
+  if (days <= 90)  return '61_90'
+  return '91_plus'
+}
+
+function asAtEndOfDay(dateStr: string, tz: string): Date {
+  const [year, month1, day] = dateStr.split('-').map(Number)
+  if (!year || !month1 || !day) return new Date()
+  try {
+    const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
+    const fmt = new Intl.DateTimeFormat('en-AU', {
+      timeZone: tz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    })
+    const parts = fmt.formatToParts(new Date(noonUtc))
+    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value)
+    const tzY = get('year'), tzM = get('month'), tzD = get('day')
+    const tzH = get('hour'), tzMin = get('minute'), tzS = get('second')
+    const offsetMs = noonUtc - Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS)
+    const midnightUtc = Date.UTC(year, month1 - 1, day, 0, 0, 0, 0) + offsetMs
+    return new Date(midnightUtc + 24 * 60 * 60 * 1000 - 1)
+  } catch {
+    const d = new Date(`${dateStr}T00:00:00.000Z`)
+    d.setUTCHours(23, 59, 59, 999)
+    return d
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const session = await requireSession()
+  const { searchParams } = new URL(request.url)
+  const asAtParam = searchParams.get('asAt')
+  const familyId  = session.familyId
+
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { timezone: true },
+  })
+  const tz = family?.timezone ?? 'Australia/Sydney'
+
+  const asAt = asAtParam
+    ? asAtEndOfDay(asAtParam, tz)
+    : asAtEndOfDay(
+        new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()),
+        tz
+      )
+
+  // ── 1. GL control account balance ─────────────────────────────────────────
+  // AP is a liability; normal balance = credit.
+  // deriveJournalLineBalances returns positive netBalance when credits exceed debits.
+  // The Balance Sheet negates this (Math.max(0, -netBalance)) — we match that exactly
+  // so the AP aging total always agrees with the Balance Sheet.
+  const apCategory = await prisma.financeCategory.findFirst({
+    where: { familyId, name: 'Accounts Payable', type: 'liability', isSystem: true },
+    select: { id: true },
+  })
+
+  let glApBalance = 0
+  if (apCategory) {
+    const journalBalances = await deriveJournalLineBalances(familyId, null, asAt)
+    const netBalance = journalBalances.get(apCategory.id)?.netBalance ?? 0
+    glApBalance = Math.round(Math.max(0, -netBalance) * 100) / 100
+  }
+
+  // ── 2. AP subledger: bills outstanding as at the report date ──────────────
+  // A bill is outstanding if:
+  //   • invoice was received on or before asAt
+  //   • it has not been paid, or was paid after asAt (so it was still open at asAt)
+  const bills = await prisma.financeRecurringBill.findMany({
+    where: {
+      familyId,
+      invoiceReceived: true,
+      invoiceReceivedDate: { lte: asAt },
+      OR: [
+        { paid: false },
+        { paidDate: { gt: asAt } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      amount: true,
+      invoiceReceivedDate: true,
+      nextDueDate: true,
+      vendor:   { select: { id: true, name: true } },
+      category: { select: { id: true, name: true, color: true } },
+      entity:   { select: { id: true, name: true } },
+      journalEntry: { select: { reference: true } },
+    },
+    orderBy: { invoiceReceivedDate: 'asc' },
+  })
+
+  // ── 3. Build per-item aging ───────────────────────────────────────────────
+  interface ApItem {
+    id: string
+    name: string
+    amount: number
+    invoiceDate: string
+    daysSinceInvoice: number
+    bucket: AgingBucket
+    vendorId: string | null
+    vendorName: string | null
+    categoryId: string | null
+    categoryName: string | null
+    categoryColor: string | null
+    entityId: string | null
+    entityName: string | null
+    reference: string | null
+  }
+
+  const items: ApItem[] = bills.map(b => {
+    const invoiceDate = b.invoiceReceivedDate ?? b.nextDueDate
+    const days = differenceInDays(asAt, invoiceDate)
+    return {
+      id:            b.id,
+      name:          b.name,
+      amount:        b.amount,
+      invoiceDate:   invoiceDate.toISOString(),
+      daysSinceInvoice: Math.max(0, days),
+      bucket:        ageBucket(invoiceDate, asAt),
+      vendorId:      b.vendor?.id    ?? null,
+      vendorName:    b.vendor?.name  ?? null,
+      categoryId:    b.category?.id   ?? null,
+      categoryName:  b.category?.name ?? null,
+      categoryColor: b.category?.color ?? null,
+      entityId:      b.entity?.id   ?? null,
+      entityName:    b.entity?.name ?? null,
+      reference:     b.journalEntry?.reference ?? null,
+    }
+  })
+
+  // ── 4. Group by vendor ────────────────────────────────────────────────────
+  interface VendorRow {
+    vendorId: string | null
+    vendorName: string
+    '0_30': number
+    '31_60': number
+    '61_90': number
+    '91_plus': number
+    total: number
+    items: ApItem[]
+  }
+
+  const vendorMap = new Map<string, VendorRow>()
+  for (const item of items) {
+    const key   = item.vendorId ?? '__none__'
+    const label = item.vendorName ?? 'No vendor'
+    if (!vendorMap.has(key)) {
+      vendorMap.set(key, { vendorId: item.vendorId, vendorName: label, '0_30': 0, '31_60': 0, '61_90': 0, '91_plus': 0, total: 0, items: [] })
+    }
+    const g = vendorMap.get(key)!
+    g[item.bucket] += item.amount
+    g.total        += item.amount
+    g.items.push(item)
+  }
+
+  const vendors = Array.from(vendorMap.values())
+    .sort((a, b) => b.total - a.total)
+    .map(v => ({
+      ...v,
+      '0_30':    Math.round(v['0_30']    * 100) / 100,
+      '31_60':   Math.round(v['31_60']   * 100) / 100,
+      '61_90':   Math.round(v['61_90']   * 100) / 100,
+      '91_plus': Math.round(v['91_plus'] * 100) / 100,
+      total:     Math.round(v.total      * 100) / 100,
+    }))
+
+  // ── 5. Column totals ──────────────────────────────────────────────────────
+  const r = (n: number) => Math.round(n * 100) / 100
+  const subledgerTotal = r(items.reduce((s, i) => s + i.amount, 0))
+  const totals = {
+    '0_30':    r(items.filter(i => i.bucket === '0_30').reduce((s, i) => s + i.amount, 0)),
+    '31_60':   r(items.filter(i => i.bucket === '31_60').reduce((s, i) => s + i.amount, 0)),
+    '61_90':   r(items.filter(i => i.bucket === '61_90').reduce((s, i) => s + i.amount, 0)),
+    '91_plus': r(items.filter(i => i.bucket === '91_plus').reduce((s, i) => s + i.amount, 0)),
+    subledgerTotal,
+  }
+
+  const difference    = r(Math.abs(glApBalance - subledgerTotal))
+  const isReconciled  = difference < 0.01
+
+  // Oldest outstanding invoice (for summary card)
+  const oldestDays = items.length > 0 ? Math.max(...items.map(i => i.daysSinceInvoice)) : 0
+
+  return NextResponse.json({
+    asAt:           asAtParam ?? new Date().toISOString().split('T')[0],
+    hasApAccount:   !!apCategory,
+    glApBalance,
+    subledgerTotal,
+    difference,
+    isReconciled,
+    oldestDays,
+    itemCount:      items.length,
+    totals,
+    vendors,
+  })
+}
