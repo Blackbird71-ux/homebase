@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
   RefreshCw, Layers, Paperclip, X, Building2,
@@ -97,6 +97,7 @@ export default function BillsPage() {
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false)
   const [quickFilter, setQuickFilter] = useState<QuickFilter | null>(null)
   const att = useAttachmentManager('/api/finance/bills')
+  const prevBillAmountRef = useRef<number>(0)
 
   const emptyForm = {
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
@@ -199,14 +200,19 @@ export default function BillsPage() {
     return defaultBillLines()
   }
 
-  // Auto-fill journal line amounts when bill amount changes
+  // Auto-fill journal line amounts when bill amount changes.
+  // Updates lines that are blank, zero, or still equal to the previously auto-filled value
+  // so typing "2" → "20" → "200" keeps journal lines in sync.
   useEffect(() => {
     if (!showForm || form.amount <= 0) return
-    setJournalLines(prev => prev.map(l =>
-      l.amount === '' || l.amount === '0.00'
+    const prev = prevBillAmountRef.current
+    const prevStr = prev > 0 ? prev.toFixed(2) : ''
+    setJournalLines(lines => lines.map(l =>
+      l.amount === '' || l.amount === '0.00' || l.amount === prevStr
         ? { ...l, amount: (form.amount as number).toFixed(2) }
         : l
     ))
+    prevBillAmountRef.current = form.amount as number
   }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
@@ -259,7 +265,7 @@ export default function BillsPage() {
     })
   }
 
-  function openNew() { setEditing(null); setErrors({}); setJournalLines(defaultBillLines()); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
+  function openNew() { prevBillAmountRef.current = 0; setEditing(null); setErrors({}); setJournalLines(defaultBillLines()); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
 
   function openEdit(b: Bill) {
     setEditing(b)
@@ -312,10 +318,12 @@ export default function BillsPage() {
   async function handleSave() {
     const errs = validate()
     setErrors(errs)
-    if (Object.keys(errs).length > 0) return
+    if (Object.keys(errs).length > 0) {
+      toast.error(Object.values(errs).join(' · '))
+      return
+    }
     try {
       const { addToBudget, ...payload } = getFormPayload() as any
-      // Include journal lines if at least 2 lines are defined with GL accounts
       const validLines = journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
       const body = editing
         ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
@@ -586,7 +594,8 @@ export default function BillsPage() {
 
       {/* Bill form dialog */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
-        <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
+        <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           <DialogHeader><DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle></DialogHeader>
           {Object.keys(errors).length > 0 && (
             <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mb-3">
@@ -614,8 +623,9 @@ export default function BillsPage() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Amount *</label>
-              <input type="number" step="0.01" value={form.amount}
+              <input type="number" step="0.01" value={form.amount || ''}
                 onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                onFocus={e => e.target.select()}
                 className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.amount && 'border-red-500')} />
               {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
             </div>
@@ -759,7 +769,8 @@ export default function BillsPage() {
             <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
           </div>
-          <DialogFooter>
+          </div>
+          <DialogFooter className="mx-0 mb-0">
             <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2,
   RefreshCw, Layers, Briefcase, Paperclip, X,
@@ -92,6 +92,7 @@ export default function IncomePage() {
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
   const att = useAttachmentManager('/api/finance/income')
+  const prevIncomeAmountRef = useRef<number>(0)
 
   // ── FIX: Use todayAU() instead of new Date().toISOString().split('T')[0] ──
   const emptyForm = {
@@ -154,14 +155,17 @@ export default function IncomePage() {
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
 
-  // When amount changes and lines have blank amounts, auto-fill them
+  // When amount changes, auto-fill blank/zero lines or lines still showing the previous auto-filled value
   useEffect(() => {
     if (!showForm || form.amount <= 0) return
-    setJournalLines(prev => prev.map(l =>
-      l.amount === '' || l.amount === '0.00'
+    const prev = prevIncomeAmountRef.current
+    const prevStr = prev > 0 ? prev.toFixed(2) : ''
+    setJournalLines(lines => lines.map(l =>
+      l.amount === '' || l.amount === '0.00' || l.amount === prevStr
         ? { ...l, amount: form.amount.toFixed(2) }
         : l
     ))
+    prevIncomeAmountRef.current = form.amount
   }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
@@ -203,7 +207,7 @@ export default function IncomePage() {
     return defaultIncomeLines()
   }
 
-  function openNew() { setEditing(null); setForm(emptyForm); setErrors({}); setJournalLines(defaultIncomeLines()); setJournalErrors({}); setShowForm(true) }
+  function openNew() { prevIncomeAmountRef.current = 0; setEditing(null); setForm(emptyForm); setErrors({}); setJournalLines(defaultIncomeLines()); setJournalErrors({}); setShowForm(true) }
 
   function openEdit(e: IncomeEntry) {
     setEditing(e)
@@ -285,7 +289,7 @@ export default function IncomePage() {
 
   async function handleSave() {
     const errs = validate()
-    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+    if (Object.keys(errs).length > 0) { setErrors(errs); toast.error(Object.values(errs).join(' · ')); return }
     const payload = getFormPayload()
     // Only submit journal lines when explicitly posting — otherwise the auto-filled
     // balanced lines would create a posted journal entry and feed the P&L unexpectedly.
@@ -527,7 +531,8 @@ export default function IncomePage() {
       )}
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
-        <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
+        <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Income' : 'New Income'}</DialogTitle>
           </DialogHeader>
@@ -564,8 +569,9 @@ export default function IncomePage() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Amount *</label>
-              <input type="number" step="0.01" value={form.amount}
+              <input type="number" step="0.01" value={form.amount || ''}
                 onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                onFocus={e => e.target.select()}
                 className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
               {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
             </div>
@@ -757,8 +763,9 @@ export default function IncomePage() {
             <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="mx-0 mb-0">
             <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
