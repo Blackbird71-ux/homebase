@@ -531,241 +531,253 @@ export default function IncomePage() {
       )}
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
-        <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true}>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Income' : 'New Income'}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-full md:max-w-4xl sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true}>
 
-          {Object.keys(errors).length > 0 && (
-            <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 mb-2">
-              <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Please fix the following errors:</p>
-              <ul className="list-disc list-inside text-xs text-red-600/80 dark:text-red-400/80 space-y-0.5">
-                {Object.entries(errors).map(([key, msg]) => (
-                  <li key={key}>{msg}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Fixed header — title, errors, income type toggle */}
+          <div className="px-4 pt-4 pb-0 shrink-0">
+            <DialogHeader>
+              <DialogTitle>{editing ? 'Edit Income' : 'New Income'}</DialogTitle>
+            </DialogHeader>
 
-          <div className="flex gap-4 pb-1">
-            {(['recurring', 'one-off'] as const).map(bt => (
-              <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" name="incomeType" value={bt} checked={form.incomeType === bt}
-                  onChange={() => setForm(p => ({ ...p, incomeType: bt }))} className="accent-primary" />
-                {bt === 'recurring'
-                  ? <><RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring</>
-                  : <><Layers className="h-3.5 w-3.5 text-orange-500" /> One-off</>}
-              </label>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.name ? 'border-red-500' : 'border-input')} />
-              {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Amount *</label>
-              <input type="number" step="0.01" value={form.amount || ''}
-                onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                onFocus={e => e.target.select()}
-                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
-              {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
-            </div>
-            {form.incomeType === 'recurring' && (
-              <div>
-                <label className="text-xs text-muted-foreground">Frequency *</label>
-                <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="weekly">Weekly</option>
-                  <option value="fortnightly">Fortnightly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="halfyearly">6 Monthly / Half-Yearly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
+            {Object.keys(errors).length > 0 && (
+              <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 mt-3">
+                <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Please fix the following errors:</p>
+                <ul className="list-disc list-inside text-xs text-red-600/80 dark:text-red-400/80 space-y-0.5">
+                  {Object.entries(errors).map(([key, msg]) => (
+                    <li key={key}>{msg}</li>
+                  ))}
+                </ul>
               </div>
             )}
-            <div>
-              <label className="text-xs text-muted-foreground">Payer / Source</label>
-              <div className="flex gap-1">
-                <select value={form.vendorId} onChange={e => handleVendorChange(e.target.value)}
-                  className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="">No payer</option>
-                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
-                <Link href="/finance/contacts"
-                  className="shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-muted-foreground hover:text-foreground"
-                  title="Manage contacts">
-                  <Building2 className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Day of Month</label>
-              <input type="number" min={1} max={31} value={form.dayOfMonth}
-                onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                placeholder="e.g. 15" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Month of Year (for annual)</label>
-              <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">None</option>
-                {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-                  <option key={i+1} value={i+1}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">{form.incomeType === 'one-off' ? 'Expected Date *' : 'Next Expected Date *'}</label>
-              <input type="date" value={form.nextExpectedDate} onChange={e => setForm(p => ({ ...p, nextExpectedDate: e.target.value }))}
-                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.nextExpectedDate ? 'border-red-500' : 'border-input')} />
-              {errors.nextExpectedDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextExpectedDate}</p>}
-            </div>
-            {form.incomeType === 'recurring' && (
-              <div>
-                <label className="text-xs text-muted-foreground">End Date (optional)</label>
-                <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-              </div>
-            )}
-            <div>
-              <label className="text-xs text-muted-foreground">Assigned To (person)</label>
-              <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">Shared (household)</option>
-                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground flex items-center gap-1">
-                <Briefcase className="h-3 w-3" /> Entity / Fund
-              </label>
-              <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">Select entity…</option>
-                {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Location</label>
-              <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No location</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
+
+            <div className="flex gap-4 py-3">
+              {(['recurring', 'one-off'] as const).map(bt => (
+                <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="incomeType" value={bt} checked={form.incomeType === bt}
+                    onChange={() => setForm(p => ({ ...p, incomeType: bt }))} className="accent-primary" />
+                  {bt === 'recurring'
+                    ? <><RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring</>
+                    : <><Layers className="h-3.5 w-3.5 text-orange-500" /> One-off</>}
+                </label>
+              ))}
             </div>
           </div>
 
-          {/* Journal Lines */}
-          <div className="rounded-md border border-border bg-muted/20 p-3">
-            <JournalLinesEditor
-              lines={journalLines}
-              onChange={setJournalLines}
-              glAccounts={glAccounts}
-              expectedTotal={form.amount || 0}
-              errors={journalErrors}
-              onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
-              lineHints={['Accounts Receivable — asset (money owed to you)', 'Income account (what category of income)']}
-            />
-          </div>
+          {/* Two-column scrollable body on md+, single-column on mobile */}
+          <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
 
-          <div className="flex flex-wrap gap-6 pt-1">
-            {form.incomeType === 'recurring' && (
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={form.autoPay} onChange={e => setForm(p => ({ ...p, autoPay: e.target.checked }))} className="rounded border-input" />
-                Direct deposit
-              </label>
-            )}
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.emailReminder} onChange={e => setForm(p => ({ ...p, emailReminder: e.target.checked }))} className="rounded border-input" />
-              Email reminder
-            </label>
-            {form.emailReminder && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">Remind</label>
-                <input type="number" min={0} max={30} value={form.reminderDays}
-                  onChange={e => setForm(p => ({ ...p, reminderDays: parseInt(e.target.value) || 0 }))}
-                  className="w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center" />
-                <span className="text-xs text-muted-foreground">days before</span>
-              </div>
-            )}
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
-              <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
-            </label>
-            {form.invoiceReceived && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">Remittance date</label>
-                <input type="date" value={form.invoiceReceivedDate}
-                  onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
-                  className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <ReceiptText className="h-4 w-4 text-orange-500" />
-                ATO / Tax Tracking
-              </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={form.isTaxTracked}
-                  onChange={e => setForm(p => ({ ...p, isTaxTracked: e.target.checked }))}
-                  className="rounded border-input accent-orange-500" />
-                Track for tax
-              </label>
-            </div>
-            {form.isTaxTracked && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <label className="text-xs text-muted-foreground">Estimated tax rate (%)</label>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <input type="number" step="0.1" min="0" max="100" value={form.taxRate}
-                        onChange={e => setForm(p => ({ ...p, taxRate: e.target.value }))}
-                        placeholder="e.g. 30"
-                        className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-                      <span className="text-xs text-muted-foreground">%</span>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground max-w-[200px]">
-                    This rate is used in the P&L report to estimate your tax liability.
-                  </p>
+            {/* Left panel — core fields */}
+            <div className="md:w-1/2 overflow-y-auto px-4 pb-4 space-y-3 md:border-r md:border-border">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Name *</label>
+                  <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                    className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.name ? 'border-red-500' : 'border-input')} />
+                  {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
-                  <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                  <label className="text-xs text-muted-foreground">Amount *</label>
+                  <input type="number" step="0.01" value={form.amount || ''}
+                    onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                    onFocus={e => e.target.select()}
+                    className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
+                  {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
+                </div>
+                {form.incomeType === 'recurring' && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Frequency *</label>
+                    <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="weekly">Weekly</option>
+                      <option value="fortnightly">Fortnightly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="halfyearly">6 Monthly / Half-Yearly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-muted-foreground">Payer / Source</label>
+                  <div className="flex gap-1">
+                    <select value={form.vendorId} onChange={e => handleVendorChange(e.target.value)}
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">No payer</option>
+                      {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                    <Link href="/finance/contacts"
+                      className="shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-muted-foreground hover:text-foreground"
+                      title="Manage contacts">
+                      <Building2 className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Day of Month</label>
+                  <input type="number" min={1} max={31} value={form.dayOfMonth}
+                    onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                    placeholder="e.g. 15" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Month of Year (for annual)</label>
+                  <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
                     className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">Not classified</option>
-                    <option value="taxable_income">Taxable Income</option>
-                    <option value="exempt_income">Exempt Income</option>
+                    <option value="">None</option>
+                    {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                      <option key={i+1} value={i+1}>{m}</option>
+                    ))}
                   </select>
                 </div>
-                {!form.memberId && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <ReceiptText className="h-3 w-3 shrink-0" />
-                    Tax-tracked income should be assigned to a person (member) for accurate tax reporting.
-                  </p>
+                <div>
+                  <label className="text-xs text-muted-foreground">{form.incomeType === 'one-off' ? 'Expected Date *' : 'Next Expected Date *'}</label>
+                  <input type="date" value={form.nextExpectedDate} onChange={e => setForm(p => ({ ...p, nextExpectedDate: e.target.value }))}
+                    className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.nextExpectedDate ? 'border-red-500' : 'border-input')} />
+                  {errors.nextExpectedDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextExpectedDate}</p>}
+                </div>
+                {form.incomeType === 'recurring' && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">End Date (optional)</label>
+                    <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-muted-foreground">Assigned To (person)</label>
+                  <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">Shared (household)</option>
+                    {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Briefcase className="h-3 w-3" /> Entity / Fund
+                  </label>
+                  <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">Select entity…</option>
+                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Location</label>
+                  <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">No location</option>
+                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Right panel — journal lines + options + tax + notes */}
+            <div className="md:w-1/2 overflow-y-auto px-4 pb-4 space-y-3">
+              {/* Journal Lines */}
+              <div className="rounded-md border border-border bg-muted/20 p-3">
+                <JournalLinesEditor
+                  lines={journalLines}
+                  onChange={setJournalLines}
+                  glAccounts={glAccounts}
+                  expectedTotal={form.amount || 0}
+                  errors={journalErrors}
+                  onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
+                  lineHints={['Accounts Receivable — asset (money owed to you)', 'Income account (what category of income)']}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-4 pt-1">
+                {form.incomeType === 'recurring' && (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={form.autoPay} onChange={e => setForm(p => ({ ...p, autoPay: e.target.checked }))} className="rounded border-input" />
+                    Direct deposit
+                  </label>
+                )}
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.emailReminder} onChange={e => setForm(p => ({ ...p, emailReminder: e.target.checked }))} className="rounded border-input" />
+                  Email reminder
+                </label>
+                {form.emailReminder && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground">Remind</label>
+                    <input type="number" min={0} max={30} value={form.reminderDays}
+                      onChange={e => setForm(p => ({ ...p, reminderDays: parseInt(e.target.value) || 0 }))}
+                      className="w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center" />
+                    <span className="text-xs text-muted-foreground">days before</span>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
+                  <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
+                </label>
+                {form.invoiceReceived && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground">Remittance date</label>
+                    <input type="date" value={form.invoiceReceivedDate}
+                      onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
+                      className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                  </div>
                 )}
               </div>
-            )}
+
+              <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <ReceiptText className="h-4 w-4 text-orange-500" />
+                    ATO / Tax Tracking
+                  </div>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={form.isTaxTracked}
+                      onChange={e => setForm(p => ({ ...p, isTaxTracked: e.target.checked }))}
+                      className="rounded border-input accent-orange-500" />
+                    Track for tax
+                  </label>
+                </div>
+                {form.isTaxTracked && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="text-xs text-muted-foreground">Estimated tax rate (%)</label>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <input type="number" step="0.1" min="0" max="100" value={form.taxRate}
+                            onChange={e => setForm(p => ({ ...p, taxRate: e.target.value }))}
+                            placeholder="e.g. 30"
+                            className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                          <span className="text-xs text-muted-foreground">%</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground max-w-[200px]">
+                        This rate is used in the P&L report to estimate your tax liability.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+                      <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">Not classified</option>
+                        <option value="taxable_income">Taxable Income</option>
+                        <option value="exempt_income">Exempt Income</option>
+                      </select>
+                    </div>
+                    {!form.memberId && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <ReceiptText className="h-3 w-3 shrink-0" />
+                        Tax-tracked income should be assigned to a person (member) for accurate tax reporting.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">Notes</label>
+                <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label className="text-xs text-muted-foreground">Notes</label>
-            <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
-          </div>
-          </div>
-
-          <DialogFooter className="mx-0 mb-0">
+          <DialogFooter className="mx-0 mb-0 shrink-0">
             <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
