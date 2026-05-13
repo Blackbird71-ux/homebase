@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { todayBoundsInTz } from '@/lib/timezone'
 
 function calculateNextDueDate(
   chore: {
@@ -115,9 +116,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // Use the user's timezone to determine "today" boundaries, so a chore due today
+  // (e.g., nextDueDate at midnight UTC = 10:00 AM Sydney time) is always completable
+  // regardless of the raw UTC clock.
+  const timezone = user.timezone ?? 'UTC'
+  const { end: todayEnd } = todayBoundsInTz(timezone)
+
   // If allowEarlyStart is false, only allow completion when the chore is actually due or overdue.
   // (nextDueDate null means it's due now; nextDueDate in the past means overdue — both allowed.)
-  if (!chore.allowEarlyStart && chore.nextDueDate && chore.nextDueDate > new Date()) {
+  if (!chore.allowEarlyStart && chore.nextDueDate && chore.nextDueDate > todayEnd) {
     return NextResponse.json(
       { error: 'This chore is not yet due. Enable "Allow early completion" on the chore to complete it ahead of schedule.' },
       { status: 422 }
