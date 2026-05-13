@@ -9,14 +9,29 @@ const VALID_TYPES = ['income', 'expense', 'transfer', 'asset', 'liability', 'equ
 export async function GET(request: NextRequest) {
   const session = await requireSession()
   const { searchParams } = new URL(request.url)
-  // forPicker=true: exclude system-seeded categories the user hasn't configured.
-  // This keeps GL account pickers clean — only showing user-created accounts.
+  // forPicker=true: exclude the "NOT IN USE" archive root and its children from pickers.
   const forPicker = searchParams.get('forPicker') === 'true'
+
+  // forPicker: exclude the "NOT IN USE" archive root and all its children
+  let pickerExcludeIds: string[] = []
+  if (forPicker) {
+    const notInUse = await prisma.financeCategory.findFirst({
+      where: { familyId: session.familyId, name: 'NOT IN USE', parentId: null },
+      select: { id: true },
+    })
+    if (notInUse) {
+      const children = await prisma.financeCategory.findMany({
+        where: { familyId: session.familyId, parentId: notInUse.id },
+        select: { id: true },
+      })
+      pickerExcludeIds = [notInUse.id, ...children.map(c => c.id)]
+    }
+  }
 
   const categories = await prisma.financeCategory.findMany({
     where: {
       familyId: session.familyId,
-      ...(forPicker ? { isSystem: false } : {}),
+      ...(forPicker && pickerExcludeIds.length > 0 ? { id: { notIn: pickerExcludeIds } } : {}),
     },
     orderBy: [{ sortOrder: 'asc' }, { level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
     include: {

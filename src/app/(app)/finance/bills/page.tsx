@@ -694,6 +694,7 @@ export default function BillsPage() {
               expectedTotal={form.amount || 0}
               errors={journalErrors}
               onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
+              lineHints={['Expense account (what you\'re paying for)', 'Accounts Payable — liability (what you owe)']}
             />
           </div>
           <div className="flex flex-wrap gap-6 pt-1">

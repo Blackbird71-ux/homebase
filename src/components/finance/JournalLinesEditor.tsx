@@ -44,6 +44,8 @@ interface Props {
   className?: string
   errors?: Record<string, string>   // keyed: line_0_account, line_0_amount, balance
   onErrorsClear?: (keys: string[]) => void
+  /** Optional per-line hints shown below the account selector, e.g. "Accounts Payable (liability)" */
+  lineHints?: (string | undefined)[]
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,6 +92,7 @@ export function JournalLinesEditor({
   className,
   errors = {},
   onErrorsClear,
+  lineHints = [],
 }: Props) {
 
   const grouped = groupedAccounts(glAccounts.filter(a => a.type !== 'transfer'))
@@ -186,11 +189,15 @@ export function JournalLinesEditor({
                     )
                   })}
                 </select>
-                {acct && (
+                {acct ? (
                   <p className="text-[10px] text-muted-foreground/70 mt-0.5 pl-0.5">
                     Normal: {normalSide(acct.type)} balance ({acct.type})
                   </p>
-                )}
+                ) : lineHints[i] ? (
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5 pl-0.5 italic">
+                    {lineHints[i]}
+                  </p>
+                ) : null}
                 {hasAccountError && (
                   <p className="text-[10px] text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>
                 )}

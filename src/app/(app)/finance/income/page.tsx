@@ -661,6 +661,7 @@ export default function IncomePage() {
               expectedTotal={form.amount || 0}
               errors={journalErrors}
               onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
+              lineHints={['Accounts Receivable — asset (money owed to you)', 'Income account (what category of income)']}
             />
           </div>
 
