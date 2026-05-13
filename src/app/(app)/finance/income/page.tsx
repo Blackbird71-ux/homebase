@@ -14,10 +14,10 @@ import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
 import Link from 'next/link'
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ResizableDialogContent,
 } from '@/components/ui/dialog'
 import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
@@ -183,7 +183,9 @@ export default function IncomePage() {
   // ── Pre-seed journal lines for income ───────────────────────────────────
   function defaultIncomeLines(amount?: number): JournalFormLine[] {
     const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
-    const ar = glAccounts.find(a => a.name === 'Accounts Receivable' && a.type === 'asset')
+    // Match by partial name (case-insensitive) so leading chart-of-accounts codes
+    // like "0 Accounts Receivable" or "1100 Accounts Receivable" are found correctly.
+    const ar = glAccounts.find(a => a.name.toLowerCase().includes('accounts receivable'))
     return [
       { glAccountId: ar?.id ?? '', side: 'debit',  amount: amtStr, description: '' },
       { glAccountId: '',           side: 'credit', amount: amtStr, description: '' },
@@ -531,7 +533,7 @@ export default function IncomePage() {
       )}
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
-        <DialogContent className="w-full md:max-w-4xl sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true}>
+        <ResizableDialogContent className="w-full md:max-w-4xl sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
 
           {/* Fixed header — title, errors, income type toggle */}
           <div className="px-4 pt-4 pb-0 shrink-0">
@@ -783,7 +785,7 @@ export default function IncomePage() {
               {editing ? 'Update' : 'Create'}
             </button>
           </DialogFooter>
-        </DialogContent>
+        </ResizableDialogContent>
       </Dialog>
 
       <Dialog open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>

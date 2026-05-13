@@ -176,9 +176,11 @@ export default function BillsPage() {
   // Amount pre-filled when editing an existing bill.
   function defaultBillLines(amount?: number): JournalFormLine[] {
     const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
-    const ap = glAccounts.find(a => a.name === 'Accounts Payable' && a.type === 'liability')
+    // Match by partial name (case-insensitive) so leading chart-of-accounts codes
+    // like "0 Accounts Payable" or "2000 Accounts Payable" are found correctly.
+    const ap = glAccounts.find(a => a.name.toLowerCase().includes('accounts payable'))
     return [
-      { glAccountId: '',      side: 'debit',  amount: amtStr, description: '' },  // user picks expense GL
+      { glAccountId: '',           side: 'debit',  amount: amtStr, description: '' },  // user picks expense GL
       { glAccountId: ap?.id ?? '', side: 'credit', amount: amtStr, description: '' },
     ]
   }
