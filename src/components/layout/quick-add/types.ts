@@ -19,6 +19,7 @@ export interface CategoryMeta {
   name: string
   type: string
   parentId: string | null
+  glCode?: string | null
 }
 
 export interface AccountMeta {
