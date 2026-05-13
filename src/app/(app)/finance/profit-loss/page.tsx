@@ -16,7 +16,7 @@ import { fyStartYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PeriodMode = 'month' | 'quarter' | 'year'
-type ViewMode   = 'cash'  | 'forecast'
+type ViewMode = 'accrual'  | 'forecast'
 
 interface Bill {
   id: string; name: string; amount: number; frequency: string
@@ -124,7 +124,7 @@ export default function ProfitLossPage() {
   const [loading, setLoading]     = useState(true)
   const [txLoading, setTxLoading] = useState(false)
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
-  const [viewMode, setViewMode]   = useState<ViewMode>('cash')
+  const [viewMode, setViewMode]   = useState<ViewMode>('accrual')
   const [anchor, setAnchor]       = useState<Date>(new Date())
   const [drillSide, setDrillSide] = useState<'income' | 'expense' | null>(null)
   const [drillKey, setDrillKey]   = useState<string | null>(null)
@@ -282,7 +282,7 @@ export default function ProfitLossPage() {
         const ts = new Date(e.receivedDate).getTime()
         return ts >= startTs && ts <= endTs
       }
-      if (viewMode === 'cash') return false
+      if (viewMode === 'accrual') return false
       if (e.incomeType === 'one-off' || isLumpSum(e.frequency)) {
         const dueTs = new Date(e.nextExpectedDate).getTime()
         return dueTs >= startTs && dueTs <= endTs
@@ -359,7 +359,7 @@ export default function ProfitLossPage() {
         const ts = new Date(b.paidDate).getTime()
         return ts >= startTs && ts <= endTs
       }
-      if (viewMode === 'cash') return false
+      if (viewMode === 'accrual') return false
       if (b.billType === 'one-off' || isLumpSum(b.frequency)) {
         const dueTs = new Date(b.nextDueDate).getTime()
         return dueTs >= startTs && dueTs <= endTs
@@ -529,10 +529,10 @@ export default function ProfitLossPage() {
         </div>
 
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-          <button onClick={() => setViewMode('cash')}
+          <button onClick={() => setViewMode('accrual')}
             className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              viewMode === 'cash' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            Cash
+              viewMode === 'accrual' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            Accrual
           </button>
           <button onClick={() => setViewMode('forecast')}
             className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
@@ -573,14 +573,14 @@ export default function ProfitLossPage() {
         {txLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading transactions…</span>}
       </div>
 
-      {viewMode === 'cash' && (
+      {viewMode === 'accrual' && (
         <p className="text-xs text-muted-foreground -mt-2">
-          <span className="font-medium text-primary">Cash basis</span> — confirmed paid bills, received income, and actual transactions in this period.
+          <span className="font-medium text-primary">Accrual basis</span> — income and expenses recognised when invoiced or received, regardless of when cash is exchanged.
         </p>
       )}
       {viewMode === 'forecast' && (
         <p className="text-xs text-muted-foreground -mt-2">
-          <span className="font-medium text-amber-500">Forecast included</span> — confirmed items use actual dates; upcoming scheduled items use due dates.
+          <span className="font-medium text-amber-500">Forecast</span> — recognised items use actual dates; upcoming scheduled items use estimated dates.
         </p>
       )}
 
@@ -737,7 +737,7 @@ export default function ProfitLossPage() {
               <div className="rounded-lg border border-dashed border-border p-6 text-center">
                 <p className="text-sm text-muted-foreground">
                   No income for this period.
-                  {viewMode === 'cash' && ' Switch to Forecast to include scheduled income.'}
+                  {viewMode === 'accrual' && ' Switch to Forecast to include scheduled income.'}
                 </p>
               </div>
             ) : (
@@ -792,7 +792,7 @@ export default function ProfitLossPage() {
               <div className="rounded-lg border border-dashed border-border p-6 text-center">
                 <p className="text-sm text-muted-foreground">
                   No expenses for this period.
-                  {viewMode === 'cash' && ' Switch to Forecast to include upcoming bills.'}
+                  {viewMode === 'accrual' && ' Switch to Forecast to include upcoming bills.'}
                 </p>
               </div>
             ) : (

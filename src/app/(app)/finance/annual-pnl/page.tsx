@@ -153,7 +153,7 @@ export default function AnnualPnLPage() {
   const [fyStartYear, setFyStartYear]   = useState<number>(() => currentFyYear(7))
   const [loading, setLoading]   = useState(true)
   const [txLoading, setTxLoading] = useState(false)
-  const [viewMode, setViewMode] = useState<'cash' | 'forecast'>('forecast')
+  const [viewMode, setViewMode] = useState<'accrual' | 'forecast'>('forecast')
 
   const fyMonthLabelsArr = useMemo(() => fyMonthLabels(fyStartMonth), [fyStartMonth])
 
@@ -397,12 +397,12 @@ export default function AnnualPnLPage() {
           </button>
         </div>
 
-        {/* Cash / Forecast */}
+        {/* Accrual / Forecast */}
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-          <button onClick={() => setViewMode('cash')}
+          <button onClick={() => setViewMode('accrual')}
             className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              viewMode === 'cash' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            Cash
+              viewMode === 'accrual' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            Accrual
           </button>
           <button onClick={() => setViewMode('forecast')}
             className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
@@ -490,7 +490,7 @@ export default function AnnualPnLPage() {
               <tr>
                 <td colSpan={14} className="px-3 py-4 text-center text-xs text-muted-foreground">
                   No income data for this period.
-                  {viewMode === 'cash' && ' Switch to Forecast to include scheduled income.'}
+                  {viewMode === 'accrual' && ' Switch to Forecast to include scheduled income.'}
                 </td>
               </tr>
             ) : incomeRows.map(row => (
@@ -545,7 +545,7 @@ export default function AnnualPnLPage() {
               <tr>
                 <td colSpan={14} className="px-3 py-4 text-center text-xs text-muted-foreground">
                   No expense data for this period.
-                  {viewMode === 'cash' && ' Switch to Forecast to include upcoming bills.'}
+                  {viewMode === 'accrual' && ' Switch to Forecast to include upcoming bills.'}
                 </td>
               </tr>
             ) : expenseRows.map(row => (
@@ -616,8 +616,8 @@ export default function AnnualPnLPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {viewMode === 'cash'
-          ? 'Cash basis — confirmed paid bills, received income, and actual transactions only. Future months will be empty until items are confirmed.'
+        {viewMode === 'accrual'
+          ? 'Accrual basis — income and expenses recognised when invoiced or received, regardless of when cash is exchanged. Future months will show only confirmed items.'
           : 'Forecast — recurring bills and income spread evenly across months at their monthly equivalent. Actual transactions always show where available.'}
       </p>
     </div>
