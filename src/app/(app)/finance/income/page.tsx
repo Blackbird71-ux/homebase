@@ -471,17 +471,7 @@ export default function IncomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Income</h1>
-        <div className="flex items-center gap-3">
-          <Link href="/finance/income/received" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Received Income
-          </Link>
-          <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-            <Plus className="h-4 w-4" /> Add Income
-          </button>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold">Income</h1>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
@@ -493,6 +483,16 @@ export default function IncomePage() {
             </button>
           ))}
         </div>
+
+        <Link href="/finance/income/received"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Received Income
+        </Link>
+
+        <button onClick={openNew}
+          className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+          <Plus className="h-3.5 w-3.5" /> Add Income
+        </button>
 
         {rootCategories.length > 0 && (
           <div className="relative">

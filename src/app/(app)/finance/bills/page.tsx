@@ -520,17 +520,7 @@ export default function BillsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Bills & Recurring</h1>
-        <div className="flex items-center gap-3">
-          <Link href="/finance/paid-bills" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Paid Bills
-          </Link>
-          <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-            <Plus className="h-4 w-4" /> Add Bill
-          </button>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold">Bills &amp; Recurring</h1>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -543,6 +533,16 @@ export default function BillsPage() {
             </button>
           ))}
         </div>
+
+        <Link href="/finance/paid-bills"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Paid Bills
+        </Link>
+
+        <button onClick={openNew}
+          className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+          <Plus className="h-3.5 w-3.5" /> Add Bill
+        </button>
 
         {quickFilter && (
           <button
