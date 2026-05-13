@@ -14,6 +14,7 @@ import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
 import Link from 'next/link'
 import {
   Dialog,
+  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
