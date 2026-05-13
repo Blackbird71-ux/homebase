@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'GL account not found' }, { status: 404 })
     }
 
-    // All posted journal lines for this account
+    // All posted journal lines for this account — GL is the single source of truth
     const journalLines = await prisma.financeJournalLine.findMany({
       where: {
         glAccountId,
@@ -108,68 +108,23 @@ export async function GET(request: NextRequest) {
       ],
     })
 
-    // Cleared transactions that reference this GL account
-    const txFilter: any = {
-      familyId,
-      isCleared: true,
-      glAccountId,
-      type: { not: 'opening_balance' },
-      ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
-      ...(entityId ? { entityId } : {}),
-    }
-    const txLines = await prisma.financeTransaction.findMany({
-      where: txFilter,
-      include: {
-        category: { select: { name: true, glCode: true } },
-        recurringBill: { select: { name: true } },
-      },
-      orderBy: { date: 'asc' },
-    })
-
-    // Merge into unified ledger lines
     type LedgerLine = {
       id: string; date: string; reference: string; description: string
-      type: 'journal' | 'transaction'; entryType: string
+      type: 'journal'; entryType: string
       debit: number; credit: number; lineDescription: string | null
     }
 
-    const entries: LedgerLine[] = []
-
-    for (const l of journalLines) {
-      entries.push({
-        id:              l.id,
-        date:            l.journalEntry.date.toISOString(),
-        reference:       l.journalEntry.reference ?? '',
-        description:     l.journalEntry.description,
-        type:            'journal',
-        entryType:       l.journalEntry.type,
-        debit:           l.side === 'debit'  ? l.amount : 0,
-        credit:          l.side === 'credit' ? l.amount : 0,
-        lineDescription: l.description ?? null,
-      })
-    }
-
-    for (const tx of txLines) {
-      const desc = tx.description ?? tx.payee
-        ?? tx.recurringBill?.name
-        ?? tx.category?.name
-        ?? tx.type
-      entries.push({
-        id:              tx.id,
-        date:            tx.date.toISOString(),
-        reference:       '',
-        description:     desc,
-        type:            'transaction',
-        entryType:       tx.type,
-        // For the GL account side: income = credit, expense = debit
-        debit:           tx.type === 'expense' ? tx.amount : 0,
-        credit:          tx.type === 'income'  ? tx.amount : 0,
-        lineDescription: null,
-      })
-    }
-
-    // Sort by date
-    entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const entries: LedgerLine[] = journalLines.map(l => ({
+      id:              l.id,
+      date:            l.journalEntry.date.toISOString(),
+      reference:       l.journalEntry.reference ?? '',
+      description:     l.journalEntry.description,
+      type:            'journal',
+      entryType:       l.journalEntry.type,
+      debit:           l.side === 'debit'  ? l.amount : 0,
+      credit:          l.side === 'credit' ? l.amount : 0,
+      lineDescription: l.description ?? null,
+    }))
 
     // Running balance — normal balance side determines sign
     // Assets & Expenses: DR increases, CR decreases
