@@ -40,7 +40,7 @@ export function choreReminderHtml(chore: {
   frequency: string
   nextDueDate: Date
   emailReminderDays: number
-}, assigneeName: string): string {
+}, assigneeName: string, completeUrl?: string): string {
   const dueStr = chore.nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
   const daysText = chore.emailReminderDays === 1 ? 'tomorrow' : `in ${chore.emailReminderDays} days`
 
@@ -56,7 +56,13 @@ export function choreReminderHtml(chore: {
       </p>
     </div>
 
-    <p style="margin:0;color:#64748b;font-size:14px">Log in to HomeBase to mark it complete.</p>
+    ${completeUrl
+      ? `<div style="text-align:center;margin:0 0 24px">
+          <a href="${completeUrl}" style="display:inline-block;padding:14px 28px;background:#16a34a;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">✓ Mark Complete</a>
+         </div>`
+      : ''}
+
+    <p style="margin:0;color:#94a3b8;font-size:13px">${completeUrl ? 'Or log' : 'Log'} in to HomeBase for full details.</p>
   `
   return baseLayout('Chore Reminder', body)
 }

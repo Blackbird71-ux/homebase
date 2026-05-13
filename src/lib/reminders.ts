@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { sendEmail } from '@/lib/email'
 import { choreReminderHtml, eventReminderHtml, documentExpiryHtml } from '@/lib/email-templates'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
+import { generateCompleteToken } from '@/lib/complete-token'
 
 function todayKey(): string {
   return new Date().toISOString().split('T')[0]
@@ -60,6 +61,10 @@ export async function processChoreReminders(): Promise<number> {
     const dueDateKey = chore.nextDueDate.toISOString().split('T')[0]
     const reminderKey = `chore_${chore.id}_${dueDateKey}`
 
+    const appUrl = process.env.NEXTAUTH_URL ?? ''
+    const token = generateCompleteToken('chore', chore.id, chore.currentAssignee.id)
+    const completeUrl = `${appUrl}/api/complete?token=${token}`
+
     const ok = await logAndSend({
       reminderKey,
       entityType: 'chore',
@@ -73,7 +78,8 @@ export async function processChoreReminders(): Promise<number> {
           nextDueDate: chore.nextDueDate,
           emailReminderDays: chore.emailReminderDays,
         },
-        chore.currentAssignee.name
+        chore.currentAssignee.name,
+        completeUrl
       ),
     })
     if (ok) sent++
