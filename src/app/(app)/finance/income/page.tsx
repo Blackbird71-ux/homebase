@@ -296,48 +296,100 @@ export default function IncomePage() {
     try {
       const payload = getFormPayload()
 
-      // ── Detect invoiceReceived transition when editing ───────────────────
-      // If the user is unticking "Posted to journals" on an already-posted entry,
-      // the PUT route has no unpost logic — we must PATCH first to reverse the GL
-      // entry, then proceed with the regular field update via PUT.
-      if (editing && editing.invoiceReceived === true && form.invoiceReceived === false) {
-        const unpostRes = await fetch('/api/finance/income', {
+      // ── EDIT path ────────────────────────────────────────────────────────
+      if (editing) {
+        // If the user is unticking "Posted to journals" on an already-posted entry,
+        // the PUT route has no unpost logic — PATCH first to reverse the GL entry.
+        if (editing.invoiceReceived === true && form.invoiceReceived === false) {
+          const unpostRes = await fetch('/api/finance/income', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: editing.id, invoiceReceived: false }),
+          })
+          if (!unpostRes.ok) {
+            const err = await unpostRes.json().catch(() => ({ error: `Server error (${unpostRes.status})` }))
+            toast.error(err.error ?? 'Failed to unpost income from journals')
+            return
+          }
+        }
+
+        // For edit mode: only send journal lines if invoiceReceived is being turned ON
+        // (i.e. it was false before). Never re-submit lines for already-posted entries.
+        const isNewPost = form.invoiceReceived && !editing.invoiceReceived
+        const validLines = isNewPost
+          ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+          : []
+
+        const body = {
+          id: editing.id,
+          ...payload,
+          ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}),
+        }
+
+        const res = await fetch('/api/finance/income', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
+          toast.error(err.error ?? 'Failed to update income')
+          return
+        }
+        toast.success('Income updated')
+        closeForm()
+        load()
+        return
+      }
+
+      // ── CREATE path ──────────────────────────────────────────────────────
+      // Always create the entry as a draft (invoiceReceived: false) regardless
+      // of what the checkbox says. This guarantees the POST never touches the GL.
+      // If the user ticked "Posted to journals", a follow-up PATCH fires below
+      // to trigger the existing atomic GL-posting path in the PATCH handler.
+      const wantsPosted = form.invoiceReceived
+      const wantsPostedDate = form.invoiceReceivedDate || null
+
+      const postRes = await fetch('/api/finance/income', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Force invoiceReceived: false so the POST never touches the GL.
+        // invoiceReceivedDate is preserved so the field is pre-filled when
+        // the user reopens the draft to review or post it later.
+        body: JSON.stringify({ ...payload, invoiceReceived: false }),
+      })
+      if (!postRes.ok) {
+        const err = await postRes.json().catch(() => ({ error: `Server error (${postRes.status})` }))
+        toast.error(err.error ?? 'Failed to create income')
+        return
+      }
+      const created = await postRes.json()
+
+      // If the user had "Posted to journals" ticked, now post it via PATCH so
+      // the full atomic GL write (DR AR / CR Income + tracking transaction) runs
+      // through the single authoritative posting path — same as clicking the
+      // Receipt button on the income row after creation.
+      if (wantsPosted) {
+        const patchRes = await fetch('/api/finance/income', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editing.id, invoiceReceived: false }),
+          body: JSON.stringify({
+            id: created.id,
+            invoiceReceived: true,
+            invoiceReceivedDate: wantsPostedDate,
+          }),
         })
-        if (!unpostRes.ok) {
-          const err = await unpostRes.json().catch(() => ({ error: `Server error (${unpostRes.status})` }))
-          toast.error(err.error ?? 'Failed to unpost income from journals')
+        if (!patchRes.ok) {
+          // Entry was saved as draft — warn the user but don't block them.
+          const err = await patchRes.json().catch(() => ({ error: `Server error (${patchRes.status})` }))
+          toast.warning(`Income saved as draft — GL posting failed: ${err.error ?? 'unknown error'}`)
+          closeForm()
+          load()
           return
         }
       }
 
-      // ── Only submit journal lines when the user is actively posting ──────
-      // For edit mode: only send lines if invoiceReceived is being turned ON
-      // (i.e. it was false before). If the entry is already posted, updating
-      // via PUT should not re-submit the auto-filled balanced lines and
-      // accidentally re-create a journal entry.
-      const isNewPost = form.invoiceReceived && (!editing || !editing.invoiceReceived)
-      const validLines = isNewPost
-        ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
-        : []
-
-      const body = editing
-        ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
-        : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
-
-      const res = await fetch('/api/finance/income', {
-        method: editing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
-        toast.error(err.error ?? `Failed to ${editing ? 'update' : 'create'} income`)
-        return
-      }
-      toast.success(editing ? 'Income updated' : 'Income created')
+      toast.success('Income created')
       closeForm()
       load()
     } catch (err) {

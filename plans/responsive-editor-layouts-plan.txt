@@ -1,0 +1,240 @@
+============================================================================
+RESPONSIVE EDITOR LAYOUTS PLAN
+HomeBase — Dynamic Layout for Large Screens + Mobile
+============================================================================
+
+1. PROBLEM STATEMENT
+---------------------------------------------------------------------------
+On larger screens (1920px+, >27" monitors), HomeBase layouts remain 
+constrained to a single-column content area with fixed-width sidebars.
+Users must scroll vertically on pages with dense data (bills, transactions,
+meal plan) because the application does not take advantage of available 
+horizontal space. Mobile is fine, desktop is under-optimized.
+
+
+2. DESIGN GOALS
+---------------------------------------------------------------------------
+A. Dynamic content density — larger screens show more columns, wider tables,
+   and side-by-side panels automatically
+B. Viewport-aware — content fills available height to minimize scrolling
+C. Mobile-first — all changes degrade gracefully down to 320px viewports
+D. No horizontal scroll — content never overflows horizontally
+E. Progressive enhancement — more detail becomes visible as space allows
+
+
+3. DENSITY TIERS
+---------------------------------------------------------------------------
+Tier        Width Range     Columns    Description
+------      -----------     -------    -----------
+compact     < 640px         1          Mobile phone
+normal      640 - 1023px    1-2        Tablet portrait
+spacious    1024 - 1535px   2-3        Tablet landscape / small desktop
+wide        >= 1536px       3-4+       Large desktop / ultrawide
+
+
+4. IMPLEMENTATION PLAN
+---------------------------------------------------------------------------
+
+4.1 PHASE 1: Shared Infrastructure
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+FILE TO CREATE:
+  src/lib/hooks/useResponsiveLayout.ts
+
+  New hook that provides responsive layout intelligence:
+  - tier: 'compact' | 'normal' | 'spacious' | 'wide'
+  - cols: number (recommended grid columns)
+  - containerWidth: number (via ResizeObserver)
+  - isMobile: boolean
+  - isDesktop: boolean
+
+FILE TO MODIFY:
+  src/app/globals.css
+
+  Add responsive CSS variables:
+  --content-max-width, --sidebar-width, --grid-min-column-width, --card-padding
+  Each gets a different value per breakpoint (mobile-first).
+
+
+4.2 PHASE 2: AppShell & Navigation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+FILE: src/components/layout/AppShell.tsx
+  - Pass responsive tier to Sidebar
+
+FILE: src/components/layout/Sidebar.tsx
+  - On 'wide' tier: increase expanded width from 208px to 260px
+  - On 'wide' tier: increase padding and font sizes
+  - On 'wide' tier: show section group labels
+
+FILE: src/app/(app)/finance/layout.tsx
+  - Finance sidebar: collapsible on spacious+
+  - On wide: increase sub-nav width from 208px to 240px
+
+
+4.3 PHASE 3: Page-Level Layout Improvements
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+4.3.1 BILLS PAGE (src/app/(app)/finance/bills/page.tsx)
+------
+
+Current problem: gridTemplate is fixed. Category columns always 6.5rem,
+action buttons cramped, no expansion on wide screens.
+
+Solution:
+- Replace fixed gridTemplate with computed function based on tier
+- Category columns: 6.5rem (compact/normal) -> 7rem (spacious) -> 8rem (wide)
+- Description column: 1fr -> 1.5fr -> 2fr
+- Actions column: 8.5rem -> 10rem -> 12rem
+- On wide: show more metadata inline (entity badge, tax classification)
+
+4.3.2 TRANSACTIONS PAGE
+------
+
+- Show more columns on spacious+ (entity, category path, notes)
+- Table font scales with tier
+- Keep current minimal columns on compact/normal
+
+4.3.3 MEAL PLAN (src/components/meal-plan/MealPlanGrid.tsx)
+------
+
+Current problem: Days stack vertically in single column. Only 4-5 days
+visible on a 27" monitor.
+
+Solution - multi-column day grid:
+- compact:   1 column (no change)
+- normal:    1 column (no change)
+- spacious:  2 columns (reduces scroll by 50%)
+- wide:      3 columns (shows 10+ days at once)
+
+Uses CSS grid: grid-cols-1 / grid-cols-2 / grid-cols-3
+
+4.3.4 CALENDAR (src/components/calendar/CalendarView.tsx)
+------
+
+Week view:
+- spacious+: add side panel showing event details for selected day
+- wide: show optional "Agenda" sidebar with scrollable event list
+- Hour column widths increase proportionally
+
+Month view:
+- spacious+: show 3+ events per cell with full titles
+- wide: show 5+ events per cell
+
+4.3.5 NOTES (src/app/(app)/notes/NotesClient.tsx)
+------
+
+- spacious: 2-column card grid with auto-fill
+- wide: 3-column card grid with preview content
+- compact/normal: 1 column (no change)
+
+CSS: grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))
+
+4.3.6 LISTS (src/app/(app)/lists/ListsClient.tsx)
+------
+
+- spacious+: ListSelector becomes sidebar panel (220px) beside list content
+- compact/normal: stacked (no change)
+
+4.3.7 DASHBOARD (src/components/dashboard/DashboardGrid.tsx)
+------
+
+- wide: default new cards to 50% width instead of 100%
+- wide: allow cards to be up to 33% width (3-column layout)
+- spacious: default to half-width cards
+
+
+4.4 PHASE 4: Editor-Specific Improvements
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+4.4.1 NOTE EDITOR (src/components/notes/NoteEditor.tsx)
+------
+
+- spacious: dialog max-width 800px, max-height 90vh
+- wide: dialog max-width 1000px
+- wide: side-by-side mode (editor left, rendered preview right)
+
+4.4.2 RECIPE FORM (src/components/recipes/RecipeForm.tsx)
+------
+
+- spacious+: split into 2-column layout
+  - Left: Ingredients + Instructions
+  - Right: Metadata panel (prep time, cook time, tags, book)
+
+4.4.3 JOURNAL ENTRY FORM (src/components/finance/JournalEntryForm.tsx)
+------
+
+- spacious+: show journal lines table beside form metadata
+- wide: show mini ledger preview panel for balance impact
+
+
+5. RESPONSIVE BEHAVIOR SUMMARY TABLE
+---------------------------------------------------------------------------
+
+Component/Page    | Compact  | Normal   | Spacious | Wide
+------------------|----------|----------|----------|--------
+Sidebar           | Hidden   | 52px     | 208px    | 260px
+Finance Nav       | Dropdown | Dropdown | Sidebar  | Sidebar+
+Bills Grid        | 1-col    | 1-col    | Wide cols| Max cols
+Meal Plan         | 1-col    | 1-col    | 2-col    | 3-col
+Calendar Month    | Compact  | Normal   | 3+ events| 5+ events
+Calendar Week     | Hour rows| Hour rows| +Detail  | +Agenda
+Notes             | 1-col    | 1-col    | 2-col    | 3-col
+Lists             | Stacked  | Stacked  | Side+list| Side+list
+Dashboard         | Full     | Full     | Half     | Thirds
+Note Editor       | 90vw     | 600px    | 800px    | 1000px
+Recipe Form       | 1-col    | 1-col    | 2-col    | 2-col+prev
+Journal Entry     | 1-col    | 1-col    | Side-side| +Preview
+
+
+6. FILES TO CREATE
+---------------------------------------------------------------------------
+1. src/lib/hooks/useResponsiveLayout.ts   - Responsive tier detection hook
+
+
+7. FILES TO MODIFY (in execution order)
+---------------------------------------------------------------------------
+1.  src/app/globals.css                         - CSS variables + container queries
+2.  src/lib/hooks/useResponsiveLayout.ts        - CREATE (responsive hook)
+3.  src/components/layout/AppShell.tsx           - Pass tier to children
+4.  src/components/layout/Sidebar.tsx            - Adaptive widths
+5.  src/app/(app)/finance/layout.tsx             - Responsive sub-nav
+6.  src/app/(app)/finance/bills/page.tsx         - Dynamic grid template
+7.  src/components/meal-plan/MealPlanGrid.tsx     - Multi-column day grid
+8.  src/components/calendar/CalendarView.tsx      - Week view detail panel
+9.  src/app/(app)/notes/NotesClient.tsx           - Responsive card grid
+10. src/app/(app)/lists/ListsClient.tsx           - Side-by-side list view
+11. src/components/dashboard/DashboardGrid.tsx    - Better wide defaults
+12. src/components/notes/NoteEditor.tsx           - Full-height dialog
+13. src/components/recipes/RecipeForm.tsx         - Multi-column form
+14. src/components/finance/JournalEntryForm.tsx   - Side-by-side preview
+
+
+8. IMPLEMENTATION ORDER (dependency tree)
+---------------------------------------------------------------------------
+Phase 1 (foundation):
+  [1] CSS variables -> [2] useResponsiveLayout hook
+
+Phase 2 (shell):
+  [3] AppShell -> [4] Sidebar -> [5] Finance Layout
+
+Phase 3 (pages - can be parallel):
+  [6a] Bills + Transactions   \
+  [6b] Meal Plan + Calendar    -> Can be done in parallel
+  [6c] Notes + Lists          /
+  [6d] Dashboard
+
+Phase 4 (editors - after pages):
+  [7a] Note Editor     \
+  [7b] Recipe Form      -> Can be done in parallel
+  [7c] Journal Entry   /
+
+
+9. KEY PRINCIPLE: PROGRESSIVE ENHANCEMENT
+---------------------------------------------------------------------------
+Every change follows this pattern:
+1. Mobile layout stays exactly as-is (already functional)
+2. At each breakpoint, add/expand content horizontally
+3. Content is never removed at larger sizes — only added
+4. All scrollable containers maintain proper overflow-y-auto with min-h-0
+5. No horizontal scrollbars are introduced

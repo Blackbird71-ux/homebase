@@ -1,0 +1,35 @@
+# Plan: Rename "Cash" → "Accrual" on P&L Pages
+
+## Background
+The system has moved to accrual accounting — the P&L reads from posted GL journal entries (FinanceJournalLine). The "Cash" view mode terminology is outdated and should be renamed to "Accrual" to reflect the actual accounting method.
+
+## Files to Modify
+
+### File 1: `src/app/(app)/finance/profit-loss/page.tsx` (Main P&L Page)
+
+| # | Line(s) | Current | Change To | Description |
+|---|---------|---------|-----------|-------------|
+| 1 | 19 | `type ViewMode = 'cash' \| 'forecast'` | `type ViewMode = 'accrual' \| 'forecast'` | Update type definition |
+| 2 | 127 | `useState<ViewMode>('cash')` | `useState<ViewMode>('accrual')` | Update default state value |
+| 3 | 285 | `if (viewMode === 'cash') return false` | `if (viewMode === 'accrual') return false` | Update condition in income filtering |
+| 4 | 362 | `if (viewMode === 'cash') return false` | `if (viewMode === 'accrual') return false` | Update condition in expense filtering |
+| 5 | 532-536 | Button: `onClick={() => setViewMode('cash')}`, label "Cash", check `viewMode === 'cash'` | Button: `onClick={() => setViewMode('accrual')}`, label "Accrual", check `viewMode === 'accrual'` | Rename toggle button |
+| 6 | 576-579 | `"Cash basis — confirmed paid bills, received income, and actual transactions in this period."` | `"Accrual basis — income and expenses recognised when invoiced or received, regardless of when cash is exchanged."` | Update accrual description |
+| 7 | 581-585 | `"Forecast included — confirmed items use actual dates; upcoming scheduled items use due dates."` | `"Forecast — recognised items use actual dates; upcoming scheduled items use estimated dates."` | Slight tweak to forecast description for consistency |
+| 8 | 740 | `viewMode === 'cash'` | `viewMode === 'accrual'` | Conditional text in "No income" empty state |
+| 9 | 795 | `viewMode === 'cash'` | `viewMode === 'accrual'` | Conditional text in "No expenses" empty state |
+
+### File 2: `src/app/(app)/finance/annual-pnl/page.tsx` (Annual P&L Page)
+
+| # | Line(s) | Current | Change To | Description |
+|---|---------|---------|-----------|-------------|
+| 1 | 156 | `useState<'cash' \| 'forecast'>('forecast')` | `useState<'accrual' \| 'forecast'>('forecast')` | Update state type |
+| 2 | 402-405 | Button: `onClick={() => setViewMode('cash')}`, label "Cash", check `viewMode === 'cash'` | Button: `onClick={() => setViewMode('accrual')}`, label "Accrual", check `viewMode === 'accrual'` | Rename toggle button |
+| 3 | 493 | `viewMode === 'cash'` | `viewMode === 'accrual'` | Conditional text in "No income" empty state |
+| 4 | 618-622 | `'Cash basis — confirmed paid bills, received income, and actual transactions only. Future months will be empty until items are confirmed.'` | `'Accrual basis — income and expenses recognised when invoiced or received, regardless of when cash is exchanged. Future months will show only confirmed items.'` | Update accrual description |
+
+## Total Changes: 13 modifications across 2 files
+
+## No Logic Changes
+- The underlying data-fetching behaviour is unchanged — only labels, descriptions, and toggle value references are updated.
+- `'cash'` → `'accrual'` is a straight string substitution in all conditions; no logic branches are altered.
