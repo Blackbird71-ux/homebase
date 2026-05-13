@@ -354,12 +354,17 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const finalBill = await prisma.financeRecurringBill.findFirst({
-    where: { id: bill.id },
-    include: BILL_INCLUDE,
-  })
-  const result = finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : bill
-  return NextResponse.json(result, { status: 201 })
+  try {
+    const finalBill = await prisma.financeRecurringBill.findFirst({
+      where: { id: bill.id },
+      include: BILL_INCLUDE,
+    })
+    const result = finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : bill
+    return NextResponse.json(result, { status: 201 })
+  } catch (err) {
+    console.error('[bills POST] Final fetch failed (bill was saved):', err)
+    return NextResponse.json({ ...bill, isGlPosted: false }, { status: 201 })
+  }
 }
 
 // ── PUT ───────────────────────────────────────────────────────────────────────

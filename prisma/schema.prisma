@@ -698,6 +698,7 @@ model FinanceRecurringBill {
   invoiceTxId     String?               @unique // FK -> expense transaction created when invoice received (stage 1: DR expense)
   paymentTxId     String?               @unique // FK -> payment transaction created when bill paid (stage 2: DR AP / CR bank)
   journalEntryId  String?               // FK -> FinanceJournalEntry — the accrual journal entry (DR expense lines / CR AP) created at save
+  journalEntry    FinanceJournalEntry?  @relation("BillJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
   transaction     FinanceTransaction?   @relation("BillTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
@@ -748,6 +749,7 @@ model FinanceIncomeEntry {
   invoiceTxId         String?              @unique // FK -> income transaction when remittance received (stage 1: CR income / DR AR)
   receiptTxId         String?              @unique // FK -> bank transaction when cash received (stage 2: DR bank / CR AR)
   journalEntryId      String?              // FK -> FinanceJournalEntry — the accrual journal entry (DR AR / CR income lines) created at save
+  journalEntry        FinanceJournalEntry? @relation("IncomeJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
   notes               String?
   memberId            String?              // Which family member earns this
   accountId           String?
@@ -1007,6 +1009,8 @@ model FinanceJournalEntry {
   familyId              String
   family                Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   lines                 FinanceJournalLine[]
+  bills                 FinanceRecurringBill[] @relation("BillJournal")
+  incomeEntries         FinanceIncomeEntry[]   @relation("IncomeJournal")
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
