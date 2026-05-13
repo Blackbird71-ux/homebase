@@ -750,6 +750,8 @@ model FinanceIncomeEntry {
   receiptTxId         String?              @unique // FK -> bank transaction when cash received (stage 2: DR bank / CR AR)
   journalEntryId      String?              // FK -> FinanceJournalEntry — the accrual journal entry (DR AR / CR income lines) created at save
   journalEntry        FinanceJournalEntry? @relation("IncomeJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
+  receiptJournalEntryId String?            // FK -> FinanceJournalEntry — the cash-receipt journal (DR bank / CR AR) posted when received=true
+  receiptJournalEntry   FinanceJournalEntry? @relation("IncomeReceiptJournal", fields: [receiptJournalEntryId], references: [id], onDelete: SetNull)
   notes               String?
   memberId            String?              // Which family member earns this
   accountId           String?
@@ -1011,6 +1013,7 @@ model FinanceJournalEntry {
   lines                 FinanceJournalLine[]
   bills                 FinanceRecurringBill[] @relation("BillJournal")
   incomeEntries         FinanceIncomeEntry[]   @relation("IncomeJournal")
+  incomeReceiptEntries  FinanceIncomeEntry[]   @relation("IncomeReceiptJournal")
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
