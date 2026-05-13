@@ -327,10 +327,38 @@ export default function BillsPage() {
     }
     try {
       const { addToBudget, ...payload } = getFormPayload() as any
-      const validLines = journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+
+      // ── Detect invoiceReceived transition when editing ───────────────────
+      // If the user is unticking "Posted to journals" on an already-posted bill,
+      // the PUT route has no unpost logic — we must PATCH first to reverse the GL
+      // entry, then proceed with the regular field update via PUT.
+      if (editing && editing.invoiceReceived === true && form.invoiceReceived === false) {
+        const unpostRes = await fetch('/api/finance/bills', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editing.id, invoiceReceived: false }),
+        })
+        if (!unpostRes.ok) {
+          const err = await unpostRes.json().catch(() => ({ error: `Server error (${unpostRes.status})` }))
+          toast.error(err.error ?? 'Failed to unpost bill from journals')
+          return
+        }
+      }
+
+      // ── Only submit journal lines when the user is actively posting ──────
+      // For edit mode: only send lines if invoiceReceived is being turned ON
+      // (i.e. it was false before). If the bill is already posted, updating
+      // via PUT should not re-submit the auto-filled balanced lines and
+      // accidentally re-create/re-post a journal entry.
+      const isNewPost = form.invoiceReceived && (!editing || !editing.invoiceReceived)
+      const validLines = isNewPost
+        ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+        : []
+
       const body = editing
         ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
         : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+
       const res = await fetch('/api/finance/bills', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -346,7 +374,7 @@ export default function BillsPage() {
       await syncBudgetRule(savedBill, form.addToBudget)
       closeForm(); load()
     } catch (err) {
-      console.error('[handleSave]', err)
+      console.error('[handleSave bills]', err)
       toast.error('An unexpected error occurred. Check the browser console for details.')
     }
   }

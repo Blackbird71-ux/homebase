@@ -293,28 +293,57 @@ export default function IncomePage() {
   async function handleSave() {
     const errs = validate()
     if (Object.keys(errs).length > 0) { setErrors(errs); toast.error(Object.values(errs).join(' · ')); return }
-    const payload = getFormPayload()
-    // Only submit journal lines when explicitly posting — otherwise the auto-filled
-    // balanced lines would create a posted journal entry and feed the P&L unexpectedly.
-    const validLines = form.invoiceReceived
-      ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
-      : []
-    const body = editing
-      ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
-      : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
-    const res = await fetch('/api/finance/income', {
-      method: editing ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
-      toast.error(err.error ?? `Failed to ${editing ? 'update' : 'create'} income`)
-      return
+    try {
+      const payload = getFormPayload()
+
+      // ── Detect invoiceReceived transition when editing ───────────────────
+      // If the user is unticking "Posted to journals" on an already-posted entry,
+      // the PUT route has no unpost logic — we must PATCH first to reverse the GL
+      // entry, then proceed with the regular field update via PUT.
+      if (editing && editing.invoiceReceived === true && form.invoiceReceived === false) {
+        const unpostRes = await fetch('/api/finance/income', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editing.id, invoiceReceived: false }),
+        })
+        if (!unpostRes.ok) {
+          const err = await unpostRes.json().catch(() => ({ error: `Server error (${unpostRes.status})` }))
+          toast.error(err.error ?? 'Failed to unpost income from journals')
+          return
+        }
+      }
+
+      // ── Only submit journal lines when the user is actively posting ──────
+      // For edit mode: only send lines if invoiceReceived is being turned ON
+      // (i.e. it was false before). If the entry is already posted, updating
+      // via PUT should not re-submit the auto-filled balanced lines and
+      // accidentally re-create a journal entry.
+      const isNewPost = form.invoiceReceived && (!editing || !editing.invoiceReceived)
+      const validLines = isNewPost
+        ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+        : []
+
+      const body = editing
+        ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+        : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+
+      const res = await fetch('/api/finance/income', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
+        toast.error(err.error ?? `Failed to ${editing ? 'update' : 'create'} income`)
+        return
+      }
+      toast.success(editing ? 'Income updated' : 'Income created')
+      closeForm()
+      load()
+    } catch (err) {
+      console.error('[handleSave income]', err)
+      toast.error('An unexpected error occurred. Check the browser console for details.')
     }
-    toast.success(editing ? 'Income updated' : 'Income created')
-    closeForm()
-    load()
   }
 
   async function handleDelete(id: string) {
