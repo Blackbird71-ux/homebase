@@ -5,13 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  BoldIcon, ItalicIcon, UnderlineIcon, StrikethroughIcon,
-  ListIcon, ListOrderedIcon, XIcon, TagIcon, LinkIcon,
-  AlignLeftIcon, AlignCenterIcon, AlignRightIcon, LockIcon, UsersIcon,
-  Heading1Icon, Heading2Icon, Heading3Icon, TypeIcon,
-  BaselineIcon, HighlighterIcon, RemoveFormattingIcon,
-} from 'lucide-react'
+import { BoldIcon, ItalicIcon, XIcon, LockIcon, UsersIcon, BaselineIcon, HighlighterIcon, RemoveFormattingIcon } from 'lucide-react'
+import { NoteEditorToolbar } from './NoteEditorToolbar'
 
 interface NoteEditorProps {
   initialTitle?: string
@@ -35,14 +30,6 @@ interface NoteEditorProps {
   isLoading?: boolean
 }
 
-const FONT_SIZES = [
-  { label: 'Small', value: '0.875em' },
-  { label: 'Normal', value: '1em' },
-  { label: 'Large', value: '1.25em' },
-  { label: 'XL', value: '1.5em' },
-  { label: '2XL', value: '2em' },
-]
-
 export function NoteEditor({
   initialTitle = '',
   initialContent = '',
@@ -64,7 +51,6 @@ export function NoteEditor({
   const [hasPin, setHasPin] = useState(!!initialPinHash)
   const [textColor, setTextColor] = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
-  const [fontSizeKey, setFontSizeKey] = useState(0)
   const titleRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const textColorInputRef = useRef<HTMLInputElement>(null)
@@ -129,22 +115,6 @@ export function NoteEditor({
     if (url) exec('createLink', url)
   }
 
-  const setFontSize = (size: string) => {
-    // execCommand fontSize only accepts 1-7; use a span workaround
-    const sel = window.getSelection()
-    if (!sel || sel.rangeCount === 0) return
-    const range = sel.getRangeAt(0)
-    if (!range.collapsed) {
-      const span = document.createElement('span')
-      span.style.fontSize = size
-      range.surroundContents(span)
-      sel.removeAllRanges()
-    }
-    editorRef.current?.focus()
-    // Reset dropdown to placeholder
-    setFontSizeKey(k => k + 1)
-  }
-
   const saveSelection = () => {
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0) {
@@ -178,57 +148,6 @@ export function NoteEditor({
     document.execCommand('hiliteColor', false, color)
     editorRef.current?.focus()
   }
-
-  const ToolButton = ({
-    onClick, title: tip, active, children,
-  }: { onClick: () => void; title: string; active?: boolean; children: React.ReactNode }) => (
-    <button
-      type="button"
-      title={tip}
-      onMouseDown={(e) => { e.preventDefault(); onClick() }}
-      className={`h-7 w-7 flex items-center justify-center rounded text-sm transition-colors
-        ${ active
-          ? 'bg-primary text-primary-foreground'
-          : 'hover:bg-accent hover:text-accent-foreground text-muted-foreground'
-        } disabled:opacity-50`}
-      disabled={isLoading}
-    >
-      {children}
-    </button>
-  )
-
-  // Color picker button: shows icon + swatch of last-used color.
-  // Saves selection on mousedown so the color picker can restore it on change.
-  const ColorButton = ({
-    inputRef, color, title: tip, onColorChange, children,
-  }: {
-    inputRef: React.RefObject<HTMLInputElement | null>
-    color: string
-    title: string
-    onColorChange: (c: string) => void
-    children: React.ReactNode
-  }) => (
-    <div className="relative">
-      <button
-        type="button"
-        title={tip}
-        onMouseDown={(e) => { e.preventDefault(); saveSelection(); inputRef.current?.click() }}
-        className="h-7 w-7 flex flex-col items-center justify-center gap-0 rounded transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground disabled:opacity-50"
-        disabled={isLoading}
-      >
-        {children}
-        <span className="block h-[3px] w-4 rounded-full mt-0.5" style={{ backgroundColor: color }} />
-      </button>
-      <input
-        ref={inputRef}
-        type="color"
-        value={color}
-        onChange={(e) => onColorChange(e.target.value)}
-        className="absolute opacity-0 w-0 h-0 pointer-events-none"
-        tabIndex={-1}
-      />
-    </div>
-  )
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -305,115 +224,18 @@ export function NoteEditor({
           <Label>Content</Label>
         </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-0.5 p-1.5 border border-input rounded-t-md bg-muted/40">
-          {/* Headings */}
-          <ToolButton onClick={() => exec('formatBlock', 'h1')} title="Heading 1">
-            <Heading1Icon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('formatBlock', 'h2')} title="Heading 2">
-            <Heading2Icon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('formatBlock', 'h3')} title="Heading 3">
-            <Heading3Icon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('formatBlock', 'p')} title="Normal text">
-            <TypeIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          {/* Font size */}
-          <select
-            key={fontSizeKey}
-            onMouseDown={(e) => e.preventDefault()}
-            onChange={(e) => { if (e.target.value) setFontSize(e.target.value) }}
-            className="h-7 text-xs rounded border border-input bg-background px-1 text-muted-foreground cursor-pointer"
-            defaultValue=""
-            disabled={isLoading}
-            title="Font size"
-          >
-            <option value="" disabled>Size</option>
-            {FONT_SIZES.map(fs => (
-              <option key={fs.value} value={fs.value}>{fs.label}</option>
-            ))}
-          </select>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          {/* Inline styles */}
-          <ToolButton onClick={() => exec('bold')} title="Bold (Ctrl+B)">
-            <BoldIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('italic')} title="Italic (Ctrl+I)">
-            <ItalicIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('underline')} title="Underline (Ctrl+U)">
-            <UnderlineIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('strikeThrough')} title="Strikethrough">
-            <StrikethroughIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          {/* Alignment */}
-          <ToolButton onClick={() => exec('justifyLeft')} title="Align left">
-            <AlignLeftIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('justifyCenter')} title="Align centre">
-            <AlignCenterIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('justifyRight')} title="Align right">
-            <AlignRightIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          {/* Lists */}
-          <ToolButton onClick={() => exec('insertUnorderedList')} title="Bullet list">
-            <ListIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-          <ToolButton onClick={() => exec('insertOrderedList')} title="Numbered list">
-            <ListOrderedIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          {/* Link */}
-          <ToolButton onClick={insertLink} title="Insert link">
-            <LinkIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          {/* Text colour */}
-          <ColorButton
-            inputRef={textColorInputRef}
-            color={textColor}
-            title="Text colour"
-            onColorChange={applyTextColor}
-          >
-            <BaselineIcon className="h-3.5 w-3.5" />
-          </ColorButton>
-
-          {/* Highlight */}
-          <ColorButton
-            inputRef={highlightColorInputRef}
-            color={highlightColor}
-            title="Highlight colour"
-            onColorChange={applyHighlightColor}
-          >
-            <HighlighterIcon className="h-3.5 w-3.5" />
-          </ColorButton>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          {/* Clear formatting */}
-          <ToolButton onClick={() => exec('removeFormat')} title="Clear formatting">
-            <RemoveFormattingIcon className="h-3.5 w-3.5" />
-          </ToolButton>
-        </div>
+        <NoteEditorToolbar
+          exec={exec}
+          insertLink={insertLink}
+          saveSelection={saveSelection}
+          applyTextColor={applyTextColor}
+          applyHighlightColor={applyHighlightColor}
+          textColorInputRef={textColorInputRef}
+          highlightColorInputRef={highlightColorInputRef}
+          textColor={textColor}
+          highlightColor={highlightColor}
+          isLoading={isLoading}
+        />
 
         {/* Editor area */}
         <div

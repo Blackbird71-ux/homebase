@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import {
   X, BookOpen, ArrowUpRight, ArrowDownLeft, Minus,
   FileText, CreditCard, Loader2, AlertCircle, Download, ChevronDown,
@@ -157,16 +158,7 @@ export default function AccountLedgerPanel({
 
   const presetsRef = useRef<HTMLDivElement>(null)
 
-  // Close preset dropdown when clicking outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (presetsRef.current && !presetsRef.current.contains(e.target as Node)) {
-        setShowPresets(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  useClickOutside(presetsRef, () => setShowPresets(false))
 
   // Escape key closes panel
   useEffect(() => {
