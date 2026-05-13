@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ResizableDialogContent,
 } from '@/components/ui/dialog'
 import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
@@ -596,7 +597,7 @@ export default function BillsPage() {
 
       {/* Bill form dialog */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
-        <DialogContent className="w-full md:max-w-4xl sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true}>
+        <ResizableDialogContent className="w-full md:max-w-4xl sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
 
           {/* Fixed header — title, errors, bill type toggle */}
           <div className="px-4 pt-4 pb-0 shrink-0">
@@ -792,7 +793,7 @@ export default function BillsPage() {
               {editing ? 'Update' : 'Create'}
             </button>
           </DialogFooter>
-        </DialogContent>
+        </ResizableDialogContent>
       </Dialog>
 
       {/* Date paid confirmation */}
