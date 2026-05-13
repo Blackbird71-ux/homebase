@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react'
 import { Plus, BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, todayAU } from '@/lib/utils'
-import { type GLAccount, type Entity, type JournalEntry, type ReversalState } from '@/components/finance/journal-types'
-import { JournalEntryForm } from '@/components/finance/JournalEntryForm'
-import { ReversalDialog }   from '@/components/finance/ReversalDialog'
-import { VoidDialog }       from '@/components/finance/VoidDialog'
-import { JournalEntryRow }  from '@/components/finance/JournalEntryRow'
+import { type GLAccount, type Entity, type JournalEntry, type ReversalState, type AmendmentState } from '@/components/finance/journal-types'
+import { JournalEntryForm }  from '@/components/finance/JournalEntryForm'
+import { ReversalDialog }    from '@/components/finance/ReversalDialog'
+import { VoidDialog }        from '@/components/finance/VoidDialog'
+import { AmendmentDialog }   from '@/components/finance/AmendmentDialog'
+import { JournalEntryRow }   from '@/components/finance/JournalEntryRow'
 
 export default function JournalsPage() {
   const [entries, setEntries]       = useState<JournalEntry[]>([])
@@ -26,8 +27,9 @@ export default function JournalsPage() {
   const [editing, setEditing]   = useState<JournalEntry | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const [reversal, setReversal] = useState<ReversalState | null>(null)
-  const [voidTarget, setVoidTarget] = useState<JournalEntry | null>(null)
+  const [reversal, setReversal]       = useState<ReversalState | null>(null)
+  const [voidTarget, setVoidTarget]   = useState<JournalEntry | null>(null)
+  const [amendment, setAmendment]     = useState<AmendmentState | null>(null)
 
   async function load() {
     setLoading(true)
@@ -119,6 +121,10 @@ export default function JournalsPage() {
     })
   }
 
+  function openAmend(entry: JournalEntry) {
+    setAmendment({ entry, correctionDate: todayAU() })
+  }
+
   if (loading && entries.length === 0) {
     return <div className="p-4 text-muted-foreground text-sm">Loading journal entries…</div>
   }
@@ -172,6 +178,14 @@ export default function JournalsPage() {
         onSaved={load}
       />
 
+      <AmendmentDialog
+        amendment={amendment}
+        glAccounts={glAccounts}
+        entities={entities}
+        onClose={() => setAmendment(null)}
+        onSaved={load}
+      />
+
       <ReversalDialog
         reversal={reversal}
         onClose={() => setReversal(null)}
@@ -217,6 +231,7 @@ export default function JournalsPage() {
               onDelete={handleDelete}
               onVoid={e => setVoidTarget(e)}
               onReverse={openReversal}
+              onAmend={openAmend}
             />
           ))}
         </div>

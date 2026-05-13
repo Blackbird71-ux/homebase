@@ -1002,9 +1002,12 @@ model FinanceJournalEntry {
   type                  String   @default("manual")  // manual | adjustment | reversal | opening_balance | auto_transaction
   isPosted              Boolean  @default(false)
   isReversed            Boolean  @default(false)
-  reversalOfId          String?  // FK to the entry this reverses
+  reversalOfId          String?  // FK to the entry this reverses (used by both void reversals and amendment reversals)
   reversalOf            FinanceJournalEntry?  @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
   reversals             FinanceJournalEntry[] @relation("JournalReversal")
+  amendmentOfId         String?  // FK to the original entry this corrects — set only on the new corrective entry
+  amendmentOf           FinanceJournalEntry?  @relation("JournalAmendment", fields: [amendmentOfId], references: [id], onDelete: SetNull)
+  amendments            FinanceJournalEntry[] @relation("JournalAmendment")
   sourceTransactionId   String?  // FK to the FinanceTransaction that auto-generated this entry
   entityId              String?
   entity                FinanceEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
@@ -1023,6 +1026,7 @@ model FinanceJournalEntry {
   @@index([familyId, isPosted])
   @@index([entityId])
   @@index([reversalOfId])
+  @@index([amendmentOfId])
   @@index([sourceTransactionId])
 }
 

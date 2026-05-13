@@ -17,6 +17,10 @@ const ENTRY_INCLUDE = {
   entity: {
     select: { id: true, name: true, color: true },
   },
+  // Return shallow amendment children so the row can display "Amended by JE-XXXX"
+  amendments: {
+    select: { id: true, reference: true },
+  },
 }
 
 
@@ -382,6 +386,130 @@ export async function PATCH(request: NextRequest) {
     )
 
     return NextResponse.json(voidEntry, { status: 201 })
+  }
+
+  // ── Amend a posted entry (reverse + repost corrected version) ──────────
+  // This is the proper accounting workflow for correcting a posted entry:
+  //   1. A reversal entry is posted (type='reversal', reversalOfId → original) to zero out the GL effect.
+  //   2. The original is marked isReversed=true.
+  //   3. A new corrective entry is posted (type='manual', amendmentOfId → original) with the user's corrections.
+  // All three writes happen atomically in a single $transaction.
+  // The corrective entry gets its own new reference number (e.g. JE-0047).
+  // The reversal also gets a new reference number (e.g. JE-0046).
+  // Both are posted immediately — amendments are never saved as drafts.
+
+  if (action === 'amend') {
+    if (!existing.isPosted) {
+      return NextResponse.json({ error: 'Only posted entries can be amended' }, { status: 400 })
+    }
+    if (existing.isReversed) {
+      return NextResponse.json({ error: 'Entry has already been reversed or amended' }, { status: 400 })
+    }
+    // Only manual/adjustment entries can be amended via this flow.
+    // Auto-generated entries (bills, income, opening balances) are managed by their own modules.
+    if (!['manual', 'adjustment'].includes(existing.type)) {
+      return NextResponse.json(
+        { error: 'Only manual and adjustment entries can be amended. Use the originating module to correct auto-generated entries.' },
+        { status: 400 },
+      )
+    }
+
+    const { correctionDate, correctionDescription, correctionLines, correctionEntityId } = json
+
+    if (!correctionDate) {
+      return NextResponse.json({ error: 'correctionDate is required' }, { status: 400 })
+    }
+    if (!Array.isArray(correctionLines) || correctionLines.length < 2) {
+      return NextResponse.json({ error: 'At least 2 corrected journal lines are required' }, { status: 400 })
+    }
+
+    // Validate corrective lines balance
+    const corrDebit  = correctionLines.filter((l: { side: string }) => l.side === 'debit') .reduce((s: number, l: { amount: number }) => s + (l.amount ?? 0), 0)
+    const corrCredit = correctionLines.filter((l: { side: string }) => l.side === 'credit').reduce((s: number, l: { amount: number }) => s + (l.amount ?? 0), 0)
+    if (Math.abs(corrDebit - corrCredit) > 0.005) {
+      return NextResponse.json({ error: 'Corrected entry: debits must equal credits' }, { status: 400 })
+    }
+
+    // Verify all GL accounts in the corrective lines belong to this family
+    const corrGlIds = [...new Set(correctionLines.map((l: { glAccountId: string }) => l.glAccountId))]
+    const validCorrAccounts = await prisma.financeCategory.findMany({
+      where: { id: { in: corrGlIds as string[] }, familyId: session.familyId },
+      select: { id: true },
+    })
+    if (validCorrAccounts.length !== corrGlIds.length) {
+      return NextResponse.json({ error: 'One or more GL accounts in the corrected entry not found' }, { status: 400 })
+    }
+
+    // We need two new references: one for the reversal, one for the corrective entry.
+    // createEntryInTxWithRetry only generates one reference per attempt, so we generate
+    // both upfront and build the transaction with both. Retry the whole block on P2002.
+    let amendmentEntry: any
+    for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
+      const reversalRef   = await nextJournalReference(session.familyId)
+      const correctionRef = await nextJournalReference(session.familyId)
+      try {
+        const result = await prisma.$transaction([
+          // Step 1: Create the reversing entry (zeroes out the GL effect of the original)
+          prisma.financeJournalEntry.create({
+            data: {
+              reference:    reversalRef,
+              date:         new Date(correctionDate),
+              description:  `Reversal of ${existing.reference ?? existing.id}: ${existing.description}`,
+              type:         'reversal',
+              isPosted:     true,
+              reversalOfId: existing.id,
+              entityId:     existing.entityId,
+              familyId:     session.familyId,
+              lines: {
+                create: existing.lines.map(l => ({
+                  glAccountId: l.glAccountId,
+                  side:        l.side === 'debit' ? 'credit' : 'debit',
+                  amount:      l.amount,
+                  description: l.description,
+                  memberId:    l.memberId,
+                })),
+              },
+            },
+          }),
+          // Step 2: Mark the original as reversed
+          prisma.financeJournalEntry.update({
+            where: { id: existing.id },
+            data:  { isReversed: true },
+          }),
+          // Step 3: Create the new corrective entry
+          prisma.financeJournalEntry.create({
+            data: {
+              reference:     correctionRef,
+              date:          new Date(correctionDate),
+              description:   correctionDescription?.trim()
+                               ?? `Amendment of ${existing.reference ?? existing.id}: ${existing.description}`,
+              type:          existing.type, // preserve manual | adjustment
+              isPosted:      true,
+              amendmentOfId: existing.id,
+              entityId:      correctionEntityId ?? existing.entityId ?? null,
+              familyId:      session.familyId,
+              lines: {
+                create: correctionLines.map((l: { glAccountId: string; side: string; amount: number; description?: string; memberId?: string }) => ({
+                  glAccountId: l.glAccountId,
+                  side:        l.side,
+                  amount:      l.amount,
+                  description: l.description || null,
+                  memberId:    l.memberId    || null,
+                })),
+              },
+            },
+            include: ENTRY_INCLUDE,
+          }),
+        ])
+        amendmentEntry = result[2] // the corrective entry with full include
+        break
+      } catch (err: any) {
+        if (err.code === 'P2002' && attempt < MAX_REF_RETRIES - 1) continue
+        throw err
+      }
+    }
+
+    return NextResponse.json(amendmentEntry, { status: 201 })
   }
 
   return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })

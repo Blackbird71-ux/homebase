@@ -10,6 +10,7 @@ const ENTRY_INCLUDE = {
     orderBy: [{ side: 'asc' as const }, { amount: 'desc' as const }],
   },
   entity: { select: { id: true, name: true, color: true } },
+  amendments: { select: { id: true, reference: true } },
 }
 
 // GET /api/finance/journals/[id]

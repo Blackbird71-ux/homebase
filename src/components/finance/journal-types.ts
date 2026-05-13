@@ -35,6 +35,9 @@ export interface JournalEntry {
   isPosted: boolean
   isReversed: boolean
   reversalOfId: string | null
+  amendmentOfId: string | null
+  // The corrective entry that amended this one — populated when isReversed=true and an amendment exists
+  amendments: { id: string; reference: string | null }[]
   lines: JournalLine[]
   entity: { id: string; name: string; color: string | null } | null
   entityId: string | null
@@ -60,6 +63,11 @@ export interface ReversalState {
   entry: JournalEntry
   date: string
   description: string
+}
+
+export interface AmendmentState {
+  entry: JournalEntry
+  correctionDate: string
 }
 
 export const TYPE_LABELS: Record<string, string> = {

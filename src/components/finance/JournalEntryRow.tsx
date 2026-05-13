@@ -2,7 +2,7 @@
 
 import {
   Clock, CheckCircle2, BookOpen, RotateCcw,
-  Send, Pencil, Trash2, Ban, ChevronDown, ChevronRight,
+  Send, Pencil, Trash2, Ban, ChevronDown, ChevronRight, FilePenLine,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -18,15 +18,29 @@ interface Props {
   onDelete: (entry: JournalEntry) => void
   onVoid: (entry: JournalEntry) => void
   onReverse: (entry: JournalEntry) => void
+  onAmend: (entry: JournalEntry) => void
 }
 
-export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, onEdit, onDelete, onVoid, onReverse }: Props) {
+export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, onEdit, onDelete, onVoid, onReverse, onAmend }: Props) {
   const isDraft    = !entry.isPosted
   const isReversal = entry.type === 'reversal'
+  const isAmendment = !!entry.amendmentOfId
   const isReversed = entry.isReversed
+  // An entry is "amended" when it has been reversed AND has an amendment child
+  const amendedBy  = isReversed && entry.amendments.length > 0 ? entry.amendments[0] : null
+  // Amendable: posted, not reversed, not a reversal, not an auto-generated entry
+  const canAmend   = entry.isPosted && !isReversed && !isReversal && ['manual', 'adjustment'].includes(entry.type)
 
-  const iconBg    = isDraft    ? 'bg-amber-500/10' : isReversal ? 'bg-red-500/10' : isReversed ? 'bg-muted' : 'bg-green-500/10'
-  const iconColor = isDraft    ? 'text-amber-600'  : isReversal ? 'text-red-600'  : isReversed ? 'text-muted-foreground' : 'text-green-600'
+  const iconBg    = isDraft      ? 'bg-amber-500/10'
+                  : isReversal   ? 'bg-red-500/10'
+                  : isAmendment  ? 'bg-blue-500/10'
+                  : isReversed   ? 'bg-muted'
+                                 : 'bg-green-500/10'
+  const iconColor = isDraft      ? 'text-amber-600'
+                  : isReversal   ? 'text-red-600'
+                  : isAmendment  ? 'text-blue-600'
+                  : isReversed   ? 'text-muted-foreground'
+                                 : 'text-green-600'
 
   return (
     <div className={cn(
@@ -42,9 +56,10 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
         onClick={onToggle}
       >
         <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5', iconBg)}>
-          {isDraft    ? <Clock     className={cn('h-4 w-4', iconColor)} /> :
-           isReversal ? <RotateCcw className={cn('h-4 w-4', iconColor)} /> :
-                        <BookOpen  className={cn('h-4 w-4', iconColor)} />}
+        {isDraft      ? <Clock      className={cn('h-4 w-4', iconColor)} />
+         : isAmendment ? <FilePenLine className={cn('h-4 w-4', iconColor)} />
+         : isReversal  ? <RotateCcw  className={cn('h-4 w-4', iconColor)} />
+                       : <BookOpen   className={cn('h-4 w-4', iconColor)} />}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -62,9 +77,19 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
             <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
               {TYPE_LABELS[entry.type] ?? entry.type}
             </span>
-            {isReversed && (
+            {isReversed && !amendedBy && (
               <span className="text-[10px] bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded border border-red-500/20">
                 REVERSED
+              </span>
+            )}
+            {amendedBy && (
+              <span className="text-[10px] bg-orange-500/10 text-orange-600 px-1.5 py-0.5 rounded border border-orange-500/20 font-mono">
+                AMENDED → {amendedBy.reference ?? amendedBy.id}
+              </span>
+            )}
+            {isAmendment && (
+              <span className="text-[10px] bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded border border-blue-500/20">
+                CORRECTION
               </span>
             )}
           </div>
@@ -118,6 +143,12 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
                   </button>
                 ) : (
                   <>
+                    {canAmend && (
+                      <button onClick={() => onAmend(entry)} title="Correct this posted entry (reverse + repost)"
+                        className="p-1 hover:bg-accent rounded text-blue-500 hover:text-blue-600 transition-colors">
+                        <FilePenLine className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     <button onClick={() => onVoid(entry)} title="Void this entry"
                       className="p-1 hover:bg-accent rounded text-amber-500 hover:text-amber-600 transition-colors">
                       <Ban className="h-3.5 w-3.5" />
