@@ -189,12 +189,14 @@ function ResizableDialogContent({
     if (!el) return
     const dx = e.clientX - origin.current.x
     const dy = e.clientY - origin.current.y
-    const newW = Math.max(minWidth,  origin.current.w + dx)
-    const newH = Math.max(minHeight, origin.current.h + dy)
+    // Cap at 96% of viewport so the dialog never overflows the screen
+    const maxW = Math.floor(window.innerWidth  * 0.96)
+    const maxH = Math.floor(window.innerHeight * 0.96)
+    const newW = Math.min(maxW, Math.max(minWidth,  origin.current.w + dx))
+    const newH = Math.min(maxH, Math.max(minHeight, origin.current.h + dy))
     el.style.width  = `${newW}px`
     el.style.height = `${newH}px`
-    // Keep it centred: translate(-50%,-50%) is set by Tailwind so we don't
-    // need to reposition — the browser re-centres around the fixed anchor.
+    // Inline style overrides Tailwind max-w-* constraints so resize always wins.
   }, [minWidth, minHeight])
 
   const onPointerUp = React.useCallback(() => {

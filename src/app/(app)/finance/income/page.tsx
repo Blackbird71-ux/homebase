@@ -563,7 +563,7 @@ export default function IncomePage() {
       )}
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
-        <ResizableDialogContent className="w-full md:max-w-4xl sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
+        <ResizableDialogContent className="w-full sm:max-w-2xl md:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
 
           {/* Fixed header — title, errors, income type toggle */}
           <div className="px-4 pt-4 pb-0 shrink-0">
@@ -595,12 +595,11 @@ export default function IncomePage() {
             </div>
           </div>
 
-          {/* Two-column scrollable body on md+, single-column on mobile */}
-          <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
-
-            {/* Left panel — core fields */}
-            <div className="md:w-1/2 overflow-y-auto px-4 pb-4 space-y-3 md:border-r md:border-border">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Two-column body — single scroll on the whole panel, not per-column */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="flex flex-col md:flex-row">
+              {/* Left panel — core fields */}
+              <div className="md:w-1/2 px-4 pb-4 space-y-3 md:border-r md:border-border">
                 <div>
                   <label className="text-xs text-muted-foreground">Name *</label>
                   <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
@@ -701,10 +700,9 @@ export default function IncomePage() {
                   </select>
                 </div>
               </div>
-            </div>
 
-            {/* Right panel — journal lines + options + tax + notes */}
-            <div className="md:w-1/2 overflow-y-auto px-4 pb-4 space-y-3">
+              {/* Right panel — journal lines + options + tax + notes */}
+              <div className="md:w-1/2 px-4 pb-4 space-y-3">
               {/* Journal Lines */}
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <JournalLinesEditor
