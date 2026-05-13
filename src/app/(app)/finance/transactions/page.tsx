@@ -48,7 +48,7 @@ export default function TransactionsPage() {
     accountId: '', categoryId: '', type: 'expense', amount: 0,
     payee: '', description: '', date: todayAU(),
     isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '',
-    taxClassification: '', isTransfer: false,
+    taxClassification: '', isTransfer: false, glAccountId: '',
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -110,12 +110,11 @@ export default function TransactionsPage() {
   function openNew() {
     setEditing(null)
     setErrors({})
-    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: todayAU(), isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '', taxClassification: '', isTransfer: false })
+    setForm({ accountId: '', categoryId: '', type: 'expense', amount: 0, payee: '', description: '', date: todayAU(), isCleared: false, isPrivate: false, memberId: '', locationId: '', entityId: '', taxClassification: '', isTransfer: false, glAccountId: '' })
     setShowForm(true)
   }
 
   function openEdit(t: Transaction) {
-    // Opening balance transactions are system-created; editing is disallowed
     if (t.type === 'opening_balance') {
       toast.info('Opening balance transactions are managed via the Accounts page.')
       return
@@ -128,6 +127,7 @@ export default function TransactionsPage() {
       date: t.date.split('T')[0], isCleared: t.isCleared, isPrivate: t.isPrivate,
       memberId: t.memberId ?? '', locationId: t.location?.id ?? '', entityId: t.entityId ?? '',
       taxClassification: t.taxClassification ?? '', isTransfer: t.isTransfer ?? false,
+      glAccountId: (t as any).glAccountId ?? '',
     })
     setShowForm(true)
   }
@@ -137,8 +137,8 @@ export default function TransactionsPage() {
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
     const body = editing
-      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null, isTransfer: form.isTransfer }
-      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null, isTransfer: form.isTransfer }
+      ? { id: editing.id, ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null, isTransfer: form.isTransfer, glAccountId: form.glAccountId || null }
+      : { ...form, accountId: form.accountId || null, categoryId: form.categoryId || null, memberId: form.memberId || null, locationId: form.locationId || null, entityId: form.entityId || null, taxClassification: form.taxClassification || null, isTransfer: form.isTransfer, glAccountId: form.glAccountId || null }
     const res = await fetch('/api/finance/transactions', {
       method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -281,6 +281,17 @@ export default function TransactionsPage() {
                   <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">GL Account (cash/asset side)</label>
+              <select value={form.glAccountId} onChange={e => setForm(p => ({ ...p, glAccountId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                <option value="">No GL account (no journal entry)</option>
+                {sortedCategoryList(categories.filter(c => ['asset','liability'].includes(c.type))).map(c => (
+                  <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Required for GL entry. Select bank account, term deposit, property, etc.</p>
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Member</label>

@@ -91,41 +91,40 @@ export async function GET(request: NextRequest) {
     bankBalanceMap.set(glAccountId, data.netBalance)
   }
 
-  // ── 3. Accounts Payable: bills with invoice received but not yet fully paid ──
-  // Deduct any partial payments already made so AP reflects the true remaining balance.
-  const apFilter: any = { familyId, invoiceReceived: true, paid: false, isActive: true }
-  if (entityId) apFilter.entityId = entityId
-  const unpaidBills = await prisma.financeRecurringBill.findMany({
-    where: apFilter,
-    select: {
-      amount: true,
-      payments: { select: { amount: true } },
-    },
-  })
-  const accountsPayable = Math.round(
-    unpaidBills.reduce((s, b) => {
-      const paid = b.payments.reduce((p: number, pmt: { amount: number }) => p + pmt.amount, 0)
-      return s + Math.max(0, b.amount - paid)
-    }, 0) * 100,
-  ) / 100
+  // ── 3 & 4. Accounts Payable and Accounts Receivable — READ FROM GL ONLY ──
+  //
+  // AP and AR balances are derived from the GL (FinanceJournalLine) — the same
+  // source as the Trial Balance. This guarantees the Balance Sheet and Trial
+  // Balance always agree. There are NO reads from FinanceRecurringBill or
+  // FinanceIncomeEntry tables for financial figures.
+  //
+  // When a bill is invoice-received, a posted journal posts: DR Expense / CR AP.
+  // When paid: DR AP / CR Bank. The AP GL account balance is the net of these.
+  //
+  // When income is invoice-received, a posted journal posts: DR AR / CR Income.
+  // When received: DR Bank / CR AR. The AR GL account balance is the net.
+  //
+  // Find the AP and AR GL category IDs for this family
+  const [apCategory, arCategory] = await Promise.all([
+    prisma.financeCategory.findFirst({
+      where: { familyId, name: 'Accounts Payable', type: 'liability', isSystem: true },
+      select: { id: true },
+    }),
+    prisma.financeCategory.findFirst({
+      where: { familyId, name: 'Accounts Receivable', type: 'asset', isSystem: true },
+      select: { id: true },
+    }),
+  ])
 
-  // ── 4. Accounts Receivable: income with invoice received but not collected ──
-  // IMPORTANT: exclude entries that have a journalEntryId — those income entries
-  // have their AR side recorded via a DR to an Accounts Receivable GL account in
-  // the journal entry, which flows through deriveJournalLineBalances() above.
-  // Including them here too would double-count the AR on the Balance Sheet.
-  const arFilter: any = {
-    familyId,
-    invoiceReceived: true,
-    received: false,
-    isActive: true,
-    journalEntryId: null,   // journal-linked entries already have AR via GL journal line DR
-  }
-  if (entityId) arFilter.entityId = entityId
-  const uncollectedIncome = await prisma.financeIncomeEntry.findMany({
-    where: arFilter, select: { amount: true },
-  })
-  const accountsReceivable = Math.round(uncollectedIncome.reduce((s, e) => s + e.amount, 0) * 100) / 100
+  // AP: balance of the Accounts Payable GL account (liability normal balance = credit)
+  const accountsPayable = apCategory
+    ? Math.round(Math.max(0, -(journalBalances.get(apCategory.id)?.netBalance ?? 0)) * 100) / 100
+    : 0
+
+  // AR: balance of the Accounts Receivable GL account (asset normal balance = debit)
+  const accountsReceivable = arCategory
+    ? Math.round(Math.max(0, journalBalances.get(arCategory.id)?.netBalance ?? 0) * 100) / 100
+    : 0
 
   // ── 5. Current Period Net Income ──────────────────────────────────────────
   // Derived exclusively from posted journal lines (income/expense GL accounts).

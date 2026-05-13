@@ -1,0 +1,21 @@
+Accounting Systems:
+
+Accounting begins with a chart of accounts.  There are 5 types of accounts:  Income, expenses, assets, liabilities and equity.   
+Income and expenses are used to record income and expenditure over time.  Income minus expenses shows a profit or loss and provides a statement of performance (usually known as a profit and loss).
+Assets and liabilities are used to record what the entity owns and owes.  Assets minus liabilities provides a statement of position (usually known as a balance sheet)  The balance of assets minus liabilities is the equity.
+
+THE CHART OF ACCOUNTS
+This is what I currently use:
+The left hand column are the accounts the middle column is the description of the account and the right hand column is the current balance of the account.
+
+
+
+
+
+The accounts are on the left.  There are main accounts and sub-accounts. The blue highlight can be ignored.
+Each account has an account name, a description, a type (income, expense, asset, liability or equity).  A checkbox to identify which assets are bank accounts would be nice.  Being able select a colour for accounts would be great too.  
+It should also be possible to click on an account and see all transactions against the account.
+
+
+
+

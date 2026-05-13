@@ -384,49 +384,115 @@ export async function PATCH(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
-  // ── Stage 1: Remittance received → create income transaction (CR income) ──
+  // ── Stage 1: Remittance received → ATOMIC GL WRITE (DR AR / CR Income) ──
   //
-  // Accounting: when remittance advice arrives, income is recognised (accrual).
-  // Creates an uncleared income transaction. The AR asset side is tracked
-  // implicitly — the uncleared income tx represents money owed to us.
+  // Accounting (accrual, Xero-standard): income is recognised when the
+  // invoice/remittance is received, not when cash arrives.
+  //   DR  Accounts Receivable    $amount   (asset — money owed to us)
+  //   CR  Income Category        $amount   (income on P&L from this date)
   //
-  // P&L effect: income appears from this point forward.
-  // Balance sheet: uncleared income tx increases net worth (AR asset).
+  // The status update and GL write are ATOMIC — both succeed or both fail.
+  // Income now appears in the Trial Balance as soon as this fires.
   if (invoiceReceived === true && !existing.invoiceReceived) {
+    if (!existing.categoryId) {
+      return NextResponse.json({ error: 'Income entry must have a category before posting' }, { status: 400 })
+    }
     const remittanceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
     try {
-      const arCategoryId = await ensureAccountsReceivableCategory(session.familyId)
-      const remittanceTx = await prisma.financeTransaction.create({
-        data: {
-          type: 'income',
-          amount: existing.amount,
-          accountId: existing.accountId,
-          categoryId: existing.categoryId,
-          description: `${existing.name} (remittance received)`,
-          date: remittanceDate,
-          isRecurring: existing.incomeType !== 'one-off',
-          vendorId: existing.vendorId,
-          notes: existing.notes,
-          memberId: existing.memberId,
-          locationId: existing.locationId,
-          isCleared: false,   // Uncleared = awaiting cash (AR outstanding)
-          isTransfer: false,
-          createdBy: session.id,
-          familyId: session.familyId,
-          entityId: existing.entityId,
-          // Reference encodes the AR category for the balance sheet to read
-          reference: `AR:${arCategoryId}`,
-        },
-      })
-      await prisma.financeIncomeEntry.update({
-        where: { id },
-        data: {
-          invoiceTxId: remittanceTx.id,
-          transactionId: remittanceTx.id,  // keep legacy pointer
-        },
+      await prisma.$transaction(async (tx) => {
+        const arCategoryId = await ensureAccountsReceivableCategory(session.familyId)
+
+        // 1. Create GL journal: DR AR / CR Income — posted immediately
+        let journalEntryId: string
+        const existingJeId: string | null = existing.journalEntryId ?? null
+
+        if (existingJeId) {
+          const existingJe = await tx.financeJournalEntry.findFirst({
+            where: { id: existingJeId, familyId: session.familyId },
+            include: { lines: true },
+          })
+          if (existingJe && !existingJe.isPosted && existingJe.lines.length >= 2) {
+            const dr = existingJe.lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+            const cr = existingJe.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+            if (Math.abs(dr - cr) <= 0.005) {
+              await tx.financeJournalEntry.update({ where: { id: existingJeId }, data: { isPosted: true, date: remittanceDate } })
+              journalEntryId = existingJeId
+            } else {
+              const reference = await nextJournalReference(session.familyId)
+              const je = await tx.financeJournalEntry.create({
+                data: {
+                  reference, date: remittanceDate, description: existing.name,
+                  type: 'auto_transaction', isPosted: true,
+                  entityId: existing.entityId ?? null, familyId: session.familyId,
+                  lines: { create: [
+                    { glAccountId: arCategoryId,         side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
+                    { glAccountId: existing.categoryId!, side: 'credit', amount: existing.amount, description: existing.name },
+                  ]},
+                }, select: { id: true },
+              })
+              journalEntryId = je.id
+            }
+          } else {
+            const reference = await nextJournalReference(session.familyId)
+            const je = await tx.financeJournalEntry.create({
+              data: {
+                reference, date: remittanceDate, description: existing.name,
+                type: 'auto_transaction', isPosted: true,
+                entityId: existing.entityId ?? null, familyId: session.familyId,
+                lines: { create: [
+                  { glAccountId: arCategoryId,         side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
+                  { glAccountId: existing.categoryId!, side: 'credit', amount: existing.amount, description: existing.name },
+                ]},
+              }, select: { id: true },
+            })
+            journalEntryId = je.id
+          }
+        } else {
+          const reference = await nextJournalReference(session.familyId)
+          const je = await tx.financeJournalEntry.create({
+            data: {
+              reference, date: remittanceDate, description: existing.name,
+              type: 'auto_transaction', isPosted: true,
+              entityId: existing.entityId ?? null, familyId: session.familyId,
+              lines: { create: [
+                { glAccountId: arCategoryId,         side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
+                { glAccountId: existing.categoryId!, side: 'credit', amount: existing.amount, description: existing.name },
+              ]},
+            }, select: { id: true },
+          })
+          journalEntryId = je.id
+        }
+
+        // 2. Create tracking transaction
+        const remittanceTx = await tx.financeTransaction.create({
+          data: {
+            type: 'income', amount: existing.amount,
+            accountId: existing.accountId, categoryId: existing.categoryId,
+            description: `${existing.name} (remittance received)`,
+            date: remittanceDate, isRecurring: existing.incomeType !== 'one-off',
+            vendorId: existing.vendorId, notes: existing.notes,
+            memberId: existing.memberId, locationId: existing.locationId,
+            isCleared: false, isTransfer: false,
+            createdBy: session.id, familyId: session.familyId, entityId: existing.entityId,
+          },
+        })
+
+        // 3. Update income entry ATOMICALLY with GL write
+        await tx.financeIncomeEntry.update({
+          where: { id },
+          data: {
+            invoiceReceived: true, invoiceReceivedDate: remittanceDate,
+            invoiceTxId: remittanceTx.id, transactionId: remittanceTx.id,
+            journalEntryId,
+          },
+        })
       })
     } catch (err) {
-      console.error('[income PATCH] Failed to create remittance transaction:', err)
+      console.error('[income PATCH] ATOMIC remittance posting failed:', err)
+      return NextResponse.json(
+        { error: 'Failed to post income to General Ledger. No changes were saved.' },
+        { status: 422 }
+      )
     }
   }
 

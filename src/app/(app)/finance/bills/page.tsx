@@ -39,6 +39,7 @@ export interface Bill {
   autoPay: boolean; emailReminder: boolean; reminderDays: number
   notes: string | null; memberId: string | null
   journalEntryId: string | null
+  isGlPosted: boolean   // Derived: true only when linked GL journal isPosted=true
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
   vendor: { id: string; name: string } | null
@@ -886,7 +887,7 @@ function BillRow({
   onOpenPaymentHistory: (b: Bill) => void; onClosePaymentHistory: () => void
 }) {
   const isOneOff            = bill.billType === 'one-off'
-  const hasInvoice          = bill.invoiceReceived
+  const hasInvoice = bill.isGlPosted === true   // TRUE only when GL journal is actually posted
   const isAttachmentOpen    = att.openEntityId === bill.id
   const isPaymentHistoryOpen = paymentHistoryBillId === bill.id
   const totalPaid           = bill.payments?.reduce((s, p) => s + p.amount, 0) ?? 0
@@ -921,6 +922,11 @@ function BillRow({
             {hasInvoice && (
               <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
                 <Receipt className="h-2.5 w-2.5" /> POSTED
+              </span>
+            )}
+            {bill.invoiceReceived && !hasInvoice && (
+              <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded flex items-center gap-0.5" title="invoiceReceived=true but no posted GL journal — data integrity warning">
+                <Receipt className="h-2.5 w-2.5" /> POSTED (no GL)
               </span>
             )}
             {inBudget && (

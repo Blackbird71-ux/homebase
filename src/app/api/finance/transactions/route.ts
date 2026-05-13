@@ -192,51 +192,63 @@ export async function POST(request: NextRequest) {
     (transaction.accountId || glAccountId) &&
     (type === 'expense' || type === 'income')
   ) {
+    // Auto-journal gate: fires when EITHER a bank account OR a GL category account
+    // is provided as the cash/asset side of the double-entry.
+    // glAccountId = a FinanceCategory (asset/liability type) used instead of a bank account.
+    // This supports term deposits, properties, vehicles, and any non-FinanceAccount GL item.
     try {
-      // Check GST before deciding which journal to create
       const cat = await prisma.financeCategory.findFirst({
         where: { id: transaction.categoryId, familyId: session.familyId },
         select: { gstApplicable: true, gstRate: true },
       })
 
       const desc = description?.trim() || payee?.trim() || type
-      const cashGlId = glAccountId ?? transaction.accountId!
 
-      if (cat?.gstApplicable) {
-        // GST journal (3 lines) handles both the expense split AND the GL posting.
-        // Do NOT also create a simple 2-line journal — that would double-post.
-        await createGstJournalEntry(
-          type as 'expense' | 'income',
-          amount,
-          cat.gstRate ?? 10,
-          transaction.categoryId,
-          glAccountId ?? null,
-          accountId ?? null,
-          txDate,
-          desc,
-          session.familyId,
-          json.entityId ?? null,
-          session.id,
-          transaction.id,
-        )
-      } else {
-        // No GST: simple balanced 2-line auto-journal.
-        const autoLines: JournalLineInput[] = type === 'expense'
-          ? [
-              { glAccountId: transaction.categoryId, side: 'debit',  amount },
-              { glAccountId: cashGlId,               side: 'credit', amount },
-            ]
-          : [
-              { glAccountId: cashGlId,               side: 'debit',  amount },
-              { glAccountId: transaction.categoryId, side: 'credit', amount },
-            ]
-        await createTransactionJournalEntry(
-          desc,
-          autoLines,
-          txDate,
-          session.familyId,
-          json.entityId ?? null,
-          transaction.id,
+      // The cash/asset side: prefer explicit glAccountId, fall back to bank accountId
+      // Both are valid FinanceCategory IDs in the GL context.
+      // Note: accountId (FinanceAccount) is NOT a FinanceCategory ID.
+      // We use glAccountId for the journal; accountId is tracked separately on the tx.
+      const cashGlId = glAccountId ?? null
+
+      // Only auto-create journal if we have a valid GL account for the cash side
+      if (cashGlId) {
+        if (cat?.gstApplicable) {
+          await createGstJournalEntry(
+            type as 'expense' | 'income',
+            amount,
+            cat.gstRate ?? 10,
+            transaction.categoryId,
+            cashGlId,
+            accountId ?? null,
+            txDate,
+            desc,
+            session.familyId,
+            json.entityId ?? null,
+            session.id,
+            transaction.id,
+          )
+        } else {
+          const autoLines: JournalLineInput[] = type === 'expense'
+            ? [
+                { glAccountId: transaction.categoryId, side: 'debit',  amount },
+                { glAccountId: cashGlId,               side: 'credit', amount },
+              ]
+            : [
+                { glAccountId: cashGlId,               side: 'debit',  amount },
+                { glAccountId: transaction.categoryId, side: 'credit', amount },
+              ]
+          await createTransactionJournalEntry(
+            desc, autoLines, txDate, session.familyId, json.entityId ?? null, transaction.id,
+          )
+        }
+      } else if (transaction.accountId) {
+        // Bank account selected but no glAccountId — log a warning.
+        // To get a GL entry, the user must also set glAccountId.
+        // This is by design: the GL requires both sides to be FinanceCategory IDs.
+        console.warn(
+          `[transactions POST] No glAccountId for tx ${transaction.id} — ` +
+          `bank account ${transaction.accountId} is not a GL category. ` +
+          `Set glAccountId to get a GL journal entry.`
         )
       }
     } catch (err) {
