@@ -287,7 +287,11 @@ export default function IncomePage() {
     const errs = validate()
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     const payload = getFormPayload()
-    const validLines = journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+    // Only submit journal lines when explicitly posting — otherwise the auto-filled
+    // balanced lines would create a posted journal entry and feed the P&L unexpectedly.
+    const validLines = form.invoiceReceived
+      ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+      : []
     const body = editing
       ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
       : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }

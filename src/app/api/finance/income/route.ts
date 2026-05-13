@@ -330,6 +330,12 @@ export async function PATCH(request: NextRequest) {
       updateData.invoiceTxId = null
       if (existing.transactionId === invoiceTxId) updateData.transactionId = null
     }
+    // Delete the accrual journal entry (lines cascade-delete) so it no longer feeds P&L
+    const jeId: string | null = existing.journalEntryId ?? null
+    if (jeId) {
+      await prisma.financeJournalEntry.deleteMany({ where: { id: jeId, familyId: session.familyId } })
+      updateData.journalEntryId = null
+    }
     // Undo received too if it was set
     if (existing.received) {
       const receiptTxId: string | null = existing.receiptTxId ?? null

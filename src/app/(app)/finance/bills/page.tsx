@@ -313,22 +313,31 @@ export default function BillsPage() {
     const errs = validate()
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
-    const { addToBudget, ...payload } = getFormPayload() as any
-    // Include journal lines if at least 2 lines are defined with GL accounts
-    const validLines = journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
-    const body = editing
-      ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
-      : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
-    const res = await fetch('/api/finance/bills', {
-      method: editing ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) { const err = await res.json(); toast.error(err.error ?? 'Failed'); return }
-    const savedBill: Bill = await res.json()
-    toast.success(editing ? 'Bill updated' : 'Bill created')
-    await syncBudgetRule(savedBill, form.addToBudget)
-    closeForm(); load()
+    try {
+      const { addToBudget, ...payload } = getFormPayload() as any
+      // Include journal lines if at least 2 lines are defined with GL accounts
+      const validLines = journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+      const body = editing
+        ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+        : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+      const res = await fetch('/api/finance/bills', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error ?? `Failed (${res.status})`)
+        return
+      }
+      const savedBill: Bill = await res.json()
+      toast.success(editing ? 'Bill updated' : 'Bill created')
+      await syncBudgetRule(savedBill, form.addToBudget)
+      closeForm(); load()
+    } catch (err) {
+      console.error('[handleSave]', err)
+      toast.error('An unexpected error occurred. Check the browser console for details.')
+    }
   }
 
   async function handleDelete(id: string) {

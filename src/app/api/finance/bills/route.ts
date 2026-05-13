@@ -269,39 +269,45 @@ export async function POST(request: NextRequest) {
   // ── ATOMIC: create bill + GL journal entry if invoiceReceived=true ─────────
   // If invoiceReceived=true on creation, we post to the GL immediately.
   // The bill status and GL entry are committed together or not at all.
-  const bill = await prisma.$transaction(async (tx) => {
-    const newBill = await tx.financeRecurringBill.create({
-      data: {
-        name,
-        amount: parsedAmount,
-        accountId: accountId ?? null,
-        categoryId: categoryId ?? null,
-        vendorId: vendorId ?? null,
-        frequency,
-        dayOfMonth: dayOfMonth != null ? parseInt(dayOfMonth, 10) : null,
-        monthOfYear: monthOfYear != null ? parseInt(monthOfYear, 10) : null,
-        nextDueDate: dueDate,
-        endDate: endDate ? new Date(endDate) : null,
-        isActive: isActive ?? true,
-        autoPay: autoPay ?? false,
-        emailReminder: emailReminder ?? false,
-        reminderDays: reminderDays != null ? parseInt(reminderDays, 10) : 3,
-        notes: notes ?? null,
-        memberId: memberId ?? null,
-        locationId: locationId ?? null,
-        billType: billType ?? 'recurring',
-        recurrenceInterval: recurrenceInterval ?? null,
-        invoiceReceived: shouldPostInvoice,
-        invoiceReceivedDate: shouldPostInvoice ? invoiceDate : null,
-        paid: paid ?? false,
-        paidDate: paidDate ? new Date(paidDate) : null,
-        entityId: entityId ?? null,
-        taxClassification: taxClassification ?? null,
-        familyId: session.familyId,
-      },
+  let bill: Awaited<ReturnType<typeof prisma.financeRecurringBill.create>>
+  try {
+    bill = await prisma.$transaction(async (tx) => {
+      return tx.financeRecurringBill.create({
+        data: {
+          name,
+          amount: parsedAmount,
+          accountId: accountId ?? null,
+          categoryId: categoryId ?? null,
+          vendorId: vendorId ?? null,
+          frequency,
+          dayOfMonth: dayOfMonth != null ? parseInt(dayOfMonth, 10) : null,
+          monthOfYear: monthOfYear != null ? parseInt(monthOfYear, 10) : null,
+          nextDueDate: dueDate,
+          endDate: endDate ? new Date(endDate) : null,
+          isActive: isActive ?? true,
+          autoPay: autoPay ?? false,
+          emailReminder: emailReminder ?? false,
+          reminderDays: reminderDays != null ? parseInt(reminderDays, 10) : 3,
+          notes: notes ?? null,
+          memberId: memberId ?? null,
+          locationId: locationId ?? null,
+          billType: billType ?? 'recurring',
+          recurrenceInterval: recurrenceInterval ?? null,
+          invoiceReceived: shouldPostInvoice,
+          invoiceReceivedDate: shouldPostInvoice ? invoiceDate : null,
+          paid: paid ?? false,
+          paidDate: paidDate ? new Date(paidDate) : null,
+          entityId: entityId ?? null,
+          taxClassification: taxClassification ?? null,
+          familyId: session.familyId,
+        },
+      })
     })
-    return newBill
-  })
+  } catch (err) {
+    console.error('[bills POST] Failed to create bill:', err)
+    const msg = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: `Failed to create bill: ${msg}` }, { status: 500 })
+  }
 
   // ── Post to GL if invoiceReceived=true ─────────────────────────────────────
   // Done outside the create transaction so the bill ID exists for the journal.
