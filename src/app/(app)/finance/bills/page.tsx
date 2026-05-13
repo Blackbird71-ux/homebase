@@ -173,16 +173,16 @@ export default function BillsPage() {
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
 
   // ── Pre-seed journal lines for bills ───────────────────────────────────────
-  // DR: blank expense line (user selects the account) / CR: Accounts Payable
+  // DR: expense line (pre-filled from bill's categoryId if known) / CR: Accounts Payable
   // Amount pre-filled when editing an existing bill.
-  function defaultBillLines(amount?: number): JournalFormLine[] {
+  function defaultBillLines(amount?: number, expenseCategoryId?: string): JournalFormLine[] {
     const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
     // Match by partial name (case-insensitive) so leading chart-of-accounts codes
     // like "0 Accounts Payable" or "2000 Accounts Payable" are found correctly.
     const ap = glAccounts.find(a => a.name.toLowerCase().includes('accounts payable'))
     return [
-      { glAccountId: '',           side: 'debit',  amount: amtStr, description: '' },  // user picks expense GL
-      { glAccountId: ap?.id ?? '', side: 'credit', amount: amtStr, description: '' },
+      { glAccountId: expenseCategoryId ?? '', side: 'debit',  amount: amtStr, description: '' },
+      { glAccountId: ap?.id ?? '',            side: 'credit', amount: amtStr, description: '' },
     ]
   }
 
@@ -274,12 +274,13 @@ export default function BillsPage() {
     setEditing(b)
     setErrors({})
     setJournalErrors({})
-    // Pre-seed journal lines: load existing JE lines if present, else defaults
+    prevBillAmountRef.current = 0  // reset so amount-sync useEffect doesn't corrupt incoming GL lines
+    // Pre-seed journal lines from GL if a journal entry exists, else default using the bill's category
     if (b.journalEntryId) {
-      setJournalLines(defaultBillLines(b.amount))  // show defaults immediately while loading
+      setJournalLines(defaultBillLines(b.amount, b.category?.id))  // show defaults immediately while loading
       loadExistingBillJournalLines(b.journalEntryId).then(setJournalLines)
     } else {
-      setJournalLines(defaultBillLines(b.amount))
+      setJournalLines(defaultBillLines(b.amount, b.category?.id))
     }
     setForm({
       name: b.name, amount: b.amount, frequency: b.frequency,
@@ -345,13 +346,14 @@ export default function BillsPage() {
         }
       }
 
-      // ── Only submit journal lines when the user is actively posting ──────
-      // For edit mode: only send lines if invoiceReceived is being turned ON
-      // (i.e. it was false before). If the bill is already posted, updating
-      // via PUT should not re-submit the auto-filled balanced lines and
-      // accidentally re-create/re-post a journal entry.
+      // ── Determine which journal lines to submit ───────────────────────────
+      // isNewPost: user is posting for the first time — lines become the posted GL entry
+      // isDraftPersist: bill remains unposted — persist any line edits to the draft journal
+      //   so the GL stays in sync with what the user sees in the editor
+      // Already-posted bills: never re-submit lines (would re-create/re-post the journal)
       const isNewPost = form.invoiceReceived && (!editing || !editing.invoiceReceived)
-      const validLines = isNewPost
+      const isDraftPersist = !!editing && !editing.invoiceReceived && !form.invoiceReceived
+      const validLines = (isNewPost || isDraftPersist)
         ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
         : []
 
@@ -443,6 +445,16 @@ export default function BillsPage() {
     })
     if (res.ok) { toast.success('Payment reversed — bill restored'); load() }
     else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to reverse payment') }
+  }
+
+  function handleCategoryChange(categoryId: string) {
+    setForm(p => ({ ...p, categoryId }))
+    // Keep the first debit line in sync so the GL journal reflects the chosen expense account
+    setJournalLines(lines => {
+      const firstDebitIdx = lines.findIndex(l => l.side === 'debit')
+      if (firstDebitIdx === -1) return lines
+      return lines.map((l, i) => i === firstDebitIdx ? { ...l, glAccountId: categoryId } : l)
+    })
   }
 
   function handleVendorChange(vendorId: string) {
@@ -742,6 +754,16 @@ export default function BillsPage() {
                     className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                     <option value="">No location</option>
                     {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Expense Category (GL)</label>
+                  <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">No category</option>
+                    {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
+                      <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>

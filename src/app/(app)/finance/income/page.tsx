@@ -182,14 +182,15 @@ export default function IncomePage() {
   }
 
   // ── Pre-seed journal lines for income ───────────────────────────────────
-  function defaultIncomeLines(amount?: number): JournalFormLine[] {
+  // DR: Accounts Receivable / CR: income account (pre-filled from entry's categoryId if known)
+  function defaultIncomeLines(amount?: number, incomeCategoryId?: string): JournalFormLine[] {
     const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
     // Match by partial name (case-insensitive) so leading chart-of-accounts codes
     // like "0 Accounts Receivable" or "1100 Accounts Receivable" are found correctly.
     const ar = glAccounts.find(a => a.name.toLowerCase().includes('accounts receivable'))
     return [
-      { glAccountId: ar?.id ?? '', side: 'debit',  amount: amtStr, description: '' },
-      { glAccountId: '',           side: 'credit', amount: amtStr, description: '' },
+      { glAccountId: ar?.id ?? '',          side: 'debit',  amount: amtStr, description: '' },
+      { glAccountId: incomeCategoryId ?? '', side: 'credit', amount: amtStr, description: '' },
     ]
   }
 
@@ -216,11 +217,13 @@ export default function IncomePage() {
     setEditing(e)
     setErrors({})
     setJournalErrors({})
+    prevIncomeAmountRef.current = 0  // reset so amount-sync useEffect doesn't corrupt incoming GL lines
+    // Pre-seed journal lines from GL if a journal entry exists, else default using the entry's category
     if (e.journalEntryId) {
-      setJournalLines(defaultIncomeLines(e.amount))
+      setJournalLines(defaultIncomeLines(e.amount, e.category?.id))  // show defaults immediately while loading
       loadExistingJournalLines(e.journalEntryId).then(setJournalLines)
     } else {
-      setJournalLines(defaultIncomeLines(e.amount))
+      setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
     }
     setForm({
       name: e.name, amount: e.amount, frequency: e.frequency,
@@ -257,6 +260,16 @@ export default function IncomePage() {
     if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
     if (!form.nextExpectedDate) errs.nextExpectedDate = 'Expected date is required'
     return errs
+  }
+
+  function handleCategoryChange(categoryId: string) {
+    setForm(p => ({ ...p, categoryId }))
+    // Keep the first credit line in sync so the GL journal reflects the chosen income account
+    setJournalLines(lines => {
+      const firstCreditIdx = lines.findIndex(l => l.side === 'credit')
+      if (firstCreditIdx === -1) return lines
+      return lines.map((l, i) => i === firstCreditIdx ? { ...l, glAccountId: categoryId } : l)
+    })
   }
 
   function handleVendorChange(vendorId: string) {
@@ -313,10 +326,12 @@ export default function IncomePage() {
           }
         }
 
-        // For edit mode: only send journal lines if invoiceReceived is being turned ON
-        // (i.e. it was false before). Never re-submit lines for already-posted entries.
+        // isNewPost: posting for the first time — lines become the posted GL entry
+        // isDraftPersist: remains unposted — persist line edits to the draft journal
+        // Already-posted: never re-submit lines
         const isNewPost = form.invoiceReceived && !editing.invoiceReceived
-        const validLines = isNewPost
+        const isDraftPersist = !editing.invoiceReceived && !form.invoiceReceived
+        const validLines = (isNewPost || isDraftPersist)
           ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
           : []
 
@@ -749,6 +764,16 @@ export default function IncomePage() {
                     className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                     <option value="">No location</option>
                     {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Income Category (GL)</label>
+                  <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">No category</option>
+                    {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
+                      <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
