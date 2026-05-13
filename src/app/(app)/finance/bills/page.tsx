@@ -815,6 +815,7 @@ export default function BillsPage() {
               </div>
             </div>
           </div>
+          </div>
 
           <DialogFooter className="mx-0 mb-0 shrink-0">
             <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
