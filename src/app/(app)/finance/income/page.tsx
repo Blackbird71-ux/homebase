@@ -757,6 +757,7 @@ export default function IncomePage() {
                     <option value="">Select entity…</option>
                     {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                   </select>
+                  <p className="mt-1 text-[11px] text-muted-foreground/70">Scopes this entry for entity-level reporting only. Does not affect journal lines.</p>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Location</label>
@@ -775,6 +776,7 @@ export default function IncomePage() {
                       <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-[11px] text-muted-foreground/70">Fallback only — auto-seeds the journal lines below when none are defined. Ignored once journal lines exist.</p>
                 </div>
               </div>
 
@@ -782,6 +784,10 @@ export default function IncomePage() {
               <div className="md:w-1/2 px-4 pb-4 space-y-3">
               {/* Journal Lines */}
               <div className="rounded-md border border-border bg-muted/20 p-3">
+                <div className="mb-2">
+                  <p className="text-xs font-medium text-foreground">Journal Lines</p>
+                  <p className="text-[11px] text-muted-foreground/70">Authoritative GL entries. When balanced, these are posted as-is — the Income Category above is ignored.</p>
+                </div>
                 <JournalLinesEditor
                   lines={journalLines}
                   onChange={setJournalLines}
