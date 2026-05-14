@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   CheckCircle2, AlertTriangle, ChevronDown, ChevronRight,
-  CreditCard, Clock, FileText, Building2,
+  CreditCard, Clock, FileText, Building2, ExternalLink,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
@@ -27,6 +27,7 @@ interface ApItem {
   paymentsToDate: number
   amount: number
   invoiceDate: string
+  nextDueDate: string | null
   daysSinceInvoice: number
   bucket: AgingBucket
   vendorId: string | null
@@ -300,9 +301,22 @@ export default function AccountsPayablePage() {
                             className="grid grid-cols-[1fr_repeat(4,_100px)_110px] text-xs border-b border-border/30 last:border-0 hover:bg-accent/20"
                           >
                             <div className="px-4 py-2 pl-10 flex flex-col justify-center">
-                              <span className="font-medium text-foreground">{item.name}</span>
+                              <span className="font-medium text-foreground flex items-center gap-1">
+                                {item.name}
+                                <a
+                                  href="/finance/bills"
+                                  title="Go to bills"
+                                  className="text-muted-foreground hover:text-foreground"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </span>
                               <span className="text-muted-foreground mt-0.5 flex items-center gap-2">
                                 Invoice {format(parseISO(item.invoiceDate), 'd MMM yyyy')}
+                                {item.nextDueDate && (
+                                  <span>Due {format(parseISO(item.nextDueDate), 'd MMM yyyy')}</span>
+                                )}
                                 {item.reference && <span className="font-mono">{item.reference}</span>}
                                 {item.categoryName && <span>{item.categoryName}</span>}
                                 {item.paymentsToDate > 0 && (

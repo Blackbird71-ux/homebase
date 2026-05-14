@@ -517,6 +517,7 @@ export async function PATCH(request: NextRequest) {
 
   const existing = await prisma.financeRecurringBill.findFirst({
     where: { id, familyId: session.familyId },
+    include: { payments: { select: { amount: true } } },
   })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
@@ -794,6 +795,10 @@ export async function PATCH(request: NextRequest) {
     const bankGlAccountId: string | null = payFromGlAccountId ?? null
     const paymentAccountId = payFromAccountId ?? existing.accountId
 
+    // Determine if this payment fully covers the bill (including prior partial payments)
+    const priorPaid = (existing.payments ?? []).reduce((s, p) => s + p.amount, 0)
+    const isFullyPaid = (priorPaid + payAmount) >= existing.amount - 0.005
+
     try {
       await prisma.$transaction(async (tx) => {
         const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
@@ -874,19 +879,17 @@ export async function PATCH(request: NextRequest) {
           })
         }
 
-        // Update bill status atomically
+        // Update bill status atomically — only mark paid when fully covered
         await tx.financeRecurringBill.update({
           where: { id },
-          data: {
-            paid: true,
-            paidDate: actualPaidDate,
-            paymentTxId: paymentTx.id,
-          },
+          data: isFullyPaid
+            ? { paid: true, paidDate: actualPaidDate, paymentTxId: paymentTx.id }
+            : { paymentTxId: paymentTx.id },
         })
       })
 
-      // Spawn next occurrence for recurring bills
-      if (existing.billType !== 'one-off') {
+      // Spawn next occurrence for recurring bills — only when fully paid
+      if (existing.billType !== 'one-off' && isFullyPaid) {
         const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
         if (!existing.endDate || newDueDate <= existing.endDate) {
           await prisma.financeRecurringBill.create({

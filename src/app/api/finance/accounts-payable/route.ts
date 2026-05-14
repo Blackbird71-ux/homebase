@@ -146,6 +146,7 @@ export async function GET(request: NextRequest) {
     paymentsToDate: number
     amount: number          // outstanding balance = originalAmount − paymentsToDate
     invoiceDate: string
+    nextDueDate: string | null
     daysSinceInvoice: number
     bucket: AgingBucket
     vendorId: string | null
@@ -179,6 +180,7 @@ export async function GET(request: NextRequest) {
         paymentsToDate:   Math.round(paymentsToDate * 100) / 100,
         amount:           outstandingAmount,
         invoiceDate:      invoiceDate.toISOString(),
+        nextDueDate:      b.nextDueDate?.toISOString() ?? null,
         daysSinceInvoice: Math.max(0, days),
         bucket:           ageBucket(invoiceDate, asAt),
         vendorId:         b.vendor?.id    ?? null,
