@@ -27,6 +27,7 @@ const queryTripsDefinition: FunctionDeclaration = {
     properties: {
       status: {
         type: SchemaType.STRING,
+        format: 'enum',
         description: 'Optional filter: "upcoming" (future trips), "active" (currently happening), "past" (completed/cancelled), or omit for all.',
         enum: ['upcoming', 'active', 'past', 'all'],
       },
