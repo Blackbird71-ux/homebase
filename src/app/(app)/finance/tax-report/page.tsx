@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import {
   Receipt, AlertTriangle, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { currentFyYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-fy'
+import { PrintButton } from '@/components/print/PrintButton'
+import { PrintWrapper } from '@/components/print/PrintWrapper'
 
 // ── Australian Tax Brackets 2025-26 ──────────────────────────────────────────
 // Update thresholds here each July — no API redeployment needed.
@@ -301,6 +303,7 @@ export default function TaxReportPage() {
   const [entityFilter, setEntityFilter] = useState<string>('')
   const [fyStartMonth, setFyStartMonth] = useState<number>(7)
   const [fyStartYear, setFyStartYear]   = useState<number>(() => currentFyYear(7))
+  const printRef = useRef<HTMLDivElement>(null)
 
   // Load settings for FY start month
   useEffect(() => {
@@ -389,7 +392,21 @@ export default function TaxReportPage() {
         <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-1.5 max-w-sm">
           Estimated only — based on 2025-26 ATO brackets. Consult your accountant for final figures.
         </p>
+        <PrintButton
+          printRef={printRef}
+          reportTitle="Tax Report"
+          dateRange={fyLabelUtil(fyStartYear, fyStartMonth)}
+          disabled={loading}
+        />
       </div>
+
+      {/* ── Printable region ──────────────────────────────────────────────── */}
+      <PrintWrapper
+        ref={printRef}
+        reportTitle="Tax Report"
+        dateRange={fyLabelUtil(fyStartYear, fyStartMonth)}
+        meta={`${data?.from ?? ''} – ${data?.to ?? ''} · Estimated only — consult your accountant`}
+      >
 
       {/* Entity filter */}
       {data.entities.length > 0 && (
@@ -523,6 +540,8 @@ export default function TaxReportPage() {
           </div>
         </div>
       )}
+
+      </PrintWrapper>
     </div>
   )
 }

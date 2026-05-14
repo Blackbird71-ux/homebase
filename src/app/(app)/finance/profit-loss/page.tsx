@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
   ReceiptText, List, X,
@@ -12,6 +12,8 @@ import {
 } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { fyStartYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-fy'
+import { PrintButton } from '@/components/print/PrintButton'
+import { PrintWrapper } from '@/components/print/PrintWrapper'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -134,6 +136,8 @@ export default function ProfitLossPage() {
   const [ledgerLabel, setLedgerLabel] = useState('')
   const [ledgerTxs, setLedgerTxs]    = useState<LedgerTx[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
+
+  const printRef = useRef<HTMLDivElement>(null)
 
   const { start, end, label } = getPeriodBounds(periodMode, anchor, fyStartMonth)
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
@@ -571,6 +575,14 @@ export default function ProfitLossPage() {
         </div>
 
         {txLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading transactions…</span>}
+        <div className="ml-auto" data-print-hide>
+          <PrintButton
+            printRef={printRef}
+            reportTitle="Profit & Loss"
+            dateRange={label}
+            disabled={loading}
+          />
+        </div>
       </div>
 
       {viewMode === 'accrual' && (
@@ -585,6 +597,14 @@ export default function ProfitLossPage() {
       )}
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
+      {/* ── Printable region ───────────────────────────────────────────────── */}
+      <PrintWrapper
+        ref={printRef}
+        reportTitle="Profit & Loss"
+        dateRange={label}
+        meta={`Income: ${fmtCurrency(totalIncome)} · Expenses: ${fmtCurrency(totalExpenses)} · Net: ${fmtCurrency(netProfit)}`}
+      >
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
@@ -846,6 +866,9 @@ export default function ProfitLossPage() {
           </div>
         </>
       )}
+
+      {/* ── End printable region ──────────────────────────────────────────── */}
+      </PrintWrapper>
     </div>
   )
 }

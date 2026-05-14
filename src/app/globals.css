@@ -831,3 +831,42 @@ body {
   --sidebar-border:       oklch(0.30 0.05 148);
   --radius: 0.75rem;
 }
+
+/* ── Print / PDF styles ───────────────────────────────────────────────────── */
+/* These supplement the dynamic styles injected by PrintButton.tsx.           */
+/* They ensure the print-header div (hidden on screen) is visible in print.   */
+@media print {
+  /* Show the print header that is hidden on-screen */
+  .print-header {
+    display: flex !important;
+  }
+
+  /* Hide the print button itself and any data-print-hide elements */
+  [data-print-hide],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Prevent orphaned rows at the bottom of a printed page */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure backgrounds print (coloured table sections etc) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide the app shell — sidebar, top nav, FAB */
+  html body > *:not(#__next):not([data-homebase-print]) {
+    display: none !important;
+  }
+
+  /* Keep Next.js root element visible so our scoped print region works */
+  #__next {
+    display: block !important;
+    background: white !important;
+  }
+}
+

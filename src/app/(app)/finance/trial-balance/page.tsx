@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   CheckCircle2, AlertTriangle, ArrowLeft, ChevronRight,
   Download, Search, X, BookOpen, Scale,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
+import { PrintButton } from '@/components/print/PrintButton'
+import { PrintWrapper } from '@/components/print/PrintWrapper'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,6 +126,7 @@ export default function TrialBalancePage() {
   const [search, setSearch]     = useState('')
 
   // GL drill-down state
+  const printRef = useRef<HTMLDivElement>(null)
   const [glAccountId, setGlAccountId] = useState<string | null>(null)
 
   // ── Load entities once ────────────────────────────────────────────────────
@@ -221,6 +224,14 @@ export default function TrialBalancePage() {
   const glData = data?.mode === 'general-ledger' ? data : null
   const grouped = tbData ? groupAccounts(filteredAccounts) : null
 
+  // Build a date range string for the print header
+  const printDateRange = data?.from && data?.to
+    ? `${format(new Date(data.from), 'd MMM yyyy')} – ${format(new Date(data.to), 'd MMM yyyy')}`
+    : data?.to ? `Up to ${format(new Date(data.to), 'd MMM yyyy')}` : 'All time'
+  const printTitle = glAccountId
+    ? `General Ledger${glData ? ` — ${glData.glAccount.name}` : ''}`
+    : 'Trial Balance'
+
   return (
     <div className="space-y-5 pb-8">
 
@@ -250,13 +261,21 @@ export default function TrialBalancePage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={exportCSV}
-          disabled={!data || loading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors"
-        >
-          <Download className="h-3.5 w-3.5" /> Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            printRef={printRef}
+            reportTitle={printTitle}
+            dateRange={printDateRange}
+            disabled={!data || loading}
+          />
+          <button
+            onClick={exportCSV}
+            disabled={!data || loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
+        </div>
       </div>
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
@@ -303,6 +322,14 @@ export default function TrialBalancePage() {
           </div>
         )}
       </div>
+
+      {/* ── Printable region ───────────────────────────────────────────────── */}
+      <PrintWrapper
+        ref={printRef}
+        reportTitle={printTitle}
+        dateRange={printDateRange}
+        meta={tbData ? `${tbData.isBalanced ? '✓ Balanced' : '⚠ Out of balance'} · ${tbData.accounts.length} accounts` : undefined}
+      >
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {error && (
@@ -489,6 +516,7 @@ export default function TrialBalancePage() {
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* GENERAL LEDGER VIEW                                                 */}
       {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* (inside same PrintWrapper) */
       {glData && glAccountId && (
         <>
           {/* GL account header */}
@@ -641,6 +669,9 @@ export default function TrialBalancePage() {
           </p>
         </>
       )}
+
+      {/* ── End printable region ──────────────────────────────────────────── */}
+      </PrintWrapper>
     </div>
   )
 }

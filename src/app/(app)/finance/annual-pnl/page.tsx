@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign,
 } from 'lucide-react'
@@ -9,6 +9,8 @@ import {
   startOfMonth, endOfMonth, getMonth, getYear,
 } from 'date-fns'
 import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
+import { PrintButton } from '@/components/print/PrintButton'
+import { PrintWrapper } from '@/components/print/PrintWrapper'
 
 // Given a FY start year (e.g. 2025 for FY2025-26), FY start month (0-based),
 // and a column index 0–11, return the calendar Date for that month
@@ -134,6 +136,7 @@ export default function AnnualPnLPage() {
   const [glMonths, setGlMonths] = useState<(PnlMonthData | null)[]>(Array(12).fill(null))
   const [glLoading, setGlLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'actuals' | 'forecast'>('actuals')
+  const printRef = useRef<HTMLDivElement>(null)
 
   const fyMonthLabelsArr = useMemo(() => fyMonthLabels(fyStartMonth), [fyStartMonth])
 
@@ -396,7 +399,24 @@ export default function AnnualPnLPage() {
         )}
 
         {glLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading GL data…</span>}
+        <div className="ml-auto" data-print-hide>
+          <PrintButton
+            printRef={printRef}
+            reportTitle="Annual P&L"
+            dateRange={fyLabelUtil(fyStartYear, fyStartMonth)}
+            landscape
+            disabled={loading}
+          />
+        </div>
       </div>
+
+      {/* ── Printable region (landscape) ───────────────────────────────────── */}
+      <PrintWrapper
+        ref={printRef}
+        reportTitle="Annual P&L"
+        dateRange={fyLabelUtil(fyStartYear, fyStartMonth)}
+        meta={`Income: ${fmtCurrency(totalIncome)} · Expenses: ${fmtCurrency(totalExpenses)} · Net: ${fmtCurrency(totalNet)} · ${viewMode === 'actuals' ? 'Actuals (GL)' : 'Forecast'}`}
+      >
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">
@@ -588,6 +608,8 @@ export default function AnnualPnLPage() {
           ? 'Actuals — sourced from the General Ledger (posted journal entries). Figures match the Trial Balance, P&L, and Balance Sheet exactly. Future months with no posted entries will show —.'
           : 'Forecast — recurring bills and income spread evenly across months at their monthly equivalent. This is a planning projection based on scheduled items, not GL-posted actuals.'}
       </p>
+
+      </PrintWrapper>
     </div>
   )
 }

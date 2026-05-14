@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Building2, TrendingUp, TrendingDown, Wallet, AlertTriangle, CheckCircle2,
   List, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { PrintButton } from '@/components/print/PrintButton'
+import { PrintWrapper } from '@/components/print/PrintWrapper'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -197,6 +199,7 @@ export default function BalanceSheetPage() {
   const [ledgerCategoryId, setLedgerCategoryId] = useState('')
   const [ledgerTxs, setLedgerTxs]      = useState<LedgerTx[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
+  const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetch('/api/finance/entities')
@@ -286,6 +289,12 @@ export default function BalanceSheetPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <PrintButton
+            printRef={printRef}
+            reportTitle="Balance Sheet"
+            dateRange={`As at ${asAt}`}
+            disabled={loading && !data}
+          />
           <div>
             <label className="text-xs text-muted-foreground mr-1">As at</label>
             <input
@@ -357,6 +366,14 @@ export default function BalanceSheetPage() {
           </ol>
         </div>
       )}
+
+      {/* ── Printable region ──────────────────────────────────────────────── */}
+      <PrintWrapper
+        ref={printRef}
+        reportTitle="Balance Sheet"
+        dateRange={`As at ${asAt}`}
+        meta={data ? `Net Worth: ${fmt(data.netWorth)} · Assets: ${fmt(data.assets.total)} · Liabilities: ${fmt(data.liabilities.total)}` : undefined}
+      >
 
       {/* ── Ledger panel ────────────────────────────────────────────────── */}
       {ledgerOpen && (
@@ -634,6 +651,8 @@ export default function BalanceSheetPage() {
         Property, investments, and mortgages use opening balances from Chart of Accounts — update these manually when values change.
         Click any account name to view its transaction ledger.
       </p>
+
+      </PrintWrapper>
     </div>
   )
 }
