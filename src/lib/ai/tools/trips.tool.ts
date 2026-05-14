@@ -83,7 +83,7 @@ async function queryTripsHandler(args: Record<string, unknown>, ctx: HandlerCont
   })
 
   if (trips.length === 0) {
-    return { result: status ? `No ${status} trips found.` : 'No trips found.' }
+    return { message: status ? `No ${status} trips found.` : 'No trips found.' }
   }
 
   const lines = trips.map((t) => {
@@ -99,7 +99,7 @@ async function queryTripsHandler(args: Record<string, unknown>, ctx: HandlerCont
   })
 
   const summary = `Found ${trips.length} trip(s):\n\n${lines.join('\n\n')}`
-  return { result: summary }
+  return { message: summary }
 }
 
 // ── createTrip ─────────────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ async function createTripHandler(args: Record<string, unknown>, ctx: HandlerCont
   })
 
   return {
-    result: `✅ Trip created!\n\n**${trip.title}** — ${trip.destination}\n${formatDate(trip.startDate)} → ${formatDate(trip.endDate)}`,
+    message: `✅ Trip created!\n\n**${trip.title}** — ${trip.destination}\n${formatDate(trip.startDate)} → ${formatDate(trip.endDate)}`,
   }
 }
 
