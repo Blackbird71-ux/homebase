@@ -79,43 +79,43 @@ function DroppableMealSlot({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col gap-1 rounded-lg transition-colors',
+        'flex flex-col gap-0.5 rounded-lg transition-colors',
         compact ? '' : 'p-0.5 -mx-0.5',
         // In compact mode, empty slots show as thin dashed drop zones
-        compact && isEmpty && !isOver && 'border border-dashed border-border/50 rounded-md px-2 py-1.5',
-        compact && isEmpty && isOver && 'border-2 border-primary/40 border-dashed rounded-md px-2 py-2 bg-primary/5',
+        compact && isEmpty && !isOver && 'border border-dashed border-border/50 rounded-md px-1.5 py-1',
+        compact && isEmpty && isOver && 'border-2 border-primary/40 border-dashed rounded-md px-2 py-1.5 bg-primary/5',
         !compact && isEmpty && 'p-0.5',
         isOver && !isEmpty && 'bg-primary/10 ring-2 ring-primary/40 ring-dashed'
       )}
     >
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {selectMode && entry && (
           <button
             type="button"
             onClick={() => onToggleMealSelect?.(entry.id)}
             className={cn(
-              'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors mr-1',
+              'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors mr-0.5',
               isSelected
                 ? 'bg-primary border-primary text-primary-foreground'
                 : 'border-muted-foreground/50'
             )}
           >
-            {isSelected && <CheckIcon className="h-3 w-3" />}
+            {isSelected && <CheckIcon className="h-2.5 w-2.5" />}
           </button>
         )}
         <Icon className={cn(
           'shrink-0',
-          compact && isEmpty ? 'h-3 w-3 text-muted-foreground/50' : 'h-3 w-3 text-muted-foreground'
+          compact && isEmpty ? 'h-2.5 w-2.5 text-muted-foreground/50' : 'h-2.5 w-2.5 text-muted-foreground'
         )} />
         <span className={cn(
-          'text-xs',
+          'text-[10px]',
           compact && isEmpty ? 'text-muted-foreground/50' : 'text-muted-foreground'
         )}>{mealType.label}</span>
         {compact && isEmpty && !isOver && (
-          <span className="text-[10px] text-muted-foreground/30 ml-1">— drop recipe here</span>
+          <span className="text-[9px] text-muted-foreground/30 ml-0.5">— drop recipe here</span>
         )}
         {compact && isEmpty && isOver && (
-          <span className="text-[10px] text-primary/60 ml-1">— drop to add</span>
+          <span className="text-[9px] text-primary/60 ml-0.5">— drop to add</span>
         )}
       </div>
       {!isEmpty && (
@@ -173,77 +173,47 @@ export function DailyMealColumn({
   })
 
   if (compact) {
+    const allEmpty = recipeFilledMealTypes.length === 0
+
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-0.5">
         {/* Day header — horizontal for compact */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className={cn(
-            "text-sm h-6 w-6 flex items-center justify-center rounded-full shrink-0",
+            "text-xs h-5 w-5 flex items-center justify-center rounded-full shrink-0",
             isToday ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground"
           )}>
             {new Date(date + 'T00:00:00').getDate()}
           </div>
           <p className={cn(
-            "text-sm font-medium",
+            "text-xs font-medium",
             isToday && "text-primary"
           )}>
-            {new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' })}
+            {new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' })}
           </p>
         </div>
 
-        {/* All meal slots — filled ones visible, empty ones are minimal droppable targets */}
-        <div className="flex flex-col gap-1 pl-1">
-          {MEAL_TYPES.map((mealType) => {
-            const entry = getEntryForMealType(mealType.id)
-            const isFilled = entry && entry.recipes && entry.recipes.length > 0
-            const isSelected = entry ? selectedMealIds.has(entry.id) : false
-            const isNewlyMoved = entry ? newlyMovedEntryIds.has(entry.id) : false
-
-            return (
-              <DroppableMealSlot
-                key={mealType.id}
-                date={date}
-                mealType={mealType}
-                entry={entry ?? undefined}
-                isNewlyMoved={isNewlyMoved}
-                selectMode={selectMode}
-                isSelected={isSelected}
-                onToggleMealSelect={onToggleMealSelect}
-                onMealClick={onMealClick}
-                onMealClear={onMealClear}
-                onMealAddToGroceries={onMealAddToGroceries}
-                compact
-              />
-            )
-          })}
-        </div>
-
-        {/* No meals state + add button */}
-        {recipeFilledMealTypes.length === 0 && (
-          <p className="text-xs text-muted-foreground italic pl-1">No meals planned</p>
-        )}
-
-        {/* Add meal — shows meal type picker inline */}
-        {emptyMealTypes.length > 0 && (
-          <div className="pl-1 relative">
+        {/* Collapsed empty-day state — single add button when no meals at all */}
+        {allEmpty ? (
+          <div className="pl-0.5">
             {addMenuOpen ? (
-              <div className="flex flex-wrap gap-1.5">
-                {emptyMealTypes.map((mt) => {
+              <div className="flex flex-wrap gap-1">
+                {MEAL_TYPES.map((mt) => {
                   const Icon = mt.icon
                   return (
                     <button
                       key={mt.id}
                       onClick={() => { setAddMenuOpen(false); onMealClick(date, mt.id) }}
-                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                      className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                     >
-                      <Icon className="h-3 w-3" />
+                      <Icon className="h-2.5 w-2.5" />
                       {mt.label}
                     </button>
                   )
                 })}
                 <button
                   onClick={() => setAddMenuOpen(false)}
-                  className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground"
+                  className="text-[10px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -251,13 +221,79 @@ export function DailyMealColumn({
             ) : (
               <button
                 onClick={() => setAddMenuOpen(true)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
               >
-                <PlusIcon className="h-3.5 w-3.5" />
-                Add meal
+                <PlusIcon className="h-3 w-3" />
+                Add meals
               </button>
             )}
           </div>
+        ) : (
+          <>
+            {/* Meal slots — filled ones visible, empty ones are minimal droppable targets */}
+            <div className="flex flex-col gap-0.5 pl-0.5">
+              {MEAL_TYPES.map((mealType) => {
+                const entry = getEntryForMealType(mealType.id)
+                const isFilled = entry && entry.recipes && entry.recipes.length > 0
+                const isSelected = entry ? selectedMealIds.has(entry.id) : false
+                const isNewlyMoved = entry ? newlyMovedEntryIds.has(entry.id) : false
+
+                return (
+                  <DroppableMealSlot
+                    key={mealType.id}
+                    date={date}
+                    mealType={mealType}
+                    entry={entry ?? undefined}
+                    isNewlyMoved={isNewlyMoved}
+                    selectMode={selectMode}
+                    isSelected={isSelected}
+                    onToggleMealSelect={onToggleMealSelect}
+                    onMealClick={onMealClick}
+                    onMealClear={onMealClear}
+                    onMealAddToGroceries={onMealAddToGroceries}
+                    compact
+                  />
+                )
+              })}
+            </div>
+
+            {/* Add meal — shows meal type picker inline */}
+            {emptyMealTypes.length > 0 && (
+              <div className="pl-0.5 relative">
+                {addMenuOpen ? (
+                  <div className="flex flex-wrap gap-1">
+                    {emptyMealTypes.map((mt) => {
+                      const Icon = mt.icon
+                      return (
+                        <button
+                          key={mt.id}
+                          onClick={() => { setAddMenuOpen(false); onMealClick(date, mt.id) }}
+                          className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                        >
+                          <Icon className="h-2.5 w-2.5" />
+                          {mt.label}
+                        </button>
+                      )
+                    })}
+                    <button
+                      onClick={() => setAddMenuOpen(false)}
+                      className="text-[10px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddMenuOpen(true)}
+                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <PlusIcon className="h-3 w-3" />
+                    Add meal
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     )

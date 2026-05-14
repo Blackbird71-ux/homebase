@@ -77,7 +77,7 @@ export function MealSlotCell({
 
   if (hasRecipes) {
     displayContent = (
-      <div className="space-y-0.5">
+      <div className="space-y-0">
         {sortedRecipes.map((recipe) => {
           // Each individual recipe is draggable when there are multiple recipes
           const isMultiRecipe = sortedRecipes.length > 1
@@ -92,14 +92,14 @@ export function MealSlotCell({
               isNewlyMoved={isNewlyMoved}
             />
           ) : (
-            <div key={recipe.id} className="flex items-start gap-1">
+            <div key={recipe.id} className="flex items-start gap-0.5">
               {recipe.courseType && (
-                <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                <span className="text-[9px] font-medium text-muted-foreground shrink-0">
                   {recipe.courseType}:
                 </span>
               )}
               <span className={cn(
-                'text-xs font-medium',
+                'text-[10px] font-medium',
                 naturalHeight ? '' : 'line-clamp-1',
                 isNewlyMoved && 'text-primary'
               )}>
@@ -110,7 +110,7 @@ export function MealSlotCell({
         })}
         {hasNote && (
           <div className={cn(
-            'text-[10px] text-muted-foreground italic',
+            'text-[9px] text-muted-foreground italic',
             naturalHeight ? '' : 'line-clamp-1'
           )}>
             {note}
@@ -120,15 +120,15 @@ export function MealSlotCell({
     )
   } else if (hasRecipeName) {
     displayContent = (
-      <div className="space-y-0.5">
+      <div className="space-y-0">
         <p className={cn(
-          'text-xs font-medium',
+          'text-[10px] font-medium',
           naturalHeight ? '' : 'line-clamp-2',
           isNewlyMoved && 'text-primary'
         )}>{recipeName}</p>
         {hasNote && (
           <div className={cn(
-            'text-[10px] text-muted-foreground italic',
+            'text-[9px] text-muted-foreground italic',
             naturalHeight ? '' : 'line-clamp-1'
           )}>
             {note}
@@ -139,7 +139,7 @@ export function MealSlotCell({
   } else if (hasNote) {
     displayContent = (
       <p className={cn(
-        'text-xs font-medium italic',
+        'text-[10px] font-medium italic',
         naturalHeight ? '' : 'line-clamp-3',
         isNewlyMoved && 'text-primary'
       )}>{note}</p>
@@ -158,12 +158,12 @@ export function MealSlotCell({
       <button
         onClick={onClick}
         className={cn(
-          'w-full h-12 flex items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors',
+          'w-full h-8 flex items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors',
           mealColor
         )}
         aria-label="Add meal"
       >
-        <PlusIcon className="h-4 w-4" />
+        <PlusIcon className="h-3 w-3" />
       </button>
     )
   }
@@ -173,8 +173,8 @@ export function MealSlotCell({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group relative w-full rounded-lg border bg-card px-2 py-1 flex items-start gap-1.5 cursor-pointer transition-colors',
-        naturalHeight ? 'min-h-[2rem]' : 'h-14',
+        'group relative w-full rounded-lg border bg-card px-1.5 py-0.5 flex items-start gap-1 cursor-pointer transition-colors',
+        naturalHeight ? 'min-h-[1.75rem]' : 'h-12',
         isDragging ? 'opacity-30 border-primary/30' : 'hover:border-primary/50',
         isDragOverlay ? 'shadow-xl border-primary/50 bg-card rotate-2 scale-105' : 'border-border',
         isNewlyMoved && 'border-primary/40 bg-primary/5 ring-1 ring-primary/20',
@@ -186,7 +186,7 @@ export function MealSlotCell({
       {/* Drag handle indicator — only for single-recipe entries */}
       {isDraggable && !isDragOverlay && (
         <div className="absolute -left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <GripVerticalIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
+          <GripVerticalIcon className="h-3 w-3 text-muted-foreground/50" />
         </div>
       )}
 
@@ -201,7 +201,7 @@ export function MealSlotCell({
         <img
           src={firstImage}
           alt=""
-          className="h-6 w-6 rounded object-cover shrink-0 mt-0.5"
+          className="h-3.5 w-3.5 rounded object-cover shrink-0 mt-0"
         />
       )}
 
@@ -211,7 +211,7 @@ export function MealSlotCell({
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-0.5 shrink-0">
+      <div className="flex items-center gap-0 shrink-0">
         {onAddToGroceries && hasRecipes && (
           <Button
             variant="ghost"
@@ -223,7 +223,7 @@ export function MealSlotCell({
             }}
             aria-label="Add to groceries"
           >
-            <ShoppingCartIcon className="h-3 w-3" />
+            <ShoppingCartIcon className="h-2.5 w-2.5" />
           </Button>
         )}
         {mealPlanId && (
@@ -237,7 +237,7 @@ export function MealSlotCell({
             }}
             aria-label="Clear meal"
           >
-            <XIcon className="h-3 w-3" />
+            <XIcon className="h-2.5 w-2.5" />
           </Button>
         )}
       </div>
@@ -296,16 +296,16 @@ function DraggableRecipeItem({
       {...attributes}
     >
       {/* Drag handle */}
-      <div className="shrink-0 mt-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-        <GripVerticalIcon className="h-3 w-3 text-muted-foreground" />
+      <div className="shrink-0 mt-0 opacity-40 group-hover:opacity-100 transition-opacity">
+        <GripVerticalIcon className="h-2.5 w-2.5 text-muted-foreground" />
       </div>
       {recipe.courseType && (
-        <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+        <span className="text-[9px] font-medium text-muted-foreground shrink-0">
           {recipe.courseType}:
         </span>
       )}
       <span className={cn(
-        'text-xs font-medium',
+        'text-[10px] font-medium',
         naturalHeight ? '' : 'line-clamp-1',
         isNewlyMoved && 'text-primary'
       )}>

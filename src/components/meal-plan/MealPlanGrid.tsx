@@ -93,8 +93,8 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
 
   return (
     <DndContext sensors={sensors} onDragStart={drag.handleDragStart} onDragEnd={drag.handleDragEnd}>
-      <div className="flex flex-col gap-2 p-3 md:p-4 h-full overflow-hidden">
-        <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-1 p-2 md:p-3 h-full overflow-hidden">
+        <div className="flex items-center justify-between gap-1">
           <h1 className="text-xl font-semibold shrink-0">Meal Plan</h1>
 
           {/* ── Mobile header ── */}
@@ -171,7 +171,7 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
         </div>
 
         {/* Week label + scope selector */}
-        <div className="flex items-center justify-between gap-2 -mt-2">
+        <div className="flex items-center justify-between gap-2 -mt-1">
           <p className="text-sm text-muted-foreground">
             {weekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
           </p>
@@ -186,7 +186,7 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
             ))}
           </div>
         </div>
-        <div className="flex sm:hidden items-center gap-1 -mt-1">
+        <div className="flex sm:hidden items-center gap-1">
           <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
             {([7, 14, 30] as ScopeDays[]).map(d => (
               <button key={d} type="button" onClick={() => setScope(d)}
@@ -199,13 +199,14 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
           </div>
         </div>
 
-        {/* Day cards */}
-        <div className="flex-1 overflow-y-auto flex flex-col gap-2 pb-2">
-          {days.map(day => {
-            const ymd = toYMD(day)
-            const dayEntries = entries.filter(e => e.date.slice(0, 10) === ymd)
-            return (
-              <div key={ymd} className={`rounded-xl border p-2 ${ymd === today ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+        {/* Day cards — responsive grid */}
+        <div className="flex-1 overflow-y-auto pb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 md:gap-2">
+            {days.map(day => {
+              const ymd = toYMD(day)
+              const dayEntries = entries.filter(e => e.date.slice(0, 10) === ymd)
+              return (
+                <div key={ymd} className={`rounded-xl border p-1.5 ${ymd === today ? 'border-primary/30 bg-primary/5' : 'border-border'}`}>
                 <DailyMealColumn
                   date={ymd}
                   entries={dayEntries}
@@ -222,6 +223,7 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
               </div>
             )
           })}
+          </div>
         </div>
 
         {/* Select mode floating bar */}
