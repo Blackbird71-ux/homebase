@@ -308,9 +308,13 @@ export async function PATCH(request: NextRequest) {
   const updateData: Record<string, any> = {}
 
   if (received !== undefined) {
-    updateData.received = received
     const stampDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
-    updateData.receivedDate = received ? stampDate : null
+    // Stage 2 transition (false→true) is handled atomically in the GL block below.
+    // Only apply here for: undo (true→false), or no-op (already received).
+    if (!(received === true && !existing.received)) {
+      updateData.received = received
+      updateData.receivedDate = received ? stampDate : null
+    }
   }
 
   if (invoiceReceived !== undefined) {
@@ -508,20 +512,14 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // ── Stage 2: Cash received → post GL journal (DR bank / CR AR) + create receipt tx (ATOMIC) ──
+  // ── Stage 2: Cash received → ATOMIC GL write (DR Bank / CR AR) ────────────
   //
-  // Accounting: cash arrives in the bank account.
+  // Always routes through AR regardless of whether Stage 1 was done first:
+  //   If Stage 1 not yet posted: auto-create it (DR AR / CR Income) in the same transaction.
+  //   Stage 2:                   DR Bank / CR AR
+  //   Net effect:                DR Bank / CR Income  (AR washes out on Trial Balance).
   //
-  // Case A: prior Stage-1 remittance journal exists (invoiceReceived = true)
-  //   The accrual was already: DR AR / CR Income.
-  //   Now we clear AR:          DR Bank/Asset / CR Accounts Receivable
-  //   Net effect: DR Bank / CR Income (AR washes out). P&L unchanged; BS updates.
-  //
-  // Case B: no prior remittance (income recognised at point of cash receipt)
-  //   Combined entry:            DR Bank/Asset / CR Income Category
-  //
-  // If no GL account is selected the journal is skipped and legacy tx-only
-  // behaviour is preserved (AR will NOT clear — user is warned in the UI).
+  // A GL account is required — no legacy tx-only path.
   if (received === true && !existing.received) {
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
     const receiptAccountId = receiveToAccountId ?? existing.accountId
@@ -533,17 +531,58 @@ export async function PATCH(request: NextRequest) {
     })
     const invoiceTxId: string | null = freshEntry?.invoiceTxId ?? null
 
-    if (receiptGlAccountId) {
-      // ── GL path: post journal + update/create tracking tx ATOMICALLY ────────
+    if (!receiptGlAccountId) {
+      return NextResponse.json(
+        { error: 'A GL account (bank account) is required to post a cash receipt.' },
+        { status: 400 }
+      )
+    }
+
+    {
+      // ── GL path: ATOMIC — auto-accrual (Stage 1) if needed, then receipt (Stage 2) ──
+      // Accounting (always via AR):
+      //   Stage 1 (if not already posted): DR AR / CR Income
+      //   Stage 2:                         DR Bank  / CR AR
+      //   Net effect:                      DR Bank  / CR Income  (AR washes out)
       try {
         await prisma.$transaction(async (tx) => {
           const arCategoryId = await ensureAccountsReceivableCategory(session.familyId)
 
-          // Credit side: clear AR (Case A) or credit Income directly (Case B)
-          const creditGlAccountId = freshEntry?.invoiceReceived
-            ? arCategoryId
-            : existing.categoryId!
+          // ── Auto-post Stage 1 accrual if it hasn't been done yet ─────────────
+          if (!freshEntry?.invoiceReceived) {
+            if (!existing.categoryId) {
+              throw new Error('Income entry must have an income category before cash can be posted to GL')
+            }
+            const accrualRef = await nextJournalReference(session.familyId)
+            const accrualJe = await tx.financeJournalEntry.create({
+              data: {
+                reference: accrualRef,
+                date: actualReceivedDate,
+                description: existing.name,
+                type: 'auto_transaction',
+                isPosted: true,
+                entityId: existing.entityId ?? null,
+                familyId: session.familyId,
+                lines: {
+                  create: [
+                    { glAccountId: arCategoryId, side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
+                    { glAccountId: existing.categoryId, side: 'credit', amount: existing.amount, description: existing.name },
+                  ],
+                },
+              },
+              select: { id: true },
+            })
+            await tx.financeIncomeEntry.update({
+              where: { id },
+              data: {
+                invoiceReceived: true,
+                invoiceReceivedDate: actualReceivedDate,
+                journalEntryId: accrualJe.id,
+              },
+            })
+          }
 
+          // ── Stage 2: DR Bank / CR AR ──────────────────────────────────────────
           const reference = await nextJournalReference(session.familyId)
           const receiptJe = await tx.financeJournalEntry.create({
             data: {
@@ -556,25 +595,19 @@ export async function PATCH(request: NextRequest) {
               familyId: session.familyId,
               lines: {
                 create: [
-                  {
-                    glAccountId: receiptGlAccountId,
-                    side: 'debit',
-                    amount: existing.amount,
-                    description: `Bank receipt: ${existing.name}`,
-                  },
-                  {
-                    glAccountId: creditGlAccountId,
-                    side: 'credit',
-                    amount: existing.amount,
-                    description: freshEntry?.invoiceReceived
-                      ? `AR clear: ${existing.name}`
-                      : existing.name,
-                  },
+                  { glAccountId: receiptGlAccountId, side: 'debit',  amount: existing.amount, description: `Bank receipt: ${existing.name}` },
+                  { glAccountId: arCategoryId,        side: 'credit', amount: existing.amount, description: `AR clear: ${existing.name}` },
                 ],
               },
             },
             select: { id: true },
           })
+
+          const receiptStatusData = {
+            received: true,
+            receivedDate: actualReceivedDate,
+            receiptJournalEntryId: receiptJe.id,
+          }
 
           if (invoiceTxId) {
             await tx.financeTransaction.update({
@@ -589,11 +622,7 @@ export async function PATCH(request: NextRequest) {
             })
             await tx.financeIncomeEntry.update({
               where: { id },
-              data: {
-                receiptTxId: invoiceTxId,
-                transactionId: invoiceTxId,
-                receiptJournalEntryId: receiptJe.id,
-              },
+              data: { ...receiptStatusData, receiptTxId: invoiceTxId, transactionId: invoiceTxId },
             })
           } else {
             const newTx = await tx.financeTransaction.create({
@@ -612,11 +641,7 @@ export async function PATCH(request: NextRequest) {
             })
             await tx.financeIncomeEntry.update({
               where: { id },
-              data: {
-                receiptTxId: newTx.id,
-                transactionId: newTx.id,
-                receiptJournalEntryId: receiptJe.id,
-              },
+              data: { ...receiptStatusData, receiptTxId: newTx.id, transactionId: newTx.id },
             })
           }
         })
@@ -626,45 +651,6 @@ export async function PATCH(request: NextRequest) {
           { error: 'Failed to post cash receipt to General Ledger. No changes were saved.' },
           { status: 422 }
         )
-      }
-    } else {
-      // ── Legacy path (no GL account selected): tx-only, AR will not clear ────
-      try {
-        if (invoiceTxId) {
-          await prisma.financeTransaction.update({
-            where: { id: invoiceTxId },
-            data: {
-              isCleared: true,
-              reconciledDate: actualReceivedDate,
-              date: actualReceivedDate,
-              accountId: receiptAccountId,
-            },
-          })
-          await prisma.financeIncomeEntry.update({
-            where: { id },
-            data: { receiptTxId: invoiceTxId, transactionId: invoiceTxId },
-          })
-        } else {
-          const newTx = await prisma.financeTransaction.create({
-            data: {
-              type: 'income', amount: existing.amount,
-              accountId: receiptAccountId, categoryId: existing.categoryId,
-              description: existing.name, date: actualReceivedDate,
-              isRecurring: existing.incomeType !== 'one-off',
-              vendorId: existing.vendorId, notes: existing.notes,
-              memberId: existing.memberId, locationId: existing.locationId,
-              isCleared: true, reconciledDate: actualReceivedDate,
-              isTransfer: false, createdBy: session.id,
-              familyId: session.familyId, entityId: existing.entityId,
-            },
-          })
-          await prisma.financeIncomeEntry.update({
-            where: { id },
-            data: { receiptTxId: newTx.id, transactionId: newTx.id },
-          })
-        }
-      } catch (err) {
-        console.error('[income PATCH] Failed to create receipt transaction (no GL):', err)
       }
     }
 

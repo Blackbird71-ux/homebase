@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -934,7 +934,8 @@ export default function IncomePage() {
           )}
           <DialogFooter>
             <button onClick={() => setReceivedConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            <button onClick={confirmMarkReceived} className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium">
+            <button onClick={confirmMarkReceived} disabled={!receivedConfirmGlAccountId}
+              className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               Mark as received
             </button>
           </DialogFooter>

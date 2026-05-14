@@ -43,6 +43,7 @@ const groups = [
     label: 'Reporting',
     items: [
       { href: '/finance/profit-loss',  label: 'P&L',               icon: BarChart2,       exact: false },
+      { href: '/finance/annual-pnl',   label: 'Annual P&L',        icon: TrendingUp,      exact: false },
       { href: '/finance/balance-sheet',label: 'Balance Sheet',      icon: Scale,           exact: false },
       { href: '/finance/tax-report',   label: 'Tax Report',        icon: Receipt,         exact: false },
       { href: '/finance/journals',     label: 'Journals',           icon: BookOpen,        exact: false },
