@@ -36,6 +36,7 @@ model Family {
   auditLogs            AuditLog[]
   documents            Document[]
   listTemplates        ListTemplate[]
+  trips                Trip[]
   financeAccounts        FinanceAccount[]
   financeTransactions    FinanceTransaction[]
   financeCategories      FinanceCategory[]
@@ -151,6 +152,9 @@ model List {
   family        Family     @relation(fields: [familyId], references: [id])
   createdBy     String     @default("")
   createdAt     DateTime   @default(now())
+
+  // Trip packing list link (reverse navigation — FK is on Trip.packingListId)
+  trip Trip? @relation("TripPackingList")
 }
 
 model ListTemplate {
@@ -1050,4 +1054,30 @@ model FinanceJournalLine {
   @@index([journalEntryId])
   @@index([glAccountId])
   @@index([glAccountId, journalEntryId])
+}
+
+// ─── Trip Planning ─────────────────────────────────────────────────────────────────────────────
+
+model Trip {
+  id            String   @id @default(cuid())
+  title         String   // e.g. "Japan 2027"
+  destination   String
+  startDate     DateTime
+  endDate       DateTime
+  accommodation String?  // Hotel name, address, booking ref
+  transport     String?  // Flight info, car rental, booking ref
+  notes         String?
+  status        String   @default("planning") // planning | confirmed | in_progress | completed | cancelled
+  color         String?  // Display colour hex
+  icon          String?  // Lucide icon name
+  packingListId String?  @unique // FK -> List (reuse existing List model for packing)
+  packingList   List?    @relation("TripPackingList", fields: [packingListId], references: [id], onDelete: SetNull)
+  createdBy     String
+  familyId      String
+  family        Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, startDate])
 }

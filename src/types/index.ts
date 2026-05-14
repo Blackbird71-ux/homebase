@@ -50,6 +50,17 @@ export interface DashboardData {
   todoSummary: TodoSummary | null
   choreSchedule: ChoreScheduleDay[]
   billsToPay: BillSummaryItem[]
+  trips: {
+    id: string
+    title: string
+    destination: string
+    startDate: string
+    endDate: string
+    status: string
+    color: string | null
+    icon: string | null
+    packingList: { pendingItems: number } | null
+  }[]
 }
 
 export interface WeeklySummaryData {
@@ -243,4 +254,57 @@ export type NextAuthSession = {
     role: string
     familyId: string
   }
+}
+
+export interface TripSummary {
+  id: string
+  title: string
+  destination: string
+  startDate: string
+  endDate: string
+  accommodation: string | null
+  transport: string | null
+  notes: string | null
+  status: string
+  color: string | null
+  icon: string | null
+  packingList: {
+    id: string
+    name: string
+    pendingItems: number
+  } | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TripDetail extends Omit<TripSummary, 'packingList'> {
+  packingList: {
+    id: string
+    name: string
+    type: string
+    isActive: boolean
+    categoryOrder: string | null
+    sortOrder: number
+    items: {
+      id: string
+      content: string
+      isCompleted: boolean
+      isLocked: boolean
+      category: string | null
+      sortOrder: number
+      dueDate: string | null
+      recipeId: string | null
+      recipeName: string | null
+      unitPrice: number | null
+      quantity: number | null
+      createdBy: string
+      assignedToUserId: string | null
+      createdAt: string
+    }[]
+    _count: {
+      items: number
+    }
+    createdAt: string
+  } | null
 }

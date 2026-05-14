@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
     weekTodos,
     choreData,
     billsData,
+    tripsData,
   ] = await Promise.all([
     prisma.event.findMany({
       where: { familyId: user.familyId, start: { gte: now } },
@@ -209,6 +210,26 @@ export async function GET(request: NextRequest) {
       orderBy: { nextDueDate: 'asc' },
       select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true, payments: { select: { amount: true } } },
     }),
+    // Trips — fetch upcoming trips for dashboard card
+    prisma.trip.findMany({
+      where: {
+        familyId: user.familyId,
+        status: { notIn: ['cancelled', 'completed'] },
+        endDate: { gte: now },
+      },
+      orderBy: { startDate: 'asc' },
+      take: 10,
+      include: {
+        packingList: {
+          select: {
+            items: {
+              where: { isCompleted: false },
+              select: { id: true },
+            },
+          },
+        },
+      },
+    }),
   ])
 
   function mealByType(plans: typeof todayMealPlans, type: string): TodaysMeal | null {
@@ -309,6 +330,19 @@ export async function GET(request: NextRequest) {
         }
       : null,
     choreSchedule: buildChoreSchedule(choreData, todayStart, todayEnd, timezone, 30),
+    trips: tripsData.map((trip) => ({
+      id: trip.id,
+      title: trip.title,
+      destination: trip.destination,
+      startDate: trip.startDate.toISOString(),
+      endDate: trip.endDate.toISOString(),
+      status: trip.status,
+      color: trip.color,
+      icon: trip.icon,
+      packingList: trip.packingList
+        ? { pendingItems: trip.packingList.items.length }
+        : null,
+    })),
     billsToPay: billsData.map((bill) => {
       const dueDate = new Date(bill.nextDueDate)
       const diffMs = dueDate.getTime() - mealPlanTodayStart.getTime()

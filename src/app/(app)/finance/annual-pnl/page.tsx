@@ -11,6 +11,14 @@ import {
 import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
+import { ExcelButton } from '@/components/print/ExcelButton'
+import * as XLSX from 'xlsx'
+import {
+  buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle,
+  totalStyle, totalLabelStyle, grandTotalStyle, grandTotalLabelStyle,
+  dataStyle, dataLabelStyle, positiveStyle, negativeStyle,
+  setCols, freeze, styleRow, sc,
+} from '@/lib/excelStyles'
 
 // Given a FY start year (e.g. 2025 for FY2025-26), FY start month (0-based),
 // and a column index 0–11, return the calendar Date for that month
@@ -139,6 +147,104 @@ export default function AnnualPnLPage() {
   const printRef = useRef<HTMLDivElement>(null)
 
   const fyMonthLabelsArr = useMemo(() => fyMonthLabels(fyStartMonth), [fyStartMonth])
+
+  // ── Build Excel workbook ─────────────────────────────────────────────────
+  function buildExcelWorkbook(): XLSX.WorkBook {
+    const wb     = XLSX.utils.book_new()
+    const now    = format(new Date(), 'd MMM yyyy h:mm a')
+    const fyStr  = fyLabelUtil(fyStartYear, fyStartMonth)
+
+    XLSX.utils.book_append_sheet(wb, buildCoverSheet({
+      reportTitle: 'Annual P&L',
+      dateRange:   fyStr,
+      generatedAt: now,
+    }), 'Info')
+
+    // Column headers: Category + 12 months + Total
+    const monthLabels = fyMonthLabelsArr  // e.g. ['Jul', 'Aug', ...]
+    const headerRow   = ['Category', ...monthLabels, 'Total']
+    const numCols     = monthLabels.length  // 12
+    const totalCol    = numCols + 1         // column index of Total
+
+    const aoa: any[][] = []
+    aoa.push([`Annual P&L — ${fyStr} (${viewMode === 'actuals' ? 'Actuals / GL' : 'Forecast'})`, ...new Array(numCols + 1).fill('')])
+    aoa.push(headerRow)
+
+    // ── Income section
+    aoa.push(['INCOME', ...new Array(numCols).fill(''), ''])
+    for (const row of incomeRows) {
+      aoa.push([row.label, ...row.monthly.map(v => v || null), row.total || null])
+    }
+    aoa.push(['Total Income', ...monthlyIncome.map(v => v || null), totalIncome || null])
+    aoa.push([])
+
+    // ── Expenses section
+    aoa.push(['EXPENSES', ...new Array(numCols).fill(''), ''])
+    for (const row of expenseRows) {
+      aoa.push([row.label, ...row.monthly.map(v => v || null), row.total || null])
+    }
+    aoa.push(['Total Expenses', ...monthlyExpenses.map(v => v || null), totalExpenses || null])
+    aoa.push([])
+
+    // ── NET row
+    aoa.push(['NET PROFIT / (LOSS)', ...monthlyNet.map(v => v || null), totalNet || null])
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    // Column widths: label col 30, 12 month cols 10, total col 14
+    setCols(ws, [30, ...new Array(numCols).fill(10), 14])
+    freeze(ws, 2, 1)
+
+    // Title row
+    styleRow(ws, 0, 0, totalCol, headerLeftStyle())
+    // Header row
+    styleRow(ws, 1, 0, totalCol, headerStyle())
+    sc(ws, 1, 0, headerLeftStyle())
+
+    let r = 2
+    // Income section label
+    styleRow(ws, r, 0, totalCol, sectionStyle()); r++
+    // Income data rows
+    let iAlt = 0
+    for (const row of incomeRows) {
+      const alt = iAlt % 2 === 1
+      sc(ws, r, 0, dataLabelStyle(alt))
+      for (let c = 1; c <= numCols; c++) sc(ws, r, c, row.monthly[c-1] > 0 ? positiveStyle(alt) : dataStyle(alt))
+      sc(ws, r, totalCol, positiveStyle(alt))
+      r++; iAlt++
+    }
+    // Total Income row
+    sc(ws, r, 0, totalLabelStyle())
+    for (let c = 1; c <= totalCol; c++) sc(ws, r, c, totalStyle())
+    r += 2  // skip blank row
+
+    // Expense section label
+    styleRow(ws, r, 0, totalCol, sectionStyle()); r++
+    // Expense data rows
+    let eAlt = 0
+    for (const row of expenseRows) {
+      const alt = eAlt % 2 === 1
+      sc(ws, r, 0, dataLabelStyle(alt))
+      for (let c = 1; c <= numCols; c++) sc(ws, r, c, row.monthly[c-1] > 0 ? negativeStyle(alt) : dataStyle(alt))
+      sc(ws, r, totalCol, negativeStyle(alt))
+      r++; eAlt++
+    }
+    // Total Expenses row
+    sc(ws, r, 0, totalLabelStyle())
+    for (let c = 1; c <= totalCol; c++) sc(ws, r, c, totalStyle())
+    r += 2  // skip blank row
+
+    // NET row
+    sc(ws, r, 0, grandTotalLabelStyle())
+    for (let c = 1; c <= totalCol; c++) {
+      const val = aoa[r]?.[c] as number
+      sc(ws, r, c, val >= 0
+        ? grandTotalStyle()
+        : { ...grandTotalStyle(), font: { bold: true, color: { rgb: 'FFC7CE' }, name: 'Arial', sz: 11 } })
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Annual P&L')
+    return wb
+  }
 
   const fyMonths = useMemo(() =>
     Array.from({ length: 12 }, (_, i) => fyColDate(fyStartYear, i, fyStartMonth)),
@@ -406,6 +512,12 @@ export default function AnnualPnLPage() {
             dateRange={fyLabelUtil(fyStartYear, fyStartMonth)}
             landscape
             disabled={loading}
+          />
+          <ExcelButton
+            buildWorkbook={buildExcelWorkbook}
+            filename={`HomeBase - Annual P&L - ${fyLabelUtil(fyStartYear, fyStartMonth)}.xlsx`}
+            disabled={loading}
+            className="ml-2"
           />
         </div>
       </div>

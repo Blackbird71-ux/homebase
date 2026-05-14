@@ -25,6 +25,7 @@ import { registerMemoryTools } from './memory.tool'
 import { registerReportTools } from './reports.tool'
 import { registerReminderTools } from './reminders.tool'
 import { registerDigestTools } from './digest.tool'
+import { registerTripTools } from './trips.tool'
 
 /**
  * Call this once at startup to register all AI tools.
@@ -53,4 +54,5 @@ export function registerAllTools(): void {
   registerReminderTools()
   registerFinanceNLTransactionTools()
   registerDigestTools()
+  registerTripTools()
 }

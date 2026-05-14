@@ -9,6 +9,14 @@ import { cn } from '@/lib/utils'
 import { currentFyYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-fy'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
+import { ExcelButton } from '@/components/print/ExcelButton'
+import * as XLSX from 'xlsx'
+import {
+  buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle,
+  totalStyle, totalLabelStyle, grandTotalStyle, grandTotalLabelStyle,
+  dataStyle, dataLabelStyle, positiveStyle, negativeStyle,
+  setCols, freeze, styleRow, sc, FMT,
+} from '@/lib/excelStyles'
 
 // ── Australian Tax Brackets 2025-26 ──────────────────────────────────────────
 // Update thresholds here each July — no API redeployment needed.
@@ -305,6 +313,125 @@ export default function TaxReportPage() {
   const [fyStartYear, setFyStartYear]   = useState<number>(() => currentFyYear(7))
   const printRef = useRef<HTMLDivElement>(null)
 
+  // ── Build Excel workbook ─────────────────────────────────────────────────
+  function buildExcelWorkbook(): XLSX.WorkBook {
+    const wb  = XLSX.utils.book_new()
+    const now = format(new Date(), 'd MMM yyyy h:mm a')
+    const fyStr = fyLabelUtil(fyStartYear, fyStartMonth)
+
+    XLSX.utils.book_append_sheet(wb, buildCoverSheet({
+      reportTitle: 'Tax Report',
+      dateRange:   fyStr,
+      generatedAt: now,
+      disclaimer:  'Estimated only — based on 2025-26 ATO tax brackets. This is not tax advice. Consult your registered tax agent or accountant before lodging.',
+    }), 'Info')
+
+    if (!data) return wb
+
+    // ── Per-person summary sheet ─────────────────────────────
+    const colHeaders = personData.map(p => p.member.name)
+    const cols = [32, ...personData.map(() => 18)]
+    const aoa: any[][] = []
+    aoa.push([`Tax Report — ${fyStr}`, ...colHeaders.map(() => '')])
+    aoa.push(['', ...colHeaders])
+
+    const pushSection = (label: string) => aoa.push([label, ...personData.map(() => '')])
+    const pushRow = (label: string, vals: (number | string)[]) => aoa.push([label, ...vals])
+
+    pushSection('GROSS INCOME')
+    pushRow('Wages / Salary',         personData.map(p => p.tax.wages))
+    pushRow('Bank Interest (joint ÷2)', personData.map(p => p.tax.bankInterest))
+    pushRow('Other Income',           personData.map(p => p.tax.otherIncome))
+    pushRow('Franking Credits',       personData.map(p => p.tax.frankingCredits))
+    pushRow('Total Gross Income',     personData.map(p => p.tax.grossIncome))
+
+    aoa.push([])
+    pushSection('DEDUCTIONS')
+    pushRow('Voluntary Super',        personData.map(p => p.tax.voluntarySuper))
+    pushRow('Charity / Gifts',        personData.map(p => p.tax.charity))
+    pushRow('Other Deductions',       personData.map(p => p.tax.otherDeductions))
+    pushRow('Total Deductions',       personData.map(p => p.tax.totalDeductions))
+
+    aoa.push([])
+    pushSection('TAXABLE INCOME')
+    pushRow('Total Taxable Income',   personData.map(p => p.tax.taxableIncome))
+    pushRow('Per Week',               personData.map(p => p.tax.perWeek))
+
+    aoa.push([])
+    pushSection('TAX CALCULATION')
+    pushRow('Income Tax (brackets)',  personData.map(p => p.tax.incomeTax))
+    pushRow('Medicare Levy (2%)',     personData.map(p => p.tax.medicare))
+    pushRow('Less: Franking Credits', personData.map(p => -p.tax.frankingOffset))
+    pushRow('Tax Payable',            personData.map(p => p.tax.totalTaxPayable))
+
+    aoa.push([])
+    pushSection('TAX ALREADY PAID')
+    pushRow('PAYG Withheld',          personData.map(p => p.tax.paygWithheld))
+    pushRow('PAYG Instalments',       personData.map(p => p.tax.paygInstalments))
+    pushRow('Total Credits',          personData.map(p => p.tax.totalCredits))
+
+    aoa.push([])
+    pushSection('RESULT')
+    pushRow('REFUND / (OWING)',       personData.map(p => p.tax.refundOrOwing))
+
+    aoa.push([])
+    pushSection('SUPER CAP')
+    const cap = SUPER_CAP[data.financialYear] ?? 30_000
+    pushRow(`Super Cap (${new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(cap)})`, personData.map(() => cap))
+    pushRow('SGC (Employer)',         personData.map(p => p.tax.sgcAmount))
+    pushRow('Voluntary Super',        personData.map(p => p.tax.voluntarySuperForCap))
+    pushRow('Total Used',             personData.map(p => p.tax.sgcAmount + p.tax.voluntarySuperForCap))
+    pushRow('Remaining',              personData.map(p => Math.max(0, cap - p.tax.sgcAmount - p.tax.voluntarySuperForCap)))
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    setCols(ws, cols)
+    freeze(ws, 2, 1)
+
+    // Title & header rows
+    styleRow(ws, 0, 0, personData.length, headerLeftStyle())
+    styleRow(ws, 1, 0, personData.length, headerStyle())
+    sc(ws, 1, 0, headerLeftStyle())
+
+    const sectionRows = [
+      'GROSS INCOME', 'DEDUCTIONS', 'TAXABLE INCOME',
+      'TAX CALCULATION', 'TAX ALREADY PAID', 'RESULT', 'SUPER CAP',
+    ]
+    const totalRows = [
+      'Total Gross Income', 'Total Deductions', 'Total Taxable Income',
+      'Tax Payable', 'Total Credits',
+    ]
+    const grandRows = ['REFUND / (OWING)']
+
+    let dataIdx = 0
+    for (let r = 2; r < aoa.length; r++) {
+      const row = aoa[r]
+      if (!row?.length || !row[0]) { dataIdx = 0; continue }
+      const lbl = String(row[0])
+      if (sectionRows.includes(lbl)) {
+        styleRow(ws, r, 0, personData.length, sectionStyle())
+        dataIdx = 0
+      } else if (totalRows.includes(lbl)) {
+        sc(ws, r, 0, totalLabelStyle())
+        for (let c = 1; c <= personData.length; c++) sc(ws, r, c, totalStyle())
+      } else if (grandRows.includes(lbl)) {
+        sc(ws, r, 0, grandTotalLabelStyle())
+        for (let c = 1; c <= personData.length; c++) {
+          const val = row[c] as number
+          sc(ws, r, c, val >= 0
+            ? { ...grandTotalStyle(), font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Arial', sz: 11 } }
+            : { ...grandTotalStyle(), font: { bold: true, color: { rgb: 'FFC7CE' }, name: 'Arial', sz: 11 } })
+        }
+      } else {
+        const alt = dataIdx % 2 === 1
+        sc(ws, r, 0, dataLabelStyle(alt))
+        for (let c = 1; c <= personData.length; c++) sc(ws, r, c, dataStyle(alt))
+        dataIdx++
+      }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'Tax Summary')
+    return wb
+  }
+
   // Load settings for FY start month
   useEffect(() => {
     async function loadSettings() {
@@ -397,6 +524,12 @@ export default function TaxReportPage() {
           reportTitle="Tax Report"
           dateRange={fyLabelUtil(fyStartYear, fyStartMonth)}
           disabled={loading}
+        />
+        <ExcelButton
+          buildWorkbook={buildExcelWorkbook}
+          filename={`HomeBase - Tax Report - ${fyLabelUtil(fyStartYear, fyStartMonth)}.xlsx`}
+          disabled={loading}
+          className="ml-2"
         />
       </div>
 

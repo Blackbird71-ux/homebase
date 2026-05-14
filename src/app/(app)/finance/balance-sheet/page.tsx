@@ -9,6 +9,14 @@ import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
+import { ExcelButton } from '@/components/print/ExcelButton'
+import * as XLSX from 'xlsx'
+import {
+  buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle, subSectionStyle,
+  totalStyle, totalLabelStyle, grandTotalStyle, grandTotalLabelStyle,
+  dataStyle, dataLabelStyle, positiveStyle, negativeStyle,
+  setCols, freeze, styleRow, sc,
+} from '@/lib/excelStyles'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -201,6 +209,124 @@ export default function BalanceSheetPage() {
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
 
+  // ── Build Excel workbook ─────────────────────────────────────────────────
+  function buildExcelWorkbook(): XLSX.WorkBook {
+    const wb  = XLSX.utils.book_new()
+    const now = format(new Date(), 'd MMM yyyy h:mm a')
+    const asAtFmt = format(new Date(asAt + 'T00:00:00'), 'd MMMM yyyy')
+
+    XLSX.utils.book_append_sheet(wb, buildCoverSheet({
+      reportTitle: 'Balance Sheet',
+      dateRange:   `As at ${asAtFmt}`,
+      generatedAt: now,
+    }), 'Info')
+
+    if (!data) return wb
+
+    // Helper to push a labelled row
+    const aoa: any[][] = []
+    aoa.push([`Balance Sheet — As at ${asAtFmt}`, '', ''])
+    aoa.push([])
+
+    // ── ASSETS
+    aoa.push(['ASSETS', '', ''])
+    if (data.assets.bankAccounts.length > 0) {
+      aoa.push(['Bank & Cash Accounts', '', ''])
+      for (const a of data.assets.bankAccounts) aoa.push(['', a.name, a.balance])
+      if (data.assets.coaAccounts.length > 0 || data.assets.accountsReceivable > 0)
+        aoa.push(['', 'Subtotal — Bank & Cash', data.assets.totalBank])
+    }
+    if (data.assets.accountsReceivable > 0) {
+      aoa.push(['Accounts Receivable', '', ''])
+      aoa.push(['', 'Invoiced income not yet received', data.assets.accountsReceivable])
+    }
+    if (data.assets.coaAccounts.length > 0) {
+      aoa.push(['Other Assets (COA)', '', ''])
+      for (const c of data.assets.coaAccounts)
+        aoa.push(['', (c.glCode ? `${c.glCode} — ` : '') + c.name, c.openingBalance])
+    }
+    aoa.push(['TOTAL ASSETS', '', data.assets.total])
+    aoa.push([])
+
+    // ── LIABILITIES
+    aoa.push(['LIABILITIES', '', ''])
+    if (data.liabilities.bankAccounts.length > 0) {
+      aoa.push(['Credit Cards & Loans', '', ''])
+      for (const a of data.liabilities.bankAccounts) aoa.push(['', a.name, Math.max(0, a.balance)])
+    }
+    if (data.liabilities.overdraftAccounts.length > 0) {
+      aoa.push(['Overdrawn Accounts', '', ''])
+      for (const a of data.liabilities.overdraftAccounts) aoa.push(['', `${a.name} (overdrawn)`, Math.abs(a.balance)])
+    }
+    if (data.liabilities.accountsPayable > 0) {
+      aoa.push(['Accounts Payable', '', ''])
+      aoa.push(['', 'Bills received but not yet paid', data.liabilities.accountsPayable])
+    }
+    if (data.liabilities.coaAccounts.length > 0) {
+      aoa.push(['Other Liabilities (COA)', '', ''])
+      for (const c of data.liabilities.coaAccounts)
+        aoa.push(['', (c.glCode ? `${c.glCode} — ` : '') + c.name, c.openingBalance])
+    }
+    aoa.push(['TOTAL LIABILITIES', '', data.liabilities.total])
+    aoa.push([])
+
+    // ── EQUITY
+    if (data.equity.coaAccounts.length > 0 || data.equity.currentPeriodNetIncome !== 0) {
+      aoa.push(['EQUITY', '', ''])
+      for (const c of data.equity.coaAccounts)
+        aoa.push(['', (c.glCode ? `${c.glCode} — ` : '') + c.name, c.openingBalance])
+      aoa.push(['', 'Net Income to date', data.equity.currentPeriodNetIncome])
+      aoa.push(['TOTAL EQUITY', '', data.equity.total])
+      aoa.push([])
+    }
+
+    // ── NET WORTH
+    aoa.push(['NET WORTH (Assets − Liabilities)', '', data.netWorth])
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    setCols(ws, [32, 38, 18])
+    freeze(ws, 1, 1)
+
+    // Style rows
+    styleRow(ws, 0, 0, 2, headerLeftStyle())
+    const sectionLabels = ['ASSETS', 'LIABILITIES', 'EQUITY',
+      'Bank & Cash Accounts', 'Accounts Receivable', 'Other Assets (COA)',
+      'Credit Cards & Loans', 'Overdrawn Accounts', 'Accounts Payable', 'Other Liabilities (COA)']
+    const totalLabels   = ['TOTAL ASSETS', 'TOTAL LIABILITIES', 'TOTAL EQUITY']
+    const grandLabels   = ['NET WORTH (Assets − Liabilities)']
+
+    let dataIdx = 0
+    for (let r = 1; r < aoa.length; r++) {
+      const row = aoa[r]
+      if (!row?.length || !row[0]) { dataIdx = 0; continue }
+      const label0 = String(row[0])
+      const label1 = String(row[1] ?? '')
+      if (grandLabels.includes(label0)) {
+        sc(ws, r, 0, grandTotalLabelStyle())
+        sc(ws, r, 1, grandTotalLabelStyle())
+        sc(ws, r, 2, data.netWorth >= 0 ? grandTotalStyle() : { ...grandTotalStyle(), font: { bold: true, color: { rgb: 'C00000' }, name: 'Arial', sz: 11 } })
+      } else if (totalLabels.includes(label0)) {
+        sc(ws, r, 0, totalLabelStyle()); sc(ws, r, 1, totalLabelStyle()); sc(ws, r, 2, totalStyle())
+      } else if (sectionLabels.includes(label0)) {
+        const isMajor = ['ASSETS', 'LIABILITIES', 'EQUITY'].includes(label0)
+        styleRow(ws, r, 0, 2, isMajor ? sectionStyle() : subSectionStyle())
+        dataIdx = 0
+      } else if (label1.startsWith('Subtotal')) {
+        sc(ws, r, 1, { ...totalLabelStyle(), alignment: { horizontal: 'left', indent: 1 } })
+        sc(ws, r, 2, totalStyle())
+      } else {
+        const alt = dataIdx % 2 === 1
+        sc(ws, r, 0, dataLabelStyle(alt, 0))
+        sc(ws, r, 1, dataLabelStyle(alt, 1))
+        const val = row[2] as number
+        sc(ws, r, 2, val >= 0 ? positiveStyle(alt) : negativeStyle(alt))
+        dataIdx++
+      }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet')
+    return wb
+  }
+
   useEffect(() => {
     fetch('/api/finance/entities')
       .then(r => r.ok ? r.json() : [])
@@ -294,6 +420,12 @@ export default function BalanceSheetPage() {
             reportTitle="Balance Sheet"
             dateRange={`As at ${asAt}`}
             disabled={loading && !data}
+          />
+          <ExcelButton
+            buildWorkbook={buildExcelWorkbook}
+            filename={`HomeBase - Balance Sheet - ${asAt}.xlsx`}
+            disabled={loading && !data}
+            className="ml-2"
           />
           <div>
             <label className="text-xs text-muted-foreground mr-1">As at</label>

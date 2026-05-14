@@ -1,5 +1,5 @@
 # HomeBase — Project Summary
-## Current Build: Balance Sheet, COA Opening Balances, Stale currentBalance Fix
+## Current Build: Trip Planning with Packing Lists
 
 ### Project Overview
 HomeBase is a comprehensive family management platform built with Next.js 16, TypeScript, Prisma, and SQLite. The application provides a centralised hub for family organisation including calendar management, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
@@ -59,10 +59,19 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 #### 11. AI Voice & Chat Assistant
 - Floating Bot button on every page; Web Speech API for microphone transcription
 - Multi-provider: Google Gemini or DeepSeek; per-user API key storage
-- 19 actions across meal plan, shopping, todo, calendar, chores, notes, recipes, contacts, documents, birthdays
+- 21 actions across meal plan, shopping, todo, calendar, chores, notes, recipes, contacts, documents, birthdays, trips
 - Context-aware: AI receives family data in system prompt; PWA-compatible
 
-#### 12. Finance Module ← *most recently enhanced — Balance Sheet & COA Opening Balances*
+#### 12. Trip Planning ← *new*
+- Full trip CRUD with title, destination, dates, accommodation, transport, notes, status (planning/confirmed/in_progress/completed/cancelled)
+- **Packing lists** reuse the existing List/TODO infrastructure — items can be added/toggled/deleted, templates cloned
+- One-to-one relation between Trip and List models; packing list items managed via existing list item API
+- **Dashboard card**: Upcoming Trips shown on home page with countdown, destination, packing status
+- **AI tools**: `queryTrips` (upcoming/active/past filtering) and `createTrip` (natural language trip creation)
+- Dedicated `/trips` page with grouped overview, `/trips/[id]` detail page with inline packing list
+- Sidebar navigation with Plane icon, auto-sorting by start date
+
+#### 13. Finance Module ← *Balance Sheet & COA Opening Balances*
 
 Full household finance tracking — bills, income, transactions, accounts, budget, P&L, annual P&L, balance sheet, tax report, reports, vendors, categories, entities, locations, members.
 
