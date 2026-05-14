@@ -270,9 +270,43 @@ function PackingListSection({
   const [newItem, setNewItem] = useState('')
   const [adding, setAdding] = useState(false)
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const pendingItems = list.items.filter((i) => !i.isCompleted)
   const completedItems = list.items.filter((i) => i.isCompleted)
+
+  function handleStartEdit(itemId: string, currentContent: string) {
+    setEditingItemId(itemId)
+    setEditValue(currentContent)
+  }
+
+  function handleCancelEdit() {
+    setEditingItemId(null)
+    setEditValue('')
+  }
+
+  async function handleSaveEdit(itemId: string) {
+    if (!editValue.trim()) return
+    setSavingEdit(true)
+    const res = await fetch(`/api/lists/${list.id}/items/${itemId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: editValue.trim() }),
+    })
+    if (res.ok) {
+      onListUpdated({
+        ...list,
+        items: list.items.map((i) =>
+          i.id === itemId ? { ...i, content: editValue.trim() } : i
+        ),
+      })
+      setEditingItemId(null)
+      setEditValue('')
+    }
+    setSavingEdit(false)
+  }
 
   async function handleToggle(itemId: string, isCompleted: boolean) {
     // Optimistic update
@@ -405,18 +439,65 @@ function PackingListSection({
               >
                 <Square className="h-4 w-4" />
               </button>
-              <span className="flex-1 text-sm">{item.content}</span>
-              {item.category && (
-                <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                  {item.category}
-                </span>
+              {editingItemId === item.id ? (
+                <div className="flex-1 flex items-center gap-1.5">
+                  <input
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(item.id) }
+                      if (e.key === 'Escape') { e.preventDefault(); handleCancelEdit() }
+                    }}
+                    className="flex-1 px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    autoFocus
+                    disabled={savingEdit}
+                  />
+                  <button
+                    onClick={() => handleSaveEdit(item.id)}
+                    disabled={savingEdit || !editValue.trim()}
+                    className="p-1 rounded text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 disabled:opacity-50"
+                    title="Save"
+                  >
+                    {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    disabled={savingEdit}
+                    className="p-1 rounded text-muted-foreground hover:bg-accent"
+                    title="Cancel"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <span
+                    className="flex-1 text-sm cursor-pointer hover:text-primary transition-colors"
+                    onClick={() => handleStartEdit(item.id, item.content)}
+                    title="Click to edit"
+                  >
+                    {item.content}
+                  </span>
+                  {item.category && (
+                    <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                      {item.category}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => handleStartEdit(item.id, item.content)}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-all"
+                    title="Edit item"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </>
               )}
-              <button
-                onClick={() => handleDeleteItem(item.id)}
-                className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
             </div>
           ))}
         </div>
@@ -430,20 +511,67 @@ function PackingListSection({
           </summary>
           <div className="divide-y divide-border">
             {completedItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-2 px-3 py-2 opacity-60">
+              <div key={item.id} className="flex items-center gap-2 px-3 py-2 opacity-60 group">
                 <button
                   onClick={() => handleToggle(item.id, item.isCompleted)}
                   className="shrink-0 text-green-500"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                 </button>
-                <span className="flex-1 text-sm line-through">{item.content}</span>
-                <button
-                  onClick={() => handleDeleteItem(item.id)}
-                  className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {editingItemId === item.id ? (
+                  <div className="flex-1 flex items-center gap-1.5">
+                    <input
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(item.id) }
+                        if (e.key === 'Escape') { e.preventDefault(); handleCancelEdit() }
+                      }}
+                      className="flex-1 px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      autoFocus
+                      disabled={savingEdit}
+                    />
+                    <button
+                      onClick={() => handleSaveEdit(item.id)}
+                      disabled={savingEdit || !editValue.trim()}
+                      className="p-1 rounded text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 disabled:opacity-50"
+                      title="Save"
+                    >
+                      {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={savingEdit}
+                      className="p-1 rounded text-muted-foreground hover:bg-accent"
+                      title="Cancel"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span
+                      className="flex-1 text-sm line-through cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleStartEdit(item.id, item.content)}
+                      title="Click to edit"
+                    >
+                      {item.content}
+                    </span>
+                    <button
+                      onClick={() => handleStartEdit(item.id, item.content)}
+                      className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-all"
+                      title="Edit item"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>

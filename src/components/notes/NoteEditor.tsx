@@ -115,6 +115,14 @@ export function NoteEditor({
     if (url) exec('createLink', url)
   }
 
+  const insertImage = () => {
+    const url = prompt('Enter image URL:', 'https://')
+    if (url) {
+      // Use execCommand to insert the image at the cursor position
+      exec('insertImage', url)
+    }
+  }
+
   const saveSelection = () => {
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0) {
@@ -227,6 +235,7 @@ export function NoteEditor({
         <NoteEditorToolbar
           exec={exec}
           insertLink={insertLink}
+          insertImage={insertImage}
           saveSelection={saveSelection}
           applyTextColor={applyTextColor}
           applyHighlightColor={applyHighlightColor}
@@ -261,6 +270,7 @@ export function NoteEditor({
           [contenteditable] ul { list-style: disc;    padding-left: 1.5em; margin: 0.25em 0; }
           [contenteditable] ol { list-style: decimal; padding-left: 1.5em; margin: 0.25em 0; }
           [contenteditable] a  { color: hsl(var(--primary)); text-decoration: underline; }
+          [contenteditable] img { max-width: 100%; height: auto; border-radius: 0.375rem; margin: 0.5em 0; }
         `}</style>
       </div>
 

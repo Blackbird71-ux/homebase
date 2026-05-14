@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   BoldIcon, ItalicIcon, UnderlineIcon, StrikethroughIcon,
-  ListIcon, ListOrderedIcon, LinkIcon,
+  ListIcon, ListOrderedIcon, LinkIcon, ImageIcon,
   AlignLeftIcon, AlignCenterIcon, AlignRightIcon,
   Heading1Icon, Heading2Icon, Heading3Icon, TypeIcon,
   BaselineIcon, HighlighterIcon, RemoveFormattingIcon,
@@ -20,6 +20,7 @@ const FONT_SIZES = [
 interface Props {
   exec: (command: string, value?: string) => void
   insertLink: () => void
+  insertImage: () => void
   saveSelection: () => void
   applyTextColor: (color: string) => void
   applyHighlightColor: (color: string) => void
@@ -82,7 +83,7 @@ function ColorButton({ inputRef, color, title, onColorChange, saveSelection, isL
 const Sep = () => <div className="w-px h-5 bg-border mx-1" />
 
 export function NoteEditorToolbar({
-  exec, insertLink, saveSelection, applyTextColor, applyHighlightColor,
+  exec, insertLink, insertImage, saveSelection, applyTextColor, applyHighlightColor,
   textColorInputRef, highlightColorInputRef, textColor, highlightColor, isLoading,
 }: Props) {
   const [fontSizeKey, setFontSizeKey] = useState(0)
@@ -145,6 +146,7 @@ export function NoteEditorToolbar({
       <Sep />
 
       <ToolButton onClick={insertLink} title="Insert link" isLoading={isLoading}><LinkIcon className="h-3.5 w-3.5" /></ToolButton>
+      <ToolButton onClick={insertImage} title="Insert image" isLoading={isLoading}><ImageIcon className="h-3.5 w-3.5" /></ToolButton>
 
       <Sep />
 
