@@ -93,3 +93,18 @@
 - Check for existing patterns before creating new ones
 - Respect existing architecture decisions
 - If something seems outdated, suggest modernization with migration path
+
+## 🗄️ Prisma Migration Rule — MANDATORY (Failure = Server Crash)
+Any modification to `prisma/schema.prisma` that adds, removes, or alters a model/field **MUST** also create a corresponding migration directory under `prisma/migrations/` following the established naming convention (e.g., `20260540000000_add_description/`). The migration directory MUST contain:
+1. `migration.sql` — the raw SQL ALTER TABLE / CREATE TABLE statement
+2. `migration_lock.toml` — provider lock file (content: `provider = "sqlite"`)
+
+This is non-negotiable because `docker/entrypoint.sh` runs `prisma migrate deploy` on server startup, which ONLY applies migrations from these directories. Using `prisma db push` alone causes the server to crash on deploy because the database schema won't match the generated Prisma client.
+
+**Checklist when touching schema.prisma:**
+- [ ] Created migration directory `prisma/migrations/YYYYMMDDHHMMSS_description/`
+- [ ] Added `migration.sql` with ALTER TABLE / CREATE TABLE statements
+- [ ] Added `migration_lock.toml` with `provider = "sqlite"`
+- [ ] Ran `npx prisma generate` to regenerate the client
+- [ ] Ran `npx prisma db push --accept-data-loss` (dev only — keeps local DB in sync)
+- [ ] Committed all files including migration directory
