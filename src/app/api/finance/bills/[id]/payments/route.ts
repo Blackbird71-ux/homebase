@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { ensureAccountsPayableCategory } from '@/lib/finance-opening-balance'
+import { nextJournalReference } from '@/lib/finance-journal-ref'
 
 const PAYMENT_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -101,13 +102,13 @@ export async function POST(
   let transactionId: string | null = null
 
   // ── Create a FinanceTransaction for this payment ────────────────────────────
-  // 
+  //
   // Accounting logic:
   //   Case A — Invoice was received first (uncleared invoice tx exists for full amount):
   //     Create a new cleared transaction for this partial payment amount.
   //     The uncleared invoice tx stays at full amount (expense already on P&L).
   //     The payment tx represents cash outflow, linked to the bank account.
-  //   
+  //
   //   Case B — No prior invoice (direct payment):
   //     Create a cleared expense transaction for this partial payment amount.
   //     The expense hits P&L proportionally with each payment.
@@ -117,8 +118,6 @@ export async function POST(
 
     if (invoiceTxId) {
       // Case A: Invoice existed — create a cleared payment transaction
-      // This represents the cash leaving the bank account.
-      // The uncleared invoice tx stays at full amount on P&L.
       const tx = await prisma.financeTransaction.create({
         data: {
           type: 'expense',
@@ -177,6 +176,86 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create payment transaction' }, { status: 500 })
   }
 
+  // ── Post GL journal: DR AP / CR Bank (partial payment) ─────────────────────
+  //
+  // Accounting: each partial payment clears a portion of Accounts Payable and
+  // credits the bank/cash GL account for the amount paid.
+  //
+  //   DR  Accounts Payable    amount   (reduces the liability)
+  //   CR  Bank GL Account     amount   (reduces the asset — cash left the bank)
+  //
+  // This is the same double-entry as the full-payment Stage 2 path in bills/route.ts.
+  // Without this journal, partial payments are invisible to the Trial Balance,
+  // Balance Sheet (AP remains overstated), and AP Aging reconciliation.
+  //
+  // If no glAccountId is provided the journal is skipped and a warning is
+  // returned to the caller so the UI can surface it to the user.
+  let glWarning: string | null = null
+  if (glAccountId && bill.categoryId) {
+    try {
+      const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
+
+      // Validate both GL accounts exist for this family
+      const valid = await prisma.financeCategory.findMany({
+        where: { id: { in: [apCategoryId, glAccountId] }, familyId: session.familyId },
+        select: { id: true },
+      })
+      if (valid.length === 2) {
+        const MAX_RETRIES = 10
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          const reference = await nextJournalReference(session.familyId)
+          try {
+            await prisma.financeJournalEntry.create({
+              data: {
+                reference,
+                date: actualDate,
+                description: `Partial payment: ${bill.name}`,
+                type: 'auto_transaction',
+                isPosted: true,
+                entityId: bill.entityId ?? null,
+                familyId: session.familyId,
+                lines: {
+                  create: [
+                    {
+                      glAccountId: apCategoryId,
+                      side: 'debit',
+                      amount,
+                      description: `Clear AP (partial): ${bill.name}`,
+                    },
+                    {
+                      glAccountId,
+                      side: 'credit',
+                      amount,
+                      description: `Partial payment: ${bill.name}`,
+                    },
+                  ],
+                },
+              },
+            })
+            break // success
+          } catch (err: any) {
+            if (err.code === 'P2002' && attempt < MAX_RETRIES - 1) continue
+            throw err
+          }
+        }
+      } else {
+        console.warn('[payments POST] GL account(s) not found for family — skipping GL journal')
+        glWarning = 'GL account not found — AP not cleared in ledger for this payment'
+      }
+    } catch (err) {
+      console.error('[payments POST] Failed to post GL journal for partial payment:', err)
+      glWarning = 'GL journal could not be posted — AP not cleared in ledger for this payment'
+    }
+  } else {
+    // No GL account selected — AP will not be cleared in the ledger for this payment.
+    // The bill is still recorded as partially paid in the subledger.
+    console.warn(
+      `[payments POST] No glAccountId for partial payment on bill ${bill.id} — ` +
+      `AP will not be cleared in the GL. Set glAccountId to get a GL journal entry.`,
+    )
+    glWarning = 'No GL account selected — AP not cleared in ledger. Select a GL account to record the full double-entry.'
+  }
+
   // ── Create the payment record ───────────────────────────────────────────────
   const payment = await prisma.financeBillPayment.create({
     data: {
@@ -196,9 +275,8 @@ export async function POST(
   // ── Update bill paid/paidDate based on cumulative payments ──────────────────
   const newTotalPaid = totalPaid + amount
   const newPaid = newTotalPaid >= bill.amount
-  const newPaidDate = newPaid ? actualDate : null // Use latest payment date
 
-  // For the paidDate, use the most recent payment date (not just the current one)
+  // For the paidDate, use the most recent payment date
   const latestPayment = await prisma.financeBillPayment.findFirst({
     where: { billId: bill.id, familyId: session.familyId },
     orderBy: { paymentDate: 'desc' },
@@ -266,5 +344,8 @@ export async function POST(
     }
   }
 
-  return NextResponse.json(payment, { status: 201 })
+  return NextResponse.json(
+    glWarning ? { ...payment, glWarning } : payment,
+    { status: 201 },
+  )
 }

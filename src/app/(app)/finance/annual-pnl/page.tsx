@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import {
-  ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign, ReceiptText,
+  ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -51,71 +51,35 @@ interface IncomeEntry {
   entityId: string | null; category: Category | null
 }
 
-interface Tx {
-  id: string; amount: number; type: string; date: string
-  description: string | null; payee: string | null
-  isTransfer: boolean; entityId: string | null; category: Category | null
-}
-
 interface Entity { id: string; name: string; type: string; isDefault: boolean }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toPeriodAmount(amount: number, frequency: string): number {
-  // Return monthly equivalent — used ONLY for weekly/fortnightly/monthly
-  // which genuinely recur within any given month.
-  // yearly / halfyearly / quarterly are lump-sum payments — they must land
-  // in the specific month(s) they arrive, not be spread across all 12 months.
   if (frequency === 'weekly')       return amount * 52 / 12
   if (frequency === 'fortnightly')  return amount * 26 / 12
-  return amount // monthly (and fallback)
+  return amount
 }
 
-/**
- * Frequencies that pay a lump sum on specific dates, not every month.
- * These must be slotted to the month(s) they land in, never averaged/spread.
- */
 function isLumpSumFrequency(frequency: string): boolean {
   return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
 }
 
-/**
- * For lump-sum frequencies, return the column indices (0-11) within this FY
- * where the payment is expected to land.
- *
- * The original implementation only looked forward from baseDate, so it missed
- * occurrences where nextExpectedDate had already advanced past the FY window
- * (e.g. a yearly bill paid in Oct 2025 whose nextExpectedDate is Oct 2026).
- *
- * Fix (P2): also walk backwards from baseDate by the frequency interval to find
- * occurrences that land within this FY but predate nextExpectedDate.
- *
- * @param frequency  'yearly' | 'halfyearly' | 'quarterly'
- * @param baseDate   nextExpectedDate / nextDueDate — anchors occurrence calculation
- * @param fyMonths   Array of 12 Date objects for the FY columns (col 0 = FY start month)
- */
 function lumpSumColumns(frequency: string, baseDate: Date, fyMonths: Date[]): number[] {
-  const baseMonth = baseDate.getMonth()   // 0-based calendar month of first hit
+  const baseMonth = baseDate.getMonth()
   const baseYear  = baseDate.getFullYear()
-
   const cols: number[] = []
   for (let col = 0; col < 12; col++) {
     const colM = fyMonths[col].getMonth()
     const colY = fyMonths[col].getFullYear()
-
     if (frequency === 'yearly') {
-      // Hits once per year — same calendar month as baseDate.
-      // Also check one year back so we catch the case where nextExpectedDate
-      // has advanced to the next FY but a hit still falls inside this FY.
       if (colM === baseMonth) cols.push(col)
     } else if (frequency === 'halfyearly') {
-      // Hits every 6 months from base. Check +/- 1 full period to catch backtrack.
       for (let offset = -12; offset <= 12; offset += 6) {
         const diff = (colY - baseYear) * 12 + (colM - baseMonth)
         if (diff === offset) { cols.push(col); break }
       }
     } else if (frequency === 'quarterly') {
-      // Hits every 3 months from base. Check +/- 1 full year to catch backtrack.
       for (let offset = -12; offset <= 12; offset += 3) {
         const diff = (colY - baseYear) * 12 + (colM - baseMonth)
         if (diff === offset) { cols.push(col); break }
@@ -137,8 +101,23 @@ interface TableRow {
   label: string
   color: string | null
   side: 'income' | 'expense'
-  monthly: number[]   // [0..11] monthly amounts
+  monthly: number[]
   total: number
+}
+
+// ── GL actuals types (from /api/finance/pnl) ─────────────────────────────────
+interface PnlGroup {
+  key: string
+  label: string
+  color: string | null
+  totalPeriod: number
+}
+interface PnlMonthData {
+  incomeGroups: PnlGroup[]
+  expenseGroups: PnlGroup[]
+  totalIncome: number
+  totalExpenses: number
+  netProfit: number
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -146,31 +125,29 @@ interface TableRow {
 export default function AnnualPnLPage() {
   const [bills, setBills]       = useState<Bill[]>([])
   const [income, setIncome]     = useState<IncomeEntry[]>([])
-  const [transactions, setTxs]  = useState<Tx[]>([])
   const [entities, setEntities] = useState<Entity[]>([])
   const [selectedEntityId, setSelectedEntityId] = useState<string>('')
-  const [fyStartMonth, setFyStartMonth] = useState<number>(7) // default July
+  const [fyStartMonth, setFyStartMonth] = useState<number>(7)
   const [fyStartYear, setFyStartYear]   = useState<number>(() => currentFyYear(7))
   const [loading, setLoading]   = useState(true)
-  const [txLoading, setTxLoading] = useState(false)
-  const [viewMode, setViewMode] = useState<'accrual' | 'forecast'>('forecast')
+  // GL actuals: one PnlMonthData per column (null = not yet loaded)
+  const [glMonths, setGlMonths] = useState<(PnlMonthData | null)[]>(Array(12).fill(null))
+  const [glLoading, setGlLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<'actuals' | 'forecast'>('actuals')
 
   const fyMonthLabelsArr = useMemo(() => fyMonthLabels(fyStartMonth), [fyStartMonth])
 
-  // Build array of 12 month start Dates for the selected FY
   const fyMonths = useMemo(() =>
     Array.from({ length: 12 }, (_, i) => fyColDate(fyStartYear, i, fyStartMonth)),
     [fyStartYear, fyStartMonth])
 
-  const fyFrom = fyMonths[0]
-  const fyTo   = endOfMonth(fyMonths[11])
+  const fyTo = endOfMonth(fyMonths[11])
 
-  // ── Load static data ──────────────────────────────────────────────────────
+  // ── Load static data (settings + forecast sources) ───────────────────────
   useEffect(() => {
     async function load() {
       setLoading(true)
       try {
-        // Load FY start month from settings
         const familyRes = await fetch('/api/settings/family')
         if (familyRes.ok) {
           const family = await familyRes.json()
@@ -192,37 +169,76 @@ export default function AnnualPnLPage() {
     load()
   }, [])
 
-  // ── Load transactions for the full FY ────────────────────────────────────
+  // ── Load GL actuals: one P&L API call per month ───────────────────────────
+  //
+  // The /api/finance/pnl endpoint reads exclusively from posted
+  // FinanceJournalLine entries — the single source of truth.
+  // We fetch all 12 months concurrently so the table fills in progressively.
   useEffect(() => {
-    async function loadTxs() {
-      setTxLoading(true)
+    if (viewMode !== 'actuals') return
+    let cancelled = false
+    setGlMonths(Array(12).fill(null))
+    setGlLoading(true)
+
+    async function loadMonth(col: number) {
+      const colDate = fyMonths[col]
+      const from = startOfMonth(colDate).toISOString().split('T')[0]
+      const params = new URLSearchParams({ period: 'month', anchor: from })
+      if (selectedEntityId) params.set('entityId', selectedEntityId)
       try {
-        const params = new URLSearchParams({
-          startDate: fyFrom.toISOString().split('T')[0],
-          endDate:   fyTo.toISOString().split('T')[0],
-          limit:     '2000',
-        })
-        if (selectedEntityId) params.set('entityId', selectedEntityId)
-        const res = await fetch(`/api/finance/transactions?${params}`)
-        if (res.ok) {
-          const d = await res.json()
-          setTxs((d.transactions ?? []).filter((t: Tx) => !t.isTransfer))
+        const res = await fetch(`/api/finance/pnl?${params}`)
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (!cancelled) {
+          setGlMonths(prev => {
+            const next = [...prev]
+            next[col] = {
+              incomeGroups:  data.incomeGroups  ?? [],
+              expenseGroups: data.expenseGroups ?? [],
+              totalIncome:   data.totalIncome   ?? 0,
+              totalExpenses: data.totalExpenses ?? 0,
+              netProfit:     data.netProfit     ?? 0,
+            }
+            return next
+          })
         }
-      } finally { setTxLoading(false) }
+      } catch { /* individual month failure is silent — column shows — */ }
     }
-    loadTxs()
-  }, [fyStartYear, selectedEntityId])   // eslint-disable-line react-hooks/exhaustive-deps
+
+    Promise.all(fyMonths.map((_, col) => loadMonth(col)))
+      .finally(() => { if (!cancelled) setGlLoading(false) })
+
+    return () => { cancelled = true }
+  }, [fyStartYear, fyStartMonth, selectedEntityId, viewMode])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build income rows ─────────────────────────────────────────────────────
+  //
+  // Actuals mode: sourced from GL (posted FinanceJournalLine via /api/finance/pnl).
+  // Forecast mode: sourced from operational tables — planning projection only.
   const incomeRows = useMemo((): TableRow[] => {
-    const map = new Map<string, TableRow>()
+    if (viewMode === 'actuals') {
+      const map = new Map<string, TableRow>()
+      for (let col = 0; col < 12; col++) {
+        const month = glMonths[col]
+        if (!month) continue
+        for (const g of month.incomeGroups) {
+          if (!map.has(g.key)) {
+            map.set(g.key, { key: g.key, label: g.label, color: g.color, side: 'income', monthly: Array(12).fill(0), total: 0 })
+          }
+          map.get(g.key)!.monthly[col] += g.totalPeriod
+        }
+      }
+      for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
+      return Array.from(map.values()).filter(r => r.total !== 0).sort((a, b) => b.total - a.total)
+    }
 
+    // Forecast mode — operational tables
+    const map = new Map<string, TableRow>()
     function getRow(key: string, label: string, color: string | null): TableRow {
       if (!map.has(key)) map.set(key, { key, label, color, side: 'income', monthly: Array(12).fill(0), total: 0 })
       return map.get(key)!
     }
 
-    // From income entries
     for (const e of income) {
       if (!e.isActive) continue
       if (selectedEntityId && e.entityId !== selectedEntityId) continue
@@ -232,73 +248,55 @@ export default function AnnualPnLPage() {
       const row   = getRow(key, label, color)
 
       if (e.received && e.receivedDate) {
-        // Confirmed received — slot by actual received date (always a lump sum on that day)
         for (let col = 0; col < 12; col++) {
-          if (isInMonth(e.receivedDate, fyMonths[col])) {
-            row.monthly[col] += e.amount
-          }
+          if (isInMonth(e.receivedDate, fyMonths[col])) row.monthly[col] += e.amount
         }
-      } else if (viewMode === 'forecast') {
-        // Forecast — slot to the month(s) the income is actually expected to arrive
+      } else {
         if (e.incomeType === 'one-off' || isLumpSumFrequency(e.frequency)) {
-          // One-off or annual/half-yearly/quarterly: show full amount in the specific month(s)
-          // it lands — never divide it across all 12 months.
           if (e.incomeType === 'one-off') {
             for (let col = 0; col < 12; col++) {
-              if (isInMonth(e.nextExpectedDate, fyMonths[col])) {
-                row.monthly[col] += e.amount
-              }
+              if (isInMonth(e.nextExpectedDate, fyMonths[col])) row.monthly[col] += e.amount
             }
           } else {
-            // Lump-sum recurring: place full payment amount in each occurrence month
             const hitCols = lumpSumColumns(e.frequency, new Date(e.nextExpectedDate), fyMonths)
-            for (const col of hitCols) {
-              row.monthly[col] += e.amount
-            }
+            for (const col of hitCols) row.monthly[col] += e.amount
           }
         } else {
-          // Genuinely recurring within a month (weekly / fortnightly / monthly):
-          // spread the monthly equivalent evenly — this is correct because they
-          // actually do receive money every month.
           const monthlyAmt = toPeriodAmount(e.amount, e.frequency)
-          for (let col = 0; col < 12; col++) {
-            row.monthly[col] += monthlyAmt
-          }
+          for (let col = 0; col < 12; col++) row.monthly[col] += monthlyAmt
         }
       }
     }
 
-    // From actual income-type transactions (always show)
-    for (const tx of transactions) {
-      if (tx.type !== 'income') continue
-      if (selectedEntityId && tx.entityId !== selectedEntityId) continue
-      const key   = tx.category?.id ?? '__tx_none__'
-      const label = tx.category?.name ?? 'Uncategorised'
-      const color = tx.category?.color ?? null
-      const row   = getRow(key, label, color)
-      for (let col = 0; col < 12; col++) {
-        if (isInMonth(tx.date, fyMonths[col])) {
-          row.monthly[col] += tx.amount
-        }
-      }
-    }
-
-    for (const row of map.values()) {
-      row.total = row.monthly.reduce((s, v) => s + v, 0)
-    }
+    for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
     return Array.from(map.values()).filter(r => r.total > 0).sort((a, b) => b.total - a.total)
-  }, [income, transactions, fyMonths, viewMode, selectedEntityId])
+  }, [income, glMonths, fyMonths, viewMode, selectedEntityId])
 
   // ── Build expense rows ────────────────────────────────────────────────────
   const expenseRows = useMemo((): TableRow[] => {
-    const map = new Map<string, TableRow>()
+    if (viewMode === 'actuals') {
+      const map = new Map<string, TableRow>()
+      for (let col = 0; col < 12; col++) {
+        const month = glMonths[col]
+        if (!month) continue
+        for (const g of month.expenseGroups) {
+          if (!map.has(g.key)) {
+            map.set(g.key, { key: g.key, label: g.label, color: g.color, side: 'expense', monthly: Array(12).fill(0), total: 0 })
+          }
+          map.get(g.key)!.monthly[col] += g.totalPeriod
+        }
+      }
+      for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
+      return Array.from(map.values()).filter(r => r.total !== 0).sort((a, b) => b.total - a.total)
+    }
 
+    // Forecast mode — operational tables
+    const map = new Map<string, TableRow>()
     function getRow(key: string, label: string, color: string | null): TableRow {
       if (!map.has(key)) map.set(key, { key, label, color, side: 'expense', monthly: Array(12).fill(0), total: 0 })
       return map.get(key)!
     }
 
-    // From bills
     for (const b of bills) {
       if (!b.isActive) continue
       if (selectedEntityId && b.entityId !== selectedEntityId) continue
@@ -311,59 +309,29 @@ export default function AnnualPnLPage() {
       const row   = getRow(key, label, color)
 
       if (b.paid && b.paidDate) {
-        // Confirmed paid — slot to the actual payment date (always a lump sum)
         for (let col = 0; col < 12; col++) {
-          if (isInMonth(b.paidDate, fyMonths[col])) {
-            row.monthly[col] += b.amount
-          }
+          if (isInMonth(b.paidDate, fyMonths[col])) row.monthly[col] += b.amount
         }
-      } else if (viewMode === 'forecast') {
+      } else {
         if (b.billType === 'one-off' || isLumpSumFrequency(b.frequency)) {
-          // One-off or annual/half-yearly/quarterly bill: show full amount in the
-          // specific month(s) it is due — do not divide across all months.
           if (b.billType === 'one-off') {
             for (let col = 0; col < 12; col++) {
-              if (isInMonth(b.nextDueDate, fyMonths[col])) {
-                row.monthly[col] += b.amount
-              }
+              if (isInMonth(b.nextDueDate, fyMonths[col])) row.monthly[col] += b.amount
             }
           } else {
             const hitCols = lumpSumColumns(b.frequency, new Date(b.nextDueDate), fyMonths)
-            for (const col of hitCols) {
-              row.monthly[col] += b.amount
-            }
+            for (const col of hitCols) row.monthly[col] += b.amount
           }
         } else {
-          // Genuinely recurring within a month (weekly / fortnightly / monthly):
-          // spread the monthly equivalent — correct because they recur every month.
           const monthlyAmt = toPeriodAmount(b.amount, b.frequency)
-          for (let col = 0; col < 12; col++) {
-            row.monthly[col] += monthlyAmt
-          }
+          for (let col = 0; col < 12; col++) row.monthly[col] += monthlyAmt
         }
       }
     }
 
-    // From actual expense-type transactions (always show)
-    for (const tx of transactions) {
-      if (tx.type !== 'expense') continue
-      if (selectedEntityId && tx.entityId !== selectedEntityId) continue
-      const key   = tx.category?.id ?? '__tx_none__'
-      const label = tx.category?.name ?? 'Uncategorised'
-      const color = tx.category?.color ?? null
-      const row   = getRow(key, label, color)
-      for (let col = 0; col < 12; col++) {
-        if (isInMonth(tx.date, fyMonths[col])) {
-          row.monthly[col] += tx.amount
-        }
-      }
-    }
-
-    for (const row of map.values()) {
-      row.total = row.monthly.reduce((s, v) => s + v, 0)
-    }
+    for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
     return Array.from(map.values()).filter(r => r.total > 0).sort((a, b) => b.total - a.total)
-  }, [bills, transactions, fyMonths, viewMode, selectedEntityId])
+  }, [bills, glMonths, fyMonths, viewMode, selectedEntityId])
 
   // ── Totals ────────────────────────────────────────────────────────────────
   const monthlyIncome   = useMemo(() => Array.from({ length: 12 }, (_, i) => incomeRows.reduce((s, r) => s + r.monthly[i], 0)), [incomeRows])
@@ -374,7 +342,6 @@ export default function AnnualPnLPage() {
   const totalExpenses = expenseRows.reduce((s, r) => s + r.total, 0)
   const totalNet      = totalIncome - totalExpenses
 
-  // Current month column (highlight today)
   const now = new Date()
   const currentCol = fyMonths.findIndex(m => getMonth(m) === getMonth(now) && getYear(m) === getYear(now))
 
@@ -397,12 +364,12 @@ export default function AnnualPnLPage() {
           </button>
         </div>
 
-        {/* Accrual / Forecast */}
+        {/* Actuals / Forecast toggle */}
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-          <button onClick={() => setViewMode('accrual')}
+          <button onClick={() => setViewMode('actuals')}
             className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              viewMode === 'accrual' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            Accrual
+              viewMode === 'actuals' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            Actuals (GL)
           </button>
           <button onClick={() => setViewMode('forecast')}
             className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
@@ -429,7 +396,7 @@ export default function AnnualPnLPage() {
           </div>
         )}
 
-        {txLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading…</span>}
+        {glLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading GL data…</span>}
       </div>
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
@@ -490,7 +457,8 @@ export default function AnnualPnLPage() {
               <tr>
                 <td colSpan={14} className="px-3 py-4 text-center text-xs text-muted-foreground">
                   No income data for this period.
-                  {viewMode === 'accrual' && ' Switch to Forecast to include scheduled income.'}
+                  {viewMode === 'actuals' && ' No posted GL journal entries found for income accounts this period.'}
+                  {viewMode === 'forecast' && ' Switch to Actuals to see GL-posted income, or add income entries for a forecast.'}
                 </td>
               </tr>
             ) : incomeRows.map(row => (
@@ -545,7 +513,8 @@ export default function AnnualPnLPage() {
               <tr>
                 <td colSpan={14} className="px-3 py-4 text-center text-xs text-muted-foreground">
                   No expense data for this period.
-                  {viewMode === 'accrual' && ' Switch to Forecast to include upcoming bills.'}
+                  {viewMode === 'actuals' && ' No posted GL journal entries found for expense accounts this period.'}
+                  {viewMode === 'forecast' && ' Switch to Actuals to see GL-posted expenses, or add bills for a forecast.'}
                 </td>
               </tr>
             ) : expenseRows.map(row => (
@@ -616,9 +585,9 @@ export default function AnnualPnLPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {viewMode === 'accrual'
-          ? 'Accrual basis — income and expenses recognised when invoiced or received, regardless of when cash is exchanged. Future months will show only confirmed items.'
-          : 'Forecast — recurring bills and income spread evenly across months at their monthly equivalent. Actual transactions always show where available.'}
+        {viewMode === 'actuals'
+          ? 'Actuals — sourced from the General Ledger (posted journal entries). Figures match the Trial Balance, P&L, and Balance Sheet exactly. Future months with no posted entries will show —.'
+          : 'Forecast — recurring bills and income spread evenly across months at their monthly equivalent. This is a planning projection based on scheduled items, not GL-posted actuals.'}
       </p>
     </div>
   )

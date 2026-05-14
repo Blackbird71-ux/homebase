@@ -166,17 +166,25 @@ export async function setOpeningBalance(
   }
 
   // ── Create or replace the GL journal entry ─────────────────────────────
-  // DR asset account (positive) or CR liability account (negative)
-  // CR Opening Balances equity (positive) or DR Opening Balances (negative)
   //
-  // The FinanceAccount doesn't have a direct FinanceCategory GL account,
-  // so we use the Opening Balances equity category on one side and create
-  // a special asset category entry for the account if needed.
+  // Proper double-entry for opening balances:
   //
-  // For bank accounts: we use the account's linked glCategoryId if set,
-  // otherwise skip the GL journal (the transaction provides balance).
-  // The correct long-term fix is to link each FinanceAccount to a FinanceCategory.
-  // For now, delete any old OB journal and create a fresh one.
+  //   Positive amount (asset, e.g. bank account with funds):
+  //     DR  Bank GL Category     amount   (asset increases — debit normal side)
+  //     CR  Opening Balances     amount   (equity increases — credit normal side)
+  //
+  //   Negative amount (liability, e.g. credit card debt):
+  //     DR  Opening Balances     amount   (equity decreases — debit reversal)
+  //     CR  Bank GL Category     amount   (liability increases — credit normal side)
+  //
+  // Each FinanceAccount gets a matching FinanceCategory of type 'asset' (or
+  // 'liability') the first time an opening balance is set. This gives the
+  // account a proper GL representation so the Trial Balance and Balance Sheet
+  // can show the correct opening balance on the right side of the ledger.
+  //
+  // The GL category is named "Account: <account name>" and flagged isSystem=true
+  // so it is not editable by the user. It is linked to the account via glCode
+  // storing the accountId for back-reference.
   const existingJournals = await prisma.financeJournalEntry.findMany({
     where: { sourceTransactionId: txId, familyId, type: 'opening_balance' },
     select: { id: true },
@@ -187,30 +195,63 @@ export async function setOpeningBalance(
     })
   }
 
-  // Build the double-entry for opening balance:
-  // Positive amount (asset): DR Opening Balances equity / CR opening-balances offset
-  // We use the Opening Balances category on BOTH sides temporarily.
-  // The full COA link (account → GL category) is a future enhancement.
-  // For now, we ensure the OB journal is created and visible.
+  // Ensure a dedicated GL category exists for this bank account.
+  // We store the accountId in glCode for cross-reference.
+  const accountGlName = `Account: ${account.name}`
+  const isLiability = signedAmount < 0
+  const glCategoryType = isLiability ? 'liability' : 'asset'
+
+  let accountGlCategory = await prisma.financeCategory.findFirst({
+    where: { familyId, glCode: `acct:${accountId}`, isSystem: true },
+    select: { id: true },
+  })
+  if (!accountGlCategory) {
+    try {
+      accountGlCategory = await prisma.financeCategory.create({
+        data: {
+          name:     accountGlName,
+          type:     glCategoryType,
+          isSystem: true,
+          level:    0,
+          glCode:   `acct:${accountId}`,
+          familyId,
+        },
+        select: { id: true },
+      })
+    } catch (err: any) {
+      // Unique constraint on (familyId, name) — account name may already exist
+      // under a different structure. Fall back to a suffixed name.
+      if (err.code === 'P2002') {
+        accountGlCategory = await prisma.financeCategory.create({
+          data: {
+            name:     `${accountGlName} (OB)`,
+            type:     glCategoryType,
+            isSystem: true,
+            level:    0,
+            glCode:   `acct:${accountId}`,
+            familyId,
+          },
+          select: { id: true },
+        })
+      } else {
+        throw err
+      }
+    }
+  }
+
+  const absAmount = Math.abs(signedAmount)
   const reference = await nextJournalReference(familyId)
 
-  // Determine DR/CR based on sign
-  // Positive = asset opening balance: DR the OB equity offset (net debit = asset increases)
-  // Negative = liability: CR the OB equity offset (net credit = liability recorded)
-  const absAmount = Math.abs(signedAmount)
-  const isAsset = signedAmount >= 0
-
-  // Lines: one side is Opening Balances equity, other side is also OB equity
-  // until we have a proper account→GL category mapping.
-  // This at minimum creates a visible GL entry for audit purposes.
-  const lines = isAsset
+  // Asset opening balance:  DR Account GL / CR Opening Balances
+  // Liability opening balance: DR Opening Balances / CR Account GL
+  const lines = isLiability
     ? [
-        { glAccountId: obCategoryId, side: 'debit' as const,  amount: absAmount, description: `Opening Balance — ${account.name}` },
-        { glAccountId: obCategoryId, side: 'credit' as const, amount: absAmount, description: `Opening Balances equity offset` },
+        { glAccountId: obCategoryId,           side: 'debit'  as const, amount: absAmount, description: `Opening Balances equity offset` },
+        { glAccountId: accountGlCategory.id,   side: 'credit' as const, amount: absAmount, description: `Opening Balance — ${account.name}` },
       ]
     : [
-        { glAccountId: obCategoryId, side: 'debit' as const,  amount: absAmount, description: `Opening Balances equity offset` },
-        { glAccountId: obCategoryId, side: 'credit' as const, amount: absAmount, description: `Opening Balance — ${account.name}` },
+        { glAccountId: accountGlCategory.id,   side: 'debit'  as const, amount: absAmount, description: `Opening Balance — ${account.name}` },
+        { glAccountId: obCategoryId,           side: 'credit' as const, amount: absAmount, description: `Opening Balances equity offset` },
       ]
 
   await prisma.financeJournalEntry.create({
@@ -250,6 +291,12 @@ export async function deriveAccountBalance(accountId: string): Promise<number> {
  *   2. Posted FinanceJournalLines (GL account movements)
  *
  * Returns a Map<accountId | glAccountId, derivedBalance>.
+ *
+ * NOTE: This function uses a hybrid read (transactions + journal lines) because
+ * FinanceAccount records are not fully linked to FinanceCategory GL accounts.
+ * The opening balance fix in setOpeningBalance() now creates a proper GL category
+ * for each account, so new opening balances will appear in journal lines.
+ * Legacy opening balance transactions are still read here for backward compatibility.
  */
 export async function deriveAllAccountBalances(
   familyId: string,

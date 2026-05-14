@@ -7,6 +7,26 @@ import { currentFyYear, fyDateRange, fyLabel } from '@/lib/finance-fy'
 //    page component (tax-report/page.tsx) so they can be updated each
 //    July without touching the API or triggering a redeployment.
 //    This route returns raw financial data only.
+//
+// ── DATA SOURCES (GL-first) ────────────────────────────────────────────────
+//
+//   glActuals   — posted FinanceJournalLine entries on GL accounts marked
+//                 isTaxDeduction=true or taxIncludeInReporting=true.
+//                 These are the authoritative figures. They agree with the
+//                 Trial Balance, P&L, and Balance Sheet by construction.
+//
+//   incomeEstimates — FinanceIncomeEntry records marked isTaxTracked=true.
+//                 These are PLANNING figures (annualised salary, rental
+//                 estimates, etc.) used by the tax bracket calculator in the
+//                 page component. They are clearly separated from GL actuals
+//                 in the response so the page component can label them correctly.
+//
+//   taxCategories — FinanceCategory metadata used by the page component to
+//                 group and label GL actuals.
+//
+// The old "transactions" field (from FinanceTransaction) has been replaced by
+// "glActuals" (from FinanceJournalLine). The page component must use
+// glActuals for all statutory figures.
 
 export async function GET(request: NextRequest) {
   const session = await requireSession()
@@ -46,7 +66,7 @@ export async function GET(request: NextRequest) {
     orderBy: { sortOrder: 'asc' },
   })
 
-  // ── 3. Categories with tax settings ────────────────────────────────────
+  // ── 3. Tax-relevant GL categories ─────────────────────────────────────
   const taxCategories = await prisma.financeCategory.findMany({
     where: {
       familyId,
@@ -54,41 +74,124 @@ export async function GET(request: NextRequest) {
     },
     select: {
       id: true, name: true, taxDisplayLabel: true,
-      isTaxDeduction: true, taxIncludeInReporting: true,
+      isTaxDeduction: true, taxIncludeInReporting: true, type: true,
     },
   })
   const taxCategoryIds = new Set(taxCategories.map(c => c.id))
 
-  // ── 4. Transactions in date range ──────────────────────────────────────
-  const txWhere: any = {
-    familyId,
-    date: { gte: from, lte: to },
-    isTransfer: false,
-    type: { not: 'opening_balance' },
-    OR: [
-      { taxClassification: { not: null } },
-      { categoryId: { in: [...taxCategoryIds] } },
-    ],
-  }
-  if (entityId) txWhere.entityId = entityId
-
-  const transactions = await prisma.financeTransaction.findMany({
-    where: txWhere,
-    include: {
-      category: { select: { id: true, name: true, taxDisplayLabel: true, type: true, isTaxDeduction: true } },
-      entity:   { select: { id: true, name: true } },
+  // ── 4. GL ACTUALS — posted journal lines on tax-relevant accounts ──────
+  //
+  // This replaces the old FinanceTransaction read. Every financial event
+  // (bill paid, income received, manual journal) that hits a tax-relevant
+  // GL account will appear here, because those events all post to the GL.
+  //
+  // Income accounts (type='income') with taxIncludeInReporting=true → taxable income
+  // Expense/transfer accounts with isTaxDeduction=true              → tax deductions
+  // Any account with taxIncludeInReporting=true                     → included in report
+  const journalLineWhere: any = {
+    journalEntry: {
+      familyId,
+      isPosted: true,
+      date: { gte: from, lte: to },
+      ...(entityId ? { entityId } : {}),
     },
-    orderBy: { date: 'desc' },
+    glAccountId: { in: [...taxCategoryIds] },
+  }
+
+  const journalLines = await prisma.financeJournalLine.findMany({
+    where: journalLineWhere,
+    include: {
+      glAccount: {
+        select: {
+          id: true, name: true, type: true,
+          taxDisplayLabel: true, isTaxDeduction: true, taxIncludeInReporting: true,
+        },
+      },
+      journalEntry: {
+        select: {
+          id: true, reference: true, date: true, description: true,
+          type: true, entityId: true,
+          entity: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { journalEntry: { date: 'desc' } },
   })
 
-  // ── 5. Income entries with tax tracking ───────────────────────────────
+  // Build member name map
+  const memberMap = new Map(members.map(m => [m.id, m.name]))
+
+  // ── 5. Aggregate GL actuals by GL account ──────────────────────────────
+  //
+  // For each tax-relevant GL account, sum the net movement of posted
+  // journal lines in the period following normal balance rules:
+  //   Income accounts:  CR increases, DR decreases  → net = CR - DR
+  //   Expense accounts: DR increases, CR decreases  → net = DR - CR
+  //
+  // We also emit individual line items so the page component can show
+  // a drill-down of what contributed to each category's total.
+
+  interface GlActualItem {
+    journalEntryId: string
+    reference: string
+    date: string
+    description: string
+    entryType: string
+    amount: number       // net movement (always positive for normal-side entries)
+    side: string         // 'debit' | 'credit'
+    glAccountId: string
+    glAccountName: string
+    glAccountType: string
+    taxDisplayLabel: string | null
+    isTaxDeduction: boolean
+    taxIncludeInReporting: boolean
+    entityId: string | null
+    entityName: string | null
+  }
+
+  const glActuals: GlActualItem[] = journalLines.map(line => {
+    const acct = line.glAccount
+    const entry = line.journalEntry
+
+    // Net movement: positive means the account balance increased on its normal side
+    const isNormalDebitSide = acct.type === 'asset' || acct.type === 'expense'
+    const netAmount = isNormalDebitSide
+      ? (line.side === 'debit'  ? line.amount : -line.amount)
+      : (line.side === 'credit' ? line.amount : -line.amount)
+
+    return {
+      journalEntryId:        entry.id,
+      reference:             entry.reference ?? '',
+      date:                  entry.date.toISOString().split('T')[0],
+      description:           entry.description,
+      entryType:             entry.type,
+      amount:                Math.round(netAmount * 100) / 100,
+      side:                  line.side,
+      glAccountId:           acct.id,
+      glAccountName:         acct.name,
+      glAccountType:         acct.type,
+      taxDisplayLabel:       acct.taxDisplayLabel ?? null,
+      isTaxDeduction:        acct.isTaxDeduction,
+      taxIncludeInReporting: acct.taxIncludeInReporting,
+      entityId:              entry.entityId ?? null,
+      entityName:            entry.entity?.name ?? null,
+    }
+  })
+
+  // ── 6. Income estimates (PLANNING DATA — not GL actuals) ───────────────
+  //
+  // FinanceIncomeEntry records marked isTaxTracked=true are annualised
+  // estimates used by the tax bracket calculator. They are planning data
+  // only and must NOT be mixed with GL actuals for statutory purposes.
+  // The page component must display these separately and label them as
+  // estimates/projections.
   const incomeWhere: any = {
     familyId,
     OR: [{ isTaxTracked: true }, { taxClassification: { not: null } }],
   }
   if (entityId) incomeWhere.entityId = entityId
 
-  const incomeEntries = await prisma.financeIncomeEntry.findMany({
+  const incomeEstimates = await prisma.financeIncomeEntry.findMany({
     where: incomeWhere,
     include: {
       category: { select: { id: true, name: true, taxDisplayLabel: true } },
@@ -97,34 +200,12 @@ export async function GET(request: NextRequest) {
     orderBy: { nextExpectedDate: 'desc' },
   })
 
-  // ── 6. Build member name map ───────────────────────────────────────────
-  const memberMap = new Map(members.map(m => [m.id, m.name]))
-
-  // ── 7. Serialize transactions ─────────────────────────────────────────
-  const serializedTransactions = transactions.map(tx => ({
-    id:                      tx.id,
-    date:                    tx.date.toISOString().split('T')[0],
-    description:             tx.description ?? tx.payee ?? null,
-    amount:                  tx.amount,
-    type:                    tx.type,
-    taxClassification:       tx.taxClassification,
-    categoryId:              tx.categoryId,
-    categoryName:            tx.category?.name ?? null,
-    categoryTaxDisplayLabel: tx.category?.taxDisplayLabel ?? null,
-    categoryIsTaxDeduction:  tx.category?.isTaxDeduction ?? false,
-    entityId:                tx.entityId,
-    entityName:              tx.entity?.name ?? null,
-    memberId:                tx.memberId,
-    memberName:              tx.memberId ? (memberMap.get(tx.memberId) ?? null) : null,
-  }))
-
-  // ── 8. Serialize income entries ───────────────────────────────────────
   const freqMultiplier: Record<string, number> = {
     weekly: 52, fortnightly: 26, monthly: 12, quarterly: 4,
     halfyearly: 2, yearly: 1, 'one-off': 1,
   }
 
-  const serializedIncomeEntries = incomeEntries.map(e => ({
+  const serializedIncomeEstimates = incomeEstimates.map(e => ({
     id:                      e.id,
     name:                    e.name,
     amount:                  e.amount,
@@ -148,14 +229,22 @@ export async function GET(request: NextRequest) {
     to:   to.toISOString().split('T')[0],
     members,
     entities,
-    transactions:  serializedTransactions,
-    incomeEntries: serializedIncomeEntries,
+    // GL-sourced actuals — use these for all statutory tax figures
+    glActuals,
+    // Planning estimates — annualised income for tax bracket calculations only
+    incomeEstimates: serializedIncomeEstimates,
+    // Legacy field alias so existing page component code keeps working
+    // while it is migrated to use glActuals. Remove once page is updated.
+    transactions: glActuals,
+    incomeEntries: serializedIncomeEstimates,
     taxCategories: taxCategories.map(c => ({
       id:                    c.id,
       name:                  c.name,
+      type:                  c.type,
       displayLabel:          c.taxDisplayLabel,
       isTaxDeduction:        c.isTaxDeduction,
       taxIncludeInReporting: c.taxIncludeInReporting,
     })),
+    source: 'gl',  // confirms this response is GL-sourced — useful for debugging
   })
 }

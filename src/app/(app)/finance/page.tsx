@@ -1,7 +1,7 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { seedFinanceCategories } from '@/lib/finance-seed'
-import { deriveAllAccountBalances } from '@/lib/finance-opening-balance'
+import { deriveAllAccountBalances, deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 import { OverviewClient } from './OverviewClient'
 import { startOfMonth, endOfMonth } from 'date-fns'
 import type {
@@ -31,6 +31,7 @@ export default async function FinanceOverviewPage() {
     familyUsers,
     locations,
     balanceMap,
+    glMonthlyBalances,
   ] = await Promise.all([
     prisma.financeAccount.findMany({
       where: { familyId, isActive: true },
@@ -74,6 +75,7 @@ export default async function FinanceOverviewPage() {
       where: { familyId, isActive: true },
     }),
     deriveAllAccountBalances(familyId),
+    deriveJournalLineBalances(familyId, monthStart, monthEnd),
   ])
 
   // Build member lookup from family users
@@ -82,13 +84,17 @@ export default async function FinanceOverviewPage() {
     memberById[m.id] = { id: m.id, name: m.name }
   }
 
-  // Compute monthly income/expense totals
-  const monthlyIncome = transactions
-    .filter((t) => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0)
-  const monthlyExpense = transactions
-    .filter((t) => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0)
+  // Compute monthly income/expense totals from the GL (posted journal lines)
+  // so they match the P&L report exactly. Using FinanceTransaction would produce
+  // different figures because it is a UI cache, not the source of truth.
+  let monthlyIncome = 0
+  let monthlyExpense = 0
+  for (const [, data] of glMonthlyBalances) {
+    if (data.accountType === 'income')  monthlyIncome  += Math.max(0, data.netBalance)
+    if (data.accountType === 'expense') monthlyExpense += Math.max(0, data.netBalance)
+  }
+  monthlyIncome  = Math.round(monthlyIncome  * 100) / 100
+  monthlyExpense = Math.round(monthlyExpense * 100) / 100
 
   // Compute total balance from derived balances
   const totalBalance = accounts.reduce((sum, a) => sum + (balanceMap.get(a.id) ?? 0), 0)
