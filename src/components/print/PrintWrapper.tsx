@@ -38,8 +38,8 @@ export const PrintWrapper = forwardRef<HTMLDivElement, PrintWrapperProps>(
     return (
       <div ref={ref}>
         {/* ── Print-only header ─────────────────────────────────────────── */}
-        {/* Hidden on screen; visible only during print via @media print rules */}
-        <div className="print-header hidden print:flex" aria-hidden="true">
+        {/* Hidden on screen via "hidden"; PrintButton makes it visible in the print window */}
+        <div className="print-header hidden" aria-hidden="true">
           <div>
             <div className="print-header-title">{reportTitle}</div>
             {dateRange && (

@@ -3,18 +3,20 @@
 /**
  * PrintButton — triggers browser print / Save as PDF for a report.
  *
+ * Strategy: opens a new browser window containing only the report HTML
+ * (cloned from the printRef element) plus extracted computed styles.
+ * This avoids all Next.js layout nesting issues — nothing from the app
+ * shell leaks into the print window.
+ *
  * Usage:
  *   const printRef = useRef<HTMLDivElement>(null)
  *   <PrintButton printRef={printRef} reportTitle="Trial Balance" dateRange="Jul 2024 – Jun 2025" />
- *   <div ref={printRef}>…report content…</div>
- *
- * The component is self-contained — no external print library required.
- * It uses the native window.print() API with a dynamically injected <style>
- * that scopes printing to only the element referenced by printRef, hiding
- * everything else on the page.
+ *   <PrintWrapper ref={printRef} reportTitle="Trial Balance" dateRange="...">
+ *     {…report JSX…}
+ *   </PrintWrapper>
  */
 
-import { useRef, useCallback, RefObject } from 'react'
+import { useCallback, RefObject } from 'react'
 import { Printer } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -41,195 +43,234 @@ export function PrintButton({
   className = '',
   disabled = false,
 }: PrintButtonProps) {
-  const styleRef = useRef<HTMLStyleElement | null>(null)
 
   const handlePrint = useCallback(() => {
-    if (!printRef.current) return
-
-    // Build a unique ID to scope the print styles
-    const printId = `print-region-${Date.now()}`
-    printRef.current.setAttribute('data-print-id', printId)
+    const el = printRef.current
+    if (!el) return
 
     // Compose document title — browser uses this as default PDF filename
     const generatedAt = format(new Date(), 'd MMM yyyy h:mm a')
-    const docTitle    = dateRange
+    const docTitle = dateRange
       ? `HomeBase - ${reportTitle} - ${dateRange}`
       : `HomeBase - ${reportTitle} - ${generatedAt}`
 
-    // Inject print stylesheet
-    const style = document.createElement('style')
-    style.setAttribute('data-homebase-print', 'true')
-    style.textContent = `
-      @media print {
-        /* ── Page setup ─────────────────────────────────────────────────── */
-        @page {
-          size: A4 ${landscape ? 'landscape' : 'portrait'};
-          margin: 15mm 12mm 15mm 12mm;
-        }
+    // Clone the report content so we don't mutate the live DOM
+    const clone = el.cloneNode(true) as HTMLElement
 
-        /* ── Hide everything on the page using visibility (not display:none)
-             Visibility is inheritable: a child CAN override visibility:hidden
-             with visibility:visible, unlike display:none which blocks the
-             entire subtree and cannot be overridden by descendants.
-             This is the correct approach when the print target is nested
-             deeply inside layout wrappers (e.g. Next.js app shell). ─────── */
-        html, body {
-          visibility: hidden !important;
-          background: white !important;
-        }
+    // Remove any interactive / screen-only elements from the clone
+    clone.querySelectorAll(
+      'button, [role="button"], input[type="date"], select, [data-print-hide], nav, aside'
+    ).forEach(node => (node as HTMLElement).remove())
 
-        /* ── Show our print region and all its descendants ───────────────── */
-        [data-print-id="${printId}"],
-        [data-print-id="${printId}"] * {
-          visibility: visible !important;
-        }
+    // Make the print-only header visible (it's hidden on screen via Tailwind "hidden")
+    const printHeader = clone.querySelector('.print-header') as HTMLElement | null
+    if (printHeader) {
+      printHeader.style.display = 'flex'
+    }
 
-        /* ── Pull the print region to the top of the page ────────────────── */
-        [data-print-id="${printId}"] {
-          position: fixed !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 100% !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: white !important;
-          color: black !important;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
-          font-size: 11pt !important;
-          line-height: 1.4 !important;
-        }
+    // Collect all <link rel="stylesheet"> and <style> tags from the main document
+    // so Tailwind utility classes render correctly in the new window.
+    // Also include preload-as-style links that Next.js may use for CSS in dev mode.
+    const styleTags = Array.from(
+      document.querySelectorAll(
+        'link[rel="stylesheet"], link[rel="preload"][as="style"], style'
+      )
+    )
+      .map(node => node.outerHTML)
+      .join('\n')
 
-        /* ── Print header (injected by PrintWrapper) ─────────────────────── */
-        .print-header {
-          display: flex !important;
-          align-items: center !important;
-          justify-content: space-between !important;
-          border-bottom: 2px solid #1a1a1a !important;
-          padding-bottom: 8px !important;
-          margin-bottom: 16px !important;
-        }
-        .print-header-title {
-          font-size: 16pt !important;
-          font-weight: 700 !important;
-          color: #1a1a1a !important;
-        }
-        .print-header-meta {
-          font-size: 8pt !important;
-          color: #555 !important;
-          text-align: right !important;
-        }
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${docTitle.replace(/</g, '&lt;')}</title>
+  ${styleTags}
+  <style>
+    /* ── Page setup ───────────────────────────────────────────────────── */
+    @page {
+      size: A4 ${landscape ? 'landscape' : 'portrait'};
+      margin: 15mm 12mm 15mm 12mm;
+    }
 
-        /* ── Print footer (page numbers via CSS) ─────────────────────────── */
-        .print-footer {
-          position: running(footer) !important;
-        }
-        @page {
-          @bottom-right {
-            content: "Page " counter(page) " of " counter(pages);
-            font-size: 8pt;
-            color: #888;
-          }
-          @bottom-left {
-            content: "HomeBase — ${reportTitle.replace(/'/g, "\\'")}";
-            font-size: 8pt;
-            color: #888;
-          }
-        }
+    /* ── Base reset for clean print output ────────────────────────────── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: white !important;
+      color: #111 !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 11pt;
+      line-height: 1.4;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
 
-        /* ── Typography resets ───────────────────────────────────────────── */
-        * {
-          color: black !important;
-          background: transparent !important;
-          box-shadow: none !important;
-          text-shadow: none !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
+    /* ── Print header ─────────────────────────────────────────────────── */
+    .print-header {
+      display: flex !important;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #1a1a1a;
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+    }
+    .print-header-title {
+      font-size: 16pt;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+    .print-header-meta {
+      font-size: 8pt;
+      color: #555;
+      text-align: right;
+    }
 
-        /* ── Tables ──────────────────────────────────────────────────────── */
-        table {
-          width: 100% !important;
-          border-collapse: collapse !important;
-          page-break-inside: auto !important;
-        }
-        tr {
-          page-break-inside: avoid !important;
-        }
-        th, td {
-          padding: 4px 6px !important;
-          font-size: 9pt !important;
-          border-bottom: 1px solid #e0e0e0 !important;
-        }
-        thead tr {
-          background-color: #f5f5f5 !important;
-          border-bottom: 1.5px solid #aaa !important;
-        }
-        tfoot tr {
-          border-top: 1.5px solid #aaa !important;
-          font-weight: 700 !important;
-        }
+    /* ── Tables ───────────────────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      page-break-inside: auto;
+    }
+    tr {
+      page-break-inside: avoid;
+    }
+    th, td {
+      padding: 4px 6px;
+      font-size: 9pt;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    thead tr {
+      background-color: #f5f5f5 !important;
+      border-bottom: 1.5px solid #aaa;
+    }
+    tfoot tr {
+      border-top: 1.5px solid #aaa;
+      font-weight: 700;
+    }
 
-        /* ── Preserve key colour semantics in print ──────────────────────── */
-        .text-green-600, [class*="text-green"] { color: #16a34a !important; }
-        .text-red-600,   [class*="text-red"]   { color: #dc2626 !important; }
-        .text-orange-600 { color: #ea580c !important; }
-        .text-blue-600   { color: #2563eb !important; }
-        .text-purple-600 { color: #9333ea !important; }
-        .text-muted-foreground { color: #555 !important; }
+    /* ── Colour semantics ─────────────────────────────────────────────── */
+    .text-green-600, .text-green-700, .dark\\:text-green-400 { color: #16a34a !important; }
+    .text-red-600,   .text-red-700,   .dark\\:text-red-400   { color: #dc2626 !important; }
+    .text-orange-600 { color: #ea580c !important; }
+    .text-blue-600   { color: #2563eb !important; }
+    .text-purple-600 { color: #9333ea !important; }
+    .text-muted-foreground { color: #555 !important; }
+    .text-emerald-600, .text-emerald-700 { color: #059669 !important; }
+    .text-amber-600  { color: #d97706 !important; }
 
-        /* ── Suppress interactive / screen-only elements ──────────────────── */
-        button,
-        [role="button"],
-        input[type="date"],
-        select,
-        .print\\:hidden,
-        [data-print-hide],
-        nav,
-        aside {
-          display: none !important;
-        }
+    /* ── Background colours (cards / sections) ────────────────────────── */
+    .bg-green-500\\/5, .bg-green-500\\/10 { background-color: #f0fdf4 !important; }
+    .bg-red-500\\/5,   .bg-red-500\\/10   { background-color: #fef2f2 !important; }
+    .bg-blue-500\\/5,  .bg-blue-500\\/10  { background-color: #eff6ff !important; }
+    .bg-muted\\/40, .bg-muted\\/60 { background-color: #f8f8f8 !important; }
 
-        /* ── Don't hide the report content itself ────────────────────────── */
-        [data-print-id="${printId}"] button,
-        [data-print-id="${printId}"] [role="button"],
-        [data-print-id="${printId}"] input,
-        [data-print-id="${printId}"] select {
-          display: none !important;
-        }
+    /* ── Layout helpers ───────────────────────────────────────────────── */
+    .overflow-x-auto, .overflow-hidden, .overflow-y-auto {
+      overflow: visible !important;
+    }
+    /* Undo sticky positioning which breaks print layout */
+    .sticky {
+      position: static !important;
+    }
 
-        /* ── Borders and cards look cleaner in print ─────────────────────── */
-        [class*="rounded"] {
-          border-radius: 0 !important;
-        }
-        [class*="border"] {
-          border-color: #d0d0d0 !important;
-        }
+    /* ── Borders & radius ─────────────────────────────────────────────── */
+    [class*="rounded"] { border-radius: 4px !important; }
+    [class*="border"]  { border-color: #d0d0d0 !important; }
 
-        /* ── Overflow fix for wide tables (landscape) ────────────────────── */
-        .overflow-x-auto, .overflow-hidden {
-          overflow: visible !important;
-        }
-        ${landscape ? `
-        /* ── Landscape: shrink font further for wide tables ──────────────── */
-        td, th { font-size: 7.5pt !important; padding: 3px 4px !important; }
-        ` : ''}
+    /* ── Page breaks ──────────────────────────────────────────────────── */
+    .page-break { page-break-before: always; }
+    h2 { page-break-before: auto; }
+
+    ${landscape ? `
+    /* ── Landscape: tighter font for wide tables ──────────────────────── */
+    td, th { font-size: 7.5pt !important; padding: 3px 4px !important; }
+    ` : ''}
+
+    /* ── Screen-only elements: hide in print window too ──────────────── */
+    button, [role="button"], input[type="date"],
+    select, [data-print-hide], nav, aside {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+${clone.outerHTML}
+</body>
+</html>`
+
+    // Open a new window, write the HTML, then trigger print
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) {
+      // Popup blocked — fall back to a data: URI in the current tab
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url
+      a.target = '_blank'
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      return
+    }
+
+    win.document.open()
+    win.document.write(html)
+    win.document.close()
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Trigger print — robust approach for dynamically-created documents
+    //
+    // The `load` event is unreliable on windows created via document.write().
+    // It may fire too early (before the event listener is registered) or not
+    // at all depending on the browser and cache state.
+    //
+    // Instead we use a layered strategy:
+    //   1. DOMContentLoaded on the child document — fires as soon as the
+    //      inline HTML is parsed (synchronous after document.close()).
+    //   2. requestAnimationFrame — yields one browser paint frame AFTER
+    //      DOMContentLoaded so stylesheets are applied and layout computed.
+    //   3. setTimeout safety net — 1.2 s fallback that fires even if the
+    //      DOMContentLoaded listener somehow misses its window.
+    //   4. didPrint guard — prevents double-invocation from overlapping
+    //      triggers.
+    // ══════════════════════════════════════════════════════════════════════
+    let didPrint = false
+    let printTimer: ReturnType<typeof setTimeout> | null = null
+
+    // Non-null assertion: `win` is guaranteed non-null here because we
+    // returned early in the popup-blocked check above.
+    const printWin = win!
+
+    function triggerPrint() {
+      if (didPrint) return
+      didPrint = true
+
+      // Clear the safety-net timer if DOMContentLoaded won the race
+      if (printTimer !== null) {
+        clearTimeout(printTimer)
+        printTimer = null
       }
-    `
-    document.head.appendChild(style)
-    styleRef.current = style
 
-    // Set document title so browser pre-fills the PDF filename
-    const originalTitle = document.title
-    document.title = docTitle
+      // requestAnimationFrame yields to the browser's render pipeline so
+      // stylesheets have a chance to apply before the print dialog opens.
+      requestAnimationFrame(() => {
+        printWin.focus()
+        printWin.print()
+        printWin.addEventListener('afterprint', () => printWin.close())
+      })
+    }
 
-    // Print!
-    window.print()
+    // DOMContentLoaded fires as soon as the written HTML is fully parsed.
+    // For a document created via document.write() this happens synchronously
+    // after document.close(), making it far more reliable than window `load`.
+    win.document.addEventListener('DOMContentLoaded', triggerPrint)
 
-    // Restore after print dialog closes (synchronous — runs after print returns)
-    document.title = originalTitle
-    style.remove()
-    printRef.current?.removeAttribute('data-print-id')
-    styleRef.current = null
+    // Safety net: if DOMContentLoaded already fired (edge case), or if the
+    // stylesheets are unusually large, this timeout guarantees print() runs.
+    printTimer = setTimeout(triggerPrint, 1200)
   }, [printRef, reportTitle, dateRange, landscape])
 
   return (
