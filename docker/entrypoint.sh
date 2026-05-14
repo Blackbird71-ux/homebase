@@ -160,6 +160,56 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3b. One-time data correction — bimonthly recurrence interval bug
+#
+# Prior to this fix, the advanceNextDueDate / advanceNextExpectedDate helpers
+# in bills/route.ts and income/route.ts did not have a 'bimonthly' branch.
+# The fallback was addMonths(1) instead of the correct addMonths(2), so any
+# bimonthly bill/income that was marked paid spawned its next occurrence only
+# one month out rather than two.
+#
+# This block runs ONCE per affected database record and is fully idempotent:
+#   - It only touches rows with frequency='bimonthly' AND paid=false.
+#   - It only advances nextDueDate / nextExpectedDate if the current value
+#     is within 15–55 days of today — i.e. clearly a 1-month gap, not the
+#     correct 2-month gap (which would be 46–75 days from today).
+#   - All corrections are wrapped in a single SQLite transaction.
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [3b] Checking for bimonthly recurrence date corrections..."
+if [ -f "$DB_PATH" ]; then
+  BILLS_FIXED=$(sqlite3 "$DB_PATH" "
+    BEGIN;
+    UPDATE FinanceRecurringBill
+    SET nextDueDate = datetime(nextDueDate, '+1 month')
+    WHERE frequency = 'bimonthly'
+      AND paid = 0
+      AND julianday(nextDueDate) - julianday('now') BETWEEN 15 AND 55;
+    SELECT changes();
+    COMMIT;
+  " 2>/dev/null || echo "0")
+
+  INCOME_FIXED=$(sqlite3 "$DB_PATH" "
+    BEGIN;
+    UPDATE FinanceIncomeEntry
+    SET nextExpectedDate = datetime(nextExpectedDate, '+1 month')
+    WHERE frequency = 'bimonthly'
+      AND received = 0
+      AND julianday(nextExpectedDate) - julianday('now') BETWEEN 15 AND 55;
+    SELECT changes();
+    COMMIT;
+  " 2>/dev/null || echo "0")
+
+  if [ "$BILLS_FIXED" -gt 0 ] || [ "$INCOME_FIXED" -gt 0 ]; then
+    echo "   ✓ Corrected $BILLS_FIXED bill(s) and $INCOME_FIXED income entry(ies) with wrong bimonthly next-due dates"
+  else
+    echo "   ✓ No bimonthly date corrections needed"
+  fi
+else
+  echo "   - No database yet; skipping bimonthly correction"
+fi
+
+# ---------------------------------------------------------------------------
 # 4. Verify the database is healthy and reachable
 # ---------------------------------------------------------------------------
 echo ""

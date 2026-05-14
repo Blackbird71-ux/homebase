@@ -179,15 +179,24 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  // ── 6. Income estimates (PLANNING DATA — not GL actuals) ───────────────
+  // ── 6. Income estimates (PLANNING DATA — master income streams only) ────
   //
-  // FinanceIncomeEntry records marked isTaxTracked=true are annualised
-  // estimates used by the tax bracket calculator. They are planning data
-  // only and must NOT be mixed with GL actuals for statutory purposes.
-  // The page component must display these separately and label them as
-  // estimates/projections.
+  // Rules that prevent double-counting:
+  //
+  //   parentIncomeId: null  — root/master entries only. Every time income is
+  //       received a child occurrence is spawned. If we included children here
+  //       each monthly salary of $8k would appear as 10× $96k = $960k instead
+  //       of 1× $96k. The master entry IS the stream definition.
+  //
+  //   isActive: true        — exclude deactivated streams.
+  //
+  // These are PLANNING figures (annualised estimate of the stream). They are
+  // NOT GL actuals and must be clearly labelled as projections in the UI.
+  // The page component uses them for the tax bracket "projected" column only.
   const incomeWhere: any = {
     familyId,
+    isActive: true,
+    parentIncomeId: null,          // master entries only — excludes spawned children
     OR: [{ isTaxTracked: true }, { taxClassification: { not: null } }],
   }
   if (entityId) incomeWhere.entityId = entityId
@@ -201,9 +210,20 @@ export async function GET(request: NextRequest) {
     orderBy: { nextExpectedDate: 'desc' },
   })
 
+  // Frequency → annual multiplier.
+  // bimonthly = every 2 months = 6× per year.
+  // Entries without a recognised frequency default to yearly (multiplier 1)
+  // rather than monthly (12) to fail safe — over-counting income is worse
+  // than under-counting it for a planning estimate.
   const freqMultiplier: Record<string, number> = {
-    weekly: 52, fortnightly: 26, monthly: 12, quarterly: 4,
-    halfyearly: 2, yearly: 1, 'one-off': 1,
+    weekly:      52,
+    fortnightly: 26,
+    monthly:     12,
+    bimonthly:   6,   // every 2 months — was missing, caused ×2 inflation
+    quarterly:   4,
+    halfyearly:  2,
+    yearly:      1,
+    'one-off':   1,
   }
 
   const serializedIncomeEstimates = incomeEstimates.map(e => ({
@@ -211,7 +231,7 @@ export async function GET(request: NextRequest) {
     name:                    e.name,
     amount:                  e.amount,
     frequency:               e.frequency,
-    estimatedAnnual:         e.amount * (freqMultiplier[e.frequency] ?? 12),
+    estimatedAnnual:         e.amount * (freqMultiplier[e.frequency] ?? 1),
     isTaxTracked:            e.isTaxTracked,
     taxRate:                 e.taxRate,
     taxClassification:       e.taxClassification,

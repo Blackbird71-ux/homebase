@@ -11,7 +11,7 @@ export interface IncomeStream {
   id: string
   name: string
   amount: number
-  frequency: 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'halfyearly' | 'yearly' | 'custom'
+  frequency: 'weekly' | 'fortnightly' | 'monthly' | 'bimonthly' | 'quarterly' | 'halfyearly' | 'yearly' | 'custom'
   customInterval?: number | null
   customUnit?: 'days' | 'weeks' | 'months' | 'years' | null
   isIncluded: boolean
@@ -27,6 +27,8 @@ export function streamToMonthly(s: IncomeStream): number {
     case 'weekly':      return amount * 52 / 12
     case 'fortnightly': return amount * 26 / 12
     case 'monthly':     return amount
+    // bimonthly = every 2 months = 6×/year → monthly equivalent = amount / 2
+    case 'bimonthly':   return amount / 2
     case 'quarterly':   return amount / 3
     case 'halfyearly':  return amount / 6
     case 'yearly':      return amount / 12
@@ -48,9 +50,9 @@ export function streamToMonthly(s: IncomeStream): number {
 
 // ─── Map FinanceIncomeEntry frequency to IncomeStream frequency ───────────────
 function mapFrequency(freq: string): IncomeStream['frequency'] {
-  const valid = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'halfyearly', 'yearly']
+  const valid = ['weekly', 'fortnightly', 'monthly', 'bimonthly', 'quarterly', 'halfyearly', 'yearly']
   if (valid.includes(freq)) return freq as IncomeStream['frequency']
-  // one-off / custom → treat as monthly for the budget planner
+  // one-off / custom / unknown → treat as monthly for the budget planner
   return 'monthly'
 }
 

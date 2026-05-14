@@ -241,12 +241,18 @@ async function upsertBillDraftJournal(
 function advanceNextDueDate(date: Date, frequency: string): Date {
   // Use max(date, today) to avoid spawning a bill that's already overdue
   const referenceDate = max([date, new Date()])
-  if (frequency === 'monthly')     return addMonths(referenceDate, 1)
-  if (frequency === 'fortnightly') return addWeeks(referenceDate, 2)
   if (frequency === 'weekly')      return addWeeks(referenceDate, 1)
+  if (frequency === 'fortnightly') return addWeeks(referenceDate, 2)
+  if (frequency === 'monthly')     return addMonths(referenceDate, 1)
+  // bimonthly = every 2 months (6×/year). date-fns addMonths already snaps
+  // end-of-month correctly (e.g. 31 Dec + 2 months → 28 Feb, not 3 Mar).
+  if (frequency === 'bimonthly')   return addMonths(referenceDate, 2)
   if (frequency === 'quarterly')   return addMonths(referenceDate, 3)
   if (frequency === 'halfyearly')  return addMonths(referenceDate, 6)
   if (frequency === 'yearly')      return addMonths(referenceDate, 12)
+  // Unknown frequency — default to monthly rather than silently misbehaving.
+  // Log a warning so misconfigured bills are visible in container logs.
+  console.warn(`[advanceNextDueDate] Unknown frequency "${frequency}" — defaulting to monthly`)
   return addMonths(referenceDate, 1)
 }
 

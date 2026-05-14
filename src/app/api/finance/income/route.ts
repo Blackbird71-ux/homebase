@@ -356,12 +356,17 @@ async function deleteUnreceivedDescendants(parentId: string, familyId: string): 
 }
 
 function advanceNextExpectedDate(date: Date, frequency: string): Date {
-  if (frequency === 'monthly')     return addMonths(date, 1)
-  if (frequency === 'fortnightly') return addWeeks(date, 2)
   if (frequency === 'weekly')      return addWeeks(date, 1)
+  if (frequency === 'fortnightly') return addWeeks(date, 2)
+  if (frequency === 'monthly')     return addMonths(date, 1)
+  // bimonthly = every 2 months (6×/year). date-fns addMonths already snaps
+  // end-of-month correctly (e.g. 31 Dec + 2 months → 28 Feb, not 3 Mar).
+  if (frequency === 'bimonthly')   return addMonths(date, 2)
   if (frequency === 'quarterly')   return addMonths(date, 3)
   if (frequency === 'halfyearly')  return addMonths(date, 6)
   if (frequency === 'yearly')      return addMonths(date, 12)
+  // Unknown frequency — default to monthly rather than silently misbehaving.
+  console.warn(`[advanceNextExpectedDate] Unknown frequency "${frequency}" — defaulting to monthly`)
   return addMonths(date, 1)
 }
 
