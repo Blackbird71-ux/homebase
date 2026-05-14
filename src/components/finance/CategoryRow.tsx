@@ -60,6 +60,7 @@ export function CategoryRow({
   if (cat.isPersonal)            flags.push('PRIVATE')
   if (cat.isLocationBased)       flags.push('LOCATION')
   if (cat.isExternal)            flags.push('EXTERNAL')
+  if (cat.hideFromReports)       flags.push('HIDDEN')
 
   function hasMatchingDescendant(c: Category): boolean {
     if (activeFilter === 'all' || c.type === activeFilter) return true

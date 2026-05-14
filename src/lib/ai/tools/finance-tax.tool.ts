@@ -62,14 +62,14 @@ async function queryTaxSummaryHandler(args: Record<string, unknown>, ctx: Handle
 
   // Get tax-deductible categories
   const deductibleCategories = await prisma.financeCategory.findMany({
-    where: { familyId: ctx.familyId, isTaxDeduction: true },
+    where: { familyId: ctx.familyId, isTaxDeduction: true, hideFromReports: false },
     select: { id: true, name: true, taxDisplayLabel: true, type: true },
   })
   const deductibleCategoryIds = deductibleCategories.map(c => c.id)
 
   // Get tax-included categories
   const reportableCategories = await prisma.financeCategory.findMany({
-    where: { familyId: ctx.familyId, taxIncludeInReporting: true },
+    where: { familyId: ctx.familyId, taxIncludeInReporting: true, hideFromReports: false },
     select: { id: true, name: true, taxDisplayLabel: true },
   })
   const reportableCategoryIds = reportableCategories.map(c => c.id)
@@ -237,6 +237,7 @@ async function queryDeductibleExpensesHandler(args: Record<string, unknown>, ctx
   const categoryWhere: Record<string, unknown> = {
     familyId: ctx.familyId,
     isTaxDeduction: true,
+    hideFromReports: false,
   }
   if (category) {
     categoryWhere.name = { contains: category }

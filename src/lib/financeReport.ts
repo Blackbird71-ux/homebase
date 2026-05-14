@@ -237,6 +237,14 @@ export async function buildYtdReport(
     entityMap.set(e.id, { name: e.name, isDefault: e.isDefault })
   }
 
+  // ── Hidden category IDs (exclude from reports) ──────────────────────────
+  const hiddenCategoryIds = new Set(
+    (await prisma.financeCategory.findMany({
+      where: { familyId, hideFromReports: true },
+      select: { id: true },
+    })).map(c => c.id)
+  )
+
   // ── Fetch income entries ─────────────────────────────────────────────────
   // For lump-sum entries, we use the nextExpectedDate as the anchor. We need
   // a wider window than just the FY because a lump-sum payment's nextExpectedDate
@@ -451,6 +459,7 @@ export async function buildYtdReport(
     // expense transactions in the transaction loop below. Skipping prevents
     // double-counting (same logic as the PNL route's billIdWithTxInPeriod dedup).
     for (const bill of entityBills) {
+      if (bill.categoryId && hiddenCategoryIds.has(bill.categoryId)) continue
       const billPayments = (bill as any).payments
       if (billPayments && billPayments.length > 0) continue
 
@@ -486,6 +495,7 @@ export async function buildYtdReport(
     // Add transaction-based expenses (cash basis — placed in actual month)
     for (const tx of entityTransactions) {
       if (tx.type === 'expense') {
+        if (tx.categoryId && hiddenCategoryIds.has(tx.categoryId)) continue
         const catName = tx.category?.name ?? 'Uncategorised'
         const label = tx.description || 'Transaction'
         const monthly = new Array(monthsComplete).fill(0)

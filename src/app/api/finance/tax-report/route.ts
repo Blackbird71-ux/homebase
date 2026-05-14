@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
   const taxCategories = await prisma.financeCategory.findMany({
     where: {
       familyId,
+      hideFromReports: false,
       OR: [{ isTaxDeduction: true }, { taxIncludeInReporting: true }],
     },
     select: {

@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
       },
       glAccount: {
         type: { in: ['expense', 'income'] },
+        hideFromReports: false,
       },
     },
     select: {

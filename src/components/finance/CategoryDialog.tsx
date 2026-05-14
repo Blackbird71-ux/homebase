@@ -30,6 +30,7 @@ export interface Category {
   openingBalanceDate: string | null
   gstApplicable: boolean
   gstRate: number
+  hideFromReports?: boolean
   parent?: { id: string; name: string } | null
   children?: Category[]
   _count?: { transactions: number; recurringBills: number; incomeEntries: number }
@@ -47,7 +48,7 @@ const EMPTY_FORM = {
   name: '', type: 'expense', parentId: '', color: '#6366F1', icon: '',
   isPersonal: false, isLocationBased: false, isExternal: false,
   isTaxDeduction: false, taxIncludeInReporting: false, taxDisplayLabel: '',
-  glCode: '', gstApplicable: false, gstRate: 10,
+  glCode: '', gstApplicable: false, gstRate: 10, hideFromReports: false,
 }
 
 export function CategoryDialog({ open, onOpenChange, editing, availableParents, onSaved }: Props) {
@@ -65,6 +66,7 @@ export function CategoryDialog({ open, onOpenChange, editing, availableParents, 
         taxIncludeInReporting: editing.taxIncludeInReporting,
         taxDisplayLabel: editing.taxDisplayLabel ?? '', glCode: editing.glCode ?? '',
         gstApplicable: editing.gstApplicable ?? false, gstRate: editing.gstRate ?? 10,
+        hideFromReports: editing.hideFromReports ?? false,
       } : { ...EMPTY_FORM })
       setErrors({})
     }
@@ -205,6 +207,17 @@ export function CategoryDialog({ open, onOpenChange, editing, availableParents, 
                 onChange={e => setForm(p => ({ ...p, isExternal: e.target.checked }))} disabled={saving} />
               External
             </label>
+            {editing?.isSystem && (
+              <>
+                <span className="text-muted-foreground/40 mx-1 select-none">|</span>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.hideFromReports}
+                    onChange={e => setForm(p => ({ ...p, hideFromReports: e.target.checked }))} disabled={saving} />
+                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">Hide from Reports</span>
+                </label>
+              </>
+            )}
           </div>
 
           {(form.type === 'expense' || form.type === 'income') && (

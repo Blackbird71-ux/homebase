@@ -108,11 +108,11 @@ export async function GET(request: NextRequest) {
   // Use partial name match so leading chart-of-accounts codes (e.g. "2000 Accounts Payable") are found.
   const [apCandidates, arCandidates] = await Promise.all([
     prisma.financeCategory.findMany({
-      where: { familyId, type: 'liability', isSystem: true },
+      where: { familyId, type: 'liability', isSystem: true, hideFromReports: false },
       select: { id: true, name: true },
     }),
     prisma.financeCategory.findMany({
-      where: { familyId, type: 'asset', isSystem: true },
+      where: { familyId, type: 'asset', isSystem: true, hideFromReports: false },
       select: { id: true, name: true },
     }),
   ])
@@ -164,6 +164,7 @@ export async function GET(request: NextRequest) {
     where: {
       familyId,
       type: { in: ['asset', 'liability', 'equity'] },
+      hideFromReports: false,
       OR: [
         { openingBalance: { not: null } },
         { id: { in: [...glCategoryIds] } },

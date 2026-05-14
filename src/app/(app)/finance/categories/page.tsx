@@ -32,7 +32,7 @@ export default function CategoriesPage() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/api/finance/categories')
+      const res = await fetch('/api/finance/categories?showAll=true')
       if (res.ok) setCategories(await res.json())
     } finally { setLoading(false) }
   }

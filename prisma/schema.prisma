@@ -590,6 +590,7 @@ model FinanceCategory {
   openingBalanceDate  DateTime? // As-at date for the opening balance
   gstApplicable       Boolean   @default(false)  // Auto-split GST on transactions in this category
   gstRate             Float     @default(10)     // GST rate %. Default 10% (Australian standard)
+  hideFromReports     Boolean   @default(false)  // Exclude from reports & dialog pickers (system cats only)
   familyId        String
   family          Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]

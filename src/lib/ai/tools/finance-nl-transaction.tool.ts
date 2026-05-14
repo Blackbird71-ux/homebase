@@ -19,7 +19,7 @@ async function financeNLContextProvider(familyId: string, _userId: string): Prom
       orderBy: { sortOrder: 'asc' },
     }),
     prisma.financeCategory.findMany({
-      where: { familyId, level: 0 },
+      where: { familyId, level: 0, hideFromReports: false },
       select: { name: true, type: true, id: true, children: { select: { name: true } } },
       orderBy: { sortOrder: 'asc' },
     }),
@@ -136,7 +136,7 @@ async function quickAddTxHandler(args: Record<string, unknown>, ctx: HandlerCont
   // Resolve category name
   if (categoryName) {
     const categories = await prisma.financeCategory.findMany({
-      where: { familyId: ctx.familyId },
+      where: { familyId: ctx.familyId, hideFromReports: false },
       select: { id: true, name: true, parentId: true },
     })
     const lower = categoryName.toLowerCase()

@@ -22,13 +22,13 @@ export async function GET() {
       orderBy: { sortOrder: 'asc' },
     }),
     prisma.financeCategory.findMany({
-      where: { familyId },
+      where: { familyId, hideFromReports: false },
       select: {
         id: true, name: true, type: true, parentId: true, icon: true, color: true,
         isSystem: true, sortOrder: true, level: true,
         isPersonal: true, isLocationBased: true, isExternal: true,
         isTaxDeduction: true, taxIncludeInReporting: true, taxDisplayLabel: true,
-        glCode: true, gstApplicable: true, gstRate: true,
+        glCode: true, gstApplicable: true, gstRate: true, hideFromReports: true,
       },
       orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     }),

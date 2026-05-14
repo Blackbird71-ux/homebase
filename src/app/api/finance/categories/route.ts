@@ -9,29 +9,44 @@ const VALID_TYPES = ['income', 'expense', 'transfer', 'asset', 'liability', 'equ
 export async function GET(request: NextRequest) {
   const session = await requireSession()
   const { searchParams } = new URL(request.url)
-  // forPicker=true: exclude the "NOT IN USE" archive root and its children from pickers.
+  // showAll=true: return everything unfiltered (used by Chart of Accounts page)
+  const showAll = searchParams.get('showAll') === 'true'
+  // forPicker=true: exclude the "NOT IN USE" archive root and its children from pickers,
+  // PLUS exclude hideFromReports categories (reuse same filtered list for GL pickers).
   const forPicker = searchParams.get('forPicker') === 'true'
 
-  // forPicker: exclude the "NOT IN USE" archive root and all its children
-  let pickerExcludeIds: string[] = []
-  if (forPicker) {
+  let whereExtra: Record<string, any> = {}
+
+  if (showAll) {
+    // Chart of Accounts: return everything including hidden
+    whereExtra = {}
+  } else if (forPicker) {
+    // GL pickers: exclude NOT IN USE archive AND hideFromReports categories
     const notInUse = await prisma.financeCategory.findFirst({
       where: { familyId: session.familyId, name: 'NOT IN USE', parentId: null },
       select: { id: true },
     })
+    const excludeIds: string[] = []
     if (notInUse) {
       const children = await prisma.financeCategory.findMany({
         where: { familyId: session.familyId, parentId: notInUse.id },
         select: { id: true },
       })
-      pickerExcludeIds = [notInUse.id, ...children.map(c => c.id)]
+      excludeIds.push(notInUse.id, ...children.map(c => c.id))
     }
+    whereExtra = {
+      hideFromReports: false,
+      ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+    }
+  } else {
+    // Default (dialog editors, etc.): exclude hideFromReports only
+    whereExtra = { hideFromReports: false }
   }
 
   const categories = await prisma.financeCategory.findMany({
     where: {
       familyId: session.familyId,
-      ...(forPicker && pickerExcludeIds.length > 0 ? { id: { notIn: pickerExcludeIds } } : {}),
+      ...whereExtra,
     },
     orderBy: [{ sortOrder: 'asc' }, { level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
     include: {
@@ -50,7 +65,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate } = json
+  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate, hideFromReports } = json
 
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
@@ -91,6 +106,7 @@ export async function POST(request: NextRequest) {
       glCode: glCode ?? null,
       gstApplicable: gstApplicable ?? false,
       gstRate: gstRate != null ? parseFloat(gstRate) : 10,
+      hideFromReports: hideFromReports ?? false,
       familyId: session.familyId,
     },
   })
@@ -101,7 +117,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate } = json
+  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate, hideFromReports } = json
 
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -155,6 +171,7 @@ export async function PUT(request: NextRequest) {
       ...(glCode !== undefined && { glCode: glCode ?? null }),
       ...(gstApplicable !== undefined && { gstApplicable }),
       ...(gstRate !== undefined && { gstRate: parseFloat(gstRate) }),
+      ...(hideFromReports !== undefined && { hideFromReports }),
     },
   })
 
