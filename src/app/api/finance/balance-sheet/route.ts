@@ -104,17 +104,20 @@ export async function GET(request: NextRequest) {
   // When income is invoice-received, a posted journal posts: DR AR / CR Income.
   // When received: DR Bank / CR AR. The AR GL account balance is the net.
   //
-  // Find the AP and AR GL category IDs for this family
-  const [apCategory, arCategory] = await Promise.all([
-    prisma.financeCategory.findFirst({
-      where: { familyId, name: 'Accounts Payable', type: 'liability', isSystem: true },
-      select: { id: true },
+  // Find the AP and AR GL category IDs for this family.
+  // Use partial name match so leading chart-of-accounts codes (e.g. "2000 Accounts Payable") are found.
+  const [apCandidates, arCandidates] = await Promise.all([
+    prisma.financeCategory.findMany({
+      where: { familyId, type: 'liability', isSystem: true },
+      select: { id: true, name: true },
     }),
-    prisma.financeCategory.findFirst({
-      where: { familyId, name: 'Accounts Receivable', type: 'asset', isSystem: true },
-      select: { id: true },
+    prisma.financeCategory.findMany({
+      where: { familyId, type: 'asset', isSystem: true },
+      select: { id: true, name: true },
     }),
   ])
+  const apCategory = apCandidates.find(c => c.name.toLowerCase().includes('accounts payable'))
+  const arCategory = arCandidates.find(c => c.name.toLowerCase().includes('accounts receivable'))
 
   // AP: balance of the Accounts Payable GL account (liability normal balance = credit)
   const accountsPayable = apCategory

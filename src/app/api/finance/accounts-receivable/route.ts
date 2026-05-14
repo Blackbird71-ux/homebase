@@ -75,10 +75,11 @@ export async function GET(request: NextRequest) {
   // deriveJournalLineBalances returns positive netBalance when debits exceed credits.
   // The Balance Sheet shows Math.max(0, netBalance) for assets — we match that exactly
   // so the AR aging total always agrees with the Balance Sheet.
-  const arCategory = await prisma.financeCategory.findFirst({
-    where: { familyId, name: 'Accounts Receivable', type: 'asset', isSystem: true },
-    select: { id: true },
+  const arCandidates = await prisma.financeCategory.findMany({
+    where: { familyId, type: 'asset', isSystem: true },
+    select: { id: true, name: true },
   })
+  const arCategory = arCandidates.find(c => c.name.toLowerCase().includes('accounts receivable'))
 
   let glArBalance = 0
   if (arCategory) {

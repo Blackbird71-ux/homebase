@@ -36,10 +36,11 @@ export async function ensureOpeningBalancesCategory(familyId: string): Promise<s
  * Returns the category ID.
  */
 export async function ensureAccountsPayableCategory(familyId: string): Promise<string> {
-  const existing = await prisma.financeCategory.findFirst({
-    where: { familyId, name: 'Accounts Payable', type: 'liability', isSystem: true },
-    select: { id: true },
+  const candidates = await prisma.financeCategory.findMany({
+    where: { familyId, type: 'liability', isSystem: true },
+    select: { id: true, name: true },
   })
+  const existing = candidates.find(c => c.name.toLowerCase().includes('accounts payable'))
   if (existing) return existing.id
   const created = await prisma.financeCategory.create({
     data: { name: 'Accounts Payable', type: 'liability', isSystem: true, level: 0, familyId },
@@ -53,10 +54,11 @@ export async function ensureAccountsPayableCategory(familyId: string): Promise<s
  * Returns the category ID.
  */
 export async function ensureAccountsReceivableCategory(familyId: string): Promise<string> {
-  const existing = await prisma.financeCategory.findFirst({
-    where: { familyId, name: 'Accounts Receivable', type: 'asset', isSystem: true },
-    select: { id: true },
+  const candidates = await prisma.financeCategory.findMany({
+    where: { familyId, type: 'asset', isSystem: true },
+    select: { id: true, name: true },
   })
+  const existing = candidates.find(c => c.name.toLowerCase().includes('accounts receivable'))
   if (existing) return existing.id
   const created = await prisma.financeCategory.create({
     data: { name: 'Accounts Receivable', type: 'asset', isSystem: true, level: 0, familyId },

@@ -76,10 +76,11 @@ export async function GET(request: NextRequest) {
   // deriveJournalLineBalances returns positive netBalance when credits exceed debits.
   // The Balance Sheet negates this (Math.max(0, -netBalance)) — we match that exactly
   // so the AP aging total always agrees with the Balance Sheet.
-  const apCategory = await prisma.financeCategory.findFirst({
-    where: { familyId, name: 'Accounts Payable', type: 'liability', isSystem: true },
-    select: { id: true },
+  const apCandidates = await prisma.financeCategory.findMany({
+    where: { familyId, type: 'liability', isSystem: true },
+    select: { id: true, name: true },
   })
+  const apCategory = apCandidates.find(c => c.name.toLowerCase().includes('accounts payable'))
 
   let glApBalance = 0
   if (apCategory) {
