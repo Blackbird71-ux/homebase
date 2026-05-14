@@ -156,13 +156,14 @@ export default function IncomePage() {
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
 
-  // When amount changes, auto-fill blank/zero lines or lines still showing the previous auto-filled value
+  // When amount changes, auto-fill blank/zero lines only.
+  // SPLIT-SAFE RULE: only update a line's amount when it is blank or exactly zero.
+  // Lines with any non-zero amount (e.g. a GST split like $9.09) are left
+  // untouched so the amount-sync never overwrites a user-configured split.
   useEffect(() => {
     if (!showForm || form.amount <= 0) return
-    const prev = prevIncomeAmountRef.current
-    const prevStr = prev > 0 ? prev.toFixed(2) : ''
     setJournalLines(lines => lines.map(l =>
-      l.amount === '' || l.amount === '0.00' || l.amount === prevStr
+      l.amount === '' || l.amount === '0' || l.amount === '0.00'
         ? { ...l, amount: form.amount.toFixed(2) }
         : l
     ))
@@ -217,11 +218,19 @@ export default function IncomePage() {
     setEditing(e)
     setErrors({})
     setJournalErrors({})
-    prevIncomeAmountRef.current = 0  // reset so amount-sync useEffect doesn't corrupt incoming GL lines
-    // Pre-seed journal lines from GL if a journal entry exists, else default using the entry's category
+    // Set prevIncomeAmountRef to the entry's ACTUAL amount before setting form state.
+    // This prevents the amount-sync useEffect from treating the entry's existing
+    // amount as a blank value and overwriting loaded split lines (Bug 6 equivalent).
+    prevIncomeAmountRef.current = e.amount
+    // Pre-seed journal lines from GL if a journal entry exists, else default using the entry's category.
+    // Show defaults immediately while the async GL fetch is in-flight.
     if (e.journalEntryId) {
-      setJournalLines(defaultIncomeLines(e.amount, e.category?.id))  // show defaults immediately while loading
-      loadExistingJournalLines(e.journalEntryId).then(setJournalLines)
+      setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
+      loadExistingJournalLines(e.journalEntryId).then(lines => {
+        setJournalLines(lines)
+        // Stamp again after load so the amount-sync useEffect knows the baseline.
+        prevIncomeAmountRef.current = e.amount
+      })
     } else {
       setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
     }
@@ -331,14 +340,32 @@ export default function IncomePage() {
         // Already-posted: never re-submit lines
         const isNewPost = form.invoiceReceived && !editing.invoiceReceived
         const isDraftPersist = !editing.invoiceReceived && !form.invoiceReceived
-        const validLines = (isNewPost || isDraftPersist)
-          ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+
+        // GL-FIRST: collect ALL lines that have a GL account assigned.
+        // Never silently drop lines — the API enforces balance validation and
+        // will return a clear error if the entry is unbalanced.
+        const linesToSubmit = (isNewPost || isDraftPersist)
+          ? journalLines.filter(l => l.glAccountId.trim() !== '')
           : []
+
+        // Block save if the editor is unbalanced — clear error before any fetch.
+        if (linesToSubmit.length >= 2) {
+          const drTotal = linesToSubmit.filter(l => l.side === 'debit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+          const crTotal = linesToSubmit.filter(l => l.side === 'credit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+          if (Math.abs(drTotal - crTotal) > 0.005) {
+            toast.error(`Journal lines are not balanced — debits ${drTotal.toFixed(2)} ≠ credits ${crTotal.toFixed(2)}. Please fix the split before saving.`)
+            return
+          }
+        }
+
+        const serialisedLines = linesToSubmit
+          .filter(l => parseFloat(l.amount) > 0)
+          .map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null }))
 
         const body = {
           id: editing.id,
           ...payload,
-          ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}),
+          ...(serialisedLines.length >= 2 ? { journalLines: serialisedLines } : {}),
         }
 
         const res = await fetch('/api/finance/income', {
