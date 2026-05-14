@@ -7,6 +7,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { currentFyYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-fy'
+import { format } from 'date-fns'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
@@ -14,7 +15,7 @@ import * as XLSX from 'xlsx'
 import {
   buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle,
   totalStyle, totalLabelStyle, grandTotalStyle, grandTotalLabelStyle,
-  dataStyle, dataLabelStyle, positiveStyle, negativeStyle,
+  dataStyle, dataLabelStyle,
   setCols, freeze, styleRow, sc, FMT,
 } from '@/lib/excelStyles'
 
