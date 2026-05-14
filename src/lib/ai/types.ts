@@ -17,6 +17,7 @@ export interface SessionUser {
 export interface HandlerContext {
   user: SessionUser
   familyId: string
+  timezone?: string
 }
 
 // ── Tool definition ──────────────────────────────────────────────────────────

@@ -335,22 +335,23 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 
 | Commit | Description |
 |--------|-------------|
-| **Chore System Bug Fixes — Calendar Refresh, Timezone, Overdue & Rotation** | 4 bugs fixed: (1) Calendar now dispatches `CALENDAR_UPDATED` from event CRUD APIs, QuickAdd, and AI orchestrator so the view refreshes immediately. (2) Chore completion uses local-date-string comparison (`Intl.DateTimeFormat('en-CA', { timeZone })`) instead of raw UTC Date objects, fixing the before-10am block in Australia/Sydney. (3) Overdue chores appear in an "Overdue" section at the top of schedule builders. (4) PATCH route recalculates `nextDueDate` when frequency/dayOfWeek/dayOfMonth changes; `rotationInterval` is respected on auto-rotate; AI tool uses correct frequency enum names (`bimonthly`/`halfyearly`). |
-| **Balance Sheet, COA Opening Balances & Stale currentBalance Fix** | Balance Sheet API + page; COA opening balances (glCode/openingBalance/openingBalanceDate on FinanceCategory + migration + UI); removed stale currentBalance.increment from transactions route; categories API cleanup. Migration: `20260523000000_add_coa_opening_balance`. |
-| **Build/deploy guide & migration checklist** | Added `.roo/prompts/build-deploy-guide.md` documenting the Docker build pipeline and auto-migration flow to prevent schema drift between dev and production. |
-| **Tax Reporting, Annual P&L & ATO Workings** | Per-person Tax Report with ATO brackets in page component; Annual FY P&L 12-column table; P&L includes actual transactions; transfer taxClassification; entity type hints; data tagging guide. Migrations: `20260517000000_add_tax_classification`, `20260519000000_add_is_transfer`. |
-| **Half-Yearly Income Frequency** | Added `halfyearly` frequency option to recurring income entries |
-| **Income Tax Tracking — ATO Compliance** | `isTaxTracked`/`taxRate` on FinanceIncomeEntry; tax toggle + rate in income form; estimated tax in P&L |
-| **Finance — Accounting Fixes & UX Parity** | P&L cash/forecast; budget single source of truth; goals auto-progress; entity on transactions; pending balances; usage counts |
-| **Finance Module Completion (FY Setting, COA, Opening Balances)** | Financial Year start month setting; Chart of Accounts rename + new types (asset/liability/equity); opening balances double-entry; currentBalance derivation from transactions |
-| Finance — Income Accuracy & Category Sorting | Date dialogs; auto-create transactions; overdue grace period; cash-basis P&L |
-| Finance — Income Tracking & P&L | FinanceIncomeEntry model, income CRUD, P&L report |
-| Collapsible Root Categories | Per-root collapse/expand; "Not In Use" auto-collapsed |
-| Dashboard Rolling Forward | Chore schedule card, todo per-user assignment |
-| AI Voice & Chat Assistant | Multi-provider (Gemini + DeepSeek), 19 actions, PWA support |
-| Apple Themes | 5 additive Apple-system themes |
-| Phase 7 | Tags, categories, notes, PIN protection, audit log |
-| Phases 1–6 | Calendar, lists, recipes, meal planning, auth, Docker deployment |
+| | **Chore Root-Cause Fix — `nextDueDate` Stores Local-Time Midnight** | Fundamental fix for the before-10am completion bug: added `utcMidnightToLocalMidnight()` utility that shifts server-midnight UTC dates to the UTC equivalent of midnight in the user's timezone. All 4 `calculateNextDueDate` variants now accept a `timezone` parameter and apply the shift at storage time. This means `nextDueDate` is stored as the UTC equivalent of midnight in the user's local timezone (e.g. for Sydney UTC+10, stores 14:00Z instead of 00:00Z). All downstream comparison sites (schedule, dashboard, home page, chores page) were simplified to use simple Date comparisons — removing all `Intl.DateTimeFormat` wrappers and diagnostic logging. Also added `timezone` to `HandlerContext` for AI tool support. |
+| | **Chore System Bug Fixes — Calendar Refresh, Timezone, Overdue & Rotation** | 4 bugs fixed: (1) Calendar now dispatches `CALENDAR_UPDATED` from event CRUD APIs, QuickAdd, and AI orchestrator so the view refreshes immediately. (2) Chore completion uses local-date-string comparison (`Intl.DateTimeFormat('en-CA', { timeZone })`) instead of raw UTC Date objects, fixing the before-10am block in Australia/Sydney. (3) Overdue chores appear in an "Overdue" section at the top of schedule builders. (4) PATCH route recalculates `nextDueDate` when frequency/dayOfWeek/dayOfMonth changes; `rotationInterval` is respected on auto-rotate; AI tool uses correct frequency enum names (`bimonthly`/`halfyearly`). |
+| | **Balance Sheet, COA Opening Balances & Stale currentBalance Fix** | Balance Sheet API + page; COA opening balances (glCode/openingBalance/openingBalanceDate on FinanceCategory + migration + UI); removed stale currentBalance.increment from transactions route; categories API cleanup. Migration: `20260523000000_add_coa_opening_balance`. |
+| | **Build/deploy guide & migration checklist** | Added `.roo/prompts/build-deploy-guide.md` documenting the Docker build pipeline and auto-migration flow to prevent schema drift between dev and production. |
+| | **Tax Reporting, Annual P&L & ATO Workings** | Per-person Tax Report with ATO brackets in page component; Annual FY P&L 12-column table; P&L includes actual transactions; transfer taxClassification; entity type hints; data tagging guide. Migrations: `20260517000000_add_tax_classification`, `20260519000000_add_is_transfer`. |
+| | **Half-Yearly Income Frequency** | Added `halfyearly` frequency option to recurring income entries |
+| | **Income Tax Tracking — ATO Compliance** | `isTaxTracked`/`taxRate` on FinanceIncomeEntry; tax toggle + rate in income form; estimated tax in P&L |
+| | **Finance — Accounting Fixes & UX Parity** | P&L cash/forecast; budget single source of truth; goals auto-progress; entity on transactions; pending balances; usage counts |
+| | **Finance Module Completion (FY Setting, COA, Opening Balances)** | Financial Year start month setting; Chart of Accounts rename + new types (asset/liability/equity); opening balances double-entry; currentBalance derivation from transactions |
+| | Finance — Income Accuracy & Category Sorting | Date dialogs; auto-create transactions; overdue grace period; cash-basis P&L |
+| | Finance — Income Tracking & P&L | FinanceIncomeEntry model, income CRUD, P&L report |
+| | Collapsible Root Categories | Per-root collapse/expand; "Not In Use" auto-collapsed |
+| | Dashboard Rolling Forward | Chore schedule card, todo per-user assignment |
+| | AI Voice & Chat Assistant | Multi-provider (Gemini + DeepSeek), 19 actions, PWA support |
+| | Apple Themes | 5 additive Apple-system themes |
+| | Phase 7 | Tags, categories, notes, PIN protection, audit log |
+| | Phases 1–6 | Calendar, lists, recipes, meal planning, auth, Docker deployment |
 
 ---
 
@@ -376,5 +377,3 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 - ✅ **Categories UI** — GL Code input field in the category dialog; GL Code badge on category rows; "Set OB" button on asset/liability/equity category rows with a dedicated opening balance dialog (pre-fills existing values).
 - ✅ **Balance Sheet API** — `GET /api/finance/balance-sheet?asAt=&entityId=` hybrid endpoint combining bank account balances (derived from cleared FinanceTransactions up to `asAt`) with COA opening balances (from FinanceCategory where `openingBalanceDate <= asAt`). Splits bank accounts into asset (`!['credit', 'loan']`) and liability (`['credit', 'loan']`) groups. Returns `assets`, `liabilities`, `equity` sections with totals and `equityMatchesNetWorth` flag.
 - ✅ **Balance Sheet Page** — Full client component at `/finance/balance-sheet` with entity filter pills, as-at date picker, sections for Assets (Bank & Cash, Other Assets), Liabilities (Credit Cards & Loans, Other Liabilities), and Equity. Net Worth card with green/red styling. Setup guide shown when no COA opening balances exist. Equity mismatch warning.
-- ✅ **Navigation** — Balance Sheet tab added to the finance layout sidebar.
-- ✅ **Migration** — `20260523000000_add_coa_opening_balance` created but pending deploy (runs automatically on next Docker startup via entrypoint).

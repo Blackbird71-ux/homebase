@@ -2,20 +2,24 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { createAuditLog } from '@/lib/audit-log'
-import { todayBoundsInTz } from '@/lib/timezone'
+import { todayBoundsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
 
 function calculateInitialDueDate(
   frequency: string,
   dayOfWeek: number | null,
   dayOfMonth: number | null,
-  startDate: Date | null
+  startDate: Date | null,
+  timezone: string
 ): Date {
   const base = startDate ? new Date(startDate) : new Date()
   base.setHours(0, 0, 0, 0)
 
+  let result: Date
+
   switch (frequency) {
     case 'daily': {
-      return base
+      result = base
+      break
     }
     case 'weekly': {
       if (dayOfWeek !== null) {
@@ -24,12 +28,15 @@ function calculateInitialDueDate(
         if (daysUntil < 0) daysUntil += 7
         const next = new Date(base)
         next.setDate(base.getDate() + daysUntil)
-        return next
+        result = next
+      } else {
+        result = base
       }
-      return base
+      break
     }
     case 'biweekly': {
-      return base
+      result = base
+      break
     }
     case 'monthly':
     case 'bimonthly':
@@ -47,21 +54,25 @@ function calculateInitialDueDate(
         } else {
           base.setDate(targetDay)
         }
-        return base
+        result = base
+      } else {
+        result = base
       }
-      return base
+      break
     }
     default: {
-      return base
+      result = base
+      break
     }
   }
+
+  // Shift from server-midnight UTC to user's local-time midnight
+  return utcMidnightToLocalMidnight(result, timezone)
 }
 
 export async function GET() {
   const user = await requireSession()
   const timezone = user.timezone ?? 'UTC'
-
-  // Get today's start boundary in the user's timezone for overdue comparison
   const { start: todayStart } = todayBoundsInTz(timezone)
 
   const chores = await prisma.chore.findMany({
@@ -78,7 +89,8 @@ export async function GET() {
     orderBy: { createdAt: 'asc' },
   })
 
-  // Attach isOverdue computed against the user's local timezone
+  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
+  // timezone, so a simple Date comparison is correct.
   const choresWithOverdue = chores.map((c) => ({
     ...c,
     isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
@@ -112,13 +124,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 })
   }
 
-  // Calculate initial nextDueDate
+  // Calculate initial nextDueDate — shifted to user's local-time midnight
   const parsedStartDate = startDate ? new Date(startDate) : null
   const nextDueDate = calculateInitialDueDate(
     frequency ?? 'weekly',
     dayOfWeek ?? null,
     dayOfMonth ?? null,
-    parsedStartDate
+    parsedStartDate,
+    user.timezone ?? 'UTC'
   )
 
   const chore = await prisma.chore.create({

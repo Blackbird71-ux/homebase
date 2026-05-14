@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { createAuditLog } from '@/lib/audit-log'
 import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
+import { utcMidnightToLocalMidnight } from '@/lib/timezone'
 
 /**
  * Local version of calculateNextDueDate for the PATCH route.
@@ -18,7 +19,8 @@ function calculateNextDueDateLocal(
     endDate: Date | null
     nextDueDate: Date | null
   },
-  baseDate: Date
+  baseDate: Date,
+  timezone: string
 ): Date | null | undefined {
   // Only recalculate if frequency/dayOfWeek/dayOfMonth is the changed part
   // We always base off "now" for schedule changes (not the old nextDueDate)
@@ -85,7 +87,8 @@ function calculateNextDueDateLocal(
     return null
   }
 
-  return next
+  // Shift from server-midnight UTC to user's local-time midnight
+  return utcMidnightToLocalMidnight(next, timezone)
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -127,7 +130,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       nextDueDate: existing.nextDueDate,
     }
 
-    const recalculated = calculateNextDueDateLocal(tempChore, now)
+    const timezone = user.timezone ?? 'UTC'
+    const recalculated = calculateNextDueDateLocal(tempChore, now, timezone)
     if (recalculated !== undefined) {
       body.nextDueDate = recalculated
     }

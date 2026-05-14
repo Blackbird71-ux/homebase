@@ -6,12 +6,14 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
+import { utcMidnightToLocalMidnight } from '@/lib/timezone'
 
 // ── Helper: calculate next due date for a chore ───────────────────────────────
 
 function calculateNextDueDateAI(
   chore: { frequency: string; dayOfWeek: number | null; dayOfMonth: number | null; triggerOnComplete: boolean; endDate: Date | null },
-  completedAt: Date
+  completedAt: Date,
+  timezone: string
 ): Date | null {
   const baseDate = chore.triggerOnComplete ? completedAt : new Date()
   let next: Date
@@ -100,7 +102,9 @@ function calculateNextDueDateAI(
   }
 
   if (chore.endDate && next > chore.endDate) return null
-  return next
+
+  // Shift from server-midnight UTC to user's local-time midnight
+  return utcMidnightToLocalMidnight(next, timezone)
 }
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -157,7 +161,8 @@ async function completeChoreHandler(args: Record<string, unknown>, ctx: HandlerC
   })
 
   const completedAt = new Date()
-  const nextDueDate = calculateNextDueDateAI(chore, completedAt)
+  const timezone = ctx.timezone ?? 'UTC'
+  const nextDueDate = calculateNextDueDateAI(chore, completedAt, timezone)
 
   if (nextDueDate === null) {
     await prisma.chore.update({ where: { id: choreId }, data: { isActive: false, nextDueDate: null } })

@@ -19,11 +19,6 @@ export async function GET(request: NextRequest) {
   // Get today's boundary in family timezone
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
 
-  // Diagnostic logging for Bug 2: before-10am issue
-  console.log('[schedule] timezone:', timezone)
-  console.log('[schedule] todayStart:', todayStart.toISOString(), 'todayEnd:', todayEnd.toISOString())
-  console.log('[schedule] now:', new Date().toISOString())
-
   // Rolling window from today
   const windowEnd = new Date(todayStart.getTime() + scope * 24 * 60 * 60 * 1000)
 
@@ -63,13 +58,11 @@ export async function GET(request: NextRequest) {
   }> = []
 
   // ── Overdue section: chores whose nextDueDate is before today ────────────
-  // Use local-date comparison so a chore due at midnight UTC (=10am Sydney) on "today"
-  // is not treated as overdue at 8am Sydney.
-  const todayLocalStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone ?? 'UTC' }).format(new Date())
+  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
+  // timezone, so a simple Date comparison is correct.
   const overdueChores = chores.filter((c: any) => {
     if (!c.nextDueDate) return false
-    const dueLocal = new Intl.DateTimeFormat('en-CA', { timeZone: timezone ?? 'UTC' }).format(new Date(c.nextDueDate))
-    return dueLocal < todayLocalStr
+    return c.nextDueDate < todayStart
   })
   if (overdueChores.length > 0) {
     schedule.push({
@@ -120,12 +113,8 @@ export async function GET(request: NextRequest) {
           ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name }
           : null,
         lastCompletedAt: c.completions[0]?.completedAt?.toISOString() ?? null,
-        isOverdue: c.nextDueDate
-          ? new Intl.DateTimeFormat('en-CA', { timeZone: timezone ?? 'UTC' }).format(new Date(c.nextDueDate)) < todayLocalStr
-          : false,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate
-          ? new Intl.DateTimeFormat('en-CA', { timeZone: timezone ?? 'UTC' }).format(new Date(c.nextDueDate)) <= todayLocalStr
-          : false),
+        isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
       })),
     })
   }

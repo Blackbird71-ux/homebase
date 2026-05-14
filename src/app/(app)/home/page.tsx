@@ -26,6 +26,32 @@ function buildChoreSchedule(
 ): ChoreScheduleDay[] {
   if (!chores || !Array.isArray(chores)) return []
   const schedule: ChoreScheduleDay[] = []
+
+  // ── Overdue section: chores whose nextDueDate is before today ────────────
+  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
+  // timezone, so a simple Date comparison is correct.
+  const overdueChores = chores.filter((c: any) => {
+    if (!c.nextDueDate) return false
+    return c.nextDueDate < todayStart
+  })
+  if (overdueChores.length > 0) {
+    schedule.push({
+      day: 'Overdue',
+      date: '',
+      chores: overdueChores.map((c: any): ChoreScheduleItem => ({
+        id: c.id,
+        title: c.title,
+        frequency: c.frequency,
+        note: c.note,
+        currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
+        lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
+        lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
+        isOverdue: true,
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
+      })),
+    })
+  }
+
   for (let i = 0; i < days; i++) {
     // Use timezone-aware day boundaries derived from todayStart (already local midnight in UTC form)
     const dayStart = new Date(todayStart.getTime() + i * 86400000)

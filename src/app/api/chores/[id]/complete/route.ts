@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
-import { todayBoundsInTz } from '@/lib/timezone'
+import { todayBoundsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
 
 function calculateNextDueDate(
   chore: {
@@ -13,7 +13,8 @@ function calculateNextDueDate(
     endDate: Date | null
     nextDueDate: Date | null
   },
-  completedAt: Date
+  completedAt: Date,
+  timezone: string
 ): Date | null {
   const now = new Date()
   // When allowEarlyStart is enabled, advance from the existing nextDueDate (if it's in the future)
@@ -100,7 +101,8 @@ function calculateNextDueDate(
     return null // Signal that chore should be deactivated
   }
 
-  return next
+  // Shift from server-midnight UTC to user's local-time midnight
+  return utcMidnightToLocalMidnight(next, timezone)
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -117,28 +119,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const timezone = user.timezone ?? 'UTC'
+  const { end: todayEnd } = todayBoundsInTz(timezone)
 
-  // ── Timezone-aware due-date comparison ────────────────────────────────────
-  // nextDueDate is stored as midnight UTC (e.g., 2026-05-15T00:00:00Z).
-  // In Australia/Sydney (UTC+10) that equals 10:00 AM local time.
-  // We compare LOCAL date strings so a chore due "today" is always completable
-  // regardless of the raw UTC clock (fixes the before-10am bug).
-  const dueLocalStr = chore.nextDueDate
-    ? new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(chore.nextDueDate))
-    : null
-  const todayLocalStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
-
-  // Diagnostic logging for Bug 2: before-10am issue
-  console.log('[complete] timezone:', timezone)
-  console.log('[complete] nextDueDate (UTC):', chore.nextDueDate?.toISOString())
-  console.log('[complete] nextDueDate (local):', dueLocalStr)
-  console.log('[complete] today (local):', todayLocalStr)
-  console.log('[complete] allowEarlyStart:', chore.allowEarlyStart)
-
-  // If allowEarlyStart is false, only allow completion when the chore is actually due or overdue.
-  // Compare local date strings: if nextDueDate's local date > today's local date, it's not yet due.
-  if (!chore.allowEarlyStart && dueLocalStr && dueLocalStr > todayLocalStr) {
-    console.log('[complete] BLOCKED: chore not yet due in local timezone')
+  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
+  // timezone, so simple Date comparisons work correctly regardless of UTC offset.
+  if (!chore.allowEarlyStart && chore.nextDueDate && chore.nextDueDate > todayEnd) {
     return NextResponse.json(
       { error: 'This chore is not yet due. Enable "Allow early completion" on the chore to complete it ahead of schedule.' },
       { status: 422 }
@@ -157,9 +142,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     },
   })
 
-  // Calculate next due date
+  // Calculate next due date — shifted to user's local-time midnight
   const completedAt = new Date()
-  const nextDueDate = calculateNextDueDate(chore, completedAt)
+  const nextDueDate = calculateNextDueDate(chore, completedAt, timezone)
 
   // Prepare update data
   const updateData: Record<string, unknown> = {}

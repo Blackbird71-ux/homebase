@@ -230,9 +230,9 @@ export function DailyMealColumn({
           </div>
         ) : (
           <>
-            {/* Meal slots — filled ones visible, empty ones are minimal droppable targets */}
+            {/* Meal slots — only show filled slots; empty ones are collapsed */}
             <div className="flex flex-col gap-0.5 pl-0.5">
-              {MEAL_TYPES.map((mealType) => {
+              {recipeFilledMealTypes.map((mealType) => {
                 const entry = getEntryForMealType(mealType.id)
                 const isFilled = entry && entry.recipes && entry.recipes.length > 0
                 const isSelected = entry ? selectedMealIds.has(entry.id) : false

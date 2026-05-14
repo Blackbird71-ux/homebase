@@ -21,13 +21,11 @@ function buildChoreSchedule(
   const schedule: ChoreScheduleDay[] = []
 
   // ── Overdue section: chores whose nextDueDate is before today ────────────
-  // Use local-date comparison so a chore due at midnight UTC (=10am Sydney) on "today"
-  // is not treated as overdue at 8am Sydney.
-  const todayLocalStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
+  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
+  // timezone, so a simple Date comparison is correct.
   const overdueChores = chores.filter((c: any) => {
     if (!c.nextDueDate) return false
-    const dueLocal = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(c.nextDueDate))
-    return dueLocal < todayLocalStr
+    return c.nextDueDate < todayStart
   })
   if (overdueChores.length > 0) {
     schedule.push({
@@ -68,12 +66,8 @@ function buildChoreSchedule(
         currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
         lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
         lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
-        isOverdue: c.nextDueDate
-          ? new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(c.nextDueDate)) < todayLocalStr
-          : false,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate
-          ? new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(c.nextDueDate)) <= todayLocalStr
-          : false),
+        isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
       })),
     })
   }

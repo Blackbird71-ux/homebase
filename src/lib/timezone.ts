@@ -47,6 +47,27 @@ export function localMidnightToUtc(dateStr: string, timezone: string): Date {
 }
 
 /**
+ * Convert a Date that was calculated as midnight in the server's timezone (UTC)
+ * to the UTC Date that represents midnight in the *user's* timezone on the same
+ * calendar day.
+ *
+ * Example:
+ *   date = 2026-05-15T00:00:00Z  (Friday midnight UTC)
+ *   timezone = 'Australia/Sydney' (UTC+10)
+ *   → Sydney local date = 2026-05-15
+ *   → returns 2026-05-14T14:00:00Z  (midnight 2026-05-15 in Sydney)
+ *
+ * This is the key fix for the "before-10am" bug: by storing nextDueDate as the
+ * UTC equivalent of midnight in the *user's* timezone (not the server's),
+ * all simple Date comparisons (nextDueDate <= todayEnd) work correctly
+ * regardless of UTC offset.
+ */
+export function utcMidnightToLocalMidnight(date: Date, timezone: string): Date {
+  const localDateStr = date.toLocaleDateString('en-CA', { timeZone: timezone })
+  return localMidnightToUtc(localDateStr, timezone)
+}
+
+/**
  * Format a date for display in the given timezone.
  */
 export function formatInTz(

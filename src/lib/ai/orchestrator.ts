@@ -121,7 +121,7 @@ export async function orchestrate(options: OrchestrateOptions): Promise<Orchestr
   }
 
   // 6. Execute the matched tool handler
-  const handlerResult = await executeTool(fnName, args, { user, familyId: user.familyId })
+  const handlerResult = await executeTool(fnName, args, { user, familyId: user.familyId, timezone })
 
   // 7. Dispatch app events based on the action returned by the handler
   //    This ensures other parts of the UI (calendar, chores, etc.) refresh automatically

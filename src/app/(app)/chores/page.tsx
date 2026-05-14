@@ -7,7 +7,7 @@ export default async function ChoresPage() {
   const user = await requireSession()
   const timezone = user.timezone ?? 'UTC'
 
-  // Get today's start boundary in the user's timezone for overdue comparison
+  // Get today's boundary (start of today in user's timezone) for comparing stored nextDueDate
   const { start: todayStart } = todayBoundsInTz(timezone)
 
   const [chores, members] = await Promise.all([
@@ -51,7 +51,9 @@ export default async function ChoresPage() {
               ...comp,
               completedAt: comp.completedAt.toISOString(),
             })),
-            isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
+            // nextDueDate is now stored as the UTC equivalent of midnight in the user's
+            // timezone, so a simple Date comparison is correct.
+            isOverdue: c.nextDueDate ? new Date(c.nextDueDate) < todayStart : false,
           })) as any[]}
           members={members}
         />
