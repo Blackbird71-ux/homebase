@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
-import { addMonths, addWeeks } from 'date-fns'
+import { addMonths, addWeeks, max } from 'date-fns'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
 
@@ -259,23 +259,36 @@ export async function PUT(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
-  // Upsert journal entry if lines provided
+  // Upsert journal entry if lines provided.
+  // F-I5 guard: if the existing journal is already posted, skip the upsert entirely.
+  // upsertIncomeJournalEntry falls through to create a new journal when it finds
+  // an already-posted entry, which orphans the original and doubles revenue/AR.
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
       const existingJeId: string | null = existing.journalEntryId ?? null
-      const journalEntryId = await upsertIncomeJournalEntry(
-        name ?? existing.name,
-        existingJeId,
-        journalLines,
-        nextExpectedDate ? new Date(nextExpectedDate) : existing.nextExpectedDate,
-        session.familyId,
-        entityId !== undefined ? (entityId ?? null) : existing.entityId,
-      )
-      if (journalEntryId !== existingJeId) {
-        await prisma.financeIncomeEntry.update({
-          where: { id: entry.id },
-          data: { journalEntryId },
-        })
+      const existingJe = existingJeId
+        ? await prisma.financeJournalEntry.findFirst({
+            where: { id: existingJeId, familyId: session.familyId },
+            select: { isPosted: true },
+          })
+        : null
+      if (existingJe?.isPosted) {
+        // Journal already posted — do not overwrite or create a duplicate
+      } else {
+        const journalEntryId = await upsertIncomeJournalEntry(
+          name ?? existing.name,
+          existingJeId,
+          journalLines,
+          nextExpectedDate ? new Date(nextExpectedDate) : existing.nextExpectedDate,
+          session.familyId,
+          entityId !== undefined ? (entityId ?? null) : existing.entityId,
+        )
+        if (journalEntryId !== existingJeId) {
+          await prisma.financeIncomeEntry.update({
+            where: { id: entry.id },
+            data: { journalEntryId },
+          })
+        }
       }
     } catch (err) {
       console.error('[income PUT] Failed to upsert journal entry:', err)
@@ -294,31 +307,67 @@ export async function DELETE(request: NextRequest) {
   const existing = await prisma.financeIncomeEntry.findFirst({ where: { id, familyId: session.familyId } })
   if (!existing) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
 
-  // Reverse any posted GL journals before deleting (mirrors bills DELETE pattern)
+  // Pre-fetch all journals that need reversing OUTSIDE the transaction so
+  // nextJournalReference sees committed DB state, then generate N sequential
+  // refs in one shot before the atomic operation.
   const jeIds = [
     (existing as any).journalEntryId,
     (existing as any).receiptJournalEntryId,
   ].filter(Boolean) as string[]
 
+  type JeReversal = {
+    reference: string
+    journalId: string
+    entityId: string | null
+    refLabel: string | null
+    description: string | null
+    lines: { glAccountId: string; side: string; amount: number; description: string | null }[]
+  }
+  const jeReversals: JeReversal[] = []
   for (const jeId of jeIds) {
     const je = await prisma.financeJournalEntry.findFirst({
       where: { id: jeId, familyId: session.familyId },
       include: { lines: true },
     })
     if (je?.isPosted && !je.isReversed) {
-      const reference = await nextJournalReference(session.familyId)
-      await prisma.financeJournalEntry.create({
+      jeReversals.push({
+        reference: '',        // filled in after batch-generating refs below
+        journalId: je.id,
+        entityId: je.entityId,
+        refLabel: je.reference,
+        description: je.description,
+        lines: je.lines,
+      })
+    }
+  }
+
+  // Generate all reversal refs in one shot (sequential increment from MAX)
+  const refs = await Promise.all(
+    jeReversals.length > 0
+      ? [nextJournalReference(session.familyId)]
+      : []
+  )
+  const firstRef = refs[0]
+  if (firstRef !== undefined) {
+    const base = parseInt(firstRef.match(/^JE-(\d+)$/)?.[1] ?? '0', 10)
+    jeReversals.forEach((r, i) => { r.reference = `JE-${String(base + i).padStart(4, '0')}` })
+  }
+
+  // Atomic: reverse all GL journals and delete the income entry together
+  await prisma.$transaction(async (tx) => {
+    for (const reversal of jeReversals) {
+      await tx.financeJournalEntry.create({
         data: {
-          reference,
+          reference: reversal.reference,
           date: new Date(),
-          description: `VOID: ${je.reference ?? je.id} — ${je.description}`,
+          description: `VOID: ${reversal.refLabel ?? reversal.journalId} — ${reversal.description}`,
           type: 'reversal',
           isPosted: true,
-          reversalOfId: je.id,
-          entityId: je.entityId,
+          reversalOfId: reversal.journalId,
+          entityId: reversal.entityId,
           familyId: session.familyId,
           lines: {
-            create: je.lines.map(l => ({
+            create: reversal.lines.map(l => ({
               glAccountId: l.glAccountId,
               side: l.side === 'debit' ? 'credit' : 'debit',
               amount: l.amount,
@@ -327,14 +376,10 @@ export async function DELETE(request: NextRequest) {
           },
         },
       })
-      await prisma.financeJournalEntry.update({
-        where: { id: je.id },
-        data: { isReversed: true },
-      })
+      await tx.financeJournalEntry.update({ where: { id: reversal.journalId }, data: { isReversed: true } })
     }
-  }
-
-  await prisma.financeIncomeEntry.delete({ where: { id } })
+    await tx.financeIncomeEntry.delete({ where: { id } })
+  })
   return NextResponse.json({ success: true })
 }
 
@@ -356,18 +401,20 @@ async function deleteUnreceivedDescendants(parentId: string, familyId: string): 
 }
 
 function advanceNextExpectedDate(date: Date, frequency: string): Date {
-  if (frequency === 'weekly')      return addWeeks(date, 1)
-  if (frequency === 'fortnightly') return addWeeks(date, 2)
-  if (frequency === 'monthly')     return addMonths(date, 1)
+  // Use max(date, today) to prevent spawning an occurrence with a date already in the past.
+  const referenceDate = max([date, new Date()])
+  if (frequency === 'weekly')      return addWeeks(referenceDate, 1)
+  if (frequency === 'fortnightly') return addWeeks(referenceDate, 2)
+  if (frequency === 'monthly')     return addMonths(referenceDate, 1)
   // bimonthly = every 2 months (6×/year). date-fns addMonths already snaps
   // end-of-month correctly (e.g. 31 Dec + 2 months → 28 Feb, not 3 Mar).
-  if (frequency === 'bimonthly')   return addMonths(date, 2)
-  if (frequency === 'quarterly')   return addMonths(date, 3)
-  if (frequency === 'halfyearly')  return addMonths(date, 6)
-  if (frequency === 'yearly')      return addMonths(date, 12)
+  if (frequency === 'bimonthly')   return addMonths(referenceDate, 2)
+  if (frequency === 'quarterly')   return addMonths(referenceDate, 3)
+  if (frequency === 'halfyearly')  return addMonths(referenceDate, 6)
+  if (frequency === 'yearly')      return addMonths(referenceDate, 12)
   // Unknown frequency — default to monthly rather than silently misbehaving.
   console.warn(`[advanceNextExpectedDate] Unknown frequency "${frequency}" — defaulting to monthly`)
-  return addMonths(date, 1)
+  return addMonths(referenceDate, 1)
 }
 
 export async function PATCH(request: NextRequest) {
@@ -587,8 +634,13 @@ export async function PATCH(request: NextRequest) {
               })
               journalEntryId = je.id
             }
+          } else if (existingJe?.isPosted) {
+            // Already posted — accrual is correctly in the GL; re-use the
+            // existing entry to avoid creating a duplicate that would double
+            // revenue on the P&L and AR on the balance sheet.
+            journalEntryId = existingJeId
           } else {
-            // Already posted or has no lines — create fresh standard entry
+            // Exists but has no lines — create a fresh standard 2-line entry
             const reference = await nextJournalReference(session.familyId)
             const je = await tx.financeJournalEntry.create({
               data: {
@@ -802,41 +854,46 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // Spawn the next occurrence for recurring income
+    // Spawn the next occurrence for recurring income — outside the receipt transaction
+    // so a spawn failure does not roll back the already-committed cash receipt.
     if (existing.incomeType !== 'one-off') {
-      const newExpectedDate = advanceNextExpectedDate(existing.nextExpectedDate, existing.frequency)
-      if (!existing.endDate || newExpectedDate <= existing.endDate) {
-        await prisma.financeIncomeEntry.create({
-          data: {
-            name: existing.name,
-            amount: existing.amount,
-            accountId: existing.accountId,
-            categoryId: existing.categoryId,
-            vendorId: existing.vendorId,
-            frequency: existing.frequency,
-            incomeType: existing.incomeType,
-            nextExpectedDate: newExpectedDate,
-            endDate: existing.endDate,
-            isActive: existing.isActive,
-            received: false,
-            receivedDate: null,
-            autoPay: existing.autoPay,
-            emailReminder: existing.emailReminder,
-            reminderDays: existing.reminderDays,
-            dayOfMonth: existing.dayOfMonth,
-            monthOfYear: existing.monthOfYear,
-            recurrenceInterval: existing.recurrenceInterval,
-            invoiceReceived: false,
-            invoiceReceivedDate: null,
-            notes: existing.notes,
-            memberId: existing.memberId,
-            locationId: existing.locationId,
-            entityId: existing.entityId,
-            taxClassification: existing.taxClassification,
-            parentIncomeId: existing.id,
-            familyId: session.familyId,
-          },
-        })
+      try {
+        const newExpectedDate = advanceNextExpectedDate(existing.nextExpectedDate, existing.frequency)
+        if (!existing.endDate || newExpectedDate <= existing.endDate) {
+          await prisma.financeIncomeEntry.create({
+            data: {
+              name: existing.name,
+              amount: existing.amount,
+              accountId: existing.accountId,
+              categoryId: existing.categoryId,
+              vendorId: existing.vendorId,
+              frequency: existing.frequency,
+              incomeType: existing.incomeType,
+              nextExpectedDate: newExpectedDate,
+              endDate: existing.endDate,
+              isActive: existing.isActive,
+              received: false,
+              receivedDate: null,
+              autoPay: existing.autoPay,
+              emailReminder: existing.emailReminder,
+              reminderDays: existing.reminderDays,
+              dayOfMonth: existing.dayOfMonth,
+              monthOfYear: existing.monthOfYear,
+              recurrenceInterval: existing.recurrenceInterval,
+              invoiceReceived: false,
+              invoiceReceivedDate: null,
+              notes: existing.notes,
+              memberId: existing.memberId,
+              locationId: existing.locationId,
+              entityId: existing.entityId,
+              taxClassification: existing.taxClassification,
+              parentIncomeId: existing.id,
+              familyId: session.familyId,
+            },
+          })
+        }
+      } catch (err) {
+        console.error('[income PATCH] Failed to spawn next occurrence — receipt was committed:', err)
       }
     }
   }

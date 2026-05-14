@@ -2,9 +2,10 @@
 // Main orchestration logic: collects all registered tools, builds context,
 // calls the LLM, and dispatches to the correct tool handler.
 
-import { getAllDefinitions, executeTool } from './tool-registry'
+import { getAllDefinitions, executeTool, getActionEventMap } from './tool-registry'
 import { callAIProvider } from './provider'
 import { buildSystemPrompt, type ContextBuilderOptions } from './context-builder'
+import { dispatchAppEvent } from '@/lib/app-events'
 import type { SessionUser } from './types'
 import type { FunctionDeclaration } from '@google/generative-ai'
 
@@ -121,6 +122,17 @@ export async function orchestrate(options: OrchestrateOptions): Promise<Orchestr
 
   // 6. Execute the matched tool handler
   const handlerResult = await executeTool(fnName, args, { user, familyId: user.familyId })
+
+  // 7. Dispatch app events based on the action returned by the handler
+  //    This ensures other parts of the UI (calendar, chores, etc.) refresh automatically
+  //    after AI-driven mutations.
+  if (handlerResult.action) {
+    const actionEventMap = getActionEventMap()
+    const eventName = actionEventMap.get(handlerResult.action)
+    if (eventName) {
+      dispatchAppEvent(eventName)
+    }
+  }
 
   return handlerResult
 }

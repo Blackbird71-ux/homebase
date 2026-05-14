@@ -52,7 +52,7 @@ function calculateNextDueDateAI(
       }
       break
     }
-    case 'bi-monthly': {
+    case 'bimonthly': {
       next = new Date(baseDate)
       next.setHours(0, 0, 0, 0)
       next.setMonth(next.getMonth() + 2)
@@ -72,7 +72,7 @@ function calculateNextDueDateAI(
       }
       break
     }
-    case 'half-year': {
+    case 'halfyearly': {
       next = new Date(baseDate)
       next.setHours(0, 0, 0, 0)
       next.setMonth(next.getMonth() + 6)

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { todayAU } from '@/lib/utils'
+import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
 import type { QuickAddFormProps } from './types'
 
 export function EventForm({ onSuccess, onBack }: QuickAddFormProps) {
@@ -30,6 +31,7 @@ export function EventForm({ onSuccess, onBack }: QuickAddFormProps) {
         body: JSON.stringify({ title: title.trim(), start: start.toISOString(), end: end.toISOString(), isAllDay: true }),
       })
       if (!res.ok) throw new Error('Failed to create event')
+      dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
       onSuccess('Event created')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong')

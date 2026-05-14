@@ -122,7 +122,12 @@ export function ChoreScheduleCard({
 
   const isEmpty = !data || data.every((d) => d.chores.length === 0)
 
-  const displayDays = (data ?? []).slice(0, scope)
+  // If there's an overdue section (day === 'Overdue'), include it plus scope regular days
+  const rawDays = data ?? []
+  const hasOverdueSection = rawDays.length > 0 && rawDays[0].day === 'Overdue'
+  const displayDays = hasOverdueSection
+    ? rawDays.slice(0, scope + 1)  // Overdue section + scope days
+    : rawDays.slice(0, scope)
 
   return (
     <Card className="flex flex-col h-full">

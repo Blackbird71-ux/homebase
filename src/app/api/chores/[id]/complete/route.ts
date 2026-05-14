@@ -116,15 +116,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // Use the user's timezone to determine "today" boundaries, so a chore due today
-  // (e.g., nextDueDate at midnight UTC = 10:00 AM Sydney time) is always completable
-  // regardless of the raw UTC clock.
   const timezone = user.timezone ?? 'UTC'
-  const { end: todayEnd } = todayBoundsInTz(timezone)
+
+  // ── Timezone-aware due-date comparison ────────────────────────────────────
+  // nextDueDate is stored as midnight UTC (e.g., 2026-05-15T00:00:00Z).
+  // In Australia/Sydney (UTC+10) that equals 10:00 AM local time.
+  // We compare LOCAL date strings so a chore due "today" is always completable
+  // regardless of the raw UTC clock (fixes the before-10am bug).
+  const dueLocalStr = chore.nextDueDate
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(chore.nextDueDate))
+    : null
+  const todayLocalStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
+
+  // Diagnostic logging for Bug 2: before-10am issue
+  console.log('[complete] timezone:', timezone)
+  console.log('[complete] nextDueDate (UTC):', chore.nextDueDate?.toISOString())
+  console.log('[complete] nextDueDate (local):', dueLocalStr)
+  console.log('[complete] today (local):', todayLocalStr)
+  console.log('[complete] allowEarlyStart:', chore.allowEarlyStart)
 
   // If allowEarlyStart is false, only allow completion when the chore is actually due or overdue.
-  // (nextDueDate null means it's due now; nextDueDate in the past means overdue — both allowed.)
-  if (!chore.allowEarlyStart && chore.nextDueDate && chore.nextDueDate > todayEnd) {
+  // Compare local date strings: if nextDueDate's local date > today's local date, it's not yet due.
+  if (!chore.allowEarlyStart && dueLocalStr && dueLocalStr > todayLocalStr) {
+    console.log('[complete] BLOCKED: chore not yet due in local timezone')
     return NextResponse.json(
       { error: 'This chore is not yet due. Enable "Allow early completion" on the chore to complete it ahead of schedule.' },
       { status: 422 }
@@ -158,21 +172,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     updateData.nextDueDate = nextDueDate
   }
 
-  // Auto-rotate assignee if enabled
+  // Auto-rotate assignee if enabled — respects rotationInterval
   if (chore.autoRotateOnComplete) {
-    const members = await prisma.user.findMany({
-      where: { familyId: user.familyId },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
+    // Count total completions for this chore to determine rotation position
+    const completionCount = await prisma.choreCompletion.count({
+      where: { choreId: id },
     })
 
-    if (members.length > 0) {
-      let nextIndex = 0
-      if (chore.currentAssigneeId) {
-        const currentIndex = members.findIndex((m) => m.id === chore.currentAssigneeId)
-        nextIndex = (currentIndex + 1) % members.length
+    const interval = chore.rotationInterval ?? 1
+    // Only rotate when completionCount is evenly divisible by rotationInterval
+    // e.g. interval=3 → rotate on 3rd, 6th, 9th... completion
+    if (completionCount % interval === 0) {
+      const members = await prisma.user.findMany({
+        where: { familyId: user.familyId },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      })
+
+      if (members.length > 0) {
+        let nextIndex = 0
+        if (chore.currentAssigneeId) {
+          const currentIndex = members.findIndex((m) => m.id === chore.currentAssigneeId)
+          nextIndex = (currentIndex + 1) % members.length
+        }
+        updateData.currentAssigneeId = members[nextIndex].id
       }
-      updateData.currentAssigneeId = members[nextIndex].id
     }
   }
 

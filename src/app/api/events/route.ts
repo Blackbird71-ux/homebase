@@ -5,6 +5,7 @@ import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { createAuditLog } from '@/lib/audit-log'
+import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
 
 export async function GET(req: Request) {
   const user = await requireSession()
@@ -109,6 +110,9 @@ export async function POST(req: Request) {
     `Created event "${title}"`,
     { eventId: event.id }
   )
+
+  // Notify calendar views to refresh
+  dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
 
   return NextResponse.json(maskPersonalEvent(event, user.id), { status: 201 })
 }
