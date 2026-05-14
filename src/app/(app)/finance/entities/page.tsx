@@ -151,15 +151,15 @@ export default function EntitiesPage() {
     <div className="space-y-4">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Entities</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Named financial entities — Super funds, trusts, businesses — that bills and budgets can be assigned to.
-          </p>
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-          <Plus className="h-4 w-4" /> Add Entity
+      <div>
+        <h1 className="text-2xl font-bold">Entities</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Named financial entities — Super funds, trusts, businesses — that bills and budgets can be assigned to.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+          <Plus className="h-3.5 w-3.5" /> Add Entity
         </button>
       </div>
 

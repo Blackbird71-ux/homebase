@@ -134,11 +134,11 @@ export function OverviewClient({
 
       {/* Accounts Row */}
       <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Accounts</h2>
+        <h2 className="text-lg font-semibold mb-2">Accounts</h2>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
           <button
             onClick={() => router.push('/finance/accounts?add=1')}
-            className="text-sm text-primary hover:underline flex items-center gap-1"
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" /> Add Account
           </button>

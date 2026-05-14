@@ -63,10 +63,10 @@ export default function LocationsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Locations</h1>
-        <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-          <Plus className="h-4 w-4" /> Add Location
+      <h1 className="text-2xl font-bold">Locations</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+          <Plus className="h-3.5 w-3.5" /> Add Location
         </button>
       </div>
 

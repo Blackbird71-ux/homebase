@@ -100,14 +100,14 @@ export default function VendorsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Financial Contacts</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Companies and people you pay bills to or receive income from.</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Financial Contacts</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Companies and people you pay bills to or receive income from.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={openNew}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-          <Plus className="h-4 w-4" /> Add Contact
+          className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+          <Plus className="h-3.5 w-3.5" /> Add Contact
         </button>
       </div>
 

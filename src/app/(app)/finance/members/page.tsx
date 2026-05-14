@@ -78,18 +78,18 @@ export default function FinanceMembersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Family Members</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage who has access to this family's finances.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Family Members</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Manage who has access to this family's finances.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={openNew}
-          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
         >
-          <Plus className="h-4 w-4" /> Add Member
+          <Plus className="h-3.5 w-3.5" /> Add Member
         </button>
       </div>
 
