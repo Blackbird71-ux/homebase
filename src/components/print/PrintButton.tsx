@@ -3,10 +3,13 @@
 /**
  * PrintButton — triggers browser print / Save as PDF for a report.
  *
- * Strategy: opens a new browser window containing only the report HTML
- * (cloned from the printRef element) plus extracted computed styles.
- * This avoids all Next.js layout nesting issues — nothing from the app
- * shell leaks into the print window.
+ * Strategy: clones the printRef element, injects extracted stylesheets, and
+ * serialises the result as a blob URL opened in a new popup window. An inline
+ * <script> inside the blob HTML calls window.print() after the `load` event so
+ * styles are fully applied before the print dialog opens. This avoids both
+ * Next.js layout bleed and the blank-page race condition that document.write()
+ * causes when DOMContentLoaded fires synchronously before the listener can be
+ * registered from the parent window.
  *
  * Usage:
  *   const printRef = useRef<HTMLDivElement>(null)
@@ -78,6 +81,29 @@ export function PrintButton({
     )
       .map(node => node.outerHTML)
       .join('\n')
+
+    // Embed a print-trigger script inside the HTML so it runs from within
+    // the popup's own execution context after `load` fires — far more reliable
+    // than cross-window event coordination on document.write() windows.
+    const printScript = `<script>
+(function () {
+  var done = false;
+  function doPrint() {
+    if (done) return;
+    done = true;
+    requestAnimationFrame(function () {
+      window.print();
+      window.addEventListener('afterprint', function () { window.close(); });
+    });
+  }
+  if (document.readyState === 'complete') {
+    doPrint();
+  } else {
+    window.addEventListener('load', doPrint);
+    setTimeout(doPrint, 2500);
+  }
+})();
+<\/script>`
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -199,78 +225,24 @@ export function PrintButton({
 </head>
 <body>
 ${clone.outerHTML}
+${printScript}
 </body>
 </html>`
 
-    // Open a new window, write the HTML, then trigger print
-    const win = window.open('', '_blank', 'width=900,height=700')
+    // Open the HTML as a blob URL so the browser treats it as a proper page
+    // load (fires `load` event, applies stylesheets) rather than about:blank.
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+
+    const win = window.open(url, '_blank', 'width=900,height=700')
+    // Revoke the blob URL after the window has had time to load it
+    setTimeout(() => URL.revokeObjectURL(url), 30_000)
+
     if (!win) {
-      // Popup blocked — fall back to a data: URI in the current tab
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href = url
-      a.target = '_blank'
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      // Popup blocked — the blob URL tab will open without auto-print;
+      // user can print manually via Ctrl+P.
       return
     }
-
-    win.document.open()
-    win.document.write(html)
-    win.document.close()
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Trigger print — robust approach for dynamically-created documents
-    //
-    // The `load` event is unreliable on windows created via document.write().
-    // It may fire too early (before the event listener is registered) or not
-    // at all depending on the browser and cache state.
-    //
-    // Instead we use a layered strategy:
-    //   1. DOMContentLoaded on the child document — fires as soon as the
-    //      inline HTML is parsed (synchronous after document.close()).
-    //   2. requestAnimationFrame — yields one browser paint frame AFTER
-    //      DOMContentLoaded so stylesheets are applied and layout computed.
-    //   3. setTimeout safety net — 1.2 s fallback that fires even if the
-    //      DOMContentLoaded listener somehow misses its window.
-    //   4. didPrint guard — prevents double-invocation from overlapping
-    //      triggers.
-    // ══════════════════════════════════════════════════════════════════════
-    let didPrint = false
-    let printTimer: ReturnType<typeof setTimeout> | null = null
-
-    // Non-null assertion: `win` is guaranteed non-null here because we
-    // returned early in the popup-blocked check above.
-    const printWin = win!
-
-    function triggerPrint() {
-      if (didPrint) return
-      didPrint = true
-
-      // Clear the safety-net timer if DOMContentLoaded won the race
-      if (printTimer !== null) {
-        clearTimeout(printTimer)
-        printTimer = null
-      }
-
-      // requestAnimationFrame yields to the browser's render pipeline so
-      // stylesheets have a chance to apply before the print dialog opens.
-      requestAnimationFrame(() => {
-        printWin.focus()
-        printWin.print()
-        printWin.addEventListener('afterprint', () => printWin.close())
-      })
-    }
-
-    // DOMContentLoaded fires as soon as the written HTML is fully parsed.
-    // For a document created via document.write() this happens synchronously
-    // after document.close(), making it far more reliable than window `load`.
-    win.document.addEventListener('DOMContentLoaded', triggerPrint)
-
-    // Safety net: if DOMContentLoaded already fired (edge case), or if the
-    // stylesheets are unusually large, this timeout guarantees print() runs.
-    printTimer = setTimeout(triggerPrint, 1200)
   }, [printRef, reportTitle, dateRange, landscape])
 
   return (
