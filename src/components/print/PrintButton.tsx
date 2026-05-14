@@ -67,19 +67,24 @@ export function PrintButton({
           margin: 15mm 12mm 15mm 12mm;
         }
 
-        /* ── Hide everything on the page ─────────────────────────────────── */
-        body > * {
-          display: none !important;
+        /* ── Hide everything on the page using visibility (not display:none)
+             Visibility is inheritable: a child CAN override visibility:hidden
+             with visibility:visible, unlike display:none which blocks the
+             entire subtree and cannot be overridden by descendants.
+             This is the correct approach when the print target is nested
+             deeply inside layout wrappers (e.g. Next.js app shell). ─────── */
+        html, body {
+          visibility: hidden !important;
+          background: white !important;
         }
 
-        /* ── But show our print region ───────────────────────────────────── */
+        /* ── Show our print region and all its descendants ───────────────── */
         [data-print-id="${printId}"],
         [data-print-id="${printId}"] * {
-          display: revert !important;
           visibility: visible !important;
         }
 
-        /* ── Force the print region to fill the page ─────────────────────── */
+        /* ── Pull the print region to the top of the page ────────────────── */
         [data-print-id="${printId}"] {
           position: fixed !important;
           top: 0 !important;
