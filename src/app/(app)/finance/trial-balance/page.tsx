@@ -634,7 +634,6 @@ export default function TrialBalancePage() {
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* GENERAL LEDGER VIEW                                                 */}
       {/* ════════════════════════════════════════════════════════════════════ */}
-      {/* (inside same PrintWrapper) */
       {glData && glAccountId && (
         <>
           {/* GL account header */}

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  startOfMonth, endOfMonth, getMonth, getYear,
+  format, startOfMonth, endOfMonth, getMonth, getYear,
 } from 'date-fns'
 import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
 import { PrintButton } from '@/components/print/PrintButton'
