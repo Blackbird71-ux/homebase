@@ -79,7 +79,8 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const needsShopping = visibleCardIds.has('shopping-list')
   const needsTodo = visibleCardIds.has('todo-summary') || visibleCardIds.has('weekly-summary')
   const needsChores = visibleCardIds.has('chore-schedule')
-  const needsBills = visibleCardIds.has('bills-to-pay')
+  const needsBills  = visibleCardIds.has('bills-to-pay')
+  const needsTrips  = visibleCardIds.has('upcoming-trips')
 
   // Compute rolling 7-day window from today
   const nowInTz = new Date(new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()))
@@ -94,7 +95,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const weekStartUtc = normalizeToUtcMidnight(weekStartStr)
   const weekEndUtc = new Date(normalizeToUtcMidnight(weekEndStr).getTime() + 24 * 60 * 60 * 1000)
 
-  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData] = await Promise.all([
     needsEvents
       ? prisma.event.findMany({
           where: { familyId, start: { gte: todayStart } },
@@ -247,6 +248,23 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true },
         })
       : Promise.resolve([]),
+    needsTrips
+      ? prisma.trip.findMany({
+          where: {
+            familyId,
+            endDate: { gte: todayStart },
+            status: { not: 'cancelled' },
+          },
+          orderBy: { startDate: 'asc' },
+          take: 5,
+          select: {
+            id: true, title: true, destination: true,
+            startDate: true, endDate: true, status: true,
+            color: true, icon: true,
+            packingListId: true,
+          },
+        })
+      : Promise.resolve([]),
   ])
 
   // Map each meal type from a set of meal plans.
@@ -361,6 +379,17 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
         autoPay: bill.autoPay,
       }
     }),
+    trips: tripsData.map(t => ({
+      id: t.id,
+      title: t.title,
+      destination: t.destination,
+      startDate: t.startDate.toISOString(),
+      endDate: t.endDate.toISOString(),
+      status: t.status,
+      color: t.color,
+      icon: t.icon,
+      packingList: t.packingListId ? { pendingItems: 0 } : null,
+    })),
   }
 }
 
