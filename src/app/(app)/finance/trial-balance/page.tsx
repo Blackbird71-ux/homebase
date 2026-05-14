@@ -519,16 +519,16 @@ export default function TrialBalancePage() {
               </p>
             </div>
           ) : (
-            <div className="rounded-lg border border-border overflow-hidden">
+            <div className="rounded-lg border border-border overflow-x-auto">
               {/* Table header */}
               <div className="grid text-xs font-medium text-muted-foreground bg-muted/40 border-b border-border px-4 py-2.5"
-                style={{ gridTemplateColumns: '3rem 1fr 6rem 7rem 7rem 7rem' }}>
-                <span>Code</span>
+                style={{ gridTemplateColumns: '3rem 1fr 6rem minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}>
+                <span className="whitespace-nowrap">Code</span>
                 <span>Account</span>
-                <span className="text-center">Type</span>
-                <span className="text-right">Debit</span>
-                <span className="text-right">Credit</span>
-                <span className="text-right">Net Balance</span>
+                <span className="text-center whitespace-nowrap">Type</span>
+                <span className="text-right whitespace-nowrap">Debit</span>
+                <span className="text-right whitespace-nowrap">Credit</span>
+                <span className="text-right whitespace-nowrap">Net Balance</span>
               </div>
 
               {/* Grouped rows */}
@@ -545,8 +545,8 @@ export default function TrialBalancePage() {
                           {TYPE_LABEL[type] ?? type}
                         </span>
                         <div className="flex gap-6 text-xs text-muted-foreground">
-                          <span>DR {fmtCompact(typeTotalDR)}</span>
-                          <span>CR {fmtCompact(typeTotalCR)}</span>
+                          <span className="whitespace-nowrap">DR {fmtCompact(typeTotalDR)}</span>
+                          <span className="whitespace-nowrap">CR {fmtCompact(typeTotalCR)}</span>
                         </div>
                       </div>
 
@@ -556,7 +556,7 @@ export default function TrialBalancePage() {
                           key={acct.id}
                           onClick={() => drillInto(acct.id)}
                           className="w-full grid items-center px-4 py-2.5 border-b border-border/40 hover:bg-accent/40 transition-colors text-left group"
-                          style={{ gridTemplateColumns: '3rem 1fr 6rem 7rem 7rem 7rem' }}
+                          style={{ gridTemplateColumns: '3rem 1fr 6rem minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}
                           title="Click to view General Ledger for this account"
                         >
                           <span className="text-[11px] font-mono text-muted-foreground/70">
@@ -575,15 +575,15 @@ export default function TrialBalancePage() {
                               {acct.type}
                             </span>
                           </div>
-                          <span className="text-right text-sm tabular-nums text-green-700 dark:text-green-400 font-medium">
+                          <span className="text-right text-sm tabular-nums text-green-700 dark:text-green-400 font-medium whitespace-nowrap">
                             {acct.totalDebit > 0 ? fmt(acct.totalDebit) : '—'}
                           </span>
-                          <span className="text-right text-sm tabular-nums text-red-700 dark:text-red-400 font-medium">
+                          <span className="text-right text-sm tabular-nums text-red-700 dark:text-red-400 font-medium whitespace-nowrap">
                             {acct.totalCredit > 0 ? fmt(acct.totalCredit) : '—'}
                           </span>
                           <div className="flex items-center justify-end gap-1">
                             <span className={cn(
-                              'text-sm tabular-nums font-semibold',
+                              'text-sm tabular-nums font-semibold whitespace-nowrap',
                               acct.netBalance > 0  ? 'text-green-600' :
                               acct.netBalance < 0  ? 'text-red-600'   :
                                                      'text-muted-foreground',
@@ -603,18 +603,18 @@ export default function TrialBalancePage() {
                 'grid items-center px-4 py-3 text-sm font-bold',
                 tbData.isBalanced ? 'bg-green-500/5' : 'bg-red-500/5',
               )}
-                style={{ gridTemplateColumns: '3rem 1fr 6rem 7rem 7rem 7rem' }}>
+                style={{ gridTemplateColumns: '3rem 1fr 6rem minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}>
                 <span />
                 <span className="text-foreground">TOTAL</span>
                 <span />
-                <span className="text-right tabular-nums text-green-700 dark:text-green-400">
+                <span className="text-right tabular-nums text-green-700 dark:text-green-400 whitespace-nowrap">
                   {fmt(tbData.grandTotalDebit)}
                 </span>
-                <span className="text-right tabular-nums text-red-700 dark:text-red-400">
+                <span className="text-right tabular-nums text-red-700 dark:text-red-400 whitespace-nowrap">
                   {fmt(tbData.grandTotalCredit)}
                 </span>
                 <span className={cn(
-                  'text-right tabular-nums',
+                  'text-right tabular-nums whitespace-nowrap',
                   tbData.isBalanced ? 'text-green-600' : 'text-red-600',
                 )}>
                   {tbData.isBalanced ? '✓ Balanced' : `Δ ${fmt(tbData.difference)}`}
@@ -687,27 +687,27 @@ export default function TrialBalancePage() {
               <p className="text-sm text-muted-foreground">No transactions for this account in the selected period.</p>
             </div>
           ) : (
-            <div className="rounded-lg border border-border overflow-hidden">
+            <div className="rounded-lg border border-border overflow-x-auto">
               {/* Table header */}
               <div className="grid text-xs font-medium text-muted-foreground bg-muted/40 border-b border-border px-4 py-2.5"
-                style={{ gridTemplateColumns: '7rem 5rem 1fr 7rem 7rem 8rem' }}>
-                <span>Date</span>
-                <span>Ref</span>
+                style={{ gridTemplateColumns: '7rem 5rem 1fr minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}>
+                <span className="whitespace-nowrap">Date</span>
+                <span className="whitespace-nowrap">Ref</span>
                 <span>Description</span>
-                <span className="text-right">Debit</span>
-                <span className="text-right">Credit</span>
-                <span className="text-right">Balance</span>
+                <span className="text-right whitespace-nowrap">Debit</span>
+                <span className="text-right whitespace-nowrap">Credit</span>
+                <span className="text-right whitespace-nowrap">Balance</span>
               </div>
 
               {/* Opening balance row */}
               <div className="grid items-center px-4 py-2 bg-muted/20 border-b border-border/50 text-xs text-muted-foreground"
-                style={{ gridTemplateColumns: '7rem 5rem 1fr 7rem 7rem 8rem' }}>
+                style={{ gridTemplateColumns: '7rem 5rem 1fr minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}>
                 <span>{glData.from ? format(new Date(glData.from), 'd MMM yyyy') : 'All time'}</span>
                 <span />
                 <span className="italic">Opening balance</span>
                 <span />
                 <span />
-                <span className="text-right font-medium text-foreground tabular-nums">{fmt(glData.openingBalance)}</span>
+                <span className="text-right font-medium text-foreground tabular-nums whitespace-nowrap">{fmt(glData.openingBalance)}</span>
               </div>
 
               {/* Transaction rows */}
@@ -718,7 +718,7 @@ export default function TrialBalancePage() {
                     'grid items-start px-4 py-2.5 border-b border-border/40 text-sm hover:bg-accent/30 transition-colors',
                     line.type === 'transaction' && 'bg-blue-500/3',
                   )}
-                  style={{ gridTemplateColumns: '7rem 5rem 1fr 7rem 7rem 8rem' }}
+                  style={{ gridTemplateColumns: '7rem 5rem 1fr minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}
                 >
                   <span className="text-xs text-muted-foreground pt-0.5">
                     {format(new Date(line.date), 'd MMM yyyy')}
@@ -742,14 +742,14 @@ export default function TrialBalancePage() {
                       </span>
                     </div>
                   </div>
-                  <span className="text-right tabular-nums text-green-700 dark:text-green-400 font-medium pt-0.5">
+                  <span className="text-right tabular-nums text-green-700 dark:text-green-400 font-medium pt-0.5 whitespace-nowrap">
                     {line.debit > 0 ? fmt(line.debit) : '—'}
                   </span>
-                  <span className="text-right tabular-nums text-red-700 dark:text-red-400 font-medium pt-0.5">
+                  <span className="text-right tabular-nums text-red-700 dark:text-red-400 font-medium pt-0.5 whitespace-nowrap">
                     {line.credit > 0 ? fmt(line.credit) : '—'}
                   </span>
                   <span className={cn(
-                    'text-right tabular-nums font-semibold pt-0.5',
+                    'text-right tabular-nums font-semibold pt-0.5 whitespace-nowrap',
                     line.balance > 0  ? 'text-foreground' :
                     line.balance < 0  ? 'text-red-600 dark:text-red-400' :
                                         'text-muted-foreground',
@@ -761,14 +761,14 @@ export default function TrialBalancePage() {
 
               {/* Closing balance row */}
               <div className="grid items-center px-4 py-3 bg-muted/30 text-sm font-bold"
-                style={{ gridTemplateColumns: '7rem 5rem 1fr 7rem 7rem 8rem' }}>
+                style={{ gridTemplateColumns: '7rem 5rem 1fr minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}>
                 <span />
                 <span />
                 <span className="text-foreground">Closing Balance</span>
-                <span className="text-right tabular-nums text-green-700 dark:text-green-400">{fmt(glData.totalDebit)}</span>
-                <span className="text-right tabular-nums text-red-700 dark:text-red-400">{fmt(glData.totalCredit)}</span>
+                <span className="text-right tabular-nums text-green-700 dark:text-green-400 whitespace-nowrap">{fmt(glData.totalDebit)}</span>
+                <span className="text-right tabular-nums text-red-700 dark:text-red-400 whitespace-nowrap">{fmt(glData.totalCredit)}</span>
                 <span className={cn(
-                  'text-right tabular-nums text-lg',
+                  'text-right tabular-nums text-lg whitespace-nowrap',
                   glData.closingBalance > 0 ? 'text-green-600' :
                   glData.closingBalance < 0 ? 'text-red-600' : 'text-muted-foreground',
                 )}>
