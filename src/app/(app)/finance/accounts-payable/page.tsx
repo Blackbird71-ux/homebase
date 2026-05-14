@@ -15,6 +15,8 @@ type AgingBucket = '0_30' | '31_60' | '61_90' | '91_plus'
 interface ApItem {
   id: string
   name: string
+  originalAmount: number
+  paymentsToDate: number
   amount: number
   invoiceDate: string
   daysSinceInvoice: number
@@ -47,6 +49,7 @@ interface ApData {
   isReconciled: boolean
   oldestDays: number
   itemCount: number
+  nullDateCount: number
   totals: {
     '0_30': number
     '31_60': number
@@ -142,7 +145,7 @@ export default function AccountsPayablePage() {
         <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
       ) : !data ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Failed to load report.</div>
-      ) : data.itemCount === 0 && data.glApBalance === 0 ? (
+      ) : data.itemCount === 0 && data.glApBalance === 0 && data.difference < 0.01 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center">
           <p className="text-sm text-muted-foreground">No outstanding accounts payable as at {format(parseISO(data.asAt), 'd MMMM yyyy')}.</p>
         </div>
@@ -174,6 +177,17 @@ export default function AccountsPayablePage() {
               <p className="text-xs text-muted-foreground mt-0.5">from invoice date</p>
             </div>
           </div>
+
+          {/* ── Data integrity warning ────────────────────────────────────────── */}
+          {(data.nullDateCount ?? 0) > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-500/5 px-4 py-3 flex items-center gap-3 text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span className="text-amber-800">
+                <span className="font-medium">{data.nullDateCount} bill{data.nullDateCount !== 1 ? 's' : ''} excluded</span>
+                {' — '}marked as invoice received but missing an invoice date. Open each bill and set the invoice date to include {data.nullDateCount !== 1 ? 'them' : 'it'} in this report.
+              </span>
+            </div>
+          )}
 
           {/* ── Aging table ───────────────────────────────────────────────── */}
           {data.vendors.length > 0 && (
@@ -236,6 +250,11 @@ export default function AccountsPayablePage() {
                                 Invoice {format(parseISO(item.invoiceDate), 'd MMM yyyy')}
                                 {item.reference && <span className="font-mono">{item.reference}</span>}
                                 {item.categoryName && <span>{item.categoryName}</span>}
+                                {item.paymentsToDate > 0 && (
+                                  <span className="text-green-600 font-medium">
+                                    {fmtCurrencyRaw(item.paymentsToDate)} paid
+                                  </span>
+                                )}
                               </span>
                             </div>
                             {BUCKETS.map(b => (

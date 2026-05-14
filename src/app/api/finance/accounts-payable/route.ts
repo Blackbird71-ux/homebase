@@ -89,16 +89,21 @@ export async function GET(request: NextRequest) {
 
   // ── 2. AP subledger: bills outstanding as at the report date ──────────────
   // A bill is outstanding if:
-  //   • invoice was received on or before asAt
-  //   • it has not been paid, or was paid after asAt (so it was still open at asAt)
+  //   • invoice was received on or before asAt (invoiceReceivedDate must be set)
+  //   • it has not been paid (paid=false), OR was paid strictly after asAt
+  //     (the second branch explicitly requires paid=true to avoid leaking bills
+  //     that have a future paidDate but paid=false from stale data)
+  // Bills with invoiceReceivedDate=null are excluded — they indicate a data
+  // integrity issue (invoiceReceived=true but no date recorded) and will be
+  // surfaced via the nullDateCount field so the user can fix them.
   const bills = await prisma.financeRecurringBill.findMany({
     where: {
       familyId,
       invoiceReceived: true,
-      invoiceReceivedDate: { lte: asAt },
+      invoiceReceivedDate: { not: null, lte: asAt },
       OR: [
         { paid: false },
-        { paidDate: { gt: asAt } },
+        { paid: true, paidDate: { gt: asAt } },
       ],
     },
     select: {
@@ -111,15 +116,32 @@ export async function GET(request: NextRequest) {
       category: { select: { id: true, name: true, color: true } },
       entity:   { select: { id: true, name: true } },
       journalEntry: { select: { reference: true } },
+      // Fetch payments so we can net off partial payments from the outstanding amount
+      payments: { select: { amount: true, paymentDate: true } },
     },
     orderBy: { invoiceReceivedDate: 'asc' },
   })
 
+  // Also count bills with invoiceReceived=true but no invoiceReceivedDate
+  // so the UI can warn the user about data integrity issues.
+  const nullDateCount = await prisma.financeRecurringBill.count({
+    where: {
+      familyId,
+      invoiceReceived: true,
+      invoiceReceivedDate: null,
+    },
+  })
+
   // ── 3. Build per-item aging ───────────────────────────────────────────────
+  // Outstanding amount = original invoice amount minus any payments that were
+  // made ON OR BEFORE asAt (payments after asAt don't count — the bill was
+  // still open at that point in time).
   interface ApItem {
     id: string
     name: string
-    amount: number
+    originalAmount: number
+    paymentsToDate: number
+    amount: number          // outstanding balance = originalAmount − paymentsToDate
     invoiceDate: string
     daysSinceInvoice: number
     bucket: AgingBucket
@@ -133,26 +155,41 @@ export async function GET(request: NextRequest) {
     reference: string | null
   }
 
-  const items: ApItem[] = bills.map(b => {
-    const invoiceDate = b.invoiceReceivedDate ?? b.nextDueDate
-    const days = differenceInDays(asAt, invoiceDate)
-    return {
-      id:            b.id,
-      name:          b.name,
-      amount:        b.amount,
-      invoiceDate:   invoiceDate.toISOString(),
-      daysSinceInvoice: Math.max(0, days),
-      bucket:        ageBucket(invoiceDate, asAt),
-      vendorId:      b.vendor?.id    ?? null,
-      vendorName:    b.vendor?.name  ?? null,
-      categoryId:    b.category?.id   ?? null,
-      categoryName:  b.category?.name ?? null,
-      categoryColor: b.category?.color ?? null,
-      entityId:      b.entity?.id   ?? null,
-      entityName:    b.entity?.name ?? null,
-      reference:     b.journalEntry?.reference ?? null,
-    }
-  })
+  const items: ApItem[] = bills
+    .map(b => {
+      // invoiceReceivedDate is guaranteed non-null by the query filter above
+      const invoiceDate = b.invoiceReceivedDate!
+
+      // Sum only payments made on or before asAt
+      const paymentsToDate = (b.payments ?? []).reduce((sum, p) => {
+        const pDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate)
+        return pDate <= asAt ? sum + p.amount : sum
+      }, 0)
+
+      const outstandingAmount = Math.round((b.amount - paymentsToDate) * 100) / 100
+
+      const days = differenceInDays(asAt, invoiceDate)
+      return {
+        id:               b.id,
+        name:             b.name,
+        originalAmount:   b.amount,
+        paymentsToDate:   Math.round(paymentsToDate * 100) / 100,
+        amount:           outstandingAmount,
+        invoiceDate:      invoiceDate.toISOString(),
+        daysSinceInvoice: Math.max(0, days),
+        bucket:           ageBucket(invoiceDate, asAt),
+        vendorId:         b.vendor?.id    ?? null,
+        vendorName:       b.vendor?.name  ?? null,
+        categoryId:       b.category?.id   ?? null,
+        categoryName:     b.category?.name ?? null,
+        categoryColor:    b.category?.color ?? null,
+        entityId:         b.entity?.id   ?? null,
+        entityName:       b.entity?.name ?? null,
+        reference:        b.journalEntry?.reference ?? null,
+      }
+    })
+    // Exclude bills that are fully paid via partial payments (net balance ≤ 0)
+    .filter(item => item.amount > 0.005)
 
   // ── 4. Group by vendor ────────────────────────────────────────────────────
   interface VendorRow {
@@ -216,6 +253,7 @@ export async function GET(request: NextRequest) {
     isReconciled,
     oldestDays,
     itemCount:      items.length,
+    nullDateCount,  // bills with invoiceReceived=true but missing invoiceReceivedDate
     totals,
     vendors,
   })
