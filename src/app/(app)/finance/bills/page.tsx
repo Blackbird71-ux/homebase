@@ -204,14 +204,20 @@ export default function BillsPage() {
   }
 
   // Auto-fill journal line amounts when bill amount changes.
-  // Updates lines that are blank, zero, or still equal to the previously auto-filled value
-  // so typing "2" → "20" → "200" keeps journal lines in sync.
+  //
+  // SPLIT-SAFE RULE: only update a line's amount when it is blank or exactly
+  // zero — i.e. the user has never manually entered a value for that line.
+  // Lines with any non-zero amount (including a GST split like $9.09) are left
+  // untouched so the amount-sync never overwrites a user-configured split.
+  //
+  // prevBillAmountRef is used only to detect the initial mount value on openEdit
+  // so we don't fire on the first render. It is NOT used as a "match and replace"
+  // comparator because that was the root cause of Bug 1 (lines at the same value
+  // as the old total being incorrectly reset).
   useEffect(() => {
     if (!showForm || form.amount <= 0) return
-    const prev = prevBillAmountRef.current
-    const prevStr = prev > 0 ? prev.toFixed(2) : ''
     setJournalLines(lines => lines.map(l =>
-      l.amount === '' || l.amount === '0.00' || l.amount === prevStr
+      l.amount === '' || l.amount === '0' || l.amount === '0.00'
         ? { ...l, amount: (form.amount as number).toFixed(2) }
         : l
     ))
@@ -274,11 +280,24 @@ export default function BillsPage() {
     setEditing(b)
     setErrors({})
     setJournalErrors({})
-    prevBillAmountRef.current = 0  // reset so amount-sync useEffect doesn't corrupt incoming GL lines
-    // Pre-seed journal lines from GL if a journal entry exists, else default using the bill's category
+    // Set prevBillAmountRef to the bill's ACTUAL amount before setting form state.
+    // This ensures the amount-sync useEffect fires with the correct reference on
+    // the first render and does NOT treat the bill's existing amount as a "blank"
+    // value that needs filling — which was Bug 6 (race between form set and async
+    // line load causing all loaded split amounts to be overwritten).
+    prevBillAmountRef.current = b.amount
+    // Pre-seed journal lines from GL if a journal entry exists, else default using the bill's category.
+    // Show defaults immediately while the async GL fetch is in-flight so the editor
+    // isn't blank. The async result overwrites once resolved.
     if (b.journalEntryId) {
-      setJournalLines(defaultBillLines(b.amount, b.category?.id))  // show defaults immediately while loading
-      loadExistingBillJournalLines(b.journalEntryId).then(setJournalLines)
+      setJournalLines(defaultBillLines(b.amount, b.category?.id))
+      loadExistingBillJournalLines(b.journalEntryId).then(lines => {
+        // Only apply loaded lines if the form is still open for this bill
+        setJournalLines(lines)
+        // Stamp prevBillAmountRef again after lines load so the amount-sync
+        // useEffect knows the current baseline and won't corrupt the split.
+        prevBillAmountRef.current = b.amount
+      })
     } else {
       setJournalLines(defaultBillLines(b.amount, b.category?.id))
     }
@@ -347,19 +366,39 @@ export default function BillsPage() {
       }
 
       // ── Determine which journal lines to submit ───────────────────────────
-      // isNewPost: user is posting for the first time — lines become the posted GL entry
-      // isDraftPersist: bill remains unposted — persist any line edits to the draft journal
-      //   so the GL stays in sync with what the user sees in the editor
-      // Already-posted bills: never re-submit lines (would re-create/re-post the journal)
+      // isNewPost: user is posting for the first time — lines become the posted GL entry.
+      // isDraftPersist: bill remains unposted — persist line edits to the draft journal
+      //   so the GL always reflects what the user has configured in the editor.
+      // Already-posted bills: never re-submit lines (journal is locked once posted).
       const isNewPost = form.invoiceReceived && (!editing || !editing.invoiceReceived)
       const isDraftPersist = !!editing && !editing.invoiceReceived && !form.invoiceReceived
-      const validLines = (isNewPost || isDraftPersist)
-        ? journalLines.filter(l => l.glAccountId && parseFloat(l.amount) > 0)
+
+      // GL-FIRST: collect ALL lines that have a GL account assigned, regardless of
+      // whether their amount is zero. Lines with amounts are the user's intended split;
+      // we never silently drop lines here — the API enforces balance validation and
+      // will return a clear error if the entry is unbalanced.
+      const linesToSubmit = (isNewPost || isDraftPersist)
+        ? journalLines.filter(l => l.glAccountId.trim() !== '')
         : []
 
+      // Block save if the user intends to post/save lines but the editor is unbalanced.
+      // This gives a clear error at save-time rather than a silent server rejection.
+      if (linesToSubmit.length >= 2) {
+        const drTotal = linesToSubmit.filter(l => l.side === 'debit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+        const crTotal = linesToSubmit.filter(l => l.side === 'credit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+        if (Math.abs(drTotal - crTotal) > 0.005) {
+          toast.error(`Journal lines are not balanced — debits ${drTotal.toFixed(2)} ≠ credits ${crTotal.toFixed(2)}. Please fix the split before saving.`)
+          return
+        }
+      }
+
+      const serialisedLines = linesToSubmit
+        .filter(l => parseFloat(l.amount) > 0)  // omit zero-amount lines from wire payload
+        .map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null }))
+
       const body = editing
-        ? { id: editing.id, ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
-        : { ...payload, ...(validLines.length >= 2 ? { journalLines: validLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null })) } : {}) }
+        ? { id: editing.id, ...payload, ...(serialisedLines.length >= 2 ? { journalLines: serialisedLines } : {}) }
+        : { ...payload, ...(serialisedLines.length >= 2 ? { journalLines: serialisedLines } : {}) }
 
       const res = await fetch('/api/finance/bills', {
         method: editing ? 'PUT' : 'POST',

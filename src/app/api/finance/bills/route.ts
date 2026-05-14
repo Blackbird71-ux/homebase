@@ -147,6 +147,15 @@ async function postBillPaymentToGL(
 }
 
 // ── Draft journal helper (save lines for review before posting) ──────────────
+// GL-FIRST: the draft journal is the canonical record of the user's intended
+// split (e.g. DR expense ex-GST / DR GST ITC / CR Accounts Payable).
+// It is promoted to isPosted=true when invoiceReceived transitions to true.
+//
+// Safety guarantees:
+//   1. Balance validation happens BEFORE any delete — unbalanced lines are
+//      rejected with a thrown error; no data is touched.
+//   2. The deleteMany + update/create is wrapped in a $transaction so a
+//      partial failure cannot leave an entry with no lines.
 async function upsertBillDraftJournal(
   billId: string,
   billName: string,
@@ -156,6 +165,11 @@ async function upsertBillDraftJournal(
   familyId: string,
   entityId: string | null,
 ): Promise<string> {
+  if (lines.length < 2) {
+    throw new Error('A journal entry requires at least 2 lines')
+  }
+
+  // Validate all GL accounts belong to this family
   const glIds = [...new Set(lines.map(l => l.glAccountId))]
   const validAccounts = await prisma.financeCategory.findMany({
     where: { id: { in: glIds }, familyId },
@@ -165,53 +179,61 @@ async function upsertBillDraftJournal(
     throw new Error('One or more GL accounts not found')
   }
 
+  // Balance check BEFORE touching anything in the DB
+  const totalDR = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+  const totalCR = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+  if (Math.abs(totalDR - totalCR) > 0.005) {
+    throw new Error(
+      `Journal lines are not balanced — debits ${totalDR.toFixed(2)} ≠ credits ${totalCR.toFixed(2)}`,
+    )
+  }
+
+  const lineData = lines.map(l => ({
+    glAccountId: l.glAccountId,
+    side: l.side,
+    amount: l.amount,
+    description: l.description ?? null,
+  }))
+
   if (existingJournalEntryId) {
     const existing = await prisma.financeJournalEntry.findFirst({
       where: { id: existingJournalEntryId, familyId },
     })
     if (existing && !existing.isPosted) {
-      await prisma.financeJournalLine.deleteMany({ where: { journalEntryId: existingJournalEntryId } })
-      await prisma.financeJournalEntry.update({
-        where: { id: existingJournalEntryId },
-        data: {
-          date,
-          description: billName,
-          entityId: entityId ?? null,
-          isPosted: false,   // Always draft — posting happens at invoiceReceived=true
-          lines: {
-            create: lines.map(l => ({
-              glAccountId: l.glAccountId,
-              side: l.side,
-              amount: l.amount,
-              description: l.description ?? null,
-            })),
+      // Atomic: delete old lines and write new ones together
+      await prisma.$transaction(async (tx) => {
+        await tx.financeJournalLine.deleteMany({ where: { journalEntryId: existingJournalEntryId } })
+        await tx.financeJournalEntry.update({
+          where: { id: existingJournalEntryId },
+          data: {
+            date,
+            description: billName,
+            entityId: entityId ?? null,
+            isPosted: false,
+            lines: { create: lineData },
           },
-        },
+        })
       })
       return existingJournalEntryId
     }
   }
 
+  // No existing draft — create a new one atomically
   const reference = await nextJournalReference(familyId)
-  const entry = await prisma.financeJournalEntry.create({
-    data: {
-      reference,
-      date,
-      description: billName,
-      type: 'auto_transaction',
-      isPosted: false,   // Draft until invoice received
-      entityId: entityId ?? null,
-      familyId,
-      lines: {
-        create: lines.map(l => ({
-          glAccountId: l.glAccountId,
-          side: l.side,
-          amount: l.amount,
-          description: l.description ?? null,
-        })),
+  const entry = await prisma.$transaction(async (tx) => {
+    return tx.financeJournalEntry.create({
+      data: {
+        reference,
+        date,
+        description: billName,
+        type: 'auto_transaction',
+        isPosted: false,
+        entityId: entityId ?? null,
+        familyId,
+        lines: { create: lineData },
       },
-    },
-    select: { id: true },
+      select: { id: true },
+    })
   })
   return entry.id
 }
@@ -450,7 +472,8 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  // Update draft journal lines if provided and bill is not yet posted (and not just transitioning to posted)
+  // Update draft journal lines if provided and bill is not yet posted (and not just transitioning to posted).
+  // Send all lines with a glAccountId — balance validation happens inside upsertBillDraftJournal.
   if (!invoiceReceivedTransition && Array.isArray(journalLines) && journalLines.length >= 2 && !existing.invoiceReceived) {
     try {
       const existingJeId: string | null = existing.journalEntryId ?? null
@@ -708,6 +731,10 @@ export async function PATCH(request: NextRequest) {
         const existingJeId: string | null = existing.journalEntryId ?? null
         let journalEntryId: string
 
+        // GL-FIRST: if a draft journal exists with balanced lines (e.g. a user-entered
+        // GST split), promote it to posted rather than discarding it and building a
+        // generic 2-line DR expense / CR AP entry. The user's custom split IS the
+        // authoritative GL record — always honour it.
         if (existingJeId) {
           const existingJe = await tx.financeJournalEntry.findFirst({
             where: { id: existingJeId, familyId: session.familyId },
@@ -717,13 +744,15 @@ export async function PATCH(request: NextRequest) {
             const dr = existingJe.lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
             const cr = existingJe.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
             if (Math.abs(dr - cr) <= 0.005) {
+              // ✅ Balanced draft — promote as-is; preserves GST splits and any
+              //    custom lines the user configured in the journal lines editor.
               await tx.financeJournalEntry.update({
                 where: { id: existingJeId },
                 data: { isPosted: true, date: invoiceDate },
               })
               journalEntryId = existingJeId
             } else {
-              // Unbalanced draft — create fresh auto journal
+              // Unbalanced draft — fall back to standard 2-line auto entry
               const reference = await nextJournalReference(session.familyId)
               const je = await tx.financeJournalEntry.create({
                 data: {
@@ -746,7 +775,7 @@ export async function PATCH(request: NextRequest) {
               journalEntryId = je.id
             }
           } else {
-            // Posted or no lines — create fresh
+            // Already posted or has no lines — create fresh standard entry
             const reference = await nextJournalReference(session.familyId)
             const je = await tx.financeJournalEntry.create({
               data: {
@@ -769,7 +798,7 @@ export async function PATCH(request: NextRequest) {
             journalEntryId = je.id
           }
         } else {
-          // No existing journal — create fresh
+          // No draft journal at all — create standard 2-line entry
           const reference = await nextJournalReference(session.familyId)
           const je = await tx.financeJournalEntry.create({
             data: {
