@@ -15,11 +15,28 @@ export async function ensureOpeningBalancesCategory(familyId: string): Promise<s
   })
   if (family?.openingBalancesCategoryId) return family.openingBalancesCategoryId
 
-  const existing = await prisma.financeCategory.findFirst({
-    where: { familyId, name: 'Opening Balances', type: 'equity', isSystem: true },
-    select: { id: true },
+  const candidates = await prisma.financeCategory.findMany({
+    where: {
+      familyId,
+      type: 'equity',
+      isSystem: true,
+      hideFromReports: false,
+    },
+    select: { id: true, name: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })
-  const categoryId = existing?.id ?? (await prisma.financeCategory.create({
+  const matches = candidates.filter(c =>
+    c.name.toLowerCase().includes('opening balances'),
+  )
+  if (matches.length > 1) {
+    console.warn(
+      `[finance] Multiple Opening Balances categories found for family ${familyId} ` +
+      `(${matches.map(m => `${m.id}=${m.name}`).join(', ')}). ` +
+      `Using oldest (${matches[0].id}); please consolidate via Categories settings.`,
+    )
+  }
+
+  const categoryId = matches[0]?.id ?? (await prisma.financeCategory.create({
     data: { name: 'Opening Balances', type: 'equity', isSystem: true, level: 0, familyId },
     select: { id: true },
   })).id
@@ -33,15 +50,31 @@ export async function ensureOpeningBalancesCategory(familyId: string): Promise<s
 
 /**
  * Ensure the family has a system "Accounts Payable" liability category.
- * Returns the category ID.
+ * Returns the category ID. Deterministic: always picks the oldest matching row.
  */
 export async function ensureAccountsPayableCategory(familyId: string): Promise<string> {
   const candidates = await prisma.financeCategory.findMany({
-    where: { familyId, type: 'liability', isSystem: true },
-    select: { id: true, name: true },
+    where: {
+      familyId,
+      type: 'liability',
+      isSystem: true,
+      hideFromReports: false,
+    },
+    select: { id: true, name: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })
-  const existing = candidates.find(c => c.name.toLowerCase().includes('accounts payable'))
-  if (existing) return existing.id
+  const matches = candidates.filter(c =>
+    c.name.toLowerCase().includes('accounts payable'),
+  )
+  if (matches.length > 1) {
+    console.warn(
+      `[finance] Multiple Accounts Payable categories found for family ${familyId} ` +
+      `(${matches.map(m => `${m.id}=${m.name}`).join(', ')}). ` +
+      `Using oldest (${matches[0].id}); please consolidate via Categories settings.`,
+    )
+  }
+  if (matches[0]) return matches[0].id
+
   const created = await prisma.financeCategory.create({
     data: { name: 'Accounts Payable', type: 'liability', isSystem: true, level: 0, familyId },
     select: { id: true },
@@ -51,15 +84,31 @@ export async function ensureAccountsPayableCategory(familyId: string): Promise<s
 
 /**
  * Ensure the family has a system "Accounts Receivable" asset category.
- * Returns the category ID.
+ * Returns the category ID. Deterministic: always picks the oldest matching row.
  */
 export async function ensureAccountsReceivableCategory(familyId: string): Promise<string> {
   const candidates = await prisma.financeCategory.findMany({
-    where: { familyId, type: 'asset', isSystem: true },
-    select: { id: true, name: true },
+    where: {
+      familyId,
+      type: 'asset',
+      isSystem: true,
+      hideFromReports: false,
+    },
+    select: { id: true, name: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })
-  const existing = candidates.find(c => c.name.toLowerCase().includes('accounts receivable'))
-  if (existing) return existing.id
+  const matches = candidates.filter(c =>
+    c.name.toLowerCase().includes('accounts receivable'),
+  )
+  if (matches.length > 1) {
+    console.warn(
+      `[finance] Multiple Accounts Receivable categories found for family ${familyId} ` +
+      `(${matches.map(m => `${m.id}=${m.name}`).join(', ')}). ` +
+      `Using oldest (${matches[0].id}); please consolidate via Categories settings.`,
+    )
+  }
+  if (matches[0]) return matches[0].id
+
   const created = await prisma.financeCategory.create({
     data: { name: 'Accounts Receivable', type: 'asset', isSystem: true, level: 0, familyId },
     select: { id: true },

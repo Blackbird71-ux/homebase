@@ -188,6 +188,7 @@ export async function POST(
   // If no glAccountId is provided the journal is skipped and a warning is
   // returned to the caller so the UI can surface it to the user.
   let glWarning: string | null = null
+  let postedPaymentJournalId: string | null = null
   if (glAccountId && bill.categoryId) {
     try {
       const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
@@ -202,7 +203,7 @@ export async function POST(
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
           const reference = await nextJournalReference(session.familyId)
           try {
-            await prisma.financeJournalEntry.create({
+            const je = await prisma.financeJournalEntry.create({
               data: {
                 reference,
                 date: actualDate,
@@ -228,7 +229,9 @@ export async function POST(
                   ],
                 },
               },
+              select: { id: true },
             })
+            postedPaymentJournalId = je.id
             break // success
           } catch (err: any) {
             if (err.code === 'P2002' && attempt < MAX_RETRIES - 1) continue
@@ -262,6 +265,7 @@ export async function POST(
       accountId: accountId ?? null,
       glAccountId: glAccountId ?? null,
       transactionId,
+      journalEntryId: postedPaymentJournalId,
       notes: notes ?? null,
       createdBy: session.id,
       familyId: session.familyId,

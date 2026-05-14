@@ -109,11 +109,13 @@ export async function GET(request: NextRequest) {
   const [apCandidates, arCandidates] = await Promise.all([
     prisma.financeCategory.findMany({
       where: { familyId, type: 'liability', isSystem: true, hideFromReports: false },
-      select: { id: true, name: true },
+      select: { id: true, name: true, createdAt: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     }),
     prisma.financeCategory.findMany({
       where: { familyId, type: 'asset', isSystem: true, hideFromReports: false },
-      select: { id: true, name: true },
+      select: { id: true, name: true, createdAt: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     }),
   ])
   const apCategory = apCandidates.find(c => c.name.toLowerCase().includes('accounts payable'))

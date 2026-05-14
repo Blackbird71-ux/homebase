@@ -838,6 +838,8 @@ model FinanceBillPayment {
   glAccount       FinanceCategory?     @relation(fields: [glAccountId], references: [id], onDelete: SetNull)
   transactionId   String?              @unique // FK -> FinanceTransaction created for this payment
   transaction     FinanceTransaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  journalEntryId  String?              // FK -> FinanceJournalEntry (DR AP / CR Bank payment journal)
+  journalEntry    FinanceJournalEntry? @relation("BillPaymentJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
   notes           String?
   createdBy       String
   familyId        String
@@ -847,6 +849,7 @@ model FinanceBillPayment {
   @@index([billId])
   @@index([familyId])
   @@index([paymentDate(sort: Desc)])
+  @@index([journalEntryId])
 }
 
 model FinanceBudget {
@@ -1025,6 +1028,7 @@ model FinanceJournalEntry {
   bills                 FinanceRecurringBill[] @relation("BillJournal")
   incomeEntries         FinanceIncomeEntry[]   @relation("IncomeJournal")
   incomeReceiptEntries  FinanceIncomeEntry[]   @relation("IncomeReceiptJournal")
+  billPayments          FinanceBillPayment[]   @relation("BillPaymentJournal")
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 

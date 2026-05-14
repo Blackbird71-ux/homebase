@@ -409,10 +409,43 @@ export async function PATCH(request: NextRequest) {
       updateData.invoiceTxId = null
       if (existing.transactionId === invoiceTxId) updateData.transactionId = null
     }
-    // Delete the accrual journal entry (lines cascade-delete) so it no longer feeds P&L
+    // Reverse the accrual journal entry (do NOT delete — preserve audit trail per R4)
     const jeId: string | null = existing.journalEntryId ?? null
     if (jeId) {
-      await prisma.financeJournalEntry.deleteMany({ where: { id: jeId, familyId: session.familyId } })
+      const je = await prisma.financeJournalEntry.findFirst({
+        where: { id: jeId, familyId: session.familyId },
+        include: { lines: true },
+      })
+      if (je?.isPosted && !je.isReversed) {
+        const reversalRef = await nextJournalReference(session.familyId)
+        await prisma.financeJournalEntry.create({
+          data: {
+            reference:    reversalRef,
+            date:         new Date(),
+            description:  `VOID: ${je.reference ?? je.id} — ${je.description}`,
+            type:         'reversal',
+            isPosted:     true,
+            reversalOfId: je.id,
+            entityId:     je.entityId,
+            familyId:     session.familyId,
+            lines: {
+              create: je.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side:        l.side === 'debit' ? 'credit' : 'debit',
+                amount:      l.amount,
+                description: l.description,
+              })),
+            },
+          },
+        })
+        await prisma.financeJournalEntry.update({
+          where: { id: je.id },
+          data:  { isReversed: true },
+        })
+      } else if (je && !je.isPosted) {
+        // Draft entry — zero GL effect, safe to delete
+        await prisma.financeJournalEntry.delete({ where: { id: je.id } })
+      }
       updateData.journalEntryId = null
     }
     // Undo received too if it was set
@@ -447,10 +480,42 @@ export async function PATCH(request: NextRequest) {
       })
       updateData.transactionId = null
     }
-    // Delete the receipt GL journal (DR bank / CR AR) — this reverses the AR clearance
+    // Reverse the receipt GL journal (do NOT delete — preserve audit trail per R4)
     const receiptJeId: string | null = (existing as any).receiptJournalEntryId ?? null
     if (receiptJeId) {
-      await prisma.financeJournalEntry.deleteMany({ where: { id: receiptJeId, familyId: session.familyId } })
+      const je = await prisma.financeJournalEntry.findFirst({
+        where: { id: receiptJeId, familyId: session.familyId },
+        include: { lines: true },
+      })
+      if (je?.isPosted && !je.isReversed) {
+        const reversalRef = await nextJournalReference(session.familyId)
+        await prisma.financeJournalEntry.create({
+          data: {
+            reference:    reversalRef,
+            date:         new Date(),
+            description:  `VOID: ${je.reference ?? je.id} — ${je.description}`,
+            type:         'reversal',
+            isPosted:     true,
+            reversalOfId: je.id,
+            entityId:     je.entityId,
+            familyId:     session.familyId,
+            lines: {
+              create: je.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side:        l.side === 'debit' ? 'credit' : 'debit',
+                amount:      l.amount,
+                description: l.description,
+              })),
+            },
+          },
+        })
+        await prisma.financeJournalEntry.update({
+          where: { id: je.id },
+          data:  { isReversed: true },
+        })
+      } else if (je && !je.isPosted) {
+        await prisma.financeJournalEntry.delete({ where: { id: je.id } })
+      }
       updateData.receiptJournalEntryId = null
     }
     // Re-open stage-1 remittance tx (income still recognised, just not yet received)
