@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { ensureAccountsPayableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { addMonths, addWeeks, max } from 'date-fns'
 
 const PAYMENT_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -94,11 +95,7 @@ export async function POST(
 
   const actualDate = new Date(paymentDate)
 
-  // ── Re-read the bill for invoiceTxId (fresh from DB) ────────────────────────
-  const freshBill = await prisma.financeRecurringBill.findFirst({
-    where: { id: billId, familyId: session.familyId },
-  }) as any
-
+  // bill already has all fields — no need for a separate freshBill query (Bug 5 fix)
   let transactionId: string | null = null
 
   // ── Create a FinanceTransaction for this payment ────────────────────────────
@@ -113,8 +110,8 @@ export async function POST(
   //     Create a cleared expense transaction for this partial payment amount.
   //     The expense hits P&L proportionally with each payment.
   try {
-    const invoiceTxId: string | null = freshBill?.invoiceTxId ?? null
-    const paymentAccountId = accountId ?? freshBill?.accountId ?? null
+    const invoiceTxId: string | null = bill.invoiceTxId ?? null
+    const paymentAccountId = accountId ?? bill.accountId ?? null
 
     if (invoiceTxId) {
       // Case A: Invoice existed — create a cleared payment transaction
@@ -139,7 +136,7 @@ export async function POST(
           createdBy: session.id,
           familyId: session.familyId,
           entityId: bill.entityId,
-          taxClassification: (bill as any).taxClassification ?? null,
+          taxClassification: bill.taxClassification ?? null,
         },
       })
       transactionId = tx.id
@@ -166,7 +163,7 @@ export async function POST(
           createdBy: session.id,
           familyId: session.familyId,
           entityId: bill.entityId,
-          taxClassification: (bill as any).taxClassification ?? null,
+          taxClassification: bill.taxClassification ?? null,
         },
       })
       transactionId = tx.id
@@ -292,9 +289,11 @@ export async function POST(
   })
 
   // ── If fully paid, spawn next occurrence for recurring bills ────────────────
+  let spawnWarning: string | null = null
   if (newPaid && bill.billType !== 'one-off') {
     try {
-      const { addMonths, addWeeks } = await import('date-fns')
+      // Use max(bill.nextDueDate, today) to prevent spawning an already-overdue bill (Bug 4 fix)
+      const referenceDate = max([bill.nextDueDate, new Date()])
       const advanceNextDueDate = (date: Date, frequency: string): Date => {
         if (frequency === 'monthly')     return addMonths(date, 1)
         if (frequency === 'fortnightly') return addWeeks(date, 2)
@@ -305,7 +304,7 @@ export async function POST(
         return addMonths(date, 1)
       }
 
-      const newDueDate = advanceNextDueDate(bill.nextDueDate, bill.frequency)
+      const newDueDate = advanceNextDueDate(referenceDate, bill.frequency)
       if (!bill.endDate || newDueDate <= bill.endDate) {
         await prisma.financeRecurringBill.create({
           data: {
@@ -334,18 +333,24 @@ export async function POST(
             paidDate: null,
             parentBillId: bill.id,
             entityId: bill.entityId,
-            taxClassification: (bill as any).taxClassification ?? null,
+            taxClassification: bill.taxClassification ?? null,
             familyId: session.familyId,
           },
         })
       }
     } catch (err) {
+      // Bug 3 fix: don't silently swallow — surface warning to caller
       console.error('[payments POST] Failed to spawn next occurrence:', err)
+      spawnWarning = 'Payment recorded, but failed to create next bill occurrence. Please check recurring bills.'
     }
   }
 
   return NextResponse.json(
-    glWarning ? { ...payment, glWarning } : payment,
+    {
+      ...payment,
+      ...(glWarning ? { glWarning } : {}),
+      ...(spawnWarning ? { spawnWarning } : {}),
+    },
     { status: 201 },
   )
 }

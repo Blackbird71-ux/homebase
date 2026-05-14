@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
-import { addMonths, addWeeks } from 'date-fns'
+import { addMonths, addWeeks, max } from 'date-fns'
 import {
   ensureAccountsPayableCategory,
   createGstJournalEntry,
@@ -217,13 +217,15 @@ async function upsertBillDraftJournal(
 }
 
 function advanceNextDueDate(date: Date, frequency: string): Date {
-  if (frequency === 'monthly')     return addMonths(date, 1)
-  if (frequency === 'fortnightly') return addWeeks(date, 2)
-  if (frequency === 'weekly')      return addWeeks(date, 1)
-  if (frequency === 'quarterly')   return addMonths(date, 3)
-  if (frequency === 'halfyearly')  return addMonths(date, 6)
-  if (frequency === 'yearly')      return addMonths(date, 12)
-  return addMonths(date, 1)
+  // Use max(date, today) to avoid spawning a bill that's already overdue
+  const referenceDate = max([date, new Date()])
+  if (frequency === 'monthly')     return addMonths(referenceDate, 1)
+  if (frequency === 'fortnightly') return addWeeks(referenceDate, 2)
+  if (frequency === 'weekly')      return addWeeks(referenceDate, 1)
+  if (frequency === 'quarterly')   return addMonths(referenceDate, 3)
+  if (frequency === 'halfyearly')  return addMonths(referenceDate, 6)
+  if (frequency === 'yearly')      return addMonths(referenceDate, 12)
+  return addMonths(referenceDate, 1)
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -576,9 +578,21 @@ export async function PATCH(request: NextRequest) {
           await tx.financeTransaction.deleteMany({ where: { id: { in: txIds }, familyId: session.familyId } })
         }
         await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: session.familyId } })
-        await tx.financeRecurringBill.deleteMany({
-          where: { parentBillId: id, familyId: session.familyId, paid: false },
-        })
+        // Recursively delete all unpaid descendant bills (children, grandchildren, etc.)
+        // to prevent orphaned occurrence chains (Bug 6 fix)
+        let currentParents = [id]
+        while (currentParents.length > 0) {
+          const children = await tx.financeRecurringBill.findMany({
+            where: { parentBillId: { in: currentParents }, familyId: session.familyId, paid: false },
+            select: { id: true },
+          })
+          const childIds = children.map((c: { id: string }) => c.id)
+          if (childIds.length === 0) break
+          await tx.financeRecurringBill.deleteMany({
+            where: { id: { in: childIds }, familyId: session.familyId },
+          })
+          currentParents = childIds
+        }
       }
 
       await tx.financeRecurringBill.update({
@@ -613,9 +627,20 @@ export async function PATCH(request: NextRequest) {
         await tx.financeTransaction.deleteMany({ where: { id: { in: txIds }, familyId: session.familyId } })
       }
       await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: session.familyId } })
-      await tx.financeRecurringBill.deleteMany({
-        where: { parentBillId: id, familyId: session.familyId, paid: false },
-      })
+      // Recursively delete all unpaid descendant bills (Bug 6 fix)
+      let currentParents = [id]
+      while (currentParents.length > 0) {
+        const children = await tx.financeRecurringBill.findMany({
+          where: { parentBillId: { in: currentParents }, familyId: session.familyId, paid: false },
+          select: { id: true },
+        })
+        const childIds = children.map((c: { id: string }) => c.id)
+        if (childIds.length === 0) break
+        await tx.financeRecurringBill.deleteMany({
+          where: { id: { in: childIds }, familyId: session.familyId },
+        })
+        currentParents = childIds
+      }
       // Re-open invoice tx so AP is outstanding again
       const invoiceTxId: string | null = existing.invoiceTxId ?? null
       if (invoiceTxId) {
@@ -886,45 +911,46 @@ export async function PATCH(request: NextRequest) {
             ? { paid: true, paidDate: actualPaidDate, paymentTxId: paymentTx.id }
             : { paymentTxId: paymentTx.id },
         })
-      })
 
-      // Spawn next occurrence for recurring bills — only when fully paid
-      if (existing.billType !== 'one-off' && isFullyPaid) {
-        const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
-        if (!existing.endDate || newDueDate <= existing.endDate) {
-          await prisma.financeRecurringBill.create({
-            data: {
-              name: existing.name,
-              amount: existing.amount,
-              accountId: existing.accountId,
-              categoryId: existing.categoryId,
-              vendorId: existing.vendorId,
-              frequency: existing.frequency,
-              dayOfMonth: existing.dayOfMonth,
-              monthOfYear: existing.monthOfYear,
-              nextDueDate: newDueDate,
-              endDate: existing.endDate,
-              isActive: existing.isActive,
-              autoPay: existing.autoPay,
-              emailReminder: existing.emailReminder,
-              reminderDays: existing.reminderDays,
-              notes: existing.notes,
-              memberId: existing.memberId,
-              locationId: existing.locationId,
-              billType: existing.billType,
-              recurrenceInterval: existing.recurrenceInterval,
-              invoiceReceived: false,
-              invoiceReceivedDate: null,
-              paid: false,
-              paidDate: null,
-              parentBillId: existing.id,
-              entityId: existing.entityId,
-              taxClassification: existing.taxClassification,
-              familyId: session.familyId,
-            },
-          })
+        // Spawn next occurrence INSIDE the transaction — prevents disappearing bill bug
+        // where the payment commits but the spawn fails (Bug 2 fix)
+        if (existing.billType !== 'one-off' && isFullyPaid) {
+          const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
+          if (!existing.endDate || newDueDate <= existing.endDate) {
+            await tx.financeRecurringBill.create({
+              data: {
+                name: existing.name,
+                amount: existing.amount,
+                accountId: existing.accountId,
+                categoryId: existing.categoryId,
+                vendorId: existing.vendorId,
+                frequency: existing.frequency,
+                dayOfMonth: existing.dayOfMonth,
+                monthOfYear: existing.monthOfYear,
+                nextDueDate: newDueDate,
+                endDate: existing.endDate,
+                isActive: existing.isActive,
+                autoPay: existing.autoPay,
+                emailReminder: existing.emailReminder,
+                reminderDays: existing.reminderDays,
+                notes: existing.notes,
+                memberId: existing.memberId,
+                locationId: existing.locationId,
+                billType: existing.billType,
+                recurrenceInterval: existing.recurrenceInterval,
+                invoiceReceived: false,
+                invoiceReceivedDate: null,
+                paid: false,
+                paidDate: null,
+                parentBillId: existing.id,
+                entityId: existing.entityId,
+                taxClassification: existing.taxClassification,
+                familyId: session.familyId,
+              },
+            })
+          }
         }
-      }
+      })
     } catch (err) {
       console.error('[bills PATCH] ATOMIC payment posting failed:', err)
       return NextResponse.json(
