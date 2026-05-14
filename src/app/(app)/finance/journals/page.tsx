@@ -142,13 +142,13 @@ export default function JournalsPage() {
         </button>
       </div>
 
-      <div className="flex items-center gap-1 rounded-lg border border-border p-1 w-fit">
+      <div className="flex items-center gap-1.5 w-fit">
         {(['manual', 'draft', 'all-posted'] as const).map(tab => (
           <button key={tab}
             onClick={() => { setFilterTab(tab); setPage(1) }}
             className={cn(
-              'px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              filterTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+              'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+              filterTab === tab ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground',
             )}
           >
             {tab === 'manual' ? 'Manual' : tab === 'draft' ? 'Draft' : 'All Posted'}

@@ -680,25 +680,25 @@ export default function ProfitLossPage() {
     <div className="space-y-5">
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1.5">
           {(['month', 'quarter', 'year'] as const).map(p => (
             <button key={p} onClick={() => setPeriodMode(p)}
-              className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors capitalize',
-                periodMode === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors capitalize',
+                periodMode === p ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
               {p === 'month' ? 'Month' : p === 'quarter' ? 'Quarter' : 'Year'}
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1.5">
           <button onClick={() => setViewMode('accrual')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              viewMode === 'accrual' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+              viewMode === 'accrual' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             Accrual
           </button>
           <button onClick={() => setViewMode('forecast')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              viewMode === 'forecast' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+              viewMode === 'forecast' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             + Forecast
           </button>
         </div>

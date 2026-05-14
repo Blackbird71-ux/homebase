@@ -566,11 +566,11 @@ export default function IncomePage() {
       <h1 className="text-2xl font-bold">Income</h1>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1.5">
           {(['14', '30', 'quarter', '12months'] as const).map(r => (
             <button key={r} onClick={() => setDateRangePersisted(r)}
-              className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-                dateRange === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+                dateRange === r ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
               {r === '14' ? '14 Days' : r === '30' ? '30 Days' : r === 'quarter' ? 'Quarter' : '12 Months'}
             </button>
           ))}
@@ -589,7 +589,7 @@ export default function IncomePage() {
         {rootCategories.length > 0 && (
           <div className="relative">
             <button onClick={() => setShowCatPicker(p => !p)}
-              className={cn('inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
+              className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                 selectedCatIds.length > 0 ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
               <Settings2 className="h-3.5 w-3.5" />
               {selectedCatIds.length > 0 ? `${selectedCatIds.length} categor${selectedCatIds.length === 1 ? 'y' : 'ies'} shown` : 'Show category columns'}

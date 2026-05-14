@@ -473,15 +473,15 @@ export default function AnnualPnLPage() {
         </div>
 
         {/* Actuals / Forecast toggle */}
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1.5">
           <button onClick={() => setViewMode('actuals')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              viewMode === 'actuals' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+              viewMode === 'actuals' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             Actuals (GL)
           </button>
           <button onClick={() => setViewMode('forecast')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              viewMode === 'forecast' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+              viewMode === 'forecast' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             + Forecast
           </button>
         </div>

@@ -261,12 +261,12 @@ export default function BudgetPage() {
       {/* ── Summary strip ──────────────────────────────────────────────────── */}
       <div className="space-y-2">
         <div className="flex justify-end">
-          <div className="flex items-center rounded-md border border-border overflow-hidden">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setShowYearly(false)}
               className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors',
-                !showYearly ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+                !showYearly ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground',
               )}
             >
               Monthly
@@ -274,8 +274,8 @@ export default function BudgetPage() {
             <button
               onClick={() => setShowYearly(true)}
               className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors border-l border-border',
-                showYearly ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+                showYearly ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground',
               )}
             >
               <CalendarDays className="h-3.5 w-3.5" /> Yearly
@@ -440,14 +440,14 @@ export default function BudgetPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center rounded-md border border-border overflow-hidden">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setExpenseView('list')}
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors',
+                  'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
                   expenseView === 'list'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground',
                 )}
                 title="List view"
               >
@@ -457,10 +457,10 @@ export default function BudgetPage() {
               <button
                 onClick={() => setExpenseView('category')}
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors border-l border-border',
+                  'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
                   expenseView === 'category'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground',
                 )}
                 title="Category spend view"
               >

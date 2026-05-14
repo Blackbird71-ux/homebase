@@ -119,11 +119,11 @@ export default function ReceivedIncomePage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1.5">
           {([1, 3, 6, 12] as const).map(m => (
             <button key={m} onClick={() => setMonthRangePersisted(m)}
-              className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-                monthRange === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+                monthRange === m ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
               {m === 1 ? '1 Month' : `${m} Months`}
             </button>
           ))}
@@ -132,7 +132,7 @@ export default function ReceivedIncomePage() {
         {rootCategories.length > 0 && (
           <div className="relative">
             <button onClick={() => setShowCatPicker(p => !p)}
-              className={cn('inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
+              className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                 selectedCatIds.length > 0 ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
               <Settings2 className="h-3.5 w-3.5" />
               {selectedCatIds.length > 0 ? `${selectedCatIds.length} categor${selectedCatIds.length === 1 ? 'y' : 'ies'} shown` : 'Show category columns'}

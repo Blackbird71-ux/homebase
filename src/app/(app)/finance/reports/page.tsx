@@ -223,40 +223,40 @@ export default function ReportsPage() {
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Period selector */}
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1.5">
           {(['month', 'quarter', 'year'] as const).map(p => (
             <button key={p} onClick={() => setPeriodMode(p)}
-              className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors capitalize',
-                periodMode === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors capitalize',
+                periodMode === p ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
               {p === 'month' ? 'Month' : p === 'quarter' ? 'Quarter' : 'Year'}
             </button>
           ))}
         </div>
 
         {/* Cash/Forecast toggle */}
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1" title="Cash: only paid bills by payment date. Forecast: all active bills by due date.">
+        <div className="flex items-center gap-1.5" title="Cash: only paid bills by payment date. Forecast: all active bills by due date.">
           <button onClick={() => setDataMode('forecast')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              dataMode === 'forecast' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+              dataMode === 'forecast' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             Forecast
           </button>
           <button onClick={() => setDataMode('cash')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors',
-              dataMode === 'cash' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+              dataMode === 'cash' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             Cash (paid)
           </button>
         </div>
 
         {/* View toggle */}
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1.5">
           <button onClick={() => setViewMode('category')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1',
-              viewMode === 'category' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors flex items-center gap-1',
+              viewMode === 'category' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             <BarChart2 className="h-3 w-3" /> By category
           </button>
           <button onClick={() => setViewMode('vendor')}
-            className={cn('px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1',
-              viewMode === 'vendor' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            className={cn('px-2.5 py-1 text-xs font-medium rounded-full border transition-colors flex items-center gap-1',
+              viewMode === 'vendor' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
             <Building2 className="h-3 w-3" /> By vendor
           </button>
         </div>
