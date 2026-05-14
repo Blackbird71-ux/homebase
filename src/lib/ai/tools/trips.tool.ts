@@ -142,7 +142,7 @@ async function createTripHandler(args: Record<string, unknown>, ctx: HandlerCont
       accommodation: accommodation ?? null,
       transport: transport ?? null,
       notes: notes ?? null,
-      createdBy: ctx.userId,
+      createdBy: ctx.user.id,
       familyId: ctx.familyId,
     },
   })
