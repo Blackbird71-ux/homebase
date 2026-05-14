@@ -7,7 +7,7 @@ import {
   BookmarkCheck, Briefcase, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
+import { format, addMonths, addDays } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
@@ -465,17 +465,7 @@ export default function BillsPage() {
   }
 
   function getNextDue(bill: Bill): Date {
-    const due = new Date(bill.nextDueDate)
-    if (isPast(due)) {
-      if (bill.frequency === 'monthly')     return addMonths(due, 1)
-      if (bill.frequency === 'fortnightly') return addWeeks(due, 2)
-      if (bill.frequency === 'weekly')      return addWeeks(due, 1)
-      if (bill.frequency === 'bimonthly')   return addMonths(due, 2)
-      if (bill.frequency === 'quarterly')   return addMonths(due, 3)
-      if (bill.frequency === 'halfyearly')  return addMonths(due, 6)
-      if (bill.frequency === 'yearly')      return addMonths(due, 12)
-    }
-    return due
+    return new Date(bill.nextDueDate)
   }
 
   function billAmountForCat(bill: Bill, rootCatId: string): number {

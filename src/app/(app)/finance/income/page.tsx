@@ -7,7 +7,7 @@ import {
   Building2, BookmarkCheck, Receipt, ReceiptText,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, isPast, addMonths, addWeeks, addDays } from 'date-fns'
+import { format, addMonths, addDays } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
@@ -463,16 +463,7 @@ export default function IncomePage() {
   }
 
   function getNextExpected(entry: IncomeEntry): Date {
-    const due = new Date(entry.nextExpectedDate)
-    if (isPast(due)) {
-      if (entry.frequency === 'monthly')      return addMonths(due, 1)
-      if (entry.frequency === 'fortnightly')  return addWeeks(due, 2)
-      if (entry.frequency === 'weekly')       return addWeeks(due, 1)
-      if (entry.frequency === 'quarterly')    return addMonths(due, 3)
-      if (entry.frequency === 'halfyearly')   return addMonths(due, 6)
-      if (entry.frequency === 'yearly')       return addMonths(due, 12)
-    }
-    return due
+    return new Date(entry.nextExpectedDate)
   }
 
   function entryAmountForCat(entry: IncomeEntry, rootCatId: string): number {
@@ -501,10 +492,9 @@ export default function IncomePage() {
     const due = toLocalMidnight(new Date(e.nextExpectedDate))
     if (due >= todayStart) return false
     if (e.incomeType === 'one-off') return false
-    if (e.parentIncomeId) {
-      const graceMs = cycleMs(e.frequency)
-      return (todayStart.getTime() - due.getTime()) > graceMs
-    }
+    // All past-due recurring entries are overdue — no grace period for children.
+    // The grace period previously applied to spawned children caused them to be
+    // invisible: past todayStart (not upcoming) but within grace (not overdue).
     return true
   }
 
@@ -525,7 +515,15 @@ export default function IncomePage() {
     const due = toLocalMidnight(new Date(e.nextExpectedDate))
     return due >= todayStart && due <= rangeEnd
   })
-  const visibleEntries = [...overdue, ...upcoming]
+  // Spawned child entries land exactly 1 period after the paid entry.  For
+  // monthly income paid on time that is 30–31 days out — 1 day beyond the
+  // default 30-day window.  Show them in a "Scheduled" section so nothing
+  // that was correctly spawned ever becomes invisible.
+  const futureScheduled = activeEntries.filter(e => {
+    const due = toLocalMidnight(new Date(e.nextExpectedDate))
+    return due > rangeEnd && e.incomeType !== 'one-off'
+  })
+  const visibleEntries = [...overdue, ...upcoming]   // totals respect the selected range
   const colCats        = rootCategories.filter(c => selectedCatIds.includes(c.id))
   const grandTotal     = visibleEntries.reduce((s, e) => s + e.amount, 0)
   const catTotals: Record<string, number> = {}
@@ -974,6 +972,21 @@ export default function IncomePage() {
               onToggleInvoice={handleToggleInvoice}
               att={att} />
           ))}
+          {futureScheduled.length > 0 && (
+            <div className="mt-3 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground px-1 flex items-center gap-1.5">
+                <RefreshCw className="h-3 w-3" />
+                Scheduled beyond {dateRange === '14' ? '14 days' : dateRange === '30' ? '30 days' : dateRange === 'quarter' ? 'this quarter' : '12 months'}
+              </p>
+              {futureScheduled.map(e => (
+                <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue={false}
+                  colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
+                  onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
+                  onToggleInvoice={handleToggleInvoice}
+                  att={att} />
+              ))}
+            </div>
+          )}
           {visibleEntries.length > 0 && (
             <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
               style={{ gridTemplateColumns: gridTemplate, alignItems: 'center' }}>

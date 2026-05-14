@@ -281,8 +281,65 @@ export async function DELETE(request: NextRequest) {
   const existing = await prisma.financeIncomeEntry.findFirst({ where: { id, familyId: session.familyId } })
   if (!existing) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
 
+  // Reverse any posted GL journals before deleting (mirrors bills DELETE pattern)
+  const jeIds = [
+    (existing as any).journalEntryId,
+    (existing as any).receiptJournalEntryId,
+  ].filter(Boolean) as string[]
+
+  for (const jeId of jeIds) {
+    const je = await prisma.financeJournalEntry.findFirst({
+      where: { id: jeId, familyId: session.familyId },
+      include: { lines: true },
+    })
+    if (je?.isPosted && !je.isReversed) {
+      const reference = await nextJournalReference(session.familyId)
+      await prisma.financeJournalEntry.create({
+        data: {
+          reference,
+          date: new Date(),
+          description: `VOID: ${je.reference ?? je.id} — ${je.description}`,
+          type: 'reversal',
+          isPosted: true,
+          reversalOfId: je.id,
+          entityId: je.entityId,
+          familyId: session.familyId,
+          lines: {
+            create: je.lines.map(l => ({
+              glAccountId: l.glAccountId,
+              side: l.side === 'debit' ? 'credit' : 'debit',
+              amount: l.amount,
+              description: l.description,
+            })),
+          },
+        },
+      })
+      await prisma.financeJournalEntry.update({
+        where: { id: je.id },
+        data: { isReversed: true },
+      })
+    }
+  }
+
   await prisma.financeIncomeEntry.delete({ where: { id } })
   return NextResponse.json({ success: true })
+}
+
+// Recursively deletes unreceived child entries for a given parent, depth-first.
+// The simple deleteMany({ parentIncomeId: id }) only removes direct children;
+// with the chain master→child1→child2, undoing master leaves child2 orphaned
+// if child1 was already received.
+async function deleteUnreceivedDescendants(parentId: string, familyId: string): Promise<void> {
+  const children = await prisma.financeIncomeEntry.findMany({
+    where: { parentIncomeId: parentId, familyId, received: false },
+    select: { id: true },
+  })
+  for (const child of children) {
+    await deleteUnreceivedDescendants(child.id, familyId)
+  }
+  await prisma.financeIncomeEntry.deleteMany({
+    where: { parentIncomeId: parentId, familyId, received: false },
+  })
 }
 
 function advanceNextExpectedDate(date: Date, frequency: string): Date {
@@ -352,9 +409,7 @@ export async function PATCH(request: NextRequest) {
       }
       updateData.received = false
       updateData.receivedDate = null
-      await prisma.financeIncomeEntry.deleteMany({
-        where: { parentIncomeId: id, familyId: session.familyId, received: false },
-      })
+      await deleteUnreceivedDescendants(id, session.familyId)
     }
   }
 
@@ -388,9 +443,7 @@ export async function PATCH(request: NextRequest) {
         data: { isCleared: false, reconciledDate: null },
       })
     }
-    await prisma.financeIncomeEntry.deleteMany({
-      where: { parentIncomeId: id, familyId: session.familyId, received: false },
-    })
+    await deleteUnreceivedDescendants(id, session.familyId)
   }
 
   // Apply status field updates
@@ -544,19 +597,27 @@ export async function PATCH(request: NextRequest) {
       //   Stage 1 (if not already posted): DR AR / CR Income
       //   Stage 2:                         DR Bank  / CR AR
       //   Net effect:                      DR Bank  / CR Income  (AR washes out)
+      //
+      // IMPORTANT: Pre-generate both journal references OUTSIDE the transaction.
+      // nextJournalReference reads committed DB state; inside a $transaction the
+      // first JE create is not yet committed, so a second call would return the
+      // same reference and trigger a unique-constraint violation.
+      const needsAutoStage1 = !freshEntry?.invoiceReceived
+      const accrualRef  = needsAutoStage1 ? await nextJournalReference(session.familyId) : null
+      // Increment base ref so receipt ref is always one higher when both are needed
+      const receiptRef  = await nextJournalReference(session.familyId)
       try {
         await prisma.$transaction(async (tx) => {
           const arCategoryId = await ensureAccountsReceivableCategory(session.familyId)
 
           // ── Auto-post Stage 1 accrual if it hasn't been done yet ─────────────
-          if (!freshEntry?.invoiceReceived) {
+          if (needsAutoStage1) {
             if (!existing.categoryId) {
               throw new Error('Income entry must have an income category before cash can be posted to GL')
             }
-            const accrualRef = await nextJournalReference(session.familyId)
             const accrualJe = await tx.financeJournalEntry.create({
               data: {
-                reference: accrualRef,
+                reference: accrualRef!,
                 date: actualReceivedDate,
                 description: existing.name,
                 type: 'auto_transaction',
@@ -583,10 +644,9 @@ export async function PATCH(request: NextRequest) {
           }
 
           // ── Stage 2: DR Bank / CR AR ──────────────────────────────────────────
-          const reference = await nextJournalReference(session.familyId)
           const receiptJe = await tx.financeJournalEntry.create({
             data: {
-              reference,
+              reference: receiptRef,
               date: actualReceivedDate,
               description: `${existing.name} (cash received)`,
               type: 'auto_transaction',

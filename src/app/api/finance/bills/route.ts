@@ -421,8 +421,37 @@ export async function PUT(request: NextRequest) {
     include: BILL_INCLUDE,
   })
 
-  // Update draft journal lines if provided and bill is not yet posted
-  if (Array.isArray(journalLines) && journalLines.length >= 2 && !existing.invoiceReceived) {
+  // If invoiceReceived is transitioning false→true, post the GL accrual journal
+  const invoiceReceivedTransition = invoiceReceived === true && !existing.invoiceReceived
+  if (invoiceReceivedTransition) {
+    try {
+      const existingJeId: string | null = existing.journalEntryId ?? null
+      const effectiveCategoryId = categoryId ?? existing.categoryId
+      if (effectiveCategoryId) {
+        const journalEntryId = await postBillToGL(
+          bill.id,
+          name ?? existing.name,
+          amount !== undefined ? parseFloat(amount) : existing.amount,
+          effectiveCategoryId,
+          entityId !== undefined ? (entityId ?? null) : existing.entityId,
+          session.familyId,
+          invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
+          existingJeId,
+        )
+        if (journalEntryId !== existingJeId) {
+          await prisma.financeRecurringBill.update({
+            where: { id: bill.id },
+            data: { journalEntryId },
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[bills PUT] Failed to post GL on invoiceReceived transition:', err)
+    }
+  }
+
+  // Update draft journal lines if provided and bill is not yet posted (and not just transitioning to posted)
+  if (!invoiceReceivedTransition && Array.isArray(journalLines) && journalLines.length >= 2 && !existing.invoiceReceived) {
     try {
       const existingJeId: string | null = existing.journalEntryId ?? null
       const journalEntryId = await upsertBillDraftJournal(
