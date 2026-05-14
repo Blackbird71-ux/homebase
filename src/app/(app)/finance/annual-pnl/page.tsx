@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  addMonths, startOfMonth, endOfMonth, getMonth, getYear,
+  startOfMonth, endOfMonth, getMonth, getYear,
 } from 'date-fns'
 import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
 
@@ -141,8 +141,6 @@ export default function AnnualPnLPage() {
     Array.from({ length: 12 }, (_, i) => fyColDate(fyStartYear, i, fyStartMonth)),
     [fyStartYear, fyStartMonth])
 
-  const fyTo = endOfMonth(fyMonths[11])
-
   // ── Load static data (settings + forecast sources) ───────────────────────
   useEffect(() => {
     async function load() {
@@ -169,44 +167,45 @@ export default function AnnualPnLPage() {
     load()
   }, [])
 
-  // ── Load GL actuals: one P&L API call per month ───────────────────────────
+  // ── Load GL actuals: single batch API call for all 12 months ────────────────
   //
-  // The /api/finance/pnl endpoint reads exclusively from posted
-  // FinanceJournalLine entries — the single source of truth.
-  // We fetch all 12 months concurrently so the table fills in progressively.
+  // The /api/finance/pnl/batch endpoint reads all posted FinanceJournalLine
+  // entries for the full FY in one DB query and returns data grouped by month.
   useEffect(() => {
     if (viewMode !== 'actuals') return
     let cancelled = false
     setGlMonths(Array(12).fill(null))
     setGlLoading(true)
 
-    async function loadMonth(col: number) {
-      const colDate = fyMonths[col]
-      const from = startOfMonth(colDate).toISOString().split('T')[0]
-      const params = new URLSearchParams({ period: 'month', anchor: from })
+    async function loadBatch() {
+      const from = startOfMonth(fyMonths[0]).toISOString().split('T')[0]
+      const to   = endOfMonth(fyMonths[11]).toISOString().split('T')[0]
+      const params = new URLSearchParams({ from, to })
       if (selectedEntityId) params.set('entityId', selectedEntityId)
       try {
-        const res = await fetch(`/api/finance/pnl?${params}`)
+        const res = await fetch(`/api/finance/pnl/batch?${params}`)
         if (!res.ok || cancelled) return
-        const data = await res.json()
+        const data: Record<string, PnlMonthData> = await res.json()
         if (!cancelled) {
-          setGlMonths(prev => {
-            const next = [...prev]
-            next[col] = {
-              incomeGroups:  data.incomeGroups  ?? [],
-              expenseGroups: data.expenseGroups ?? [],
-              totalIncome:   data.totalIncome   ?? 0,
-              totalExpenses: data.totalExpenses ?? 0,
-              netProfit:     data.netProfit     ?? 0,
+          setGlMonths(fyMonths.map(colDate => {
+            const yr  = colDate.getFullYear()
+            const mo  = String(colDate.getMonth() + 1).padStart(2, '0')
+            const key = `${yr}-${mo}`
+            const m   = data[key]
+            if (!m) return { incomeGroups: [], expenseGroups: [], totalIncome: 0, totalExpenses: 0, netProfit: 0 }
+            return {
+              incomeGroups:  m.incomeGroups  ?? [],
+              expenseGroups: m.expenseGroups ?? [],
+              totalIncome:   m.totalIncome   ?? 0,
+              totalExpenses: m.totalExpenses ?? 0,
+              netProfit:     m.netProfit     ?? 0,
             }
-            return next
-          })
+          }))
         }
-      } catch { /* individual month failure is silent — column shows — */ }
+      } catch { /* silently leave months empty on error */ }
     }
 
-    Promise.all(fyMonths.map((_, col) => loadMonth(col)))
-      .finally(() => { if (!cancelled) setGlLoading(false) })
+    loadBatch().finally(() => { if (!cancelled) setGlLoading(false) })
 
     return () => { cancelled = true }
   }, [fyStartYear, fyStartMonth, selectedEntityId, viewMode])   // eslint-disable-line react-hooks/exhaustive-deps

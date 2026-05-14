@@ -164,7 +164,7 @@ export default function ProfitLossPage() {
         startDate: from.toISOString().split('T')[0],
         endDate:   to.toISOString().split('T')[0],
         isCleared: 'true',
-        limit:     '500',
+        limit:     '200',
       })
       const res = await fetch(`/api/finance/transactions?${params}`)
       if (res.ok) {

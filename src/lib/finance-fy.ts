@@ -53,6 +53,21 @@ export function fyDateRange(
  * Example: tzMidnight(2025, 7, 1, 'Australia/Sydney')
  *   → 2025-06-30T14:00:00.000Z  (AEST = UTC+10, so midnight AEST = 14:00 UTC prev day)
  */
+const _tzFmtCache = new Map<string, Intl.DateTimeFormat>()
+function getTzFormatter(tz: string): Intl.DateTimeFormat {
+  let fmt = _tzFmtCache.get(tz)
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-AU', {
+      timeZone: tz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    })
+    _tzFmtCache.set(tz, fmt)
+  }
+  return fmt
+}
+
 function tzMidnight(year: number, month1: number, day: number, tz: string): Date {
   // Build an ISO-like string and interpret it in the target timezone using Intl.
   // Strategy: format a UTC instant and ask Intl what date/time it shows in `tz`,
@@ -64,12 +79,7 @@ function tzMidnight(year: number, month1: number, day: number, tz: string): Date
   //
   // Noon avoids DST edge cases (DST transitions happen at 02:00-03:00 in most tz).
   const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
-  const fmt = new Intl.DateTimeFormat('en-AU', {
-    timeZone: tz,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false,
-  })
+  const fmt = getTzFormatter(tz)
   // Find what UTC instant shows as 00:00:00 on this date in the timezone.
   // We use the offset at noon (safe for DST), then fine-correct with a second pass.
   const parts = fmt.formatToParts(new Date(noonUtc))

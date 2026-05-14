@@ -90,16 +90,15 @@ export default function TransactionsPage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, mRes, lRes, eRes] = await Promise.all([
-      fetch('/api/finance/accounts'), fetch('/api/finance/categories'),
-      fetch('/api/finance/members'), fetch('/api/finance/locations'),
-      fetch('/api/finance/entities'),
-    ])
-    if (aRes.ok) setAccounts(await aRes.json())
-    if (cRes.ok) setCategories(await cRes.json())
-    if (mRes.ok) setMembers(await mRes.json())
-    if (lRes.ok) setLocations(await lRes.json())
-    if (eRes.ok) setEntities(await eRes.json())
+    const res = await fetch('/api/finance/references')
+    if (res.ok) {
+      const { accounts, categories, members, locations, entities } = await res.json()
+      setAccounts(accounts)
+      setCategories(categories)
+      setMembers(members)
+      setLocations(locations)
+      setEntities(entities)
+    }
   }
 
   useEffect(() => { loadRefs() }, [])

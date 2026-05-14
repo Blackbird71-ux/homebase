@@ -10,7 +10,7 @@ import { nextJournalReference } from '@/lib/finance-journal-ref'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
-  category: true,
+  category: { select: { id: true, name: true, color: true, type: true, glCode: true, gstApplicable: true, gstRate: true, isTaxDeduction: true, taxIncludeInReporting: true } },
   location: { select: { id: true, name: true } },
   vendor: { select: { id: true, name: true } },
   entity: { select: { id: true, name: true, color: true, type: true } },
