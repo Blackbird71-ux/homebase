@@ -155,6 +155,13 @@ async function createTripHandler(args: Record<string, unknown>, ctx: HandlerCont
 // ── Register ───────────────────────────────────────────────────────────────────
 
 export function registerTripTools(): void {
-  registerTool(queryTripsDefinition, queryTripsHandler)
-  registerTool(createTripDefinition, createTripHandler)
+  registerTool('queryTrips', {
+    definition: queryTripsDefinition,
+    handler: queryTripsHandler,
+  })
+
+  registerTool('createTrip', {
+    definition: createTripDefinition,
+    handler: createTripHandler,
+  })
 }
