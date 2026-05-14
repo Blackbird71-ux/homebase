@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
   const session = await requireSession()
   const { searchParams } = new URL(request.url)
   const asAtParam = searchParams.get('asAt')
+  const entityId  = searchParams.get('entityId') ?? undefined
   const familyId  = session.familyId
 
   const family = await prisma.family.findUnique({
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
 
   let glApBalance = 0
   if (apCategory) {
-    const journalBalances = await deriveJournalLineBalances(familyId, null, asAt)
+    const journalBalances = await deriveJournalLineBalances(familyId, null, asAt, entityId)
     const netBalance = journalBalances.get(apCategory.id)?.netBalance ?? 0
     glApBalance = Math.round(Math.max(0, -netBalance) * 100) / 100
   }
@@ -101,6 +102,7 @@ export async function GET(request: NextRequest) {
       familyId,
       invoiceReceived: true,
       invoiceReceivedDate: { not: null, lte: asAt },
+      ...(entityId ? { entityId } : {}),
       OR: [
         { paid: false },
         { paid: true, paidDate: { gt: asAt } },
@@ -129,6 +131,7 @@ export async function GET(request: NextRequest) {
       familyId,
       invoiceReceived: true,
       invoiceReceivedDate: null,
+      ...(entityId ? { entityId } : {}),
     },
   })
 
@@ -246,6 +249,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     asAt:           asAtParam ?? new Date().toISOString().split('T')[0],
+    entityId:       entityId ?? null,
     hasApAccount:   !!apCategory,
     glApBalance,
     subledgerTotal,

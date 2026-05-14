@@ -26,6 +26,7 @@ import {
   ChevronDown,
   Menu,
   CreditCard,
+  Banknote,
 } from 'lucide-react'
 
 const groups = [
@@ -48,7 +49,8 @@ const groups = [
       { href: '/finance/tax-report',   label: 'Tax Report',        icon: Receipt,         exact: false },
       { href: '/finance/journals',     label: 'Journals',           icon: BookOpen,        exact: false },
       { href: '/finance/trial-balance',  label: 'Trial Balance / GL', icon: Table2,          exact: false },
-      { href: '/finance/accounts-payable', label: 'AP Aging',         icon: CreditCard,      exact: false },
+      { href: '/finance/accounts-payable',    label: 'AP Aging',         icon: CreditCard,      exact: false },
+      { href: '/finance/accounts-receivable', label: 'AR Aging',         icon: Banknote,        exact: false },
       { href: '/finance/reports',      label: 'Reports',            icon: PieChart,        exact: false },
     ],
   },

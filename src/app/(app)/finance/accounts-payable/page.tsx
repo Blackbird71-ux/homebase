@@ -12,6 +12,14 @@ import { cn, todayAU } from '@/lib/utils'
 
 type AgingBucket = '0_30' | '31_60' | '61_90' | '91_plus'
 
+interface Entity {
+  id: string
+  name: string
+  type: string
+  isDefault: boolean
+  color: string | null
+}
+
 interface ApItem {
   id: string
   name: string
@@ -42,6 +50,7 @@ interface VendorRow {
 
 interface ApData {
   asAt: string
+  entityId: string | null
   hasApAccount: boolean
   glApBalance: number
   subledgerTotal: number
@@ -94,22 +103,37 @@ function agingColor(bucket: AgingBucket) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AccountsPayablePage() {
-  const [asAt, setAsAt]       = useState(todayAU())
-  const [data, setData]       = useState<ApData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [asAt, setAsAt]         = useState(todayAU())
+  const [entityId, setEntityId] = useState('')
+  const [entities, setEntities] = useState<Entity[]>([])
+  const [data, setData]         = useState<ApData | null>(null)
+  const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  const load = useCallback(async (date: string) => {
+  // Load entities once on mount
+  useEffect(() => {
+    fetch('/api/finance/entities')
+      .then(r => r.ok ? r.json() : [])
+      .then(setEntities)
+      .catch(() => {})
+  }, [])
+
+  const load = useCallback(async (date: string, eid: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/finance/accounts-payable?asAt=${date}`)
+      const params = new URLSearchParams({ asAt: date })
+      if (eid) params.set('entityId', eid)
+      const res = await fetch(`/api/finance/accounts-payable?${params}`)
       if (res.ok) setData(await res.json())
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { load(asAt) }, [asAt, load])
+  useEffect(() => { load(asAt, entityId) }, [asAt, entityId, load])
+
+  // Reset drill-down expansion when filters change
+  useEffect(() => { setExpanded(new Set()) }, [asAt, entityId])
 
   function toggleVendor(key: string) {
     setExpanded(prev => {
@@ -140,6 +164,37 @@ export default function AccountsPayablePage() {
           />
         </div>
       </div>
+
+      {/* ── Entity filter ───────────────────────────────────────────────────── */}
+      {entities.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setEntityId('')}
+            className={cn(
+              'px-3 py-1 text-xs font-medium rounded-full border transition-colors',
+              !entityId
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border text-muted-foreground hover:text-foreground',
+            )}
+          >
+            All entities
+          </button>
+          {entities.map(en => (
+            <button
+              key={en.id}
+              onClick={() => setEntityId(entityId === en.id ? '' : en.id)}
+              className={cn(
+                'px-3 py-1 text-xs font-medium rounded-full border transition-colors',
+                entityId === en.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {en.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
