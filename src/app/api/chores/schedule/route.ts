@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const assignedToMe = assignedToMeParam === 'true'
 
   // Get today's boundary in family timezone
-  const { start: todayStart } = todayBoundsInTz(timezone)
+  const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
 
   // Rolling window from today
   const windowEnd = new Date(todayStart.getTime() + scope * 24 * 60 * 60 * 1000)
@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
   })
 
   // Build schedule grouped by day within the rolling window
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const schedule: Array<{
     day: string
     date: string
@@ -59,22 +58,20 @@ export async function GET(request: NextRequest) {
   }> = []
 
   for (let i = 0; i < scope; i++) {
-    const dayDate = new Date(todayStart)
-    dayDate.setDate(dayDate.getDate() + i)
-
-    const dayStart = new Date(dayDate)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(dayDate)
-    dayEnd.setHours(23, 59, 59, 999)
+    // Use timezone-aware day boundaries derived from todayStart (already local midnight in UTC form)
+    const dayStart = new Date(todayStart.getTime() + i * 86400000)
+    const dayEnd = new Date(todayStart.getTime() + (i + 1) * 86400000)
+    // Use the midpoint of the local day to reliably determine the day name/date in the target timezone
+    const midDay = new Date(dayStart.getTime() + 12 * 3600000)
 
     const dayChores = chores.filter((c: any) => {
       if (!c.nextDueDate) return false
-      return c.nextDueDate >= dayStart && c.nextDueDate <= dayEnd
+      return c.nextDueDate >= dayStart && c.nextDueDate < dayEnd
     })
 
     schedule.push({
-      day: dayNames[dayDate.getDay()],
-      date: dayDate.toISOString(),
+      day: new Intl.DateTimeFormat('en-US', { timeZone: timezone ?? 'UTC', weekday: 'short' }).format(midDay),
+      date: new Intl.DateTimeFormat('en-CA', { timeZone: timezone ?? 'UTC' }).format(midDay),
       chores: dayChores.map((c: any) => ({
         id: c.id,
         title: c.title,
@@ -88,7 +85,7 @@ export async function GET(request: NextRequest) {
           : null,
         lastCompletedAt: c.completions[0]?.completedAt?.toISOString() ?? null,
         isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayStart : false),
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
       })),
     })
   }

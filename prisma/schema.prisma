@@ -649,6 +649,8 @@ model FinanceTransaction {
 
   @@index([familyId])
   @@index([familyId, date(sort: Desc)])
+  @@index([familyId, date(sort: Desc), type])
+  @@index([familyId, accountId, isCleared])
   @@index([accountId])
   @@index([categoryId])
   @@index([familyId, isCleared])
@@ -715,6 +717,7 @@ model FinanceRecurringBill {
   @@index([familyId])
   @@index([familyId, isActive])
   @@index([familyId, nextDueDate])
+  @@index([familyId, isActive, nextDueDate])
   @@index([familyId, paid])
   @@index([memberId])
   @@index([locationId])
@@ -1024,6 +1027,8 @@ model FinanceJournalEntry {
   @@index([familyId])
   @@index([familyId, date(sort: Desc)])
   @@index([familyId, isPosted])
+  @@index([familyId, isPosted, date(sort: Desc)])
+  @@index([familyId, entityId, isPosted, date(sort: Desc)])
   @@index([entityId])
   @@index([reversalOfId])
   @@index([amendmentOfId])
@@ -1044,4 +1049,5 @@ model FinanceJournalLine {
 
   @@index([journalEntryId])
   @@index([glAccountId])
+  @@index([glAccountId, journalEntryId])
 }

@@ -13,25 +13,25 @@ function normalizeToUtcMidnight(dateStr: string): Date {
 function buildChoreSchedule(
   chores: any[],
   todayStart: Date,
+  todayEnd: Date,
+  timezone: string,
   days: number = 30
 ): ChoreScheduleDay[] {
   if (!chores || !Array.isArray(chores)) return []
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const schedule: ChoreScheduleDay[] = []
   for (let i = 0; i < days; i++) {
-    const dayDate = new Date(todayStart)
-    dayDate.setDate(dayDate.getDate() + i)
-    const dayStart = new Date(dayDate)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(dayDate)
-    dayEnd.setHours(23, 59, 59, 999)
+    // Use timezone-aware day boundaries derived from todayStart (already local midnight in UTC form)
+    const dayStart = new Date(todayStart.getTime() + i * 86400000)
+    const dayEnd = new Date(todayStart.getTime() + (i + 1) * 86400000)
+    // Use the midpoint of the local day to reliably determine the day name/date in the target timezone
+    const midDay = new Date(dayStart.getTime() + 12 * 3600000)
     const dayChores = chores.filter((c: any) => {
       if (!c.nextDueDate) return false
-      return c.nextDueDate >= dayStart && c.nextDueDate <= dayEnd
+      return c.nextDueDate >= dayStart && c.nextDueDate < dayEnd
     })
     schedule.push({
-      day: dayNames[dayDate.getDay()],
-      date: dayDate.toISOString(),
+      day: new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(midDay),
+      date: new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(midDay),
       chores: dayChores.map((c: any): ChoreScheduleItem => ({
         id: c.id,
         title: c.title,
@@ -41,7 +41,7 @@ function buildChoreSchedule(
         lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
         lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
         isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayStart : false),
+        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
       })),
     })
   }
@@ -308,7 +308,7 @@ export async function GET(request: NextRequest) {
           firstItems: todoLists[0].items.map(i => i.content),
         }
       : null,
-    choreSchedule: buildChoreSchedule(choreData, todayStart, 30),
+    choreSchedule: buildChoreSchedule(choreData, todayStart, todayEnd, timezone, 30),
     billsToPay: billsData.map((bill) => {
       const dueDate = new Date(bill.nextDueDate)
       const diffMs = dueDate.getTime() - mealPlanTodayStart.getTime()
