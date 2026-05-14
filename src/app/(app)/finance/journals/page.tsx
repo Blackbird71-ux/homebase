@@ -132,17 +132,12 @@ export default function JournalsPage() {
   return (
     <div className="space-y-4">
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-2xl font-bold">Journal Entries</h1>
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-          <Plus className="h-4 w-4" /> New Entry
-        </button>
+      <div className="flex items-center gap-2">
+        <BookOpen className="h-5 w-5 text-muted-foreground" />
+        <h1 className="text-2xl font-bold">Journal Entries</h1>
       </div>
 
-      <div className="flex items-center gap-1.5 w-fit">
+      <div className="flex flex-wrap items-center gap-1.5">
         {(['manual', 'draft', 'all-posted'] as const).map(tab => (
           <button key={tab}
             onClick={() => { setFilterTab(tab); setPage(1) }}
@@ -154,6 +149,9 @@ export default function JournalsPage() {
             {tab === 'manual' ? 'Manual' : tab === 'draft' ? 'Draft' : 'All Posted'}
           </button>
         ))}
+        <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+          <Plus className="h-3.5 w-3.5" /> New Entry
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

@@ -160,18 +160,19 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold">Transactions</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowFilters(!showFilters)}
-            className="inline-flex items-center gap-1 text-xs rounded-md border border-input px-2 py-1 hover:bg-accent">
-            <Filter className="h-3.5 w-3.5" /> Filters
-            {(filterMemberId || filterLocationId || filterType || filterEntityId) && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
-          </button>
-          <button onClick={openNew} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-            <Plus className="h-4 w-4" /> Add Transaction
-          </button>
-        </div>
+      <h1 className="text-2xl font-bold">Transactions</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => setShowFilters(!showFilters)}
+          className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+            (filterMemberId || filterLocationId || filterType || filterEntityId)
+              ? 'border-primary/40 bg-primary/10 text-primary'
+              : 'border-border text-muted-foreground hover:text-foreground')}>
+          <Filter className="h-3.5 w-3.5" /> Filters
+          {(filterMemberId || filterLocationId || filterType || filterEntityId) && <span className="w-1.5 h-1.5 rounded-full bg-primary ml-0.5" />}
+        </button>
+        <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+          <Plus className="h-3.5 w-3.5" /> Add Transaction
+        </button>
       </div>
 
       {showFilters && (
