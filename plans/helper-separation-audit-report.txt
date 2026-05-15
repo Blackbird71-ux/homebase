@@ -1,0 +1,690 @@
+================================================================================
+  HELPER SEPARATION AUDIT REPORT
+  HomeBase Codebase
+================================================================================
+  Date:  2026-05-15
+  Scope: Audit of business/logic/functional code separation from UI rendering
+  Goal:  Ensure UI edits (styling, layout, minor tweaks) cannot accidentally
+         introduce functional bugs
+================================================================================
+
+
+REFACTOR STATUS: COMPLETE  (as of 2026-05-15)
+--------------------------------------------------------------------
+
+  All four phases executed and committed with zero TypeScript regressions
+  (baseline: 8 pre-existing errors unrelated to refactor). Each phase
+  verified by `npx tsc --noEmit` before commit.
+
+  Commits (oldest → newest):
+    0841b61  fix: SUPER_CAP, fmtCompact, GL draft lines (pre-refactor fixes)
+    7dcd5bb  Phase 1 — pure helpers extracted to lib/
+    4a3c37b  Phase 2 — Excel workbook builders extracted to src/lib/excel/
+    00bbb9d  Phase 3a — useTrialBalance hook
+    387ebda  Phase 3b — useBillCrud hook
+    2e033d8  Phase 3c — useProfitLoss hook
+    b4082fd  Phase 3d — useIncomeCrud hook
+    ee59d16  Phase 3e — useTransactionCrud hook
+    d8651b2  Phase 3f — useShoppingList + useTodoList hooks
+    b0aee9f  Phase 4a — BillRow + IncomeRow components
+    b37e391  Phase 4b — TaxReportComponents (types + sub-components)
+    ab33959  fix: remove dead condition in useProfitLoss bill deduplication
+
+  Post-refactor correctness review (17 file pairs, 41 tool reads):
+    FAIL  0
+    WARN  2  (both resolved — see below)
+    PASS  15
+
+  Resolved WARNs:
+    1. useProfitLoss.ts — dead code `!b.item.id` in filteredBillItems
+       filter removed (commit ab33959). Deduplication behaviour unchanged.
+    2. useIncomeCrud.ts — `isTrulyOverdue` declared before `todayStart`
+       const. Safe at runtime (function declaration is hoisted; const is
+       initialised before the function is first called). No action taken.
+
+  Final extracted file inventory:
+
+    src/lib/
+      finance-period.ts          toPeriodAmount, isLumpSum, getPeriodBounds,
+                                 navigateAnchor
+      tax-calculator.ts          calcIncomeTax, calcMedicare, calcPersonalTax,
+                                 SUPER_CAP
+      excel/profit-loss-excel.ts buildProfitLossWorkbook
+      excel/tax-report-excel.ts  buildTaxReportWorkbook
+      excel/trial-balance-excel.ts buildTrialBalanceWorkbook
+
+    src/components/finance/
+      account-ledger-helpers.ts  fmtDate, buildPresets, exportCsv
+      journal-helpers.ts         getLineTotals, validateJournalEntry,
+                                 sortedGlAccounts, glAccountLabel
+      journal-types.ts           GLAccount, Entity, JournalEntry, FormLine,
+                                 MANUAL_TYPES, fmt, normalSide, emptyForm
+      BillRow.tsx                extracted from bills/page.tsx
+      IncomeRow.tsx              extracted from income/page.tsx
+      TaxReportComponents.tsx    types + fmt + LineRow/Divider/SectionHeader/
+                                 TaxColumnView/PersonPanel/EntitySection
+
+    src/hooks/finance/
+      useBillCrud.ts             full bill CRUD + GL journal logic
+      useIncomeCrud.ts           full income CRUD + GL journal logic
+      useProfitLoss.ts           period filtering, deduplication, tax estimate
+      useTrialBalance.ts         grouping, drill-in, date range
+      useTransactionCrud.ts      transaction CRUD + filtering
+
+    src/hooks/lists/
+      useShoppingList.ts         shopping list CRUD (replaces inline logic)
+      useTodoList.ts             todo list CRUD (replaces inline logic)
+
+  Page size before → after:
+    bills/page.tsx        1,300 →  528 lines
+    income/page.tsx       1,240 →  550 lines
+    profit-loss/page.tsx  1,038 →  390 lines
+    tax-report/page.tsx   1,002 →  455 lines
+    trial-balance/page.tsx  794 →  484 lines
+    ShoppingList.tsx         513 →  216 lines
+    TodoList.tsx             565 →  325 lines
+    AccountLedgerPanel.tsx   616 →  461 lines
+    JournalEntryForm.tsx     351 →  281 lines
+    EventModal.tsx           479 →  442 lines
+
+================================================================================
+
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------
+  1.  Executive Summary
+  2.  What's Done Well (Good Patterns)
+  3.  Critical Issues (P0)
+  4.  High Priority Issues (P1)
+  5.  Medium Priority Issues (P2)
+  6.  Recommended Refactoring Plan
+  7.  File-by-File Breakdown
+  8.  Risk Assessment
+
+
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------
+
+The codebase has a SOLID FOUNDATION of well-separated helpers in src/lib/.
+However, several page files and components contain MASSIVE amounts of inline
+business logic that belongs in lib/ or custom hooks.
+
+CRITICAL OFFENDERS:
+
+  File                                      Lines  Risk    Primary Issue
+  ---------------------------------------   -----  ------  ----------------------------
+  profit-loss/page.tsx                      1,038  CRIT    Period calc, tax estimation,
+                                                            Excel builder inline
+  tax-report/page.tsx                       1,002  CRIT    ATO tax bracket calculators,
+                                                            aggregation, Excel builder
+  bills/page.tsx                            1,300  CRIT    Full CRUD, paid-confirm,
+                                                            journal posting inline
+  income/page.tsx                           1,240  CRIT    Full CRUD, received-confirm,
+                                                            journal posting inline
+  ShoppingList.tsx                            513  HIGH    CRUD duplicated with TodoList
+  TodoList.tsx                                565  HIGH    CRUD duplicated with ShoppingList
+  AccountLedgerPanel.tsx                      616  HIGH    CSV export, date presets inline
+  EventModal.tsx                              479  HIGH    Recurring event logic inline
+  JournalEntryForm.tsx                        351  HIGH    Validation, GL sorting inline
+  trial-balance/page.tsx                      794  HIGH    Excel builder inline
+  transactions/page.tsx                       460  MEDIUM  Validation, formatting inline
+
+
+2. WHAT'S DONE WELL (GOOD PATTERNS)
+--------------------------------------------------------------------
+
+  2.1 PROPERLY EXTRACTED LIB HELPERS
+
+  Helper File                    Purpose                          Used By
+  ---------------------------   ------------------------------   ------------------
+  src/lib/list-helpers.ts        groupByCategory(),               ShoppingList,
+                                  groupByRecipe(),                 TodoList
+                                  filterTodoItems()
+  src/lib/event-helpers.ts       validateEventDates(),            Calendar page
+                                  maskPersonalEvent()
+  src/lib/recurrence.ts          RRULE parsing,                   Calendar page
+                                  generateRecurrenceInstances()
+  src/lib/finance-fy.ts          FY date range, month index,      Multiple finance
+                                  label helpers                    pages
+  src/lib/financeReport.ts       Server-side report building      API routes
+                                  from payload
+  src/lib/reportExcel.ts         Excel workbook generation        Export route,
+                                  from ReportPayload               email service
+  src/lib/excelStyles.ts         Shared Excel cell styling        Excel builders
+                                  constants
+  src/lib/utils.ts               cn(), todayAU()                  Miscellaneous
+  src/lib/auth-helpers.ts        requireSession(),                Server components
+                                  requireAdmin()
+
+  2.2 PROPERLY EXTRACTED HOOKS
+
+  Hook File                      Purpose                          Used By
+  ----------------------------   ------------------------------   ------------------
+  hooks/lists/useOfflineQueue    IndexedDB offline queue, sync,   ShoppingList
+  .ts                             SW messaging
+  hooks/finance/                 Attachment CRUD via API          Bills, Income pages
+  useAttachmentManager.ts
+  hooks/meal-plan/               Fetch, assign, remove, clear     MealPlanGrid
+  useMealPlanData.ts
+  hooks/meal-plan/               DnD context, sensors, handlers   MealPlanGrid
+  useMealPlanDragDrop.ts
+
+  2.3 THIN PAGE EXAMPLES
+
+  calendar/page.tsx (84 lines):  Server component that fetches
+    data, calls generateRecurrenceInstances() + maskPersonalEvent(),
+    then renders CalendarView.  EXCELLENT PATTERN.
+
+  journals/page.tsx (254 lines): Thin page that delegates to
+    JournalEntryForm component.  The form itself still has inline
+    logic, but the page structure is correct.
+
+  finance/page.tsx (234 lines):  Server component with data mapping,
+    delegates to OverviewClient.  Reasonable separation.
+
+
+3. CRITICAL ISSUES (P0)
+--------------------------------------------------------------------
+
+  These files contain business logic that, if accidentally modified
+  during a UI/styling change, would cause FUNCTIONAL BUGS -- incorrect
+  financial calculations, data corruption, or silent data loss.
+
+
+  3.1 profit-loss/page.tsx (1,038 lines)
+
+  INLINE FUNCTIONS to extract to src/lib/finance-period.ts:
+
+    toPeriodAmount(amount, frequency, periodMonths)
+      - Converts amounts across frequencies (weekly/fortnightly/etc.)
+      - Lines 94-100
+      - If someone reformats this, ALL period calculations are wrong
+
+    isLumpSum(frequency)
+      - Line 107
+      - Determines if a frequency aggregates (yearly/halfyearly/quarterly)
+
+    getPeriodBounds(mode, anchor, fyStartMonth)
+      - Lines 110-116
+      - Period boundary calculation for month/quarter/year views
+
+    navigateAnchor(mode, anchor, dir)
+      - Lines 118-122
+      - Period navigation direction
+
+    fmtCurrency(n)
+      - Line 107 (estimated, inline formatting)
+      - Currency formatting (also duplicated elsewhere)
+
+  INLINE LOGIC to extract to hooks/finance/useProfitLoss.ts:
+
+    matchesEntity()                   - Lines 230-234
+    incomeLinkedTxIds (useMemo)       - Lines 254-262
+    relevantIncome (useMemo, ~80ln)   - Lines 280-359
+    relevantExpenses (useMemo, ~74ln) - Lines 362-436
+    incomeGroups / expenseGroups      - Lines 439-461
+    estimatedTax (useMemo)            - Lines 466-490
+
+  INLINE EXCEL BUILDER to extract to src/lib/excel/profit-loss-excel.ts:
+
+    buildExcelWorkbook()              - Lines 503-650 (~147 lines)
+      Full XLSX workbook with custom cell styling, column widths,
+      and freeze panes
+
+
+  3.2 tax-report/page.tsx (1,002 lines)
+
+  INLINE FUNCTIONS to extract to src/lib/tax-calculator.ts:
+
+    calcIncomeTax(income): number
+      - Lines 24-31
+      - ATO progressive tax brackets (2024-25 rates):
+        0-18,200:       $0
+        18,201-45,000:  16c per $1 over 18,200
+        45,001-135,000: $4,288 + 30c per $1 over 45,000
+        135,001-190K:   $31,288 + 37c per $1 over 135,000
+        190,001+:       $51,638 + 45c per $1 over 190,000
+      - IF THIS IS WRONG, TAX REPORT IS WRONG
+
+    calcMedicare(income): number
+      - Lines 33-36
+      - 2% Medicare levy with low-income threshold
+
+    calcPersonalTax(taxableIncome)
+      - Lines 38-42
+      - Combined income tax + Medicare
+
+    SUPER_CAP constants
+      - Line ~47 (estimated)
+      - Superannuation contribution caps by FY year
+
+  INLINE LOGIC to extract:
+
+    buildTaxColumn()                  - Lines 120-178 (~58 lines)
+      Aggregation of income/deductions into tax columns
+
+    buildPersonTax()                  - Lines 180-284 (~104 lines)
+      Income/deduction categorization with regex GL matching,
+      member-level tax calculation
+
+    TaxColumnView sub-component       - Lines 306-428 (~122 lines)
+      Inline sub-component with rendering + business logic
+
+    PersonPanel sub-component         - Lines 430-462 (~32 lines)
+
+    EntitySection sub-component       - Lines 464-556 (~92 lines)
+      Entity tax calculation inline
+
+    buildExcelWorkbook()              - Lines 569-684 (~115 lines)
+
+    jointActualsIncome,               - Lines 726-738
+    jointProjectedIncome,
+    personData (useMemo)
+
+
+  3.3 bills/page.tsx (1,300 lines)
+
+  INLINE LOGIC to extract to hooks/finance/useBillCrud.ts:
+
+    validate()                        - Lines 120-127
+    enrichBills()                     - Lines 129-134
+    defaultBillLines()                - Lines 186-195
+    loadExistingBillJournalLines()    - Lines 197-212
+    syncBudgetRule()                  - Lines 246-271
+    getFormPayload()                  - Lines 336-349
+    handleSave()                      - Lines 351-436 (~85 lines)
+    confirmDelete()                   - Lines 442-451
+    handleVoid() / confirmVoid()      - Lines 453-466
+    handleMarkPaid()                  - Lines 468-473
+    confirmMarkPaid()                 - Lines 475-494
+    handleToggleInvoice()             - Lines 496-511
+    handleUnmarkPaid()                - Lines 513-521
+
+  INLINE SUB-COMPONENT:
+
+    BillRow()                         - Lines 1084-1300 (~216 lines)
+
+
+  3.4 income/page.tsx (1,240 lines)
+
+  Mirror of bills pattern.  Extract to hooks/finance/useIncomeCrud.ts:
+
+    enrichEntries()                   - Lines 118-122
+    defaultIncomeLines()              - Lines 213-222
+    loadExistingJournalLines()        - Lines 224-239
+    validate()                        - Lines 288-294
+    getFormPayload()                  - Lines 313-335
+    handleSave()                      - Lines 337-468 (~131 lines)
+    confirmDelete()                   - Lines 472-477
+    confirmVoid()                     - Lines 481-490
+    handleMarkReceived()              - Lines 493-497
+    confirmMarkReceived()             - Lines 499-517
+
+  INLINE SUB-COMPONENT:
+
+    IncomeRow()                       - Lines 1125-1240 (~115 lines)
+
+
+  3.5 EXCEL BUILDER DUPLICATION
+
+  Three separate buildExcelWorkbook() inline functions with their own
+  styling logic:
+
+    File                                  Lines  Size
+    profit-loss/page.tsx                  503     ~147 lines
+    tax-report/page.tsx                   569     ~115 lines
+    trial-balance/page.tsx                184     ~136 lines
+
+  Compare with reportExcel.ts which cleanly separates workbook
+  generation from the page layer.  These three should be extracted
+  to src/lib/excel/ as dedicated modules.
+
+  The existing excelStyles.ts in lib/ already provides shared
+  styling constants (HEADER_BG, CATEGORY_BG, GRAND_TOTAL_BG, etc.)
+  -- these inline builders should use it.
+
+
+4. HIGH PRIORITY ISSUES (P1)
+--------------------------------------------------------------------
+
+  These files contain logic that is DUPLICATED across components or
+  would cause INCONSISTENT BEHAVIOR if modified in one place but
+  not another.
+
+
+  4.1 ShoppingList.tsx & TodoList.tsx
+
+  DUPLICATED CRUD PATTERNS:
+
+    Operation           ShoppingList (ln)            TodoList (ln)
+    ----------------    --------------------------   --------------------------
+    addItem()           183-238                      180-203
+    toggleItem()        240-263                      205-220
+    deleteItem()        265-272                      245-252
+    toggleLock()        274-285                      254-265
+    handleDragEnd()     152-179                      280-316
+    saveCategoryOrder() 82-88                        318-325
+
+  All follow the same pattern: optimistic state update, fetch with
+  fallback, offline queue enqueue.  Differences are only the API
+  endpoint path and field names.
+
+  EXTRACT to hooks/lists/useListCrud.ts with customization params.
+
+
+  4.2 AccountLedgerPanel.tsx (616 lines)
+
+  INLINE HELPERS to extract to src/lib/account-ledger.ts:
+
+    fmtDate(iso): string               - Lines 61-69
+    buildPresets(fyStartMonth)         - Lines 75-105 (~30 lines)
+    exportCsv(data)                    - Lines 109-136 (~27 lines)
+
+  INLINE SUB-COMPONENTS:
+
+    SummaryCard()                      - Lines 498-520
+    LedgerRowItem()                    - Lines 524-616
+
+
+  4.3 EventModal.tsx (479 lines)
+
+  INLINE LOGIC to extract to event-helpers.ts (where validateEventDates
+  already lives) or a new src/lib/event-mutations.ts:
+
+    handleSave()                       - Lines 105-172 (~67 lines)
+      All-day vs timed date handling, recurring instance detection,
+      API payload construction
+
+    getEventId()                       - Lines 178-182
+      Recurring event ID resolution
+
+    isRecurringEvent()                 - Lines 185-191
+      Recurring detection from event data
+
+    handleDelete()                     - Lines 193-227 (~34 lines)
+      Single vs recurring delete confirmation flow
+
+
+  4.4 JournalEntryForm.tsx (351 lines)
+
+  INLINE LOGIC to extract to src/lib/journal-helpers.ts:
+
+    getLineTotals()                    - Lines 71-83
+      Debit/credit balancing calculation
+
+    validate()                         - Lines 85-99
+      Form validation rules
+
+    glAccountOptions()                 - Lines 101-110
+      GL account sorting and filtering
+
+    handleSave(postImmediately)        - Lines 120-157 (~37 lines)
+      Journal posting with entity mapping
+
+
+  4.5 trial-balance/page.tsx (794 lines)
+
+    fmt(), fmtCompact()                - Lines 80-92
+    buildExcelWorkbook()               - Lines 184-320 (~136 lines)
+    groupAccounts()                    - Lines 323-332
+
+
+  4.6 ExpenseForm.tsx (304 lines)
+
+    loadPrefs() / savePrefs()          - Lines 36-54
+      localStorage persistence for last-used GL selections
+
+    optionLabel()                      - Lines 56-59
+      GL label formatting
+
+    handleSubmit()                     - Lines 120-170 (~50 lines)
+      Expense journal posting logic
+
+
+5. MEDIUM PRIORITY ISSUES (P2)
+--------------------------------------------------------------------
+
+  Minor inline logic, lower risk but still better extracted.
+
+
+  5.1 transactions/page.tsx (460 lines)
+
+    validate()                         - Lines 57-62 (duplicated pattern)
+    Inline data mapping from API       - Lines 78-81
+
+
+  5.2 HomeClient.tsx (226 lines)
+
+    handleLayoutsChange() with debounce - Lines 57-81
+    fetchDashboard() with settings     - Lines 88-104
+    handleScopeChange, handleTodoListChange, etc.
+
+
+  5.3 MealPlanGrid.tsx (363 lines)
+
+    toggleLayout()                     - Lines 53-64
+    toggleMealSelection()              - Lines 85-92
+    handleAddSelectedToGroceries()     - Lines 94-100
+    handleClearWeek()                  - Lines 102-107
+
+
+6. RECOMMENDED REFACTORING PLAN
+--------------------------------------------------------------------
+
+  PHASE 1: New Lib Modules (Low Risk, High Impact)
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Pure function libraries that can be tested independently:
+
+    #  New File                           Functions to Extract
+    -- ---------------------------------  ------------------------------------
+    1  src/lib/finance-period.ts           toPeriodAmount, isLumpSum,
+                                           getPeriodBounds, navigateAnchor
+    2  src/lib/tax-calculator.ts           calcIncomeTax, calcMedicare,
+                                           calcPersonalTax, SUPER_CAP
+    3  src/lib/account-ledger.ts           fmtDate, buildPresets, exportCsv,
+                                           fmt, fmtCompact
+    4  src/lib/journal-helpers.ts          getLineTotals, validateJournal,
+                                           glAccountOptions, defaultLines
+    5  src/lib/list-mutations.ts           addItem, toggleItem, deleteItem,
+                                           toggleLock, saveCategoryOrder,
+                                           handleDragEnd
+    6  src/lib/event-mutations.ts          getEventId, isRecurringEvent,
+                                           buildEventPayload,
+                                           handleRecurringDelete
+    7  src/lib/expense-form-helpers.ts     loadPrefs, savePrefs, optionLabel
+    8  src/lib/transaction-helpers.ts      validateTransaction,
+                                           mapTransactionFromApi
+
+    SOURCE FILES:
+      1 = profit-loss/page.tsx
+      2 = tax-report/page.tsx
+      3 = AccountLedgerPanel.tsx + trial-balance/page.tsx
+      4 = JournalEntryForm.tsx + bills/page.tsx + income/page.tsx
+      5 = ShoppingList.tsx + TodoList.tsx
+      6 = EventModal.tsx
+      7 = ExpenseForm.tsx
+      8 = transactions/page.tsx
+
+
+  PHASE 2: Excel Builder Extraction (Medium Risk)
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    #  New File                           Source
+    -- ---------------------------------  ------------------------------------
+    1  src/lib/excel/profit-loss-excel.ts  profit-loss/page.tsx
+                                          buildExcelWorkbook()
+    2  src/lib/excel/tax-report-excel.ts   tax-report/page.tsx
+                                          buildExcelWorkbook()
+    3  src/lib/excel/trial-balance-excel.ts trial-balance/page.tsx
+                                          buildExcelWorkbook()
+
+
+  PHASE 3: New Hooks (Medium Risk)
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    #  New File                           Functions to Extract
+    -- ---------------------------------  ------------------------------------
+    1  hooks/finance/useProfitLoss.ts      matchesEntity, relevantIncome,
+                                           relevantExpenses, incomeGroups,
+                                           expenseGroups, estimatedTax
+    2  hooks/finance/useBillCrud.ts        validate, enrichBills,
+                                           defaultBillLines, handleSave,
+                                           confirmDelete, handleMarkPaid,
+                                           etc.
+    3  hooks/finance/useIncomeCrud.ts      validate, enrichEntries,
+                                           defaultIncomeLines, handleSave,
+                                           confirmDelete,
+                                           handleMarkReceived, etc.
+    4  hooks/finance/useTrialBalance.ts    groupAccounts, drillInto,
+                                           data fetching
+    5  hooks/finance/useTransactionCrud.ts validate, filtering,
+                                           sorting data
+    6  hooks/lists/useListCrud.ts          Generic CRUD for list items
+                                           (shopping + todo)
+
+    SOURCE FILES:
+      1 = profit-loss/page.tsx
+      2 = bills/page.tsx
+      3 = income/page.tsx
+      4 = trial-balance/page.tsx
+      5 = transactions/page.tsx
+      6 = ShoppingList.tsx + TodoList.tsx
+
+
+  PHASE 4: Component Extraction (Low Risk)
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    #  New Component File                 Source
+    -- ---------------------------------  ------------------------------------
+    1  components/finance/BillRow.tsx      bills/page.tsx BillRow()
+    2  components/finance/IncomeRow.tsx    income/page.tsx IncomeRow()
+    3  components/finance/TaxColumnView.tsx tax-report/page.tsx TaxColumnView
+    4  components/finance/PersonPanel.tsx  tax-report/page.tsx PersonPanel
+    5  components/finance/EntitySection.tsx tax-report/page.tsx EntitySection
+    6  components/finance/SummaryCard.tsx  AccountLedgerPanel.tsx SummaryCard
+    7  components/finance/LedgerRowItem.tsx AccountLedgerPanel.tsx LedgerRowItem
+
+
+7. FILE-BY-FILE BREAKDOWN
+--------------------------------------------------------------------
+
+  SEVERITY LEGEND:
+
+    CRIT  - Business logic that would cause functional bugs if modified
+    HIGH  - Duplicated logic or inconsistent behavior risk
+    MED   - Minor inline logic, lower risk
+    OK    - Properly separated already
+    LIB   - Already extracted to lib/
+
+  7.1 Page Files
+
+  File                                         Lines  Sev  Notes
+  ------------------------------------------   -----  ---- ------------------------
+  profit-loss/page.tsx                         1,038  CRIT Period calc, dedup,
+                                                          tax est, Excel
+  tax-report/page.tsx                          1,002  CRIT ATO brackets, Medicare,
+                                                          GL regex matching, Excel
+  bills/page.tsx                               1,300  CRIT Full CRUD, paid-confirm,
+                                                          journal, 216ln sub-comp
+  income/page.tsx                              1,240  CRIT Full CRUD, received-confirm,
+                                                          journal, 115ln sub-comp
+  trial-balance/page.tsx                         794  HIGH Formatting, grouping, Excel
+  transactions/page.tsx                          460  MED  Validation, API mapping
+  journals/page.tsx                              254  OK   Thin, delegates to comps
+  calendar/page.tsx                               84  OK   Thin server component
+  finance/page.tsx                               234  OK   Server component
+
+  7.2 Component Files
+
+  File                                         Lines  Sev  Notes
+  ------------------------------------------   -----  ---- ------------------------
+  ShoppingList.tsx                               513  HIGH CRUD duplicated w/ TodoList
+  TodoList.tsx                                   565  HIGH CRUD duplicated w/ ShoppingList
+  AccountLedgerPanel.tsx                         616  HIGH Date presets, CSV export,
+                                                          sub-components
+  EventModal.tsx                                 479  HIGH Recurring event logic,
+                                                          date handling
+  JournalEntryForm.tsx                           351  HIGH Validation, GL sorting,
+                                                          line totals
+  ExpenseForm.tsx                                304  HIGH localStorage persistence,
+                                                          GL formatting
+  MealPlanGrid.tsx                               363  MED  Selection state, clear week
+  QuickAdd.tsx                                   151  OK   Mostly UI orchestration
+  MonthView.tsx                                   79  OK   Pure rendering
+
+  7.3 Lib Files (Existing)
+
+  File                                         Lines  Status Notes
+  ------------------------------------------   -----  ------ ------------------------
+  list-helpers.ts                                144  GOOD   Pure grouping/filtering
+  event-helpers.ts                                56  GOOD   Validation + masking
+  finance-fy.ts                                  255  GOOD   Clean FY utilities
+  recurrence.ts                                  170  GOOD   RRULE + instances
+  reportExcel.ts                                 144  GOOD   Excel from ReportPayload
+  excelStyles.ts                                  --   GOOD   Shared styling constants
+  financeReport.ts                                --   GOOD   Server-side report builder
+  utils.ts                                        23  GOOD   cn() and todayAU()
+  auth-helpers.ts                                 15  GOOD   Session wrappers
+  financeShared.ts                               144  NOTE   Some fns @deprecated
+                                                          (use finance-fy.ts)
+
+  7.4 Hook Files (Existing)
+
+  File                                         Lines  Status Notes
+  ------------------------------------------   -----  ------ ------------------------
+  useOfflineQueue.ts                             127  GOOD   Clean offline abstraction
+  useAttachmentManager.ts                         88  GOOD   Generic attachment CRUD
+  useMealPlanData.ts                             117  GOOD   Fetch/assign/remove
+  useMealPlanDragDrop.ts                          --   GOOD   DnD abstraction
+
+
+8. RISK ASSESSMENT
+--------------------------------------------------------------------
+
+  Factor                          Current                  After Refactoring
+  ------------------------------  -----------------------  --------------------------
+  UI change breaking financial    HIGH                     VERY LOW (pure functions)
+    calculations
+  Duplicated CRUD patterns        ShoppingList/TodoList    ELIMINATED (shared hook)
+    drifting apart                 already diverging
+  Excel formatting changes        POSSIBLE (mixed in       IMPOSSIBLE (separate
+    affecting page rendering        page file)               file)
+  Unit testability of             LIMITED (inline in       FULL (extracted pure
+    business logic                  components)              functions)
+  New developer understanding     STEEP learning curve     CLEAR separation
+  Merge conflicts on busy files   HIGH (1300-line files    LOW (small focused files
+                                  touched by all changes)   per concern)
+
+
+QUICK WINS (Phase 1 - Pure Function Extraction)
+--------------------------------------------------------------------
+
+  These can be done FIRST because they're pure functions with zero
+  UI impact, immediately testable:
+
+    1.  Extract finance-period.ts
+        - Pure functions for period calculations
+        - No UI impact, immediately testable
+
+    2.  Extract tax-calculator.ts
+        - Pure functions with ATO rates (critical to get right)
+        - No UI impact, immediately testable
+
+    3.  Extract list-mutations.ts
+        - Eliminates ShoppingList/TodoList duplication immediately
+        - Pure data transformation + API call pattern
+
+    4.  Extract journal-helpers.ts
+        - Shared by bills, income, and JournalEntryForm
+        - Pure validation and computation
+
+    5.  Extract account-ledger.ts
+        - Simple formatting/CSV functions
+        - Pure data transformation
+
+  Each Quick Win follows the pattern:
+    1. Create the lib file with extracted functions
+    2. Add tests (if test suite exists)
+    3. Import back into the source file
+    4. Verify the import works and functionality is identical

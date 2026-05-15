@@ -50,6 +50,7 @@ No waiting for approval between reads, plan, and implementation. The only approv
 - Use descriptive variable/function names
 - Keep functions focused and small (single responsibility)
 - Add comments for complex logic or non-obvious decisions
+- **Keep page components under 50 lines** (excluding imports/whitespace) — extract handlers, API calls, and utilities to `handlers/`, `services/`, `utils/`, or `hooks/` modules
 
 ### Error Handling & Resilience
 - Validate inputs and handle edge cases

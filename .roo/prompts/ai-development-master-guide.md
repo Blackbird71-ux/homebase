@@ -398,6 +398,136 @@ User preferences are stored in the database, not hardcoded:
 2. Check `node_modules/next/dist/docs/` for version-specific guides.
 3. Heed deprecation notices.
 
+### 6.8 Separation of Concerns — Keep Pages Thin
+
+**Core Rule:** Business logic, handlers, and utility functions MUST be separated from UI page components.
+
+#### Page Component Constraints
+
+- **MUST NOT** contain event handlers, API calls, state management logic, or helper functions defined inline.
+- **Maximum 50 lines** per page component (excluding imports and whitespace).
+- Page components should only:
+  - Render JSX/TSX markup.
+  - Import and call functions from appropriate modules.
+  - Handle minimal, page-specific local state (e.g. dialog open/close, form input values).
+
+#### Where Logic Should Live
+
+| Logic Type | Location | Example |
+|------------|----------|---------|
+| Event handlers & workflows | `handlers/` or `hooks/` | `useSubmitForm`, `handleLogin` |
+| API calls & external services | `services/` or `api/` | `fetchUserData`, `authService` |
+| Pure helper functions | `utils/` or `helpers/` | `formatDate`, `validateEmail` |
+| Shared state | `store/` or `context/` | Redux slices, Zustand stores |
+| Custom reusable logic | `hooks/` | `useDebounce`, `useLocalStorage` |
+
+#### File Structure Example
+
+```
+src/
+├── pages/         # UI only (thin components)
+├── handlers/      # Business logic & event handlers
+├── services/      # API & external services
+├── utils/         # Pure helper functions
+├── hooks/         # Reusable custom hooks
+└── store/         # State management
+```
+
+#### ✅ Correct Pattern
+
+```typescript
+// handlers/dashboardHandlers.ts
+import { submitForm } from '@/services/apiService'
+
+export const useDashboardHandlers = () => {
+  const handleSubmit = async (formData: FormData) => {
+    const result = await submitForm('/api/submit', formData)
+    localStorage.setItem('lastSubmit', Date.now().toString())
+    return result
+  }
+  return { handleSubmit }
+}
+
+// utils/dateHelpers.ts
+export const formatDate = (date: Date): string => {
+  return new Date(date).toLocaleDateString()
+}
+
+// pages/Dashboard.tsx — CLEAN UI ONLY
+import { useDashboardHandlers } from '@/handlers/dashboardHandlers'
+import { formatDate } from '@/utils/dateHelpers'
+
+export default function Dashboard() {
+  const { handleSubmit } = useDashboardHandlers()
+  return <form onSubmit={handleSubmit}>...</form>
+}
+```
+
+#### ❌ Anti-Pattern (Don't Do This)
+
+```typescript
+// pages/Dashboard.tsx — BAD
+export default function Dashboard() {
+  const [data, setData] = useState(null)
+  
+  // Handler logic inline — BAD
+  const handleSubmit = async (formData) => {
+    try {
+      const response = await fetch('/api/submit', { method: 'POST', body: JSON.stringify(formData) })
+      const result = await response.json()
+      setData(result)
+      localStorage.setItem('lastSubmit', Date.now())
+    } catch (error) { console.error(error) }
+  }
+  
+  // Utility function inline — BAD
+  const formatDate = (date) => new Date(date).toLocaleDateString()
+  
+  return <form onSubmit={handleSubmit}>...</form>
+}
+```
+
+#### Benefits
+
+| Benefit | Why |
+|---------|-----|
+| ✅ **Code Reusability** | Same handler works across multiple pages |
+| ✅ **Easier Debugging** | Logic is centralised, not scattered across pages |
+| ✅ **Simpler Testing** | Test handlers and utilities independently from UI |
+| ✅ **Reduced Duplication** | No copy-pasting logic between pages |
+| ✅ **Better Maintainability** | Change logic in one place, not every page |
+| ✅ **Cleaner Code Reviews** | PRs show actual changes, not duplicate code |
+
+#### Enforcement Checklist
+
+During implementation and code review, verify:
+
+- [ ] No API calls directly in page components
+- [ ] No complex handlers defined inside pages
+- [ ] No utility functions defined in pages
+- [ ] No `localStorage`/`sessionStorage` directly in pages
+- [ ] Any function used in 2+ places is extracted to a shared module
+- [ ] Page components are under 50 lines (excluding imports)
+
+#### Refactoring Existing Code
+
+When you find violations:
+
+1. **Identify** the logic type (handler, utility, API call).
+2. **Create** an appropriate file in the correct directory (`handlers/`, `utils/`, `services/`, `hooks/`).
+3. **Move** the logic there.
+4. **Update** imports in the page component.
+5. **Test** that functionality remains unchanged.
+
+#### Self-Check Questions
+
+Before writing code in a page component, ask:
+
+- Can this logic be reused elsewhere? → **Extract it**
+- Does this need to be tested separately from the UI? → **Extract it**
+- Is this more than 10 lines of non-JSX code? → **Extract it**
+- Would this logic work the same in a different framework? → **Extract it**
+
 ---
 
 ## 7. Database & Migrations
@@ -690,6 +820,10 @@ Rules:
     - Testing results
     - Rollback procedure
 [ ] Build/deploy reminder added to completion message (if schema changed)
+[ ] Separation of Concerns verified:
+    - Page components under 50 lines (excluding imports/whitespace)
+    - No handlers/API calls/utility functions defined inline in pages
+    - Any repeated logic extracted to shared module
 ```
 
 ### 12.2 Completion Message
@@ -750,6 +884,14 @@ Create a summary Markdown file and save it to the `/docs` directory with:
 ### 13.9 Finance: Reading FinanceTransaction Instead of GL
 **Problem**: Reports read from `FinanceTransaction` table instead of posted `FinanceJournalLine` entries, causing double-counting or stale data.
 **Fix**: All financial reports must read from `FinanceJournalLine` (posted entries). `FinanceTransaction` is a UI cache only.
+
+### 13.10 Inline Business Logic in Page Components
+
+**Problem**: Event handlers, API calls, and utility functions defined directly inside a page component, violating separation of concerns.
+
+**Fix**: Extract to the appropriate module — handlers into `handlers/`, API calls into `services/`, utilities into `utils/`, custom logic into `hooks/`. Import and call from the page component instead.
+
+**Enforcement**: Page components must stay under 50 lines (excluding imports/whitespace). If a page exceeds this, look for logic that should be extracted.
 
 ---
 
