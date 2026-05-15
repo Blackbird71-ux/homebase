@@ -682,6 +682,8 @@ body {
 /* ── Accessibility: font weight ── */
 [data-font-weight="medium"] {
   --body-font-weight: 500;
+}
+
 /* ── Accessibility: font size ── */
 [data-font-size="sm"]   { font-size: 14px; }
 [data-font-size="base"] { font-size: 16px; }
