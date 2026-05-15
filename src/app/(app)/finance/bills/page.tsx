@@ -382,12 +382,16 @@ export default function BillsPage() {
       // Already-posted bills: never re-submit lines (journal is locked once posted).
       const isNewPost = form.invoiceReceived && (!editing || !editing.invoiceReceived)
       const isDraftPersist = !!editing && !editing.invoiceReceived && !form.invoiceReceived
+      // NEW bill saved without "Posted to journals" — still send lines so the server
+      // creates a draft journal entry; otherwise journalEntryId stays null and a 3-line
+      // GST split typed in the editor is silently lost on reopen.
+      const isNewDraft = !editing && !form.invoiceReceived
 
       // GL-FIRST: collect ALL lines that have a GL account assigned, regardless of
       // whether their amount is zero. Lines with amounts are the user's intended split;
       // we never silently drop lines here — the API enforces balance validation and
       // will return a clear error if the entry is unbalanced.
-      const linesToSubmit = (isNewPost || isDraftPersist)
+      const linesToSubmit = (isNewPost || isDraftPersist || isNewDraft)
         ? journalLines.filter(l => l.glAccountId.trim() !== '')
         : []
 
@@ -585,7 +589,7 @@ export default function BillsPage() {
   for (const catId of selectedCatIds) {
     catTotals[catId] = visibleBills.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
-  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 7rem 8.5rem`
+  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 8rem 10rem`
 
   function handleQuickFilter(f: QuickFilter) {
     setQuickFilter(q => q?.id === f.id ? null : f)

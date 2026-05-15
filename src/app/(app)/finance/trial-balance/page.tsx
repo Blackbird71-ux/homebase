@@ -85,10 +85,12 @@ function fmt(n: number) {
 }
 
 function fmtCompact(n: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n)
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`
+  if (abs >= 10_000)    return `${sign}$${(abs / 1_000).toFixed(1)}K`
+  if (abs >= 1_000)     return `${sign}$${(abs / 1_000).toFixed(2)}K`
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
 const TYPE_ORDER: Record<string, number> = {

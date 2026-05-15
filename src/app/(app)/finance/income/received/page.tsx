@@ -148,12 +148,7 @@ export default function ReceivedIncomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Received Income</h1>
-        <Link href="/finance/income" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1">
-          <RotateCcw className="h-3.5 w-3.5" /> Active Income
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold">Received Income</h1>
 
       <Dialog open={!!voidConfirm} onOpenChange={open => { if (!open) setVoidConfirm(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton={true}>
@@ -198,6 +193,11 @@ export default function ReceivedIncomePage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        <Link href="/finance/income"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+          <RotateCcw className="h-3.5 w-3.5" /> Active Income
+        </Link>
+
         <div className="flex items-center gap-1.5">
           {([1, 3, 6, 12] as const).map(m => (
             <button key={m} onClick={() => setMonthRangePersisted(m)}

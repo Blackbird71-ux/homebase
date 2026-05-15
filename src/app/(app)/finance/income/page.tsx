@@ -419,13 +419,43 @@ export default function IncomePage() {
       const wantsPosted = form.invoiceReceived
       const wantsPostedDate = form.invoiceReceivedDate || null
 
+      // GL-FIRST: collect ALL lines with a GL account so the server creates a
+      // draft journal entry that captures the user's split (e.g. DR AR /
+      // CR Income / CR GST Payable for a 3-line GST entry). Filter by
+      // glAccountId, not amount; balance is enforced below.
+      const createLines = journalLines.filter(l => l.glAccountId.trim() !== '')
+
+      // Block save if the editor is unbalanced; clear error before any fetch.
+      if (createLines.length >= 2) {
+        const drTotal = createLines.filter(l => l.side === 'debit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+        const crTotal = createLines.filter(l => l.side === 'credit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+        if (Math.abs(drTotal - crTotal) > 0.005) {
+          toast.error(`Journal lines are not balanced — debits ${drTotal.toFixed(2)} ≠ credits ${crTotal.toFixed(2)}. Please fix the split before saving.`)
+          return
+        }
+      }
+
+      const serialisedCreateLines = createLines.map(l => ({
+        glAccountId: l.glAccountId,
+        side: l.side,
+        amount: parseFloat(l.amount) || 0,
+        description: l.description || null,
+      }))
+
       const postRes = await fetch('/api/finance/income', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Force invoiceReceived: false so the POST never touches the GL.
         // invoiceReceivedDate is preserved so the field is pre-filled when
         // the user reopens the draft to review or post it later.
-        body: JSON.stringify({ ...payload, invoiceReceived: false }),
+        // journalLines is included only when there's a meaningful split (>=2 lines).
+        // The follow-up PATCH below (when "Posted to journals" was ticked) will
+        // promote the balanced draft as-is rather than build a default 2-line entry.
+        body: JSON.stringify({
+          ...payload,
+          invoiceReceived: false,
+          ...(serialisedCreateLines.length >= 2 ? { journalLines: serialisedCreateLines } : {}),
+        }),
       })
       if (!postRes.ok) {
         const err = await postRes.json().catch(() => ({ error: `Server error (${postRes.status})` }))
