@@ -19,7 +19,7 @@ interface GLAccount {
   id: string
   name: string
   type: string
-  parentId?: string | null
+  parentId: string | null
 }
 
 export interface BillRowProps {
