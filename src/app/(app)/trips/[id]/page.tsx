@@ -24,6 +24,12 @@ export default async function TripDetailPage({
           _count: { select: { items: { where: { isCompleted: false } } } },
         },
       },
+      days: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          activities: { orderBy: { sortOrder: 'asc' } },
+        },
+      },
     },
   })
 
@@ -43,6 +49,28 @@ export default async function TripDetailPage({
     status: trip.status,
     color: trip.color,
     icon: trip.icon,
+    estimatedBudget: trip.estimatedBudget ?? null,
+    actualCost: trip.actualCost ?? null,
+    budgetBreakdown: trip.budgetBreakdown ?? null,
+    days: trip.days.map((day) => ({
+      id: day.id,
+      date: day.date.toISOString(),
+      label: day.label,
+      notes: day.notes,
+      sortOrder: day.sortOrder,
+      createdAt: day.createdAt.toISOString(),
+      activities: day.activities.map((act) => ({
+        id: act.id,
+        title: act.title,
+        location: act.location,
+        startTime: act.startTime?.toISOString() ?? null,
+        endTime: act.endTime?.toISOString() ?? null,
+        notes: act.notes,
+        category: act.category,
+        sortOrder: act.sortOrder,
+        createdAt: act.createdAt.toISOString(),
+      })),
+    })),
     packingList: trip.packingList
       ? {
           id: trip.packingList.id,

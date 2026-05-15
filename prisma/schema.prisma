@@ -47,6 +47,7 @@ model Family {
   financeVendors         FinanceVendor[]
   financeEntities        FinanceEntity[]
   financeIncomeEntries   FinanceIncomeEntry[]
+  financePayslips        FinancePayslip[]
   financeSnapshots       FinanceSnapshot[]
   financeJournalEntries  FinanceJournalEntry[]
   financeBillPayments    FinanceBillPayment[]
@@ -735,10 +736,69 @@ model FinanceRecurringBill {
   @@index([transactionId])
 }
 
+model FinancePayslip {
+  // ── Per-occurrence payslip breakdown ────────────────────────────────────
+  // Linked 1:1 to a FinanceIncomeEntry (the received occurrence).
+  // Stores structured pay components so the GL journal reflects gross pay,
+  // PAYG withheld, deductions (e.g. salary sacrifice), and net take-home.
+  //
+  // GL journal built from this record when marking received:
+  //   DR  bankGlAccountId              netPay        (take-home hits the bank)
+  //   DR  paygGlAccountId              paygWithheld  (PAYG withheld liability)
+  //   DR  deduction[n].glAccountId     amount        (per deduction with GL)
+  //   CR  grossIncomeGlAccountId       grossPay      (gross income on P&L)
+  //
+  // SGC (employer super) is stored for informational reporting only.
+  // It does NOT auto-create a journal line — add via components if desired.
+
+  id                    String             @id @default(cuid())
+  incomeEntryId         String             @unique
+  incomeEntry           FinanceIncomeEntry @relation(fields: [incomeEntryId], references: [id], onDelete: Cascade)
+  familyId              String
+
+  // Pay period dates (display only — do not affect GL date)
+  payPeriodStart        DateTime?
+  payPeriodEnd          DateTime?
+
+  // Core amounts
+  grossPay              Float              // Total gross before any deductions
+  netPay                Float              // Take-home (what hits the bank account)
+
+  // GL accounts for the auto-built journal (user picks from their own COA)
+  grossIncomeGlAccountId  String?          // CR — e.g. "Gross Wages - Mark"
+  bankGlAccountId         String?          // DR — e.g. the bank/asset GL account
+
+  // PAYG withholding
+  paygWithheld          Float              @default(0)
+  paygGlAccountId       String?            // DR — e.g. "Taxes - Mark"
+
+  // SGC (employer super) — informational only, stored for tax reporting
+  sgcAmount             Float              @default(0)
+  sgcGlAccountId        String?            // Optional DR — e.g. "Accrued SGC - Mark"
+
+  // Variable pay components (allowances, overtime, public holiday pay, etc.)
+  // JSON: [{label: string, amount: number}]
+  // Additive breakdown of grossPay for display; grossPay already includes them.
+  components            String             @default("[]")
+
+  // Deductions from gross pay (salary sacrifice, union fees, etc.)
+  // JSON: [{label: string, amount: number, glAccountId: string | null}]
+  // Each entry with a glAccountId creates a DR journal line.
+  deductions            String             @default("[]")
+
+  notes                 String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([familyId])
+  @@index([incomeEntryId])
+}
+
 model FinanceIncomeEntry {
   id                  String               @id @default(cuid())
   name                String               // e.g. "Salary - May", "Rental Income", "Tax Refund"
-  amount              Float                // Amount received (positive)
+  amount              Float                // Expected/template amount (used for forecasting & next-occurrence spawn)
+  actualAmountReceived Float?              // Actual net received this occurrence (overrides amount for GL posting)
   frequency           String               @default("monthly") // weekly | fortnightly | monthly | quarterly | halfyearly | yearly | one-off
   incomeType          String               @default("recurring") // recurring | one-off
   isTaxTracked        Boolean              @default(false)   // Track this income for ATO/tax purposes
@@ -761,8 +821,9 @@ model FinanceIncomeEntry {
   receiptTxId         String?              @unique // FK -> bank transaction when cash received (stage 2: DR bank / CR AR)
   journalEntryId      String?              // FK -> FinanceJournalEntry — the accrual journal entry (DR AR / CR income lines) created at save
   journalEntry        FinanceJournalEntry? @relation("IncomeJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
-  receiptJournalEntryId String?            // FK -> FinanceJournalEntry — the cash-receipt journal (DR bank / CR AR) posted when received=true
+  receiptJournalEntryId String?            // FK -> FinanceJournalEntry — the cash-receipt journal posted when received=true
   receiptJournalEntry   FinanceJournalEntry? @relation("IncomeReceiptJournal", fields: [receiptJournalEntryId], references: [id], onDelete: SetNull)
+  payslip             FinancePayslip?      // Linked per-occurrence payslip breakdown (created when marking received)
   notes               String?
   memberId            String?              // Which family member earns this
   accountId           String?
@@ -1070,25 +1131,60 @@ model FinanceJournalLine {
 // ─── Trip Planning ─────────────────────────────────────────────────────────────────────────────
 
 model Trip {
-  id            String   @id @default(cuid())
-  title         String   // e.g. "Japan 2027"
-  destination   String
-  startDate     DateTime
-  endDate       DateTime
-  accommodation String?  // Hotel name, address, booking ref
-  transport     String?  // Flight info, car rental, booking ref
-  notes         String?
-  status        String   @default("planning") // planning | confirmed | in_progress | completed | cancelled
-  color         String?  // Display colour hex
-  icon          String?  // Lucide icon name
-  packingListId String?  @unique // FK -> List (reuse existing List model for packing)
-  packingList   List?    @relation("TripPackingList", fields: [packingListId], references: [id], onDelete: SetNull)
-  createdBy     String
-  familyId      String
-  family        Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(cuid())
+  title            String   // e.g. "Japan 2027"
+  destination      String
+  startDate        DateTime
+  endDate          DateTime
+  accommodation    String?  // Hotel name, address, booking ref
+  transport        String?  // Flight info, car rental, booking ref
+  notes            String?
+  status           String   @default("planning") // planning | confirmed | in_progress | completed | cancelled
+  color            String?  // Display colour hex
+  icon             String?  // Lucide icon name
+  packingListId    String?  @unique // FK -> List (reuse existing List model for packing)
+  packingList      List?    @relation("TripPackingList", fields: [packingListId], references: [id], onDelete: SetNull)
+  estimatedBudget  Float?   // Overall estimated trip cost
+  actualCost       Float?   // Sum of logged expenses (manual or linked)
+  budgetBreakdown  String?  // JSON: { "flights": 2000, "hotel": 1500, "food": 800, "activities": 500, "transport": 400, "other": 300 }
+  days             TripDay[] @relation("TripDays")
+  createdBy        String
+  familyId         String
+  family           Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([familyId])
   @@index([familyId, startDate])
+}
+
+model TripDay {
+  id         String         @id @default(cuid())
+  tripId     String
+  trip       Trip           @relation("TripDays", fields: [tripId], references: [id], onDelete: Cascade)
+  date       DateTime       // Specific calendar date of this trip day
+  label      String?        // e.g. "Travel Day", "Exploring Tokyo"
+  notes      String?
+  sortOrder  Int            @default(0)
+  activities TripActivity[]
+  createdAt  DateTime       @default(now())
+
+  @@unique([tripId, date])
+  @@index([tripId])
+}
+
+model TripActivity {
+  id        String   @id @default(cuid())
+  dayId     String
+  day       TripDay  @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  title     String
+  location  String?
+  startTime DateTime?
+  endTime   DateTime?
+  notes     String?
+  category  String?  // e.g. "sightseeing", "meal", "transport", "accommodation", "activity"
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([dayId])
 }

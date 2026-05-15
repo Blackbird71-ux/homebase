@@ -8,7 +8,10 @@ import {
   CheckCircle2, Clock, AlertTriangle, Plus, X, Loader2,
   Hotel, Car, StickyNote, CheckSquare, Square,
 } from 'lucide-react'
-import type { TripDetail } from '@/types'
+import type { TripDetail, TripDayShape } from '@/types'
+import { ItinerarySection } from '@/components/trips/ItinerarySection'
+import { TripBudgetSection } from '@/components/trips/TripBudgetSection'
+import { TripWeatherSection } from '@/components/trips/TripWeatherSection'
 
 interface TripDetailClientProps {
   trip: TripDetail
@@ -22,6 +25,7 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showCreatePacking, setShowCreatePacking] = useState(false)
+  const [days, setDays] = useState<TripDayShape[]>(initialTrip.days ?? [])
 
   // ── Status helpers ─────────────────────────────────────────────────
 
@@ -193,6 +197,33 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
             </div>
           )}
         </section>
+
+        {/* Weather */}
+        <TripWeatherSection
+          destination={trip.destination}
+          startDate={trip.startDate}
+          endDate={trip.endDate}
+        />
+
+        {/* Itinerary */}
+        <ItinerarySection
+          days={days}
+          tripId={trip.id}
+          startDate={trip.startDate}
+          endDate={trip.endDate}
+          onDaysUpdated={setDays}
+        />
+
+        {/* Budget */}
+        <TripBudgetSection
+          tripId={trip.id}
+          estimatedBudget={trip.estimatedBudget ?? null}
+          actualCost={trip.actualCost ?? null}
+          budgetBreakdown={trip.budgetBreakdown ?? null}
+          onBudgetUpdated={(estimatedBudget, actualCost, budgetBreakdown) => {
+            setTrip((prev) => ({ ...prev, estimatedBudget, actualCost, budgetBreakdown }))
+          }}
+        />
       </div>
 
       {/* Edit Dialog */}

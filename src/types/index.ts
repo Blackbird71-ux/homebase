@@ -273,9 +273,31 @@ export interface TripSummary {
     name: string
     pendingItems: number
   } | null
+  estimatedBudget: number | null
+  actualCost: number | null
   createdBy: string
   createdAt: string
   updatedAt: string
+}
+
+export interface TripActivityShape {
+  id: string
+  title: string
+  location: string | null
+  startTime: string | null
+  endTime: string | null
+  notes: string | null
+  category: string | null
+  sortOrder: number
+}
+
+export interface TripDayShape {
+  id: string
+  date: string
+  label: string | null
+  notes: string | null
+  sortOrder: number
+  activities: TripActivityShape[]
 }
 
 export interface TripDetail extends Omit<TripSummary, 'packingList'> {
@@ -307,4 +329,8 @@ export interface TripDetail extends Omit<TripSummary, 'packingList'> {
     }
     createdAt: string
   } | null
+  estimatedBudget: number | null
+  actualCost: number | null
+  budgetBreakdown: string | null
+  days: TripDayShape[]
 }

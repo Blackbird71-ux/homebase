@@ -54,7 +54,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { title, destination, startDate, endDate, accommodation, transport, notes, status, color, icon } = body
+  const { title, destination, startDate, endDate, accommodation, transport, notes, status, color, icon, estimatedBudget, budgetBreakdown } = body
 
   if (!title || !destination || !startDate || !endDate) {
     return NextResponse.json(
@@ -82,6 +82,8 @@ export async function POST(req: Request) {
       status: status ?? 'planning',
       color: color ?? null,
       icon: icon ?? null,
+      estimatedBudget: estimatedBudget ?? null,
+      budgetBreakdown: budgetBreakdown ?? null,
       createdBy: user.id,
       familyId: user.familyId,
     },

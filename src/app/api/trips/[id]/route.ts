@@ -74,6 +74,9 @@ export async function PATCH(
     status,
     color,
     icon,
+    estimatedBudget,
+    actualCost,
+    budgetBreakdown,
   } = body
 
   const updateData: Record<string, unknown> = {}
@@ -87,6 +90,9 @@ export async function PATCH(
   if (status !== undefined) updateData.status = status
   if (color !== undefined) updateData.color = color
   if (icon !== undefined) updateData.icon = icon
+  if (estimatedBudget !== undefined) updateData.estimatedBudget = estimatedBudget
+  if (actualCost !== undefined) updateData.actualCost = actualCost
+  if (budgetBreakdown !== undefined) updateData.budgetBreakdown = budgetBreakdown
 
   const trip = await prisma.trip.update({
     where: { id },
