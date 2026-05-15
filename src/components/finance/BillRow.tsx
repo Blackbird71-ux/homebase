@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns'
 import {
-  Layers, RefreshCw, Receipt, CheckCircle2, Paperclip, Pencil, Trash2,
+  Layers, RefreshCw, Receipt, CheckCircle2, CreditCard, Paperclip, Pencil, Trash2,
   Ban, Clock, X, BookmarkCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -136,13 +136,12 @@ export function BillRow({
 
         <div className="flex items-center gap-0.5 justify-end">
           <button onClick={() => onOpenPaymentHistory(bill)}
-            title="Payment history"
-            className={cn('p-1 hover:bg-accent rounded', isPaymentHistoryOpen ? 'text-amber-600' : 'text-muted-foreground')}>
+            className={cn('relative group p-1 hover:bg-accent rounded', isPaymentHistoryOpen ? 'text-amber-600' : 'text-muted-foreground')}>
             <Clock className="h-3.5 w-3.5" />
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">Payment history</span>
           </button>
           <button onClick={() => att.open(bill.id)}
-            title={bill.attachments && bill.attachments.length > 0 ? `${bill.attachments.length} attachment${bill.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
-            className={cn('relative p-1 hover:bg-accent rounded',
+            className={cn('relative group p-1 hover:bg-accent rounded',
               isAttachmentOpen || (bill.attachments && bill.attachments.length > 0) ? 'text-green-600' : 'text-muted-foreground')}>
             <Paperclip className="h-3.5 w-3.5" />
             {!isAttachmentOpen && bill.attachments && bill.attachments.length > 0 && (
@@ -150,23 +149,43 @@ export function BillRow({
                 {bill.attachments.length}
               </span>
             )}
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">
+              {bill.attachments && bill.attachments.length > 0 ? `${bill.attachments.length} attachment${bill.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}
+            </span>
           </button>
+          {/* POST — creates accrual journal (Debit Expense / Credit AP) */}
           <button onClick={() => onToggleInvoice(bill)}
-            title={bill.invoiceReceived ? 'Unpost (reverse accrual)' : 'Post — post this bill to journals'}
-            className={cn('p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-amber-500')}>
-            <Receipt className="h-3.5 w-3.5" />
+            className={cn('relative group p-1 hover:bg-accent rounded', bill.invoiceReceived ? 'text-green-500' : 'text-muted-foreground hover:text-green-500')}>
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">
+              {bill.invoiceReceived ? 'Unpost — reverse accrual journal' : 'Post bill — Debit Expense / Credit AP'}
+            </span>
           </button>
+          {/* PAY — record payment, clears AP balance */}
           {bill.paid
-            ? <button onClick={() => onUnmarkPaid(bill)} title="Undo payment" className="p-1 hover:bg-accent rounded text-green-500">
-                <CheckCircle2 className="h-3.5 w-3.5" />
+            ? <button onClick={() => onUnmarkPaid(bill)} className="relative group p-1 hover:bg-accent rounded text-blue-500">
+                <CreditCard className="h-3.5 w-3.5" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">Reverse payment</span>
               </button>
-            : <button onClick={() => onMarkPaid(bill)} title="Mark as paid" className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-green-500">
-                <CheckCircle2 className="h-3.5 w-3.5" />
+            : <button onClick={() => onMarkPaid(bill)} className="relative group p-1 hover:bg-accent rounded text-muted-foreground hover:text-blue-500">
+                <CreditCard className="h-3.5 w-3.5" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">Record payment — Debit AP / Credit bank</span>
               </button>
           }
-          <button onClick={() => onEdit(bill)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-          <button onClick={() => onVoid(bill.id, bill.name)} title="Void (accountant-safe)" className="p-1 hover:bg-accent rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
-          {!hideDelete && <button onClick={() => onDelete(bill.id, bill.name)} title="Delete permanently" className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
+          <button onClick={() => onEdit(bill)} className="relative group p-1 hover:bg-accent rounded text-muted-foreground">
+            <Pencil className="h-3.5 w-3.5" />
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">Edit bill</span>
+          </button>
+          <button onClick={() => onVoid(bill.id, bill.name)} className="relative group p-1 hover:bg-accent rounded text-amber-500">
+            <Ban className="h-3.5 w-3.5" />
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">Void — accountant-safe, keeps audit trail</span>
+          </button>
+          {!hideDelete && (
+            <button onClick={() => onDelete(bill.id, bill.name)} className="relative group p-1 hover:bg-accent rounded text-red-500">
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="pointer-events-none absolute bottom-full right-0 mb-1 whitespace-nowrap rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 z-50 transition-opacity">Delete permanently</span>
+            </button>
+          )}
         </div>
       </div>
 

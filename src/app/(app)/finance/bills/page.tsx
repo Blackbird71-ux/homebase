@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns'
 import {
-  Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
+  Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt, CreditCard,
   RefreshCw, Layers, Paperclip, X, Building2,
   BookmarkCheck, Briefcase, Clock, Ban,
 } from 'lucide-react'
@@ -133,10 +133,11 @@ export default function BillsPage() {
                 <span className="truncate min-w-0 flex-1">{b.name}</span>
                 <span className="font-medium shrink-0">{formatCurrency(b.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button onClick={() => handleMarkPaid(b)} className="p-1 hover:bg-red-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => openEdit(b)} className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleVoid(b.id, b.name)} title="Void (accountant-safe)" className="p-1 hover:bg-red-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
-                  {!hideDeleteBills && <button onClick={() => handleDelete(b.id, b.name)} className="p-1 hover:bg-red-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
+                  <button onClick={() => handleToggleInvoice(b)} title={b.invoiceReceived ? 'Unpost' : 'Post bill — Debit Expense / Credit AP'} className={`p-1 hover:bg-red-500/10 rounded ${b.invoiceReceived ? 'text-green-500' : 'text-muted-foreground hover:text-green-500'}`}><CheckCircle2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleMarkPaid(b)} title="Record payment — Debit AP / Credit bank" className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-blue-500"><CreditCard className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEdit(b)} title="Edit bill" className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleVoid(b.id, b.name)} title="Void — keeps audit trail" className="p-1 hover:bg-red-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+                  {!hideDeleteBills && <button onClick={() => handleDelete(b.id, b.name)} title="Delete permanently" className="p-1 hover:bg-red-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </div>
               </div>
             ))}
@@ -158,10 +159,11 @@ export default function BillsPage() {
                 </div>
                 <span className="font-medium shrink-0">{formatCurrency(b.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button onClick={() => handleMarkPaid(b)} className="p-1 hover:bg-orange-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => openEdit(b)} className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleVoid(b.id, b.name)} title="Void (accountant-safe)" className="p-1 hover:bg-orange-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
-                  {!hideDeleteBills && <button onClick={() => handleDelete(b.id, b.name)} className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
+                  <button onClick={() => handleToggleInvoice(b)} title={b.invoiceReceived ? 'Unpost' : 'Post bill — Debit Expense / Credit AP'} className={`p-1 hover:bg-orange-500/10 rounded ${b.invoiceReceived ? 'text-green-500' : 'text-muted-foreground hover:text-green-500'}`}><CheckCircle2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleMarkPaid(b)} title="Record payment — Debit AP / Credit bank" className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-blue-500"><CreditCard className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEdit(b)} title="Edit bill" className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleVoid(b.id, b.name)} title="Void — keeps audit trail" className="p-1 hover:bg-orange-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+                  {!hideDeleteBills && <button onClick={() => handleDelete(b.id, b.name)} title="Delete permanently" className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </div>
               </div>
             ))}
