@@ -75,6 +75,8 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 
 Full household finance tracking — bills, income, transactions, accounts, budget, P&L, annual P&L, balance sheet, tax report, reports, vendors, categories, entities, locations, members.
 
+> **Wipe scripts:** [`scripts/finance-data-wipe.sql`](scripts/finance-data-wipe.sql) deletes all transactional data (transactions, journal entries, bill payments, attachments, snapshots) while preserving GL chart of accounts, vendors, entities, budgets, accounts, locations, and savings goals. [`scripts/wipe-finance-data.sh`](scripts/wipe-finance-data.sh) is an SSH wrapper that backs up the DB and runs the wipe on the NAS.
+
 Complete ATO tax compliance support:
 - Australian tax brackets (2025-26) + Medicare levy calculated in the page component (easy to update each July without redeployment)
 - Per-person tax workings (Mark / Michelle) — wages, joint interest split, deductions, PAYG credits, refund/owing
