@@ -75,7 +75,7 @@ export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent
         currentUserId=""
         defaultDate={new Date()}
         onClose={() => setEventOpen(false)}
-        onSave={() => { setEventOpen(false); router.refresh() }}
+        onSave={async () => { setEventOpen(false); router.refresh() }}
       />
     </Card>
   )

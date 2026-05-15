@@ -309,7 +309,7 @@ export function WeeklySummaryCard({
         currentUserId=""
         defaultDate={new Date()}
         onClose={() => setEventOpen(false)}
-        onSave={() => { setEventOpen(false); router.refresh() }}
+        onSave={async () => { setEventOpen(false); router.refresh() }}
       />
 
       <AssignMealModal
