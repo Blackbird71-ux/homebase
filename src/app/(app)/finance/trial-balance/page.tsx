@@ -1,74 +1,17 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useRef } from 'react'
 import {
   CheckCircle2, AlertTriangle, ArrowLeft, ChevronRight,
   Search, X, BookOpen, Scale,
 } from 'lucide-react'
 import { format } from 'date-fns'
-import { cn, todayAU } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
 import { buildTrialBalanceWorkbook } from '@/lib/excel/trial-balance-excel'
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface TBAccount {
-  id: string
-  name: string
-  type: string
-  glCode: string | null
-  parentId: string | null
-  parentName: string | null
-  totalDebit: number
-  totalCredit: number
-  netBalance: number
-}
-
-interface TrialBalanceData {
-  mode: 'trial-balance'
-  accounts: TBAccount[]
-  grandTotalDebit: number
-  grandTotalCredit: number
-  isBalanced: boolean
-  difference: number
-  from: string | null
-  to: string | null
-}
-
-interface GLLine {
-  id: string
-  date: string
-  reference: string
-  description: string
-  type: 'journal' | 'transaction'
-  entryType: string
-  debit: number
-  credit: number
-  movement: number
-  balance: number
-  lineDescription: string | null
-}
-
-interface GLAccount {
-  id: string; name: string; type: string; glCode: string | null
-  parentName: string | null; openingBalance: number
-}
-
-interface GeneralLedgerData {
-  mode: 'general-ledger'
-  glAccount: GLAccount
-  openingBalance: number
-  closingBalance: number
-  totalDebit: number
-  totalCredit: number
-  lines: GLLine[]
-  from: string | null
-  to: string | null
-}
-
-type Data = TrialBalanceData | GeneralLedgerData | null
+import { useTrialBalance } from '@/hooks/finance/useTrialBalance'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -86,10 +29,6 @@ function fmtCompact(n: number) {
   if (abs >= 10_000)    return `${sign}$${(abs / 1_000).toFixed(1)}K`
   if (abs >= 1_000)     return `${sign}$${(abs / 1_000).toFixed(2)}K`
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
-}
-
-const TYPE_ORDER: Record<string, number> = {
-  asset: 1, liability: 2, equity: 3, income: 4, expense: 5, transfer: 6,
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -118,97 +57,20 @@ const TYPE_BG: Record<string, string> = {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TrialBalancePage() {
-  const [data, setData]         = useState<Data>(null)
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState<string | null>(null)
-
-  // Filter state
-  const [from, setFrom]         = useState('')
-  const [to, setTo]             = useState(todayAU())
-  const [entityId, setEntityId] = useState('')
-  const [entities, setEntities] = useState<{ id: string; name: string }[]>([])
-  const [search, setSearch]     = useState('')
-
-  // GL drill-down state
   const printRef = useRef<HTMLDivElement>(null)
-  const [glAccountId, setGlAccountId] = useState<string | null>(null)
 
-  // ── Load entities once ────────────────────────────────────────────────────
-  useEffect(() => {
-    fetch('/api/finance/entities')
-      .then(r => r.ok ? r.json() : [])
-      .then(setEntities)
-      .catch(() => {})
-  }, [])
-
-  // ── Fetch report ──────────────────────────────────────────────────────────
-  const load = useCallback(async (glId?: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const params = new URLSearchParams()
-      if (from)     params.set('from', from)
-      if (to)       params.set('to', to)
-      if (entityId) params.set('entityId', entityId)
-      if (glId)     params.set('glAccountId', glId)
-
-      const res = await fetch(`/api/finance/trial-balance?${params}`)
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-        setError(e.error ?? 'Failed to load')
-        return
-      }
-      setData(await res.json())
-    } catch (e: any) {
-      setError(e.message ?? 'Network error')
-    } finally {
-      setLoading(false)
-    }
-  }, [from, to, entityId])
-
-  useEffect(() => { load(glAccountId ?? undefined) }, [load, glAccountId])
-
-  function drillInto(accountId: string) {
-    setGlAccountId(accountId)
-    setSearch('')
-  }
-
-  function backToTrialBalance() {
-    setGlAccountId(null)
-  }
-
-  // ── Group TB accounts by type ─────────────────────────────────────────────
-  function groupAccounts(accounts: TBAccount[]) {
-    const groups = new Map<string, TBAccount[]>()
-    const order  = ['asset', 'liability', 'equity', 'income', 'expense', 'transfer']
-    for (const type of order) groups.set(type, [])
-    for (const acct of accounts) {
-      const key = acct.type in TYPE_ORDER ? acct.type : 'transfer'
-      groups.get(key)?.push(acct)
-    }
-    return groups
-  }
-
-  // Filter accounts by search
-  const filteredAccounts = data?.mode === 'trial-balance'
-    ? data.accounts.filter(a =>
-        !search || a.name.toLowerCase().includes(search.toLowerCase())
-          || (a.glCode ?? '').toLowerCase().includes(search.toLowerCase())
-          || (a.parentName ?? '').toLowerCase().includes(search.toLowerCase())
-      )
-    : []
-
-  const tbData = data?.mode === 'trial-balance' ? data : null
-  const glData = data?.mode === 'general-ledger' ? data : null
-  const grouped = tbData ? groupAccounts(filteredAccounts) : null
-
-  // Build a date range string for the print header
-  const printDateRange = data?.from && data?.to
-    ? `${format(new Date(data.from), 'd MMM yyyy')} – ${format(new Date(data.to), 'd MMM yyyy')}`
-    : data?.to ? `Up to ${format(new Date(data.to), 'd MMM yyyy')}` : 'All time'
-  const printTitle = glAccountId
-    ? `General Ledger${glData ? ` — ${glData.glAccount.name}` : ''}`
-    : 'Trial Balance'
+  const {
+    data, loading, error,
+    from, setFrom,
+    to, setTo,
+    entityId, setEntityId,
+    entities,
+    search, setSearch,
+    glAccountId,
+    filteredAccounts, tbData, glData, grouped,
+    printDateRange, printTitle,
+    load, drillInto, backToTrialBalance,
+  } = useTrialBalance()
 
   return (
     <div className="space-y-5 pb-8">
