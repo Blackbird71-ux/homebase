@@ -10,13 +10,15 @@ function getEventIcon(event: CalendarEvent): { icon: string; title: string } | n
 export function EventBadge({
   event,
   onClick,
+  compact = false,
 }: {
   event: CalendarEvent
   onClick: (event: CalendarEvent) => void
+  compact?: boolean
 }) {
   if (event.isBusy) {
     return (
-      <div className="w-full text-left truncate text-xs px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground cursor-default select-none">
+      <div className="w-full text-left truncate text-xs px-2 py-0.5 rounded-md font-medium bg-muted/60 text-muted-foreground cursor-default select-none italic">
         Busy
       </div>
     )
@@ -29,16 +31,27 @@ export function EventBadge({
 
   return (
     <button
-      onClick={e => { e.stopPropagation(); onClick(event) }}
-      className="w-full text-left truncate text-xs px-1.5 py-0.5 rounded font-medium"
-      style={{ backgroundColor: color + '33', color }}
+      onClick={ev => { ev.stopPropagation(); onClick(event) }}
+      className="group w-full text-left text-xs font-medium rounded-md overflow-hidden flex items-stretch transition-all duration-150 hover:shadow-sm hover:scale-[1.01] active:scale-[0.99]"
+      style={{ '--event-color': color } as React.CSSProperties}
     >
-      {specialIcon ? (
-        <span className="inline-block mr-1" title={specialIcon.title}>{specialIcon.icon}</span>
-      ) : (event.isRecurring || isRecurringInstance) ? (
-        <span className="inline-block mr-1" title="Repeating event">🔄</span>
-      ) : null}
-      {event.title}
+      {/* Left color stripe */}
+      <span
+        className="w-1 shrink-0 rounded-l-md"
+        style={{ backgroundColor: color }}
+      />
+      {/* Content area */}
+      <span
+        className="flex-1 px-1.5 py-0.5 truncate rounded-r-md flex items-center gap-1"
+        style={{ backgroundColor: color + '20', color }}
+      >
+        {specialIcon ? (
+          <span className="shrink-0 text-[10px]" title={specialIcon.title}>{specialIcon.icon}</span>
+        ) : (event.isRecurring || isRecurringInstance) ? (
+          <span className="shrink-0 text-[9px]" title="Repeating">↻</span>
+        ) : null}
+        <span className="truncate">{event.title}</span>
+      </span>
     </button>
   )
 }

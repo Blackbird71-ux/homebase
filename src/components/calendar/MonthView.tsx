@@ -2,8 +2,8 @@
 
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, isSameMonth, isToday, isSameDay, format,
-  isWithinInterval, startOfDay, endOfDay
+  eachDayOfInterval, isSameMonth, isToday, format,
+  startOfDay, endOfDay,
 } from 'date-fns'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
@@ -27,29 +27,46 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
     ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+  const weeks = Math.ceil(days.length / 7)
+
   return (
     <div className="flex flex-col h-full">
-      <div className="grid grid-cols-7 border-b border-border">
-        {dayHeaders.map(d => (
-          <div key={d} className="py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            <span className="hidden sm:inline">{d}</span>
-            <span className="sm:hidden">{d.slice(0, 1)}</span>
-          </div>
-        ))}
+      {/* Day headers */}
+      <div className="grid grid-cols-7 border-b border-border/60 bg-muted/30">
+        {dayHeaders.map((d, i) => {
+          const isWeekend = weekStartsOn === 0
+            ? i === 0 || i === 6
+            : i === 5 || i === 6
+          return (
+            <div
+              key={d}
+              className={`py-2.5 text-center text-[10px] font-semibold uppercase tracking-widest ${isWeekend ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}
+            >
+              <span className="hidden sm:inline">{d}</span>
+              <span className="sm:hidden">{d.slice(0, 1)}</span>
+            </div>
+          )
+        })}
       </div>
-      <div className="flex-1 grid grid-cols-7 grid-rows-6">
-        {days.map(day => {
+
+      {/* Calendar grid */}
+      <div
+        className="flex-1 grid grid-cols-7"
+        style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
+      >
+        {days.map((day, idx) => {
           const dayStart = startOfDay(day)
-          const dayEnd = endOfDay(day)
-          
+          const col = idx % 7
+          const isWeekend = weekStartsOn === 0
+            ? col === 0 || col === 6
+            : col === 5 || col === 6
+
           const dayEvents = events.filter(e => {
             const eventStart = startOfDay(new Date(e.start))
             const eventEnd = startOfDay(new Date(e.end))
-            
-            // Check if day is within event range (inclusive)
             return dayStart >= eventStart && dayStart <= eventEnd
           })
-          
+
           const inMonth = isSameMonth(day, currentDate)
           const today = isToday(day)
 
@@ -57,17 +74,42 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
             <div
               key={day.toISOString()}
               onClick={() => onDayClick(day)}
-              className={`border-b border-r border-border p-0.5 md:p-1 flex flex-col gap-1 cursor-pointer hover:bg-accent/30 transition-colors overflow-hidden ${!inMonth ? 'opacity-40' : ''}`}
+              className={[
+                'border-b border-r border-border/50 flex flex-col gap-0.5 cursor-pointer transition-all duration-150 group',
+                'p-1 md:p-1.5',
+                !inMonth ? 'opacity-35' : '',
+                isWeekend && inMonth ? 'bg-muted/20' : '',
+                today ? 'bg-primary/5' : 'hover:bg-accent/20',
+              ].join(' ')}
             >
-              <span className={`text-xs font-medium self-start w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full ${today ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
-                {format(day, 'd')}
-              </span>
-              <div className="flex flex-col gap-0.5 overflow-hidden">
+              {/* Date number */}
+              <div className="flex items-start justify-between">
+                <span
+                  className={[
+                    'text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full transition-colors shrink-0',
+                    today
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-foreground group-hover:bg-accent group-hover:text-accent-foreground',
+                  ].join(' ')}
+                >
+                  {format(day, 'd')}
+                </span>
+                {dayEvents.length > 3 && (
+                  <span className="text-[10px] text-muted-foreground font-medium mt-0.5 mr-0.5 hidden md:block">
+                    +{dayEvents.length - 3}
+                  </span>
+                )}
+              </div>
+
+              {/* Events */}
+              <div className="flex flex-col gap-0.5 overflow-hidden flex-1">
                 {dayEvents.slice(0, 3).map(e => (
                   <EventBadge key={e.id} event={e} onClick={onEventClick} />
                 ))}
                 {dayEvents.length > 3 && (
-                  <span className="text-xs text-muted-foreground px-1">+{dayEvents.length - 3} more</span>
+                  <span className="text-[10px] text-muted-foreground px-1 md:hidden">
+                    +{dayEvents.length - 3}
+                  </span>
                 )}
               </div>
             </div>
