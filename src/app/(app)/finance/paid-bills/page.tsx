@@ -1,17 +1,22 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers } from 'lucide-react'
+import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers, Trash2, Ban } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, subMonths } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import type { Bill } from '@/app/(app)/finance/bills/page'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 export default function PaidBillsPage() {
   const [bills, setBills] = useState<Bill[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([])
   const [loading, setLoading] = useState(true)
+  const [hideDeleteBills, setHideDeleteBills] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidConfirm, setVoidConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidNote, setVoidNote] = useState('')
   const [monthRange, setMonthRange] = useState<1 | 3 | 6 | 12>(() => {
     if (typeof window !== 'undefined') {
       const saved = parseInt(sessionStorage.getItem('paid-bills-monthRange') ?? '')
@@ -33,12 +38,17 @@ export default function PaidBillsPage() {
   async function load() {
     setLoading(true)
     try {
-      const [billsRes, catsRes] = await Promise.all([
+      const [billsRes, catsRes, sRes] = await Promise.all([
         fetch('/api/finance/bills'),
         fetch('/api/finance/categories'),
+        fetch('/api/settings'),
       ])
       if (billsRes.ok) setBills((await billsRes.json()).filter((b: Bill) => b.paid))
       if (catsRes.ok) setCategories(await catsRes.json())
+      if (sRes.ok) {
+        const settings = await sRes.json()
+        setHideDeleteBills(settings.uiPreferences?.hideDeleteBills === true)
+      }
     } finally { setLoading(false) }
   }
 
@@ -67,6 +77,32 @@ export default function PaidBillsPage() {
     else toast.error('Failed to undo payment')
   }
 
+  function handleDelete(id: string, name: string) {
+    setDeleteConfirm({ id, name })
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return
+    const res = await fetch(`/api/finance/bills?id=${deleteConfirm.id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Bill deleted'); setDeleteConfirm(null); load() }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
+  }
+
+  function handleVoid(id: string, name: string) {
+    setVoidNote('')
+    setVoidConfirm({ id, name })
+  }
+
+  async function confirmVoid() {
+    if (!voidConfirm) return
+    const res = await fetch('/api/finance/bills', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: voidConfirm.id, void: true, voidNote: voidNote || null }),
+    })
+    if (res.ok) { toast.success('Bill voided — GL reversal journals created'); setVoidConfirm(null); load() }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to void') }
+  }
+
   function formatCurrency(n: number) {
     return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
   }
@@ -80,16 +116,14 @@ export default function PaidBillsPage() {
   }
 
   const rootCategories = categories.filter(c => !c.parentId)
-  // Use local-date midnight for cutoff to avoid timezone issues with stored UTC dates
   const today = new Date()
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const cutoff = subMonths(todayMidnight, monthRange)
 
   const sorted = [...bills]
     .filter(b => {
-      if (!b.paidDate) return true // show bills with no paidDate (paid flag but no date recorded)
+      if (!b.paidDate) return true
       const pd = new Date(b.paidDate)
-      // Use date-only comparison to avoid timezone edge cases
       const pdMidnight = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate())
       return pdMidnight >= cutoff
     })
@@ -106,7 +140,7 @@ export default function PaidBillsPage() {
   for (const catId of selectedCatIds) {
     catTotals[catId] = sorted.reduce((s, b) => s + billAmountForCat(b, catId), 0)
   }
-  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 2rem`
+  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 5rem`
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading paid bills…</div>
 
@@ -154,6 +188,64 @@ export default function PaidBillsPage() {
           </div>
         )}
       </div>
+
+      {/* Void confirmation dialog */}
+      <Dialog open={!!voidConfirm} onOpenChange={open => { if (!open) setVoidConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-amber-500" /> Void bill</DialogTitle></DialogHeader>
+          {voidConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Void <span className="font-medium text-foreground">{voidConfirm.name}</span>?
+              </p>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 space-y-1">
+                <p className="font-medium">What void does (accountant-approved):</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>Creates reversal journal entries in the GL</li>
+                  <li>The bill and all journals are kept for audit trail</li>
+                  <li>The bill will no longer appear in active lists or reports</li>
+                </ul>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Reason for void (optional)</label>
+                <input value={voidNote} onChange={e => setVoidNote(e.target.value)} placeholder="e.g. Entered in error"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setVoidConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmVoid} className="rounded-md bg-amber-600 text-white px-4 py-1.5 text-sm font-medium">Void bill</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={open => { if (!open) setDeleteConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Trash2 className="h-4 w-4 text-red-500" /> Delete bill</DialogTitle></DialogHeader>
+          {deleteConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Permanently delete <span className="font-medium text-foreground">{deleteConfirm.name}</span>?
+              </p>
+              <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-700 space-y-1">
+                <p className="font-medium">Warning — this cannot be undone:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>GL journal entries will be reversed</li>
+                  <li>Associated transactions will be permanently deleted</li>
+                  <li>No audit trail is kept</li>
+                  <li>Consider using <span className="font-medium">Void</span> instead for a proper audit trail</li>
+                </ul>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setDeleteConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmDelete} className="rounded-md bg-red-600 text-white px-4 py-1.5 text-sm font-medium">Delete permanently</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* List */}
       {sorted.length === 0 ? (
@@ -216,11 +308,25 @@ export default function PaidBillsPage() {
               <p className="text-sm font-semibold text-muted-foreground text-right">
                 {formatCurrency(bill.amount)}
               </p>
-              <button onClick={() => handleUndoPaid(bill.id)}
-                title={bill.billType !== 'one-off' ? 'Undo payment (removes the next scheduled occurrence)' : 'Undo payment'}
-                className="p-1 hover:bg-accent rounded text-green-500 justify-self-end">
-                <Undo2 className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-0.5 justify-end">
+                <button onClick={() => handleUndoPaid(bill.id)}
+                  title={bill.billType !== 'one-off' ? 'Undo payment (removes the next scheduled occurrence)' : 'Undo payment'}
+                  className="p-1 hover:bg-accent rounded text-green-500">
+                  <Undo2 className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => handleVoid(bill.id, bill.name)}
+                  title="Void (accountant-safe — creates reversal journals, keeps audit trail)"
+                  className="p-1 hover:bg-accent rounded text-amber-500">
+                  <Ban className="h-3.5 w-3.5" />
+                </button>
+                {!hideDeleteBills && (
+                  <button onClick={() => handleDelete(bill.id, bill.name)}
+                    title="Delete permanently (no audit trail)"
+                    className="p-1 hover:bg-accent rounded text-red-500">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
 

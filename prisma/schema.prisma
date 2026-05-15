@@ -710,6 +710,9 @@ model FinanceRecurringBill {
   entityId        String?               // FK -> FinanceEntity; null = personal/default
   entity          FinanceEntity?        @relation(fields: [entityId], references: [id], onDelete: SetNull)
   taxClassification String?            // tax_deduction | tax_payment | null
+  isVoided        Boolean              @default(false)
+  voidedAt        DateTime?
+  voidNote        String?
   familyId        String
   family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   transactions    FinanceTransaction[]
@@ -778,6 +781,9 @@ model FinanceIncomeEntry {
   transactionId       String?              @unique // FK -> FinanceTransaction (legacy: first tx created; prefer invoiceTxId/receiptTxId)
   transaction         FinanceTransaction?  @relation("IncomeTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   attachments         IncomeAttachment[]
+  isVoided            Boolean              @default(false)
+  voidedAt            DateTime?
+  voidNote            String?
   familyId            String
   family              Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   createdAt           DateTime             @default(now())

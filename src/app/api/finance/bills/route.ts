@@ -274,7 +274,7 @@ async function nextNJournalReferences(familyId: string, n: number): Promise<stri
 export async function GET() {
   const session = await requireSession()
   const bills = await prisma.financeRecurringBill.findMany({
-    where: { familyId: session.familyId },
+    where: { familyId: session.familyId, isVoided: false },
     include: BILL_INCLUDE,
     orderBy: { nextDueDate: 'asc' },
   })
@@ -537,34 +537,65 @@ export async function DELETE(request: NextRequest) {
   const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId } })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
-  // Pre-fetch journal for reversal outside the transaction so nextJournalReference
-  // reads committed DB state before any writes occur.
-  const jeId = existing.journalEntryId ?? null
-  const jeToReverse = jeId
+  // Pre-fetch all journals and transaction IDs OUTSIDE the transaction so
+  // nextJournalReference reads committed DB state before any writes occur.
+
+  // 1. Accrual journal (DR Expense / CR AP)
+  const accrualJeId = existing.journalEntryId ?? null
+  const accrualJe = accrualJeId
     ? await prisma.financeJournalEntry.findFirst({
-        where: { id: jeId, familyId: session.familyId },
+        where: { id: accrualJeId, familyId: session.familyId },
         include: { lines: true },
       })
     : null
-  const needsReversal = jeToReverse?.isPosted === true && !jeToReverse.isReversed
-  const reversalRef = needsReversal ? await nextJournalReference(session.familyId) : null
+  const needsAccrualReversal = accrualJe?.isPosted === true && !accrualJe.isReversed
 
-  // Atomic: reverse the GL journal and delete the bill together — if either fails
-  // neither partial state is committed.
+  // 2. Payment journals (DR AP / CR Bank) — one per installment
+  const allPayments = await prisma.financeBillPayment.findMany({
+    where: { billId: id, familyId: session.familyId },
+    select: { transactionId: true, journalEntryId: true },
+  })
+  type JournalWithLines = NonNullable<Awaited<ReturnType<typeof prisma.financeJournalEntry.findFirst<{ include: { lines: true } }>>>>
+  const paymentJournalsToReverse: JournalWithLines[] = []
+  for (const p of allPayments) {
+    if (!p.journalEntryId) continue
+    const je = await prisma.financeJournalEntry.findFirst({
+      where: { id: p.journalEntryId, familyId: session.familyId },
+      include: { lines: true },
+    })
+    if (je?.isPosted && !je.isReversed) paymentJournalsToReverse.push(je)
+  }
+
+  // Generate all reversal refs in one call (nextJournalReference reads committed MAX)
+  const totalRefs = (needsAccrualReversal ? 1 : 0) + paymentJournalsToReverse.length
+  const allRefs = await nextNJournalReferences(session.familyId, totalRefs)
+  let refIdx = 0
+  const accrualRef  = needsAccrualReversal ? allRefs[refIdx++] : null
+  const paymentRefs = paymentJournalsToReverse.map(() => allRefs[refIdx++])
+
+  // Collect all transaction IDs to delete
+  const txIdsToDelete = [
+    existing.invoiceTxId,
+    existing.paymentTxId,
+    ...allPayments.map(p => p.transactionId),
+  ].filter((v): v is string => !!v)
+
+  // Atomic: reverse all GL journals, delete all transactions, delete the bill
   await prisma.$transaction(async (tx) => {
-    if (jeToReverse && needsReversal && reversalRef) {
+    // Reverse accrual journal (DR Expense / CR AP → DR AP / CR Expense)
+    if (accrualJe && needsAccrualReversal && accrualRef) {
       await tx.financeJournalEntry.create({
         data: {
-          reference: reversalRef,
+          reference: accrualRef,
           date: new Date(),
-          description: `VOID: ${jeToReverse.reference ?? jeToReverse.id} — ${jeToReverse.description}`,
+          description: `VOID: ${accrualJe.reference ?? accrualJe.id} — ${accrualJe.description}`,
           type: 'reversal',
           isPosted: true,
-          reversalOfId: jeToReverse.id,
-          entityId: jeToReverse.entityId,
+          reversalOfId: accrualJe.id,
+          entityId: accrualJe.entityId,
           familyId: session.familyId,
           lines: {
-            create: jeToReverse.lines.map(l => ({
+            create: accrualJe.lines.map(l => ({
               glAccountId: l.glAccountId,
               side: l.side === 'debit' ? 'credit' : 'debit',
               amount: l.amount,
@@ -573,8 +604,41 @@ export async function DELETE(request: NextRequest) {
           },
         },
       })
-      await tx.financeJournalEntry.update({ where: { id: jeToReverse.id }, data: { isReversed: true } })
+      await tx.financeJournalEntry.update({ where: { id: accrualJe.id }, data: { isReversed: true } })
     }
+
+    // Reverse payment journals (DR AP / CR Bank → DR Bank / CR AP)
+    for (let i = 0; i < paymentJournalsToReverse.length; i++) {
+      const je = paymentJournalsToReverse[i]
+      await tx.financeJournalEntry.create({
+        data: {
+          reference: paymentRefs[i],
+          date: new Date(),
+          description: `VOID: ${je.reference ?? je.id} — ${je.description}`,
+          type: 'reversal',
+          isPosted: true,
+          reversalOfId: je.id,
+          entityId: je.entityId,
+          familyId: session.familyId,
+          lines: {
+            create: je.lines.map(l => ({
+              glAccountId: l.glAccountId,
+              side: l.side === 'debit' ? 'credit' : 'debit',
+              amount: l.amount,
+              description: l.description,
+            })),
+          },
+        },
+      })
+      await tx.financeJournalEntry.update({ where: { id: je.id }, data: { isReversed: true } })
+    }
+
+    // Delete all associated transactions (invoice + payment legs)
+    if (txIdsToDelete.length > 0) {
+      await tx.financeTransaction.deleteMany({ where: { id: { in: txIdsToDelete }, familyId: session.familyId } })
+    }
+
+    // Delete the bill — FinanceBillPayment and BillAttachment cascade automatically
     await tx.financeRecurringBill.delete({ where: { id } })
   })
   return NextResponse.json({ success: true })
@@ -588,6 +652,7 @@ export async function PATCH(request: NextRequest) {
     id, paid, paidDate: paidDateRaw,
     invoiceReceived, invoiceReceivedDate,
     payFromAccountId, payFromGlAccountId, paymentAmount,
+    void: doVoid, voidNote,
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -1151,6 +1216,97 @@ export async function PATCH(request: NextRequest) {
 
     const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId }, include: BILL_INCLUDE })
     return NextResponse.json(finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : { id })
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VOID: soft delete — reverse all GL journals, keep records for audit trail
+  // ══════════════════════════════════════════════════════════════════════════
+  if (doVoid === true && !existing.isVoided) {
+    const accrualJeId = existing.journalEntryId ?? null
+    const accrualJe = accrualJeId
+      ? await prisma.financeJournalEntry.findFirst({
+          where: { id: accrualJeId, familyId: session.familyId },
+          include: { lines: true },
+        })
+      : null
+    const needsAccrualReversal = accrualJe?.isPosted === true && !accrualJe.isReversed
+
+    const allPayments = await prisma.financeBillPayment.findMany({
+      where: { billId: id, familyId: session.familyId },
+      select: { transactionId: true, journalEntryId: true },
+    })
+    type JournalWithLines = NonNullable<Awaited<ReturnType<typeof prisma.financeJournalEntry.findFirst<{ include: { lines: true } }>>>>
+    const paymentJournalsToReverse: JournalWithLines[] = []
+    for (const p of allPayments) {
+      if (!p.journalEntryId) continue
+      const je = await prisma.financeJournalEntry.findFirst({
+        where: { id: p.journalEntryId, familyId: session.familyId },
+        include: { lines: true },
+      })
+      if (je?.isPosted && !je.isReversed) paymentJournalsToReverse.push(je)
+    }
+
+    const totalRefs = (needsAccrualReversal ? 1 : 0) + paymentJournalsToReverse.length
+    const allRefs = await nextNJournalReferences(session.familyId, totalRefs)
+    let refIdx = 0
+    const accrualRef = needsAccrualReversal ? allRefs[refIdx++] : null
+    const paymentRefs = paymentJournalsToReverse.map(() => allRefs[refIdx++])
+
+    await prisma.$transaction(async (tx) => {
+      if (accrualJe && needsAccrualReversal && accrualRef) {
+        await tx.financeJournalEntry.create({
+          data: {
+            reference: accrualRef,
+            date: new Date(),
+            description: `VOID: ${accrualJe.reference ?? accrualJe.id} — ${accrualJe.description}`,
+            type: 'reversal',
+            isPosted: true,
+            reversalOfId: accrualJe.id,
+            entityId: accrualJe.entityId,
+            familyId: session.familyId,
+            lines: {
+              create: accrualJe.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side: l.side === 'debit' ? 'credit' : 'debit',
+                amount: l.amount,
+                description: l.description,
+              })),
+            },
+          },
+        })
+        await tx.financeJournalEntry.update({ where: { id: accrualJe.id }, data: { isReversed: true } })
+      }
+      for (let i = 0; i < paymentJournalsToReverse.length; i++) {
+        const je = paymentJournalsToReverse[i]
+        await tx.financeJournalEntry.create({
+          data: {
+            reference: paymentRefs[i],
+            date: new Date(),
+            description: `VOID: ${je.reference ?? je.id} — ${je.description}`,
+            type: 'reversal',
+            isPosted: true,
+            reversalOfId: je.id,
+            entityId: je.entityId,
+            familyId: session.familyId,
+            lines: {
+              create: je.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side: l.side === 'debit' ? 'credit' : 'debit',
+                amount: l.amount,
+                description: l.description,
+              })),
+            },
+          },
+        })
+        await tx.financeJournalEntry.update({ where: { id: je.id }, data: { isReversed: true } })
+      }
+      await tx.financeRecurringBill.update({
+        where: { id },
+        data: { isVoided: true, voidedAt: new Date(), voidNote: voidNote ?? null },
+      })
+    })
+
+    return NextResponse.json({ success: true, voided: true })
   }
 
   // ── Simple field update (no GL event) ────────────────────────────────────

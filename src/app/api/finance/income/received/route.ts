@@ -12,7 +12,7 @@ const RECEIVED_INCOME_INCLUDE = {
 export async function GET() {
   const session = await requireSession()
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: session.familyId, received: true },
+    where: { familyId: session.familyId, received: true, isVoided: false },
     include: RECEIVED_INCOME_INCLUDE,
     orderBy: { receivedDate: 'desc' },
   })

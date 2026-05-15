@@ -1,17 +1,28 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers } from 'lucide-react'
+import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers, Ban, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, subMonths } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import type { IncomeEntry } from '@/app/(app)/finance/income/page'
 
 export default function ReceivedIncomePage() {
   const [entries, setEntries] = useState<IncomeEntry[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([])
   const [loading, setLoading] = useState(true)
+  const [hideDeleteBills, setHideDeleteBills] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidConfirm, setVoidConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidNote, setVoidNote] = useState('')
   const [monthRange, setMonthRange] = useState<1 | 3 | 6 | 12>(() => {
     if (typeof window !== 'undefined') {
       const saved = parseInt(sessionStorage.getItem('income-received-monthRange') ?? '')
@@ -33,12 +44,17 @@ export default function ReceivedIncomePage() {
   async function load() {
     setLoading(true)
     try {
-      const [entriesRes, catsRes] = await Promise.all([
+      const [entriesRes, catsRes, sRes] = await Promise.all([
         fetch('/api/finance/income/received'),
         fetch('/api/finance/categories'),
+        fetch('/api/settings'),
       ])
       if (entriesRes.ok) setEntries(await entriesRes.json())
       if (catsRes.ok) setCategories(await catsRes.json())
+      if (sRes.ok) {
+        const settings = await sRes.json()
+        setHideDeleteBills(!!settings.uiPreferences?.hideDeleteBills)
+      }
     } finally { setLoading(false) }
   }
 
@@ -65,6 +81,28 @@ export default function ReceivedIncomePage() {
     })
     if (res.ok) { toast.success('Income receipt undone'); load() }
     else toast.error('Failed to undo receipt')
+  }
+
+  function handleDelete(id: string, name: string) { setDeleteConfirm({ id, name }) }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return
+    const res = await fetch(`/api/finance/income?id=${deleteConfirm.id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Income deleted'); setDeleteConfirm(null); load() }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
+  }
+
+  function handleVoid(id: string, name: string) { setVoidNote(''); setVoidConfirm({ id, name }) }
+
+  async function confirmVoid() {
+    if (!voidConfirm) return
+    const res = await fetch('/api/finance/income', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: voidConfirm.id, void: true, voidNote }),
+    })
+    if (res.ok) { toast.success('Income voided'); setVoidConfirm(null); load() }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to void') }
   }
 
   function formatCurrency(n: number) {
@@ -104,7 +142,7 @@ export default function ReceivedIncomePage() {
   for (const catId of selectedCatIds) {
     catTotals[catId] = sorted.reduce((s, e) => s + entryAmountForCat(e, catId), 0)
   }
-  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 2rem`
+  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 6.5rem 5rem`
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading received income…</div>
 
@@ -116,6 +154,47 @@ export default function ReceivedIncomePage() {
           <RotateCcw className="h-3.5 w-3.5" /> Active Income
         </Link>
       </div>
+
+      <Dialog open={!!voidConfirm} onOpenChange={open => { if (!open) setVoidConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-amber-500" /> Void Income Entry</DialogTitle></DialogHeader>
+          {voidConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Void <span className="font-medium text-foreground">{voidConfirm.name}</span>? This will create reversal journal entries and mark the income as voided. The record is kept for audit purposes.
+              </p>
+              <div>
+                <label className="text-xs text-muted-foreground">Void reason (optional)</label>
+                <input value={voidNote} onChange={e => setVoidNote(e.target.value)}
+                  placeholder="e.g. Cancelled, entered in error…"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setVoidConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmVoid} className="rounded-md bg-amber-500 text-white px-4 py-1.5 text-sm font-medium">Void Entry</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirm} onOpenChange={open => { if (!open) setDeleteConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2 text-red-600"><Trash2 className="h-4 w-4" /> Delete Income Entry</DialogTitle></DialogHeader>
+          {deleteConfirm && (
+            <div className="space-y-2 py-1">
+              <p className="text-sm text-muted-foreground">
+                Permanently delete <span className="font-medium text-foreground">{deleteConfirm.name}</span>? All related journal entries and transactions will be removed. This cannot be undone.
+              </p>
+              <p className="text-xs text-amber-600 font-medium">Consider using Void instead to preserve the audit trail.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setDeleteConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmDelete} className="rounded-md bg-red-600 text-white px-4 py-1.5 text-sm font-medium">Delete Permanently</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -210,11 +289,23 @@ export default function ReceivedIncomePage() {
               <p className="text-sm font-semibold text-muted-foreground text-right">
                 {formatCurrency(entry.amount)}
               </p>
-              <button onClick={() => handleUndoReceived(entry.id)}
-                title={entry.incomeType !== 'one-off' ? 'Undo receipt (removes the next scheduled occurrence)' : 'Undo receipt'}
-                className="p-1 hover:bg-accent rounded text-green-500 justify-self-end">
-                <Undo2 className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-0.5 justify-end">
+                <button onClick={() => handleUndoReceived(entry.id)}
+                  title={entry.incomeType !== 'one-off' ? 'Undo receipt (removes the next scheduled occurrence)' : 'Undo receipt'}
+                  className="p-1 hover:bg-accent rounded text-green-500">
+                  <Undo2 className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => handleVoid(entry.id, entry.name)} title="Void"
+                  className="p-1 hover:bg-accent rounded text-amber-500">
+                  <Ban className="h-3.5 w-3.5" />
+                </button>
+                {!hideDeleteBills && (
+                  <button onClick={() => handleDelete(entry.id, entry.name)} title="Delete"
+                    className="p-1 hover:bg-accent rounded text-red-500">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
 

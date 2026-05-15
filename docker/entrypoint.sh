@@ -24,6 +24,8 @@ echo "  DATABASE_URL : $DATABASE_URL"
 echo "  DB file path : $DB_PATH"
 echo "  Node version : $(node --version)"
 echo "  Working dir  : $(pwd)"
+echo "  System TZ    : $(cat /etc/timezone 2>/dev/null || echo 'not set')"
+echo "  Current time : $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "========================================"
 
 # Fail fast with a clear message if critical files are missing
@@ -39,10 +41,36 @@ done
 echo "   ✓ Critical files present"
 
 # ---------------------------------------------------------------------------
+# 0. Verify timezone is correctly configured
+#    Without tzdata on Alpine, the TZ env var is ignored and all times use
+#    UTC internally. This causes cron backups to fire at wrong hours, SQLite
+#    datetime('now') to return UTC timestamps, and backup filenames to be
+#    stamped with the wrong date.
+# ---------------------------------------------------------------------------
+echo ""
+echo ">> [0/7] Verifying timezone configuration..."
+if [ -f /etc/timezone ] && [ "$(cat /etc/timezone)" = "Australia/Sydney" ]; then
+  echo "   ✓ Timezone configured: $(cat /etc/timezone)"
+  echo "   ✓ Current local time: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+else
+  echo "   ⚠ WARNING: Timezone not set to Australia/Sydney"
+  echo "     System time is currently: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+  echo "     This means cron schedules, backup timestamps, and date"
+  echo "     calculations will all be UTC-based instead of local time."
+  echo ""
+  echo "     If tzdata is missing from the image, install it and set"
+  echo "     /etc/timezone manually:"
+  echo "       apk add --no-cache tzdata"
+  echo "       cp /usr/share/zoneinfo/Australia/Sydney /etc/localtime"
+  echo "       echo 'Australia/Sydney' > /etc/timezone"
+  echo "     Or re-build with the fixed Dockerfile that includes tzdata."
+fi
+
+# ---------------------------------------------------------------------------
 # 1. Ensure /data directory structure exists and is owned by nextjs
 # ---------------------------------------------------------------------------
 echo ""
-echo ">> [1/6] Setting up /data directory structure..."
+echo ">> [1/7] Setting up /data directory structure..."
 mkdir -p /data/uploads          # recipe images uploaded by users
 mkdir -p /data/documents        # document vault files
 mkdir -p /data/bill-attachments # invoice/reference docs attached to bills
@@ -63,7 +91,7 @@ echo "   ✓ /data structure ready"
 # 2. Pre-migration database backup
 # ---------------------------------------------------------------------------
 echo ""
-echo ">> [2/6] Pre-migration backup..."
+echo ">> [2/7] Pre-migration backup..."
 if [ -f "$DB_PATH" ]; then
   BACKUP_FILE="/data/backups/homebase.db.pre-deploy.$(date +%Y%m%d_%H%M%S)"
   cp "$DB_PATH" "$BACKUP_FILE"
@@ -84,7 +112,7 @@ fi
 #    commands that can silently drop/recreate tables.
 # ---------------------------------------------------------------------------
 echo ""
-echo ">> [3/6] Running database migrations..."
+echo ">> [3/7] Running database migrations..."
 echo "   Schema  : $(pwd)/prisma/schema.prisma"
 echo "   Prisma  : $(node_modules/.bin/prisma --version 2>/dev/null | head -1 || echo 'unknown')"
 
@@ -213,7 +241,7 @@ fi
 # 4. Verify the database is healthy and reachable
 # ---------------------------------------------------------------------------
 echo ""
-echo ">> [4/6] Verifying database health..."
+echo ">> [4/7] Verifying database health..."
 if sqlite3 "$DB_PATH" "SELECT count(*) FROM sqlite_master WHERE type='table';" > /dev/null 2>&1; then
   TABLE_COUNT=$(sqlite3 "$DB_PATH" "SELECT count(*) FROM sqlite_master WHERE type='table';")
   echo "   ✓ Database is healthy ($TABLE_COUNT tables found)"
@@ -239,7 +267,7 @@ fi
 # 5. Set up daily backup cron job (runs at 03:00 every night)
 # ---------------------------------------------------------------------------
 echo ""
-echo ">> [5/6] Configuring scheduled backups..."
+echo ">> [5/7] Configuring scheduled backups..."
 echo "0 3 * * * su-exec nextjs:nodejs /app/scripts/backup-db.sh /data/backups >> /data/backups/cron.log 2>&1" \
   > /etc/crontabs/root
 crond -b -l 2
@@ -249,7 +277,7 @@ echo "   ✓ Cron daemon started (daily backup at 03:00)"
 # 6. Optional: Cloudflare tunnel
 # ---------------------------------------------------------------------------
 echo ""
-echo ">> [6/6] Starting services..."
+echo ">> [6/7] Starting services..."
 if [ -f /etc/cloudflared/config.yml ]; then
   echo "   Starting Cloudflare tunnel..."
   # Use public DNS – Docker's internal resolver (127.0.0.11) can't handle

@@ -74,8 +74,24 @@ echo ✓ Files copied to NAS
 
 echo.
 echo ============================================
-echo   Build complete.
+echo   Build complete — Deployment Notes
+echo ============================================
+echo.
 echo   Now run on the NAS to deploy:
 echo     sudo sh /volume1/docker/homebase/deploy-nas.sh
+echo.
+echo   ⏰ Timezone fix included in this build:
+echo      The Dockerfile now installs tzdata in the runner
+echo      stage and sets /etc/localtime + /etc/timezone to
+echo      Australia/Sydney. This ensures:
+echo        • Cron backups fire at 03:00 AEST (not UTC)
+echo        • Backup filenames use local date stamps
+echo        • SQLite datetime('now') returns local time
+echo        • Entrypoint startup banner shows correct local time
+echo.
+echo      If the running container was started without tzdata,
+echo      run this on the NAS to fix it in-place:
+echo        sudo sh /volume1/docker/homebase/scripts/set-container-tz.sh
+echo.
 echo ============================================
 pause

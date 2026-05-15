@@ -59,8 +59,14 @@ ENV TZ=Australia/Sydney
 #   su-exec  – drop privileges from root to nextjs after startup tasks
 #   dcron    – lightweight cron for scheduled DB backups
 #   sqlite   – sqlite3 CLI used by entrypoint to verify DB health
+#   tzdata   – timezone database required for TZ env var to work on Alpine
+#              (without it, Node.js date/time uses UTC internally, causing
+#               cron schedules, SQLite datetime('now'), and backup timestamps
+#               to all be offset from Australia/Sydney time)
 COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
-RUN apk add --no-cache su-exec dcron sqlite
+RUN apk add --no-cache su-exec dcron sqlite tzdata \
+ && cp /usr/share/zoneinfo/Australia/Sydney /etc/localtime \
+ && echo "Australia/Sydney" > /etc/timezone
 
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 nextjs

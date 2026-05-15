@@ -16,6 +16,7 @@ import { ActivityLogTab } from '@/components/settings/ActivityLogTab'
 import { EmailTab } from '@/components/settings/EmailTab'
 import { AISettingsTab } from '@/components/settings/AISettingsTab'
 import { LoginPageTab } from '@/components/settings/LoginPageTab'
+import { FinanceTab } from '@/components/settings/FinanceTab'
 
 export default async function SettingsPage() {
   const session = await requireSession()
@@ -86,6 +87,7 @@ export default async function SettingsPage() {
               <TabsTrigger value="categories">Categories</TabsTrigger>
               <TabsTrigger value="event-categories">Event Categories</TabsTrigger>
               <TabsTrigger value="ingredient-mappings">Ingredient Mappings</TabsTrigger>
+              <TabsTrigger value="finance">Finance</TabsTrigger>
               <TabsTrigger value="notifications">Notifications</TabsTrigger>
               <TabsTrigger value="activity">Activity Log</TabsTrigger>
               <TabsTrigger value="ai">AI</TabsTrigger>
@@ -162,6 +164,10 @@ export default async function SettingsPage() {
 
           <TabsContent value="ingredient-mappings">
             <IngredientMappingsTab />
+          </TabsContent>
+
+          <TabsContent value="finance">
+            <FinanceTab />
           </TabsContent>
 
           <TabsContent value="notifications">

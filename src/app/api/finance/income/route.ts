@@ -122,7 +122,7 @@ async function upsertIncomeJournalEntry(
 export async function GET() {
   const session = await requireSession()
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: session.familyId },
+    where: { familyId: session.familyId, isVoided: false },
     include: INCOME_INCLUDE,
     orderBy: { nextExpectedDate: 'asc' },
   })
@@ -353,7 +353,14 @@ export async function DELETE(request: NextRequest) {
     jeReversals.forEach((r, i) => { r.reference = `JE-${String(base + i).padStart(4, '0')}` })
   }
 
-  // Atomic: reverse all GL journals and delete the income entry together
+  // Collect all transaction IDs to delete
+  const txIdsToDelete = [
+    existing.invoiceTxId,
+    existing.receiptTxId,
+    existing.transactionId,
+  ].filter((v, i, arr): v is string => !!v && arr.indexOf(v) === i)
+
+  // Atomic: reverse all GL journals, delete transactions, and delete the income entry together
   await prisma.$transaction(async (tx) => {
     for (const reversal of jeReversals) {
       await tx.financeJournalEntry.create({
@@ -377,6 +384,9 @@ export async function DELETE(request: NextRequest) {
         },
       })
       await tx.financeJournalEntry.update({ where: { id: reversal.journalId }, data: { isReversed: true } })
+    }
+    if (txIdsToDelete.length > 0) {
+      await tx.financeTransaction.deleteMany({ where: { id: { in: txIdsToDelete }, familyId: session.familyId } })
     }
     await tx.financeIncomeEntry.delete({ where: { id } })
   })
@@ -420,12 +430,79 @@ function advanceNextExpectedDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId, receiveToGlAccountId } = json
+  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId, receiveToGlAccountId, void: doVoid, voidNote } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   const existing = await prisma.financeIncomeEntry.findFirst({ where: { id, familyId: session.familyId } })
   if (!existing) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VOID: soft delete — reverse all GL journals, keep records for audit trail
+  // ══════════════════════════════════════════════════════════════════════════
+  if (doVoid === true && !existing.isVoided) {
+    const jeIds = [
+      existing.journalEntryId,
+      (existing as any).receiptJournalEntryId,
+    ].filter(Boolean) as string[]
+
+    type JeReversal = {
+      reference: string
+      journalId: string
+      entityId: string | null
+      refLabel: string | null
+      description: string | null
+      lines: { glAccountId: string; side: string; amount: number; description: string | null }[]
+    }
+    const jeReversals: JeReversal[] = []
+    for (const jeId of jeIds) {
+      const je = await prisma.financeJournalEntry.findFirst({
+        where: { id: jeId, familyId: session.familyId },
+        include: { lines: true },
+      })
+      if (je?.isPosted && !je.isReversed) {
+        jeReversals.push({ reference: '', journalId: je.id, entityId: je.entityId, refLabel: je.reference, description: je.description, lines: je.lines })
+      }
+    }
+
+    if (jeReversals.length > 0) {
+      const firstRef = await nextJournalReference(session.familyId)
+      const base = parseInt(firstRef.match(/^JE-(\d+)$/)?.[1] ?? '0', 10)
+      jeReversals.forEach((r, i) => { r.reference = `JE-${String(base + i).padStart(4, '0')}` })
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const reversal of jeReversals) {
+        await tx.financeJournalEntry.create({
+          data: {
+            reference: reversal.reference,
+            date: new Date(),
+            description: `VOID: ${reversal.refLabel ?? reversal.journalId} — ${reversal.description}`,
+            type: 'reversal',
+            isPosted: true,
+            reversalOfId: reversal.journalId,
+            entityId: reversal.entityId,
+            familyId: session.familyId,
+            lines: {
+              create: reversal.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side: l.side === 'debit' ? 'credit' : 'debit',
+                amount: l.amount,
+                description: l.description,
+              })),
+            },
+          },
+        })
+        await tx.financeJournalEntry.update({ where: { id: reversal.journalId }, data: { isReversed: true } })
+      }
+      await tx.financeIncomeEntry.update({
+        where: { id },
+        data: { isVoided: true, voidedAt: new Date(), voidNote: voidNote ?? null },
+      })
+    })
+
+    return NextResponse.json({ success: true, voided: true })
+  }
 
   const updateData: Record<string, any> = {}
 

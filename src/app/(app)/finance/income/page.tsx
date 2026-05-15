@@ -1093,8 +1093,8 @@ export default function IncomePage() {
               {futureScheduled.map(e => (
                 <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue={false}
                   colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
-                  onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
-                  onToggleInvoice={handleToggleInvoice}
+                  onEdit={openEdit} onDelete={handleDelete} onVoid={handleVoid} hideDelete={hideDeleteBills}
+                  onMarkReceived={handleMarkReceived} onToggleInvoice={handleToggleInvoice}
                   att={att} />
               ))}
             </div>

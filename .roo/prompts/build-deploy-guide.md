@@ -64,6 +64,50 @@ cp /data/backups/homebase.db.pre-deploy.<timestamp> /data/homebase.db
 
 ---
 
+## ⏰ Timezone Requirement — Australia/Sydney
+
+The application **must** run in the `Australia/Sydney` timezone for correct operation. Without proper timezone configuration:
+
+- The daily backup cron (scheduled for `03:00`) fires at 03:00 **UTC** instead of 03:00 **AEST**
+- Backup filenames like `homebase.db.pre-deploy.20260515_130000` use UTC timestamps
+- SQLite functions (`datetime('now')`, `julianday('now')`) return UTC values
+- The bimonthly date correction in `entrypoint.sh` uses `julianday('now')` which would be UTC-offset
+- Node.js `new Date()` uses UTC internally for `Date()` without timezone-aware formatting
+
+### How it's configured
+
+| Layer | Mechanism |
+|-------|-----------|
+| **Dockerfile** (runner stage) | `ENV TZ=Australia/Sydney` + `apk add tzdata` + copies zoneinfo to `/etc/localtime` and `/etc/timezone` |
+| **docker-compose.yml** | `TZ=Australia/Sydney` environment variable |
+| **deploy-nas.sh** | `-e TZ=Australia/Sydney` on `docker run` |
+| **entrypoint.sh** | Step [0/7] verifies timezone at startup; banner displays `System TZ` and `Current time` |
+
+### Why tzdata is required
+
+Alpine Linux (`node:22-alpine`) does **not** include the `tzdata` package by default. Without it, the musl libc cannot resolve the `TZ` environment variable — it has no `/usr/share/zoneinfo/` directory to read from. Setting `TZ=Australia/Sydney` without `tzdata` is effectively a no-op.
+
+### ⚠️ Legacy containers (built before this fix)
+
+If a running container was built before `tzdata` was added to the Dockerfile, fix it in-place via SSH:
+
+```bash
+sudo sh /volume1/docker/homebase/scripts/set-container-tz.sh
+```
+
+This script:
+1. Installs `tzdata` in the running container
+2. Copies `Australia/Sydney` zoneinfo to `/etc/localtime`
+3. Sets `/etc/timezone` to `Australia/Sydney`
+4. Restarts the container
+
+After restart, verify with:
+```bash
+docker exec homebase-app date
+```
+
+---
+
 ## Reminder for Future Schema Changes
 
 When I create/modify any Prisma migration, I must add a note like this to my completion message:
