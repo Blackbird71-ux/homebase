@@ -1,14 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { format } from 'date-fns'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
   RefreshCw, Layers, Paperclip, X, Building2,
   BookmarkCheck, Briefcase, Clock, Ban,
 } from 'lucide-react'
-import { toast } from 'sonner'
-import { format, addMonths, addDays } from 'date-fns'
-import { cn, todayAU } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
 import Link from 'next/link'
@@ -20,617 +18,47 @@ import {
   DialogFooter,
   ResizableDialogContent,
 } from '@/components/ui/dialog'
-import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { AttachmentSection } from '@/components/finance/AttachmentSection'
+import { useBillCrud, type Bill, type QuickFilter } from '@/hooks/finance/useBillCrud'
 
-interface Member { id: string; name: string; email: string }
-interface Location { id: string; name: string }
-interface Vendor { id: string; name: string; defaultCategory?: { id: string; name: string } | null }
-interface Entity { id: string; name: string; color: string | null; type: string; isDefault: boolean }
-interface BillAttachment {
-  id: string; billId: string; title: string; fileName: string
-  fileSize: number; mimeType: string; createdAt: string
-}
-
-export interface Bill {
-  id: string; name: string; amount: number; frequency: string
-  dayOfMonth: number | null; monthOfYear: number | null
-  nextDueDate: string; endDate: string | null; isActive: boolean
-  autoPay: boolean; emailReminder: boolean; reminderDays: number
-  notes: string | null; memberId: string | null
-  journalEntryId: string | null
-  isGlPosted: boolean   // Derived: true only when linked GL journal isPosted=true
-  account: { id: string; name: string } | null
-  category: { id: string; name: string; color: string | null } | null
-  vendor: { id: string; name: string } | null
-  member: Member | null
-  location: Location | null
-  entity: Entity | null
-  paid: boolean; paidDate: string | null
-  invoiceReceived: boolean; invoiceReceivedDate: string | null
-  billType: string; recurrenceInterval: string | null; parentBillId: string | null
-  taxClassification: string | null
-  attachments?: BillAttachment[]
-  payments?: { amount: number }[]
-}
-
-type QuickFilter = { type: 'member' | 'vendor' | 'location' | 'entity'; id: string; label: string }
+export type { Bill } from '@/hooks/finance/useBillCrud'
 
 export default function BillsPage() {
-  const [bills, setBills]           = useState<Bill[]>([])
-  const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
-  const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
-  const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
-  const [members, setMembers]       = useState<Member[]>([])
-  const [locations, setLocations]   = useState<Location[]>([])
-  const [vendors, setVendors]       = useState<Vendor[]>([])
-  const [entities, setEntities]     = useState<Entity[]>([])
-  const [budgetBillIds, setBudgetBillIds] = useState<Set<string>>(new Set())
-  const [loading, setLoading]       = useState(true)
-  const [showForm, setShowForm]     = useState(false)
-  const [editing, setEditing]       = useState<Bill | null>(null)
-  const [journalLines, setJournalLines] = useState<JournalFormLine[]>([])
-  const [journalErrors, setJournalErrors] = useState<Record<string, string>>({})
-  const [paidConfirm, setPaidConfirm] = useState<{ bill: Bill } | null>(null)
-  const [paidConfirmDate, setPaidConfirmDate] = useState<string>('')
-  const [paidConfirmGlAccountId, setPaidConfirmGlAccountId] = useState<string>('')
-  const [paidConfirmAmount, setPaidConfirmAmount] = useState<number>(0)
-  const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('bills-dateRange')
-      if (saved === '14' || saved === '30' || saved === 'quarter' || saved === '12months') return saved
-    }
-    return '30'
-  })
-  const [selectedCatIds, setSelectedCatIds] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = sessionStorage.getItem('bills-selectedCatIds')
-        if (saved) return JSON.parse(saved) as string[]
-      } catch {}
-    }
-    return []
-  })
-  const [showCatPicker, setShowCatPicker] = useState(false)
-  const [paymentHistoryBillId, setPaymentHistoryBillId] = useState<string | null>(null)
-  const [paymentHistory, setPaymentHistory] = useState<any[]>([])
-  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false)
-  const [quickFilter, setQuickFilter] = useState<QuickFilter | null>(null)
-  const [hideDeleteBills, setHideDeleteBills] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
-  const [voidConfirm, setVoidConfirm] = useState<{ id: string; name: string } | null>(null)
-  const [voidNote, setVoidNote] = useState('')
+  const {
+    bills, loading, showForm, editing,
+    journalLines, setJournalLines,
+    journalErrors, setJournalErrors,
+    form, setForm, errors,
+    categories, glAccounts, members, locations, vendors, entities,
+    budgetBillIds,
+    paidConfirm, setPaidConfirm,
+    paidConfirmDate, setPaidConfirmDate,
+    paidConfirmGlAccountId, setPaidConfirmGlAccountId,
+    paidConfirmAmount, setPaidConfirmAmount,
+    deleteConfirm, setDeleteConfirm,
+    voidConfirm, setVoidConfirm,
+    voidNote, setVoidNote,
+    dateRange, setDateRangePersisted,
+    selectedCatIds, showCatPicker, setShowCatPicker, toggleCat,
+    quickFilter,
+    hideDeleteBills,
+    rootCategories, overdue, overdueOneOff, upcoming, visibleBills,
+    colCats, grandTotal, catTotals, gridTemplate,
+    paymentHistoryBillId, paymentHistory, paymentHistoryLoading,
+    openPaymentHistory, closePaymentHistory,
+    openNew, openEdit, closeForm,
+    handleSave, handleDelete, confirmDelete,
+    handleVoid, confirmVoid,
+    handleMarkPaid, confirmMarkPaid,
+    handleToggleInvoice, handleUnmarkPaid,
+    handleCategoryChange, handleVendorChange,
+    handleQuickFilter,
+    getNextDue, billAmountForCat,
+  } = useBillCrud()
+
   const att = useAttachmentManager('/api/finance/bills')
-
-  const emptyForm = {
-    name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
-    dayOfMonth: '', monthOfYear: '', nextDueDate: todayAU(),
-    endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
-    notes: '', memberId: '', locationId: '', vendorId: '',
-    entityId: '',
-    billType: 'recurring', recurrenceInterval: '',
-    invoiceReceived: false, invoiceReceivedDate: '',
-    taxClassification: '',
-    addToBudget: false,
-  }
-  const [form, setForm] = useState(emptyForm)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-
-  function validate(): Record<string, string> {
-    const errs: Record<string, string> = {}
-    if (!form.name.trim()) errs.name = 'Name is required'
-    if (!form.amount || form.amount <= 0) errs.amount = 'Amount must be greater than 0'
-    if (!form.nextDueDate) errs.nextDueDate = 'Due date is required'
-    // taxClassification is intentionally optional — most bills don't need ATO classification
-    return errs
-  }
-
-  function enrichBills(data: any[]): Bill[] {
-    return data.map((b: any) => ({
-      ...b,
-      member: b.memberId ? (members.find((m) => m.id === b.memberId) ?? null) : null,
-    }))
-  }
-
-  async function load() {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/finance/bills')
-      if (res.ok) setBills(enrichBills(await res.json()))
-    } finally { setLoading(false) }
-  }
-
-  async function loadRefs() {
-    const [aRes, cRes, glRes, mRes, lRes, vRes, bRes, eRes, sRes] = await Promise.all([
-      fetch('/api/finance/accounts'),
-      fetch('/api/finance/categories'),           // full list for category/P&L selector
-      fetch('/api/finance/categories?forPicker=true'), // filtered for GL journal line picker
-      fetch('/api/finance/members'),
-      fetch('/api/finance/locations'),
-      fetch('/api/finance/contacts'),
-      fetch('/api/finance/budget'),
-      fetch('/api/finance/entities'),
-      fetch('/api/settings'),
-    ])
-    if (aRes.ok) setAccounts(await aRes.json())
-    if (cRes.ok) {
-      const cats = await cRes.json()
-      setCategories(cats)
-    }
-    if (glRes.ok) {
-      const glCats = await glRes.json()
-      // GL accounts for journal line picker = user-created categories only (no system seeds)
-      setGLAccounts(glCats.filter((c: any) => c.type !== 'transfer'))
-    }
-    if (mRes.ok) setMembers(await mRes.json())
-    if (lRes.ok) setLocations(await lRes.json())
-    if (vRes.ok) setVendors(await vRes.json())
-    if (eRes.ok) setEntities(await eRes.json())
-    if (bRes.ok) {
-      const budgets: any[] = await bRes.json()
-      setBudgetBillIds(new Set(budgets.filter(b => b.billId).map(b => b.billId)))
-    }
-    if (sRes.ok) {
-      const settings = await sRes.json()
-      setHideDeleteBills(settings.uiPreferences?.hideDeleteBills === true)
-    }
-  }
-
-  useEffect(() => { loadRefs() }, [])
-  useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
-
-  // ── Pre-seed journal lines for bills ───────────────────────────────────────
-  // DR: expense line (pre-filled from bill's categoryId if known) / CR: Accounts Payable
-  // Amount pre-filled when editing an existing bill.
-  function defaultBillLines(amount?: number, expenseCategoryId?: string): JournalFormLine[] {
-    const amtStr = amount && amount > 0 ? amount.toFixed(2) : ''
-    // Match by partial name (case-insensitive) so leading chart-of-accounts codes
-    // like "0 Accounts Payable" or "2000 Accounts Payable" are found correctly.
-    const ap = glAccounts.find(a => a.name.toLowerCase().includes('accounts payable'))
-    return [
-      { glAccountId: expenseCategoryId ?? '', side: 'debit',  amount: amtStr, description: '' },
-      { glAccountId: ap?.id ?? '',            side: 'credit', amount: amtStr, description: '' },
-    ]
-  }
-
-  async function loadExistingBillJournalLines(journalEntryId: string): Promise<JournalFormLine[]> {
-    try {
-      const res = await fetch(`/api/finance/journals/${journalEntryId}`)
-      if (!res.ok) return defaultBillLines()
-      const entry = await res.json()
-      if (entry?.lines?.length >= 2) {
-        return entry.lines.map((l: any) => ({
-          glAccountId: l.glAccountId,
-          side: l.side,
-          amount: l.amount.toFixed(2),
-          description: l.description ?? '',
-        }))
-      }
-    } catch { /* fall through */ }
-    return defaultBillLines()
-  }
-
-  // ── Sync the bill amount into journal lines while they are still in "default mirror" state ──
-  //
-  // GL-FIRST invariant: the user owns the journal lines. The amount field is
-  // a UI summary that should track the lines, not drive them — EXCEPT in the
-  // simple 2-line default case where the user is just entering a flat amount.
-  //
-  // "Default mirror" means: exactly 2 lines (one DR + one CR), both with the
-  // SAME amount. This is the out-of-the-box state for any bill that hasn't
-  // been split for GST or anything else. While in this state, we mirror the
-  // amount field into both lines so typing "35" naturally shows 35.00 on both
-  // sides. The moment the user adds a 3rd line OR changes a line amount
-  // independently, the lines diverge from mirror state and we stop syncing —
-  // every line is now user-owned and protected against any further auto-edits.
-  //
-  // This single rule fixes:
-  //   • "Only the first digit prepopulates" — typing 3 then 5 now updates both
-  //     lines because lines were still mirroring ("3.00","3.00") and remain so.
-  //   • "3rd GST line silently disappears on save" — once a 3rd line is added
-  //     (or the existing two diverge to ex-GST + GST), we stop syncing and the
-  //     user-configured split is preserved end-to-end.
-  useEffect(() => {
-    if (!showForm || form.amount <= 0) return
-    if (journalLines.length !== 2) return                       // 3+ lines → user has built a split, hands off
-    const a0 = journalLines[0]?.amount ?? ''
-    const a1 = journalLines[1]?.amount ?? ''
-    const inMirror = a0 === a1                                  // both sides equal → still in default state
-    if (!inMirror) return
-    const target = (form.amount as number).toFixed(2)
-    if (a0 === target) return                                    // already in sync; avoid render loop
-    setJournalLines(lines => lines.map(l => ({ ...l, amount: target })))
-  }, [form.amount, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Reverse-sync the first debit line's GL account into form.categoryId ──────
-  //
-  // The left-panel "Expense Category (GL)" dropdown is a convenience pointer to
-  // the principal expense account — it's the same data as the first debit line's
-  // GL account. Forward sync (left dropdown -> line 1) is handled by
-  // handleCategoryChange. This effect handles the reverse direction so the two
-  // controls can never visibly drift apart:
-  //
-  //   user edits line 1's GL directly  ->  form.categoryId follows automatically.
-  //
-  // Why this matters: `bill.categoryId` is what populates category-column
-  // displays, budget-rule defaults, and report filters. Keeping it aligned with
-  // the actual GL means reports stay consistent without the user remembering to
-  // update both fields.
-  useEffect(() => {
-    if (!showForm) return
-    const firstDebit = journalLines.find(l => l.side === 'debit')
-    const principalGl = firstDebit?.glAccountId ?? ''
-    if (principalGl === form.categoryId) return
-    setForm(p => ({ ...p, categoryId: principalGl }))
-  }, [journalLines, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
-    try {
-      if (addToBudget) {
-        const res = await fetch('/api/finance/budget', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            upsertFromBill: true, billId: bill.id, name: bill.name,
-            amount: toMonthlyAmount(bill.amount, bill.frequency),
-            categoryId: bill.category?.id ?? null, period: 'monthly',
-            entityId: bill.entity?.id ?? null,
-          }),
-        })
-        if (!res.ok) { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to sync budget rule'); return }
-        setBudgetBillIds(prev => new Set([...prev, bill.id]))
-      } else {
-        const res = await fetch('/api/finance/budget', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ removeFromBill: true, billId: bill.id }),
-        })
-        if (!res.ok) { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to remove from budget'); return }
-        setBudgetBillIds(prev => { const s = new Set(prev); s.delete(bill.id); return s })
-      }
-    } catch { toast.error('Network error updating budget rule') }
-  }
-
-  function closePaymentHistory() { setPaymentHistoryBillId(null); setPaymentHistory([]) }
-
-  async function openPaymentHistory(bill: Bill) {
-    if (paymentHistoryBillId === bill.id) { closePaymentHistory(); return }
-    setPaymentHistoryBillId(bill.id); setPaymentHistoryLoading(true)
-    try {
-      const res = await fetch(`/api/finance/bills/${bill.id}/payments`)
-      if (res.ok) setPaymentHistory(await res.json())
-      else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to load payment history') }
-    } finally { setPaymentHistoryLoading(false) }
-  }
-  function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
-    sessionStorage.setItem('bills-dateRange', r); setDateRange(r)
-  }
-
-  function toggleCat(id: string) {
-    setSelectedCatIds(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-      sessionStorage.setItem('bills-selectedCatIds', JSON.stringify(next))
-      return next
-    })
-  }
-
-  function openNew() { setEditing(null); setErrors({}); setJournalLines(defaultBillLines()); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
-
-  function openEdit(b: Bill) {
-    setEditing(b)
-    setErrors({})
-    setJournalErrors({})
-    // Pre-seed journal lines from GL if a journal entry exists, else default using the bill's category.
-    // Show defaults immediately while the async GL fetch is in-flight so the editor isn't blank;
-    // the async result overwrites once resolved. The amount→lines mirror effect is split-aware
-    // (only fires when both lines have equal amounts), so loaded GST splits are never overwritten.
-    if (b.journalEntryId) {
-      setJournalLines(defaultBillLines(b.amount, b.category?.id))
-      loadExistingBillJournalLines(b.journalEntryId).then(lines => {
-        setJournalLines(lines)
-      })
-    } else {
-      setJournalLines(defaultBillLines(b.amount, b.category?.id))
-    }
-    setForm({
-      name: b.name, amount: b.amount, frequency: b.frequency,
-      accountId: b.account?.id ?? '', categoryId: b.category?.id ?? '',
-      dayOfMonth: b.dayOfMonth?.toString() ?? '',
-      monthOfYear: b.monthOfYear?.toString() ?? '',
-      nextDueDate: new Date(b.nextDueDate).toISOString().split('T')[0],
-      endDate: b.endDate ? new Date(b.endDate).toISOString().split('T')[0] : '',
-      autoPay: b.autoPay, emailReminder: b.emailReminder, reminderDays: b.reminderDays,
-      notes: b.notes ?? '', memberId: b.memberId ?? '',
-      locationId: b.location?.id ?? '', vendorId: b.vendor?.id ?? '',
-      entityId: b.entity?.id ?? entities.find(e => e.isDefault)?.id ?? '',
-      billType: b.billType ?? 'recurring', recurrenceInterval: b.recurrenceInterval ?? '',
-      invoiceReceived: b.invoiceReceived ?? false,
-      invoiceReceivedDate: b.invoiceReceivedDate ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
-      taxClassification: b.taxClassification ?? '',
-      addToBudget: budgetBillIds.has(b.id),
-    })
-    setShowForm(true)
-  }
-
-  function closeForm() { setShowForm(false); setEditing(null); setJournalLines([]); setJournalErrors({}) }
-
-  function getFormPayload() {
-    return {
-      ...form, amount: form.amount || 0,
-      accountId: form.accountId || null, categoryId: form.categoryId || null,
-      vendorId: form.vendorId || null, entityId: form.entityId || null,
-      dayOfMonth: form.dayOfMonth || null, monthOfYear: form.monthOfYear || null,
-      endDate: form.endDate || null, notes: form.notes || null,
-      memberId: form.memberId || null, locationId: form.locationId || null,
-      billType: form.billType || 'recurring', recurrenceInterval: form.recurrenceInterval || null,
-      invoiceReceived: form.invoiceReceived,
-      invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
-      taxClassification: form.taxClassification || null,
-    }
-  }
-
-  async function handleSave() {
-    const errs = validate()
-    setErrors(errs)
-    if (Object.keys(errs).length > 0) {
-      toast.error(Object.values(errs).join(' · '))
-      return
-    }
-    try {
-      const { addToBudget, ...payload } = getFormPayload() as any
-
-      // ── Detect invoiceReceived transition when editing ───────────────────
-      // If the user is unticking "Posted to journals" on an already-posted bill,
-      // the PUT route has no unpost logic — we must PATCH first to reverse the GL
-      // entry, then proceed with the regular field update via PUT.
-      if (editing && editing.invoiceReceived === true && form.invoiceReceived === false) {
-        const unpostRes = await fetch('/api/finance/bills', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editing.id, invoiceReceived: false }),
-        })
-        if (!unpostRes.ok) {
-          const err = await unpostRes.json().catch(() => ({ error: `Server error (${unpostRes.status})` }))
-          toast.error(err.error ?? 'Failed to unpost bill from journals')
-          return
-        }
-      }
-
-      // ── Determine which journal lines to submit ───────────────────────────
-      // isNewPost: user is posting for the first time — lines become the posted GL entry.
-      // isDraftPersist: bill remains unposted — persist line edits to the draft journal
-      //   so the GL always reflects what the user has configured in the editor.
-      // Already-posted bills: never re-submit lines (journal is locked once posted).
-      const isNewPost = form.invoiceReceived && (!editing || !editing.invoiceReceived)
-      const isDraftPersist = !!editing && !editing.invoiceReceived && !form.invoiceReceived
-      // NEW bill saved without "Posted to journals" — still send lines so the server
-      // creates a draft journal entry; otherwise journalEntryId stays null and a 3-line
-      // GST split typed in the editor is silently lost on reopen.
-      const isNewDraft = !editing && !form.invoiceReceived
-
-      // Pre-validate: any line with an amount but no GL account is a user error.
-      // Without this guard, the filter below would silently drop the row, leaving
-      // the remaining lines unbalanced — the editor shows "Balanced ✓" but the
-      // Create button appears to do nothing because the unbalanced check fails.
-      // We surface this as a clear, specific error so the user knows what to fix.
-      if (isNewPost || isDraftPersist || isNewDraft) {
-        const missingAccountIdx = journalLines.findIndex(
-          l => (parseFloat(l.amount) || 0) > 0 && l.glAccountId.trim() === ''
-        )
-        if (missingAccountIdx !== -1) {
-          toast.error(`Journal line ${missingAccountIdx + 1} has an amount but no GL account. Please select a GL account or remove the line before saving.`)
-          return
-        }
-      }
-
-      // GL-FIRST: collect ALL lines that have a GL account assigned, regardless of
-      // whether their amount is zero. Lines with amounts are the user's intended split;
-      // we never silently drop lines here — the API enforces balance validation and
-      // will return a clear error if the entry is unbalanced.
-      const linesToSubmit = (isNewPost || isDraftPersist || isNewDraft)
-        ? journalLines.filter(l => l.glAccountId.trim() !== '')
-        : []
-
-      // Block save if the user intends to post/save lines but the editor is unbalanced.
-      // This gives a clear error at save-time rather than a silent server rejection.
-      if (linesToSubmit.length >= 2) {
-        const drTotal = linesToSubmit.filter(l => l.side === 'debit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
-        const crTotal = linesToSubmit.filter(l => l.side === 'credit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
-        if (Math.abs(drTotal - crTotal) > 0.005) {
-          toast.error(`Journal lines are not balanced — debits ${drTotal.toFixed(2)} ≠ credits ${crTotal.toFixed(2)}. Please fix the split before saving.`)
-          return
-        }
-      }
-
-      // Final wire payload — linesToSubmit is already filtered by glAccountId above,
-      // so we don't drop any more lines here. Every user-configured line goes to the server.
-      const serialisedLines = linesToSubmit.map(l => ({
-        glAccountId: l.glAccountId,
-        side: l.side,
-        amount: parseFloat(l.amount) || 0,
-        description: l.description || null,
-      }))
-
-      const body = editing
-        ? { id: editing.id, ...payload, ...(serialisedLines.length >= 2 ? { journalLines: serialisedLines } : {}) }
-        : { ...payload, ...(serialisedLines.length >= 2 ? { journalLines: serialisedLines } : {}) }
-
-      const res = await fetch('/api/finance/bills', {
-        method: editing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        toast.error(err.error ?? `Failed (${res.status})`)
-        return
-      }
-      const savedBill: Bill = await res.json()
-      toast.success(editing ? 'Bill updated' : 'Bill created')
-      await syncBudgetRule(savedBill, form.addToBudget)
-      closeForm(); load()
-    } catch (err) {
-      console.error('[handleSave bills]', err)
-      toast.error('An unexpected error occurred. Check the browser console for details.')
-    }
-  }
-
-  function handleDelete(id: string, name: string) {
-    setDeleteConfirm({ id, name })
-  }
-
-  async function confirmDelete() {
-    if (!deleteConfirm) return
-    await fetch('/api/finance/budget', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ removeFromBill: true, billId: deleteConfirm.id }),
-    })
-    const res = await fetch(`/api/finance/bills?id=${deleteConfirm.id}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Bill deleted'); setDeleteConfirm(null); load() }
-    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
-  }
-
-  function handleVoid(id: string, name: string) {
-    setVoidNote('')
-    setVoidConfirm({ id, name })
-  }
-
-  async function confirmVoid() {
-    if (!voidConfirm) return
-    const res = await fetch('/api/finance/bills', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: voidConfirm.id, void: true, voidNote: voidNote || null }),
-    })
-    if (res.ok) { toast.success('Bill voided — GL reversal journals created'); setVoidConfirm(null); load() }
-    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to void') }
-  }
-
-  async function handleMarkPaid(bill: Bill) {
-    setPaidConfirmDate(todayAU())
-    setPaidConfirmGlAccountId('')
-    setPaidConfirmAmount(bill.amount)
-    setPaidConfirm({ bill })
-  }
-
-  async function confirmMarkPaid() {
-    if (!paidConfirm) return
-    const payAmount = Math.min(paidConfirmAmount, paidConfirm.bill.amount)
-    if (payAmount <= 0) { toast.error('Payment amount must be greater than 0'); return }
-    const res = await fetch('/api/finance/bills', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: paidConfirm.bill.id,
-        paid: true,
-        paidDate: paidConfirmDate,
-        payFromGlAccountId: paidConfirmGlAccountId || null,
-        paymentAmount: payAmount < paidConfirm.bill.amount ? payAmount : undefined,
-      }),
-    })
-    if (res.ok) { toast.success('Bill marked as paid'); setPaidConfirm(null); load() }
-    else {
-      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
-      toast.error(err.error ?? 'Failed to mark as paid')
-    }
-  }
-
-  async function handleToggleInvoice(bill: Bill) {
-    const newVal = !bill.invoiceReceived
-    // Posting requires a confirmation when un-posting (reversing the accrual)
-    if (!newVal && bill.invoiceReceived) {
-      if (!confirm(`Unpost "${bill.name}"? This will reverse the accrual journal entry and remove the pending expense transaction.`)) return
-    }
-    const res = await fetch('/api/finance/bills', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bill.id, invoiceReceived: newVal }),
-    })
-    if (res.ok) { toast.success(newVal ? 'Bill posted to journals' : 'Bill unposted'); load() }
-    else {
-      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }))
-      toast.error(err.error ?? 'Failed to update posting status')
-    }
-  }
-
-  async function handleUnmarkPaid(bill: Bill) {
-    if (!confirm(`Undo payment for "${bill.name}"? This will reverse the payment transaction.`)) return
-    const res = await fetch('/api/finance/bills', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bill.id, paid: false }),
-    })
-    if (res.ok) { toast.success('Payment reversed — bill restored'); load() }
-    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to reverse payment') }
-  }
-
-  function handleCategoryChange(categoryId: string) {
-    setForm(p => ({ ...p, categoryId }))
-    // Keep the first debit line in sync so the GL journal reflects the chosen expense account
-    setJournalLines(lines => {
-      const firstDebitIdx = lines.findIndex(l => l.side === 'debit')
-      if (firstDebitIdx === -1) return lines
-      return lines.map((l, i) => i === firstDebitIdx ? { ...l, glAccountId: categoryId } : l)
-    })
-  }
-
-  function handleVendorChange(vendorId: string) {
-    const vendor = vendors.find(v => v.id === vendorId)
-    const update: any = { vendorId }
-    if (vendor?.defaultCategory && !form.categoryId) update.categoryId = vendor.defaultCategory.id
-    setForm(p => ({ ...p, ...update }))
-  }
-
-  function getNextDue(bill: Bill): Date {
-    return new Date(bill.nextDueDate)
-  }
-
-  function billAmountForCat(bill: Bill, rootCatId: string): number {
-    if (!bill.category) return 0
-    const cat = categories.find(c => c.id === bill.category!.id)
-    if (!cat) return 0
-    if (cat.id === rootCatId || cat.parentId === rootCatId) return bill.amount
-    return 0
-  }
-
-  const rootCategories = categories.filter(c => !c.parentId && c.type === 'expense')
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const rangeEnd = dateRange === '14' ? addDays(todayStart, 14)
-    : dateRange === '30' ? addDays(todayStart, 30)
-    : dateRange === '12months' ? addMonths(todayStart, 12)
-    : addMonths(todayStart, 3)
-
-  function toLocalMidnight(d: Date): Date {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  }
-
-  const activeBills = bills.filter(b => {
-    if (!b.isActive || b.paid) return false
-    if (quickFilter) {
-      if (quickFilter.type === 'member'   && b.member?.id   !== quickFilter.id) return false
-      if (quickFilter.type === 'vendor'   && b.vendor?.id   !== quickFilter.id) return false
-      if (quickFilter.type === 'location' && b.location?.id !== quickFilter.id) return false
-      if (quickFilter.type === 'entity'   && b.entity?.id   !== quickFilter.id) return false
-    }
-    return true
-  })
-
-  const overdue       = activeBills.filter(b => b.billType !== 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
-  const overdueOneOff = activeBills.filter(b => b.billType === 'one-off' && toLocalMidnight(new Date(b.nextDueDate)) < todayStart)
-  const upcoming      = activeBills.filter(b => {
-    const due = toLocalMidnight(new Date(b.nextDueDate))
-    return due >= todayStart && due <= rangeEnd
-  })
-  const visibleBills  = [...overdue, ...upcoming]
-  const colCats       = rootCategories.filter(c => selectedCatIds.includes(c.id))
-  const grandTotal    = visibleBills.reduce((s, b) => s + b.amount, 0)
-  const catTotals: Record<string, number> = {}
-  for (const catId of selectedCatIds) {
-    catTotals[catId] = visibleBills.reduce((s, b) => s + billAmountForCat(b, catId), 0)
-  }
-  const gridTemplate = `2.25rem 1fr${colCats.map(() => ' 6.5rem').join('')} 8rem 10rem`
-
-  function handleQuickFilter(f: QuickFilter) {
-    setQuickFilter(q => q?.id === f.id ? null : f)
-  }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading bills&hellip;</div>
 
@@ -662,7 +90,7 @@ export default function BillsPage() {
 
         {quickFilter && (
           <button
-            onClick={() => setQuickFilter(null)}
+            onClick={() => handleQuickFilter(quickFilter)}
             className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
           >
             <span className="capitalize">{quickFilter.type}:</span>
@@ -742,7 +170,7 @@ export default function BillsPage() {
       )}
 
       {/* Bill form dialog */}
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
+      <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); } }}>
         <ResizableDialogContent className="w-full sm:max-w-2xl md:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
 
           {/* Fixed header — title, errors, bill type toggle */}
@@ -989,7 +417,7 @@ export default function BillsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
                   <option value="">No GL account (unlinked)</option>
                   {sortedCategoryList(categories.filter(c => c.type === 'asset')).map(c => (
-                    <option key={c.id} value={c.id}>{c.parentId ? `\u2014 ${c.name}` : c.name}</option>
+                    <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
                   ))}
                 </select>
                 {!paidConfirmGlAccountId && (
