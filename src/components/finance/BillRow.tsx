@@ -50,7 +50,7 @@ export interface BillRowProps {
   setAddForm:          (f: AddPaymentForm) => void
   addingPayment:       boolean
   deletingPaymentId:   string | null
-  onOpenPanel:         (b: Bill) => void
+  onOpenPanel:         (billId: string) => void
   onClosePanel:        () => void
   onOpenAddForm:       (billAmount: number, totalPaid: number) => void
   onCancelAddForm:     () => void
@@ -192,7 +192,7 @@ export function BillRow({
         <div className="flex items-center gap-0.5 justify-end">
           {/* Payment history / add payment */}
           <button
-            onClick={() => onOpenPanel(bill)}
+            onClick={() => onOpenPanel(bill.id)}
             title={isPartiallyPaid ? 'Payments & add payment' : 'Payment history / add payment'}
             className={cn(
               'relative group p-1 hover:bg-accent rounded transition-colors',
