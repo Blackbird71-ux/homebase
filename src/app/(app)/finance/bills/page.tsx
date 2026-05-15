@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt,
   RefreshCw, Layers, Paperclip, X, Building2,
-  BookmarkCheck, Briefcase, Clock,
+  BookmarkCheck, Briefcase, Clock, Ban,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, addMonths, addDays } from 'date-fns'
@@ -97,8 +97,11 @@ export default function BillsPage() {
   const [paymentHistory, setPaymentHistory] = useState<any[]>([])
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false)
   const [quickFilter, setQuickFilter] = useState<QuickFilter | null>(null)
+  const [hideDeleteBills, setHideDeleteBills] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidConfirm, setVoidConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidNote, setVoidNote] = useState('')
   const att = useAttachmentManager('/api/finance/bills')
-  const prevBillAmountRef = useRef<number>(0)
 
   const emptyForm = {
     name: '', amount: 0, frequency: 'monthly', accountId: '', categoryId: '',
@@ -139,7 +142,7 @@ export default function BillsPage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, glRes, mRes, lRes, vRes, bRes, eRes] = await Promise.all([
+    const [aRes, cRes, glRes, mRes, lRes, vRes, bRes, eRes, sRes] = await Promise.all([
       fetch('/api/finance/accounts'),
       fetch('/api/finance/categories'),           // full list for category/P&L selector
       fetch('/api/finance/categories?forPicker=true'), // filtered for GL journal line picker
@@ -148,6 +151,7 @@ export default function BillsPage() {
       fetch('/api/finance/contacts'),
       fetch('/api/finance/budget'),
       fetch('/api/finance/entities'),
+      fetch('/api/settings'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) {
@@ -166,6 +170,10 @@ export default function BillsPage() {
     if (bRes.ok) {
       const budgets: any[] = await bRes.json()
       setBudgetBillIds(new Set(budgets.filter(b => b.billId).map(b => b.billId)))
+    }
+    if (sRes.ok) {
+      const settings = await sRes.json()
+      setHideDeleteBills(settings.uiPreferences?.hideDeleteBills === true)
     }
   }
 
@@ -203,26 +211,37 @@ export default function BillsPage() {
     return defaultBillLines()
   }
 
-  // Auto-fill journal line amounts when bill amount changes.
+  // ── Sync the bill amount into journal lines while they are still in "default mirror" state ──
   //
-  // SPLIT-SAFE RULE: only update a line's amount when it is blank or exactly
-  // zero — i.e. the user has never manually entered a value for that line.
-  // Lines with any non-zero amount (including a GST split like $9.09) are left
-  // untouched so the amount-sync never overwrites a user-configured split.
+  // GL-FIRST invariant: the user owns the journal lines. The amount field is
+  // a UI summary that should track the lines, not drive them — EXCEPT in the
+  // simple 2-line default case where the user is just entering a flat amount.
   //
-  // prevBillAmountRef is used only to detect the initial mount value on openEdit
-  // so we don't fire on the first render. It is NOT used as a "match and replace"
-  // comparator because that was the root cause of Bug 1 (lines at the same value
-  // as the old total being incorrectly reset).
+  // "Default mirror" means: exactly 2 lines (one DR + one CR), both with the
+  // SAME amount. This is the out-of-the-box state for any bill that hasn't
+  // been split for GST or anything else. While in this state, we mirror the
+  // amount field into both lines so typing "35" naturally shows 35.00 on both
+  // sides. The moment the user adds a 3rd line OR changes a line amount
+  // independently, the lines diverge from mirror state and we stop syncing —
+  // every line is now user-owned and protected against any further auto-edits.
+  //
+  // This single rule fixes:
+  //   • "Only the first digit prepopulates" — typing 3 then 5 now updates both
+  //     lines because lines were still mirroring ("3.00","3.00") and remain so.
+  //   • "3rd GST line silently disappears on save" — once a 3rd line is added
+  //     (or the existing two diverge to ex-GST + GST), we stop syncing and the
+  //     user-configured split is preserved end-to-end.
   useEffect(() => {
     if (!showForm || form.amount <= 0) return
-    setJournalLines(lines => lines.map(l =>
-      l.amount === '' || l.amount === '0' || l.amount === '0.00'
-        ? { ...l, amount: (form.amount as number).toFixed(2) }
-        : l
-    ))
-    prevBillAmountRef.current = form.amount as number
-  }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (journalLines.length !== 2) return                       // 3+ lines → user has built a split, hands off
+    const a0 = journalLines[0]?.amount ?? ''
+    const a1 = journalLines[1]?.amount ?? ''
+    const inMirror = a0 === a1                                  // both sides equal → still in default state
+    if (!inMirror) return
+    const target = (form.amount as number).toFixed(2)
+    if (a0 === target) return                                    // already in sync; avoid render loop
+    setJournalLines(lines => lines.map(l => ({ ...l, amount: target })))
+  }, [form.amount, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
     try {
@@ -274,29 +293,20 @@ export default function BillsPage() {
     })
   }
 
-  function openNew() { prevBillAmountRef.current = 0; setEditing(null); setErrors({}); setJournalLines(defaultBillLines()); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
+  function openNew() { setEditing(null); setErrors({}); setJournalLines(defaultBillLines()); setJournalErrors({}); setForm(emptyForm); setShowForm(true) }
 
   function openEdit(b: Bill) {
     setEditing(b)
     setErrors({})
     setJournalErrors({})
-    // Set prevBillAmountRef to the bill's ACTUAL amount before setting form state.
-    // This ensures the amount-sync useEffect fires with the correct reference on
-    // the first render and does NOT treat the bill's existing amount as a "blank"
-    // value that needs filling — which was Bug 6 (race between form set and async
-    // line load causing all loaded split amounts to be overwritten).
-    prevBillAmountRef.current = b.amount
     // Pre-seed journal lines from GL if a journal entry exists, else default using the bill's category.
-    // Show defaults immediately while the async GL fetch is in-flight so the editor
-    // isn't blank. The async result overwrites once resolved.
+    // Show defaults immediately while the async GL fetch is in-flight so the editor isn't blank;
+    // the async result overwrites once resolved. The amount→lines mirror effect is split-aware
+    // (only fires when both lines have equal amounts), so loaded GST splits are never overwritten.
     if (b.journalEntryId) {
       setJournalLines(defaultBillLines(b.amount, b.category?.id))
       loadExistingBillJournalLines(b.journalEntryId).then(lines => {
-        // Only apply loaded lines if the form is still open for this bill
         setJournalLines(lines)
-        // Stamp prevBillAmountRef again after lines load so the amount-sync
-        // useEffect knows the current baseline and won't corrupt the split.
-        prevBillAmountRef.current = b.amount
       })
     } else {
       setJournalLines(defaultBillLines(b.amount, b.category?.id))
@@ -392,9 +402,14 @@ export default function BillsPage() {
         }
       }
 
-      const serialisedLines = linesToSubmit
-        .filter(l => parseFloat(l.amount) > 0)  // omit zero-amount lines from wire payload
-        .map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null }))
+      // Final wire payload — linesToSubmit is already filtered by glAccountId above,
+      // so we don't drop any more lines here. Every user-configured line goes to the server.
+      const serialisedLines = linesToSubmit.map(l => ({
+        glAccountId: l.glAccountId,
+        side: l.side,
+        amount: parseFloat(l.amount) || 0,
+        description: l.description || null,
+      }))
 
       const body = editing
         ? { id: editing.id, ...payload, ...(serialisedLines.length >= 2 ? { journalLines: serialisedLines } : {}) }
@@ -420,15 +435,34 @@ export default function BillsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this bill?')) return
+  function handleDelete(id: string, name: string) {
+    setDeleteConfirm({ id, name })
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return
     await fetch('/api/finance/budget', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ removeFromBill: true, billId: id }),
+      body: JSON.stringify({ removeFromBill: true, billId: deleteConfirm.id }),
     })
-    const res = await fetch(`/api/finance/bills?id=${id}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Bill deleted'); load() }
+    const res = await fetch(`/api/finance/bills?id=${deleteConfirm.id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Bill deleted'); setDeleteConfirm(null); load() }
     else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
+  }
+
+  function handleVoid(id: string, name: string) {
+    setVoidNote('')
+    setVoidConfirm({ id, name })
+  }
+
+  async function confirmVoid() {
+    if (!voidConfirm) return
+    const res = await fetch('/api/finance/bills', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: voidConfirm.id, void: true, voidNote: voidNote || null }),
+    })
+    if (res.ok) { toast.success('Bill voided — GL reversal journals created'); setVoidConfirm(null); load() }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to void') }
   }
 
   async function handleMarkPaid(bill: Bill) {
@@ -632,7 +666,8 @@ export default function BillsPage() {
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button onClick={() => handleMarkPaid(b)} className="p-1 hover:bg-red-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
                   <button onClick={() => openEdit(b)} className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleDelete(b.id)} className="p-1 hover:bg-red-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleVoid(b.id, b.name)} title="Void (accountant-safe)" className="p-1 hover:bg-red-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+                  {!hideDeleteBills && <button onClick={() => handleDelete(b.id, b.name)} className="p-1 hover:bg-red-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </div>
               </div>
             ))}
@@ -656,7 +691,8 @@ export default function BillsPage() {
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button onClick={() => handleMarkPaid(b)} className="p-1 hover:bg-orange-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
                   <button onClick={() => openEdit(b)} className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleDelete(b.id)} className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleVoid(b.id, b.name)} title="Void (accountant-safe)" className="p-1 hover:bg-orange-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+                  {!hideDeleteBills && <button onClick={() => handleDelete(b.id, b.name)} className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </div>
               </div>
             ))}
@@ -934,6 +970,64 @@ export default function BillsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Void confirmation dialog */}
+      <Dialog open={!!voidConfirm} onOpenChange={open => { if (!open) setVoidConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-amber-500" /> Void bill</DialogTitle></DialogHeader>
+          {voidConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Void <span className="font-medium text-foreground">{voidConfirm.name}</span>?
+              </p>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 space-y-1">
+                <p className="font-medium">What void does (accountant-approved):</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>Creates reversal journal entries in the GL</li>
+                  <li>The bill and all journals are kept for audit trail</li>
+                  <li>The bill will no longer appear in active lists or reports</li>
+                </ul>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Reason for void (optional)</label>
+                <input value={voidNote} onChange={e => setVoidNote(e.target.value)} placeholder="e.g. Entered in error"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setVoidConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmVoid} className="rounded-md bg-amber-600 text-white px-4 py-1.5 text-sm font-medium">Void bill</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={open => { if (!open) setDeleteConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Trash2 className="h-4 w-4 text-red-500" /> Delete bill</DialogTitle></DialogHeader>
+          {deleteConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Permanently delete <span className="font-medium text-foreground">{deleteConfirm.name}</span>?
+              </p>
+              <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-700 space-y-1">
+                <p className="font-medium">Warning — this cannot be undone:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>GL journal entries will be reversed</li>
+                  <li>Associated transactions will be permanently deleted</li>
+                  <li>No audit trail is kept</li>
+                  <li>Consider using <span className="font-medium">Void</span> instead for a proper audit trail</li>
+                </ul>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setDeleteConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmDelete} className="rounded-md bg-red-600 text-white px-4 py-1.5 text-sm font-medium">Delete permanently</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Bill list */}
       {bills.length === 0 ? (
         <p className="text-sm text-muted-foreground">No bills yet.</p>
@@ -951,7 +1045,8 @@ export default function BillsPage() {
             <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={overdue.includes(b)}
               colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
               inBudget={budgetBillIds.has(b.id)}
-              onEdit={openEdit} onDelete={handleDelete} onMarkPaid={handleMarkPaid}
+              onEdit={openEdit} onDelete={handleDelete} onVoid={handleVoid} hideDelete={hideDeleteBills}
+              onMarkPaid={handleMarkPaid}
               onUnmarkPaid={handleUnmarkPaid}
               onToggleInvoice={handleToggleInvoice}
               onQuickFilter={handleQuickFilter}
@@ -988,7 +1083,7 @@ export default function BillsPage() {
 
 function BillRow({
   bill, nextDue, isOverdue, colCats, billAmountForCat, gridTemplate,
-  inBudget, onEdit, onDelete, onMarkPaid, onUnmarkPaid, onToggleInvoice, onQuickFilter,
+  inBudget, onEdit, onDelete, onVoid, hideDelete, onMarkPaid, onUnmarkPaid, onToggleInvoice, onQuickFilter,
   att,
   paymentHistoryBillId, paymentHistory, paymentHistoryLoading,
   onOpenPaymentHistory, onClosePaymentHistory,
@@ -997,7 +1092,8 @@ function BillRow({
   colCats: { id: string; name: string }[]
   billAmountForCat: (bill: Bill, catId: string) => number
   gridTemplate: string; inBudget: boolean
-  onEdit: (b: Bill) => void; onDelete: (id: string) => void
+  onEdit: (b: Bill) => void; onDelete: (id: string, name: string) => void
+  onVoid: (id: string, name: string) => void; hideDelete: boolean
   onMarkPaid: (b: Bill) => void; onUnmarkPaid: (b: Bill) => void; onToggleInvoice: (b: Bill) => void
   onQuickFilter: (f: QuickFilter) => void
   att: ReturnType<typeof useAttachmentManager>
@@ -1139,7 +1235,8 @@ function BillRow({
               </button>
           }
           <button onClick={() => onEdit(bill)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-          <button onClick={() => onDelete(bill.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={() => onVoid(bill.id, bill.name)} title="Void (accountant-safe)" className="p-1 hover:bg-accent rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+          {!hideDelete && <button onClick={() => onDelete(bill.id, bill.name)} title="Delete permanently" className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       </div>
 

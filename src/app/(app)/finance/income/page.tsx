@@ -1,10 +1,10 @@
 ﻿'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2,
   RefreshCw, Layers, Briefcase, Paperclip, X,
-  Building2, BookmarkCheck, Receipt, ReceiptText,
+  Building2, BookmarkCheck, Receipt, ReceiptText, Ban,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, addMonths, addDays } from 'date-fns'
@@ -72,6 +72,10 @@ export default function IncomePage() {
   const [errors, setErrors]           = useState<Record<string, string>>({})
   const [journalLines, setJournalLines] = useState<JournalFormLine[]>([])
   const [journalErrors, setJournalErrors] = useState<Record<string, string>>({})
+  const [hideDeleteBills, setHideDeleteBills] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidConfirm, setVoidConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [voidNote, setVoidNote] = useState('')
   const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
   const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
   const [receivedConfirmGlAccountId, setReceivedConfirmGlAccountId] = useState<string>('')
@@ -93,7 +97,6 @@ export default function IncomePage() {
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
   const att = useAttachmentManager('/api/finance/income')
-  const prevIncomeAmountRef = useRef<number>(0)
 
   // ── FIX: Use todayAU() instead of new Date().toISOString().split('T')[0] ──
   const emptyForm = {
@@ -128,7 +131,7 @@ export default function IncomePage() {
   }
 
   async function loadRefs() {
-    const [aRes, cRes, glRes, mRes, lRes, vRes, eRes] = await Promise.all([
+    const [aRes, cRes, glRes, mRes, lRes, vRes, eRes, sRes] = await Promise.all([
       fetch('/api/finance/accounts'),
       fetch('/api/finance/categories'),           // full list for category/P&L selector
       fetch('/api/finance/categories?forPicker=true'), // filtered for GL journal line picker
@@ -136,6 +139,7 @@ export default function IncomePage() {
       fetch('/api/finance/locations'),
       fetch('/api/finance/contacts'),
       fetch('/api/finance/entities'),
+      fetch('/api/settings'),
     ])
     if (aRes.ok) setAccounts(await aRes.json())
     if (cRes.ok) {
@@ -151,24 +155,46 @@ export default function IncomePage() {
     if (lRes.ok) setLocations(await lRes.json())
     if (vRes.ok) setVendors(await vRes.json())
     if (eRes.ok) setEntities(await eRes.json())
+    if (sRes.ok) {
+      const settings = await sRes.json()
+      setHideDeleteBills(!!settings.uiPreferences?.hideDeleteBills)
+    }
   }
 
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (members.length > 0 || accounts.length > 0) load() }, [members, accounts])
 
-  // When amount changes, auto-fill blank/zero lines only.
-  // SPLIT-SAFE RULE: only update a line's amount when it is blank or exactly zero.
-  // Lines with any non-zero amount (e.g. a GST split like $9.09) are left
-  // untouched so the amount-sync never overwrites a user-configured split.
+  // ── Sync the income amount into journal lines while in "default mirror" state ──
+  //
+  // GL-FIRST invariant: the user owns the journal lines. The amount field is
+  // a UI summary that should track the lines, not drive them — EXCEPT in the
+  // simple 2-line default case where the user is just entering a flat amount.
+  //
+  // "Default mirror" means: exactly 2 lines (one DR + one CR), both with the
+  // SAME amount. This is the out-of-the-box state for any income entry that
+  // hasn't been split for GST or anything else. While in this state, we mirror
+  // the amount field into both lines so typing "35" naturally shows 35.00 on
+  // both sides. The moment the user adds a 3rd line OR changes a line amount
+  // independently, the lines diverge from mirror state and we stop syncing —
+  // every line is now user-owned and protected against any further auto-edits.
+  //
+  // This single rule fixes:
+  //   • "Only the first digit prepopulates" — typing 3 then 5 now updates both
+  //     lines because lines are still mirroring ("3.00","3.00") and remain so.
+  //   • "3rd GST line silently disappears on save" — once a 3rd line is added
+  //     (or the existing two diverge), we stop syncing and the user-configured
+  //     split is preserved end-to-end.
   useEffect(() => {
     if (!showForm || form.amount <= 0) return
-    setJournalLines(lines => lines.map(l =>
-      l.amount === '' || l.amount === '0' || l.amount === '0.00'
-        ? { ...l, amount: form.amount.toFixed(2) }
-        : l
-    ))
-    prevIncomeAmountRef.current = form.amount
-  }, [form.amount]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (journalLines.length !== 2) return                       // 3+ lines → user has built a split, hands off
+    const a0 = journalLines[0]?.amount ?? ''
+    const a1 = journalLines[1]?.amount ?? ''
+    const inMirror = a0 === a1                                  // both sides equal → still in default state
+    if (!inMirror) return
+    const target = form.amount.toFixed(2)
+    if (a0 === target) return                                    // already in sync; avoid render loop
+    setJournalLines(lines => lines.map(l => ({ ...l, amount: target })))
+  }, [form.amount, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
     sessionStorage.setItem('income-dateRange', r); setDateRange(r)
@@ -212,24 +238,20 @@ export default function IncomePage() {
     return defaultIncomeLines()
   }
 
-  function openNew() { prevIncomeAmountRef.current = 0; setEditing(null); setForm(emptyForm); setErrors({}); setJournalLines(defaultIncomeLines()); setJournalErrors({}); setShowForm(true) }
+  function openNew() { setEditing(null); setForm(emptyForm); setErrors({}); setJournalLines(defaultIncomeLines()); setJournalErrors({}); setShowForm(true) }
 
   function openEdit(e: IncomeEntry) {
     setEditing(e)
     setErrors({})
     setJournalErrors({})
-    // Set prevIncomeAmountRef to the entry's ACTUAL amount before setting form state.
-    // This prevents the amount-sync useEffect from treating the entry's existing
-    // amount as a blank value and overwriting loaded split lines (Bug 6 equivalent).
-    prevIncomeAmountRef.current = e.amount
     // Pre-seed journal lines from GL if a journal entry exists, else default using the entry's category.
-    // Show defaults immediately while the async GL fetch is in-flight.
+    // Show defaults immediately while the async GL fetch is in-flight so the editor isn't blank;
+    // the async result overwrites once resolved. The amount→lines mirror effect is split-aware
+    // (only fires when both lines have equal amounts), so loaded GST splits are never overwritten.
     if (e.journalEntryId) {
       setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
       loadExistingJournalLines(e.journalEntryId).then(lines => {
         setJournalLines(lines)
-        // Stamp again after load so the amount-sync useEffect knows the baseline.
-        prevIncomeAmountRef.current = e.amount
       })
     } else {
       setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
@@ -358,9 +380,14 @@ export default function IncomePage() {
           }
         }
 
-        const serialisedLines = linesToSubmit
-          .filter(l => parseFloat(l.amount) > 0)
-          .map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: parseFloat(l.amount), description: l.description || null }))
+        // Final wire payload — linesToSubmit is already filtered by glAccountId above,
+        // so we don't drop any more lines here. Every user-configured line goes to the server.
+        const serialisedLines = linesToSubmit.map(l => ({
+          glAccountId: l.glAccountId,
+          side: l.side,
+          amount: parseFloat(l.amount) || 0,
+          description: l.description || null,
+        }))
 
         const body = {
           id: editing.id,
@@ -440,11 +467,26 @@ export default function IncomePage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this income entry?')) return
-    const res = await fetch(`/api/finance/income?id=${id}`, { method: 'DELETE' })
-    if (res.ok) { toast.success('Income deleted'); load() }
+  function handleDelete(id: string, name: string) { setDeleteConfirm({ id, name }) }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return
+    const res = await fetch(`/api/finance/income?id=${deleteConfirm.id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Income deleted'); setDeleteConfirm(null); load() }
     else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
+  }
+
+  function handleVoid(id: string, name: string) { setVoidNote(''); setVoidConfirm({ id, name }) }
+
+  async function confirmVoid() {
+    if (!voidConfirm) return
+    const res = await fetch('/api/finance/income', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: voidConfirm.id, void: true, voidNote }),
+    })
+    if (res.ok) { toast.success('Income voided'); setVoidConfirm(null); load() }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to void') }
   }
 
   // ── FIX: use todayAU() for the date default ──
@@ -622,7 +664,8 @@ export default function IncomePage() {
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button onClick={() => handleMarkReceived(e)} title="Mark as received" className="p-1 hover:bg-amber-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
                   <button onClick={() => openEdit(e)} title="Edit" className="p-1 hover:bg-amber-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleDelete(e.id)} title="Delete" className="p-1 hover:bg-amber-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleVoid(e.id, e.name)} title="Void" className="p-1 hover:bg-amber-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+                  {!hideDeleteBills && <button onClick={() => handleDelete(e.id, e.name)} title="Delete" className="p-1 hover:bg-amber-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </div>
               </div>
             ))}
@@ -646,13 +689,55 @@ export default function IncomePage() {
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button onClick={() => handleMarkReceived(e)} title="Mark as received" className="p-1 hover:bg-orange-500/10 rounded text-green-500"><CheckCircle2 className="h-3.5 w-3.5" /></button>
                   <button onClick={() => openEdit(e)} title="Edit" className="p-1 hover:bg-orange-500/10 rounded text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleDelete(e.id)} title="Delete" className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleVoid(e.id, e.name)} title="Void" className="p-1 hover:bg-orange-500/10 rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+                  {!hideDeleteBills && <button onClick={() => handleDelete(e.id, e.name)} title="Delete" className="p-1 hover:bg-orange-500/10 rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      <Dialog open={!!voidConfirm} onOpenChange={open => { if (!open) setVoidConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-amber-500" /> Void Income Entry</DialogTitle></DialogHeader>
+          {voidConfirm && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Void <span className="font-medium text-foreground">{voidConfirm.name}</span>? This will create reversal journal entries and mark the income as voided. The record is kept for audit purposes.
+              </p>
+              <div>
+                <label className="text-xs text-muted-foreground">Void reason (optional)</label>
+                <input value={voidNote} onChange={e => setVoidNote(e.target.value)}
+                  placeholder="e.g. Cancelled, entered in error…"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setVoidConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmVoid} className="rounded-md bg-amber-500 text-white px-4 py-1.5 text-sm font-medium">Void Entry</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirm} onOpenChange={open => { if (!open) setDeleteConfirm(null) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2 text-red-600"><Trash2 className="h-4 w-4" /> Delete Income Entry</DialogTitle></DialogHeader>
+          {deleteConfirm && (
+            <div className="space-y-2 py-1">
+              <p className="text-sm text-muted-foreground">
+                Permanently delete <span className="font-medium text-foreground">{deleteConfirm.name}</span>? All related journal entries and transactions will be removed. This cannot be undone.
+              </p>
+              <p className="text-xs text-amber-600 font-medium">Consider using Void instead to preserve the audit trail.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setDeleteConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={confirmDelete} className="rounded-md bg-red-600 text-white px-4 py-1.5 text-sm font-medium">Delete Permanently</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); setErrors({}) } }}>
         <ResizableDialogContent className="w-full sm:max-w-2xl md:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
@@ -988,15 +1073,15 @@ export default function IncomePage() {
           {overdue.map(e => (
             <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue
               colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
-              onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
-              onToggleInvoice={handleToggleInvoice}
+              onEdit={openEdit} onDelete={handleDelete} onVoid={handleVoid} hideDelete={hideDeleteBills}
+              onMarkReceived={handleMarkReceived} onToggleInvoice={handleToggleInvoice}
               att={att} />
           ))}
           {upcoming.map(e => (
             <IncomeRow key={e.id} entry={e} nextExpected={getNextExpected(e)} isOverdue={false}
               colCats={colCats} entryAmountForCat={entryAmountForCat} gridTemplate={gridTemplate}
-              onEdit={openEdit} onDelete={handleDelete} onMarkReceived={handleMarkReceived}
-              onToggleInvoice={handleToggleInvoice}
+              onEdit={openEdit} onDelete={handleDelete} onVoid={handleVoid} hideDelete={hideDeleteBills}
+              onMarkReceived={handleMarkReceived} onToggleInvoice={handleToggleInvoice}
               att={att} />
           ))}
           {futureScheduled.length > 0 && (
@@ -1039,14 +1124,15 @@ export default function IncomePage() {
 
 function IncomeRow({
   entry, nextExpected, isOverdue, colCats, entryAmountForCat, gridTemplate,
-  onEdit, onDelete, onMarkReceived, onToggleInvoice,
+  onEdit, onDelete, onVoid, hideDelete, onMarkReceived, onToggleInvoice,
   att,
 }: {
   entry: IncomeEntry; nextExpected: Date; isOverdue: boolean
   colCats: { id: string; name: string }[]
   entryAmountForCat: (entry: IncomeEntry, catId: string) => number
   gridTemplate: string
-  onEdit: (e: IncomeEntry) => void; onDelete: (id: string) => void
+  onEdit: (e: IncomeEntry) => void; onDelete: (id: string, name: string) => void
+  onVoid: (id: string, name: string) => void; hideDelete: boolean
   onMarkReceived: (e: IncomeEntry) => void
   onToggleInvoice: (e: IncomeEntry) => void
   att: ReturnType<typeof useAttachmentManager>
@@ -1128,7 +1214,8 @@ function IncomeRow({
             <CheckCircle2 className="h-3.5 w-3.5" />
           </button>
           <button onClick={() => onEdit(entry)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
-          <button onClick={() => onDelete(entry.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={() => onVoid(entry.id, entry.name)} title="Void" className="p-1 hover:bg-accent rounded text-amber-500"><Ban className="h-3.5 w-3.5" /></button>
+          {!hideDelete && <button onClick={() => onDelete(entry.id, entry.name)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       </div>
 
