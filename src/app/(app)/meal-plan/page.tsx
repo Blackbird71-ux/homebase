@@ -98,7 +98,7 @@ export default async function MealPlanPage() {
       weekStartsOn={user.weekStartsOn}
       initialWeekStart={toYMDLocal(weekStart)}
       initialEntries={serialized}
-      timezone={user.timezone}
+      timezone={user.family.timezone}
       mealPlanLayout={mealPlanLayout}
     />
   )

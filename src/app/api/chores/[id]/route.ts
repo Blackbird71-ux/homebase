@@ -156,14 +156,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   // Audit log for chore changes
   if (changedFields.length > 0) {
-    void createAuditLog({
-      action: 'CHORE_UPDATED',
-      entityType: 'chore',
-      entityId: id,
-      familyId: user.familyId,
-      userId: user.id,
-      metadata: { changedFields, previous: existing, current: updated },
-    })
+    void createAuditLog(
+      user,
+      'update',
+      'chore',
+      id,
+      `Updated chore: ${updated.title}`,
+      { changedFields, previous: existing, current: updated }
+    )
   }
 
   // Dispatch event so the calendar UI refreshes if events depend on chores
