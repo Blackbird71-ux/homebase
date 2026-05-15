@@ -35,6 +35,7 @@ interface DailyMealColumnProps {
   selectedMealIds?: Set<string>
   onToggleMealSelect?: (entryId: string) => void
   compact?: boolean // mobile: hide empty slots, natural height
+  singleColumn?: boolean // show expanded single-column layout with full day label
   newlyMovedEntryIds?: Set<string> // entry IDs that were just moved in
 }
 
@@ -158,6 +159,7 @@ export function DailyMealColumn({
   selectedMealIds = new Set(),
   onToggleMealSelect,
   compact = false,
+  singleColumn = false,
   newlyMovedEntryIds = new Set(),
 }: DailyMealColumnProps) {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -174,6 +176,62 @@ export function DailyMealColumn({
 
   if (compact) {
     const allEmpty = recipeFilledMealTypes.length === 0
+
+    // ── Single-column expanded layout ──
+    if (singleColumn) {
+      const dayDate = new Date(date + 'T00:00:00')
+      const dayName = dayDate.toLocaleDateString(undefined, { weekday: 'long' })
+      const dayNum  = dayDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+
+      return (
+        <div className="flex gap-3">
+          {/* Left: day label — fixed width so meal slots align across days */}
+          <div className={cn(
+            'flex flex-col items-center justify-start pt-0.5 shrink-0 w-16',
+          )}>
+            <span className={cn(
+              'text-[10px] font-semibold uppercase tracking-wide leading-none',
+              isToday ? 'text-primary' : 'text-muted-foreground'
+            )}>{dayName.slice(0, 3)}</span>
+            <span className={cn(
+              'text-xl font-bold leading-tight tabular-nums',
+              isToday ? 'text-primary' : 'text-foreground'
+            )}>{dayDate.getDate()}</span>
+            <span className="text-[9px] text-muted-foreground/60 leading-none mt-0.5">
+              {dayDate.toLocaleDateString(undefined, { month: 'short' })}
+            </span>
+            {isToday && (
+              <div className="mt-1 h-1 w-1 rounded-full bg-primary" aria-hidden />
+            )}
+          </div>
+
+          {/* Right: all meal slots, always visible */}
+          <div className="flex-1 flex flex-col gap-1 min-w-0">
+            {MEAL_TYPES.map((mealType) => {
+              const entry = getEntryForMealType(mealType.id)
+              const isNewlyMoved = entry ? newlyMovedEntryIds.has(entry.id) : false
+              const isSelected = entry ? selectedMealIds.has(entry.id) : false
+              return (
+                <DroppableMealSlot
+                  key={mealType.id}
+                  date={date}
+                  mealType={mealType}
+                  entry={entry ?? undefined}
+                  isNewlyMoved={isNewlyMoved}
+                  selectMode={selectMode}
+                  isSelected={isSelected}
+                  onToggleMealSelect={onToggleMealSelect}
+                  onMealClick={onMealClick}
+                  onMealClear={onMealClear}
+                  onMealAddToGroceries={onMealAddToGroceries}
+                  compact
+                />
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
 
     return (
       <div className="flex flex-col gap-0.5">

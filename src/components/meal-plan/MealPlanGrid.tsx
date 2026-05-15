@@ -7,7 +7,7 @@ import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { SaveTemplateDialog } from './SaveTemplateDialog'
 import { ApplyTemplateDialog } from './ApplyTemplateDialog'
 import { Button } from '@/components/ui/button'
-import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon, MoreHorizontalIcon, GripVerticalIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon, MoreHorizontalIcon, GripVerticalIcon, LayoutListIcon, LayoutGridIcon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
 import { DEFAULT_MEAL_TYPE, type MealType } from '@/lib/meal-types'
 import {
@@ -26,9 +26,10 @@ interface MealPlanGridProps {
   initialWeekStart: string
   initialEntries: MealPlanEntry[]
   timezone: string
+  mealPlanLayout?: 'single' | 'multi'
 }
 
-export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, initialEntries, timezone }: MealPlanGridProps) {
+export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, initialEntries, timezone, mealPlanLayout: initialLayout = 'multi' }: MealPlanGridProps) {
   const mealData = useMealPlanData(initialWeekStart, initialEntries, timezone)
   const { weekStart, entries, setEntries, loading, scope, setScope, navWeek, goToday, refresh, assign, remove, clearPeriod } = mealData
 
@@ -47,6 +48,20 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [layout, setLayout] = useState<'single' | 'multi'>(initialLayout)
+
+  async function toggleLayout() {
+    const next = layout === 'multi' ? 'single' : 'multi'
+    setLayout(next)
+    // Persist to uiPreferences silently
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uiPreferences: { mealPlanLayout: next } }),
+      })
+    } catch { /* non-critical */ }
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -99,6 +114,9 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
 
           {/* ── Mobile header ── */}
           <div className="flex md:hidden items-center gap-1.5">
+            <Button variant="ghost" size="icon-sm" onClick={toggleLayout} aria-label={layout === 'multi' ? 'Switch to single column' : 'Switch to multi column'} title={layout === 'multi' ? 'Single column' : 'Multi column'}>
+              {layout === 'multi' ? <LayoutListIcon className="h-4 w-4" /> : <LayoutGridIcon className="h-4 w-4" />}
+            </Button>
             <Button variant="ghost" size="icon-sm" onClick={() => navWeek(-1)} disabled={loading} aria-label="Previous week">
               <ChevronLeftIcon className="h-4 w-4" />
             </Button>
@@ -138,6 +156,10 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
 
           {/* ── Desktop header ── */}
           <div className="hidden md:flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={toggleLayout} aria-label={layout === 'multi' ? 'Switch to single column' : 'Switch to multi column'}>
+              {layout === 'multi' ? <LayoutListIcon className="h-4 w-4 mr-1" /> : <LayoutGridIcon className="h-4 w-4 mr-1" />}
+              {layout === 'multi' ? 'Single Column' : 'Multi Column'}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setSaveTemplateOpen(true)}>
               <SaveIcon className="h-4 w-4 mr-1" /> Save Template
             </Button>
@@ -201,28 +223,38 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
 
         {/* Day cards — responsive grid */}
         <div className="flex-1 overflow-y-auto pb-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 md:gap-2">
+          <div className={layout === 'single'
+            ? 'flex flex-col gap-1.5'
+            : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 md:gap-2'
+          }>
             {days.map(day => {
               const ymd = toYMD(day)
               const dayEntries = entries.filter(e => e.date.slice(0, 10) === ymd)
+              const hasAnyMeals = dayEntries.some(e => e.recipes && e.recipes.length > 0)
               return (
-                <div key={ymd} className={`rounded-xl border p-1.5 ${ymd === today ? 'border-primary/30 bg-primary/5' : 'border-border'}`}>
-                <DailyMealColumn
-                  date={ymd}
-                  entries={dayEntries}
-                  isToday={ymd === today}
-                  onMealClick={openModal}
-                  onMealClear={remove}
-                  onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
-                  selectMode={selectMode}
-                  selectedMealIds={selectedMealIds}
-                  onToggleMealSelect={toggleMealSelection}
-                  compact
-                  newlyMovedEntryIds={drag.newlyMovedEntryIds}
-                />
-              </div>
-            )
-          })}
+                <div key={ymd} className={[
+                  'rounded-xl border transition-all duration-150',
+                  ymd === today ? 'border-primary/30 bg-primary/5' : 'border-border',
+                  // Compress empty days in multi-column view; full padding in single
+                  layout === 'single' ? 'p-2' : hasAnyMeals ? 'p-1.5' : 'p-1 opacity-60 hover:opacity-100 hover:p-1.5 hover:border-border/80',
+                ].join(' ')}>
+                  <DailyMealColumn
+                    date={ymd}
+                    entries={dayEntries}
+                    isToday={ymd === today}
+                    onMealClick={openModal}
+                    onMealClear={remove}
+                    onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
+                    selectMode={selectMode}
+                    selectedMealIds={selectedMealIds}
+                    onToggleMealSelect={toggleMealSelection}
+                    compact
+                    singleColumn={layout === 'single'}
+                    newlyMovedEntryIds={drag.newlyMovedEntryIds}
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
 

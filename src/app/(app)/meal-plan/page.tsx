@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { MealPlanGrid } from '@/components/meal-plan/MealPlanGrid'
 import { todayStringInTz } from '@/lib/timezone'
 import { getLocalImageUrl } from '@/lib/image-cache'
-import { startOfDay } from 'date-fns'
 
 function toYMDLocal(date: Date): string {
   const year = date.getFullYear()
@@ -13,7 +12,13 @@ function toYMDLocal(date: Date): string {
 }
 
 export default async function MealPlanPage() {
-  const user = await requireSession()
+  const userSession = await requireSession()
+  // Fetch full user record to read uiPreferences
+  const user = await prisma.user.findUnique({
+    where: { id: userSession.id },
+    select: { weekStartsOn: true, timezone: true, familyId: true, uiPreferences: true },
+  })
+  if (!user) return null
   const todayStr = todayStringInTz(user.timezone)
   const localToday = new Date(todayStr + 'T00:00:00')
 
@@ -79,12 +84,22 @@ export default async function MealPlanPage() {
         : [],
   }))
 
+  // Read mealPlanLayout from uiPreferences JSON column
+  let mealPlanLayout: 'single' | 'multi' = 'multi'
+  if (user.uiPreferences) {
+    try {
+      const prefs = JSON.parse(user.uiPreferences as string)
+      if (prefs?.mealPlanLayout === 'single') mealPlanLayout = 'single'
+    } catch { /* ignore */ }
+  }
+
   return (
     <MealPlanGrid
       weekStartsOn={user.weekStartsOn}
       initialWeekStart={toYMDLocal(weekStart)}
       initialEntries={serialized}
       timezone={user.timezone}
+      mealPlanLayout={mealPlanLayout}
     />
   )
 }

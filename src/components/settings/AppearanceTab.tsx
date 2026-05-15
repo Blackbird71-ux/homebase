@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, CloudSun, MapPin } from 'lucide-react'
+import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, CloudSun, MapPin, LayoutList, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AppearanceTabProps {
@@ -126,6 +126,7 @@ export function AppearanceTab({
   const [doneItemColor, setDoneItemColor] = useState(initialDoneItemColor)
   const [secureCardStyle, setSecureCardStyle] = useState(initialSecureCardStyle)
   const [secureCardColor, setSecureCardColor] = useState(initialSecureCardColor)
+  const [mealPlanLayout, setMealPlanLayout] = useState<'single' | 'multi'>('multi')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<Status>(null)
 
@@ -167,6 +168,9 @@ export function AppearanceTab({
           if (prefs?.secureCardColor) {
             setSecureCardColor(prefs.secureCardColor)
           }
+          if (prefs?.mealPlanLayout === 'single' || prefs?.mealPlanLayout === 'multi') {
+            setMealPlanLayout(prefs.mealPlanLayout)
+          }
           if (prefs?.weatherLocation) {
             setWeatherLocation(prefs.weatherLocation)
           }
@@ -196,6 +200,7 @@ export function AppearanceTab({
           dashboardTodoListId: dashboardTodoListId || null,
           secureCardStyle,
           secureCardColor,
+          mealPlanLayout,
           weatherLocation: weatherLocation || null,
         },
       }
@@ -470,6 +475,81 @@ export function AppearanceTab({
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Meal Planner Layout */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Meal Planner Layout</CardTitle>
+          <CardDescription>
+            Choose how days are displayed in the Meal Planner.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              aria-pressed={mealPlanLayout === 'multi'}
+              onClick={() => setMealPlanLayout('multi')}
+              className={cn(
+                'flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all',
+                mealPlanLayout === 'multi'
+                  ? 'border-primary bg-primary/5 shadow-sm'
+                  : 'border-border hover:border-muted-foreground/30'
+              )}
+            >
+              {/* Mini grid preview */}
+              <div className="w-full aspect-[4/3] rounded-lg border border-border/50 bg-muted/30 p-1.5 grid grid-cols-2 gap-1">
+                {[0,1,2,3].map(i => (
+                  <div key={i} className="rounded bg-muted/60 flex flex-col gap-0.5 p-1">
+                    <div className="h-1 w-3/4 rounded-sm bg-muted-foreground/20" />
+                    <div className="h-2 rounded-sm bg-primary/20" />
+                    <div className="h-1.5 rounded-sm bg-muted/80" />
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-sm font-medium">Grid</span>
+              </div>
+              <span className="text-xs text-muted-foreground text-center leading-tight">See more days at once — great for planning ahead</span>
+            </button>
+
+            <button
+              type="button"
+              aria-pressed={mealPlanLayout === 'single'}
+              onClick={() => setMealPlanLayout('single')}
+              className={cn(
+                'flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all',
+                mealPlanLayout === 'single'
+                  ? 'border-primary bg-primary/5 shadow-sm'
+                  : 'border-border hover:border-muted-foreground/30'
+              )}
+            >
+              {/* Mini list preview */}
+              <div className="w-full aspect-[4/3] rounded-lg border border-border/50 bg-muted/30 p-1.5 flex flex-col gap-1">
+                {[0,1,2].map(i => (
+                  <div key={i} className="rounded bg-muted/60 flex items-center gap-1.5 px-1.5 py-1">
+                    <div className="shrink-0 w-5 flex flex-col items-center">
+                      <div className="h-1 w-4 rounded-sm bg-muted-foreground/20" />
+                      <div className="h-2.5 w-3.5 rounded-sm bg-primary/30" />
+                    </div>
+                    <div className="flex-1 flex flex-col gap-0.5">
+                      <div className="h-1.5 w-full rounded-sm bg-primary/20" />
+                      <div className="h-1 w-2/3 rounded-sm bg-muted/80" />
+                      <div className="h-1 w-1/2 rounded-sm bg-muted/80" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <LayoutList className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-sm font-medium">List</span>
+              </div>
+              <span className="text-xs text-muted-foreground text-center leading-tight">One day per row with all meal slots always visible</span>
+            </button>
+          </div>
         </CardContent>
       </Card>
 
