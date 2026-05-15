@@ -117,6 +117,53 @@ export async function ensureAccountsReceivableCategory(familyId: string): Promis
 }
 
 /**
+ * Ensure the family has a system "Undeposited Funds" asset category.
+ *
+ * This is the suspense/clearing account used when a payment is recorded but no
+ * specific bank GL account is provided. It keeps the GL balanced and gives the
+ * accountant a visible line item to allocate to a bank account later — identical
+ * to the "Undeposited Funds" clearing account in Xero and QuickBooks.
+ *
+ * GL semantics: asset type. Debit = funds received but unallocated.
+ * Returns the category ID. Deterministic: always picks the oldest matching row.
+ */
+export async function ensureUndepositedFundsCategory(familyId: string): Promise<string> {
+  const candidates = await prisma.financeCategory.findMany({
+    where: {
+      familyId,
+      type: 'asset',
+      isSystem: true,
+      hideFromReports: false,
+    },
+    select: { id: true, name: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const matches = candidates.filter(c =>
+    c.name.toLowerCase().includes('undeposited funds'),
+  )
+  if (matches.length > 1) {
+    console.warn(
+      `[finance] Multiple Undeposited Funds categories found for family ${familyId} ` +
+      `(${matches.map(m => `${m.id}=${m.name}`).join(', ')}). ` +
+      `Using oldest (${matches[0].id}); please consolidate via Categories settings.`,
+    )
+  }
+  if (matches[0]) return matches[0].id
+
+  const created = await prisma.financeCategory.create({
+    data: {
+      name: 'Undeposited Funds',
+      type: 'asset',
+      isSystem: true,
+      level: 0,
+      familyId,
+    },
+    select: { id: true },
+  })
+  return created.id
+}
+
+/**
  * Set or update the opening balance for a bank/financial account.
  *
  * GL-first: creates a posted journal entry (DR asset / CR Opening Balances equity)

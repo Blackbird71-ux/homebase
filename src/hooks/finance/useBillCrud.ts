@@ -6,6 +6,7 @@ import { addMonths, addDays } from 'date-fns'
 import { todayAU } from '@/lib/utils'
 import { toMonthlyAmount } from '@/lib/financeShared'
 import { type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import { usePaymentHistory } from '@/hooks/finance/usePaymentHistory'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,9 +82,6 @@ export function useBillCrud() {
     return []
   })
   const [showCatPicker, setShowCatPicker] = useState(false)
-  const [paymentHistoryBillId, setPaymentHistoryBillId] = useState<string | null>(null)
-  const [paymentHistory, setPaymentHistory] = useState<any[]>([])
-  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false)
   const [quickFilter, setQuickFilter] = useState<QuickFilter | null>(null)
   const [hideDeleteBills, setHideDeleteBills] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
@@ -103,6 +101,12 @@ export function useBillCrud() {
   }
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // ── Payment history — extracted hook ────────────────────────────────────────
+  // Manages open panel, payments list, add-payment form, and undo per payment.
+  // load() is passed so the bill list refreshes after any payment change.
+
+  const paymentHistory = usePaymentHistory(() => load())
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -193,8 +197,6 @@ export function useBillCrud() {
   }
 
   // ── Amount → journal lines mirror (GL-FIRST invariant) ──────────────────────
-  // Only syncs while lines are in "default mirror" state (exactly 2 equal-amount lines).
-  // Once a 3rd line is added or amounts diverge, lines are user-owned and never auto-edited.
   useEffect(() => {
     if (!showForm || form.amount <= 0) return
     if (journalLines.length !== 2) return
@@ -208,7 +210,6 @@ export function useBillCrud() {
   }, [form.amount, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── First debit GL → form.categoryId reverse-sync ───────────────────────────
-  // Keeps the convenience "Expense Category" dropdown in sync with line 1 of the journal editor.
   useEffect(() => {
     if (!showForm) return
     const firstDebit = journalLines.find(l => l.side === 'debit')
@@ -244,20 +245,6 @@ export function useBillCrud() {
         setBudgetBillIds(prev => { const s = new Set(prev); s.delete(bill.id); return s })
       }
     } catch { toast.error('Network error updating budget rule') }
-  }
-
-  // ── Payment history ──────────────────────────────────────────────────────────
-
-  function closePaymentHistory() { setPaymentHistoryBillId(null); setPaymentHistory([]) }
-
-  async function openPaymentHistory(bill: Bill) {
-    if (paymentHistoryBillId === bill.id) { closePaymentHistory(); return }
-    setPaymentHistoryBillId(bill.id); setPaymentHistoryLoading(true)
-    try {
-      const res = await fetch(`/api/finance/bills/${bill.id}/payments`)
-      if (res.ok) setPaymentHistory(await res.json())
-      else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to load payment history') }
-    } finally { setPaymentHistoryLoading(false) }
   }
 
   // ── Filter helpers ───────────────────────────────────────────────────────────
@@ -594,9 +581,8 @@ export function useBillCrud() {
     // Derived list data
     rootCategories, overdue, overdueOneOff, upcoming, visibleBills,
     colCats, grandTotal, catTotals, gridTemplate,
-    // Payment history
-    paymentHistoryBillId, paymentHistory, paymentHistoryLoading,
-    openPaymentHistory, closePaymentHistory,
+    // Payment history — from usePaymentHistory hook
+    paymentHistory,
     // Actions
     openNew, openEdit, closeForm,
     handleSave, handleDelete, confirmDelete,

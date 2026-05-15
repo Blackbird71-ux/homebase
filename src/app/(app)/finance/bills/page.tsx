@@ -1,10 +1,9 @@
-﻿'use client'
+'use client'
 
-import { format } from 'date-fns'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt, CreditCard,
-  RefreshCw, Layers, Paperclip, X, Building2,
-  BookmarkCheck, Briefcase, Clock, Ban,
+  RefreshCw, Layers, X, Building2,
+  BookmarkCheck, Briefcase, Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
@@ -46,8 +45,7 @@ export default function BillsPage() {
     hideDeleteBills,
     rootCategories, overdue, overdueOneOff, upcoming, visibleBills,
     colCats, grandTotal, catTotals, gridTemplate,
-    paymentHistoryBillId, paymentHistory, paymentHistoryLoading,
-    openPaymentHistory, closePaymentHistory,
+    paymentHistory,
     openNew, openEdit, closeForm,
     handleSave, handleDelete, confirmDelete,
     handleVoid, confirmVoid,
@@ -155,7 +153,6 @@ export default function BillsPage() {
               <div key={b.id} className="flex items-center justify-between gap-2 text-sm">
                 <div className="min-w-0 flex-1">
                   <span>{b.name}</span>
-                  <span className="text-xs text-muted-foreground ml-2">Due {format(new Date(b.nextDueDate), 'd MMM yyyy')}</span>
                 </div>
                 <span className="font-medium shrink-0">{formatCurrency(b.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
@@ -175,7 +172,7 @@ export default function BillsPage() {
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); } }}>
         <ResizableDialogContent className="w-full sm:max-w-2xl md:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
 
-          {/* Fixed header — title, errors, bill type toggle */}
+          {/* Fixed header */}
           <div className="px-4 pt-4 pb-0 shrink-0">
             <DialogHeader><DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle></DialogHeader>
             {Object.keys(errors).length > 0 && (
@@ -197,11 +194,10 @@ export default function BillsPage() {
             </div>
           </div>
 
-          {/* Two-column body — single scroll on the whole panel, not per-column */}
+          {/* Two-column body */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="flex flex-col md:flex-row">
-
-              {/* Left panel — core fields */}
+              {/* Left panel */}
               <div className="md:w-1/2 px-4 pb-4 space-y-3 md:border-r md:border-border">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -285,14 +281,6 @@ export default function BillsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Location</label>
-                  <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">No location</option>
-                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                </div>
-                <div>
                   <label className="text-xs text-muted-foreground">Expense Category (GL)</label>
                   <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
                     className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
@@ -305,7 +293,7 @@ export default function BillsPage() {
               </div>
               </div>
 
-              {/* Right panel — journal lines + options + notes */}
+              {/* Right panel */}
               <div className="md:w-1/2 px-4 pb-4 space-y-3">
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <JournalLinesEditor
@@ -426,12 +414,6 @@ export default function BillsPage() {
                   <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won't update</p>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {paidConfirmAmount < paidConfirm.bill.amount
-                  ? `A partial transaction of ${formatCurrency(paidConfirmAmount)} will be recorded.`
-                  : `An expense transaction of ${formatCurrency(paidConfirmAmount)} will be recorded on this date.`
-                }
-              </p>
             </div>
           )}
           <DialogFooter>
@@ -441,25 +423,23 @@ export default function BillsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Void confirmation dialog */}
+      {/* Void confirmation */}
       <Dialog open={!!voidConfirm} onOpenChange={open => { if (!open) setVoidConfirm(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton={true}>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-amber-500" /> Void bill</DialogTitle></DialogHeader>
           {voidConfirm && (
             <div className="space-y-3 py-1">
-              <p className="text-sm text-muted-foreground">
-                Void <span className="font-medium text-foreground">{voidConfirm.name}</span>?
-              </p>
+              <p className="text-sm text-muted-foreground">Void <span className="font-medium text-foreground">{voidConfirm.name}</span>?</p>
               <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 space-y-1">
-                <p className="font-medium">What void does (accountant-approved):</p>
+                <p className="font-medium">What void does:</p>
                 <ul className="list-disc list-inside space-y-0.5">
                   <li>Creates reversal journal entries in the GL</li>
-                  <li>The bill and all journals are kept for audit trail</li>
-                  <li>The bill will no longer appear in active lists or reports</li>
+                  <li>Bill and journals kept for audit trail</li>
+                  <li>Bill removed from active lists and reports</li>
                 </ul>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Reason for void (optional)</label>
+                <label className="text-xs text-muted-foreground">Reason (optional)</label>
                 <input value={voidNote} onChange={e => setVoidNote(e.target.value)} placeholder="e.g. Entered in error"
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
@@ -472,22 +452,19 @@ export default function BillsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation dialog */}
+      {/* Delete confirmation */}
       <Dialog open={!!deleteConfirm} onOpenChange={open => { if (!open) setDeleteConfirm(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton={true}>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Trash2 className="h-4 w-4 text-red-500" /> Delete bill</DialogTitle></DialogHeader>
           {deleteConfirm && (
             <div className="space-y-3 py-1">
-              <p className="text-sm text-muted-foreground">
-                Permanently delete <span className="font-medium text-foreground">{deleteConfirm.name}</span>?
-              </p>
+              <p className="text-sm text-muted-foreground">Permanently delete <span className="font-medium text-foreground">{deleteConfirm.name}</span>?</p>
               <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-700 space-y-1">
-                <p className="font-medium">Warning — this cannot be undone:</p>
+                <p className="font-medium">Warning — cannot be undone:</p>
                 <ul className="list-disc list-inside space-y-0.5">
                   <li>GL journal entries will be reversed</li>
-                  <li>Associated transactions will be permanently deleted</li>
-                  <li>No audit trail is kept</li>
-                  <li>Consider using <span className="font-medium">Void</span> instead for a proper audit trail</li>
+                  <li>Associated transactions permanently deleted</li>
+                  <li>No audit trail kept — consider Void instead</li>
                 </ul>
               </div>
             </div>
@@ -513,20 +490,41 @@ export default function BillsPage() {
             </div>
           )}
           {[...overdue, ...upcoming].map(b => (
-            <BillRow key={b.id} bill={b} nextDue={getNextDue(b)} isOverdue={overdue.includes(b)}
-              colCats={colCats} billAmountForCat={billAmountForCat} gridTemplate={gridTemplate}
+            <BillRow
+              key={b.id}
+              bill={b}
+              nextDue={getNextDue(b)}
+              isOverdue={overdue.includes(b)}
+              colCats={colCats}
+              billAmountForCat={billAmountForCat}
+              gridTemplate={gridTemplate}
               inBudget={budgetBillIds.has(b.id)}
-              onEdit={openEdit} onDelete={handleDelete} onVoid={handleVoid} hideDelete={hideDeleteBills}
+              hideDelete={hideDeleteBills}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onVoid={handleVoid}
               onMarkPaid={handleMarkPaid}
               onUnmarkPaid={handleUnmarkPaid}
               onToggleInvoice={handleToggleInvoice}
               onQuickFilter={handleQuickFilter}
               att={att}
-              paymentHistoryBillId={paymentHistoryBillId}
-              paymentHistory={paymentHistory}
-              paymentHistoryLoading={paymentHistoryLoading}
-              onOpenPaymentHistory={openPaymentHistory}
-              onClosePaymentHistory={closePaymentHistory} />
+              glAccounts={glAccounts}
+              // Payment history — from usePaymentHistory via useBillCrud
+              openBillId={paymentHistory.openBillId}
+              payments={paymentHistory.payments}
+              loadingHistory={paymentHistory.loadingHistory}
+              showAddForm={paymentHistory.showAddForm}
+              addForm={paymentHistory.addForm}
+              setAddForm={paymentHistory.setAddForm}
+              addingPayment={paymentHistory.addingPayment}
+              deletingPaymentId={paymentHistory.deletingPaymentId}
+              onOpenPanel={paymentHistory.openPanel}
+              onClosePanel={paymentHistory.closePanel}
+              onOpenAddForm={paymentHistory.openAddForm}
+              onCancelAddForm={paymentHistory.cancelAddForm}
+              onSubmitAddPayment={paymentHistory.submitAddPayment}
+              onDeletePayment={paymentHistory.deletePayment}
+            />
           ))}
           {visibleBills.length > 0 && (
             <div className="grid gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 mt-1"
