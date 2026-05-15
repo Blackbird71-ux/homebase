@@ -340,7 +340,7 @@ export function useProfitLoss() {
           source: 'journal',
         },
       }))
-    const filteredBillItems = billItems.filter(b => !b.item.id || !journalExpenseGlIds.has(b.key))
+    const filteredBillItems = billItems.filter(b => !journalExpenseGlIds.has(b.key))
 
     return [...filteredBillItems, ...txItems, ...journalExpItems]
   }, [bills, transactions, journalGroups, startTs, endTs, start, viewMode, selectedEntityId, periodMonths, billLinkedTxIds])
