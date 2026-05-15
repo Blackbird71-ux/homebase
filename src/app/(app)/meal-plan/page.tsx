@@ -16,10 +16,10 @@ export default async function MealPlanPage() {
   // Fetch full user record to read uiPreferences
   const user = await prisma.user.findUnique({
     where: { id: userSession.id },
-    select: { weekStartsOn: true, timezone: true, familyId: true, uiPreferences: true },
+    select: { weekStartsOn: true, familyId: true, uiPreferences: true, family: { select: { timezone: true } } },
   })
   if (!user) return null
-  const todayStr = todayStringInTz(user.timezone)
+  const todayStr = todayStringInTz(user.family.timezone)
   const localToday = new Date(todayStr + 'T00:00:00')
 
   // Use today as the start date — not the start of the week.
