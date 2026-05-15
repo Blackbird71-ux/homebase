@@ -216,8 +216,9 @@ export function AppearanceTab({
         // Apply accessibility settings immediately without page reload
         document.documentElement.dataset.lineHeight = lineHeight
         document.documentElement.dataset.fontWeight = fontWeight
+        document.documentElement.dataset.fontSize = fontSize
         window.dispatchEvent(new Event('appearance-updated'))
-        setStatus({ type: 'success', message: 'Settings saved. Font size changes apply on next page load.' })
+        setStatus({ type: 'success', message: 'Settings saved.' })
       } else {
         const data = await res.json()
         setStatus({ type: 'error', message: data.error ?? 'Failed to save.' })
@@ -701,7 +702,7 @@ export function AppearanceTab({
                     )}
                   >
                     <div className={cn('w-6 h-6 rounded-full shrink-0', swatch)} />
-                    <span className="text-[10px] font-medium truncate w-full text-center">{label}</span>
+                    <span className="text-xs font-medium truncate w-full text-center">{label}</span>
                   </button>
                 ))}
               </div>

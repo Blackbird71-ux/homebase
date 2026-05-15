@@ -161,7 +161,7 @@ export function WeeklySummaryCard({
               type="button"
               onClick={() => setWeatherOpen(true)}
               title="Today's weather"
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/30"
             >
               <CloudSun className="h-3 w-3" />
               <span className="hidden sm:inline">Weather</span>
@@ -173,7 +173,7 @@ export function WeeklySummaryCard({
                     key={d}
                     type="button"
                     onClick={() => onScopeChange(d)}
-                    className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                    className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
                       (scope ?? 7) === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -257,7 +257,7 @@ export function WeeklySummaryCard({
                         <span className="text-muted-foreground">{m.day}:</span> {m.meal}
                       </p>
                       {m.note && (
-                        <p className="text-[10px] text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
+                        <p className="text-xs text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
                       )}
                     </div>
                   ))}
@@ -275,7 +275,7 @@ export function WeeklySummaryCard({
                 <select
                   value={selectedListId ?? ''}
                   onChange={(e) => onListChange?.(e.target.value)}
-                  className="ml-auto text-[10px] text-muted-foreground bg-transparent border border-border rounded px-1 py-0.5 cursor-pointer max-w-[120px] truncate"
+                  className="ml-auto text-xs text-muted-foreground bg-transparent border border-border rounded px-1 py-0.5 cursor-pointer max-w-[120px] truncate"
                 >
                   {availableLists.map((l) => (
                     <option key={l.id} value={l.id}>{l.name}</option>

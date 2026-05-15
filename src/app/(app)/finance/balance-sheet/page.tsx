@@ -146,7 +146,7 @@ function SectionRow({ label, amount, indent, bold, glCode, muted, positive, onCl
         bold ? 'font-semibold text-foreground' : muted ? 'text-muted-foreground/70 italic' : 'text-muted-foreground',
       )}>
         {glCode && (
-          <span className="text-[10px] font-mono bg-muted px-1 rounded text-muted-foreground/70">
+          <span className="text-xs font-mono bg-muted px-1 rounded text-muted-foreground/70">
             {glCode}
           </span>
         )}
@@ -530,7 +530,7 @@ export default function BalanceSheetPage() {
                   <span className="text-xs text-muted-foreground w-24 shrink-0">{format(new Date(t.date), 'd MMM yyyy')}</span>
                   <span className="flex-1 min-w-0 truncate">{t.description ?? t.payee ?? 'Transaction'}</span>
                   {t.category && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{t.category.name}</span>}
-                  {!t.isCleared && <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded shrink-0">PENDING</span>}
+                  {!t.isCleared && <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded shrink-0">PENDING</span>}
                   <span className={cn('font-semibold shrink-0 tabular-nums',
                     t.type === 'income' ? 'text-green-600' : 'text-red-600')}>
                     {t.type === 'income' ? '+' : '-'}{fmtCurrency(t.amount)}

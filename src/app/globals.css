@@ -682,7 +682,11 @@ body {
 /* ── Accessibility: font weight ── */
 [data-font-weight="medium"] {
   --body-font-weight: 500;
-}
+/* ── Accessibility: font size ── */
+[data-font-size="sm"]   { font-size: 14px; }
+[data-font-size="base"] { font-size: 16px; }
+[data-font-size="lg"]   { font-size: 18px; }
+[data-font-size="xl"]   { font-size: 20px; }
 
 /* ─── Apple System Font Stack (scoped to Apple themes only) ───── */
 .apple-aqua body,

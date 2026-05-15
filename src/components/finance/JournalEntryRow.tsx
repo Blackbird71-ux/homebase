@@ -69,26 +69,26 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
             )}
             <span className="text-xs text-muted-foreground">{format(new Date(entry.date), 'd MMM yyyy')}</span>
             {entry.entity && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
                 style={{ backgroundColor: entry.entity.color ?? '#6B7280' }}>
                 {entry.entity.name}
               </span>
             )}
-            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+            <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
               {TYPE_LABELS[entry.type] ?? entry.type}
             </span>
             {isReversed && !amendedBy && (
-              <span className="text-[10px] bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded border border-red-500/20">
+              <span className="text-xs bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded border border-red-500/20">
                 REVERSED
               </span>
             )}
             {amendedBy && (
-              <span className="text-[10px] bg-orange-500/10 text-orange-600 px-1.5 py-0.5 rounded border border-orange-500/20 font-mono">
+              <span className="text-xs bg-orange-500/10 text-orange-600 px-1.5 py-0.5 rounded border border-orange-500/20 font-mono">
                 AMENDED → {amendedBy.reference ?? amendedBy.id}
               </span>
             )}
             {isAmendment && (
-              <span className="text-[10px] bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded border border-blue-500/20">
+              <span className="text-xs bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded border border-blue-500/20">
                 CORRECTION
               </span>
             )}
@@ -108,11 +108,11 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
 
         <div className="flex flex-col items-end gap-2 shrink-0">
           {isDraft ? (
-            <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+            <span className="text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
               <Clock className="h-2.5 w-2.5" /> Draft
             </span>
           ) : (
-            <span className="text-[10px] bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+            <span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
               <CheckCircle2 className="h-2.5 w-2.5" /> Posted
             </span>
           )}
@@ -188,9 +188,9 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
         <div className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-lg">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Journal Lines</p>
           <div className="grid gap-2 mb-1" style={{ gridTemplateColumns: '1fr 60px 120px' }}>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Account</span>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider text-center">Side</span>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider text-right">Amount</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">Account</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider text-center">Side</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider text-right">Amount</span>
           </div>
           {entry.lines.map(line => (
             <div key={line.id} className="grid gap-2 py-1 border-t border-border/50 first:border-t-0"
@@ -198,7 +198,7 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
               <div>
                 <p className="text-sm">{line.glAccount?.name ?? line.glAccountId}</p>
                 {line.glAccount?.glCode && (
-                  <p className="text-[10px] font-mono text-muted-foreground">{line.glAccount.glCode}</p>
+                  <p className="text-xs font-mono text-muted-foreground">{line.glAccount.glCode}</p>
                 )}
                 {line.description && (
                   <p className="text-xs text-muted-foreground italic">{line.description}</p>

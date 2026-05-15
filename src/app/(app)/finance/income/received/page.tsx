@@ -27,7 +27,7 @@ function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
   return (
     <div className="mt-1">
       <button onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors">
+        className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors">
         <FileText className="h-2.5 w-2.5" />
         Payslip
         {payslip.payPeriodStart && payslip.payPeriodEnd && (
@@ -42,7 +42,7 @@ function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
           {payslip.paygWithheld > 0 && <div className="flex justify-between text-orange-600 dark:text-orange-400"><span>PAYG Withheld</span><span>– {formatCurrency(payslip.paygWithheld)}</span></div>}
           {deductions.filter((d: any) => d.amount > 0).map((d: any, i: number) => <div key={i} className="flex justify-between text-muted-foreground"><span>{d.label}</span><span>– {formatCurrency(d.amount)}</span></div>)}
           <div className="flex justify-between font-semibold border-t border-violet-500/20 pt-1 text-green-600 dark:text-green-400"><span>Net Pay</span><span>{formatCurrency(payslip.netPay)}</span></div>
-          {payslip.sgcAmount > 0 && <div className="flex justify-between text-muted-foreground/70 text-[10px]"><span>SGC Super</span><span>{formatCurrency(payslip.sgcAmount)}</span></div>}
+          {payslip.sgcAmount > 0 && <div className="flex justify-between text-muted-foreground/70 text-xs"><span>SGC Super</span><span>{formatCurrency(payslip.sgcAmount)}</span></div>}
         </div>
       )}
     </div>
@@ -290,8 +290,8 @@ export default function ReceivedIncomePage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{entry.name}</span>
                   {entry.incomeType !== 'one-off'
-                    ? <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 rounded flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> Recurring</span>
-                    : <span className="text-[10px] bg-orange-500/10 text-orange-500 px-1.5 rounded flex items-center gap-0.5"><Layers className="h-2.5 w-2.5" /> One-off</span>
+                    ? <span className="text-xs bg-blue-500/10 text-blue-400 px-1.5 rounded flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> Recurring</span>
+                    : <span className="text-xs bg-orange-500/10 text-orange-500 px-1.5 rounded flex items-center gap-0.5"><Layers className="h-2.5 w-2.5" /> One-off</span>
                   }
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
@@ -322,7 +322,7 @@ export default function ReceivedIncomePage() {
                   {formatCurrency(entry.actualAmountReceived ?? entry.amount)}
                 </p>
                 {entry.actualAmountReceived != null && Math.abs(entry.actualAmountReceived - entry.amount) > 0.005 && (
-                  <p className="text-[10px] text-muted-foreground/60">Expected: {formatCurrency(entry.amount)}</p>
+                  <p className="text-xs text-muted-foreground/60">Expected: {formatCurrency(entry.amount)}</p>
                 )}
               </div>
               <div className="flex items-center gap-0.5 justify-end">

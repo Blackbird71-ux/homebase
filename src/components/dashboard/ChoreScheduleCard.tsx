@@ -152,7 +152,7 @@ export function ChoreScheduleCard({
               type="button"
               onClick={() => setShowOnlyMine(!showOnlyMine)}
               title={showOnlyMine ? 'Show all family chores' : 'Show only my chores'}
-              className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+              className={`flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-md transition-colors ${
                 showOnlyMine
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
@@ -173,7 +173,7 @@ export function ChoreScheduleCard({
                       setInternalScope(d)
                     }
                   }}
-                  className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                  className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
                     scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -269,7 +269,7 @@ export function ChoreScheduleCard({
                           }`}>
                             {c.title}
                           </span>
-                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {c.currentAssignee && (
                               <span className="flex items-center gap-0.5">
                                 <UserIcon className="h-2.5 w-2.5" />

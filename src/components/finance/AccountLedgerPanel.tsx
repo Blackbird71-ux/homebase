@@ -439,7 +439,7 @@ function LedgerRowItem({ row, index }: { row: LedgerRow; index: number }) {
               <span className="text-xs text-muted-foreground truncate max-w-[180px]">{row.vendor}</span>
             )}
             {!row.isCleared && (
-              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">
                 PENDING
               </span>
             )}
@@ -459,7 +459,7 @@ function LedgerRowItem({ row, index }: { row: LedgerRow; index: number }) {
       {/* Source badge */}
       <td className="hidden px-3 py-2.5 lg:table-cell">
         <span className={cn(
-          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold border',
           isJournal
             ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
             : 'bg-blue-500/10   text-blue-600   dark:text-blue-400   border-blue-500/20',

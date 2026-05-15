@@ -557,13 +557,13 @@ export default function BudgetPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-medium">{r.name}</span>
                       {r.category && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white"
+                        <span className="text-xs px-1.5 py-0.5 rounded-full text-white"
                           style={{ backgroundColor: r.category.color ?? '#6B7280' }}>
                           {r.category.name}
                         </span>
                       )}
                       {fromBill && (
-                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">from bill</span>
+                        <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">from bill</span>
                       )}
                     </div>
                     {r.isIncludedInPlanner && (

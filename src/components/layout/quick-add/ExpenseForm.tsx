@@ -226,9 +226,9 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
       <div className="space-y-1.5">
         <Label htmlFor="qa-exp-dr">
           Expense Type
-          <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(debit)</span>
+          <span className="ml-1.5 text-xs font-normal text-muted-foreground">(debit)</span>
           {rememberedExpense && expenseCategoryId && (
-            <span className="ml-2 text-[10px] font-normal text-muted-foreground">(remembered)</span>
+            <span className="ml-2 text-xs font-normal text-muted-foreground">(remembered)</span>
           )}
         </Label>
 
@@ -247,7 +247,7 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
         )}
 
         {!expenseCategoryId && !dataLoading && (
-          <p className="text-[11px] text-amber-500">
+          <p className="text-xs text-amber-500">
             ⚠ Required — this determines which expense appears on your P&amp;L
           </p>
         )}
@@ -257,9 +257,9 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
       <div className="space-y-1.5">
         <Label htmlFor="qa-exp-cr">
           Paid From
-          <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(credit)</span>
+          <span className="ml-1.5 text-xs font-normal text-muted-foreground">(credit)</span>
           {rememberedPayment && paymentGlId && (
-            <span className="ml-2 text-[10px] font-normal text-muted-foreground">(remembered)</span>
+            <span className="ml-2 text-xs font-normal text-muted-foreground">(remembered)</span>
           )}
         </Label>
 
@@ -282,7 +282,7 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
         )}
 
         {!paymentGlId && !dataLoading && paymentGlCategories.length > 0 && (
-          <p className="text-[11px] text-amber-500">
+          <p className="text-xs text-amber-500">
             ⚠ Required — e.g. 1.2 Visa Card, 1.1 Business Cheque, 1.5 Petty Cash
           </p>
         )}

@@ -313,9 +313,9 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
               </div>
 
               <div className="grid gap-2 mb-1 px-1" style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-right">Amount ($)</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Amount ($)</span>
                 <span />
               </div>
 
@@ -348,11 +348,11 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
                           })}
                         </select>
                         {acct && (
-                          <p className="text-[10px] text-muted-foreground/70 mt-0.5 pl-0.5">
+                          <p className="text-xs text-muted-foreground/70 mt-0.5 pl-0.5">
                             Normal: {normalSide(acct.type)} balance ({acct.type})
                           </p>
                         )}
-                        {hasAccountError && <p className="text-[10px] text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>}
+                        {hasAccountError && <p className="text-xs text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>}
                       </div>
 
                       <div className="flex rounded-md border border-input overflow-hidden">
@@ -379,7 +379,7 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
                           )}
                           disabled={saving}
                         />
-                        {hasAmountError && <p className="text-[10px] text-red-500 mt-0.5 text-right">{errors[`line_${i}_amount`]}</p>}
+                        {hasAmountError && <p className="text-xs text-red-500 mt-0.5 text-right">{errors[`line_${i}_amount`]}</p>}
                       </div>
 
                       <button type="button" onClick={() => removeLine(i)} disabled={saving || lines.length <= 2}

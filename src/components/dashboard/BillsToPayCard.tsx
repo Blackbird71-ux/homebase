@@ -75,7 +75,7 @@ export function BillsToPayCard({ bills }: { bills: BillSummaryItem[] }) {
                   <div className="text-right shrink-0">
                     <span className="text-sm font-semibold tabular-nums">{formatCurrency(bill.amount)}</span>
                     {isPartial && (
-                      <p className="text-[10px] text-amber-600 font-medium leading-tight">{formatCurrency(bill.remainingBalance!)} due</p>
+                      <p className="text-xs text-amber-600 font-medium leading-tight">{formatCurrency(bill.remainingBalance!)} due</p>
                     )}
                   </div>
                 </div>

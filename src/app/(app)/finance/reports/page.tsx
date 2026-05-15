@@ -373,9 +373,9 @@ export default function ReportsPage() {
                   )}
                 </div>
                 {bill.isOneOff && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-orange-500/10 text-orange-600">one-off</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-500/10 text-orange-600">one-off</span>
                 )}
-                <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium',
+                <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
                   bill.paid ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600')}>
                   {bill.paid ? 'Paid' : 'Due'}
                 </span>

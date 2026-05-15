@@ -96,20 +96,20 @@ export function CategoryRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             {cat.glCode && (
-              <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{cat.glCode}</span>
+              <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{cat.glCode}</span>
             )}
             <span className="text-sm font-medium">{cat.name}</span>
-            {cat.isSystem && <span className="text-[10px] bg-muted px-1.5 rounded">SYSTEM</span>}
+            {cat.isSystem && <span className="text-xs bg-muted px-1.5 rounded">SYSTEM</span>}
             {flags.map(f => (
               <span key={f} className={cn(
-                'text-[10px] px-1.5 py-0.5 rounded font-medium border',
+                'text-xs px-1.5 py-0.5 rounded font-medium border',
                 f === 'TAX DED' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' :
                 f === 'TAX RPT' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20' :
                 'bg-muted text-muted-foreground border-border'
               )}>{f}</span>
             ))}
             {showToggle && effectivelyCollapsed && hasChildren && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {children.length} subcategor{children.length === 1 ? 'y' : 'ies'} (hidden)
               </span>
             )}
@@ -129,7 +129,7 @@ export function CategoryRow({
 
         <div className="flex items-center gap-1">
           <button onClick={() => onOpenLedger(cat)} title="View account ledger"
-            className="flex items-center gap-1 p-1 px-2 hover:bg-accent rounded text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+            className="flex items-center gap-1 p-1 px-2 hover:bg-accent rounded text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
             <BookOpen className="h-3.5 w-3.5" /> Ledger
           </button>
           <button onClick={() => onEdit(cat)} className="p-1 hover:bg-accent rounded">
@@ -138,7 +138,7 @@ export function CategoryRow({
           {(cat.type === 'asset' || cat.type === 'liability' || cat.type === 'equity') && !cat.isSystem && (
             <button onClick={() => onSetOpeningBalance(cat)} title="Set opening balance"
               className={cn(
-                'px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors',
+                'px-2 py-0.5 rounded-full text-xs font-medium border transition-colors',
                 cat.openingBalance != null
                   ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                   : 'text-muted-foreground border-border hover:border-primary hover:text-primary'

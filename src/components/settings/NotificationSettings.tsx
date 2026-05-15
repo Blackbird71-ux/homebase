@@ -203,7 +203,7 @@ export function NotificationSettings() {
                         <p className="text-sm">
                           {sub.enabled ? 'Active' : 'Paused'}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           Subscribed {new Date(sub.createdAt).toLocaleDateString('en-AU')}
                         </p>
                       </div>

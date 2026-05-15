@@ -120,7 +120,7 @@ export default function LocationsPage() {
                 <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: loc.color ?? '#10B981' }} />
                 <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
                 <span className="font-medium truncate">{loc.name}</span>
-                {!loc.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
+                {!loc.isActive && <span className="text-xs bg-muted px-1.5 rounded">INACTIVE</span>}
               </div>
               {loc.address && <p className="text-xs text-muted-foreground mb-1">{loc.address}</p>}
               <div className="flex items-center gap-2 flex-wrap">

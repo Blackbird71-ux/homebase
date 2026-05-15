@@ -112,7 +112,7 @@ function MobileNav({ pathname }: { pathname: string }) {
           <div className="absolute left-0 right-0 z-30 bg-background border-b border-border shadow-lg overflow-y-auto max-h-[70svh]">
             {groups.map((group) => (
               <div key={group.label} className="px-3 py-2">
-                <p className="px-2 py-1 text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/50">
+                <p className="px-2 py-1 text-xs font-semibold tracking-wider uppercase text-muted-foreground/50">
                   {group.label}
                 </p>
                 {group.items.map((item) => {
@@ -152,7 +152,7 @@ function DesktopSidebar({ pathname }: { pathname: string }) {
   return (
     <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border bg-muted/30 overflow-y-auto">
       <div className="px-4 pt-5 pb-3 shrink-0">
-        <p className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground/60 select-none">
+        <p className="text-xs font-semibold tracking-widest uppercase text-muted-foreground/60 select-none">
           Finance
         </p>
       </div>
@@ -160,7 +160,7 @@ function DesktopSidebar({ pathname }: { pathname: string }) {
       <nav className="flex-1 px-2 pb-4 space-y-5">
         {groups.map((group) => (
           <div key={group.label}>
-            <p className="px-2 mb-1 text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/50 select-none">
+            <p className="px-2 mb-1 text-xs font-semibold tracking-wider uppercase text-muted-foreground/50 select-none">
               {group.label}
             </p>
             <ul className="space-y-0.5">

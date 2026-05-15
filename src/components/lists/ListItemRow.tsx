@@ -130,7 +130,7 @@ export function ListItemRow({
       >
         <span className={`text-sm block ${isCompleted ? 'line-through' : ''}`}>{content}</span>
         {!isCompleted && recipeName && showRecipePills && (
-          <span className="inline-flex text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium mt-0.5">
+          <span className="inline-flex text-xs leading-none px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium mt-0.5">
             {recipeName}
           </span>
         )}
@@ -197,7 +197,7 @@ export function ListItemRow({
             <button
               type="button"
               onClick={() => onAssign(id, null)}
-              className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               title={`Assigned to ${members.find(m => m.id === assignedToUserId)?.name ?? 'Unknown'} — click to unassign`}
             >
               <UserIcon className="h-2.5 w-2.5" />
@@ -210,7 +210,7 @@ export function ListItemRow({
                 const val = e.target.value
                 if (val) onAssign(id, val)
               }}
-              className="h-6 text-[10px] rounded-full border border-input bg-transparent px-1.5 text-muted-foreground hover:text-foreground appearance-none cursor-pointer opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              className="h-6 text-xs rounded-full border border-input bg-transparent px-1.5 text-muted-foreground hover:text-foreground appearance-none cursor-pointer opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
               aria-label="Assign to"
             >
               <option value="">Assign</option>

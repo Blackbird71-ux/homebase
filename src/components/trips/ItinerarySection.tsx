@@ -248,7 +248,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
               <div className="flex items-center gap-3">
                 <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary">
                   <span className="text-xs font-bold">{new Date(day.date).getDate()}</span>
-                  <span className="text-[10px] uppercase leading-none">
+                  <span className="text-xs uppercase leading-none">
                     {new Date(day.date).toLocaleDateString('en-AU', { month: 'short' })}
                   </span>
                 </div>
@@ -368,7 +368,7 @@ function ActivityRow({
             </span>
           )}
           {activity.category && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-medium bg-muted">
+            <span className="px-1.5 py-0.5 rounded text-xs uppercase font-medium bg-muted">
               {activity.category}
             </span>
           )}

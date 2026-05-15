@@ -158,15 +158,15 @@ export function CategoryGroup({
           {category}
         </p>
         {aisle && (
-          <span className="text-[10px] font-medium text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded ml-1">
+          <span className="text-xs font-medium text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded ml-1">
             Aisle {aisle}
           </span>
         )}
-        <span className="text-[10px] text-muted-foreground ml-1">
+        <span className="text-xs text-muted-foreground ml-1">
           ({itemCount} item{itemCount !== 1 ? 's' : ''})
         </span>
         {priceSubtotal > 0 && (
-          <span className="text-[10px] text-muted-foreground ml-auto flex items-center gap-0.5">
+          <span className="text-xs text-muted-foreground ml-auto flex items-center gap-0.5">
             <DollarSignIcon className="h-2.5 w-2.5" />
             {priceSubtotal.toFixed(2)}
           </span>

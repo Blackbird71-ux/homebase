@@ -99,7 +99,7 @@ export function MealSlotCell({
                 </span>
               )}
               <span className={cn(
-                'text-[10px] font-medium',
+                'text-xs font-medium',
                 naturalHeight ? '' : 'line-clamp-1',
                 isNewlyMoved && 'text-primary'
               )}>
@@ -122,7 +122,7 @@ export function MealSlotCell({
     displayContent = (
       <div className="space-y-0">
         <p className={cn(
-          'text-[10px] font-medium',
+          'text-xs font-medium',
           naturalHeight ? '' : 'line-clamp-2',
           isNewlyMoved && 'text-primary'
         )}>{recipeName}</p>
@@ -139,7 +139,7 @@ export function MealSlotCell({
   } else if (hasNote) {
     displayContent = (
       <p className={cn(
-        'text-[10px] font-medium italic',
+        'text-xs font-medium italic',
         naturalHeight ? '' : 'line-clamp-3',
         isNewlyMoved && 'text-primary'
       )}>{note}</p>
@@ -305,7 +305,7 @@ function DraggableRecipeItem({
         </span>
       )}
       <span className={cn(
-        'text-[10px] font-medium',
+        'text-xs font-medium',
         naturalHeight ? '' : 'line-clamp-1',
         isNewlyMoved && 'text-primary'
       )}>

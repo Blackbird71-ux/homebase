@@ -40,7 +40,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
           return (
             <div
               key={d}
-              className={`py-2.5 text-center text-[10px] font-semibold uppercase tracking-widest ${isWeekend ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}
+              className={`py-2.5 text-center text-xs font-semibold uppercase tracking-widest ${isWeekend ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}
             >
               <span className="hidden sm:inline">{d}</span>
               <span className="sm:hidden">{d.slice(0, 1)}</span>
@@ -95,7 +95,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
                   {format(day, 'd')}
                 </span>
                 {dayEvents.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground font-medium mt-0.5 mr-0.5 hidden md:block">
+                  <span className="text-xs text-muted-foreground font-medium mt-0.5 mr-0.5 hidden md:block">
                     +{dayEvents.length - 3}
                   </span>
                 )}
@@ -107,7 +107,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
                   <EventBadge key={e.id} event={e} onClick={onEventClick} />
                 ))}
                 {dayEvents.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground px-1 md:hidden">
+                  <span className="text-xs text-muted-foreground px-1 md:hidden">
                     +{dayEvents.length - 3}
                   </span>
                 )}

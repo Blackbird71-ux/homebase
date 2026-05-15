@@ -160,7 +160,7 @@ export default function TransactionsPage() {
                   <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Required for GL entry. Select bank account, term deposit, property, etc.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Required for GL entry. Select bank account, term deposit, property, etc.</p>
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Member</label>
@@ -267,12 +267,12 @@ export default function TransactionsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium truncate">{t.payee ?? t.description ?? 'Transaction'}</span>
-                    {!t.isCleared    && <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-1.5 rounded">PENDING</span>}
-                    {t.isPrivate     && <span className="text-[10px] bg-muted px-1.5 rounded">PRIVATE</span>}
-                    {t.isTransfer    && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">TRANSFER</span>}
+                    {!t.isCleared    && <span className="text-xs bg-yellow-500/10 text-yellow-500 px-1.5 rounded">PENDING</span>}
+                    {t.isPrivate     && <span className="text-xs bg-muted px-1.5 rounded">PRIVATE</span>}
+                    {t.isTransfer    && <span className="text-xs bg-blue-500/10 text-blue-500 px-1.5 rounded">TRANSFER</span>}
                     {/* Spec §6.4: show "Opening Balance" badge instead of normal type badge */}
                     {isOpeningBalance && (
-                      <span className="text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
+                      <span className="text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
                         OPENING BALANCE
                       </span>
                     )}
@@ -283,7 +283,7 @@ export default function TransactionsPage() {
                     {t.member   && <span>{t.member.name}</span>}
                     {t.location && <span>{t.location.name}</span>}
                     {t.entity && !t.entity.isDefault && (
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                      <span className="px-1.5 py-0.5 rounded-full text-xs font-medium"
                         style={{ backgroundColor: t.entity.color ? `${t.entity.color}20` : undefined, color: t.entity.color ?? undefined }}>
                         {t.entity.name}
                       </span>

@@ -24,7 +24,7 @@ function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
     <div className="mt-1.5">
       <button
         onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors">
+        className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors">
         <FileText className="h-2.5 w-2.5" />
         Payslip
         {payslip.payPeriodStart && payslip.payPeriodEnd && (
@@ -64,7 +64,7 @@ function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
             <span>{formatCurrency(payslip.netPay)}</span>
           </div>
           {payslip.sgcAmount > 0 && (
-            <div className="flex justify-between text-muted-foreground/70 text-[10px]">
+            <div className="flex justify-between text-muted-foreground/70 text-xs">
               <span>SGC Super (informational)</span>
               <span>{formatCurrency(payslip.sgcAmount)}</span>
             </div>
@@ -116,21 +116,21 @@ export function IncomeRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{entry.name}</span>
-            {!entry.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
-            {entry.autoPay && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">DIRECT</span>}
+            {!entry.isActive && <span className="text-xs bg-muted px-1.5 rounded">INACTIVE</span>}
+            {entry.autoPay && <span className="text-xs bg-blue-500/10 text-blue-500 px-1.5 rounded">DIRECT</span>}
             {hasRemittance && (
-              <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
+              <span className="text-xs bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
                 <Receipt className="h-2.5 w-2.5" /> POSTED
               </span>
             )}
             {entry.isTaxTracked && (
-              <span className="text-[10px] bg-orange-500/10 text-orange-600 px-1.5 rounded flex items-center gap-0.5">
+              <span className="text-xs bg-orange-500/10 text-orange-600 px-1.5 rounded flex items-center gap-0.5">
                 <ReceiptText className="h-2.5 w-2.5" /> TAX TRACKED
                 {entry.taxRate != null && <span className="font-medium">{entry.taxRate}%</span>}
               </span>
             )}
             {entry.entity && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
                 style={{ backgroundColor: entry.entity.color ?? '#6B7280' }}>
                 {entry.entity.name}
               </span>
@@ -154,7 +154,7 @@ export function IncomeRow({
         <div className="text-right">
           <p className="text-sm font-semibold">{formatCurrency(entry.amount)}</p>
           {entry.actualAmountReceived != null && Math.abs(entry.actualAmountReceived - entry.amount) > 0.005 && (
-            <p className="text-[10px] text-green-600 dark:text-green-400">Actual: {formatCurrency(entry.actualAmountReceived)}</p>
+            <p className="text-xs text-green-600 dark:text-green-400">Actual: {formatCurrency(entry.actualAmountReceived)}</p>
           )}
         </div>
         <div className="flex items-center gap-0.5 justify-end">

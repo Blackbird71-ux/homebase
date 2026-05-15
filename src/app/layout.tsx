@@ -22,12 +22,6 @@ export const metadata: Metadata = {
   },
 }
 
-const fontSizeClassMap: Record<string, string> = {
-  sm: 'text-sm',
-  base: 'text-base',
-  lg: 'text-lg',
-  xl: 'text-xl',
-}
 
 export default async function RootLayout({
   children,
@@ -67,13 +61,13 @@ export default async function RootLayout({
     console.error('[layout] Failed to read user data:', err)
   }
 
-  const fontSizeClass = fontSizeClassMap[fontSize] ?? 'text-base'
   const showUmami = Boolean(umamiScriptUrl && umamiSiteId)
 
   return (
     <html
       lang="en"
-      className={`h-full ${fontSizeClass}`}
+      className="h-full"
+      data-font-size={fontSize}
       data-line-height={lineHeight}
       data-font-weight={fontWeight}
       suppressHydrationWarning

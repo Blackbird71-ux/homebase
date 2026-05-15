@@ -370,7 +370,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
                             </div>
                           )}
                           {contact.notes && (
-                            <p className="text-[10px] text-muted-foreground/60 italic mt-1">{contact.notes}</p>
+                            <p className="text-xs text-muted-foreground/60 italic mt-1">{contact.notes}</p>
                           )}
                           {isSecured && (
                             <div className="pt-2">

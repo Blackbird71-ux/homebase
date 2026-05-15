@@ -355,13 +355,13 @@ export default function TaxReportPage() {
           <div className="flex gap-4 flex-wrap">
             {jointActualsIncome > 0 && (
               <div className="flex-1 min-w-[160px]">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">Actuals</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">Actuals</p>
                 <LineRow label="Total Joint Income" amount={jointActualsIncome} bold color="text-green-600 dark:text-green-400" />
               </div>
             )}
             {jointProjectedIncome > 0 && (
               <div className="flex-1 min-w-[160px]">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">Projected</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">Projected</p>
                 <LineRow label="Total Joint Projected" amount={jointProjectedIncome} bold color="text-blue-600 dark:text-blue-400" />
               </div>
             )}

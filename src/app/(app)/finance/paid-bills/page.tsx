@@ -293,23 +293,23 @@ function PaidBillRow({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{bill.name}</span>
             {bill.autoPay && (
-              <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>
+              <span className="text-xs bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>
             )}
             {isOneOff
-              ? <span className="text-[10px] bg-orange-500/10 text-orange-500 px-1.5 rounded flex items-center gap-0.5">
+              ? <span className="text-xs bg-orange-500/10 text-orange-500 px-1.5 rounded flex items-center gap-0.5">
                   <Layers className="h-2.5 w-2.5" /> One-off
                 </span>
-              : <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 rounded flex items-center gap-0.5">
+              : <span className="text-xs bg-blue-500/10 text-blue-400 px-1.5 rounded flex items-center gap-0.5">
                   <RefreshCw className="h-2.5 w-2.5" /> Recurring
                 </span>
             }
             {installments > 1 && (
-              <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded">
+              <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded">
                 {installments} installments
               </span>
             )}
             {bill.entity && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
                 style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>
                 {bill.entity.name}
               </span>
@@ -504,7 +504,7 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
               }
               {p.transaction && (
                 <span className={cn(
-                  'text-[10px] px-1.5 rounded shrink-0',
+                  'text-xs px-1.5 rounded shrink-0',
                   p.transaction.isCleared
                     ? 'bg-green-500/10 text-green-600'
                     : 'bg-amber-500/10 text-amber-600',
@@ -557,7 +557,7 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
                 />
               </div>
               {parseFloat(addForm.amount) > remaining + 0.005 && (
-                <p className="text-[10px] text-destructive mt-0.5">
+                <p className="text-xs text-destructive mt-0.5">
                   Exceeds remaining balance of {formatCurrency(remaining)}
                 </p>
               )}
@@ -577,7 +577,7 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
           <div>
             <label className="text-xs text-muted-foreground">
               Pay from GL account
-              <span className="ml-1 text-[10px] text-muted-foreground/70">
+              <span className="ml-1 text-xs text-muted-foreground/70">
                 (leave blank → posts to Undeposited Funds)
               </span>
             </label>
@@ -594,7 +594,7 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
               ))}
             </select>
             {!addForm.glAccountId && (
-              <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
+              <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3 shrink-0" />
                 Will post to Undeposited Funds — allocate to a bank account when deposited
               </p>

@@ -266,7 +266,7 @@ export default function AccountsPage() {
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: a.color ?? '#6B7280' }} />
                 <span className="font-medium truncate">{a.name}</span>
-                {!a.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
+                {!a.isActive && <span className="text-xs bg-muted px-1.5 rounded">INACTIVE</span>}
               </div>
               {a.institution && <p className="text-xs text-muted-foreground mb-1">{a.institution}</p>}
               <p className="text-xl font-bold mb-1">{formatCurrency(a.currentBalance, a.currency)}</p>

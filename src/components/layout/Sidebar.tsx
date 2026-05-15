@@ -84,7 +84,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           {!collapsed && (
             <>
               Quick Add
-              <kbd className="ml-auto px-1 py-0.5 rounded bg-muted text-[10px] font-mono">⌘K</kbd>
+              <kbd className="ml-auto px-1 py-0.5 rounded bg-muted text-xs font-mono">⌘K</kbd>
             </>
           )}
         </button>

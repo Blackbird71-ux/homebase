@@ -74,7 +74,7 @@ export function ShoppingListCard({
               <select
                 value={selectedListId ?? ''}
                 onChange={(e) => onListChange?.(e.target.value)}
-                className="text-[10px] text-muted-foreground bg-transparent border border-border rounded px-1.5 py-0.5 cursor-pointer max-w-[110px] truncate appearance-none pr-5"
+                className="text-xs text-muted-foreground bg-transparent border border-border rounded px-1.5 py-0.5 cursor-pointer max-w-[110px] truncate appearance-none pr-5"
               >
                 <option value="">Auto (recent)</option>
                 {availableLists.map((l) => (

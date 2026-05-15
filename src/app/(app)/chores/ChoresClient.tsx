@@ -264,7 +264,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
         </div>
 
         {lastCompleted && (
-          <p className="text-[11px] text-muted-foreground/70 pt-1 border-t border-border/40 mt-1">
+          <p className="text-xs text-muted-foreground/70 pt-1 border-t border-border/40 mt-1">
             Last done by {lastCompleted.completedBy.name} on{' '}
             {new Date(lastCompleted.completedAt).toLocaleDateString('en-AU', {
               weekday: 'short', day: 'numeric', month: 'short',
@@ -318,7 +318,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
                 key={d}
                 type="button"
                 onClick={() => setScope(d)}
-                className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
                   scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -394,7 +394,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
 
                 {/* Overdue badge */}
                 {overdue && !isCompleted && (
-                  <span className="shrink-0 text-[11px] font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                  <span className="shrink-0 text-xs font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
                     Overdue
                   </span>
                 )}

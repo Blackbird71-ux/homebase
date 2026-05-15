@@ -148,9 +148,9 @@ export function JournalLinesEditor({
       {/* ── Column headers ───────────────────────────────────────────────── */}
       <div className="grid gap-2 px-1 mb-1"
         style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-right">Amount ($)</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Amount ($)</span>
         <span />
       </div>
 
@@ -190,16 +190,16 @@ export function JournalLinesEditor({
                   })}
                 </select>
                 {acct ? (
-                  <p className="text-[10px] text-muted-foreground/70 mt-0.5 pl-0.5">
+                  <p className="text-xs text-muted-foreground/70 mt-0.5 pl-0.5">
                     Normal: {normalSide(acct.type)} balance ({acct.type})
                   </p>
                 ) : lineHints[i] ? (
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5 pl-0.5 italic">
+                  <p className="text-xs text-muted-foreground/60 mt-0.5 pl-0.5 italic">
                     {lineHints[i]}
                   </p>
                 ) : null}
                 {hasAccountError && (
-                  <p className="text-[10px] text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>
+                  <p className="text-xs text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>
                 )}
               </div>
 
@@ -249,7 +249,7 @@ export function JournalLinesEditor({
                   )}
                 />
                 {hasAmountError && (
-                  <p className="text-[10px] text-red-500 mt-0.5 text-right">{errors[`line_${i}_amount`]}</p>
+                  <p className="text-xs text-red-500 mt-0.5 text-right">{errors[`line_${i}_amount`]}</p>
                 )}
               </div>
 

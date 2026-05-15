@@ -209,7 +209,7 @@ export default function EntitiesPage() {
                 ))}
               </select>
               {typeHint(form.type) && (
-                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
                   <Receipt className="h-3 w-3" /> {typeHint(form.type)}
                 </p>
               )}
@@ -298,15 +298,15 @@ export default function EntitiesPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium">{entity.name}</span>
                     {entity.isDefault && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded-full font-medium">
+                      <span className="inline-flex items-center gap-0.5 text-xs bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded-full font-medium">
                         <Star className="h-2.5 w-2.5 fill-current" /> DEFAULT
                       </span>
                     )}
-                    <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
+                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
                       {typeLabel(entity.type)}
                     </span>
                     {hint && (
-                      <span className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                      <span className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                         <Receipt className="h-2.5 w-2.5" /> {hint}
                       </span>
                     )}
@@ -348,7 +348,7 @@ export default function EntitiesPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium line-through text-muted-foreground">{entity.name}</span>
-                <span className="ml-2 text-[10px] bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
+                <span className="ml-2 text-xs bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
                   {typeLabel(entity.type)}
                 </span>
               </div>

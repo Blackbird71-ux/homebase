@@ -129,7 +129,7 @@ function DatabaseBackupsSection() {
               <div key={backup.filename} className="flex items-center justify-between px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm truncate">{backup.filename}</p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {new Date(backup.createdAt).toLocaleDateString('en-AU', {
                       year: 'numeric', month: 'short', day: 'numeric',
                       hour: '2-digit', minute: '2-digit',

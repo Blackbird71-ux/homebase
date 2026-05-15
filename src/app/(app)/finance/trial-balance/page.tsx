@@ -279,7 +279,7 @@ export default function TrialBalancePage() {
                           style={{ gridTemplateColumns: '3rem 1fr 6rem minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}
                           title="Click to view General Ledger for this account"
                         >
-                          <span className="text-[11px] font-mono text-muted-foreground/70">
+                          <span className="text-xs font-mono text-muted-foreground/70">
                             {acct.glCode ?? '—'}
                           </span>
                           <div className="min-w-0">
@@ -289,7 +289,7 @@ export default function TrialBalancePage() {
                           </div>
                           <div className="text-center">
                             <span className={cn(
-                              'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                              'text-xs font-medium px-1.5 py-0.5 rounded-full',
                               TYPE_BG[acct.type], TYPE_COLOR[acct.type],
                             )}>
                               {acct.type}
@@ -361,7 +361,7 @@ export default function TrialBalancePage() {
             <div className="flex items-center gap-3 flex-wrap">
               <div>
                 {glData.glAccount.glCode && (
-                  <span className="text-[11px] font-mono text-muted-foreground mr-2">
+                  <span className="text-xs font-mono text-muted-foreground mr-2">
                     {glData.glAccount.glCode}
                   </span>
                 )}
@@ -370,7 +370,7 @@ export default function TrialBalancePage() {
                     ? `${glData.glAccount.parentName} — ${glData.glAccount.name}`
                     : glData.glAccount.name}
                 </span>
-                <span className={cn('ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full', TYPE_BG[glData.glAccount.type], TYPE_COLOR[glData.glAccount.type])}>
+                <span className={cn('ml-2 text-xs font-medium px-1.5 py-0.5 rounded-full', TYPE_BG[glData.glAccount.type], TYPE_COLOR[glData.glAccount.type])}>
                   {glData.glAccount.type}
                 </span>
               </div>
@@ -443,7 +443,7 @@ export default function TrialBalancePage() {
                   <span className="text-xs text-muted-foreground pt-0.5">
                     {format(new Date(line.date), 'd MMM yyyy')}
                   </span>
-                  <span className="text-[11px] font-mono text-muted-foreground pt-0.5">
+                  <span className="text-xs font-mono text-muted-foreground pt-0.5">
                     {line.reference || '—'}
                   </span>
                   <div className="min-w-0 pr-2">
@@ -453,7 +453,7 @@ export default function TrialBalancePage() {
                     )}
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className={cn(
-                        'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                        'text-xs px-1.5 py-0.5 rounded-full font-medium',
                         line.type === 'journal'
                           ? 'bg-muted text-muted-foreground'
                           : 'bg-blue-500/10 text-blue-600 dark:text-blue-400',

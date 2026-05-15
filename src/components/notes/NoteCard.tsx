@@ -49,27 +49,27 @@ export function NoteCard({
               />
               <div className="flex items-center gap-1 shrink-0">
                 {isSecured && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 px-1.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 px-1.5 py-0.5 rounded-full">
                     <ShieldCheckIcon className="h-2.5 w-2.5" /> Secure
                   </span>
                 )}
                 {isPrivate ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full">
                     <LockIcon className="h-2.5 w-2.5" /> Private
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 rounded-full">
                     <UsersIcon className="h-2.5 w-2.5" /> Family
                   </span>
                 )}
                 {isRecentlyUpdated && (
-                  <span className="text-[10px] bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-1.5 py-0.5 rounded-full">
+                  <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-1.5 py-0.5 rounded-full">
                     New
                   </span>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-0.5">
                 <CalendarIcon className="h-2.5 w-2.5" />
                 <span>{formattedDate}</span>
@@ -89,7 +89,7 @@ export function NoteCard({
                   dangerouslySetInnerHTML={{ __html: content || '' }}
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[10px] font-medium text-muted-foreground bg-background/80 px-2 py-1 rounded-full backdrop-blur-sm">
+                  <span className="text-xs font-medium text-muted-foreground bg-background/80 px-2 py-1 rounded-full backdrop-blur-sm">
                     🔒 PIN required to view
                   </span>
                 </div>
@@ -110,7 +110,7 @@ export function NoteCard({
                   return (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full font-medium"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full font-medium"
                       style={{
                         backgroundColor: color ? `${color}20` : undefined,
                         color: color || undefined,
@@ -127,7 +127,7 @@ export function NoteCard({
                   )
                 })}
                 {tags.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     +{tags.length - 3} more
                   </span>
                 )}

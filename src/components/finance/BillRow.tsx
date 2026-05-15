@@ -116,31 +116,31 @@ export function BillRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{bill.name}</span>
-            {!bill.isActive && <span className="text-[10px] bg-muted px-1.5 rounded">INACTIVE</span>}
-            {bill.autoPay   && <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
+            {!bill.isActive && <span className="text-xs bg-muted px-1.5 rounded">INACTIVE</span>}
+            {bill.autoPay   && <span className="text-xs bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
             {hasInvoice && (
-              <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
+              <span className="text-xs bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
                 <Receipt className="h-2.5 w-2.5" /> POSTED
               </span>
             )}
             {bill.invoiceReceived && !hasInvoice && (
-              <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded flex items-center gap-0.5"
+              <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded flex items-center gap-0.5"
                 title="invoiceReceived=true but no posted GL journal — data integrity warning">
                 <Receipt className="h-2.5 w-2.5" /> POSTED (no GL)
               </span>
             )}
             {inBudget && (
-              <span className="text-[10px] bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
+              <span className="text-xs bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
                 <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET
               </span>
             )}
             {isPartiallyPaid && (
-              <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 rounded">
+              <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded">
                 PARTIAL
               </span>
             )}
             {bill.entity && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white"
+              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
                 style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>
                 {bill.entity.name}
               </span>
@@ -182,7 +182,7 @@ export function BillRow({
         <div className="text-right">
           <p className="text-sm font-semibold">{formatCurrency(bill.amount)}</p>
           {isPartiallyPaid && (
-            <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+            <p className="text-xs text-amber-600 font-medium mt-0.5">
               {formatCurrency(totalPaid)} paid · {formatCurrency(remaining)} left
             </p>
           )}
@@ -315,7 +315,7 @@ export function BillRow({
                   }
                   {p.transaction && (
                     <span className={cn(
-                      'text-[10px] px-1.5 rounded shrink-0',
+                      'text-xs px-1.5 rounded shrink-0',
                       p.transaction.isCleared
                         ? 'bg-green-500/10 text-green-600'
                         : 'bg-amber-500/10 text-amber-600',
@@ -369,7 +369,7 @@ export function BillRow({
                     />
                   </div>
                   {parseFloat(addForm.amount) > remaining + 0.005 && (
-                    <p className="text-[10px] text-destructive mt-0.5">
+                    <p className="text-xs text-destructive mt-0.5">
                       Exceeds remaining balance of {formatCurrency(remaining)}
                     </p>
                   )}
@@ -391,7 +391,7 @@ export function BillRow({
               <div>
                 <label className="text-xs text-muted-foreground">
                   Pay from GL account
-                  <span className="ml-1 text-[10px] text-muted-foreground/70">(leave blank → posts to Undeposited Funds)</span>
+                  <span className="ml-1 text-xs text-muted-foreground/70">(leave blank → posts to Undeposited Funds)</span>
                 </label>
                 <select
                   value={addForm.glAccountId}
@@ -406,7 +406,7 @@ export function BillRow({
                   ))}
                 </select>
                 {!addForm.glAccountId && (
-                  <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
+                  <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                     Will post to Undeposited Funds — allocate to a bank account when deposited
                   </p>

@@ -153,7 +153,7 @@ export function OverviewClient({
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color ?? '#6B7280' }} />
                 <span className="text-sm font-medium truncate">{a.name}</span>
-                <span className="text-[10px] uppercase text-muted-foreground ml-auto">{a.type}</span>
+                <span className="text-xs uppercase text-muted-foreground ml-auto">{a.type}</span>
               </div>
               <p className="text-lg font-bold">{formatCurrency(a.currentBalance, a.currency)}</p>
             </div>

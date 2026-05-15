@@ -46,7 +46,7 @@ export function EventBadge({
         style={{ backgroundColor: color + '20', color }}
       >
         {specialIcon ? (
-          <span className="shrink-0 text-[10px]" title={specialIcon.title}>{specialIcon.icon}</span>
+          <span className="shrink-0 text-xs" title={specialIcon.title}>{specialIcon.icon}</span>
         ) : (event.isRecurring || isRecurringInstance) ? (
           <span className="shrink-0 text-[9px]" title="Repeating">↻</span>
         ) : null}

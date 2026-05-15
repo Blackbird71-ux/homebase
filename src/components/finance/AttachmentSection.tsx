@@ -100,7 +100,7 @@ export function AttachmentSection({
             <Upload className="h-3.5 w-3.5" />
             {uploading ? 'Uploading…' : attachments.length === 0 ? firstUploadLabel : 'Upload Reference Doc'}
           </button>
-          <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC &middot; Max 2 files</p>
+          <p className="text-xs text-muted-foreground">PDF, JPG, PNG, DOC &middot; Max 2 files</p>
         </div>
       )}
     </div>

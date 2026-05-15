@@ -320,7 +320,7 @@ export function ExportGroceriesModal({
                                   {ing.text}
                                 </span>
                                 {isHeading && (
-                                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
+                                  <span className="text-xs uppercase tracking-wider text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
                                     heading
                                   </span>
                                 )}

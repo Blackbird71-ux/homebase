@@ -56,7 +56,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
             >
               <div className="flex items-center gap-3 mb-2">
                 <span className={[
-                  'text-[10px] font-bold uppercase tracking-widest w-8 shrink-0',
+                  'text-xs font-bold uppercase tracking-widest w-8 shrink-0',
                   today ? 'text-primary' : 'text-muted-foreground',
                 ].join(' ')}>
                   {format(day, 'EEE')}
@@ -72,7 +72,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                 {allEvents.map((e) => (
                   <div key={e.id} onClick={(ev) => { ev.stopPropagation(); onEventClick(e) }}>
                     {!e.isAllDay && (
-                      <span className="text-[10px] text-muted-foreground font-medium block mb-0.5">
+                      <span className="text-xs text-muted-foreground font-medium block mb-0.5">
                         {format(new Date(e.start), 'h:mm a')}
                       </span>
                     )}
@@ -105,7 +105,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                 ].join(' ')}
               >
                 <p className={[
-                  'text-[10px] font-bold uppercase tracking-widest mb-1',
+                  'text-xs font-bold uppercase tracking-widest mb-1',
                   today ? 'text-primary' : 'text-muted-foreground',
                 ].join(' ')}>
                   {format(day, 'EEE')}
@@ -166,7 +166,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                 >
                   {timed.map((e) => (
                     <div key={e.id} className="flex flex-col gap-0.5" onClick={(ev) => ev.stopPropagation()}>
-                      <span className="text-[10px] text-muted-foreground font-medium px-1">
+                      <span className="text-xs text-muted-foreground font-medium px-1">
                         {format(new Date(e.start), 'h:mm a')}
                       </span>
                       <EventBadge event={e} onClick={onEventClick} />
@@ -174,7 +174,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                   ))}
                   {timed.length === 0 && (
                     <div className="flex-1 flex items-center justify-center">
-                      <span className="text-[10px] text-muted-foreground/30">—</span>
+                      <span className="text-xs text-muted-foreground/30">—</span>
                     </div>
                   )}
                 </div>

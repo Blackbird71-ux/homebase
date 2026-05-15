@@ -109,7 +109,7 @@ function DroppableMealSlot({
           compact && isEmpty ? 'h-2.5 w-2.5 text-muted-foreground/50' : 'h-2.5 w-2.5 text-muted-foreground'
         )} />
         <span className={cn(
-          'text-[10px]',
+          'text-xs',
           compact && isEmpty ? 'text-muted-foreground/50' : 'text-muted-foreground'
         )}>{mealType.label}</span>
         {compact && isEmpty && !isOver && (
@@ -190,7 +190,7 @@ export function DailyMealColumn({
             'flex flex-col items-center justify-start pt-0.5 shrink-0 w-16',
           )}>
             <span className={cn(
-              'text-[10px] font-semibold uppercase tracking-wide leading-none',
+              'text-xs font-semibold uppercase tracking-wide leading-none',
               isToday ? 'text-primary' : 'text-muted-foreground'
             )}>{dayName.slice(0, 3)}</span>
             <span className={cn(
@@ -218,7 +218,7 @@ export function DailyMealColumn({
                         <button
                           key={mt.id}
                           onClick={() => { setAddMenuOpen(false); onMealClick(date, mt.id) }}
-                          className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                          className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                         >
                           <Icon className="h-2.5 w-2.5" />
                           {mt.label}
@@ -227,7 +227,7 @@ export function DailyMealColumn({
                     })}
                     <button
                       onClick={() => setAddMenuOpen(false)}
-                      className="text-[10px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                      className="text-xs px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
                     >
                       Cancel
                     </button>
@@ -235,7 +235,7 @@ export function DailyMealColumn({
                 ) : (
                   <button
                     onClick={() => setAddMenuOpen(true)}
-                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
                   >
                     <PlusIcon className="h-3 w-3" />
                     Add meals
@@ -280,7 +280,7 @@ export function DailyMealColumn({
                             <button
                               key={mt.id}
                               onClick={() => { setAddMenuOpen(false); onMealClick(date, mt.id) }}
-                              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                              className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                             >
                               <Icon className="h-2.5 w-2.5" />
                               {mt.label}
@@ -289,7 +289,7 @@ export function DailyMealColumn({
                         })}
                         <button
                           onClick={() => setAddMenuOpen(false)}
-                          className="text-[10px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                          className="text-xs px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
                         >
                           Cancel
                         </button>
@@ -297,7 +297,7 @@ export function DailyMealColumn({
                     ) : (
                       <button
                         onClick={() => setAddMenuOpen(true)}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
                       >
                         <PlusIcon className="h-3 w-3" />
                         Add meal
@@ -341,7 +341,7 @@ export function DailyMealColumn({
                     <button
                       key={mt.id}
                       onClick={() => { setAddMenuOpen(false); onMealClick(date, mt.id) }}
-                      className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                      className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                     >
                       <Icon className="h-2.5 w-2.5" />
                       {mt.label}
@@ -350,7 +350,7 @@ export function DailyMealColumn({
                 })}
                 <button
                   onClick={() => setAddMenuOpen(false)}
-                  className="text-[10px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                  className="text-xs px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -358,7 +358,7 @@ export function DailyMealColumn({
             ) : (
               <button
                 onClick={() => setAddMenuOpen(true)}
-                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
               >
                 <PlusIcon className="h-3 w-3" />
                 Add meals
@@ -405,7 +405,7 @@ export function DailyMealColumn({
                         <button
                           key={mt.id}
                           onClick={() => { setAddMenuOpen(false); onMealClick(date, mt.id) }}
-                          className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                          className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                         >
                           <Icon className="h-2.5 w-2.5" />
                           {mt.label}
@@ -414,7 +414,7 @@ export function DailyMealColumn({
                     })}
                     <button
                       onClick={() => setAddMenuOpen(false)}
-                      className="text-[10px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                      className="text-xs px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
                     >
                       Cancel
                     </button>
@@ -422,7 +422,7 @@ export function DailyMealColumn({
                 ) : (
                   <button
                     onClick={() => setAddMenuOpen(true)}
-                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
                   >
                     <PlusIcon className="h-3 w-3" />
                     Add meal

@@ -153,13 +153,13 @@ export function ApplyTemplateDialog({
                   </p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {template.slots.slice(0, 5).map((slot) => (
-                      <span key={slot.id} className="text-[10px] px-1.5 py-0.5 bg-muted rounded">
+                      <span key={slot.id} className="text-xs px-1.5 py-0.5 bg-muted rounded">
                         {getDayLabel(slot.dayOffset)} {slot.mealType}
                         {slot.recipe ? `: ${slot.recipe.title}` : ''}
                       </span>
                     ))}
                     {template.slots.length > 5 && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         +{template.slots.length - 5} more
                       </span>
                     )}

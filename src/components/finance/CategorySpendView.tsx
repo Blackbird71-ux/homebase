@@ -122,7 +122,7 @@ export function CategorySpendView({ rules }: { rules: BudgetRule[] }) {
                       <div className="flex-1 min-w-0">
                         <span className="text-sm">{r.name}</span>
                         {r.bill && (
-                          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground ml-2">from bill</span>
+                          <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground ml-2">from bill</span>
                         )}
                       </div>
                       <div className="text-right shrink-0">

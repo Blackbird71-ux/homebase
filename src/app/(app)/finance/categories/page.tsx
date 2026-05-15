@@ -147,7 +147,7 @@ export default function CategoriesPage() {
             >
               {opt.label}
               <span className={cn(
-                'text-[10px] px-1.5 py-0.5 rounded-full font-semibold',
+                'text-xs px-1.5 py-0.5 rounded-full font-semibold',
                 isActive ? 'bg-black/10 dark:bg-white/20' : 'bg-muted',
               )}>
                 {count}

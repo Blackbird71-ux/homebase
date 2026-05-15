@@ -89,7 +89,7 @@ export function LineRow({ label, amount, color, bold, indent }: {
 export function Divider() { return <div className="border-t border-border my-1" /> }
 
 export function SectionHeader({ label }: { label: string }) {
-  return <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-1">{label}</p>
+  return <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-1">{label}</p>
 }
 
 // ── TaxColumnView ─────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export function TaxColumnView({ col, fy, label, isProjected }: {
     )}>
       <div className="flex items-center gap-2 mb-3">
         <span className={cn(
-          'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full',
+          'text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full',
           isProjected
             ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
             : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
@@ -120,12 +120,12 @@ export function TaxColumnView({ col, fy, label, isProjected }: {
           {label}
         </span>
         {isProjected && (
-          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Info className="h-3 w-3" /> annualised estimate
           </span>
         )}
         {!isProjected && (
-          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Info className="h-3 w-3" /> from GL (authoritative)
           </span>
         )}
@@ -207,10 +207,10 @@ export function TaxColumnView({ col, fy, label, isProjected }: {
           />
         </div>
         {superExceeds
-          ? <p className="text-[10px] text-red-500 flex items-center gap-1">
+          ? <p className="text-xs text-red-500 flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" /> Exceeds cap by {fmt(totalSuper - cap)}
             </p>
-          : <p className="text-[10px] text-muted-foreground">{fmt(cap - totalSuper)} remaining</p>}
+          : <p className="text-xs text-muted-foreground">{fmt(cap - totalSuper)} remaining</p>}
       </div>
     </div>
   )
@@ -234,7 +234,7 @@ export function PersonPanel({ name, p, fy }: { name: string; p: PersonTax; fy: s
           ) : (
             <div className="flex-1 min-w-0 rounded-lg border border-dashed border-border p-4 text-center">
               <p className="text-xs text-muted-foreground">No GL-posted income this FY yet.</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">Mark income as received to post it to the GL.</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Mark income as received to post it to the GL.</p>
             </div>
           )}
           {hasProjected ? (
@@ -242,7 +242,7 @@ export function PersonPanel({ name, p, fy }: { name: string; p: PersonTax; fy: s
           ) : (
             <div className="flex-1 min-w-0 rounded-lg border border-dashed border-blue-500/20 bg-blue-500/5 p-4 text-center">
               <p className="text-xs text-muted-foreground">No projected income streams set up.</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">Add income entries marked "Track for tax" to see projections.</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Add income entries marked "Track for tax" to see projections.</p>
             </div>
           )}
         </div>
