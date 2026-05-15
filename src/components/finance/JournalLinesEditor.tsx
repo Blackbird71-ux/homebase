@@ -176,7 +176,7 @@ export function JournalLinesEditor({
                     hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input',
                   )}
                 >
-                  <option value="">Select account\u2026</option>
+                  <option value="">Select account…</option>
                   {(['asset', 'liability', 'equity', 'income', 'expense'] as const).map(type => {
                     const group = grouped.filter(a => a.type === type)
                     if (!group.length) return null

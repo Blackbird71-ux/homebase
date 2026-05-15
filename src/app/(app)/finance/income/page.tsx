@@ -196,6 +196,28 @@ export default function IncomePage() {
     setJournalLines(lines => lines.map(l => ({ ...l, amount: target })))
   }, [form.amount, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Reverse-sync the first credit line's GL account into form.categoryId ──────
+  //
+  // The left-panel "Income Category (GL)" dropdown is a convenience pointer to
+  // the principal income account — it's the same data as the first credit line's
+  // GL account (DR AR / CR Income). Forward sync (left dropdown -> credit line)
+  // is handled by handleCategoryChange. This effect handles the reverse direction
+  // so the two controls can never visibly drift apart:
+  //
+  //   user edits the credit line's GL directly  ->  form.categoryId follows.
+  //
+  // Why this matters: `incomeEntry.categoryId` populates category-column
+  // displays, vendor default-category logic, tax-split logic, and report filters.
+  // Keeping it aligned with the actual GL means reports stay consistent without
+  // the user remembering to update both fields.
+  useEffect(() => {
+    if (!showForm) return
+    const firstCredit = journalLines.find(l => l.side === 'credit')
+    const principalGl = firstCredit?.glAccountId ?? ''
+    if (principalGl === form.categoryId) return
+    setForm(p => ({ ...p, categoryId: principalGl }))
+  }, [journalLines, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function setDateRangePersisted(r: '14' | '30' | 'quarter' | '12months') {
     sessionStorage.setItem('income-dateRange', r); setDateRange(r)
   }
@@ -363,6 +385,20 @@ export default function IncomePage() {
         const isNewPost = form.invoiceReceived && !editing.invoiceReceived
         const isDraftPersist = !editing.invoiceReceived && !form.invoiceReceived
 
+        // Pre-validate: any line with an amount but no GL account is a user error.
+        // Without this guard, the filter below would silently drop the row, leaving
+        // the remaining lines unbalanced — the editor shows "Balanced ✓" but the
+        // Update button appears to do nothing because the unbalanced check fails.
+        if (isNewPost || isDraftPersist) {
+          const missingAccountIdx = journalLines.findIndex(
+            l => (parseFloat(l.amount) || 0) > 0 && l.glAccountId.trim() === ''
+          )
+          if (missingAccountIdx !== -1) {
+            toast.error(`Journal line ${missingAccountIdx + 1} has an amount but no GL account. Please select a GL account or remove the line before saving.`)
+            return
+          }
+        }
+
         // GL-FIRST: collect ALL lines that have a GL account assigned.
         // Never silently drop lines — the API enforces balance validation and
         // will return a clear error if the entry is unbalanced.
@@ -418,6 +454,18 @@ export default function IncomePage() {
       // to trigger the existing atomic GL-posting path in the PATCH handler.
       const wantsPosted = form.invoiceReceived
       const wantsPostedDate = form.invoiceReceivedDate || null
+
+      // Pre-validate: any line with an amount but no GL account is a user error.
+      // Without this guard, the filter below silently drops the row, leaving
+      // the remaining lines unbalanced — editor shows "Balanced ✓" but Create
+      // appears to do nothing because the unbalanced check fails.
+      const missingAccountIdx = journalLines.findIndex(
+        l => (parseFloat(l.amount) || 0) > 0 && l.glAccountId.trim() === ''
+      )
+      if (missingAccountIdx !== -1) {
+        toast.error(`Journal line ${missingAccountIdx + 1} has an amount but no GL account. Please select a GL account or remove the line before saving.`)
+        return
+      }
 
       // GL-FIRST: collect ALL lines with a GL account so the server creates a
       // draft journal entry that captures the user's split (e.g. DR AR /

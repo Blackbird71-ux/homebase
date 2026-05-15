@@ -243,6 +243,28 @@ export default function BillsPage() {
     setJournalLines(lines => lines.map(l => ({ ...l, amount: target })))
   }, [form.amount, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Reverse-sync the first debit line's GL account into form.categoryId ──────
+  //
+  // The left-panel "Expense Category (GL)" dropdown is a convenience pointer to
+  // the principal expense account — it's the same data as the first debit line's
+  // GL account. Forward sync (left dropdown -> line 1) is handled by
+  // handleCategoryChange. This effect handles the reverse direction so the two
+  // controls can never visibly drift apart:
+  //
+  //   user edits line 1's GL directly  ->  form.categoryId follows automatically.
+  //
+  // Why this matters: `bill.categoryId` is what populates category-column
+  // displays, budget-rule defaults, and report filters. Keeping it aligned with
+  // the actual GL means reports stay consistent without the user remembering to
+  // update both fields.
+  useEffect(() => {
+    if (!showForm) return
+    const firstDebit = journalLines.find(l => l.side === 'debit')
+    const principalGl = firstDebit?.glAccountId ?? ''
+    if (principalGl === form.categoryId) return
+    setForm(p => ({ ...p, categoryId: principalGl }))
+  }, [journalLines, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
     try {
       if (addToBudget) {
@@ -386,6 +408,21 @@ export default function BillsPage() {
       // creates a draft journal entry; otherwise journalEntryId stays null and a 3-line
       // GST split typed in the editor is silently lost on reopen.
       const isNewDraft = !editing && !form.invoiceReceived
+
+      // Pre-validate: any line with an amount but no GL account is a user error.
+      // Without this guard, the filter below would silently drop the row, leaving
+      // the remaining lines unbalanced — the editor shows "Balanced ✓" but the
+      // Create button appears to do nothing because the unbalanced check fails.
+      // We surface this as a clear, specific error so the user knows what to fix.
+      if (isNewPost || isDraftPersist || isNewDraft) {
+        const missingAccountIdx = journalLines.findIndex(
+          l => (parseFloat(l.amount) || 0) > 0 && l.glAccountId.trim() === ''
+        )
+        if (missingAccountIdx !== -1) {
+          toast.error(`Journal line ${missingAccountIdx + 1} has an amount but no GL account. Please select a GL account or remove the line before saving.`)
+          return
+        }
+      }
 
       // GL-FIRST: collect ALL lines that have a GL account assigned, regardless of
       // whether their amount is zero. Lines with amounts are the user's intended split;
