@@ -755,6 +755,7 @@ model FinancePayslip {
   incomeEntryId         String             @unique
   incomeEntry           FinanceIncomeEntry @relation(fields: [incomeEntryId], references: [id], onDelete: Cascade)
   familyId              String
+  family                Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
   // Pay period dates (display only — do not affect GL date)
   payPeriodStart        DateTime?
