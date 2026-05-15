@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers, Ban, Trash2 } from 'lucide-react'
+import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers, Ban, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, subMonths } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,41 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { IncomeEntry } from '@/app/(app)/finance/income/page'
+import type { IncomeEntry, StoredPayslip } from '@/hooks/finance/useIncomeCrud'
+import { formatCurrency } from '@/lib/financeShared'
+
+function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
+  const [open, setOpen] = useState(false)
+  const components: { label: string; amount: number }[] = (() => {
+    try { return JSON.parse(payslip.components) } catch { return [] }
+  })()
+  const deductions: { label: string; amount: number }[] = (() => {
+    try { return JSON.parse(payslip.deductions) } catch { return [] }
+  })()
+  return (
+    <div className="mt-1">
+      <button onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors">
+        <FileText className="h-2.5 w-2.5" />
+        Payslip
+        {payslip.payPeriodStart && payslip.payPeriodEnd && (
+          <span>{format(new Date(payslip.payPeriodStart), 'd MMM')} – {format(new Date(payslip.payPeriodEnd), 'd MMM yyyy')}</span>
+        )}
+        {open ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
+      </button>
+      {open && (
+        <div className="mt-1 rounded-md border border-violet-500/20 bg-violet-500/5 p-2.5 text-xs space-y-1">
+          <div className="flex justify-between font-medium"><span className="text-muted-foreground">Gross Pay</span><span>{formatCurrency(payslip.grossPay)}</span></div>
+          {components.map((c, i) => <div key={i} className="flex justify-between pl-3 text-muted-foreground"><span>{c.label}</span><span>{formatCurrency(c.amount)}</span></div>)}
+          {payslip.paygWithheld > 0 && <div className="flex justify-between text-orange-600 dark:text-orange-400"><span>PAYG Withheld</span><span>– {formatCurrency(payslip.paygWithheld)}</span></div>}
+          {deductions.filter((d: any) => d.amount > 0).map((d: any, i: number) => <div key={i} className="flex justify-between text-muted-foreground"><span>{d.label}</span><span>– {formatCurrency(d.amount)}</span></div>)}
+          <div className="flex justify-between font-semibold border-t border-violet-500/20 pt-1 text-green-600 dark:text-green-400"><span>Net Pay</span><span>{formatCurrency(payslip.netPay)}</span></div>
+          {payslip.sgcAmount > 0 && <div className="flex justify-between text-muted-foreground/70 text-[10px]"><span>SGC Super</span><span>{formatCurrency(payslip.sgcAmount)}</span></div>}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ReceivedIncomePage() {
   const [entries, setEntries] = useState<IncomeEntry[]>([])
@@ -105,10 +139,6 @@ export default function ReceivedIncomePage() {
     else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to void') }
   }
 
-  function formatCurrency(n: number) {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
-  }
-
   function entryAmountForCat(entry: IncomeEntry, rootCatId: string): number {
     if (!entry.category) return 0
     const cat = categories.find(c => c.id === entry.category!.id)
@@ -137,7 +167,7 @@ export default function ReceivedIncomePage() {
     })
 
   const colCats = rootCategories.filter(c => selectedCatIds.includes(c.id))
-  const grandTotal = sorted.reduce((s, e) => s + e.amount, 0)
+  const grandTotal = sorted.reduce((s, e) => s + (e.actualAmountReceived ?? e.amount), 0)
   const catTotals: Record<string, number> = {}
   for (const catId of selectedCatIds) {
     catTotals[catId] = sorted.reduce((s, e) => s + entryAmountForCat(e, catId), 0)
@@ -277,6 +307,7 @@ export default function ReceivedIncomePage() {
                   {entry.member && <span className="text-primary">{entry.member.name}</span>}
                   {entry.location && <span>{entry.location.name}</span>}
                 </div>
+                {entry.payslip && <PayslipBadge payslip={entry.payslip} />}
               </div>
               {colCats.map(c => {
                 const amt = entryAmountForCat(entry, c.id)
@@ -286,9 +317,14 @@ export default function ReceivedIncomePage() {
                   </span>
                 )
               })}
-              <p className="text-sm font-semibold text-muted-foreground text-right">
-                {formatCurrency(entry.amount)}
-              </p>
+              <div className="text-right">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  {formatCurrency(entry.actualAmountReceived ?? entry.amount)}
+                </p>
+                {entry.actualAmountReceived != null && Math.abs(entry.actualAmountReceived - entry.amount) > 0.005 && (
+                  <p className="text-[10px] text-muted-foreground/60">Expected: {formatCurrency(entry.amount)}</p>
+                )}
+              </div>
               <div className="flex items-center gap-0.5 justify-end">
                 <button onClick={() => handleUndoReceived(entry.id)}
                   title={entry.incomeType !== 'one-off' ? 'Undo receipt (removes the next scheduled occurrence)' : 'Undo receipt'}

@@ -150,6 +150,7 @@ if [ -f "$DB_PATH" ]; then
 20260527000000_add_bill_income_journal_link|FinanceIncomeEntry|journalEntryId
 20260529000000_add_gst_fields|FinanceCategory|gstApplicable
 20260529000000_add_gst_fields|FinanceCategory|gstRate
+20260545000000_add_finance_payslip|FinanceIncomeEntry|actualAmountReceived
 "
   echo "$COLUMN_CHECKS" | while IFS='|' read -r MIGRATION TABLE COLUMN; do
     # Skip blank lines

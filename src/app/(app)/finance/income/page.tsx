@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
-import { useIncomeCrud, type IncomeEntry } from '@/hooks/finance/useIncomeCrud'
+import { useIncomeCrud, type IncomeEntry, type PayslipFormData } from '@/hooks/finance/useIncomeCrud'
 import { IncomeRow } from '@/components/finance/IncomeRow'
 
 export type { IncomeEntry } from '@/hooks/finance/useIncomeCrud'
@@ -38,6 +38,8 @@ export default function IncomePage() {
     receivedConfirm, setReceivedConfirm,
     receivedConfirmDate, setReceivedConfirmDate,
     receivedConfirmGlAccountId, setReceivedConfirmGlAccountId,
+    receivedConfirmActualAmount, setReceivedConfirmActualAmount,
+    payslipForm, setPayslipForm,
     dateRange, setDateRangePersisted,
     selectedCatIds, showCatPicker, setShowCatPicker, toggleCat,
     hideDeleteBills,
@@ -463,51 +465,292 @@ export default function IncomePage() {
       </Dialog>
 
       <Dialog open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>
-        <DialogContent className="sm:max-w-sm" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>Confirm income received</DialogTitle>
-          </DialogHeader>
+        <ResizableDialogContent className="w-full sm:max-w-xl md:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={480} minHeight={300}>
+          <div className="px-4 pt-4 pb-0 shrink-0">
+            <DialogHeader>
+              <DialogTitle>Confirm Income Received</DialogTitle>
+            </DialogHeader>
+          </div>
+
           {receivedConfirm && (
-            <div className="space-y-3 py-1">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-4 pt-3">
               <p className="text-sm text-muted-foreground">
-                Mark <span className="font-medium text-foreground">{receivedConfirm.entry.name}</span> as
-                received. What date did the money arrive in your account?
+                Recording <span className="font-medium text-foreground">{receivedConfirm.entry.name}</span> as received.
               </p>
-              <div>
-                <label className="text-xs text-muted-foreground">Date received</label>
-                <input type="date" value={receivedConfirmDate} onChange={e => setReceivedConfirmDate(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+
+              {/* Date + mode toggle */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Date received *</label>
+                  <input type="date" value={receivedConfirmDate} onChange={e => setReceivedConfirmDate(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Entry mode</label>
+                  <div className="flex mt-1 rounded-md border border-input overflow-hidden">
+                    <button
+                      onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, enabled: false }))}
+                      className={cn('flex-1 py-1.5 text-xs font-medium transition-colors',
+                        !payslipForm.enabled ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground')}>
+                      Simple
+                    </button>
+                    <button
+                      onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, enabled: true }))}
+                      className={cn('flex-1 py-1.5 text-xs font-medium transition-colors',
+                        payslipForm.enabled ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground')}>
+                      Payslip
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Receive into GL account</label>
-                <select value={receivedConfirmGlAccountId} onChange={e => setReceivedConfirmGlAccountId(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                  <option value="">No GL account (unlinked)</option>
-                  {sortedCategoryList(categories.filter(c => c.type === 'asset')).map(c => (
-                    <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
-                  ))}
-                </select>
-                {!receivedConfirmGlAccountId && (
-                  <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won&apos;t update</p>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                An income transaction of{' '}
-                <span className="font-medium text-foreground">
-                  {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(receivedConfirm.entry.amount)}
-                </span>{' '}
-                will be recorded on this date.
-              </p>
+
+              {/* ── SIMPLE MODE ─────────────────────────────────────────── */}
+              {!payslipForm.enabled && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Actual amount received</label>
+                    <p className="text-[11px] text-muted-foreground/60 mb-1">Defaults to the expected amount — edit if your pay varied this period.</p>
+                    <input type="number" step="0.01" value={receivedConfirmActualAmount}
+                      onChange={e => setReceivedConfirmActualAmount(e.target.value)}
+                      onFocus={e => e.currentTarget.select()}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Receive into GL account (bank)</label>
+                    <select value={receivedConfirmGlAccountId} onChange={e => setReceivedConfirmGlAccountId(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                      <option value="">Select GL account…</option>
+                      {glAccounts.filter(a => a.type === 'asset').map(a => (
+                        <option key={a.id} value={a.id}>{a.parentId ? `— ${a.name}` : a.name}</option>
+                      ))}
+                    </select>
+                    {!receivedConfirmGlAccountId && (
+                      <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won&apos;t update</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── PAYSLIP MODE ──────────────────────────────────────── */}
+              {payslipForm.enabled && (
+                <div className="space-y-4">
+                  <div className="rounded-md bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+                    Payslip mode builds a multi-line GL journal: DR Bank + PAYG + Deductions = CR Gross Income. Net Pay + PAYG + Deductions must equal Gross Pay.
+                  </div>
+
+                  {/* Pay period */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Pay period start</label>
+                      <input type="date" value={payslipForm.payPeriodStart}
+                        onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, payPeriodStart: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Pay period end</label>
+                      <input type="date" value={payslipForm.payPeriodEnd}
+                        onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, payPeriodEnd: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+                    </div>
+                  </div>
+
+                  {/* Gross + GL */}
+                  <div className="rounded-md border border-border p-3 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gross Income</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground">Gross Pay *</label>
+                        <input type="number" step="0.01" value={payslipForm.grossPay}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, grossPay: e.target.value }))}
+                          onFocus={e => e.currentTarget.select()}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Gross Income GL account *</label>
+                        <select value={payslipForm.grossIncomeGlAccountId}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, grossIncomeGlAccountId: e.target.value }))}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                          <option value="">Select GL account…</option>
+                          {glAccounts.filter(a => a.type === 'income').map(a => (
+                            <option key={a.id} value={a.id}>{a.parentId ? `— ${a.name}` : a.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Pay components */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs text-muted-foreground">Pay components (breakdown of gross)</label>
+                        <button onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, components: [...p.components, { label: '', amount: 0 }] }))}
+                          className="text-xs text-primary hover:underline">+ Add</button>
+                      </div>
+                      {payslipForm.components.map((c, i) => (
+                        <div key={i} className="flex gap-2 mb-1.5">
+                          <input placeholder="e.g. Base Pay" value={c.label}
+                            onChange={e => setPayslipForm((p: PayslipFormData) => { const cs = [...p.components]; cs[i] = { ...cs[i], label: e.target.value }; return { ...p, components: cs } })}
+                            className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                          <input type="number" step="0.01" value={c.amount || ''} placeholder="0.00"
+                            onChange={e => setPayslipForm((p: PayslipFormData) => { const cs = [...p.components]; cs[i] = { ...cs[i], amount: parseFloat(e.target.value) || 0 }; return { ...p, components: cs } })}
+                            onFocus={e => e.currentTarget.select()}
+                            className="w-28 rounded-md border border-input bg-background px-2 py-1 text-sm text-right" />
+                          <button onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, components: p.components.filter((_, j) => j !== i) }))}
+                            className="text-red-500 hover:text-red-600 px-1">×</button>
+                        </div>
+                      ))}
+                      {payslipForm.components.length > 0 && (
+                        <p className="text-[11px] text-muted-foreground/60">Components total: {formatCurrency(payslipForm.components.reduce((s, c) => s + (c.amount || 0), 0))} — informational only, must sum to Gross Pay.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* PAYG withheld */}
+                  <div className="rounded-md border border-border p-3 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">PAYG Withheld</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground">PAYG withheld amount</label>
+                        <input type="number" step="0.01" value={payslipForm.paygWithheld}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, paygWithheld: e.target.value }))}
+                          onFocus={e => e.currentTarget.select()}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">PAYG GL account (liability / expense)</label>
+                        <select value={payslipForm.paygGlAccountId}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, paygGlAccountId: e.target.value }))}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                          <option value="">Select GL account…</option>
+                          {glAccounts.filter(a => a.type === 'liability' || a.type === 'expense').map(a => (
+                            <option key={a.id} value={a.id}>{a.parentId ? `— ${a.name}` : a.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Deductions */}
+                  <div className="rounded-md border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Deductions</p>
+                      <button onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, deductions: [...p.deductions, { label: '', amount: 0, glAccountId: null }] }))}
+                        className="text-xs text-primary hover:underline">+ Add deduction</button>
+                    </div>
+                    {payslipForm.deductions.map((d, i) => (
+                      <div key={i} className="grid gap-2" style={{ gridTemplateColumns: '1fr 90px 1fr 24px' }}>
+                        <input placeholder="e.g. Salary Sacrifice" value={d.label}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => { const ds = [...p.deductions]; ds[i] = { ...ds[i], label: e.target.value }; return { ...p, deductions: ds } })}
+                          className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                        <input type="number" step="0.01" value={d.amount || ''} placeholder="0.00"
+                          onChange={e => setPayslipForm((p: PayslipFormData) => { const ds = [...p.deductions]; ds[i] = { ...ds[i], amount: parseFloat(e.target.value) || 0 }; return { ...p, deductions: ds } })}
+                          onFocus={e => e.currentTarget.select()}
+                          className="rounded-md border border-input bg-background px-2 py-1 text-sm text-right" />
+                        <select value={d.glAccountId ?? ''}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => { const ds = [...p.deductions]; ds[i] = { ...ds[i], glAccountId: e.target.value || null }; return { ...p, deductions: ds } })}
+                          className="rounded-md border border-input bg-background px-2 py-1 text-sm">
+                          <option value="">No GL account</option>
+                          {glAccounts.filter(a => a.type === 'expense' || a.type === 'asset' || a.type === 'liability').map(a => (
+                            <option key={a.id} value={a.id}>{a.parentId ? `— ${a.name}` : a.name}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, deductions: p.deductions.filter((_, j) => j !== i) }))}
+                          className="text-red-500 hover:text-red-600">×</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* SGC super */}
+                  <div className="rounded-md border border-border p-3 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SGC Super (Informational)</p>
+                    <p className="text-[11px] text-muted-foreground/60">Employer SGC is recorded for tax reporting. It doesn&apos;t affect your net pay or the journal balance.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground">SGC amount</label>
+                        <input type="number" step="0.01" value={payslipForm.sgcAmount}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcAmount: e.target.value }))}
+                          onFocus={e => e.currentTarget.select()}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">SGC GL account (optional)</label>
+                        <select value={payslipForm.sgcGlAccountId}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcGlAccountId: e.target.value }))}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                          <option value="">Select GL account…</option>
+                          {glAccounts.filter(a => a.type === 'asset' || a.type === 'liability').map(a => (
+                            <option key={a.id} value={a.id}>{a.parentId ? `— ${a.name}` : a.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Net pay + bank GL */}
+                  <div className="rounded-md border border-green-500/30 bg-green-500/5 p-3 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Take-Home</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground">Net Pay (take-home) *</label>
+                        <input type="number" step="0.01" value={payslipForm.netPay}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, netPay: e.target.value }))}
+                          onFocus={e => e.currentTarget.select()}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Bank / Take-home GL account *</label>
+                        <select value={payslipForm.bankGlAccountId}
+                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, bankGlAccountId: e.target.value }))}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                          <option value="">Select GL account…</option>
+                          {glAccounts.filter(a => a.type === 'asset').map(a => (
+                            <option key={a.id} value={a.id}>{a.parentId ? `— ${a.name}` : a.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {/* Balance indicator */}
+                    {(() => {
+                      const gross = parseFloat(payslipForm.grossPay) || 0
+                      const net   = parseFloat(payslipForm.netPay)   || 0
+                      const payg  = parseFloat(payslipForm.paygWithheld) || 0
+                      const deds  = payslipForm.deductions.reduce((s, d) => s + (d.amount || 0), 0)
+                      const diff  = Math.abs(gross - net - payg - deds)
+                      const balanced = diff < 0.005
+                      return (
+                        <div className={cn('rounded-md px-3 py-2 text-xs font-medium flex items-center justify-between',
+                          balanced ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-red-500/10 text-red-600')}>
+                          <span>{balanced ? '✓ Balanced — journal will post correctly' : `⚠ Out of balance by ${formatCurrency(diff)}`}</span>
+                          <span>{balanced ? '' : `Net + PAYG + Deductions = ${formatCurrency(net + payg + deds)} vs Gross ${formatCurrency(gross)}`}</span>
+                        </div>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="text-xs text-muted-foreground">Notes (optional)</label>
+                    <textarea value={payslipForm.notes} rows={2}
+                      onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, notes: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none mt-1" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          <DialogFooter>
+
+          <DialogFooter className="mx-0 mb-0 shrink-0 px-4 pb-4">
             <button onClick={() => setReceivedConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            <button onClick={confirmMarkReceived} disabled={!receivedConfirmGlAccountId}
+            <button
+              onClick={confirmMarkReceived}
+              disabled={payslipForm.enabled
+                ? !payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId
+                : !receivedConfirmGlAccountId
+              }
               className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               Mark as received
             </button>
           </DialogFooter>
-        </DialogContent>
+        </ResizableDialogContent>
       </Dialog>
 
       {entries.length === 0 ? (

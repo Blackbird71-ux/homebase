@@ -11,6 +11,7 @@ const INCOME_INCLUDE = {
   location: { select: { id: true, name: true } },
   vendor: { select: { id: true, name: true } },
   entity: { select: { id: true, name: true, color: true, type: true, isDefault: true } },
+  payslip: true,
   attachments: {
     select: { id: true, incomeId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
     orderBy: { createdAt: 'asc' as const },
@@ -142,6 +143,7 @@ export async function POST(request: NextRequest) {
     notes, memberId, locationId, entityId, vendorId,
     isTaxTracked, taxRate, taxClassification,
     journalLines,   // optional: JournalLine[] for double-entry accrual
+    actualAmountReceived, // optional: actual net received (overrides amount for GL)
   } = json
 
   if (!name || !amount || !frequency) {
@@ -177,6 +179,7 @@ export async function POST(request: NextRequest) {
       isTaxTracked: isTaxTracked ?? false,
       taxRate: taxRate != null ? parseFloat(taxRate) : null,
       taxClassification: taxClassification ?? null,
+      actualAmountReceived: actualAmountReceived != null ? parseFloat(actualAmountReceived) : null,
       familyId: session.familyId,
     },
     include: INCOME_INCLUDE,
@@ -218,6 +221,7 @@ export async function PUT(request: NextRequest) {
     notes, memberId, locationId, entityId, vendorId,
     isTaxTracked, taxRate, taxClassification,
     journalLines,   // optional: JournalLine[] for double-entry accrual
+    actualAmountReceived, // optional: actual net received
   } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -255,6 +259,7 @@ export async function PUT(request: NextRequest) {
       ...(isTaxTracked !== undefined && { isTaxTracked }),
       ...(taxRate !== undefined && { taxRate: taxRate != null ? parseFloat(taxRate) : null }),
       ...(taxClassification !== undefined && { taxClassification: taxClassification ?? null }),
+      ...(actualAmountReceived !== undefined && { actualAmountReceived: actualAmountReceived != null ? parseFloat(actualAmountReceived) : null }),
     },
     include: INCOME_INCLUDE,
   })
@@ -430,7 +435,7 @@ function advanceNextExpectedDate(date: Date, frequency: string): Date {
 export async function PATCH(request: NextRequest) {
   const session = await requireSession()
   const json = await request.json()
-  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId, receiveToGlAccountId, void: doVoid, voidNote } = json
+  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId, receiveToGlAccountId, void: doVoid, voidNote, actualAmountReceived: actualAmountReceivedRaw, payslip: payslipData } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -782,18 +787,36 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // ── Stage 2: Cash received → ATOMIC GL write (DR Bank / CR AR) ────────────
+  // ── Stage 2: Cash received → ATOMIC GL write ─────────────────────────────
   //
-  // Always routes through AR regardless of whether Stage 1 was done first:
-  //   If Stage 1 not yet posted: auto-create it (DR AR / CR Income) in the same transaction.
-  //   Stage 2:                   DR Bank / CR AR
-  //   Net effect:                DR Bank / CR Income  (AR washes out on Trial Balance).
+  // Two modes depending on whether a payslip breakdown was supplied:
   //
-  // A GL account is required — no legacy tx-only path.
+  // MODE A — Payslip mode (wages with variable pay):
+  //   The payslip supplies grossPay, paygWithheld, deductions[], netPay and
+  //   the user-selected GL accounts for each component. We build a multi-line
+  //   balanced journal directly from those fields:
+  //     DR  bankGlAccountId          netPay         (take-home hits bank)
+  //     DR  paygGlAccountId          paygWithheld   (PAYG withheld)
+  //     DR  deduction[n].glAccountId deduction.amount (per-line deductions)
+  //     CR  grossIncomeGlAccountId   grossPay       (gross on P&L / income)
+  //   The FinancePayslip record is also created/upserted.
+  //
+  // MODE B — Simple mode (existing 2-line path):
+  //   DR  Bank GL account        actualAmount   (net received)
+  //   CR  Accounts Receivable    actualAmount   (AR cleared)
+  //   Uses actualAmountReceived if supplied, otherwise entry.amount.
+  //
+  // In both modes the next-occurrence spawn ALWAYS uses entry.amount (the
+  // template/expected amount) so forecasting remains stable.
   if (received === true && !existing.received) {
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
     const receiptAccountId = receiveToAccountId ?? existing.accountId
     const receiptGlAccountId: string | null = receiveToGlAccountId ?? null
+
+    // The actual amount to post to GL — actual overrides template for this occurrence
+    const actualAmount: number = actualAmountReceivedRaw != null
+      ? parseFloat(actualAmountReceivedRaw)
+      : (existing.amount)
 
     // Re-read to get latest invoiceTxId (may have just been written above in Stage 1)
     const freshEntry = await prisma.financeIncomeEntry.findFirst({
@@ -801,67 +824,185 @@ export async function PATCH(request: NextRequest) {
     })
     const invoiceTxId: string | null = freshEntry?.invoiceTxId ?? null
 
-    if (!receiptGlAccountId) {
+    // ── Validate payslip GL accounts when payslip mode ──────────────────────
+    if (payslipData) {
+      const { grossIncomeGlAccountId, bankGlAccountId, paygGlAccountId, deductions = [] } = payslipData
+      if (!grossIncomeGlAccountId) {
+        return NextResponse.json(
+          { error: 'Payslip mode requires a Gross Income GL account (e.g. Gross Wages).' },
+          { status: 400 }
+        )
+      }
+      if (!bankGlAccountId) {
+        return NextResponse.json(
+          { error: 'Payslip mode requires a Bank / Take-home GL account.' },
+          { status: 400 }
+        )
+      }
+      // Validate all GL IDs referenced in the payslip belong to this family
+      const glIds = [
+        grossIncomeGlAccountId,
+        bankGlAccountId,
+        paygGlAccountId,
+        ...(deductions as { glAccountId?: string }[]).map(d => d.glAccountId),
+      ].filter((v): v is string => !!v)
+      const validCount = await prisma.financeCategory.count({
+        where: { id: { in: [...new Set(glIds)] }, familyId: session.familyId },
+      })
+      if (validCount < new Set(glIds).size) {
+        return NextResponse.json(
+          { error: 'One or more payslip GL accounts not found.' },
+          { status: 400 }
+        )
+      }
+    } else if (!receiptGlAccountId) {
       return NextResponse.json(
         { error: 'A GL account (bank account) is required to post a cash receipt.' },
         { status: 400 }
       )
     }
 
-    {
-      // ── GL path: ATOMIC — auto-accrual (Stage 1) if needed, then receipt (Stage 2) ──
-      // Accounting (always via AR):
-      //   Stage 1 (if not already posted): DR AR / CR Income
-      //   Stage 2:                         DR Bank  / CR AR
-      //   Net effect:                      DR Bank  / CR Income  (AR washes out)
-      //
-      // IMPORTANT: Pre-generate both journal references OUTSIDE the transaction.
-      // nextJournalReference reads committed DB state; inside a $transaction the
-      // first JE create is not yet committed, so a second call would return the
-      // same reference and trigger a unique-constraint violation.
-      const needsAutoStage1 = !freshEntry?.invoiceReceived
-      const accrualRef  = needsAutoStage1 ? await nextJournalReference(session.familyId) : null
-      // Increment base ref so receipt ref is always one higher when both are needed
-      const receiptRef  = await nextJournalReference(session.familyId)
-      try {
-        await prisma.$transaction(async (tx) => {
-          const arCategoryId = await ensureAccountsReceivableCategory(session.familyId)
+    // Pre-generate journal references outside the transaction so sequential
+    // increments work correctly (inside $transaction uncommitted writes are invisible).
+    const needsAutoStage1 = !freshEntry?.invoiceReceived
+    const accrualRef  = needsAutoStage1 ? await nextJournalReference(session.familyId) : null
+    const receiptRef  = await nextJournalReference(session.familyId)
 
-          // ── Auto-post Stage 1 accrual if it hasn't been done yet ─────────────
-          if (needsAutoStage1) {
-            if (!existing.categoryId) {
-              throw new Error('Income entry must have an income category before cash can be posted to GL')
-            }
-            const accrualJe = await tx.financeJournalEntry.create({
-              data: {
-                reference: accrualRef!,
-                date: actualReceivedDate,
-                description: existing.name,
-                type: 'auto_transaction',
-                isPosted: true,
-                entityId: existing.entityId ?? null,
-                familyId: session.familyId,
-                lines: {
-                  create: [
-                    { glAccountId: arCategoryId, side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
-                    { glAccountId: existing.categoryId, side: 'credit', amount: existing.amount, description: existing.name },
-                  ],
-                },
+    try {
+      await prisma.$transaction(async (tx) => {
+        const arCategoryId = await ensureAccountsReceivableCategory(session.familyId)
+
+        // ── Auto-post Stage 1 accrual if not yet done ──────────────────────
+        if (needsAutoStage1) {
+          if (!existing.categoryId) {
+            throw new Error('Income entry must have an income category before cash can be posted to GL')
+          }
+          const accrualJe = await tx.financeJournalEntry.create({
+            data: {
+              reference: accrualRef!,
+              date: actualReceivedDate,
+              description: existing.name,
+              type: 'auto_transaction',
+              isPosted: true,
+              entityId: existing.entityId ?? null,
+              familyId: session.familyId,
+              lines: {
+                create: [
+                  { glAccountId: arCategoryId,        side: 'debit',  amount: actualAmount, description: `AR: ${existing.name}` },
+                  { glAccountId: existing.categoryId, side: 'credit', amount: actualAmount, description: existing.name },
+                ],
               },
-              select: { id: true },
-            })
-            await tx.financeIncomeEntry.update({
-              where: { id },
-              data: {
-                invoiceReceived: true,
-                invoiceReceivedDate: actualReceivedDate,
-                journalEntryId: accrualJe.id,
-              },
+            },
+            select: { id: true },
+          })
+          await tx.financeIncomeEntry.update({
+            where: { id },
+            data: { invoiceReceived: true, invoiceReceivedDate: actualReceivedDate, journalEntryId: accrualJe.id },
+          })
+        }
+
+        // ── MODE A: Payslip multi-line journal ─────────────────────────────
+        let receiptJe: { id: string }
+        if (payslipData) {
+          const {
+            grossPay, netPay, grossIncomeGlAccountId, bankGlAccountId,
+            paygWithheld = 0, paygGlAccountId,
+            sgcAmount = 0, sgcGlAccountId,
+            components = [], deductions = [],
+            payPeriodStart, payPeriodEnd, notes: payslipNotes,
+          } = payslipData
+
+          // Build journal lines from payslip components
+          // DR lines: bank (net), PAYG, each deduction with a GL account
+          // CR lines: gross income
+          const journalLines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[] = []
+
+          // CR: Gross income (e.g. Gross Wages - Mark)
+          journalLines.push({
+            glAccountId: grossIncomeGlAccountId,
+            side: 'credit',
+            amount: grossPay,
+            description: `${existing.name} — Gross Pay`,
+          })
+
+          // DR: Net take-home into bank
+          journalLines.push({
+            glAccountId: bankGlAccountId,
+            side: 'debit',
+            amount: netPay,
+            description: `${existing.name} — Net Pay`,
+          })
+
+          // DR: PAYG withheld (if GL account specified)
+          if (paygWithheld > 0 && paygGlAccountId) {
+            journalLines.push({
+              glAccountId: paygGlAccountId,
+              side: 'debit',
+              amount: paygWithheld,
+              description: `${existing.name} — PAYG Withheld`,
             })
           }
 
-          // ── Stage 2: DR Bank / CR AR ──────────────────────────────────────────
-          const receiptJe = await tx.financeJournalEntry.create({
+          // DR: Each deduction that has a GL account
+          for (const ded of deductions as { label: string; amount: number; glAccountId?: string | null }[]) {
+            if (ded.amount > 0 && ded.glAccountId) {
+              journalLines.push({
+                glAccountId: ded.glAccountId,
+                side: 'debit',
+                amount: ded.amount,
+                description: `${existing.name} — ${ded.label}`,
+              })
+            }
+          }
+
+          // Balance check before writing
+          const totalDR = journalLines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+          const totalCR = journalLines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+          if (Math.abs(totalDR - totalCR) > 0.005) {
+            throw new Error(
+              `Payslip journal is not balanced — debits ${totalDR.toFixed(2)} ≠ credits ${totalCR.toFixed(2)}. ` +
+              `Check that Net Pay + PAYG + Deductions = Gross Pay.`
+            )
+          }
+
+          receiptJe = await tx.financeJournalEntry.create({
+            data: {
+              reference: receiptRef,
+              date: actualReceivedDate,
+              description: `${existing.name} (payslip received)`,
+              type: 'auto_transaction',
+              isPosted: true,
+              entityId: existing.entityId ?? null,
+              familyId: session.familyId,
+              lines: { create: journalLines },
+            },
+            select: { id: true },
+          })
+
+          // Upsert FinancePayslip record (delete + create for clean replace)
+          await tx.financePayslip.deleteMany({ where: { incomeEntryId: id } })
+          await tx.financePayslip.create({
+            data: {
+              incomeEntryId: id,
+              familyId: session.familyId,
+              grossPay,
+              netPay,
+              grossIncomeGlAccountId: grossIncomeGlAccountId ?? null,
+              bankGlAccountId: bankGlAccountId ?? null,
+              paygWithheld,
+              paygGlAccountId: paygGlAccountId ?? null,
+              sgcAmount,
+              sgcGlAccountId: sgcGlAccountId ?? null,
+              components: JSON.stringify(components),
+              deductions: JSON.stringify(deductions),
+              payPeriodStart: payPeriodStart ? new Date(payPeriodStart) : null,
+              payPeriodEnd: payPeriodEnd ? new Date(payPeriodEnd) : null,
+              notes: payslipNotes ?? null,
+            },
+          })
+        } else {
+          // ── MODE B: Simple 2-line DR Bank / CR AR ─────────────────────
+          receiptJe = await tx.financeJournalEntry.create({
             data: {
               reference: receiptRef,
               date: actualReceivedDate,
@@ -872,67 +1013,71 @@ export async function PATCH(request: NextRequest) {
               familyId: session.familyId,
               lines: {
                 create: [
-                  { glAccountId: receiptGlAccountId, side: 'debit',  amount: existing.amount, description: `Bank receipt: ${existing.name}` },
-                  { glAccountId: arCategoryId,        side: 'credit', amount: existing.amount, description: `AR clear: ${existing.name}` },
+                  { glAccountId: receiptGlAccountId!, side: 'debit',  amount: actualAmount, description: `Bank receipt: ${existing.name}` },
+                  { glAccountId: arCategoryId,         side: 'credit', amount: actualAmount, description: `AR clear: ${existing.name}` },
                 ],
               },
             },
             select: { id: true },
           })
+        }
 
-          const receiptStatusData = {
-            received: true,
-            receivedDate: actualReceivedDate,
-            receiptJournalEntryId: receiptJe.id,
-          }
+        const receiptStatusData = {
+          received: true,
+          receivedDate: actualReceivedDate,
+          receiptJournalEntryId: receiptJe.id,
+          actualAmountReceived: actualAmount,
+        }
 
-          if (invoiceTxId) {
-            await tx.financeTransaction.update({
-              where: { id: invoiceTxId },
-              data: {
-                isCleared: true,
-                reconciledDate: actualReceivedDate,
-                date: actualReceivedDate,
-                glAccountId: receiptGlAccountId,
-                accountId: receiptAccountId,
-              },
-            })
-            await tx.financeIncomeEntry.update({
-              where: { id },
-              data: { ...receiptStatusData, receiptTxId: invoiceTxId, transactionId: invoiceTxId },
-            })
-          } else {
-            const newTx = await tx.financeTransaction.create({
-              data: {
-                type: 'income', amount: existing.amount,
-                accountId: receiptAccountId, categoryId: existing.categoryId,
-                description: existing.name, date: actualReceivedDate,
-                isRecurring: existing.incomeType !== 'one-off',
-                vendorId: existing.vendorId, notes: existing.notes,
-                memberId: existing.memberId, locationId: existing.locationId,
-                isCleared: true, reconciledDate: actualReceivedDate,
-                isTransfer: false, glAccountId: receiptGlAccountId,
-                createdBy: session.id, familyId: session.familyId,
-                entityId: existing.entityId,
-              },
-            })
-            await tx.financeIncomeEntry.update({
-              where: { id },
-              data: { ...receiptStatusData, receiptTxId: newTx.id, transactionId: newTx.id },
-            })
-          }
-        })
-      } catch (err) {
-        console.error('[income PATCH] ATOMIC cash-receipt GL posting failed:', err)
-        return NextResponse.json(
-          { error: 'Failed to post cash receipt to General Ledger. No changes were saved.' },
-          { status: 422 }
-        )
-      }
+        if (invoiceTxId) {
+          await tx.financeTransaction.update({
+            where: { id: invoiceTxId },
+            data: {
+              isCleared: true,
+              reconciledDate: actualReceivedDate,
+              date: actualReceivedDate,
+              amount: actualAmount,
+              glAccountId: payslipData ? payslipData.bankGlAccountId : receiptGlAccountId,
+              accountId: receiptAccountId,
+            },
+          })
+          await tx.financeIncomeEntry.update({
+            where: { id },
+            data: { ...receiptStatusData, receiptTxId: invoiceTxId, transactionId: invoiceTxId },
+          })
+        } else {
+          const newTx = await tx.financeTransaction.create({
+            data: {
+              type: 'income', amount: actualAmount,
+              accountId: receiptAccountId, categoryId: existing.categoryId,
+              description: existing.name, date: actualReceivedDate,
+              isRecurring: existing.incomeType !== 'one-off',
+              vendorId: existing.vendorId, notes: existing.notes,
+              memberId: existing.memberId, locationId: existing.locationId,
+              isCleared: true, reconciledDate: actualReceivedDate,
+              isTransfer: false,
+              glAccountId: payslipData ? payslipData.bankGlAccountId : receiptGlAccountId,
+              createdBy: session.id, familyId: session.familyId,
+              entityId: existing.entityId,
+            },
+          })
+          await tx.financeIncomeEntry.update({
+            where: { id },
+            data: { ...receiptStatusData, receiptTxId: newTx.id, transactionId: newTx.id },
+          })
+        }
+      })
+    } catch (err) {
+      console.error('[income PATCH] ATOMIC cash-receipt GL posting failed:', err)
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Failed to post cash receipt to General Ledger. No changes were saved.' },
+        { status: 422 }
+      )
     }
 
-    // Spawn the next occurrence for recurring income — outside the receipt transaction
-    // so a spawn failure does not roll back the already-committed cash receipt.
+    // Spawn the next occurrence for recurring income — outside the transaction
+    // so a spawn failure does not roll back the committed cash receipt.
+    // ALWAYS spawns using entry.amount (template) not actualAmount for stable forecasting.
     if (existing.incomeType !== 'one-off') {
       try {
         const newExpectedDate = advanceNextExpectedDate(existing.nextExpectedDate, existing.frequency)
@@ -940,7 +1085,7 @@ export async function PATCH(request: NextRequest) {
           await prisma.financeIncomeEntry.create({
             data: {
               name: existing.name,
-              amount: existing.amount,
+              amount: existing.amount,  // template amount for forecasting
               accountId: existing.accountId,
               categoryId: existing.categoryId,
               vendorId: existing.vendorId,
@@ -964,6 +1109,8 @@ export async function PATCH(request: NextRequest) {
               locationId: existing.locationId,
               entityId: existing.entityId,
               taxClassification: existing.taxClassification,
+              isTaxTracked: existing.isTaxTracked,
+              taxRate: existing.taxRate,
               parentIncomeId: existing.id,
               familyId: session.familyId,
             },

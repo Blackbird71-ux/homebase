@@ -2,13 +2,81 @@
 
 import { format } from 'date-fns'
 import {
-  Layers, RefreshCw, Receipt, ReceiptText, CheckCircle2, Paperclip, Pencil, Trash2, Ban,
+  Layers, RefreshCw, Receipt, ReceiptText, CheckCircle2, Paperclip, Pencil, Trash2, Ban, FileText, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/financeShared'
 import { AttachmentSection } from '@/components/finance/AttachmentSection'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
-import type { IncomeEntry } from '@/hooks/finance/useIncomeCrud'
+import { useState } from 'react'
+import type { IncomeEntry, StoredPayslip } from '@/hooks/finance/useIncomeCrud'
+
+function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
+  const [open, setOpen] = useState(false)
+  const components: { label: string; amount: number }[] = (() => {
+    try { return JSON.parse(payslip.components) } catch { return [] }
+  })()
+  const deductions: { label: string; amount: number; glAccountId?: string | null }[] = (() => {
+    try { return JSON.parse(payslip.deductions) } catch { return [] }
+  })()
+
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors">
+        <FileText className="h-2.5 w-2.5" />
+        Payslip
+        {payslip.payPeriodStart && payslip.payPeriodEnd && (
+          <span className="text-violet-400">
+            {format(new Date(payslip.payPeriodStart), 'd MMM')} – {format(new Date(payslip.payPeriodEnd), 'd MMM yyyy')}
+          </span>
+        )}
+        {open ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
+      </button>
+
+      {open && (
+        <div className="mt-1.5 rounded-md border border-violet-500/20 bg-violet-500/5 p-2.5 text-xs space-y-1.5">
+          <div className="flex justify-between font-medium">
+            <span className="text-muted-foreground">Gross Pay</span>
+            <span>{formatCurrency(payslip.grossPay)}</span>
+          </div>
+          {components.map((c, i) => (
+            <div key={i} className="flex justify-between pl-3 text-muted-foreground">
+              <span>{c.label || 'Component'}</span>
+              <span>{formatCurrency(c.amount)}</span>
+            </div>
+          ))}
+          {payslip.paygWithheld > 0 && (
+            <div className="flex justify-between text-orange-600 dark:text-orange-400">
+              <span>PAYG Withheld</span>
+              <span>– {formatCurrency(payslip.paygWithheld)}</span>
+            </div>
+          )}
+          {deductions.filter(d => d.amount > 0).map((d, i) => (
+            <div key={i} className="flex justify-between text-muted-foreground">
+              <span>{d.label || 'Deduction'}</span>
+              <span>– {formatCurrency(d.amount)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between font-semibold border-t border-violet-500/20 pt-1.5 text-green-600 dark:text-green-400">
+            <span>Net Pay (take-home)</span>
+            <span>{formatCurrency(payslip.netPay)}</span>
+          </div>
+          {payslip.sgcAmount > 0 && (
+            <div className="flex justify-between text-muted-foreground/70 text-[10px]">
+              <span>SGC Super (informational)</span>
+              <span>{formatCurrency(payslip.sgcAmount)}</span>
+            </div>
+          )}
+          {payslip.notes && (
+            <p className="text-muted-foreground/70 italic pt-0.5">{payslip.notes}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function IncomeRow({
   entry, nextExpected, isOverdue, colCats, entryAmountForCat, gridTemplate,
@@ -77,12 +145,18 @@ export function IncomeRow({
             <span>Expected {format(nextExpected, 'd MMM yyyy')}</span>
             {entry.notes && <span className="italic truncate max-w-[120px]" title={entry.notes}>· {entry.notes}</span>}
           </div>
+          {entry.payslip && <PayslipBadge payslip={entry.payslip} />}
         </div>
         {colCats.map(c => {
           const amt = entryAmountForCat(entry, c.id)
           return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
         })}
-        <p className="text-sm font-semibold text-right">{formatCurrency(entry.amount)}</p>
+        <div className="text-right">
+          <p className="text-sm font-semibold">{formatCurrency(entry.amount)}</p>
+          {entry.actualAmountReceived != null && Math.abs(entry.actualAmountReceived - entry.amount) > 0.005 && (
+            <p className="text-[10px] text-green-600 dark:text-green-400">Actual: {formatCurrency(entry.actualAmountReceived)}</p>
+          )}
+        </div>
         <div className="flex items-center gap-0.5 justify-end">
           <button onClick={() => att.open(entry.id)}
             title={entry.attachments && entry.attachments.length > 0 ? `${entry.attachments.length} attachment${entry.attachments.length !== 1 ? 's' : ''}` : 'Attachments'}

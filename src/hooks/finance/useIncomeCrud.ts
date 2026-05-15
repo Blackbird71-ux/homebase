@@ -18,6 +18,52 @@ export interface IncomeAttachment {
   fileSize: number; mimeType: string; createdAt: string
 }
 
+export interface PayslipComponent {
+  label: string
+  amount: number
+}
+
+export interface PayslipDeduction {
+  label: string
+  amount: number
+  glAccountId: string | null
+}
+
+export interface PayslipFormData {
+  enabled: boolean
+  payPeriodStart: string
+  payPeriodEnd: string
+  grossPay: string
+  netPay: string
+  grossIncomeGlAccountId: string
+  bankGlAccountId: string
+  paygWithheld: string
+  paygGlAccountId: string
+  sgcAmount: string
+  sgcGlAccountId: string
+  components: PayslipComponent[]
+  deductions: PayslipDeduction[]
+  notes: string
+}
+
+export interface StoredPayslip {
+  id: string
+  incomeEntryId: string
+  grossPay: number
+  netPay: number
+  paygWithheld: number
+  sgcAmount: number
+  grossIncomeGlAccountId: string | null
+  bankGlAccountId: string | null
+  paygGlAccountId: string | null
+  sgcGlAccountId: string | null
+  components: string  // JSON
+  deductions: string  // JSON
+  payPeriodStart: string | null
+  payPeriodEnd: string | null
+  notes: string | null
+}
+
 export interface IncomeEntry {
   id: string; name: string; amount: number; frequency: string
   incomeType: string
@@ -32,6 +78,8 @@ export interface IncomeEntry {
   taxClassification: string | null
   notes: string | null; memberId: string | null
   journalEntryId: string | null
+  actualAmountReceived: number | null
+  payslip: StoredPayslip | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
   vendor: { id: string; name: string } | null
@@ -66,6 +114,16 @@ export function useIncomeCrud() {
   const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
   const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
   const [receivedConfirmGlAccountId, setReceivedConfirmGlAccountId] = useState<string>('')
+  const [receivedConfirmActualAmount, setReceivedConfirmActualAmount] = useState<string>('')
+  const [payslipForm, setPayslipForm] = useState<PayslipFormData>({
+    enabled: false,
+    payPeriodStart: '', payPeriodEnd: '',
+    grossPay: '', netPay: '',
+    grossIncomeGlAccountId: '', bankGlAccountId: '',
+    paygWithheld: '', paygGlAccountId: '',
+    sgcAmount: '', sgcGlAccountId: '',
+    components: [], deductions: [], notes: '',
+  })
   const [dateRange, setDateRange]     = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('income-dateRange')
@@ -472,20 +530,62 @@ export function useIncomeCrud() {
   async function handleMarkReceived(entry: IncomeEntry) {
     setReceivedConfirmDate(todayAU())
     setReceivedConfirmGlAccountId('')
+    setReceivedConfirmActualAmount(entry.amount.toFixed(2))
+    setPayslipForm({
+      enabled: false,
+      payPeriodStart: '', payPeriodEnd: '',
+      grossPay: entry.amount.toFixed(2),
+      netPay: entry.amount.toFixed(2),
+      grossIncomeGlAccountId: entry.category?.id ?? '',
+      bankGlAccountId: '',
+      paygWithheld: '0', paygGlAccountId: '',
+      sgcAmount: '0', sgcGlAccountId: '',
+      components: [], deductions: [], notes: '',
+    })
     setReceivedConfirm({ entry })
   }
 
   async function confirmMarkReceived() {
     if (!receivedConfirm) return
     const { entry } = receivedConfirm
+
+    // Build request body — payslip mode or simple mode
+    const body: Record<string, any> = {
+      id: entry.id,
+      received: true,
+      receivedDate: receivedConfirmDate,
+    }
+
+    if (payslipForm.enabled) {
+      // Payslip mode: send full breakdown, GL accounts come from payslip
+      body.payslip = {
+        grossPay:               parseFloat(payslipForm.grossPay) || 0,
+        netPay:                 parseFloat(payslipForm.netPay) || 0,
+        grossIncomeGlAccountId: payslipForm.grossIncomeGlAccountId || null,
+        bankGlAccountId:        payslipForm.bankGlAccountId || null,
+        paygWithheld:           parseFloat(payslipForm.paygWithheld) || 0,
+        paygGlAccountId:        payslipForm.paygGlAccountId || null,
+        sgcAmount:              parseFloat(payslipForm.sgcAmount) || 0,
+        sgcGlAccountId:         payslipForm.sgcGlAccountId || null,
+        components:             payslipForm.components,
+        deductions:             payslipForm.deductions,
+        payPeriodStart:         payslipForm.payPeriodStart || null,
+        payPeriodEnd:           payslipForm.payPeriodEnd || null,
+        notes:                  payslipForm.notes || null,
+      }
+      body.actualAmountReceived = parseFloat(payslipForm.netPay) || 0
+    } else {
+      // Simple mode: just bank GL account + optional actual amount
+      body.receiveToGlAccountId = receivedConfirmGlAccountId || null
+      const actual = parseFloat(receivedConfirmActualAmount)
+      if (!isNaN(actual) && Math.abs(actual - entry.amount) > 0.005) {
+        body.actualAmountReceived = actual
+      }
+    }
+
     const res = await fetch('/api/finance/income', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: entry.id,
-        received: true,
-        receivedDate: receivedConfirmDate,
-        receiveToGlAccountId: receivedConfirmGlAccountId || null,
-      }),
+      body: JSON.stringify(body),
     })
     if (res.ok) { toast.success('Income marked as received'); setReceivedConfirm(null); load() }
     else {
@@ -612,6 +712,8 @@ export function useIncomeCrud() {
     receivedConfirm, setReceivedConfirm,
     receivedConfirmDate, setReceivedConfirmDate,
     receivedConfirmGlAccountId, setReceivedConfirmGlAccountId,
+    receivedConfirmActualAmount, setReceivedConfirmActualAmount,
+    payslipForm, setPayslipForm,
     // Filter state
     dateRange, setDateRangePersisted,
     selectedCatIds, showCatPicker, setShowCatPicker, toggleCat,
