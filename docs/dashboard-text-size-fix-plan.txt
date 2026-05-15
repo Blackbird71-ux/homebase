@@ -1,0 +1,126 @@
+# Plan: Fix Dashboard Card Text Size Responsiveness
+
+## Problem Summary
+
+The user reports that text on home page dashboard panels (cards) does not respond to the Text Size setting in Settings > Appearance. They're unsure if the setting works at all.
+
+## Root Cause Analysis
+
+### 1. How the Font Size Setting Currently Works
+
+The fontSize user preference (sm, base, lg, xl) is:
+
+1. Stored in the User model in Prisma (prisma/schema.prisma:66), default: "base"
+2. Saved via AppearanceTab -> PATCH /api/settings (src/components/settings/AppearanceTab.tsx:192-214)
+3. Applied in src/app/layout.tsx:76 as a Tailwind class on <html>:
+   - sm -> text-sm (0.875rem, approx 14px root)
+   - base -> text-base (1rem, approx 16px root)
+   - lg -> text-lg (1.125rem, approx 18px root)
+   - xl -> text-xl (1.25rem, approx 20px root)
+
+### 2. Why It Mostly Doesn't Work
+
+#### Issue A: Fixed pixel values don't scale
+
+The dashboard cards use hardcoded pixel values (text-[10px], text-[11px]) that are completely immune to root font-size changes. These appear extensively:
+
+| File | Lines | Usage |
+|------|-------|-------|
+| src/components/dashboard/WeeklySummaryCard.tsx | 164, 176, 260, 278 | Scope buttons, meal notes, list selector |
+| src/components/dashboard/ChoreScheduleCard.tsx | 155, 176, 272 | Filter toggle, scope buttons, assignee info |
+| src/components/dashboard/ShoppingListCard.tsx | 77 | List selector dropdown |
+| src/components/dashboard/BillsToPayCard.tsx | 78 | Partial balance label |
+
+#### Issue B: Subtle scaling difference
+
+Even for rem-based sizes, the scaling is subtle. Moving from base (16px) to lg (18px) is only a ~12.5% increase. text-xs (0.75rem) goes from 12px to 13.5px.
+
+#### Issue C: No immediate feedback
+
+Unlike lineHeight and fontWeight (which are applied immediately via document.documentElement.dataset at AppearanceTab.tsx:217-218), the font size change requires a full page reload. The success message says "Font size changes apply on next page load."
+
+#### Issue D: Inverted effect perception
+
+Applying text-sm to <html> sets root to 14px (smaller than default 16px), which actually scales ALL rem text down. The "Large" setting (18px root) is what most users would want, but it's not obvious.
+
+## Recommended Solution
+
+Adopt a CSS custom property approach - similar to how line-height and font-weight are already handled:
+
+### Step 1: Add CSS variables for font-size scaling
+
+In src/app/globals.css, add data-attribute selectors that set a root font-size:
+
+```css
+[data-font-size="sm"]   { font-size: 14px; }
+[data-font-size="base"] { font-size: 16px; }
+[data-font-size="lg"]   { font-size: 18px; }
+[data-font-size="xl"]   { font-size: 20px; }
+```
+
+Remove the font-size from the existing @layer base for html to avoid conflicts.
+
+### Step 2: Update the root layout
+
+In src/app/layout.tsx, change from applying a Tailwind class to applying a data-font-size attribute:
+
+Before:
+<html className={`h-full ${fontSizeClass}`} data-line-height={lineHeight} data-font-weight={fontWeight}>
+
+After:
+<html className="h-full" data-font-size={fontSize} data-line-height={lineHeight} data-font-weight={fontWeight}>
+
+Remove the fontSizeClassMap and fontSizeClass variable entirely since they are no longer needed.
+
+### Step 3: Replace fixed pixel sizes with rem-based classes
+
+In all dashboard card components, replace text-[10px] with text-xs and text-[11px] with text-xs (since text-xs = 0.75rem, which WILL scale with the root font-size):
+
+| Component | Replace | With |
+|-----------|---------|------|
+| WeeklySummaryCard.tsx (4 occurrences) | text-[10px] | text-xs |
+| ChoreScheduleCard.tsx (3 occurrences) | text-[10px] | text-xs |
+| ShoppingListCard.tsx (1 occurrence) | text-[10px] | text-xs |
+| BillsToPayCard.tsx (1 occurrence) | text-[10px] | text-xs |
+
+### Step 4: Add immediate application on save
+
+In src/components/settings/AppearanceTab.tsx, add the font-size to the immediate-application block:
+
+```tsx
+document.documentElement.dataset.lineHeight = lineHeight
+document.documentElement.dataset.fontWeight = fontWeight
+document.documentElement.dataset.fontSize = fontSize  // ADD THIS
+window.dispatchEvent(new Event('appearance-updated'))
+```
+
+Also update the success message to not say "on next page load" since it now applies immediately.
+
+### Step 5: Update settings API validation (optional)
+
+The settings route at src/app/api/settings/route.ts already validates font-size values, so no changes needed there.
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| src/app/globals.css | Add [data-font-size] CSS rules |
+| src/app/layout.tsx | Change className to data-font-size attr; remove fontSizeClassMap |
+| src/components/settings/AppearanceTab.tsx | Apply fontSize immediately via dataset; update success message |
+| src/components/dashboard/WeeklySummaryCard.tsx | Replace text-[10px] -> text-xs (4 occurrences) |
+| src/components/dashboard/ChoreScheduleCard.tsx | Replace text-[10px] -> text-xs (3 occurrences) |
+| src/components/dashboard/ShoppingListCard.tsx | Replace text-[10px] -> text-xs (1 occurrence) |
+| src/components/dashboard/BillsToPayCard.tsx | Replace text-[10px] -> text-xs (1 occurrence) |
+
+## Not In Scope
+
+- The text-[10px] and text-[11px] classes also appear in many other areas of the app (finance pages, chore client, contacts, etc.). This fix plan is scoped to dashboard cards only as per the user's request. A follow-up could extend the same treatment app-wide.
+- The font-size options could also be expanded with a "Largest" option (e.g., 2xl = 24px) for accessibility.
+
+## Testing
+
+1. Set font size to "Large" in Settings > Appearance and verify dashboard text scales up immediately
+2. Set font size to "Extra Large" and verify all card text is noticeably larger
+3. Set back to "Normal" and verify text returns to default size
+4. Refresh the page after each change to verify persistence
+5. Verify text-[10px] elements (scope buttons, list selectors) now scale with the setting
