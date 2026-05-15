@@ -163,7 +163,7 @@ export default function IncomePage() {
               <div>
                 <label className="text-xs text-muted-foreground">Void reason (optional)</label>
                 <input value={voidNote} onChange={e => setVoidNote(e.target.value)}
-                  placeholder="e.g. Cancelled, entered in error�"
+                  placeholder="e.g. Cancelled, entered in error?"
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
             </div>
@@ -196,7 +196,7 @@ export default function IncomePage() {
       <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
         <ResizableDialogContent className="w-full sm:max-w-2xl md:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
 
-          {/* Fixed header � title, errors, income type toggle */}
+          {/* Fixed header — title, errors, income type toggle */}
           <div className="px-4 pt-4 pb-0 shrink-0">
             <DialogHeader>
               <DialogTitle>{editing ? 'Edit Income' : 'New Income'}</DialogTitle>
@@ -226,12 +226,12 @@ export default function IncomePage() {
             </div>
           </div>
 
-          {/* Two-column body � single scroll on the whole panel, not per-column */}
+          {/* Two-column body — single scroll on the whole panel, not per-column */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="flex flex-col md:flex-row">
-              {/* Left panel � core fields */}
+              {/* Left panel — core fields */}
               <div className="md:w-1/2 px-4 pb-4 space-y-2.5 md:border-r md:border-border">
-                {/* Name � full width */}
+                {/* Name — full width */}
                 <div>
                   <label className="text-xs text-muted-foreground">Name *</label>
                   <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
@@ -274,7 +274,7 @@ export default function IncomePage() {
                   )}
                 </div>
 
-                {/* Payer / Source � full width */}
+                {/* Payer / Source — full width */}
                 <div>
                   <label className="text-xs text-muted-foreground">Payer / Source</label>
                   <div className="flex gap-1">
@@ -331,7 +331,7 @@ export default function IncomePage() {
                   </div>
                 )}
 
-                {/* Assigned To + Entity (recurring only � one-off has Assigned To paired with Amount above) */}
+                {/* Assigned To + Entity (recurring only — one-off has Assigned To paired with Amount above) */}
                 {form.incomeType === 'recurring' && (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -346,7 +346,7 @@ export default function IncomePage() {
                       <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
                       <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
                         className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                        <option value="">Select entity�</option>
+                        <option value="">Select entity…</option>
                         {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                       </select>
                     </div>
@@ -360,7 +360,7 @@ export default function IncomePage() {
                       <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
                       <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
                         className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                        <option value="">Select entity�</option>
+                        <option value="">Select entity…</option>
                         {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                       </select>
                     </div>
@@ -392,14 +392,14 @@ export default function IncomePage() {
                         className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                         <option value="">No category</option>
                         {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
-                          <option key={c.id} value={c.id}>{c.parentId ? '� ' + c.name : c.name}</option>
+                          <option key={c.id} value={c.id}>{c.parentId ? '→ ' + c.name : c.name}</option>
                         ))}
                       </select>
                     </div>
                   </div>
                 )}
 
-                {/* Income Category (one-off � location already paired with entity above) */}
+                {/* Income Category (one-off — location already paired with entity above) */}
                 {form.incomeType === 'one-off' && (
                   <div>
                     <label className="text-xs text-muted-foreground">Income Category</label>
@@ -407,20 +407,20 @@ export default function IncomePage() {
                       className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                       <option value="">No category</option>
                       {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
-                        <option key={c.id} value={c.id}>{c.parentId ? '� ' + c.name : c.name}</option>
+                        <option key={c.id} value={c.id}>{c.parentId ? '→ ' + c.name : c.name}</option>
                       ))}
                     </select>
                   </div>
                 )}
               </div>
 
-              {/* Right panel � journal lines + options + tax + notes */}
+              {/* Right panel — journal lines + options + tax + notes */}
               <div className="md:w-1/2 px-4 pb-4 space-y-2.5">
               {/* Journal Lines */}
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <div className="mb-2">
                   <p className="text-xs font-medium text-foreground">Journal Lines</p>
-                  <p className="text-xs text-muted-foreground/70">Authoritative GL entries. When balanced, these are posted as-is � the Income Category above is ignored.</p>
+                  <p className="text-xs text-muted-foreground/70">Authoritative GL entries. When balanced, these are posted as-is — the Income Category above is ignored.</p>
                 </div>
                 <JournalLinesEditor
                   lines={journalLines}
@@ -429,7 +429,7 @@ export default function IncomePage() {
                   expectedTotal={form.amount || 0}
                   errors={journalErrors}
                   onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
-                  lineHints={['Accounts Receivable � asset (money owed to you)', 'Income account (what category of income)']}
+                  lineHints={['Accounts Receivable — asset (money owed to you)', 'Income account (what category of income)']}
                 />
               </div>
 
@@ -579,7 +579,7 @@ export default function IncomePage() {
                 <div className="space-y-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Actual amount received</label>
-                    <p className="text-xs text-muted-foreground/60 mb-1">Defaults to the expected amount � edit if your pay varied this period.</p>
+                    <p className="text-xs text-muted-foreground/60 mb-1">Defaults to the expected amount — edit if your pay varied this period.</p>
                     <input type="number" step="0.01" value={receivedConfirmActualAmount}
                       onChange={e => setReceivedConfirmActualAmount(e.target.value)}
                       onFocus={e => e.currentTarget.select()}
@@ -589,13 +589,13 @@ export default function IncomePage() {
                     <label className="text-xs text-muted-foreground">Receive into GL account (bank)</label>
                     <select value={receivedConfirmGlAccountId} onChange={e => setReceivedConfirmGlAccountId(e.target.value)}
                       className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                      <option value="">Select GL account�</option>
+                      <option value="">Select GL account…</option>
                       {glAccounts.filter(a => a.type === 'asset').map(a => (
-                        <option key={a.id} value={a.id}>{a.parentId ? `� ${a.name}` : a.name}</option>
+                        <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                       ))}
                     </select>
                     {!receivedConfirmGlAccountId && (
-                      <p className="text-xs text-amber-500 mt-1">? No GL account selected � balance sheet won&apos;t update</p>
+                      <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won&apos;t update</p>
                     )}
                   </div>
                 </div>
@@ -640,9 +640,9 @@ export default function IncomePage() {
                         <select value={payslipForm.grossIncomeGlAccountId}
                           onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, grossIncomeGlAccountId: e.target.value }))}
                           className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account�</option>
+                          <option value="">Select GL account…</option>
                           {glAccounts.filter(a => a.type === 'income').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? `� ${a.name}` : a.name}</option>
+                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                           ))}
                         </select>
                       </div>
@@ -665,11 +665,11 @@ export default function IncomePage() {
                             onFocus={e => e.currentTarget.select()}
                             className="w-28 rounded-md border border-input bg-background px-2 py-1 text-sm text-right" />
                           <button onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, components: p.components.filter((_, j) => j !== i) }))}
-                            className="text-red-500 hover:text-red-600 px-1">�</button>
+                            className="text-red-500 hover:text-red-600 px-1">×</button>
                         </div>
                       ))}
                       {payslipForm.components.length > 0 && (
-                        <p className="text-xs text-muted-foreground/60">Components total: {formatCurrency(payslipForm.components.reduce((s, c) => s + (c.amount || 0), 0))} � informational only, must sum to Gross Pay.</p>
+                        <p className="text-xs text-muted-foreground/60">Components total: {formatCurrency(payslipForm.components.reduce((s, c) => s + (c.amount || 0), 0))} — informational only, must sum to Gross Pay.</p>
                       )}
                     </div>
                   </div>
@@ -690,9 +690,9 @@ export default function IncomePage() {
                         <select value={payslipForm.paygGlAccountId}
                           onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, paygGlAccountId: e.target.value }))}
                           className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account�</option>
+                          <option value="">Select GL account…</option>
                           {glAccounts.filter(a => a.type === 'liability' || a.type === 'expense').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? `� ${a.name}` : a.name}</option>
+                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                           ))}
                         </select>
                       </div>
@@ -720,11 +720,11 @@ export default function IncomePage() {
                           className="rounded-md border border-input bg-background px-2 py-1 text-sm">
                           <option value="">No GL account</option>
                           {glAccounts.filter(a => a.type === 'expense' || a.type === 'asset' || a.type === 'liability').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? `� ${a.name}` : a.name}</option>
+                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                           ))}
                         </select>
                         <button onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, deductions: p.deductions.filter((_, j) => j !== i) }))}
-                          className="text-red-500 hover:text-red-600">�</button>
+                          className="text-red-500 hover:text-red-600">×</button>
                       </div>
                     ))}
                   </div>
@@ -746,9 +746,9 @@ export default function IncomePage() {
                         <select value={payslipForm.sgcGlAccountId}
                           onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcGlAccountId: e.target.value }))}
                           className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account�</option>
+                          <option value="">Select GL account…</option>
                           {glAccounts.filter(a => a.type === 'asset' || a.type === 'liability').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? `� ${a.name}` : a.name}</option>
+                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                           ))}
                         </select>
                       </div>
@@ -771,9 +771,9 @@ export default function IncomePage() {
                         <select value={payslipForm.bankGlAccountId}
                           onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, bankGlAccountId: e.target.value }))}
                           className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account�</option>
+                          <option value="">Select GL account…</option>
                           {glAccounts.filter(a => a.type === 'asset').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? `� ${a.name}` : a.name}</option>
+                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                           ))}
                         </select>
                       </div>
@@ -789,7 +789,7 @@ export default function IncomePage() {
                       return (
                         <div className={cn('rounded-md px-3 py-2 text-xs font-medium flex items-center justify-between',
                           balanced ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-red-500/10 text-red-600')}>
-                          <span>{balanced ? '? Balanced � journal will post correctly' : `? Out of balance by ${formatCurrency(diff)}`}</span>
+                          <span>{balanced ? '✓ Balanced — journal will post correctly' : `⚠ Out of balance by ${formatCurrency(diff)}`}</span>
                           <span>{balanced ? '' : `Net + PAYG + Deductions = ${formatCurrency(net + payg + deds)} vs Gross ${formatCurrency(gross)}`}</span>
                         </div>
                       )
@@ -874,7 +874,7 @@ export default function IncomePage() {
               </div>
               {colCats.map(c => (
                 <span key={c.id} className="text-xs font-semibold text-right">
-                  {catTotals[c.id] > 0 ? formatCurrency(catTotals[c.id]) : <span className="text-muted-foreground">�</span>}
+                  {catTotals[c.id] > 0 ? formatCurrency(catTotals[c.id]) : <span className="text-muted-foreground">—</span>}
                 </span>
               ))}
               <span className="text-sm font-bold text-right">{formatCurrency(grandTotal)}</span>
