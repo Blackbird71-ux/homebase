@@ -198,14 +198,16 @@ export default function BillsPage() {
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="flex flex-col md:flex-row">
               {/* Left panel */}
-              <div className="md:w-1/2 px-4 pb-4 space-y-3 md:border-r md:border-border">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+              <div className="md:w-1/2 px-4 pb-4 space-y-2.5 md:border-r md:border-border">
+              <div className="grid grid-cols-2 gap-2">
+                {/* Name — full width */}
+                <div className="col-span-2">
                   <label className="text-xs text-muted-foreground">Name *</label>
                   <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                     className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.name && 'border-red-500')} />
                   {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
                 </div>
+                {/* Amount + Frequency (or Assigned To for one-off) */}
                 <div>
                   <label className="text-xs text-muted-foreground">Amount *</label>
                   <input type="number" step="0.01" value={form.amount || ''}
@@ -214,7 +216,7 @@ export default function BillsPage() {
                     className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.amount && 'border-red-500')} />
                   {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
                 </div>
-                {form.billType === 'recurring' && (
+                {form.billType === 'recurring' ? (
                   <div>
                     <label className="text-xs text-muted-foreground">Frequency *</label>
                     <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
@@ -228,8 +230,18 @@ export default function BillsPage() {
                       <option value="yearly">Yearly</option>
                     </select>
                   </div>
+                ) : (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Assigned To</label>
+                    <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">Shared</option>
+                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
                 )}
-                <div>
+                {/* Financial Contact — full width (needs link button) */}
+                <div className="col-span-2">
                   <label className="text-xs text-muted-foreground">Financial Contact</label>
                   <div className="flex gap-1">
                     <select value={form.vendorId} onChange={e => handleVendorChange(e.target.value)}
@@ -242,27 +254,31 @@ export default function BillsPage() {
                       title="Manage contacts"><Building2 className="h-3.5 w-3.5" /></Link>
                   </div>
                 </div>
+                {/* Due Date + End Date */}
                 <div>
                   <label className="text-xs text-muted-foreground">{form.billType === 'one-off' ? 'Due Date *' : 'Next Due Date *'}</label>
                   <input type="date" value={form.nextDueDate} onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
                     className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.nextDueDate && 'border-red-500')} />
                   {errors.nextDueDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextDueDate}</p>}
                 </div>
-                {form.billType === 'recurring' && (
+                {form.billType === 'recurring' ? (
                   <div>
                     <label className="text-xs text-muted-foreground">End Date (optional)</label>
                     <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
                       className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
                   </div>
+                ) : <div />}
+                {/* Assigned To + Entity (recurring only — one-off has Assigned To above) */}
+                {form.billType === 'recurring' && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Assigned To</label>
+                    <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">Shared</option>
+                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
                 )}
-                <div>
-                  <label className="text-xs text-muted-foreground">Assigned To (person)</label>
-                  <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">Shared (household)</option>
-                    {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                </div>
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
                   <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
@@ -271,6 +287,7 @@ export default function BillsPage() {
                     {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                   </select>
                 </div>
+                {/* Tax Classification + Expense Category */}
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
                   <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
@@ -294,7 +311,7 @@ export default function BillsPage() {
               </div>
 
               {/* Right panel */}
-              <div className="md:w-1/2 px-4 pb-4 space-y-3">
+              <div className="md:w-1/2 px-4 pb-4 space-y-2.5">
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <JournalLinesEditor
                   lines={journalLines}

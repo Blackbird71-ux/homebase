@@ -230,35 +230,51 @@ export default function IncomePage() {
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="flex flex-col md:flex-row">
               {/* Left panel — core fields */}
-              <div className="md:w-1/2 px-4 pb-4 space-y-3 md:border-r md:border-border">
+              <div className="md:w-1/2 px-4 pb-4 space-y-2.5 md:border-r md:border-border">
+                {/* Name — full width */}
                 <div>
                   <label className="text-xs text-muted-foreground">Name *</label>
                   <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                     className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.name ? 'border-red-500' : 'border-input')} />
                   {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Amount *</label>
-                  <input type="number" step="0.01" value={form.amount || ''}
-                    onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                    onFocus={e => e.target.select()}
-                    className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
-                  {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
-                </div>
-                {form.incomeType === 'recurring' && (
+
+                {/* Amount + Frequency on one row */}
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">Frequency *</label>
-                    <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
-                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                      <option value="weekly">Weekly</option>
-                      <option value="fortnightly">Fortnightly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="quarterly">Quarterly</option>
-                      <option value="halfyearly">6 Monthly / Half-Yearly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
+                    <label className="text-xs text-muted-foreground">Amount *</label>
+                    <input type="number" step="0.01" value={form.amount || ''}
+                      onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                      onFocus={e => e.target.select()}
+                      className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500' : 'border-input')} />
+                    {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
                   </div>
-                )}
+                  {form.incomeType === 'recurring' ? (
+                    <div>
+                      <label className="text-xs text-muted-foreground">Frequency *</label>
+                      <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="weekly">Weekly</option>
+                        <option value="fortnightly">Fortnightly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="halfyearly">6 Monthly / Half-Yearly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs text-muted-foreground">Assigned To</label>
+                      <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">Shared</option>
+                        {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payer / Source — full width */}
                 <div>
                   <label className="text-xs text-muted-foreground">Payer / Source</label>
                   <div className="flex gap-1">
@@ -274,78 +290,132 @@ export default function IncomePage() {
                     </Link>
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Day of Month</label>
-                  <input type="number" min={1} max={31} value={form.dayOfMonth}
-                    onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                    placeholder="e.g. 15" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Month of Year (for annual)</label>
-                  <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">None</option>
-                    {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-                      <option key={i+1} value={i+1}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">{form.incomeType === 'one-off' ? 'Expected Date *' : 'Next Expected Date *'}</label>
-                  <input type="date" value={form.nextExpectedDate} onChange={e => setForm(p => ({ ...p, nextExpectedDate: e.target.value }))}
-                    className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.nextExpectedDate ? 'border-red-500' : 'border-input')} />
-                  {errors.nextExpectedDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextExpectedDate}</p>}
-                </div>
-                {form.incomeType === 'recurring' && (
+
+                {/* Dates row */}
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">End Date (optional)</label>
-                    <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
-                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <label className="text-xs text-muted-foreground">{form.incomeType === 'one-off' ? 'Expected Date *' : 'Next Expected Date *'}</label>
+                    <input type="date" value={form.nextExpectedDate} onChange={e => setForm(p => ({ ...p, nextExpectedDate: e.target.value }))}
+                      className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.nextExpectedDate ? 'border-red-500' : 'border-input')} />
+                    {errors.nextExpectedDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextExpectedDate}</p>}
+                  </div>
+                  {form.incomeType === 'recurring' ? (
+                    <div>
+                      <label className="text-xs text-muted-foreground">End Date (optional)</label>
+                      <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Day of Month + Month of Year (recurring only) */}
+                {form.incomeType === 'recurring' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Day of Month</label>
+                      <input type="number" min={1} max={31} value={form.dayOfMonth}
+                        onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                        placeholder="e.g. 15" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Month (annual)</label>
+                      <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">None</option>
+                        {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                          <option key={i+1} value={i+1}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 )}
-                <div>
-                  <label className="text-xs text-muted-foreground">Assigned To (person)</label>
-                  <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">Shared (household)</option>
-                    {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Briefcase className="h-3 w-3" /> Entity / Fund
-                  </label>
-                  <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">Select entity…</option>
-                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
-                  </select>
-                  <p className="mt-1 text-[11px] text-muted-foreground/70">Scopes this entry for entity-level reporting only. Does not affect journal lines.</p>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Location</label>
-                  <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">No location</option>
-                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Income Category (GL)</label>
-                  <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">No category</option>
-                    {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
-                      <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-[11px] text-muted-foreground/70">Fallback only — auto-seeds the journal lines below when none are defined. Ignored once journal lines exist.</p>
-                </div>
+
+                {/* Assigned To + Entity (recurring only — one-off has Assigned To paired with Amount above) */}
+                {form.incomeType === 'recurring' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Assigned To</label>
+                      <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">Shared</option>
+                        {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
+                      <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">Select entity…</option>
+                        {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Entity for one-off (no Assigned To pairing since it's above) */}
+                {form.incomeType === 'one-off' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
+                      <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">Select entity…</option>
+                        {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Location</label>
+                      <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">No location</option>
+                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Location + Income Category (recurring) */}
+                {form.incomeType === 'recurring' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Location</label>
+                      <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">No location</option>
+                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Income Category</label>
+                      <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">No category</option>
+                        {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
+                          <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Income Category (one-off — location already paired with entity above) */}
+                {form.incomeType === 'one-off' && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Income Category</label>
+                    <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">No category</option>
+                      {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
+                        <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Right panel — journal lines + options + tax + notes */}
-              <div className="md:w-1/2 px-4 pb-4 space-y-3">
+              <div className="md:w-1/2 px-4 pb-4 space-y-2.5">
               {/* Journal Lines */}
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <div className="mb-2">
