@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CheckCircle, AlertCircle, Copy, RefreshCw, Check } from 'lucide-react'
 
 interface InviteCode {
@@ -311,7 +312,15 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <Tabs defaultValue="profile" className="w-full">
+      <TabsList className="mb-6">
+        <TabsTrigger value="profile">Profile</TabsTrigger>
+        {isAdmin && <TabsTrigger value="family">Family</TabsTrigger>}
+      </TabsList>
+
+      {/* ── PROFILE TAB ── */}
+      <TabsContent value="profile" className="space-y-6">
+
       {/* Display Name */}
       <Card>
         <CardHeader>
@@ -365,9 +374,27 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         </CardContent>
       </Card>
 
-      {/* Admin: Family Name */}
-      {isAdmin && (
+      {/* Timezone — read-only for non-admins */}
+      {!isAdmin && (
         <Card>
+          <CardHeader>
+            <CardTitle>Timezone</CardTitle>
+            <CardDescription>The timezone used for all dates and times in the app.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm">{user.family.timezone.replace(/_/g, ' ')}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      </TabsContent>
+
+      {/* ── FAMILY TAB (admin only) ── */}
+      {isAdmin && (
+      <TabsContent value="family" className="space-y-6">
+
+      {/* Admin: Family Name */}
+      <Card>
           <CardHeader>
             <CardTitle>Family Name</CardTitle>
             <CardDescription>Admin only — changes the name shown in the app header.</CardDescription>
@@ -384,9 +411,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
             {familyNameStatus && <StatusMessage status={familyNameStatus} />}
           </CardContent>
         </Card>
-      )}
 
-      {/* Timezone — admin editable, others read-only */}
+      {/* Timezone */}
       <Card>
         <CardHeader>
           <CardTitle>Timezone</CardTitle>
@@ -413,18 +439,12 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
               </Button>
               {timezoneStatus && <StatusMessage status={timezoneStatus} />}
             </>
-          ) : (
-            <p className="text-sm">{user.family.timezone.replace(/_/g, ' ')}</p>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
-      {/* ── Spec §2.7: Financial Year Start Month ──────────────────────────────
-          Admin-only. Controls the FY start used by P&L, Annual P&L,
-          Tax Report, Snapshots, and Budget pages.
-          Australian default is 1 July (month 7). ────────────────────────── */}
-      {isAdmin && (
-        <Card>
+      {/* Financial Year Start Month */}
+      <Card>
           <CardHeader>
             <CardTitle>Financial Year Start Month</CardTitle>
             <CardDescription>
@@ -457,11 +477,9 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
             {fyStartMonthStatus && <StatusMessage status={fyStartMonthStatus} />}
           </CardContent>
         </Card>
-      )}
 
       {/* Admin: Invite Codes */}
-      {isAdmin && (
-        <Card>
+      <Card>
           <CardHeader>
             <CardTitle>Invite Codes</CardTitle>
             <CardDescription>Generate codes to invite new family members. Codes expire in 7 days.</CardDescription>
@@ -512,11 +530,9 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
             )}
           </CardContent>
         </Card>
-      )}
 
       {/* Admin: Family Members */}
-      {isAdmin && (
-        <Card>
+      <Card>
           <CardHeader>
             <CardTitle>Family Members</CardTitle>
             <CardDescription>All accounts with access to your family&apos;s Homebase.</CardDescription>
@@ -574,8 +590,11 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
             )}
           </CardContent>
         </Card>
+
+      </TabsContent>
       )}
-    </div>
+
+    </Tabs>
   )
 }
 

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, CloudSun, MapPin, LayoutList, LayoutGrid } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, MapPin, LayoutList, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AppearanceTabProps {
@@ -230,8 +231,43 @@ export function AppearanceTab({
 
   const isHighContrast = theme.startsWith('high-contrast')
 
+  function SaveBar() {
+    return (
+      <div className="pt-2 space-y-3">
+        <Button onClick={save} disabled={saving} size="lg">
+          {saving ? 'Saving...' : 'Save Appearance'}
+        </Button>
+        {status && (
+          <div
+            role="alert"
+            className={cn(
+              'flex items-start gap-2 text-sm p-3 rounded-md',
+              status.type === 'success'
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                : 'bg-destructive/10 text-destructive'
+            )}
+          >
+            {status.type === 'success'
+              ? <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+            <span>{status.message}</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
+    <Tabs defaultValue="theme" className="w-full">
+      <TabsList className="mb-6">
+        <TabsTrigger value="theme">Theme</TabsTrigger>
+        <TabsTrigger value="text">Text</TabsTrigger>
+        <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+        <TabsTrigger value="advanced">Advanced</TabsTrigger>
+      </TabsList>
+
+      {/* ── THEME TAB ── */}
+      <TabsContent value="theme" className="space-y-6">
 
       {/* Theme */}
       <Card>
@@ -268,6 +304,12 @@ export function AppearanceTab({
           )}
         </CardContent>
       </Card>
+
+      <SaveBar />
+      </TabsContent>
+
+      {/* ── TEXT TAB ── */}
+      <TabsContent value="text" className="space-y-6">
 
       {/* Font Size */}
       <Card>
@@ -363,6 +405,12 @@ export function AppearanceTab({
         </CardContent>
       </Card>
 
+      <SaveBar />
+      </TabsContent>
+
+      {/* ── DASHBOARD TAB ── */}
+      <TabsContent value="dashboard" className="space-y-6">
+
       {/* Week Start */}
       <Card>
         <CardHeader>
@@ -391,7 +439,7 @@ export function AppearanceTab({
         </CardContent>
       </Card>
 
-      {/* Done Item Color */}
+      {/* Done Item Colour */}
       <Card>
         <CardHeader>
           <CardTitle>Done Item Colour</CardTitle>
@@ -417,64 +465,6 @@ export function AppearanceTab({
               </button>
             ))}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Secure Card Appearance */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Secure Card Appearance</CardTitle>
-          <CardDescription>
-            How PIN-protected notes and contacts appear on cards before unlocking.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label className="text-sm font-medium mb-2 block">Style</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {secureCardStyleOptions.map(({ value, label, description }) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={secureCardStyle === value}
-                  onClick={() => setSecureCardStyle(value)}
-                  className={cn(
-                    'flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-colors text-left',
-                    secureCardStyle === value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-muted-foreground/30'
-                  )}
-                >
-                  <span className="text-sm font-medium">{label}</span>
-                  <span className="text-xs text-muted-foreground">{description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          {secureCardStyle === 'color' && (
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Placeholder Colour</Label>
-              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-                {secureCardColorOptions.map(({ value, label, swatch }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={secureCardColor === value}
-                    onClick={() => setSecureCardColor(value)}
-                    className={cn(
-                      'flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-colors',
-                      secureCardColor === value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-muted-foreground/30'
-                    )}
-                  >
-                    <div className={cn('w-6 h-6 rounded-full shrink-0', swatch)} />
-                    <span className="text-[10px] font-medium truncate w-full text-center">{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -656,26 +646,73 @@ export function AppearanceTab({
         </CardContent>
       </Card>
 
-      <Button onClick={save} disabled={saving} size="lg">
-        {saving ? 'Saving...' : 'Save Appearance'}
-      </Button>
+      <SaveBar />
+      </TabsContent>
 
-      {status && (
-        <div
-          role="alert"
-          className={cn(
-            'flex items-start gap-2 text-sm p-3 rounded-md',
-            status.type === 'success'
-              ? 'bg-green-500/10 text-green-600 dark:text-green-400'
-              : 'bg-destructive/10 text-destructive'
+      {/* ── ADVANCED TAB ── */}
+      <TabsContent value="advanced" className="space-y-6">
+
+      {/* Secure Card Appearance */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Secure Card Appearance</CardTitle>
+          <CardDescription>
+            How PIN-protected notes and contacts appear on cards before unlocking.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label className="text-sm font-medium mb-2 block">Style</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {secureCardStyleOptions.map(({ value, label, description }) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={secureCardStyle === value}
+                  onClick={() => setSecureCardStyle(value)}
+                  className={cn(
+                    'flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-colors text-left',
+                    secureCardStyle === value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-muted-foreground/30'
+                  )}
+                >
+                  <span className="text-sm font-medium">{label}</span>
+                  <span className="text-xs text-muted-foreground">{description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {secureCardStyle === 'color' && (
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Placeholder Colour</Label>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                {secureCardColorOptions.map(({ value, label, swatch }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={secureCardColor === value}
+                    onClick={() => setSecureCardColor(value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-colors',
+                      secureCardColor === value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-muted-foreground/30'
+                    )}
+                  >
+                    <div className={cn('w-6 h-6 rounded-full shrink-0', swatch)} />
+                    <span className="text-[10px] font-medium truncate w-full text-center">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
-        >
-          {status.type === 'success'
-            ? <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
-          <span>{status.message}</span>
-        </div>
-      )}
-    </div>
+        </CardContent>
+      </Card>
+
+      <SaveBar />
+      </TabsContent>
+
+    </Tabs>
   )
 }
