@@ -34,7 +34,7 @@ interface EventModalProps {
   open: boolean
   currentUserId: string
   onClose: () => void
-  onSave: () => void
+  onSave: () => Promise<void>
 }
 
 export function EventModal({ event, defaultDate, open, currentUserId, onClose, onSave }: EventModalProps) {
@@ -162,7 +162,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
         const data = await res.json()
         setError(data.error ?? 'Failed to save event')
       } else {
-        onSave()
+        await onSave()
         onClose()
       }
     } catch (err) {
@@ -202,7 +202,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       }
       setShowDeleteConfirm(false)
       setDeleteAll(false)
-      onSave()
+      await onSave()
       onClose()
     } catch (err) {
       setLoading(false)
