@@ -45,6 +45,9 @@ export default async function TripsPage() {
           pendingItems: t.packingList.items.length,
         }
       : null,
+    estimatedBudget: t.estimatedBudget,
+    actualCost: t.actualCost,
+    budgetBreakdown: t.budgetBreakdown,
     createdBy: t.createdBy,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
