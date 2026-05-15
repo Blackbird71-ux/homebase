@@ -1063,7 +1063,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // STAGE 2: Bill paid → ATOMIC GL WRITE (DR AP / CR Bank)
+  // STAGE 2: Bill paid → ATOMIC GL WRITE
   // ══════════════════════════════════════════════════════════════════════════
   if (paid === true && !existing.paid) {
     const actualPaidDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
@@ -1079,10 +1079,59 @@ export async function PATCH(request: NextRequest) {
       await prisma.$transaction(async (tx) => {
         const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
 
-        // Create payment GL journal: DR AP / CR Bank — only if we have a bank GL account
+        // ── GL-FIRST payment journal logic ────────────────────────────────────
+        //
+        // Two accounting paths depending on whether the bill was accrued first:
+        //
+        // PATH A — Invoice was posted first (invoiceReceived=true):
+        //   Stage 1 created: DR Expense / CR AP  (liability recognised)
+        //   Stage 2 clears:  DR AP     / CR Bank  (liability settled)
+        //   Net effect:      DR Expense / CR Bank  ✓ expense hits P&L via stage 1
+        //
+        // PATH B — Direct payment, no prior accrual (invoiceReceived=false):
+        //   No stage 1 journal exists — AP was never credited.
+        //   Wrong:  DR AP / CR Bank  → debits a liability that was never created;
+        //           expense never reaches P&L (the original bug).
+        //   Correct: DR Expense / CR Bank → single combined journal; expense hits
+        //            P&L immediately and the GL remains balanced.
+        //
+        // We detect the path via existing.invoiceReceived rather than checking
+        // whether a journal entry physically exists — invoiceReceived is the
+        // canonical flag for "stage 1 has been committed".
+        const wasAccrued = existing.invoiceReceived === true
+        const expenseCategoryId = existing.categoryId  // may be null — handled below
+
+        // Create payment GL journal — only if we have a bank GL account to credit
         let paymentJournalId: string | null = null
         if (bankGlAccountId) {
           const reference = await nextJournalReference(session.familyId)
+
+          let journalLines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[]
+
+          if (wasAccrued) {
+            // PATH A: clear the AP liability that stage 1 created
+            journalLines = [
+              { glAccountId: apCategoryId,    side: 'debit',  amount: payAmount, description: `Clear AP: ${existing.name}` },
+              { glAccountId: bankGlAccountId, side: 'credit', amount: payAmount, description: `Payment: ${existing.name}` },
+            ]
+          } else if (expenseCategoryId) {
+            // PATH B: no prior accrual — combine expense recognition + cash outflow
+            // into a single journal so the expense hits the P&L in the same period
+            // as the cash payment. This is correct cash-basis accounting.
+            journalLines = [
+              { glAccountId: expenseCategoryId, side: 'debit',  amount: payAmount, description: existing.name },
+              { glAccountId: bankGlAccountId,   side: 'credit', amount: payAmount, description: `Payment: ${existing.name}` },
+            ]
+          } else {
+            // No expense category and no prior accrual — fall back to AP debit so
+            // the journal at least balances, but flag it (same behaviour as before
+            // for uncategorised bills; user should assign a category).
+            journalLines = [
+              { glAccountId: apCategoryId,    side: 'debit',  amount: payAmount, description: `Payment (no category): ${existing.name}` },
+              { glAccountId: bankGlAccountId, side: 'credit', amount: payAmount, description: `Payment: ${existing.name}` },
+            ]
+          }
+
           const paymentJe = await tx.financeJournalEntry.create({
             data: {
               reference,
@@ -1092,12 +1141,7 @@ export async function PATCH(request: NextRequest) {
               isPosted: true,
               entityId: existing.entityId ?? null,
               familyId: session.familyId,
-              lines: {
-                create: [
-                  { glAccountId: apCategoryId,    side: 'debit',  amount: payAmount, description: `Clear AP: ${existing.name}` },
-                  { glAccountId: bankGlAccountId, side: 'credit', amount: payAmount, description: `Payment: ${existing.name}` },
-                ],
-              },
+              lines: { create: journalLines },
             },
             select: { id: true },
           })

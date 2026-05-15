@@ -235,8 +235,10 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
                 <div key={ymd} className={[
                   'rounded-xl border transition-all duration-150',
                   ymd === today ? 'border-primary/30 bg-primary/5' : 'border-border',
-                  // Compress empty days in multi-column view; full padding in single
-                  layout === 'single' ? 'p-2' : hasAnyMeals ? 'p-1.5' : 'p-1 opacity-60 hover:opacity-100 hover:p-1.5 hover:border-border/80',
+                  // Compress empty days in both layouts; full padding only when meals present
+                  layout === 'single'
+                    ? hasAnyMeals ? 'p-2' : 'p-1.5 opacity-60 hover:opacity-100'
+                    : hasAnyMeals ? 'p-1.5' : 'p-1 opacity-60 hover:opacity-100 hover:p-1.5 hover:border-border/80',
                 ].join(' ')}>
                   <DailyMealColumn
                     date={ymd}
