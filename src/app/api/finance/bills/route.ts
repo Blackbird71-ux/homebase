@@ -355,6 +355,40 @@ export async function POST(request: NextRequest) {
 
   // ── Post to GL if invoiceReceived=true ─────────────────────────────────────
   // Done outside the create transaction so the bill ID exists for the journal.
+  // Materialise custom journal split as a draft first (if provided).
+  // GL-FIRST: when the client sends explicit `journalLines` (e.g. a 3-line GST
+  // split), write them as a draft journal entry BEFORE posting. Then
+  // postBillToGL's existing "promote balanced draft as-is" branch will preserve
+  // the user's split end-to-end. Without this step, postBillToGL falls through
+  // to its hardcoded 2-line DR Expense / CR AP default and the GST line is lost.
+  //
+  // This step runs for BOTH posted and unposted bills:
+  //   - shouldPostInvoice=false: ends here, bill keeps the draft journal for later promotion
+  //   - shouldPostInvoice=true:  draft is then promoted by postBillToGL below
+  let draftJeId: string | null = null
+  if (Array.isArray(journalLines) && journalLines.length >= 2) {
+    try {
+      draftJeId = await upsertBillDraftJournal(
+        bill.id, name, null, journalLines, dueDate, session.familyId, entityId ?? null,
+      )
+      await prisma.financeRecurringBill.update({
+        where: { id: bill.id },
+        data: { journalEntryId: draftJeId },
+      })
+    } catch (err) {
+      // Custom lines failed validation (e.g. unbalanced or invalid GL accounts).
+      // Surface as 422 and delete the orphan bill so it doesn't sit without
+      // a journal entry the user thought they saved.
+      console.error('[bills POST] Failed to save draft journal from custom lines:', err)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      await prisma.financeRecurringBill.delete({ where: { id: bill.id } }).catch(() => {})
+      return NextResponse.json(
+        { error: `Failed to save journal lines: ${msg}` },
+        { status: 422 }
+      )
+    }
+  }
+
   if (shouldPostInvoice && categoryId) {
     try {
       const journalEntryId = await postBillToGL(
@@ -365,12 +399,14 @@ export async function POST(request: NextRequest) {
         entityId ?? null,
         session.familyId,
         invoiceDate,
-        null,
+        draftJeId,
       )
-      await prisma.financeRecurringBill.update({
-        where: { id: bill.id },
-        data: { journalEntryId },
-      })
+      if (journalEntryId !== draftJeId) {
+        await prisma.financeRecurringBill.update({
+          where: { id: bill.id },
+          data: { journalEntryId },
+        })
+      }
     } catch (err) {
       // GL posting failed — roll back the bill's invoiceReceived status
       console.error('[bills POST] GL posting failed, reverting invoiceReceived:', err)
@@ -383,20 +419,11 @@ export async function POST(request: NextRequest) {
         { status: 422 }
       )
     }
-  } else if (!shouldPostInvoice && Array.isArray(journalLines) && journalLines.length >= 2) {
-    // Save draft journal lines for later posting
-    try {
-      const journalEntryId = await upsertBillDraftJournal(
-        bill.id, name, null, journalLines, dueDate, session.familyId, entityId ?? null,
-      )
-      await prisma.financeRecurringBill.update({
-        where: { id: bill.id },
-        data: { journalEntryId },
-      })
-    } catch (err) {
-      console.error('[bills POST] Failed to save draft journal:', err)
-    }
   }
+
+  // No `else if` for the unposted+lines case: handled by the unconditional
+  // upsertBillDraftJournal step above so the draft is always written when
+  // lines are provided, regardless of posting state.
 
   try {
     const finalBill = await prisma.financeRecurringBill.findFirst({
@@ -463,11 +490,54 @@ export async function PUT(request: NextRequest) {
     include: BILL_INCLUDE,
   })
 
-  // If invoiceReceived is transitioning false→true, post the GL accrual journal
+  // If invoiceReceived is transitioning false->true, post the GL accrual journal
   const invoiceReceivedTransition = invoiceReceived === true && !existing.invoiceReceived
+  const hasCustomLines = Array.isArray(journalLines) && journalLines.length >= 2
+
+  // Step 1: refresh the draft journal from custom lines if provided.
+  // GL-FIRST: when the client sends explicit `journalLines`, write them as a
+  // draft entry FIRST (or update an existing unposted draft). This ensures any
+  // subsequent posting step finds the user's split as a balanced draft to
+  // promote, rather than falling back to a hardcoded 2-line auto entry.
+  //
+  // Skipped when the bill is already posted — a posted journal is locked and
+  // must not be silently overwritten by an edit form save.
+  let workingJeId: string | null = existing.journalEntryId ?? null
+  if (hasCustomLines && !existing.invoiceReceived) {
+    try {
+      workingJeId = await upsertBillDraftJournal(
+        bill.id,
+        name ?? existing.name,
+        workingJeId,
+        journalLines,
+        nextDueDate ? new Date(nextDueDate) : existing.nextDueDate,
+        session.familyId,
+        entityId !== undefined ? (entityId ?? null) : existing.entityId,
+      )
+      if (workingJeId !== (existing.journalEntryId ?? null)) {
+        await prisma.financeRecurringBill.update({
+          where: { id: bill.id },
+          data: { journalEntryId: workingJeId },
+        })
+      }
+    } catch (err) {
+      // Unbalanced or invalid lines. Surface as 422 so the user is told their
+      // split was rejected. The bill's other field updates have already been
+      // saved; the journal entry is not modified.
+      console.error('[bills PUT] Failed to upsert draft journal:', err)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      return NextResponse.json(
+        { error: `Failed to save journal lines: ${msg}` },
+        { status: 422 }
+      )
+    }
+  }
+
+  // Step 2: promote to posted if the user is transitioning false->true.
+  // postBillToGL finds the just-written balanced draft via workingJeId and
+  // promotes it as-is, preserving any custom split (e.g. 3-line GST entry).
   if (invoiceReceivedTransition) {
     try {
-      const existingJeId: string | null = existing.journalEntryId ?? null
       const effectiveCategoryId = categoryId ?? existing.categoryId
       if (effectiveCategoryId) {
         const journalEntryId = await postBillToGL(
@@ -478,9 +548,9 @@ export async function PUT(request: NextRequest) {
           entityId !== undefined ? (entityId ?? null) : existing.entityId,
           session.familyId,
           invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
-          existingJeId,
+          workingJeId,
         )
-        if (journalEntryId !== existingJeId) {
+        if (journalEntryId !== workingJeId) {
           await prisma.financeRecurringBill.update({
             where: { id: bill.id },
             data: { journalEntryId },
@@ -492,30 +562,7 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  // Update draft journal lines if provided and bill is not yet posted (and not just transitioning to posted).
-  // Send all lines with a glAccountId — balance validation happens inside upsertBillDraftJournal.
-  if (!invoiceReceivedTransition && Array.isArray(journalLines) && journalLines.length >= 2 && !existing.invoiceReceived) {
-    try {
-      const existingJeId: string | null = existing.journalEntryId ?? null
-      const journalEntryId = await upsertBillDraftJournal(
-        bill.id,
-        name ?? existing.name,
-        existingJeId,
-        journalLines,
-        nextDueDate ? new Date(nextDueDate) : existing.nextDueDate,
-        session.familyId,
-        entityId !== undefined ? (entityId ?? null) : existing.entityId,
-      )
-      if (journalEntryId !== existingJeId) {
-        await prisma.financeRecurringBill.update({
-          where: { id: bill.id },
-          data: { journalEntryId },
-        })
-      }
-    } catch (err) {
-      console.error('[bills PUT] Failed to upsert draft journal:', err)
-    }
-  }
+  // No separate "else if" for the draft-only update case: handled by Step 1 above.
 
   const finalBill = await prisma.financeRecurringBill.findFirst({
     where: { id, familyId: session.familyId },
