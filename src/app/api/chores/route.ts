@@ -12,7 +12,7 @@ function calculateInitialDueDate(
   timezone: string
 ): Date {
   const base = startDate ? new Date(startDate) : new Date()
-  base.setHours(0, 0, 0, 0)
+  base.setUTCHours(0, 0, 0, 0)
 
   let result: Date
 
@@ -23,11 +23,11 @@ function calculateInitialDueDate(
     }
     case 'weekly': {
       if (dayOfWeek !== null) {
-        const currentDay = base.getDay()
+        const currentDay = base.getUTCDay()
         let daysUntil = dayOfWeek - currentDay
         if (daysUntil < 0) daysUntil += 7
         const next = new Date(base)
-        next.setDate(base.getDate() + daysUntil)
+        next.setUTCDate(base.getUTCDate() + daysUntil)
         result = next
       } else {
         result = base
@@ -44,15 +44,15 @@ function calculateInitialDueDate(
     case 'halfyearly':
     case 'yearly': {
       if (dayOfMonth !== null) {
-        const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
+        const lastDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate()
         const targetDay = Math.min(dayOfMonth, lastDay)
         // If start date's day is after the target day this month, go to next month
-        if (base.getDate() > targetDay) {
-          base.setMonth(base.getMonth() + 1)
-          const nextLastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
-          base.setDate(Math.min(dayOfMonth, nextLastDay))
+        if (base.getUTCDate() > targetDay) {
+          base.setUTCMonth(base.getUTCMonth() + 1)
+          const nextLastDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate()
+          base.setUTCDate(Math.min(dayOfMonth, nextLastDay))
         } else {
-          base.setDate(targetDay)
+          base.setUTCDate(targetDay)
         }
         result = base
       } else {
@@ -66,7 +66,7 @@ function calculateInitialDueDate(
     }
   }
 
-  // Shift from server-midnight UTC to user's local-time midnight
+  // Shift from UTC midnight to user's local-time midnight
   return utcMidnightToLocalMidnight(result, timezone)
 }
 

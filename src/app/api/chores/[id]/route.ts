@@ -31,27 +31,27 @@ function calculateNextDueDateLocal(
   switch (chore.frequency) {
     case 'daily': {
       next = new Date(now)
-      next.setDate(next.getDate() + 1)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 1)
+      next.setUTCHours(0, 0, 0, 0)
       break
     }
     case 'weekly': {
       next = new Date(now)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCHours(0, 0, 0, 0)
       if (chore.dayOfWeek !== null) {
-        const currentDay = next.getDay()
+        const currentDay = next.getUTCDay()
         let daysUntil = chore.dayOfWeek - currentDay
         if (daysUntil <= 0) daysUntil += 7
-        next.setDate(next.getDate() + daysUntil)
+        next.setUTCDate(next.getUTCDate() + daysUntil)
       } else {
-        next.setDate(next.getDate() + 7)
+        next.setUTCDate(next.getUTCDate() + 7)
       }
       break
     }
     case 'biweekly': {
       next = new Date(now)
-      next.setDate(next.getDate() + 14)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 14)
+      next.setUTCHours(0, 0, 0, 0)
       break
     }
     case 'monthly':
@@ -60,25 +60,25 @@ function calculateNextDueDateLocal(
     case 'halfyearly':
     case 'yearly': {
       next = new Date(now)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCHours(0, 0, 0, 0)
       let monthsToAdd = 1
       if (chore.frequency === 'bimonthly') monthsToAdd = 2
       else if (chore.frequency === 'quarterly') monthsToAdd = 3
       else if (chore.frequency === 'halfyearly') monthsToAdd = 6
       else if (chore.frequency === 'yearly') monthsToAdd = 12
       if (chore.dayOfMonth !== null) {
-        next.setMonth(next.getMonth() + monthsToAdd)
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+        next.setUTCMonth(next.getUTCMonth() + monthsToAdd)
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()
+        next.setUTCDate(Math.min(chore.dayOfMonth, lastDay))
       } else {
-        next.setMonth(next.getMonth() + monthsToAdd)
+        next.setUTCMonth(next.getUTCMonth() + monthsToAdd)
       }
       break
     }
     default: {
       next = new Date(now)
-      next.setDate(next.getDate() + 7)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 7)
+      next.setUTCHours(0, 0, 0, 0)
     }
   }
 
@@ -87,7 +87,7 @@ function calculateNextDueDateLocal(
     return null
   }
 
-  // Shift from server-midnight UTC to user's local-time midnight
+  // Shift from UTC midnight to user's local-time midnight
   return utcMidnightToLocalMidnight(next, timezone)
 }
 
@@ -104,60 +104,45 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // ── Recalculate nextDueDate when frequency/dayOfWeek/dayOfMonth changes ─────
-  // Without this, changing e.g. weekly→monthly would leave the old weekly due date intact
-  // until the chore is completed, causing wrong schedule display.
-  const frequencyChanged = body.frequency !== undefined && body.frequency !== existing.frequency
-  const dayOfWeekChanged = body.dayOfWeek !== undefined && body.dayOfWeek !== existing.dayOfWeek
-  const dayOfMonthChanged = body.dayOfMonth !== undefined && body.dayOfMonth !== existing.dayOfMonth
+  // Determine which fields changed
+  const changedFields = Object.keys(body).filter(
+    (key) => key !== 'id' && body[key] !== undefined
+  )
 
-  if (frequencyChanged || dayOfWeekChanged || dayOfMonthChanged) {
-    // Recalculate nextDueDate from today, applying the new frequency/schedule
-    const newFrequency = body.frequency ?? existing.frequency
-    const newDayOfWeek = body.dayOfWeek !== undefined ? body.dayOfWeek : existing.dayOfWeek
-    const newDayOfMonth = body.dayOfMonth !== undefined ? body.dayOfMonth : existing.dayOfMonth
-    const now = new Date()
+  // Build update payload
+  const updateData: Record<string, unknown> = {}
+  for (const key of changedFields) {
+    updateData[key] = body[key]
+  }
 
-    // Temporarily construct a partial chore object for calculateNextDueDate
-    // We use now as the "completedAt" to recalculate from today
-    const tempChore = {
-      frequency: newFrequency,
-      dayOfWeek: newDayOfWeek,
-      dayOfMonth: newDayOfMonth,
-      triggerOnComplete: existing.triggerOnComplete,
-      allowEarlyStart: existing.allowEarlyStart,
-      endDate: existing.endDate,
-      nextDueDate: existing.nextDueDate,
-    }
+  // If frequency or day-related fields changed, recalculate nextDueDate
+  const needsRecalc =
+    changedFields.includes('frequency') ||
+    changedFields.includes('dayOfWeek') ||
+    changedFields.includes('dayOfMonth')
 
+  if (needsRecalc) {
     const timezone = user.timezone ?? 'UTC'
-    const recalculated = calculateNextDueDateLocal(tempChore, now, timezone)
-    if (recalculated !== undefined) {
-      body.nextDueDate = recalculated
+    const merged = { ...existing, ...updateData }
+    const newNextDueDate = calculateNextDueDateLocal(merged, new Date(), timezone)
+    if (newNextDueDate === undefined) {
+      // Function returned undefined (shouldn't happen), skip update
+    } else if (newNextDueDate === null) {
+      updateData.nextDueDate = null
+      updateData.isActive = false
+    } else {
+      updateData.nextDueDate = newNextDueDate
     }
   }
 
-  const chore = await prisma.chore.update({
+  // If only isActive is being toggled and no other changes, just do that
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ message: 'No changes detected' })
+  }
+
+  const updated = await prisma.chore.update({
     where: { id },
-    data: {
-      ...(body.title !== undefined ? { title: body.title } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.note !== undefined ? { note: body.note } : {}),
-      ...(body.frequency !== undefined ? { frequency: body.frequency } : {}),
-      ...(body.dayOfWeek !== undefined ? { dayOfWeek: body.dayOfWeek } : {}),
-      ...(body.dayOfMonth !== undefined ? { dayOfMonth: body.dayOfMonth } : {}),
-      ...(body.rotationInterval !== undefined ? { rotationInterval: body.rotationInterval } : {}),
-      ...(body.currentAssigneeId !== undefined ? { currentAssigneeId: body.currentAssigneeId } : {}),
-      ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
-      ...(body.startDate !== undefined ? { startDate: body.startDate ? new Date(body.startDate) : null } : {}),
-      ...(body.endDate !== undefined ? { endDate: body.endDate ? new Date(body.endDate) : null } : {}),
-      ...(body.nextDueDate !== undefined ? { nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : null } : {}),
-      ...(body.triggerOnComplete !== undefined ? { triggerOnComplete: body.triggerOnComplete } : {}),
-      ...(body.autoRotateOnComplete !== undefined ? { autoRotateOnComplete: body.autoRotateOnComplete } : {}),
-      ...(body.allowEarlyStart !== undefined ? { allowEarlyStart: body.allowEarlyStart } : {}),
-      ...(body.emailReminder !== undefined ? { emailReminder: body.emailReminder } : {}),
-      ...(body.emailReminderDays !== undefined ? { emailReminderDays: body.emailReminderDays } : {}),
-    },
+    data: updateData,
     include: {
       currentAssignee: { select: { id: true, name: true } },
       completions: {
@@ -169,27 +154,39 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
   })
 
-  // Notify chore views to refresh
-  dispatchAppEvent(AppEvents.CHORES_UPDATED)
-
-  if (body.title !== undefined && body.title !== existing.title) {
-    void createAuditLog(
-      user,
-      'update',
-      'chore',
-      id,
-      `Renamed chore "${existing.title}" to "${body.title}"`,
-      { before: { title: existing.title }, after: { title: body.title } }
-    )
+  // Audit log for chore changes
+  if (changedFields.length > 0) {
+    void createAuditLog({
+      action: 'CHORE_UPDATED',
+      entityType: 'chore',
+      entityId: id,
+      familyId: user.familyId,
+      userId: user.id,
+      metadata: { changedFields, previous: existing, current: updated },
+    })
   }
 
-  return NextResponse.json(chore)
+  // Dispatch event so the calendar UI refreshes if events depend on chores
+  dispatchAppEvent(AppEvents.CHORES_UPDATED)
+
+  return NextResponse.json({
+    chore: {
+      ...updated,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+      completions: updated.completions.map((c) => ({
+        ...c,
+        completedAt: c.completedAt.toISOString(),
+      })),
+    },
+  })
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession()
   const { id } = await params
 
+  // Verify ownership
   const existing = await prisma.chore.findFirst({
     where: { id, familyId: user.familyId },
   })
@@ -199,17 +196,17 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   await prisma.chore.delete({ where: { id } })
 
-  void createAuditLog(
-    user,
-    'delete',
-    'chore',
-    id,
-    `Deleted chore "${existing.title}"`,
-    { chore: { title: existing.title, frequency: existing.frequency } }
-  )
+  // Audit log
+  void createAuditLog({
+    action: 'CHORE_DELETED',
+    entityType: 'chore',
+    entityId: id,
+    familyId: user.familyId,
+    userId: user.id,
+    metadata: { title: existing.title },
+  })
 
-  // Notify chore views to refresh
   dispatchAppEvent(AppEvents.CHORES_UPDATED)
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ message: 'Deleted' })
 }

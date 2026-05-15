@@ -53,6 +53,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV TZ=Australia/Sydney
 
 # Runtime tools:
 #   su-exec  – drop privileges from root to nextjs after startup tasks

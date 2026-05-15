@@ -21,89 +21,89 @@ function calculateNextDueDateAI(
   switch (chore.frequency) {
     case 'daily': {
       next = new Date(baseDate)
-      next.setDate(next.getDate() + 1)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 1)
+      next.setUTCHours(0, 0, 0, 0)
       break
     }
     case 'weekly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCHours(0, 0, 0, 0)
       if (chore.dayOfWeek !== null) {
-        const currentDay = next.getDay()
+        const currentDay = next.getUTCDay()
         let daysUntil = chore.dayOfWeek - currentDay
         if (daysUntil <= 0) daysUntil += 7
-        next.setDate(next.getDate() + daysUntil)
+        next.setUTCDate(next.getUTCDate() + daysUntil)
       } else {
-        next.setDate(next.getDate() + 7)
+        next.setUTCDate(next.getUTCDate() + 7)
       }
       break
     }
     case 'biweekly': {
       next = new Date(baseDate)
-      next.setDate(next.getDate() + 14)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 14)
+      next.setUTCHours(0, 0, 0, 0)
       break
     }
     case 'monthly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
-      next.setMonth(next.getMonth() + 1)
+      next.setUTCHours(0, 0, 0, 0)
+      next.setUTCMonth(next.getUTCMonth() + 1)
       if (chore.dayOfMonth !== null) {
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()
+        next.setUTCDate(Math.min(chore.dayOfMonth, lastDay))
       }
       break
     }
     case 'bimonthly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
-      next.setMonth(next.getMonth() + 2)
+      next.setUTCHours(0, 0, 0, 0)
+      next.setUTCMonth(next.getUTCMonth() + 2)
       if (chore.dayOfMonth !== null) {
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()
+        next.setUTCDate(Math.min(chore.dayOfMonth, lastDay))
       }
       break
     }
     case 'quarterly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
-      next.setMonth(next.getMonth() + 3)
+      next.setUTCHours(0, 0, 0, 0)
+      next.setUTCMonth(next.getUTCMonth() + 3)
       if (chore.dayOfMonth !== null) {
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()
+        next.setUTCDate(Math.min(chore.dayOfMonth, lastDay))
       }
       break
     }
     case 'halfyearly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
-      next.setMonth(next.getMonth() + 6)
+      next.setUTCHours(0, 0, 0, 0)
+      next.setUTCMonth(next.getUTCMonth() + 6)
       if (chore.dayOfMonth !== null) {
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()
+        next.setUTCDate(Math.min(chore.dayOfMonth, lastDay))
       }
       break
     }
     case 'yearly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
-      next.setFullYear(next.getFullYear() + 1)
+      next.setUTCHours(0, 0, 0, 0)
+      next.setUTCFullYear(next.getUTCFullYear() + 1)
       if (chore.dayOfMonth !== null) {
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(chore.dayOfMonth, lastDay))
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()
+        next.setUTCDate(Math.min(chore.dayOfMonth, lastDay))
       }
       break
     }
     default: {
       next = new Date(baseDate)
-      next.setDate(next.getDate() + 7)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 7)
+      next.setUTCHours(0, 0, 0, 0)
     }
   }
 
   if (chore.endDate && next > chore.endDate) return null
 
-  // Shift from server-midnight UTC to user's local-time midnight
+  // Shift from UTC midnight to user's local-time midnight
   return utcMidnightToLocalMidnight(next, timezone)
 }
 

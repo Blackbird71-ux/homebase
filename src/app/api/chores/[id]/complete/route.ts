@@ -34,29 +34,29 @@ function calculateNextDueDate(
   switch (chore.frequency) {
     case 'daily': {
       next = new Date(baseDate)
-      next.setDate(next.getDate() + 1)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 1)
+      next.setUTCHours(0, 0, 0, 0)
       break
     }
     case 'weekly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCHours(0, 0, 0, 0)
       if (chore.dayOfWeek !== null) {
         // Find the next occurrence of the specified day of week
-        const currentDay = next.getDay()
+        const currentDay = next.getUTCDay()
         let daysUntil = chore.dayOfWeek - currentDay
         if (daysUntil <= 0) daysUntil += 7
-        next.setDate(next.getDate() + daysUntil)
+        next.setUTCDate(next.getUTCDate() + daysUntil)
       } else {
         // No specific day, just add 7 days
-        next.setDate(next.getDate() + 7)
+        next.setUTCDate(next.getUTCDate() + 7)
       }
       break
     }
     case 'biweekly': {
       next = new Date(baseDate)
-      next.setDate(next.getDate() + 14)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 14)
+      next.setUTCHours(0, 0, 0, 0)
       break
     }
     case 'monthly':
@@ -65,7 +65,7 @@ function calculateNextDueDate(
     case 'halfyearly':
     case 'yearly': {
       next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCHours(0, 0, 0, 0)
       if (chore.dayOfMonth !== null) {
         const targetDay = chore.dayOfMonth
         // Advance by the appropriate number of months
@@ -74,10 +74,10 @@ function calculateNextDueDate(
         else if (chore.frequency === 'quarterly') monthsToAdd = 3
         else if (chore.frequency === 'halfyearly') monthsToAdd = 6
         else if (chore.frequency === 'yearly') monthsToAdd = 12
-        next.setMonth(next.getMonth() + monthsToAdd)
+        next.setUTCMonth(next.getUTCMonth() + monthsToAdd)
         // Get the last day of that month
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(targetDay, lastDay))
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()
+        next.setUTCDate(Math.min(targetDay, lastDay))
       } else {
         // No specific day: advance by appropriate months from original
         let monthsToAdd = 1
@@ -85,14 +85,14 @@ function calculateNextDueDate(
         else if (chore.frequency === 'quarterly') monthsToAdd = 3
         else if (chore.frequency === 'halfyearly') monthsToAdd = 6
         else if (chore.frequency === 'yearly') monthsToAdd = 12
-        next.setMonth(next.getMonth() + monthsToAdd)
+        next.setUTCMonth(next.getUTCMonth() + monthsToAdd)
       }
       break
     }
     default: {
       next = new Date(baseDate)
-      next.setDate(next.getDate() + 7)
-      next.setHours(0, 0, 0, 0)
+      next.setUTCDate(next.getUTCDate() + 7)
+      next.setUTCHours(0, 0, 0, 0)
     }
   }
 
@@ -101,7 +101,7 @@ function calculateNextDueDate(
     return null // Signal that chore should be deactivated
   }
 
-  // Shift from server-midnight UTC to user's local-time midnight
+  // Shift from UTC midnight to user's local-time midnight
   return utcMidnightToLocalMidnight(next, timezone)
 }
 

@@ -28,7 +28,7 @@ services:
       - DATABASE_URL=file:/data/homebase.db
       - AUTH_URL=https://homebase.liddleapps.com
       - NEXTAUTH_URL=https://homebase.liddleapps.com
-      - TZ=Australia/Brisbane
+      - TZ=Australia/Sydney
       # SMTP config for automated report emails (optional)
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT:-587}
