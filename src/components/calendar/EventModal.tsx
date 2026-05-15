@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { format } from 'date-fns'
 import type { CalendarEvent } from '@/types'
+import { getEventId, isRecurringEvent } from '@/lib/event-helpers'
 import { EventAttendeePanel } from './EventAttendeePanel'
 
 interface CategoryOption {
@@ -109,7 +110,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
     try {
       // If this is a recurring instance, save to the original event (seriesId)
-      const eventId = getEventId()
+      const eventId = event ? getEventId(event) : null
       const method = event ? 'PUT' : 'POST'
       const url = event ? `/api/events/${eventId}` : '/api/events'
 
@@ -128,7 +129,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
       // Only send start/end dates if this is NOT a recurring instance
       // (recurring instances are virtual - editing them should update the original event's metadata, not its dates)
-      const isRecurringInstance = !!(event && (event as unknown as Record<string, unknown>).seriesId)
+      const isRecurringInstance = !!(event && event.seriesId)
       if (!isRecurringInstance) {
         const startDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(start).toISOString()
         const endDate = isAllDay ? new Date(end.split('T')[0]).toISOString() : new Date(end).toISOString()
@@ -174,38 +175,22 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteAll, setDeleteAll] = useState(false)
 
-  // Get the actual event ID - if this is a recurring instance, use the seriesId
-  function getEventId() {
-    if (!event) return null
-    const seriesId = (event as unknown as Record<string, unknown>).seriesId as string | undefined
-    return seriesId || event.id
-  }
-
-  // Check if this event is part of a recurring series
-  function isRecurringEvent() {
-    if (!event) return false
-    const seriesId = (event as unknown as Record<string, unknown>).seriesId as string | undefined
-    // The original recurring event has recurrenceRule set
-    // Recurring instances have seriesId set
-    return !!(event.recurrenceRule || seriesId)
-  }
-
   async function handleDelete() {
     if (!event) return
     setLoading(true)
 
     try {
-      if (isRecurringEvent() && !showDeleteConfirm) {
+      if (isRecurringEvent(event) && !showDeleteConfirm) {
         // Show confirmation dialog first
         setShowDeleteConfirm(true)
         setLoading(false)
         return
       }
 
-      const eventId = getEventId()
+      const eventId = getEventId(event)
       if (!eventId) return
 
-      const url = deleteAll && isRecurringEvent()
+      const url = deleteAll && isRecurringEvent(event)
         ? `/api/events/${eventId}?all=true`
         : `/api/events/${eventId}`
       const res = await fetch(url, { method: 'DELETE' })
@@ -459,7 +444,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
               {event && (
-                <EventAttendeePanel eventId={getEventId() ?? event.id} currentUserId={currentUserId} />
+                <EventAttendeePanel eventId={getEventId(event)} currentUserId={currentUserId} />
               )}
             </div>
             <DialogFooter className="gap-2 shrink-0">

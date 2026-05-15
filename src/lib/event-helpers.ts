@@ -1,3 +1,15 @@
+import type { CalendarEvent } from '@/types'
+
+/** Return the canonical event ID to update — recurring instances point to their seriesId. */
+export function getEventId(event: CalendarEvent): string {
+  return event.seriesId ?? event.id
+}
+
+/** Return true if the event is part of a recurring series (original or instance). */
+export function isRecurringEvent(event: CalendarEvent): boolean {
+  return !!(event.recurrenceRule || event.seriesId)
+}
+
 export function validateEventDates(
   start: string,
   end: string,

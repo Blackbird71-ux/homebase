@@ -5,13 +5,9 @@ import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
   ReceiptText, List, X,
 } from 'lucide-react'
-import {
-  format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
-  startOfYear, endOfYear, subMonths, addMonths, subQuarters, addQuarters,
-  subYears, addYears, getQuarter, getYear,
-} from 'date-fns'
+import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { fyStartYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-fy'
+import { type PeriodMode, toPeriodAmount, isLumpSum, getPeriodBounds, navigateAnchor } from '@/lib/finance-period'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
@@ -25,7 +21,6 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PeriodMode = 'month' | 'quarter' | 'year'
 type ViewMode = 'accrual'  | 'forecast'
 
 interface Bill {
@@ -91,34 +86,8 @@ interface LedgerTx {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toPeriodAmount(amount: number, frequency: string, periodMonths: number): number {
-  let tpm: number
-  if (frequency === 'weekly')           tpm = 52 / 12
-  else if (frequency === 'fortnightly') tpm = 26 / 12
-  else                                   tpm = 1
-  return amount * tpm * periodMonths
-}
-
-function isLumpSum(frequency: string): boolean {
-  return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
-}
-
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
-}
-
-function getPeriodBounds(mode: PeriodMode, anchor: Date, fyStartMonth: number = 7): { start: Date; end: Date; label: string } {
-  if (mode === 'month')   return { start: startOfMonth(anchor),   end: endOfMonth(anchor),   label: format(anchor, 'MMMM yyyy') }
-  if (mode === 'quarter') return { start: startOfQuarter(anchor), end: endOfQuarter(anchor), label: `Q${getQuarter(anchor)} ${getYear(anchor)}` }
-  const fYear = fyStartYear(anchor, fyStartMonth)
-  const { start, end } = fyDateRange(fYear, fyStartMonth)
-  return { start, end, label: fyLabelUtil(fYear, fyStartMonth) }
-}
-
-function navigateAnchor(mode: PeriodMode, anchor: Date, dir: -1 | 1): Date {
-  if (mode === 'month')   return dir === -1 ? subMonths(anchor, 1)   : addMonths(anchor, 1)
-  if (mode === 'quarter') return dir === -1 ? subQuarters(anchor, 1) : addQuarters(anchor, 1)
-  return dir === -1 ? subYears(anchor, 1) : addYears(anchor, 1)
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
