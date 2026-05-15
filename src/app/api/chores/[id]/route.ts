@@ -197,14 +197,14 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   await prisma.chore.delete({ where: { id } })
 
   // Audit log
-  void createAuditLog({
-    action: 'CHORE_DELETED',
-    entityType: 'chore',
-    entityId: id,
-    familyId: user.familyId,
-    userId: user.id,
-    metadata: { title: existing.title },
-  })
+  void createAuditLog(
+    user,
+    'delete',
+    'chore',
+    id,
+    `Deleted chore "${existing.title}"`,
+    { title: existing.title }
+  )
 
   dispatchAppEvent(AppEvents.CHORES_UPDATED)
 
