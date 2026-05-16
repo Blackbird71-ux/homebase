@@ -36,6 +36,8 @@ export interface Bill {
   entity: Entity | null
   paid: boolean; paidDate: string | null
   invoiceReceived: boolean; invoiceReceivedDate: string | null
+  billDate: string | null
+  status: string | null
   billType: string; recurrenceInterval: string | null; parentBillId: string | null
   taxClassification: string | null
   attachments?: BillAttachment[]

@@ -54,6 +54,7 @@ interface FormState {
   dayOfMonth: string
   monthOfYear: string
   startDate: string
+  firstDueDate: string
   endMode: string
   endDate: string
   totalOccurrences: string
@@ -112,6 +113,7 @@ const emptyForm: FormState = {
   dayOfMonth: '',
   monthOfYear: '',
   startDate: todayAU(),
+  firstDueDate: todayAU(),
   endMode: 'forever',
   endDate: '',
   totalOccurrences: '',
@@ -257,6 +259,13 @@ function templateToForm(t: TemplateRow): FormState {
     dayOfMonth: t.dayOfMonth != null ? String(t.dayOfMonth) : '',
     monthOfYear: t.monthOfYear != null ? String(t.monthOfYear) : '',
     startDate: (t.startDate as string).slice(0, 10),
+    firstDueDate: (() => {
+      const sd = new Date((t.startDate as string).slice(0, 10) + 'T00:00:00')
+      const offset = parseInt(t.defaultDueOffsetDays ?? '0') || 0
+      if (offset === 0) return (t.startDate as string).slice(0, 10)
+      const due = new Date(sd.getTime() + offset * 86_400_000)
+      return due.toISOString().slice(0, 10)
+    })(),
     endMode: t.endMode ?? 'forever',
     endDate: t.endDate ? (t.endDate as string).slice(0, 10) : '',
     totalOccurrences: t.totalOccurrences != null ? String(t.totalOccurrences) : '',
@@ -768,20 +777,12 @@ function OverviewTab({
           />
         </div>
 
-        {/* Due offset (bills only) */}
-        {form.kind === 'bill' && (
+        {/* Due offset (bills only) — computed from Frequency tab dates */}
+        {form.kind === 'bill' && parseInt(form.defaultDueOffsetDays) > 0 && (
           <div>
-            <label className="block text-xs font-medium mb-1">Days from bill date to payment due</label>
-            <p className="text-xs text-muted-foreground mb-1">
-              The bill date is when the invoice is recognised (hits P&amp;L and AP). Payment is due this many days later. e.g. set 14 if the bill arrives 2 weeks before it&apos;s due.
+            <p className="text-xs text-muted-foreground">
+              Payment due <strong>{form.defaultDueOffsetDays} day{parseInt(form.defaultDueOffsetDays) !== 1 ? 's' : ''}</strong> after bill date — set via the <em>Frequency</em> tab.
             </p>
-            <input
-              type="number"
-              min="0"
-              value={form.defaultDueOffsetDays}
-              onChange={e => set('defaultDueOffsetDays', e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-            />
           </div>
         )}
       </div>
@@ -901,13 +902,33 @@ function FrequencyTab({
           </div>
         )}
 
-        {/* Start date */}
+        {/* Start date = first bill / invoice date */}
         <div>
-          <label className="block text-xs font-medium mb-1">Start date <span className="text-red-500">*</span></label>
+          <label className="block text-xs font-medium mb-1">
+            {form.kind === 'bill' ? 'First bill date' : 'Start date'} <span className="text-red-500">*</span>
+          </label>
+          {form.kind === 'bill' && (
+            <p className="text-xs text-muted-foreground mb-1">The date the invoice is received — hits P&amp;L and AP from this date.</p>
+          )}
           <input
             type="date"
             value={form.startDate}
-            onChange={e => set('startDate', e.target.value)}
+            onChange={e => {
+              const newStart = e.target.value
+              set('startDate', newStart)
+              // Keep the due date offset: if firstDueDate was in sync, advance it too
+              if (form.startDate && form.firstDueDate && newStart) {
+                const oldOffset = Math.max(0, Math.round(
+                  (new Date(form.firstDueDate + 'T00:00:00').getTime() - new Date(form.startDate + 'T00:00:00').getTime()) / 86_400_000
+                ))
+                const newDue = new Date(new Date(newStart + 'T00:00:00').getTime() + oldOffset * 86_400_000)
+                setForm(p => ({
+                  ...p,
+                  startDate: newStart,
+                  firstDueDate: newDue.toISOString().slice(0, 10),
+                }))
+              }
+            }}
             className={cn(
               'w-full rounded-md border bg-background px-2 py-1.5 text-sm',
               errors.startDate ? 'border-red-500' : 'border-input',
@@ -915,6 +936,34 @@ function FrequencyTab({
           />
           {errors.startDate && <p className="text-xs text-red-500 mt-0.5">{errors.startDate}</p>}
         </div>
+
+        {/* First due date (bills only) — drives defaultDueOffsetDays */}
+        {form.kind === 'bill' && (
+          <div>
+            <label className="block text-xs font-medium mb-1">First payment due date</label>
+            <p className="text-xs text-muted-foreground mb-1">When the first payment is due. Sets the bill-to-due gap for all occurrences.</p>
+            <input
+              type="date"
+              value={form.firstDueDate}
+              min={form.startDate}
+              onChange={e => {
+                const dueVal = e.target.value
+                const offsetDays = form.startDate && dueVal
+                  ? Math.max(0, Math.round(
+                      (new Date(dueVal + 'T00:00:00').getTime() - new Date(form.startDate + 'T00:00:00').getTime()) / 86_400_000
+                    ))
+                  : 0
+                setForm(p => ({ ...p, firstDueDate: dueVal, defaultDueOffsetDays: String(offsetDays) }))
+              }}
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            />
+            {form.startDate && form.firstDueDate && form.firstDueDate > form.startDate && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {Math.round((new Date(form.firstDueDate + 'T00:00:00').getTime() - new Date(form.startDate + 'T00:00:00').getTime()) / 86_400_000)} days after bill date
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* End mode */}

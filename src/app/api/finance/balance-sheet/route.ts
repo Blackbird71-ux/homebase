@@ -197,8 +197,11 @@ export async function GET(request: NextRequest) {
   const liabilityBankRows = bankAccountRows.filter(a => ['credit', 'loan'].includes(a.accountType))
   const overdraftRows     = bankAccountRows.filter(a => !['credit', 'loan'].includes(a.accountType) && a.balance < 0)
 
-  const assetCOARows     = coaRows.filter(c => c.type === 'asset')
-  const liabilityCOARows = coaRows.filter(c => c.type === 'liability')
+  // Exclude the AP/AR system accounts from COA rows — they're already
+  // represented by the explicit accountsPayable / accountsReceivable lines.
+  // Including them here would double-count those balances.
+  const assetCOARows     = coaRows.filter(c => c.type === 'asset'     && c.id !== arCategory?.id)
+  const liabilityCOARows = coaRows.filter(c => c.type === 'liability' && c.id !== apCategory?.id)
   const equityCOARows    = coaRows.filter(c => c.type === 'equity')
 
   // ── 9. Totals ─────────────────────────────────────────────────────────────
