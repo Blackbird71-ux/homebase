@@ -1136,6 +1136,7 @@ model Trip {
   id               String   @id @default(cuid())
   title            String   // e.g. "Japan 2027"
   destination      String
+  departureLocation String? // City/place the traveller is departing from
   startDate        DateTime
   endDate          DateTime
   accommodation    String?  // Hotel name, address, booking ref

@@ -223,6 +223,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           take: 5,
           select: {
             id: true, title: true, destination: true,
+            departureLocation: true,
             startDate: true, endDate: true, status: true,
             color: true, icon: true,
             packingListId: true,
@@ -330,7 +331,8 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
     choreSchedule: buildChoreSchedule(choreData, todayStart, todayEnd, timezone, 30),
     billsToPay: billsData.map((bill) => {
       const dueDate = new Date(bill.nextDueDate)
-      const diffMs = dueDate.getTime() - todayStart.getTime()
+      const now = new Date()
+      const diffMs = dueDate.getTime() - now.getTime()
       const daysUntilDue = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
       return {
         id: bill.id,
@@ -347,6 +349,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       id: t.id,
       title: t.title,
       destination: t.destination,
+      departureLocation: t.departureLocation ?? null,
       startDate: t.startDate.toISOString(),
       endDate: t.endDate.toISOString(),
       status: t.status,

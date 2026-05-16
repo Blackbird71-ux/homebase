@@ -360,6 +360,7 @@ export async function GET(request: NextRequest) {
       id: trip.id,
       title: trip.title,
       destination: trip.destination,
+      departureLocation: trip.departureLocation ?? null,
       startDate: trip.startDate.toISOString(),
       endDate: trip.endDate.toISOString(),
       status: trip.status,

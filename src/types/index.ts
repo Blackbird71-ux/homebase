@@ -54,6 +54,7 @@ export interface DashboardData {
     id: string
     title: string
     destination: string
+    departureLocation: string | null
     startDate: string
     endDate: string
     status: string
@@ -260,6 +261,7 @@ export interface TripSummary {
   id: string
   title: string
   destination: string
+  departureLocation: string | null
   startDate: string
   endDate: string
   accommodation: string | null

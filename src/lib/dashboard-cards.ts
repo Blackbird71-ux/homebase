@@ -33,6 +33,7 @@ export const DASHBOARD_CARDS: DashboardCardDefinition[] = [
   { id: 'shopping-list',     label: 'Shopping List',    defaultVisible: true  },
   { id: 'bills-to-pay',     label: 'Bills to Pay',     defaultVisible: false },
   { id: 'upcoming-trips',   label: 'Upcoming Trips',   defaultVisible: true  },
+  { id: 'current-weather',  label: 'Current Weather',  defaultVisible: false },
 ]
 
 /**

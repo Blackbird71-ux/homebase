@@ -9,11 +9,14 @@
 | 1 | **Day-by-Day Itinerary** | ✅ Done | [`ItinerarySection.tsx`](src/components/trips/ItinerarySection.tsx), [`days/route.ts`](src/app/api/trips/[id]/days/route.ts), [`[dayId]/route.ts`](src/app/api/trips/[id]/days/[dayId]/route.ts), [`activities/route.ts`](src/app/api/trips/[id]/days/[dayId]/activities/route.ts) |
 | 2 | **Trip Budget & Cost Tracking** | ✅ Done | [`TripBudgetSection.tsx`](src/components/trips/TripBudgetSection.tsx), updated [`POST`](src/app/api/trips/route.ts) / [`PATCH`](src/app/api/trips/[id]/route.ts) routes |
 | 3 | **Weather Forecast Integration** | ✅ Done | [`TripWeatherSection.tsx`](src/components/trips/TripWeatherSection.tsx) |
+| 3b| **Weather Tabs (Start/Destination/Legs)** | ✅ Done | [`TripWeatherSection.tsx`](src/components/trips/TripWeatherSection.tsx) |
+| 3c| **Dashboard Weather Card** | ✅ Done | [`WeatherCard.tsx`](src/components/dashboard/WeatherCard.tsx) |
 
 **Data model additions** ([`schema.prisma`](prisma/schema.prisma)):
 - `TripDay` model with `@@unique([tripId, date])` constraint
 - `TripActivity` model with category, location, time range fields
 - `Trip.estimatedBudget`, `Trip.actualCost`, `Trip.budgetBreakdown`
+- `Trip.departureLocation` — optional text field for start-of-trip weather tab
 
 **AI tool additions** ([`trips.tool.ts`](src/lib/ai/tools/trips.tool.ts)):
 - `createTrip` now supports `estimatedBudget` and `budgetBreakdown` params

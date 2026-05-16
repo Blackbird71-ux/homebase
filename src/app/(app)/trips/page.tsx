@@ -30,6 +30,7 @@ export default async function TripsPage() {
     id: t.id,
     title: t.title,
     destination: t.destination,
+    departureLocation: t.departureLocation ?? null,
     startDate: t.startDate.toISOString(),
     endDate: t.endDate.toISOString(),
     accommodation: t.accommodation,

@@ -203,6 +203,7 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           destination={trip.destination}
           startDate={trip.startDate}
           endDate={trip.endDate}
+          startLocation={trip.departureLocation}
         />
 
         {/* Itinerary */}
