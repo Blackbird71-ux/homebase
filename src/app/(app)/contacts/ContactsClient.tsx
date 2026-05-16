@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 
@@ -261,8 +262,139 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     }))
     .filter((g) => g.contacts.length > 0)
 
+  // Derive tab values: "all" plus each category
+  const tabValues = ['all', ...grouped.map((g) => g.value)]
+
+  // Default to first tab that has contacts, or "all"
+  const [activeTab, setActiveTab] = useState('all')
+
+  // Render a single contact card
+  function renderContactCard(contact: Contact) {
+    const isSecured = !!contact.pinHash
+    const isUnlocked = unlockedIds.has(contact.id)
+
+    return (
+      <Card key={contact.id} className={`group ${isSecured && !isUnlocked ? 'relative overflow-hidden' : ''}`}>
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+              <span>{getCategoryIcon(contact.category)}</span>
+              {contact.name}
+              {isSecured && (
+                <ShieldCheckIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+              )}
+            </CardTitle>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {isSecured && !isUnlocked && (
+                <button
+                  onClick={() => setUnlockContact(contact)}
+                  className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
+                  aria-label="Unlock contact"
+                >
+                  <LockIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {isSecured && isUnlocked && (
+                <button
+                  onClick={() => handleLock(contact.id)}
+                  className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
+                  aria-label="Lock contact"
+                >
+                  <UnlockIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button
+                onClick={() => openEdit(contact)}
+                className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
+                aria-label="Edit contact"
+              >
+                <PencilIcon className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => handleDelete(contact.id, contact.name)}
+                className="text-muted-foreground/40 hover:text-destructive transition-colors p-1"
+                aria-label="Delete contact"
+              >
+                <Trash2Icon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {isSecured && !isUnlocked ? (
+            <div className="flex flex-col items-center justify-center py-4 text-center">
+              <LockIcon className="h-5 w-5 text-muted-foreground/50 mb-2" />
+              <p className="text-xs text-muted-foreground/60">PIN required to view details</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 h-7 text-xs"
+                onClick={() => setUnlockContact(contact)}
+              >
+                <UnlockIcon className="h-3 w-3 mr-1" />
+                Unlock
+              </Button>
+            </div>
+          ) : (
+            <>
+              {contact.phone && (
+                <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  <PhoneIcon className="h-3 w-3 shrink-0" />
+                  {contact.phone}
+                </a>
+              )}
+              {contact.email && (
+                <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  <MailIcon className="h-3 w-3 shrink-0" />
+                  {contact.email}
+                </a>
+              )}
+              {contact.address && (
+                <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <MapPinIcon className="h-3 w-3 shrink-0 mt-0.5" />
+                  <span>{contact.address}</span>
+                </div>
+              )}
+              {contact.notes && (
+                <p className="text-xs text-muted-foreground/60 italic mt-1">{contact.notes}</p>
+              )}
+              {isSecured && (
+                <div className="pt-2">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="h-6 text-xs text-muted-foreground/60 hover:text-foreground"
+                    onClick={() => handleLock(contact.id)}
+                  >
+                    <LockIcon className="h-3 w-3 mr-1" />
+                    Lock
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Render a grid of contact cards (responsive columns)
+  function renderGrid(contactsList: Contact[]) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+        {contactsList.map(renderContactCard)}
+      </div>
+    )
+  }
+
+  // Get filtered list for the active tab
+  function contactsForTab(tabValue: string): Contact[] {
+    if (tabValue === 'all') return contacts
+    return contacts.filter((c) => c.category === tabValue)
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{contacts.length} contact{contacts.length !== 1 ? 's' : ''}</p>
         <Button size="sm" onClick={openNew}>
@@ -277,123 +409,24 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
           </CardContent>
         </Card>
       ) : (
-        grouped.map((group) => (
-          <div key={group.value}>
-            <h3 className={`text-sm font-semibold mb-2 ${group.color}`}>
-              {group.label} ({group.contacts.length})
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {group.contacts.map((contact) => {
-                const isSecured = !!contact.pinHash
-                const isUnlocked = unlockedIds.has(contact.id)
-
-                return (
-                  <Card key={contact.id} className={`group ${isSecured && !isUnlocked ? 'relative overflow-hidden' : ''}`}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
-                        <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                          <span>{getCategoryIcon(contact.category)}</span>
-                          {contact.name}
-                          {isSecured && (
-                            <ShieldCheckIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                          )}
-                        </CardTitle>
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {isSecured && !isUnlocked && (
-                            <button
-                              onClick={() => setUnlockContact(contact)}
-                              className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
-                              aria-label="Unlock contact"
-                            >
-                              <LockIcon className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                          {isSecured && isUnlocked && (
-                            <button
-                              onClick={() => handleLock(contact.id)}
-                              className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
-                              aria-label="Lock contact"
-                            >
-                              <UnlockIcon className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => openEdit(contact)}
-                            className="text-muted-foreground/40 hover:text-foreground transition-colors p-1"
-                            aria-label="Edit contact"
-                          >
-                            <PencilIcon className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(contact.id, contact.name)}
-                            className="text-muted-foreground/40 hover:text-destructive transition-colors p-1"
-                            aria-label="Delete contact"
-                          >
-                            <Trash2Icon className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-1">
-                      {isSecured && !isUnlocked ? (
-                        <div className="flex flex-col items-center justify-center py-4 text-center">
-                          <LockIcon className="h-5 w-5 text-muted-foreground/50 mb-2" />
-                          <p className="text-xs text-muted-foreground/60">PIN required to view details</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-2 h-7 text-xs"
-                            onClick={() => setUnlockContact(contact)}
-                          >
-                            <UnlockIcon className="h-3 w-3 mr-1" />
-                            Unlock
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          {contact.phone && (
-                            <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                              <PhoneIcon className="h-3 w-3 shrink-0" />
-                              {contact.phone}
-                            </a>
-                          )}
-                          {contact.email && (
-                            <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                              <MailIcon className="h-3 w-3 shrink-0" />
-                              {contact.email}
-                            </a>
-                          )}
-                          {contact.address && (
-                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <MapPinIcon className="h-3 w-3 shrink-0 mt-0.5" />
-                              <span>{contact.address}</span>
-                            </div>
-                          )}
-                          {contact.notes && (
-                            <p className="text-xs text-muted-foreground/60 italic mt-1">{contact.notes}</p>
-                          )}
-                          {isSecured && (
-                            <div className="pt-2">
-                              <Button
-                                variant="ghost"
-                                size="xs"
-                                className="h-6 text-xs text-muted-foreground/60 hover:text-foreground"
-                                onClick={() => handleLock(contact.id)}
-                              >
-                                <LockIcon className="h-3 w-3 mr-1" />
-                                Lock
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="overflow-x-auto pb-1">
+            <TabsList className="w-max">
+              <TabsTrigger value="all">
+                All ({contacts.length})
+              </TabsTrigger>
+              {grouped.map((g) => (
+                <TabsTrigger key={g.value} value={g.value} className={g.color}>
+                  {g.label} ({g.contacts.length})
+                </TabsTrigger>
+              ))}
+            </TabsList>
           </div>
-        ))
+
+          <TabsContent value={activeTab} className="mt-4">
+            {renderGrid(contactsForTab(activeTab))}
+          </TabsContent>
+        </Tabs>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
