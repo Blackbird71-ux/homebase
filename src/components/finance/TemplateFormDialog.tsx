@@ -884,7 +884,7 @@ export function TemplateFormDialog({
           </div>
         </div>
 
-        {/* ── Wide layout (≥ lg): all three panels side-by-side ───── */}
+        {/* ── Wide layout (≥ lg): two columns — Overview | Frequency + Transaction ───── */}
         <div className="hidden lg:flex flex-1 min-h-0 overflow-hidden mt-3">
           {/* Column 1 — Overview */}
           <div className="flex-1 flex flex-col border-r border-border min-w-0 overflow-hidden">
@@ -899,21 +899,20 @@ export function TemplateFormDialog({
               />
             </div>
           </div>
-          {/* Column 2 — Frequency */}
-          <div className="flex-1 flex flex-col border-r border-border min-w-0 overflow-hidden">
-            <div className="px-4 py-2 border-b border-border bg-muted/30">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Frequency</span>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+          {/* Column 2 — Frequency + Transaction stacked, scrolls as one */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+            {/* Frequency section */}
+            <div className="shrink-0 border-b border-border">
+              <div className="px-4 py-2 border-b border-border bg-muted/30">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Frequency</span>
+              </div>
               <FrequencyTab form={form} setForm={setForm} errors={errors} />
             </div>
-          </div>
-          {/* Column 3 — Transaction */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <div className="px-4 py-2 border-b border-border bg-muted/30">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transaction</span>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+            {/* Transaction section */}
+            <div className="shrink-0">
+              <div className="px-4 py-2 border-b border-border bg-muted/30">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transaction</span>
+              </div>
               <TransactionTab
                 form={form} setForm={setForm}
                 errors={errors} setErrors={setErrors}
