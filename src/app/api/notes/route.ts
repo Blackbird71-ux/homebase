@@ -46,6 +46,12 @@ export async function GET(req: Request) {
   const search = searchParams.get('search') ?? ''
   const category = searchParams.get('category')
   const tag = searchParams.get('tag')
+  const archived = searchParams.get('archived') // 'true' | 'false' | 'all'
+
+  // Default: exclude archived notes (show active only)
+  // archived=true: show only archived
+  // archived=all: show both archived and active
+  const archivedFilter = archived === 'all' ? undefined : archived === 'true' ? true : false
 
   const notes = await prisma.note.findMany({
     where: {
@@ -55,6 +61,7 @@ export async function GET(req: Request) {
         { isPrivate: false },
         { isPrivate: true, createdBy: user.id },
       ],
+      isArchived: archivedFilter,
       ...(search && {
         AND: [{
           OR: [
@@ -73,6 +80,7 @@ export async function GET(req: Request) {
       category: true,
       tags: true,
       isPrivate: true,
+      isArchived: true,
       pinHash: true,
       createdBy: true,
       createdAt: true,
@@ -101,6 +109,7 @@ export async function GET(req: Request) {
       content: note.content,
       category: note.category,
       isPrivate: note.isPrivate,
+      isArchived: note.isArchived,
       isSecured: !!note.pinHash,
       tags: parseTags(note.tags),
       createdBy: note.createdBy,
@@ -161,6 +170,7 @@ export async function POST(req: Request) {
     content: note.content,
     category: note.category,
     isPrivate: note.isPrivate,
+    isArchived: note.isArchived,
     isSecured: !!(note as any).pinHash,
     tags: parseTags(note.tags),
     createdBy: note.createdBy,

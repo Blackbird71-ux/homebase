@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BoldIcon, ItalicIcon, XIcon, LockIcon, UsersIcon, BaselineIcon, HighlighterIcon, RemoveFormattingIcon } from 'lucide-react'
+import { BoldIcon, ItalicIcon, XIcon, LockIcon, UsersIcon, ArchiveIcon, BaselineIcon, HighlighterIcon, RemoveFormattingIcon } from 'lucide-react'
 import { NoteEditorToolbar } from './NoteEditorToolbar'
 
 interface NoteEditorProps {
@@ -14,6 +14,7 @@ interface NoteEditorProps {
   initialCategory?: string | null
   initialTags?: string[]
   initialIsPrivate?: boolean
+  initialIsArchived?: boolean
   initialPinHash?: string | null
   categories?: string[]
   tagColors?: Record<string, string>
@@ -23,6 +24,7 @@ interface NoteEditorProps {
     category?: string | null
     tags?: string[]
     isPrivate?: boolean
+    isArchived?: boolean
     pin?: string | null
   }) => void
 
@@ -36,6 +38,7 @@ export function NoteEditor({
   initialCategory = null,
   initialTags = [],
   initialIsPrivate = false,
+  initialIsArchived = false,
   initialPinHash = null,
   categories = [],
   tagColors,
@@ -47,6 +50,7 @@ export function NoteEditor({
   const [tags, setTags] = useState<string[]>(initialTags)
   const [newTag, setNewTag] = useState('')
   const [isPrivate, setIsPrivate] = useState(initialIsPrivate)
+  const [isArchived, setIsArchived] = useState(initialIsArchived)
   const [pinCode, setPinCode] = useState('')
   const [hasPin, setHasPin] = useState(!!initialPinHash)
   const [textColor, setTextColor] = useState('#e11d48')
@@ -94,6 +98,7 @@ export function NoteEditor({
       category: category || null,
       tags: tags.length > 0 ? tags : undefined,
       isPrivate,
+      isArchived,
       pin: hasPin && pinCode ? pinCode : undefined,
     })
   }
@@ -418,6 +423,43 @@ export function NoteEditor({
               <div>
                 <p className="text-sm font-medium">Family note</p>
                 <p className="text-xs text-muted-foreground">Visible to all family members</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Archive toggle */}
+      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30 shrink-0">
+        <button
+          type="button"
+          onClick={() => setIsArchived(!isArchived)}
+          disabled={isLoading}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+            isArchived ? 'bg-gray-500' : 'bg-muted-foreground/30'
+          }`}
+          aria-checked={!isArchived}
+          role="switch"
+        >
+          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+            isArchived ? 'translate-x-6' : 'translate-x-1'
+          }`} />
+        </button>
+        <div className="flex items-center gap-2">
+          {isArchived ? (
+            <>
+              <ArchiveIcon className="h-4 w-4 text-gray-500" />
+              <div>
+                <p className="text-sm font-medium">Archived note</p>
+                <p className="text-xs text-muted-foreground">Hidden from main view, visible in Archived tab</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <ArchiveIcon className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Archive note</p>
+                <p className="text-xs text-muted-foreground">Keep for reference, hide from active tabs</p>
               </div>
             </>
           )}

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon, ShieldCheckIcon } from 'lucide-react'
+import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, ArchiveRestoreIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
@@ -13,10 +13,12 @@ interface NoteCardProps {
   tagColors?: Record<string, string>
   isPrivate?: boolean
   isSecured?: boolean
+  isArchived?: boolean
   createdAt: string
   updatedAt: string
   onDelete?: (id: string) => void
   onEdit?: (id: string) => void
+  onArchive?: (id: string, isArchived: boolean) => void
 }
 
 export function NoteCard({
@@ -28,19 +30,21 @@ export function NoteCard({
   tagColors,
   isPrivate = false,
   isSecured = false,
+  isArchived = false,
   createdAt,
   updatedAt,
   onDelete,
   onEdit,
+  onArchive,
 }: NoteCardProps) {
   const formattedDate = format(new Date(updatedAt), 'MMM d, yyyy')
-  const isRecentlyUpdated = new Date(updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
+  const isRecentlyUpdated = !isArchived && new Date(updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
 
 
   return (
     <div className="relative group h-full">
       <Link href={`/notes/${id}`} className="block h-full">
-        <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
+        <Card className={`h-full hover:border-primary/50 transition-colors cursor-pointer overflow-hidden ${isArchived ? 'opacity-70' : ''}`}>
           <CardHeader className="p-2 pb-0.5">
             <div className="flex justify-between items-start gap-2">
               <CardTitle
@@ -48,12 +52,17 @@ export function NoteCard({
                 dangerouslySetInnerHTML={{ __html: title }}
               />
               <div className="flex items-center gap-1 shrink-0">
-                {isSecured && (
+                {isArchived && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-400 px-1.5 py-0.5 rounded-full">
+                    <ArchiveIcon className="h-2.5 w-2.5" /> Archived
+                  </span>
+                )}
+                {isSecured && !isArchived && (
                   <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 px-1.5 py-0.5 rounded-full">
                     <ShieldCheckIcon className="h-2.5 w-2.5" /> Secure
                   </span>
                 )}
-                {isPrivate ? (
+                {!isArchived && (isPrivate ? (
                   <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full">
                     <LockIcon className="h-2.5 w-2.5" /> Private
                   </span>
@@ -61,7 +70,7 @@ export function NoteCard({
                   <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 rounded-full">
                     <UsersIcon className="h-2.5 w-2.5" /> Family
                   </span>
-                )}
+                ))}
                 {isRecentlyUpdated && (
                   <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-1.5 py-0.5 rounded-full">
                     New
@@ -137,38 +146,55 @@ export function NoteCard({
         </Card>
       </Link>
       
-      {(onDelete || onEdit) && (
-        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-          {onEdit && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onEdit(id)
-              }}
-            >
-              <EditIcon className="h-3 w-3" />
-            </Button>
-          )}
-          {onDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 bg-background/80 backdrop-blur-sm text-destructive hover:text-destructive"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onDelete(id)
-              }}
-            >
-              <Trash2Icon className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      )}
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        {onArchive && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+            title={isArchived ? 'Restore from archive' : 'Archive'}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onArchive(id, !isArchived)
+            }}
+          >
+            {isArchived ? (
+              <ArchiveRestoreIcon className="h-3 w-3" />
+            ) : (
+              <ArchiveIcon className="h-3 w-3" />
+            )}
+          </Button>
+        )}
+        {onEdit && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onEdit(id)
+            }}
+          >
+            <EditIcon className="h-3 w-3" />
+          </Button>
+        )}
+        {onDelete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 bg-background/80 backdrop-blur-sm text-destructive hover:text-destructive"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onDelete(id)
+            }}
+          >
+            <Trash2Icon className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

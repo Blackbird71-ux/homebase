@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NoteEditor } from '@/components/notes/NoteEditor'
-import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon, ShieldCheckIcon, UnlockIcon } from 'lucide-react'
+import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon, ShieldCheckIcon, UnlockIcon, ArchiveIcon, ArchiveRestoreIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 
@@ -20,6 +20,7 @@ interface NoteDetailProps {
     category: string | null
     tags: string[]
     isPrivate: boolean
+    isArchived?: boolean
     isSecured?: boolean
     isLocked?: boolean
     pinHash?: string | null
@@ -153,6 +154,30 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
     }
   }
 
+  const handleArchive = async () => {
+    const newArchived = !(note as any).isArchived
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/notes/${note.id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: newArchived }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update archive status')
+      }
+
+      toast.success(newArchived ? 'Note archived' : 'Note restored')
+      router.refresh()
+    } catch (error) {
+      console.error('Error archiving note:', error)
+      toast.error('Failed to update archive status')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const formattedCreatedAt = format(new Date(note.createdAt), 'PPpp')
   const formattedUpdatedAt = format(new Date(note.updatedAt), 'PPpp')
   const isRecentlyUpdated = new Date(note.updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
@@ -225,6 +250,11 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
                     Unlock
                   </>
                 )}
+                {(note as any).isArchived && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-400 px-2 py-0.5 rounded-full">
+                    <ArchiveIcon className="h-3 w-3" /> Archived
+                  </span>
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -295,6 +325,17 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
               Lock
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={handleArchive}
+            disabled={isLoading || isDeleting}
+          >
+            {(note as any).isArchived ? (
+              <><ArchiveRestoreIcon className="h-4 w-4 mr-2" /> Restore</>
+            ) : (
+              <><ArchiveIcon className="h-4 w-4 mr-2" /> Archive</>
+            )}
+          </Button>
           <Button
             variant="outline"
             onClick={() => setIsEditing(true)}

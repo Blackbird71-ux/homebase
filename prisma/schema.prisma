@@ -392,18 +392,19 @@ model EventCategory {
 }
 
 model Note {
-  id        String   @id @default(cuid())
-  title     String
-  content   String
-  category  String?
-  tags      String?  // JSON array of tags
-  isPrivate Boolean  @default(false)  // private = only visible to creator
-  pinHash   String?  // bcrypt hash of PIN for secure notes (null = not secured)
-  createdBy String
-  familyId  String
-  family    Family   @relation(fields: [familyId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  title      String
+  content    String
+  category   String?
+  tags       String?  // JSON array of tags
+  isPrivate  Boolean  @default(false)  // private = only visible to creator
+  isArchived Boolean  @default(false)  // archived = hidden from main view, kept for reference
+  pinHash    String?  // bcrypt hash of PIN for secure notes (null = not secured)
+  createdBy  String
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Chore {

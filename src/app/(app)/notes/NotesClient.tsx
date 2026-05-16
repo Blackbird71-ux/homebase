@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon } from 'lucide-react'
+import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, FolderIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 
@@ -18,6 +18,7 @@ interface Note {
   category: string | null
   tags: string[]
   isPrivate: boolean
+  isArchived?: boolean
   isSecured?: boolean
   createdBy: string
   createdAt: string
@@ -31,7 +32,7 @@ interface NotesClientProps {
   tagColors?: Record<string, string>
 }
 
-type TabType = 'family' | 'private' | 'secure'
+type TabType = 'family' | 'private' | 'secure' | 'archived' | string
 
 export function NotesClient({ initialNotes, initialCategories, currentUserId, tagColors }: NotesClientProps) {
   const [notes, setNotes] = useState(initialNotes)
@@ -46,13 +47,14 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
   // Listen for notes updates from AI assistant or other sources
   useEffect(() => {
     const cleanup = listenAppEvent(AppEvents.NOTES_UPDATED, () => {
-      fetch('/api/notes')
+      fetch('/api/notes?archived=all')
         .then((res) => res.ok ? res.json() : null)
         .then((data) => {
           if (data) {
             setNotes(data.map((note: Record<string, unknown>) => ({
               ...note,
               isPrivate: (note as { isPrivate?: boolean }).isPrivate ?? false,
+              isArchived: (note as { isArchived?: boolean }).isArchived ?? false,
             })) as Note[])
           }
         })
@@ -60,6 +62,15 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
     })
     return cleanup
   }, [])
+
+  // Get all unique categories from non-archived notes for tabs
+  const allCategories = useMemo(() => {
+    const catSet = new Set<string>()
+    notes.forEach(note => {
+      if (note.category && !note.isArchived) catSet.add(note.category)
+    })
+    return Array.from(catSet).sort()
+  }, [notes])
 
   // Get all unique tags from notes
   const allTags = useMemo(() => {
@@ -70,13 +81,26 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
     return Array.from(tagSet).sort()
   }, [notes])
 
+  // Determine if the active tab is a category tab
+  const isCategoryTab = activeTab !== 'family' && activeTab !== 'private' && activeTab !== 'secure' && activeTab !== 'archived'
+
   // Filter notes based on active tab, search, category, and tag
   const filteredNotes = useMemo(() => {
     return notes.filter(note => {
       // Tab filter
-      if (activeTab === 'family' && note.isPrivate) return false
-      if (activeTab === 'private' && (!note.isPrivate || note.createdBy !== currentUserId)) return false
-      if (activeTab === 'secure' && !note.isSecured) return false
+      if (activeTab === 'archived') {
+        if (!note.isArchived) return false
+      } else {
+        // Non-archived tabs: exclude archived notes
+        if (note.isArchived) return false
+
+        if (activeTab === 'family' && note.isPrivate) return false
+        if (activeTab === 'private' && (!note.isPrivate || note.createdBy !== currentUserId)) return false
+        if (activeTab === 'secure' && !note.isSecured) return false
+
+        // Category tab filter
+        if (isCategoryTab && note.category !== activeTab) return false
+      }
 
       // Search filter (strip HTML from title/content before matching)
       if (search) {
@@ -88,10 +112,12 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         if (!matchesSearch) return false
       }
 
-      // Category filter
-      if (categoryFilter && categoryFilter !== 'all') {
-        if (categoryFilter === 'uncategorized' && note.category) return false
-        if (categoryFilter !== 'uncategorized' && note.category !== categoryFilter) return false
+      // Category filter (only when not on a category tab)
+      if (!isCategoryTab && activeTab !== 'archived') {
+        if (categoryFilter && categoryFilter !== 'all') {
+          if (categoryFilter === 'uncategorized' && note.category) return false
+          if (categoryFilter !== 'uncategorized' && note.category !== categoryFilter) return false
+        }
       }
 
       // Tag filter
@@ -101,7 +127,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
 
       return true
     })
-  }, [notes, search, categoryFilter, tagFilter, activeTab, currentUserId])
+  }, [notes, search, categoryFilter, tagFilter, activeTab, currentUserId, isCategoryTab])
 
   const handleCreateNote = async (data: {
     title: string
@@ -124,7 +150,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
       }
 
       const newNote = await response.json()
-      setNotes([{ ...newNote, isPrivate: newNote.isPrivate ?? false }, ...notes])
+      setNotes([{ ...newNote, isPrivate: newNote.isPrivate ?? false, isArchived: newNote.isArchived ?? false }, ...notes])
       setEditorOpen(false)
       toast.success('Note created successfully')
     } catch (error) {
@@ -158,7 +184,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
       }
 
       const updatedNote = await response.json()
-      setNotes(notes.map(note => note.id === updatedNote.id ? { ...updatedNote, isPrivate: updatedNote.isPrivate ?? false } : note))
+      setNotes(notes.map(note => note.id === updatedNote.id ? { ...updatedNote, isPrivate: updatedNote.isPrivate ?? false, isArchived: updatedNote.isArchived ?? false } : note))
       setEditorOpen(false)
       setEditingNote(null)
       toast.success('Note updated successfully')
@@ -198,6 +224,27 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
     }
   }
 
+  const handleArchiveNote = async (id: string, isArchived: boolean) => {
+    try {
+      const response = await fetch(`/api/notes/${id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update archive status')
+      }
+
+      const updatedNote = await response.json()
+      setNotes(notes.map(note => note.id === updatedNote.id ? { ...updatedNote, isPrivate: updatedNote.isPrivate ?? false, isArchived: updatedNote.isArchived ?? false } : note))
+      toast.success(isArchived ? 'Note archived' : 'Note restored')
+    } catch (error) {
+      console.error('Error archiving note:', error)
+      toast.error('Failed to update archive status')
+    }
+  }
+
   const handleEditorSubmit = (data: {
     title: string
     content: string
@@ -222,9 +269,10 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
   const hasActiveFilters = search || (categoryFilter && categoryFilter !== 'all') || tagFilter
 
   const tabCounts = useMemo(() => ({
-    family: notes.filter(n => !n.isPrivate).length,
-    private: notes.filter(n => n.isPrivate && n.createdBy === currentUserId).length,
-    secure: notes.filter(n => n.isSecured).length,
+    family: notes.filter(n => !n.isPrivate && !n.isArchived).length,
+    private: notes.filter(n => n.isPrivate && n.createdBy === currentUserId && !n.isArchived).length,
+    secure: notes.filter(n => n.isSecured && !n.isArchived).length,
+    archived: notes.filter(n => n.isArchived).length,
   }), [notes, currentUserId])
 
   return (
@@ -247,12 +295,12 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         </Button>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex border-b border-border shrink-0">
+      {/* Tab bar - horizontal scrollable */}
+      <div className="flex border-b border-border shrink-0 overflow-x-auto scrollbar-thin">
         <button
           type="button"
           onClick={() => setActiveTab('family')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'family'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
@@ -267,7 +315,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         <button
           type="button"
           onClick={() => setActiveTab('private')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'private'
               ? 'border-amber-500 text-amber-600 dark:text-amber-400'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
@@ -282,7 +330,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         <button
           type="button"
           onClick={() => setActiveTab('secure')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'secure'
               ? 'border-green-500 text-green-600 dark:text-green-400'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
@@ -292,6 +340,43 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
           Secure
           <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
             {tabCounts.secure}
+          </span>
+        </button>
+
+        {/* Dynamic category tabs */}
+        {allCategories.map(category => (
+          <button
+            key={category}
+            type="button"
+            onClick={() => setActiveTab(category)}
+            className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === category
+                ? 'border-purple-500 text-purple-600 dark:text-purple-400'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+            }`}
+          >
+            <FolderIcon className="h-4 w-4" />
+            {category}
+            <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+              {notes.filter(n => n.category === category && !n.isArchived).length}
+            </span>
+          </button>
+        ))}
+
+        {/* Archived tab */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('archived')}
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === 'archived'
+              ? 'border-gray-500 text-gray-600 dark:text-gray-400'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+          }`}
+        >
+          <ArchiveIcon className="h-4 w-4" />
+          Archived
+          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+            {tabCounts.archived}
           </span>
         </button>
       </div>
@@ -408,6 +493,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
               tagColors={tagColors}
               onDelete={handleDeleteNote}
               onEdit={handleEditNote}
+              onArchive={handleArchiveNote}
             />
           ))}
         </div>
@@ -432,6 +518,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
             initialCategory={editingNote?.category || null}
             initialTags={editingNote?.tags || []}
             initialIsPrivate={editingNote?.isPrivate ?? false}
+            initialIsArchived={editingNote?.isArchived ?? false}
             categories={initialCategories}
             tagColors={tagColors}
             onSubmit={handleEditorSubmit}

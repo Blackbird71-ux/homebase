@@ -51,6 +51,7 @@ export async function GET(
       category: true,
       tags: true,
       isPrivate: true,
+      isArchived: true,
       pinHash: true,
       createdBy: true,
       createdAt: true,
@@ -85,6 +86,7 @@ export async function GET(
     content: isLocked ? '' : note.content,
     category: note.category,
     isPrivate: note.isPrivate,
+    isArchived: note.isArchived,
     isSecured: !!note.pinHash,
     isLocked,
     tags: note.tags ? JSON.parse(note.tags) as string[] : [],
@@ -101,7 +103,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { title, content, category, tags, isPrivate, pin } = body
+  const { title, content, category, tags, isPrivate, isArchived, pin } = body
 
   if (!title || !content) {
     return NextResponse.json(
@@ -136,6 +138,7 @@ export async function PUT(
     category: category || null,
     tags: tags ? JSON.stringify(tags) : null,
     isPrivate: isPrivate ?? existingNote.isPrivate,
+    isArchived: isArchived ?? existingNote.isArchived,
     updatedAt: new Date(),
   }
 
@@ -169,6 +172,7 @@ export async function PUT(
     content: note.content,
     category: note.category,
     isPrivate: note.isPrivate,
+    isArchived: note.isArchived,
     isSecured: !!note.pinHash,
     tags: note.tags ? JSON.parse(note.tags) as string[] : [],
     createdBy: note.createdBy,
