@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { ListSelector } from '@/components/lists/ListSelector'
 import { ShoppingList } from '@/components/lists/ShoppingList'
 import { TodoList } from '@/components/lists/TodoList'
+import { TodoCalendarView } from '@/components/lists/TodoCalendarView'
 import { NewListDialog } from '@/components/lists/NewListDialog'
 import { EditListDialog } from '@/components/lists/EditListDialog'
 import { TemplateDialog } from '@/components/lists/TemplateDialog'
@@ -12,6 +13,7 @@ import { ListPresence } from '@/components/lists/ListPresence'
 import type { ListItemShape } from '@/lib/list-helpers'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ListIcon, CalendarDays } from 'lucide-react'
 
 interface SerializedItem {
   id: string
@@ -67,6 +69,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
   const [listFilter, setListFilter] = useState<'all' | 'mine'>('mine')
+  const [todoView, setTodoView] = useState<'list' | 'calendar'>('list')
 
   // Filtered view — pure client-side derivation, no extra network round-trip needed
   // "mine"   → lists owned by the current user OR unowned (createdBy '' / null)
@@ -418,26 +421,59 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
         ) : (
           <>
             <div className="flex items-center justify-between mb-4">
-              {renamingListId === activeList.id ? (
-                <form onSubmit={(e) => { e.preventDefault(); handleRenameSubmit(activeList.id) }}>
-                  <input
-                    ref={renameInputRef}
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={() => handleRenameSubmit(activeList.id)}
-                    onKeyDown={(e) => { if (e.key === 'Escape') setRenamingListId(null) }}
-                    className="text-xl font-semibold border-b-2 border-primary bg-transparent outline-none"
-                    maxLength={100}
-                    autoFocus
-                  />
-                </form>
-              ) : (
-                <h1
-                  className="text-xl font-semibold cursor-pointer"
-                  onDoubleClick={() => { setRenamingListId(activeList.id); setRenameValue(activeList.name); setTimeout(() => renameInputRef.current?.focus(), 50) }}
-                  title="Double-click to rename"
-                >{activeList.name}</h1>
-              )}
+              <div className="flex items-center gap-3">
+                {renamingListId === activeList.id ? (
+                  <form onSubmit={(e) => { e.preventDefault(); handleRenameSubmit(activeList.id) }}>
+                    <input
+                      ref={renameInputRef}
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => handleRenameSubmit(activeList.id)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setRenamingListId(null) }}
+                      className="text-xl font-semibold border-b-2 border-primary bg-transparent outline-none"
+                      maxLength={100}
+                      autoFocus
+                    />
+                  </form>
+                ) : (
+                  <h1
+                    className="text-xl font-semibold cursor-pointer"
+                    onDoubleClick={() => { setRenamingListId(activeList.id); setRenameValue(activeList.name); setTimeout(() => renameInputRef.current?.focus(), 50) }}
+                    title="Double-click to rename"
+                  >{activeList.name}</h1>
+                )}
+                {/* View toggle */}
+                <div className="flex items-center border border-border/60 rounded-md overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTodoView('list')}
+                    className={[
+                      'p-1.5 transition-colors',
+                      todoView === 'list'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted',
+                    ].join(' ')}
+                    aria-label="List view"
+                    title="List view"
+                  >
+                    <ListIcon className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTodoView('calendar')}
+                    className={[
+                      'p-1.5 transition-colors',
+                      todoView === 'calendar'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted',
+                    ].join(' ')}
+                    aria-label="Calendar view"
+                    title="Calendar view"
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={() => setTemplateDialogOpen(true)}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md border border-border hover:bg-muted"
@@ -445,17 +481,28 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
                 Templates
               </button>
             </div>
-            <TodoList
-              key={activeList.id}
-              listId={activeList.id}
-              initialItems={(activeList.items ?? []).map(toListItemShape)}
-              initialCategoryOrder={(() => {
-                if (!activeList.categoryOrder) return null
-                try { return JSON.parse(activeList.categoryOrder) } catch { return null }
-              })()}
-              members={members}
-              currentUserId={currentUserId}
-            />
+            {todoView === 'list' ? (
+              <TodoList
+                key={activeList.id}
+                listId={activeList.id}
+                initialItems={(activeList.items ?? []).map(toListItemShape)}
+                initialCategoryOrder={(() => {
+                  if (!activeList.categoryOrder) return null
+                  try { return JSON.parse(activeList.categoryOrder) } catch { return null }
+                })()}
+                members={members}
+                currentUserId={currentUserId}
+              />
+            ) : (
+              <TodoCalendarView
+                key={activeList.id}
+                items={(activeList.items ?? []).map(toListItemShape)}
+                members={members}
+                currentUserId={currentUserId}
+                listId={activeList.id}
+                weekStartsOn={0}
+              />
+            )}
           </>
         )}
       </main>

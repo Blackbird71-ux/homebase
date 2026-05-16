@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon, UserIcon, GlobeIcon } from 'lucide-react'
+import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon, UserIcon, GlobeIcon, CalendarDays, ListIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { ChoreDialog } from './ChoreDialog'
+import { ChoreCalendarView } from './ChoreCalendarView'
 import { HoverCard } from '@/components/ui/hover-card'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 
@@ -52,6 +53,7 @@ interface ChoresClientProps {
   initialChores: Chore[]
   members: Member[]
   currentUserId: string
+  weekStartsOn: 0 | 1
 }
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -74,7 +76,7 @@ function formatDate(dateStr: string): string {
 
 type ScopeDays = 7 | 30 | 90 | 365
 
-export function ChoresClient({ initialChores, members, currentUserId }: ChoresClientProps) {
+export function ChoresClient({ initialChores, members, currentUserId, weekStartsOn }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
@@ -85,6 +87,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
   const [newChoreKey, setNewChoreKey] = useState(0)
   const [scope, setScope] = useState<ScopeDays>(30)
   const [publicView, setPublicView] = useState(false)
+  const [view, setView] = useState<'list' | 'calendar'>('list')
 
   // Listen for chores updates from AI assistant or other sources
   useEffect(() => {
@@ -275,7 +278,7 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
     )
   }
 
-  // Filter chores based on scope and mine/all toggle
+  // Filter chores based on scope and mine/all toggle (used in list view)
   const filteredChores = chores.filter((chore) => {
     if (!publicView && chore.currentAssigneeId !== currentUserId) return false
     if (scope === 365) return true
@@ -285,14 +288,31 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
     return dueDate <= cutoff
   })
 
+  // For calendar view: filter by assignee only, show all chores regardless of scope
+  const calendarChores = chores.filter((chore) => {
+    if (!publicView && chore.currentAssigneeId !== currentUserId) return false
+    return true
+  })
+
+  function openEditChore(chore: Chore) {
+    setEditingChore(chore)
+    setDialogOpen(true)
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">
-            {filteredChores.length} of {publicView ? chores.length : chores.filter(c => c.currentAssigneeId === currentUserId).length} active chore{chores.length !== 1 ? 's' : ''}
-            {scope !== 365 && <span className="text-muted-foreground/50"> due in {scope} days</span>}
-          </p>
+          {view === 'list' ? (
+            <p className="text-sm text-muted-foreground">
+              {filteredChores.length} of {publicView ? chores.length : chores.filter(c => c.currentAssigneeId === currentUserId).length} active chore{chores.length !== 1 ? 's' : ''}
+              {scope !== 365 && <span className="text-muted-foreground/50"> due in {scope} days</span>}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {calendarChores.length} active chore{calendarChores.length !== 1 ? 's' : ''}
+            </p>
+          )}
           <button
             onClick={() => setPublicView(!publicView)}
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors ${
@@ -311,138 +331,185 @@ export function ChoresClient({ initialChores, members, currentUserId }: ChoresCl
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {/* Scope toggle */}
+          {/* View toggle: list / calendar */}
           <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
-            {([7, 30, 90, 365] as ScopeDays[]).map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setScope(d)}
-                className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
-                  scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {d === 365 ? 'All' : d === 90 ? '90d' : d === 30 ? '30d' : '7d'}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              title="List view"
+              className={`h-7 w-7 flex items-center justify-center rounded-md transition-all ${
+                view === 'list'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <ListIcon className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('calendar')}
+              title="Calendar view"
+              className={`h-7 w-7 flex items-center justify-center rounded-md transition-all ${
+                view === 'calendar'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+            </button>
           </div>
+
+          {/* Scope toggle (list view only) */}
+          {view === 'list' && (
+            <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
+              {([7, 30, 90, 365] as ScopeDays[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setScope(d)}
+                  className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
+                    scope === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {d === 365 ? 'All' : d === 90 ? '90d' : d === 30 ? '30d' : '7d'}
+                </button>
+              ))}
+            </div>
+          )}
           <Button size="sm" onClick={() => { setEditingChore(null); setNewChoreKey(k => k + 1); setDialogOpen(true) }}>
             <PlusIcon className="h-4 w-4 mr-1" /> Add Chore
           </Button>
         </div>
       </div>
 
-      {filteredChores.length === 0 ? (
-        <div className="py-8 text-center text-muted-foreground text-sm">
-          {chores.length === 0
-            ? 'No chores yet. Add your first household chore to get started.'
-            : !publicView && !chores.some(c => c.currentAssigneeId === currentUserId)
-              ? 'No chores assigned to you. Switch to All to see family chores.'
-              : scope === 365
-                ? 'No active chores.'
-                : `No chores due in the next ${scope} days. Try expanding the time window above.`}
-        </div>
+      {/* ── List View ──────────────────────────────────────────────────── */}
+      {view === 'list' ? (
+        <>
+          {filteredChores.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">
+              {chores.length === 0
+                ? 'No chores yet. Add your first household chore to get started.'
+                : !publicView && !chores.some(c => c.currentAssigneeId === currentUserId)
+                  ? 'No chores assigned to you. Switch to All to see family chores.'
+                  : scope === 365
+                    ? 'No active chores.'
+                    : `No chores due in the next ${scope} days. Try expanding the time window above.`}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+              {filteredChores.map((chore) => {
+                const overdue = chore.isOverdue
+                const isCompleted = completedIds.has(chore.id)
+
+                return (
+                  <div
+                    key={chore.id}
+                    className={`group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''} ${isCompleted ? 'opacity-50' : ''}`}
+                  >
+                    {/* Complete button (checkbox-style) */}
+                    <button
+                      onClick={() => handleComplete(chore)}
+                      className={`shrink-0 flex items-center justify-center h-5 w-5 rounded border transition-all duration-200
+                        ${completingIds.has(chore.id)
+                          ? 'border-green-500 bg-green-500 scale-110'
+                          : isCompleted
+                            ? 'border-green-500 bg-green-500/20'
+                            : 'border-border hover:border-green-500 hover:bg-green-500/10'
+                        }`}
+                      title="Mark complete"
+                    >
+                      <CheckIcon className={`h-3 w-3 transition-colors duration-200 ${
+                        completingIds.has(chore.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent group-hover:text-green-500'
+                      }`} />
+                    </button>
+
+                    {/* Title + hover info */}
+                    <HoverCard
+                      content={<HoverDetails chore={chore} />}
+                      side="bottom"
+                      className="flex-1 min-w-0"
+                      contentClassName=""
+                    >
+                      <span
+                        className={`text-sm font-medium cursor-default truncate block ${isCompleted ? 'line-through text-muted-foreground' : ''}`}
+                        onClick={() => openEditChore(chore)}
+                      >
+                        {chore.title}
+                      </span>
+                    </HoverCard>
+
+                    {/* Next occurrence date */}
+                    {chore.nextDueDate && (
+                      <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDate(chore.nextDueDate)}
+                      </span>
+                    )}
+
+                    {/* Overdue badge */}
+                    {overdue && !isCompleted && (
+                      <span className="shrink-0 text-xs font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                        Overdue
+                      </span>
+                    )}
+
+                    {/* Assignee */}
+                    {chore.currentAssignee ? (
+                      <span className="shrink-0 text-xs text-muted-foreground truncate max-w-[100px] hidden sm:inline">
+                        👤 {chore.currentAssignee.name}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-xs text-muted-foreground/50 italic hidden sm:inline">
+                        Unassigned
+                      </span>
+                    )}
+
+                    {/* Info dot for hover hint (mobile) */}
+                    <HoverCard
+                      content={<HoverDetails chore={chore} />}
+                      side="left"
+                      contentClassName="sm:hidden"
+                    >
+                      <button className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors sm:hidden">
+                        <InfoIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </HoverCard>
+
+                    {/* Actions */}
+                    <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleRotate(chore.id)}
+                        title="Rotate assignee"
+                      >
+                        <RotateCcwIcon className="h-3.5 w-3.5" />
+                      </Button>
+                      <button
+                        onClick={() => handleDelete(chore.id)}
+                        className="h-7 w-7 flex items-center justify-center text-muted-foreground/40 hover:text-destructive transition-colors"
+                        aria-label="Delete chore"
+                      >
+                        <Trash2Icon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       ) : (
-        <div className="rounded-lg border border-border/60 divide-y divide-border/40">
-          {filteredChores.map((chore) => {
-            const overdue = chore.isOverdue
-            const isCompleted = completedIds.has(chore.id)
-
-            return (
-              <div
-                key={chore.id}
-                className={`group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''} ${isCompleted ? 'opacity-50' : ''}`}
-              >
-                {/* Complete button (checkbox-style) */}
-                <button
-                  onClick={() => handleComplete(chore)}
-                  className={`shrink-0 flex items-center justify-center h-5 w-5 rounded border transition-all duration-200
-                    ${completingIds.has(chore.id)
-                      ? 'border-green-500 bg-green-500 scale-110'
-                      : isCompleted
-                        ? 'border-green-500 bg-green-500/20'
-                        : 'border-border hover:border-green-500 hover:bg-green-500/10'
-                    }`}
-                  title="Mark complete"
-                >
-                  <CheckIcon className={`h-3 w-3 transition-colors duration-200 ${
-                    completingIds.has(chore.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent group-hover:text-green-500'
-                  }`} />
-                </button>
-
-                {/* Title + hover info */}
-                <HoverCard
-                  content={<HoverDetails chore={chore} />}
-                  side="bottom"
-                  className="flex-1 min-w-0"
-                  contentClassName=""
-                >
-                  <span
-                    className={`text-sm font-medium cursor-default truncate block ${isCompleted ? 'line-through text-muted-foreground' : ''}`}
-                    onClick={() => { setEditingChore(chore); setDialogOpen(true) }}
-                  >
-                    {chore.title}
-                  </span>
-                </HoverCard>
-
-                {/* Next occurrence date */}
-                {chore.nextDueDate && (
-                  <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
-                    {formatDate(chore.nextDueDate)}
-                  </span>
-                )}
-
-                {/* Overdue badge */}
-                {overdue && !isCompleted && (
-                  <span className="shrink-0 text-xs font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                    Overdue
-                  </span>
-                )}
-
-                {/* Assignee */}
-                {chore.currentAssignee ? (
-                  <span className="shrink-0 text-xs text-muted-foreground truncate max-w-[100px] hidden sm:inline">
-                    👤 {chore.currentAssignee.name}
-                  </span>
-                ) : (
-                  <span className="shrink-0 text-xs text-muted-foreground/50 italic hidden sm:inline">
-                    Unassigned
-                  </span>
-                )}
-
-                {/* Info dot for hover hint (mobile) */}
-                <HoverCard
-                  content={<HoverDetails chore={chore} />}
-                  side="left"
-                  contentClassName="sm:hidden"
-                >
-                  <button className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors sm:hidden">
-                    <InfoIcon className="h-3.5 w-3.5" />
-                  </button>
-                </HoverCard>
-
-                {/* Actions */}
-                <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleRotate(chore.id)}
-                    title="Rotate assignee"
-                  >
-                    <RotateCcwIcon className="h-3.5 w-3.5" />
-                  </Button>
-                  <button
-                    onClick={() => handleDelete(chore.id)}
-                    className="h-7 w-7 flex items-center justify-center text-muted-foreground/40 hover:text-destructive transition-colors"
-                    aria-label="Delete chore"
-                  >
-                    <Trash2Icon className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+        /* ── Calendar View ───────────────────────────────────────────── */
+        <div className="rounded-lg border border-border/60 bg-background p-3">
+          <ChoreCalendarView
+            chores={calendarChores}
+            weekStartsOn={weekStartsOn}
+            onEditChore={openEditChore}
+            onComplete={handleComplete}
+            completedIds={completedIds}
+            completingIds={completingIds}
+          />
         </div>
       )}
 

@@ -10,6 +10,8 @@ export default async function ChoresPage() {
   // Get today's boundary (start of today in user's timezone) for comparing stored nextDueDate
   const { start: todayStart } = todayBoundsInTz(timezone)
 
+  const weekStartsOn = (user.weekStartsOn ?? 0) as 0 | 1
+
   const [chores, members] = await Promise.all([
     prisma.chore.findMany({
       where: { familyId: user.familyId, isActive: true },
@@ -56,6 +58,7 @@ export default async function ChoresPage() {
             isOverdue: c.nextDueDate ? new Date(c.nextDueDate) < todayStart : false,
           })) as any[]}
           members={members}
+          weekStartsOn={weekStartsOn}
         />
       </div>
     </div>
