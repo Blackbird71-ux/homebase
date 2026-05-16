@@ -163,9 +163,9 @@ export function NoteEditor({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 h-full">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       {/* Title */}
-      <div className="space-y-1 shrink-0">
+      <div className="space-y-1">
         <Label onClick={() => titleRef.current?.focus()}>Title</Label>
         <div
           ref={titleRef}
@@ -231,9 +231,9 @@ export function NoteEditor({
         </div>
       </div>
 
-      {/* Rich Text Editor — scrollable area */}
-      <div className="flex flex-col min-h-0 flex-1">
-        <div className="flex items-center justify-between shrink-0">
+      {/* Rich Text Editor */}
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between">
           <Label>Content</Label>
         </div>
 
@@ -259,7 +259,7 @@ export function NoteEditor({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && e.ctrlKey) handleSubmit(e)
           }}
-          className="flex-1 min-h-[120px] overflow-y-auto px-4 py-3 border border-input border-t-0 rounded-b-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 prose prose-sm dark:prose-invert max-w-none"
+          className="min-h-[160px] overflow-y-auto px-4 py-3 border border-input border-t-0 rounded-b-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 prose prose-sm dark:prose-invert max-w-none"
           data-placeholder="Start writing your note…"
           style={{ whiteSpace: 'pre-wrap' } as React.CSSProperties}
         />
@@ -280,7 +280,7 @@ export function NoteEditor({
       </div>
 
       {/* Category + Tags + Visibility + PIN — fixed, no scroll */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label>Category</Label>
           <Select
@@ -393,7 +393,7 @@ export function NoteEditor({
       </div>
 
       {/* Visibility toggle */}
-      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30 shrink-0">
+      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30">
         <button
           type="button"
           onClick={() => setIsPrivate(!isPrivate)}
@@ -430,7 +430,7 @@ export function NoteEditor({
       </div>
 
       {/* Archive toggle */}
-      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30 shrink-0">
+      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30">
         <button
           type="button"
           onClick={() => setIsArchived(!isArchived)}
@@ -467,7 +467,7 @@ export function NoteEditor({
       </div>
 
       {/* PIN Protection */}
-      <div className="p-3 border border-input rounded-md bg-muted/30 shrink-0">
+      <div className="p-3 border border-input rounded-md bg-muted/30">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <LockIcon className="h-4 w-4 text-muted-foreground" />
@@ -515,7 +515,7 @@ export function NoteEditor({
       </div>
 
 
-      <div className="flex justify-end gap-2 shrink-0">
+      <div className="flex justify-end gap-2">
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
             Cancel

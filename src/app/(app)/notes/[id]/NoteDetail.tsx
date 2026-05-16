@@ -410,19 +410,21 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
           <DialogHeader>
             <DialogTitle>Edit Note</DialogTitle>
           </DialogHeader>
-          <NoteEditor
-            initialTitle={note.title}
-            initialContent={note.content}
-            initialCategory={note.category}
-            initialTags={note.tags}
-            initialIsPrivate={note.isPrivate}
-            initialPinHash={note.pinHash ?? null}
-            categories={note.category ? [note.category] : []}
-            tagColors={tagColors}
-            onSubmit={handleUpdate}
-            onCancel={() => setIsEditing(false)}
-            isLoading={isLoading}
-          />
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            <NoteEditor
+              initialTitle={note.title}
+              initialContent={note.content}
+              initialCategory={note.category}
+              initialTags={note.tags}
+              initialIsPrivate={note.isPrivate}
+              initialPinHash={note.pinHash ?? null}
+              categories={note.category ? [note.category] : []}
+              tagColors={tagColors}
+              onSubmit={handleUpdate}
+              onCancel={() => setIsEditing(false)}
+              isLoading={isLoading}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

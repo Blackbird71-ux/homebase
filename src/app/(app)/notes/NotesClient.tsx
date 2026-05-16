@@ -512,6 +512,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
               {editingNote ? 'Edit Note' : 'Create New Note'}
             </DialogTitle>
           </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           <NoteEditor
             initialTitle={editingNote?.title || ''}
             initialContent={editingNote?.content || ''}
@@ -528,6 +529,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
             }}
             isLoading={isLoading}
           />
+          </div>
         </DialogContent>
       </Dialog>
     </div>
