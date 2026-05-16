@@ -50,7 +50,7 @@ export function CategoryRow({
   isCollapsed, onToggleCollapse, showToggle,
   onSetOpeningBalance, onOpenLedger, activeFilter,
 }: Props) {
-  const children = childrenMap.get(cat.id) || []
+  const children = (childrenMap.get(cat.id) || []).slice().sort((a, b) => a.name.localeCompare(b.name))
   const hasChildren = children.length > 0
 
   const flags: string[] = []
