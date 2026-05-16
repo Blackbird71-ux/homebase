@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, ChevronLeft, ChevronRight, FileText, DollarSign, Plane,
+  Plus, ChevronLeft, ChevronRight, FileText, DollarSign, Plane, ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -27,9 +27,10 @@ const navItems = [
 interface SidebarProps {
   collapsed?: boolean
   onToggle?: () => void
+  isAdmin?: boolean
 }
 
-export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed = false, onToggle, isAdmin = false }: SidebarProps) {
   const pathname = usePathname()
 
   function openQuickAdd() {
@@ -116,6 +117,22 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       {/* Settings + Sign out */}
       <div className="px-2 py-4 border-t border-border space-y-1 shrink-0">
+        {isAdmin && (
+          <Link
+            href="/admin"
+            title={collapsed ? 'Admin' : undefined}
+            className={cn(
+              'flex items-center rounded-md text-sm font-medium transition-colors',
+              collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
+              pathname.startsWith('/admin')
+                ? 'bg-primary text-primary-foreground'
+                : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
+            )}
+          >
+            <ShieldAlert className="h-4 w-4 shrink-0" />
+            {!collapsed && 'Admin'}
+          </Link>
+        )}
         <Link
           href="/settings"
           title={collapsed ? 'Settings' : undefined}

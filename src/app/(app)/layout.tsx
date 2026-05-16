@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { auth } from '@/lib/auth'
+import { requireSession } from '@/lib/auth-helpers'
 import { AppShell } from '@/components/layout/AppShell'
 
 export default async function AppLayout({
@@ -7,8 +7,8 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
+  const session = await requireSession()
+  const isAdmin = session.role === 'admin'
 
-  return <AppShell>{children}</AppShell>
+  return <AppShell isAdmin={isAdmin}>{children}</AppShell>
 }
