@@ -6,6 +6,7 @@ import { AssignMealModal } from './AssignMealModal'
 import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { SaveTemplateDialog } from './SaveTemplateDialog'
 import { ApplyTemplateDialog } from './ApplyTemplateDialog'
+import { MealPlanRightPanel } from './MealPlanRightPanel'
 import { Button } from '@/components/ui/button'
 import { ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon, SaveIcon, FileTextIcon, MoreHorizontalIcon, GripVerticalIcon, LayoutListIcon, LayoutGridIcon } from 'lucide-react'
 import { todayStringInTz } from '@/lib/timezone'
@@ -50,10 +51,12 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [layout, setLayout] = useState<'single' | 'multi'>(initialLayout)
 
+  // Right panel: which day is spotlighted (clicked on left schedule)
+  const [panelSelectedDate, setPanelSelectedDate] = useState<string | null>(null)
+
   async function toggleLayout() {
     const next = layout === 'multi' ? 'single' : 'multi'
     setLayout(next)
-    // Persist to uiPreferences silently
     try {
       await fetch('/api/settings', {
         method: 'PATCH',
@@ -75,6 +78,11 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
     setSelectedDate(date)
     setSelectedMealType(mealType)
     setModalOpen(true)
+  }
+
+  // Clicking a day card on the left updates the right panel spotlight
+  function handleDayCardClick(ymd: string) {
+    setPanelSelectedDate(prev => prev === ymd ? null : ymd)
   }
 
   function toggleSelectMode() {
@@ -106,14 +114,20 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
     setClearing(false)
   }
 
+  // Handle drag-from-right-panel: open the assign modal pre-filled
+  // The droppable slots in DailyMealColumn already handle the drop — the drag data
+  // type 'search-recipe' flows through useMealPlanDragDrop → handleDragEnd.
+  // We just need to make sure that hook knows how to handle it (see below).
+
   return (
     <DndContext sensors={sensors} onDragStart={drag.handleDragStart} onDragEnd={drag.handleDragEnd}>
       <div className="flex flex-col gap-1 p-2 md:p-3 h-full overflow-hidden">
+        {/* ── Header ── */}
         <div className="flex items-center justify-between gap-1">
           <h1 className="text-xl font-semibold shrink-0">Meal Plan</h1>
 
-          {/* ── Mobile header ── */}
-          <div className="flex md:hidden items-center gap-1.5">
+          {/* Mobile header */}
+          <div className="flex xl:hidden items-center gap-1.5">
             <Button variant="ghost" size="icon-sm" onClick={toggleLayout} aria-label={layout === 'multi' ? 'Switch to single column' : 'Switch to multi column'} title={layout === 'multi' ? 'Single column' : 'Multi column'}>
               {layout === 'multi' ? <LayoutListIcon className="h-4 w-4" /> : <LayoutGridIcon className="h-4 w-4" />}
             </Button>
@@ -154,8 +168,8 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
             </div>
           </div>
 
-          {/* ── Desktop header ── */}
-          <div className="hidden md:flex items-center gap-2 flex-wrap">
+          {/* Desktop header (xl+) */}
+          <div className="hidden xl:flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={toggleLayout} aria-label={layout === 'multi' ? 'Switch to single column' : 'Switch to multi column'}>
               {layout === 'multi' ? <LayoutListIcon className="h-4 w-4 mr-1" /> : <LayoutGridIcon className="h-4 w-4 mr-1" />}
               {layout === 'multi' ? 'Single Column' : 'Multi Column'}
@@ -221,46 +235,71 @@ export function MealPlanGrid({ weekStartsOn: _weekStartsOn, initialWeekStart, in
           </div>
         </div>
 
-        {/* Day cards — responsive grid */}
-        <div className="flex-1 overflow-y-auto pb-2">
-          <div className={layout === 'single'
-            ? 'flex flex-col gap-1.5'
-            : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 md:gap-2'
-          }>
-            {days.map(day => {
-              const ymd = toYMD(day)
-              const dayEntries = entries.filter(e => e.date.slice(0, 10) === ymd)
-              const hasAnyMeals = dayEntries.some(e => e.recipes && e.recipes.length > 0)
-              return (
-                <div key={ymd} className={[
-                  'rounded-xl border transition-all duration-150',
-                  ymd === today ? 'border-primary/30 bg-primary/5' : 'border-border',
-                  // Compress empty days in both layouts; full padding only when meals present
-                  layout === 'single'
-                    ? hasAnyMeals ? 'p-2' : 'p-1.5 opacity-60 hover:opacity-100'
-                    : hasAnyMeals ? 'p-1.5' : 'p-1 opacity-60 hover:opacity-100 hover:p-1.5 hover:border-border/80',
-                ].join(' ')}>
-                  <DailyMealColumn
-                    date={ymd}
-                    entries={dayEntries}
-                    isToday={ymd === today}
-                    onMealClick={openModal}
-                    onMealClear={remove}
-                    onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
-                    selectMode={selectMode}
-                    selectedMealIds={selectedMealIds}
-                    onToggleMealSelect={toggleMealSelection}
-                    compact
-                    singleColumn={layout === 'single'}
-                    newlyMovedEntryIds={drag.newlyMovedEntryIds}
-                  />
-                </div>
-              )
-            })}
+        {/* ── Main body: split layout on xl+, full-width below ── */}
+        <div className="flex-1 overflow-hidden flex gap-0">
+
+          {/* Left: schedule */}
+          <div className="flex-1 overflow-y-auto pb-2 min-w-0">
+            <div className={layout === 'single'
+              ? 'flex flex-col gap-1.5'
+              : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-1.5 md:gap-2'
+            }>
+              {days.map(day => {
+                const ymd = toYMD(day)
+                const dayEntries = entries.filter(e => e.date.slice(0, 10) === ymd)
+                const hasAnyMeals = dayEntries.some(e => e.recipes && e.recipes.length > 0)
+                const isSelectedForPanel = panelSelectedDate === ymd
+
+                return (
+                  <div
+                    key={ymd}
+                    onClick={() => handleDayCardClick(ymd)}
+                    className={[
+                      'rounded-xl border transition-all duration-150 cursor-pointer',
+                      ymd === today
+                        ? 'border-primary/30 bg-primary/5'
+                        : isSelectedForPanel
+                          ? 'border-primary/40 bg-muted/40'
+                          : 'border-border hover:border-border/80',
+                      layout === 'single'
+                        ? hasAnyMeals ? 'p-2' : 'p-1.5 opacity-60 hover:opacity-100'
+                        : hasAnyMeals ? 'p-1.5' : 'p-1 opacity-60 hover:opacity-100 hover:p-1.5 hover:border-border/80',
+                    ].join(' ')}
+                  >
+                    <DailyMealColumn
+                      date={ymd}
+                      entries={dayEntries}
+                      isToday={ymd === today}
+                      onMealClick={(date, mealType) => {
+                        openModal(date, mealType)
+                      }}
+                      onMealClear={remove}
+                      onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
+                      selectMode={selectMode}
+                      selectedMealIds={selectedMealIds}
+                      onToggleMealSelect={toggleMealSelection}
+                      compact
+                      singleColumn={layout === 'single'}
+                      newlyMovedEntryIds={drag.newlyMovedEntryIds}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Right: tabbed panel — only on xl+ */}
+          <div className="hidden xl:flex w-72 2xl:w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-border ml-3">
+            <MealPlanRightPanel
+              entries={entries}
+              selectedDate={panelSelectedDate}
+              days={days}
+              today={today}
+            />
           </div>
         </div>
 
-        {/* Select mode floating bar */}
+        {/* Select mode floating bar (mobile) */}
         {selectMode && (
           <div className="md:hidden fixed bottom-20 left-4 right-4 z-30 flex items-center justify-between gap-2 bg-background border border-border rounded-xl px-4 py-3 shadow-lg">
             <span className="text-sm text-muted-foreground">{selectedMealIds.size} meal{selectedMealIds.size !== 1 ? 's' : ''} selected</span>

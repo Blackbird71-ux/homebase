@@ -52,6 +52,12 @@ export function useMealPlanDragDrop({
         courseType: dragData.courseType as string | undefined,
       })
       setActiveDragEntry(null)
+    } else if (dragData?.type === 'search-recipe') {
+      // Dragging from the right panel recipe browser
+      setActiveDragRecipe({
+        recipeName: dragData.recipeName as string,
+      })
+      setActiveDragEntry(null)
     } else {
       setActiveDragEntry(entries.find(e => e.id === active.id) ?? null)
       setActiveDragRecipe(null)
@@ -69,12 +75,61 @@ export function useMealPlanDragDrop({
     if (!targetData) return
 
     const { date: targetDate, mealType: targetMealType } = targetData
-    if (dragData?.type === 'recipe') {
+
+    if (dragData?.type === 'search-recipe') {
+      // Drag from right panel — assign recipe to target slot
+      await handleSearchRecipeDrop(
+        dragData.recipeId as string,
+        dragData.recipeName as string,
+        targetDate,
+        targetMealType,
+      )
+    } else if (dragData?.type === 'recipe') {
       await handleRecipeDragEnd(active.id as string, dragData, targetDate, targetMealType)
     } else {
       await handleEntryDragEnd(active.id as string, targetDate, targetMealType)
     }
   }
+
+  // ── New: drop from the right panel search browser ────────────────────────
+
+  async function handleSearchRecipeDrop(
+    recipeId: string,
+    recipeName: string,
+    targetDate: string,
+    targetMealType: string,
+  ) {
+    try {
+      const res = await fetch('/api/meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: targetDate + 'T00:00:00Z',
+          mealType: targetMealType,
+          recipeIds: [recipeId],
+          append: true,
+        }),
+      })
+      if (res.ok) {
+        const entry: MealPlanEntry = await res.json()
+        setEntries(prev => {
+          const filtered = prev.filter(e => !(e.date.slice(0, 10) === targetDate && e.mealType === targetMealType))
+          return [...filtered, entry]
+        })
+        markNewlyMoved(entry.id)
+        toast.success(`Added ${recipeName}`)
+      } else {
+        const errorText = await res.text()
+        console.error('Search recipe drop failed:', res.status, errorText)
+        toast.error('Failed to add recipe. Please try again.')
+      }
+    } catch (error) {
+      console.error('Search recipe drop error:', error)
+      toast.error('Network error adding recipe. Please try again.')
+    }
+  }
+
+  // ── Existing handlers (unchanged) ────────────────────────────────────────
 
   async function handleRecipeDragEnd(
     recipeId: string,
