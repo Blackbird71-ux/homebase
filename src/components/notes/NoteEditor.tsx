@@ -279,6 +279,18 @@ export function NoteEditor({
         `}</style>
       </div>
 
+      {/* Save / Cancel — at the top so you don't have to scroll past content */}
+      <div className="flex justify-end gap-2">
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? 'Saving…' : 'Save Note'}
+        </Button>
+      </div>
+
       {/* Category + Tags + Visibility + PIN — fixed, no scroll */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2">
@@ -514,17 +526,6 @@ export function NoteEditor({
         )}
       </div>
 
-
-      <div className="flex justify-end gap-2">
-        {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving…' : 'Save Note'}
-        </Button>
-      </div>
     </form>
   )
 }
