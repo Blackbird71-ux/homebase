@@ -117,7 +117,7 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={true} fitViewport storageKey="dialog-size:journal-entry-form">
+      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={true} fitViewport storageKey="dialog-size-v2:journal-entry-form">
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
           <DialogTitle>{editing ? 'Edit Journal Entry' : 'New Journal Entry'}</DialogTitle>
         </DialogHeader>

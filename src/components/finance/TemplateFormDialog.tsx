@@ -828,7 +828,7 @@ export function TemplateFormDialog({
         minWidth={560}
         minHeight={400}
         fitViewport
-        storageKey="dialog-size:template-form"
+        storageKey="dialog-size-v2:template-form"
       >
         {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-0 shrink-0">

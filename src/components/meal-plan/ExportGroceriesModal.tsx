@@ -222,7 +222,7 @@ export function ExportGroceriesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" fitViewport storageKey="dialog-size:export-groceries">
+      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" fitViewport storageKey="dialog-size-v2:export-groceries">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <DialogTitle>Add to Groceries</DialogTitle>
           {status !== 'loading' && (

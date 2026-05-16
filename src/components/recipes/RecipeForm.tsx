@@ -230,7 +230,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden p-0 gap-0" fitViewport storageKey="dialog-size:recipe-form">
+      <ResizableDialogContent className="flex flex-col overflow-hidden p-0 gap-0" fitViewport storageKey="dialog-size-v2:recipe-form">
         <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
           <DialogTitle>{editMode ? 'Edit recipe' : 'Add recipe'}</DialogTitle>
         </DialogHeader>

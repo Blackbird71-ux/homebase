@@ -481,7 +481,7 @@ export function AssignMealModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <ResizableDialogContent fitViewport storageKey="dialog-size:assign-meal">
+      <ResizableDialogContent fitViewport storageKey="dialog-size-v2:assign-meal">
         <DialogHeader>
           <DialogTitle>
             {displayDate} — {mealType}

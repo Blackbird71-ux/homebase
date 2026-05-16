@@ -213,7 +213,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
   return (
     <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size:event-modal">
+      <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size-v2:event-modal">
         {showDeleteConfirm ? (
           <>
             <DialogHeader>

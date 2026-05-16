@@ -203,7 +203,7 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
 
   return (
     <Dialog open={!!amendment} onOpenChange={o => { if (!o && !saving) onClose() }}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={!saving} fitViewport storageKey="dialog-size:amendment-dialog">
+      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={!saving} fitViewport storageKey="dialog-size-v2:amendment-dialog">
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
           <DialogTitle className="flex items-center gap-2">
             <FilePenLine className="h-4 w-4 text-blue-500" />

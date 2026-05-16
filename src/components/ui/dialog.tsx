@@ -178,6 +178,9 @@ function ResizableDialogContent({
     const el = popupRef.current
     if (!el) return
 
+    el.style.maxWidth  = 'none'
+    el.style.maxHeight = 'none'
+
     if (storageKey) {
       try {
         const saved = localStorage.getItem(storageKey)
@@ -212,7 +215,7 @@ function ResizableDialogContent({
     if (!el) return
     dragging.current = edge
     origin.current = { x: e.clientX, y: e.clientY, w: el.offsetWidth, h: el.offsetHeight }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    el.setPointerCapture(e.pointerId)
   }, [])
 
   const onPointerMove = React.useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -250,7 +253,7 @@ function ResizableDialogContent({
         ref={popupRef}
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         onPointerMove={onPointerMove}

@@ -194,7 +194,7 @@ export default function IncomePage() {
       </Dialog>
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
-        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400} fitViewport storageKey="dialog-size:income-form">
+        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400} fitViewport storageKey="dialog-size-v2:income-form">
 
           {/* Fixed header — title, errors, income type toggle */}
           <div className="px-4 pt-4 pb-0 shrink-0">
@@ -535,7 +535,7 @@ export default function IncomePage() {
       </Dialog>
 
       <Dialog open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>
-        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={480} minHeight={300} fitViewport storageKey="dialog-size:income-received">
+        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={480} minHeight={300} fitViewport storageKey="dialog-size-v2:income-received">
           <div className="px-4 pt-4 pb-0 shrink-0">
             <DialogHeader>
               <DialogTitle>Confirm Income Received</DialogTitle>

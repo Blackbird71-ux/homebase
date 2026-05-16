@@ -518,7 +518,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         }
         setEditorOpen(open)
       }}>
-        <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size:note-editor">
+        <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size-v2:note-editor">
           <DialogHeader>
             <DialogTitle>
               {editingNote ? 'Edit Note' : 'Create New Note'}
