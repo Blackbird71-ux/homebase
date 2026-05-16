@@ -13,6 +13,33 @@ function parseTags(tags: string | null): string[] {
   }
 }
 
+/**
+ * Ensures every tag name in the given array has a corresponding Tag record
+ * in the database for this family. Tag names that already exist are skipped.
+ * This keeps tags created via the notes editor visible in the Tag Manager,
+ * Tag Selector, and Tag Cloud.
+ */
+async function syncTagsToTagTable(tagNames: string[], familyId: string) {
+  if (!tagNames || tagNames.length === 0) return
+
+  const existing = await (prisma as any).tag.findMany({
+    where: {
+      familyId,
+      name: { in: tagNames },
+    },
+    select: { name: true },
+  })
+
+  const existingNames = new Set(existing.map((t: { name: string }) => t.name))
+  const newTags = tagNames
+    .filter((name) => !existingNames.has(name))
+    .map((name) => ({ name, familyId }))
+
+  if (newTags.length > 0) {
+    await (prisma as any).tag.createMany({ data: newTags })
+  }
+}
+
 export async function GET(req: Request) {
   const user = await requireSession()
   const { searchParams } = new URL(req.url)
@@ -99,6 +126,11 @@ export async function POST(req: Request) {
   let pinHash: string | undefined
   if (pin && typeof pin === 'string' && pin.length >= 4) {
     pinHash = await hashPin(pin)
+  }
+
+  // Sync new tags to the Tag table so they appear in the tag manager & selector
+  if (tags && tags.length > 0) {
+    await syncTagsToTagTable(tags, user.familyId)
   }
 
   const note = await prisma.note.create({
