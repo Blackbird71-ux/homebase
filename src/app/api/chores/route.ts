@@ -2,73 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { createAuditLog } from '@/lib/audit-log'
-import { todayBoundsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
-
-function calculateInitialDueDate(
-  frequency: string,
-  dayOfWeek: number | null,
-  dayOfMonth: number | null,
-  startDate: Date | null,
-  timezone: string
-): Date {
-  const base = startDate ? new Date(startDate) : new Date()
-  base.setUTCHours(0, 0, 0, 0)
-
-  let result: Date
-
-  switch (frequency) {
-    case 'daily': {
-      result = base
-      break
-    }
-    case 'weekly': {
-      if (dayOfWeek !== null) {
-        const currentDay = base.getUTCDay()
-        let daysUntil = dayOfWeek - currentDay
-        if (daysUntil < 0) daysUntil += 7
-        const next = new Date(base)
-        next.setUTCDate(base.getUTCDate() + daysUntil)
-        result = next
-      } else {
-        result = base
-      }
-      break
-    }
-    case 'biweekly': {
-      result = base
-      break
-    }
-    case 'monthly':
-    case 'bimonthly':
-    case 'quarterly':
-    case 'halfyearly':
-    case 'yearly': {
-      if (dayOfMonth !== null) {
-        const lastDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate()
-        const targetDay = Math.min(dayOfMonth, lastDay)
-        // If start date's day is after the target day this month, go to next month
-        if (base.getUTCDate() > targetDay) {
-          base.setUTCMonth(base.getUTCMonth() + 1)
-          const nextLastDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate()
-          base.setUTCDate(Math.min(dayOfMonth, nextLastDay))
-        } else {
-          base.setUTCDate(targetDay)
-        }
-        result = base
-      } else {
-        result = base
-      }
-      break
-    }
-    default: {
-      result = base
-      break
-    }
-  }
-
-  // Shift from UTC midnight to user's local-time midnight
-  return utcMidnightToLocalMidnight(result, timezone)
-}
+import { todayBoundsInTz } from '@/lib/timezone'
+import { calculateInitialDueDate } from '@/lib/chore-helpers'
 
 export async function GET() {
   const user = await requireSession()
@@ -89,8 +24,8 @@ export async function GET() {
     orderBy: { createdAt: 'asc' },
   })
 
-  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
-  // timezone, so a simple Date comparison is correct.
+  // nextDueDate is stored as the UTC equivalent of midnight in the user's timezone,
+  // so a simple Date comparison is correct.
   const choresWithOverdue = chores.map((c) => ({
     ...c,
     isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
@@ -124,8 +59,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 })
   }
 
-  // Calculate initial nextDueDate — shifted to user's local-time midnight
   const parsedStartDate = startDate ? new Date(startDate) : null
+
+  // Calculate initial nextDueDate using the canonical helper.
   const nextDueDate = calculateInitialDueDate(
     frequency ?? 'weekly',
     dayOfWeek ?? null,

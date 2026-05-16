@@ -365,7 +365,7 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
 
       {/* Editor Dialog */}
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Note</DialogTitle>
           </DialogHeader>

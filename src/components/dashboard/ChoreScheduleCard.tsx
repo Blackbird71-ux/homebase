@@ -84,7 +84,16 @@ export function ChoreScheduleCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      if (!res.ok) throw new Error('Failed to complete chore')
+      if (!res.ok) {
+        // Surface the real server error (e.g. "not yet due") so users know why it failed
+        let message = 'Failed to complete chore. Please try again.'
+        try {
+          const json = await res.json()
+          if (json?.error) message = json.error
+        } catch { /* ignore parse errors */ }
+        toast.error(message)
+        return
+      }
 
       // Briefly show strikethrough, then re-fetch so the completed item disappears
       setCompletedIds((prev) => new Set(prev).add(choreId))
@@ -193,27 +202,37 @@ export function ChoreScheduleCard({
               <p className="text-xs text-muted-foreground/60">No outstanding chores in this period.</p>
             </div>
           ) : displayDays.map((day) => {
-            const dateStr = day.date.slice(0, 10)
-            // Parse YYYY-MM-DD as local date to avoid UTC timezone shift
-            const [y, m, d] = dateStr.split('-').map(Number)
-            const dayNum = d
-            const month = new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short' })
-            const isToday = dateStr === today
+            // The "Overdue" section has day.day === 'Overdue' and day.date === '' —
+            // guard against parsing an empty string as a date.
+            const isOverdueSection = day.day === 'Overdue'
+            const dateStr = isOverdueSection ? '' : day.date.slice(0, 10)
+            const isToday = !isOverdueSection && dateStr === today
+
+            // Only parse day/month numbers for non-overdue sections
+            let dayNum: number | null = null
+            let month: string | null = null
+            if (!isOverdueSection && dateStr) {
+              const [y, m, d] = dateStr.split('-').map(Number)
+              dayNum = d
+              month = new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short' })
+            }
 
             if (day.chores.length === 0) return null
 
             return (
               <div
-                key={day.date}
+                key={isOverdueSection ? 'overdue' : day.date}
                 className={`border rounded-lg p-2 ${
-                  isToday
-                    ? 'border-primary/40 bg-primary/5'
-                    : 'border-border bg-muted/20'
+                  isOverdueSection
+                    ? 'border-destructive/40 bg-destructive/5'
+                    : isToday
+                      ? 'border-primary/40 bg-primary/5'
+                      : 'border-border bg-muted/20'
                 }`}
               >
-                <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div className={`text-xs font-semibold mb-1.5 ${isOverdueSection ? 'text-destructive' : isToday ? 'text-primary' : 'text-muted-foreground'}`}>
                   {isToday && <span className="mr-1">●</span>}
-                  {day.day} {dayNum} {month}
+                  {isOverdueSection ? '⚠ Overdue' : `${day.day} ${dayNum} ${month}`}
                   {isToday && <span className="ml-1 text-primary font-bold">— Today</span>}
                 </div>
                 <div className="flex flex-col gap-1">

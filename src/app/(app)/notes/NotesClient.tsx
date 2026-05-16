@@ -420,7 +420,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         }
         setEditorOpen(open)
       }}>
-        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
               {editingNote ? 'Edit Note' : 'Create New Note'}

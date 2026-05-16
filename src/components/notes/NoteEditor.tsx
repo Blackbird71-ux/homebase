@@ -158,9 +158,9 @@ export function NoteEditor({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 h-full">
       {/* Title */}
-      <div className="space-y-1">
+      <div className="space-y-1 shrink-0">
         <Label onClick={() => titleRef.current?.focus()}>Title</Label>
         <div
           ref={titleRef}
@@ -226,9 +226,9 @@ export function NoteEditor({
         </div>
       </div>
 
-      {/* Rich Text Editor */}
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
+      {/* Rich Text Editor — scrollable area */}
+      <div className="flex flex-col min-h-0 flex-1">
+        <div className="flex items-center justify-between shrink-0">
           <Label>Content</Label>
         </div>
 
@@ -246,7 +246,7 @@ export function NoteEditor({
           isLoading={isLoading}
         />
 
-        {/* Editor area */}
+        {/* Editor area — this is the only scrollable part of the dialog */}
         <div
           ref={editorRef}
           contentEditable={!isLoading}
@@ -254,7 +254,7 @@ export function NoteEditor({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && e.ctrlKey) handleSubmit(e)
           }}
-          className="min-h-[280px] max-h-[500px] overflow-y-auto px-4 py-3 border border-input border-t-0 rounded-b-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 prose prose-sm dark:prose-invert max-w-none"
+          className="flex-1 min-h-[120px] overflow-y-auto px-4 py-3 border border-input border-t-0 rounded-b-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 prose prose-sm dark:prose-invert max-w-none"
           data-placeholder="Start writing your note…"
           style={{ whiteSpace: 'pre-wrap' } as React.CSSProperties}
         />
@@ -274,8 +274,8 @@ export function NoteEditor({
         `}</style>
       </div>
 
-      {/* Category + Tags + Visibility */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Category + Tags + Visibility + PIN — fixed, no scroll */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0">
         <div className="space-y-2">
           <Label>Category</Label>
           <Select
@@ -388,7 +388,7 @@ export function NoteEditor({
       </div>
 
       {/* Visibility toggle */}
-      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30">
+      <div className="flex items-center gap-3 p-3 border border-input rounded-md bg-muted/30 shrink-0">
         <button
           type="button"
           onClick={() => setIsPrivate(!isPrivate)}
@@ -425,7 +425,7 @@ export function NoteEditor({
       </div>
 
       {/* PIN Protection */}
-      <div className="p-3 border border-input rounded-md bg-muted/30">
+      <div className="p-3 border border-input rounded-md bg-muted/30 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <LockIcon className="h-4 w-4 text-muted-foreground" />
@@ -473,7 +473,7 @@ export function NoteEditor({
       </div>
 
 
-      <div className="flex justify-end gap-2 pt-2">
+      <div className="flex justify-end gap-2 shrink-0">
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
             Cancel

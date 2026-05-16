@@ -4,7 +4,8 @@ import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { mergeDashboardCards, type DashboardCardConfig } from '@/lib/dashboard-cards'
 import { HomeClient } from './HomeClient'
-import type { DashboardData, TodaysMeal, WeeklySummaryData, ChoreScheduleDay, ChoreScheduleItem } from '@/types'
+import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
+import { buildChoreSchedule } from '@/lib/chore-helpers'
 import { format } from 'date-fns'
 
 /**
@@ -17,69 +18,6 @@ function normalizeToUtcMidnight(dateStr: string): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-function buildChoreSchedule(
-  chores: any[],
-  todayStart: Date,
-  todayEnd: Date,
-  timezone: string,
-  days: number = 30
-): ChoreScheduleDay[] {
-  if (!chores || !Array.isArray(chores)) return []
-  const schedule: ChoreScheduleDay[] = []
-
-  // ── Overdue section: chores whose nextDueDate is before today ────────────
-  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
-  // timezone, so a simple Date comparison is correct.
-  const overdueChores = chores.filter((c: any) => {
-    if (!c.nextDueDate) return false
-    return c.nextDueDate < todayStart
-  })
-  if (overdueChores.length > 0) {
-    schedule.push({
-      day: 'Overdue',
-      date: '',
-      chores: overdueChores.map((c: any): ChoreScheduleItem => ({
-        id: c.id,
-        title: c.title,
-        frequency: c.frequency,
-        note: c.note,
-        currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
-        lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
-        lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
-        isOverdue: true,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
-      })),
-    })
-  }
-
-  for (let i = 0; i < days; i++) {
-    // Use timezone-aware day boundaries derived from todayStart (already local midnight in UTC form)
-    const dayStart = new Date(todayStart.getTime() + i * 86400000)
-    const dayEnd = new Date(todayStart.getTime() + (i + 1) * 86400000)
-    // Use the midpoint of the local day to reliably determine the day name/date in the target timezone
-    const midDay = new Date(dayStart.getTime() + 12 * 3600000)
-    const dayChores = chores.filter((c: any) => {
-      if (!c.nextDueDate) return false
-      return c.nextDueDate >= dayStart && c.nextDueDate < dayEnd
-    })
-    schedule.push({
-      day: new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(midDay),
-      date: new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(midDay),
-      chores: dayChores.map((c: any): ChoreScheduleItem => ({
-        id: c.id,
-        title: c.title,
-        frequency: c.frequency,
-        note: c.note,
-        currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
-        lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
-        lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
-        isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
-      })),
-    })
-  }
-  return schedule
-}
 
 async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0, userId?: string, dashboardTodoListId?: string | null): Promise<DashboardData> {
   // Get today's boundaries in the family's timezone
