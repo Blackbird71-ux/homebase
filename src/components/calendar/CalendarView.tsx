@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   addMonths, subMonths, addWeeks, subWeeks,
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
@@ -20,6 +21,7 @@ interface CalendarViewProps {
 }
 
 export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: CalendarViewProps) {
+  const router = useRouter()
   const [view, setView] = useState<'month' | 'week'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
@@ -31,6 +33,13 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
   const currentDateRef = useRef(currentDate)
   viewRef.current = view
   currentDateRef.current = currentDate
+
+  // Sync server-rendered events when router.refresh() causes a re-render
+  const isInitialMount = useRef(true)
+  useEffect(() => {
+    if (isInitialMount.current) { isInitialMount.current = false; return }
+    setEvents(initialEvents)
+  }, [initialEvents])
 
   const refresh = useCallback(async (date?: Date, currentView?: string) => {
     const targetDate = date ?? currentDateRef.current
@@ -53,9 +62,10 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
       from: rangeStart.toISOString(),
       to: rangeEnd.toISOString(),
     })
-    const res = await fetch(`/api/events?${params}`)
+    router.refresh()
+    const res = await fetch(`/api/events?${params}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
-  }, [weekStartsOn])
+  }, [weekStartsOn, router])
 
   useEffect(() => {
     const cleanup = listenAppEvent(AppEvents.CALENDAR_UPDATED, () => {
