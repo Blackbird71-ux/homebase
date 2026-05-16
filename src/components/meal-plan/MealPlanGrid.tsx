@@ -7,6 +7,7 @@ import { ExportGroceriesModal } from './ExportGroceriesModal'
 import { SaveTemplateDialog } from './SaveTemplateDialog'
 import { ApplyTemplateDialog } from './ApplyTemplateDialog'
 import { MealPlanRightPanel } from './MealPlanRightPanel'
+import { RecipeViewPopup } from './RecipeViewPopup'
 import { Button } from '@/components/ui/button'
 import {
   ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon,
@@ -63,6 +64,7 @@ export function MealPlanGrid({
   const [moreMenuOpen, setMoreMenuOpen]     = useState(false)
   const [layout, setLayout]                 = useState<'single' | 'multi'>(initialLayout)
   const [panelSelectedDate, setPanelSelectedDate] = useState<string | null>(null)
+  const [viewingRecipeId, setViewingRecipeId] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -80,6 +82,10 @@ export function MealPlanGrid({
 
   function handleDayCardClick(ymd: string) {
     setPanelSelectedDate(prev => prev === ymd ? null : ymd)
+  }
+
+  function handleViewRecipe(recipeId: string) {
+    setViewingRecipeId(recipeId)
   }
 
   function toggleSelectMode() {
@@ -289,6 +295,7 @@ export function MealPlanGrid({
                         onMealClick={openModal}
                         onMealClear={remove}
                         onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
+                        onViewRecipe={handleViewRecipe}
                         selectMode={selectMode}
                         selectedMealIds={selectedMealIds}
                         onToggleMealSelect={toggleMealSelection}
@@ -328,6 +335,7 @@ export function MealPlanGrid({
                 selectedDate={panelSelectedDate}
                 days={days}
                 today={today}
+                onViewRecipe={handleViewRecipe}
               />
             </div>
           </div>
@@ -402,6 +410,13 @@ export function MealPlanGrid({
             onOpenChange={setApplyTemplateOpen}
             weekStart={toYMD(weekStart)}
             onApplied={refresh}
+          />
+
+          <RecipeViewPopup
+            recipeId={viewingRecipeId}
+            open={viewingRecipeId !== null}
+            onOpenChange={(open) => { if (!open) setViewingRecipeId(null) }}
+            onRecipeUpdated={refresh}
           />
         </div>
 

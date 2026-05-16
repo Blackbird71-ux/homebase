@@ -31,6 +31,7 @@ interface DailyMealColumnProps {
   onMealClick: (date: string, mealType: MealType) => void
   onMealClear: (entryId: string) => void
   onMealAddToGroceries: (entryId: string) => void
+  onViewRecipe?: (recipeId: string) => void
   selectMode?: boolean
   selectedMealIds?: Set<string>
   onToggleMealSelect?: (entryId: string) => void
@@ -52,6 +53,7 @@ function DroppableMealSlot({
   onMealClick,
   onMealClear,
   onMealAddToGroceries,
+  onViewRecipe,
   compact,
   isDragActive,
 }: {
@@ -65,6 +67,7 @@ function DroppableMealSlot({
   onMealClick: (date: string, mealType: MealType) => void
   onMealClear: (entryId: string) => void
   onMealAddToGroceries: (entryId: string) => void
+  onViewRecipe?: (recipeId: string) => void
   compact: boolean
   isDragActive: boolean
 }) {
@@ -150,6 +153,7 @@ function DroppableMealSlot({
           onClick={() => onMealClick(date, mealType.id)}
           onClear={() => entry && onMealClear(entry.id)}
           onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
+          onViewRecipe={onViewRecipe}
           naturalHeight={compact}
           isNewlyMoved={isNewlyMoved}
         />
@@ -167,6 +171,7 @@ export function DailyMealColumn({
   onMealClick,
   onMealClear,
   onMealAddToGroceries,
+  onViewRecipe,
   selectMode = false,
   selectedMealIds = new Set(),
   onToggleMealSelect,
@@ -238,6 +243,7 @@ export function DailyMealColumn({
                   onMealClick={onMealClick}
                   onMealClear={onMealClear}
                   onMealAddToGroceries={onMealAddToGroceries}
+                  onViewRecipe={onViewRecipe}
                   compact
                   isDragActive={isDragActive}
                 />
@@ -320,6 +326,7 @@ export function DailyMealColumn({
                 onMealClick={onMealClick}
                 onMealClear={onMealClear}
                 onMealAddToGroceries={onMealAddToGroceries}
+                onViewRecipe={onViewRecipe}
                 compact
                 isDragActive={isDragActive}
               />
@@ -393,6 +400,7 @@ export function DailyMealColumn({
               onMealClick={onMealClick}
               onMealClear={onMealClear}
               onMealAddToGroceries={onMealAddToGroceries}
+              onViewRecipe={onViewRecipe}
               compact={false}
               isDragActive={isDragActive}
             />

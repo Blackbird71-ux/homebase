@@ -25,6 +25,7 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - Weekly meal planning grid with drag-and-drop; multiple meals per day
 - Recipe integration, grocery list generation, export
 - Scope selector (7/14/30 days) rolling forward display
+- **Recipe View Popup** — eye icon on meal slot recipes opens full recipe details in a dialog (ingredients, instructions, notes, nutrition, tags, image); Edit button opens the RecipeForm inline; Add to list and Open full recipe actions
 
 #### 4. Shopping & Todo Lists
 - Multiple list types (shopping, todo), category-based organisation
@@ -358,6 +359,7 @@ Migrations run automatically at container start via `docker/entrypoint.sh`. The 
 | | Apple Themes | 5 additive Apple-system themes |
 | | Phase 7 | Tags, categories, notes, PIN protection, audit log |
 | | Phases 1–6 | Calendar, lists, recipes, meal planning, auth, Docker deployment |
+| | **Meal Plan Recipe View Popup** | Eye icon on meal plan recipe slots opens [`RecipeViewPopup`](src/components/meal-plan/RecipeViewPopup.tsx) dialog showing full recipe details (ingredients, instructions, notes, nutrition, tags, image). Includes Edit button that opens the existing [`RecipeForm`](src/components/recipes/RecipeForm.tsx) inline, plus Add to list and Open full recipe actions. Wired through [`MealSlotCell`](src/components/meal-plan/MealSlotCell.tsx) → [`DailyMealColumn`](src/components/meal-plan/DailyMealColumn.tsx) → [`MealPlanGrid`](src/components/meal-plan/MealPlanGrid.tsx) and the right panel's SpotlightRecipeCard. |
 
 ---
 

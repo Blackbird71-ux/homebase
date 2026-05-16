@@ -1,6 +1,6 @@
 'use client'
 
-import { PlusIcon, XIcon, ShoppingCartIcon, GripVerticalIcon } from 'lucide-react'
+import { PlusIcon, XIcon, ShoppingCartIcon, GripVerticalIcon, EyeIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getMealTypeColor } from '@/lib/meal-types'
 import { useDraggable } from '@dnd-kit/core'
@@ -23,6 +23,7 @@ interface MealSlotCellProps {
   onClick: () => void
   onClear: () => void
   onAddToGroceries?: () => void
+  onViewRecipe?: (recipeId: string) => void
   naturalHeight?: boolean // mobile: remove fixed h-16 and line-clamp
   isDragOverlay?: boolean // whether this is being rendered as a drag preview
   isNewlyMoved?: boolean // highlight recipes that were just moved in
@@ -38,6 +39,7 @@ export function MealSlotCell({
   onClick,
   onClear,
   onAddToGroceries,
+  onViewRecipe,
   naturalHeight = false,
   isDragOverlay = false,
   isNewlyMoved = false,
@@ -90,6 +92,7 @@ export function MealSlotCell({
               mealPlanId={mealPlanId!}
               naturalHeight={naturalHeight}
               isNewlyMoved={isNewlyMoved}
+              onViewRecipe={onViewRecipe}
             />
           ) : (
             <div key={recipe.id} className="flex items-start gap-0.5">
@@ -212,6 +215,21 @@ export function MealSlotCell({
 
       {/* Action buttons */}
       <div className="flex items-center gap-0 shrink-0">
+        {onViewRecipe && hasRecipes && sortedRecipes.length === 1 && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={cn(btnVisibility, 'hover:text-primary')}
+            onClick={(e) => {
+              e.stopPropagation()
+              onViewRecipe(sortedRecipes[0].recipeId)
+            }}
+            aria-label="View recipe"
+            title="View recipe"
+          >
+            <EyeIcon className="h-2.5 w-2.5" />
+          </Button>
+        )}
         {onAddToGroceries && hasRecipes && (
           <Button
             variant="ghost"
@@ -254,6 +272,7 @@ function DraggableRecipeItem({
   mealPlanId,
   naturalHeight,
   isNewlyMoved,
+  onViewRecipe,
 }: {
   recipe: { id: string; recipeId: string; recipeName: string; imageUrl?: string | null; courseType?: string; order: number }
   date: string
@@ -261,6 +280,7 @@ function DraggableRecipeItem({
   mealPlanId: string
   naturalHeight: boolean
   isNewlyMoved: boolean
+  onViewRecipe?: (recipeId: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: recipe.id, // Use the MealPlanRecipe.id as the draggable ID
@@ -311,6 +331,20 @@ function DraggableRecipeItem({
       )}>
         {recipe.recipeName}
       </span>
+      {onViewRecipe && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            onViewRecipe(recipe.recipeId)
+          }}
+          className="shrink-0 text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          title="View recipe"
+        >
+          <EyeIcon className="h-2.5 w-2.5" />
+        </button>
+      )}
     </div>
   )
 }
