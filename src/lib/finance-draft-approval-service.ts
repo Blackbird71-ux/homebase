@@ -110,10 +110,10 @@ export async function approveBillDraft(
     )
   }
 
-  // The accrual is recognised on the bill's due date (the economic date the
-  // liability is incurred). This mirrors the existing bills route, which
-  // posts the accrual dated to the invoice/occurrence date.
-  const accrualDate = draft.nextDueDate
+  // Accrual is recognised on billDate (the occurrence/invoice date — when the
+  // liability is incurred). For legacy rows without billDate, fall back to
+  // nextDueDate so existing approved bills are unaffected.
+  const accrualDate = draft.billDate ?? draft.nextDueDate
 
   const post = await prisma.$transaction(async (tx) => {
     const r = await postBillAccrualJournal(tx, {
@@ -405,6 +405,7 @@ export async function bulkApproveUnchangedDrafts(
       },
       select: {
         id: true,
+        billDate: true,
         nextDueDate: true,
         spawnedSnapshotHash: true,
         templateId: true,
@@ -430,11 +431,10 @@ export async function bulkApproveUnchangedDrafts(
           id: l.id,
         }))
 
-        // The occurrence date the draft was scheduled for. The spawn worker
-        // wrote the bill's nextDueDate = occurrence + defaultDueOffsetDays,
-        // so to recompute the SAME hash we must reverse that offset back to
-        // the occurrence date the hash was computed against.
-        const occurrenceDate = new Date(
+        // Use the stored billDate (recognition/occurrence date) directly.
+        // For legacy rows backfilled with billDate = nextDueDate (offset was 0),
+        // the reversed calculation gives the same result either way.
+        const occurrenceDate = d.billDate ?? new Date(
           d.nextDueDate.getTime() - template.defaultDueOffsetDays * 86_400_000,
         )
 

@@ -692,6 +692,7 @@ model FinanceRecurringBill {
   reminderDays    Int                  @default(3)
   billType        String               @default("recurring")  // recurring | one-off
   recurrenceInterval String?
+  billDate        DateTime?            // GL recognition date (= occurrence date from template). Drives AP, P&L and GL posting.
   invoiceReceived Boolean              @default(false)
   invoiceReceivedDate DateTime?
   paid            Boolean              @default(false)

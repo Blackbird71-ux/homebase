@@ -771,7 +771,10 @@ function OverviewTab({
         {/* Due offset (bills only) */}
         {form.kind === 'bill' && (
           <div>
-            <label className="block text-xs font-medium mb-1">Bill due … days after occurrence</label>
+            <label className="block text-xs font-medium mb-1">Days from bill date to payment due</label>
+            <p className="text-xs text-muted-foreground mb-1">
+              The bill date is when the invoice is recognised (hits P&amp;L and AP). Payment is due this many days later. e.g. set 14 if the bill arrives 2 weeks before it&apos;s due.
+            </p>
             <input
               type="number"
               min="0"

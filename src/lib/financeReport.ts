@@ -297,6 +297,7 @@ export async function buildYtdReport(
       amount: true,
       frequency: true,
       billType: true,
+      billDate: true,
       nextDueDate: true,
       paid: true,
       entityId: true,
@@ -472,7 +473,7 @@ export async function buildYtdReport(
       if (isLumpSum) {
         const baseDate = (bill.paid && (bill as any).paidDate)
           ? new Date((bill as any).paidDate)
-          : new Date(bill.nextDueDate)
+          : new Date(bill.billDate ?? bill.nextDueDate)
         const indices = lumpSumMonthIndices(baseDate, bill.frequency, fyYear, fyStartMonth, monthsComplete)
         for (const idx of indices) {
           monthly[idx] = Math.round((monthly[idx] + bill.amount) * 100) / 100

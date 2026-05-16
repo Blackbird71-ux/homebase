@@ -286,12 +286,15 @@ export async function spawnDraftsForTemplate(
 
     let alreadyExists = false
     if (kind === 'bill') {
+      // Idempotency keyed on billDate (recognition date = occurrence date), not
+      // nextDueDate, because nextDueDate = occurrenceDate + defaultDueOffsetDays
+      // and would fall outside the dayStart/dayEnd window when offset > 0.
       const existing = await prisma.financeRecurringBill.count({
         where: {
           templateId: template.id,
           familyId: template.familyId,
           status: { not: 'cancelled' },
-          nextDueDate: { gte: dayStart, lte: dayEnd },
+          billDate: { gte: dayStart, lte: dayEnd },
         },
       })
       alreadyExists = existing > 0
@@ -320,7 +323,8 @@ export async function spawnDraftsForTemplate(
 
       await prisma.$transaction(async (tx) => {
         if (kind === 'bill') {
-          // Bill due date = occurrence + defaultDueOffsetDays
+          // billDate = occurrence date (GL recognition date: when liability is incurred).
+          // nextDueDate = occurrence + defaultDueOffsetDays (when payment is expected).
           const dueDate = addDays(occurrenceDate, template.defaultDueOffsetDays)
           await tx.financeRecurringBill.create({
             data: {
@@ -331,6 +335,7 @@ export async function spawnDraftsForTemplate(
               frequency: template.frequency,
               dayOfMonth: template.dayOfMonth,
               monthOfYear: template.monthOfYear,
+              billDate: occurrenceDate,
               nextDueDate: dueDate,
               endDate: template.endDate,
               isActive: true,
