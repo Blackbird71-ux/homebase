@@ -537,7 +537,10 @@ export async function DELETE(request: NextRequest) {
 
   const existing = await prisma.financeJournalEntry.findFirst({
     where: { id, familyId: session.familyId },
-    include: { reversals: { select: { id: true } } },
+    include: {
+      reversals:  { select: { id: true } },
+      amendments: { select: { id: true } },
+    },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 })
@@ -549,15 +552,16 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  // Case 2: voided original — delete original + all its reversal children atomically
+  // Case 2: reversed/amended original — delete original + all reversal children + all amendment children atomically
   if (existing.isPosted && existing.isReversed) {
-    const reversalIds = existing.reversals.map((r: { id: string }) => r.id)
+    const childIds = [
+      ...existing.reversals.map((r: { id: string }) => r.id),
+      ...existing.amendments.map((a: { id: string }) => a.id),
+    ]
     await prisma.$transaction([
-      // Delete the reversal entries first (they reference the original via reversalOfId)
       prisma.financeJournalEntry.deleteMany({
-        where: { id: { in: reversalIds }, familyId: session.familyId },
+        where: { id: { in: childIds }, familyId: session.familyId },
       }),
-      // Now delete the original
       prisma.financeJournalEntry.delete({ where: { id } }),
     ])
     return NextResponse.json({ success: true })
@@ -581,6 +585,38 @@ export async function DELETE(request: NextRequest) {
   // These are never created manually so void-first is not required.
   if (existing.isPosted && existing.type === 'auto_transaction') {
     await prisma.financeJournalEntry.delete({ where: { id } })
+    return NextResponse.json({ success: true })
+  }
+
+  // Case 5: corrective entry (amendment child) — undo the amendment by:
+  //   a) deleting this corrective entry
+  //   b) deleting the reversal entry that was created alongside it
+  //   c) restoring isReversed=false on the original so it is active again
+  if (existing.isPosted && existing.amendmentOfId) {
+    const originalId = existing.amendmentOfId
+    const original = await prisma.financeJournalEntry.findFirst({
+      where: { id: originalId, familyId: session.familyId },
+      include: { reversals: { select: { id: true } } },
+    })
+    if (!original) {
+      // Original already gone — just remove the orphaned corrective entry
+      await prisma.financeJournalEntry.delete({ where: { id } })
+      return NextResponse.json({ success: true })
+    }
+    const reversalIds = original.reversals.map((r: { id: string }) => r.id)
+    await prisma.$transaction([
+      // Delete the reversal entries that zeroed out the original
+      prisma.financeJournalEntry.deleteMany({
+        where: { id: { in: reversalIds }, familyId: session.familyId },
+      }),
+      // Delete this corrective entry
+      prisma.financeJournalEntry.delete({ where: { id } }),
+      // Restore the original to active (un-reversed) status
+      prisma.financeJournalEntry.update({
+        where: { id: originalId },
+        data: { isReversed: false },
+      }),
+    ])
     return NextResponse.json({ success: true })
   }
 

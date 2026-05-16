@@ -63,7 +63,14 @@ export default function JournalsPage() {
   function openNew() { setEditing(null); setShowForm(true) }
 
   function openEdit(entry: JournalEntry) {
-    if (entry.isPosted) { toast.info('Posted entries cannot be edited. Create a reversal to correct them.'); return }
+    if (entry.isPosted) {
+      if (['manual', 'adjustment'].includes(entry.type) && !entry.isReversed) {
+        openAmend(entry)
+      } else {
+        toast.info('This entry cannot be edited directly. Use Void or Reverse to correct it.')
+      }
+      return
+    }
     setEditing(entry)
     setShowForm(true)
   }
@@ -110,6 +117,17 @@ export default function JournalsPage() {
       else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
       return
     }
+    // Corrective entry (amendment child) — deleting it undoes the entire amendment
+    if (entry.isPosted && entry.amendmentOfId) {
+      if (!confirm(
+        `Delete corrective entry ${entry.reference ?? ''}?\n\nThis will undo the amendment — the original entry will be restored to active status and the reversal entry will also be removed. This cannot be undone.`
+      )) return
+      const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('Amendment undone — original entry restored'); load() }
+      else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
+      return
+    }
+
     toast.error('Void this entry first, then delete.')
   }
 

@@ -144,18 +144,22 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
                 ) : (
                   <>
                     {canAmend && (
-                      <button onClick={() => onAmend(entry)} title="Correct this posted entry (reverse + repost)"
-                        className="p-1 hover:bg-accent rounded text-blue-500 hover:text-blue-600 transition-colors">
-                        <FilePenLine className="h-3.5 w-3.5" />
+                      <button onClick={() => onAmend(entry)}
+                        title="Correct this posted entry — posts a reversal then a new corrective entry"
+                        className="inline-flex items-center gap-1 rounded-md bg-blue-600 text-white text-xs px-2 py-1 hover:bg-blue-700 transition-colors">
+                        <FilePenLine className="h-3 w-3" />
+                        Amend
                       </button>
                     )}
                     <button onClick={() => onVoid(entry)} title="Void this entry"
-                      className="p-1 hover:bg-accent rounded text-amber-500 hover:text-amber-600 transition-colors">
-                      <Ban className="h-3.5 w-3.5" />
+                      className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 text-amber-600 text-xs px-2 py-1 hover:bg-amber-500/10 transition-colors">
+                      <Ban className="h-3 w-3" />
+                      Void
                     </button>
-                    <button onClick={() => onReverse(entry)} title="Reverse this entry"
-                      className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-red-500 transition-colors">
-                      <RotateCcw className="h-3.5 w-3.5" />
+                    <button onClick={() => onReverse(entry)} title="Reverse this entry (keeps both entries on ledger)"
+                      className="inline-flex items-center gap-1 rounded-md border border-border text-muted-foreground text-xs px-2 py-1 hover:border-red-400 hover:text-red-500 transition-colors">
+                      <RotateCcw className="h-3 w-3" />
+                      Reverse
                     </button>
                   </>
                 )}
