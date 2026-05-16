@@ -1,0 +1,420 @@
+/* ============================================================
+   HOMEBASE — Enhancement styles
+   Loaded after pages.css. Adds:
+   - Command palette (⌘K)
+   - SwipeRow (swipe-to-action)
+   - Activity Rings
+   - Cook Mode (fullscreen recipe)
+   - Inline edit affordance
+   - Undo toast
+   - Page-transition + sticky group heads + liquid-glass topbar push
+   - ⌘K trigger pill in topbar + smart-row context
+   ============================================================ */
+
+/* ──────── Liquid-glass push for topbar ──────── */
+.topbar {
+  background: color-mix(in oklab, var(--bg) 68%, transparent);
+  -webkit-backdrop-filter: saturate(200%) blur(36px);
+  backdrop-filter: saturate(200%) blur(36px);
+  border-bottom: 0;
+  box-shadow: inset 0 -0.5px 0 var(--line);
+}
+
+/* ──────── Page-transition cross-fade ──────── */
+.page-fade {
+  animation: page-fade 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes page-fade {
+  from { opacity: 0.6; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ──────── ⌘K Trigger pill in topbar ──────── */
+.cmdk-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
+  background: var(--bg-sunken);
+  border-radius: 10px;
+  color: var(--ink-4);
+  font-size: 13px;
+  min-width: 240px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+.cmdk-trigger:hover { background: var(--bg-hover); color: var(--ink-3); }
+.cmdk-trigger .spacer { flex: 1; }
+.cmdk-trigger .kbd { background: var(--bg-elev); color: var(--ink-3); box-shadow: var(--ring); }
+
+/* ──────── Command Palette ──────── */
+.cmdk-scrim {
+  position: fixed; inset: 0;
+  background: color-mix(in oklab, var(--ink) 38%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  backdrop-filter: blur(8px) saturate(180%);
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 16px 16px;
+  animation: scrim-in 220ms var(--ease);
+}
+.cmdk {
+  width: 100%;
+  max-width: 640px;
+  background: var(--bg-elev);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: cmdk-in 260ms var(--ease-out);
+}
+@keyframes cmdk-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.cmdk-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  color: var(--ink-4);
+  border-bottom: 1px solid var(--line);
+}
+.cmdk-input input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 17px;
+  color: var(--ink);
+  letter-spacing: -0.012em;
+  font-family: var(--font-sans);
+}
+.cmdk-input input::placeholder { color: var(--ink-4); }
+.cmdk-input .kbd { background: var(--bg-sunken); }
+.cmdk-list { max-height: 52vh; overflow-y: auto; padding: 6px; scrollbar-width: thin; }
+.cmdk-list::-webkit-scrollbar { width: 8px; }
+.cmdk-list::-webkit-scrollbar-thumb { background: var(--ink-5); border-radius: 4px; }
+.cmdk-group { padding: 4px 0 2px; }
+.cmdk-group-head {
+  padding: 8px 12px 4px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--ink-4);
+}
+.cmdk-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  width: 100%;
+  text-align: left;
+  color: var(--ink-2);
+  transition: none;
+  cursor: pointer;
+}
+.cmdk-item.selected {
+  background: var(--accent-soft);
+}
+.cmdk-item.selected .cmdk-label,
+.cmdk-item.selected svg { color: var(--accent-ink); }
+[data-theme="midnight"] .cmdk-item.selected,
+[data-theme="forest"] .cmdk-item.selected {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+}
+[data-theme="midnight"] .cmdk-item.selected .cmdk-label,
+[data-theme="forest"] .cmdk-item.selected .cmdk-label { color: var(--ink); }
+.cmdk-icon {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  background: var(--bg-sunken);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.cmdk-item.selected .cmdk-icon { background: color-mix(in oklab, var(--accent) 18%, var(--bg-elev)); }
+.cmdk-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmdk-ctx {
+  color: var(--ink-4);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+.cmdk-item > svg:last-child { color: var(--ink-5); flex-shrink: 0; }
+.cmdk-empty {
+  padding: 40px 16px 36px;
+  text-align: center;
+  color: var(--ink-4);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.cmdk-empty em { font-style: normal; color: var(--ink-2); font-weight: 500; }
+.cmdk-empty svg { color: var(--ink-5); margin-bottom: 4px; }
+.cmdk-foot {
+  display: flex;
+  gap: 16px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink-4);
+  align-items: center;
+}
+.cmdk-foot > span { display: inline-flex; align-items: center; gap: 5px; }
+.cmdk-foot .kbd { background: var(--bg-sunken); }
+.cmdk-foot .spacer { flex: 1; }
+
+/* ──────── SwipeRow ──────── */
+.swipe-row {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elev);
+}
+.swipe-row + .swipe-row { box-shadow: inset 0 0.5px 0 var(--line); }
+.swipe-bg {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.swipe-bg-l { left: 0; justify-content: flex-start; }
+.swipe-bg-r { right: 0; justify-content: flex-end; }
+.swipe-row-content {
+  position: relative;
+  background: var(--bg-elev);
+  touch-action: pan-y;
+  user-select: none;
+  will-change: transform;
+}
+
+/* ──────── Activity Rings ──────── */
+.rings { display: block; flex-shrink: 0; }
+.ring-card {
+  background: var(--bg-elev);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ring-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.ring-name {
+  font-size: 17px;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.ring-sub { font-size: 12px; color: var(--ink-4); }
+.ring-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.ring-stats span { display: inline-flex; align-items: center; gap: 4px; }
+.ring-stats i {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ──────── Cook Mode ──────── */
+.cook-mode {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  animation: cook-in 320ms var(--ease-out);
+}
+@keyframes cook-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.cook-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px;
+  background: color-mix(in oklab, var(--bg) 68%, transparent);
+  -webkit-backdrop-filter: saturate(200%) blur(28px);
+  backdrop-filter: saturate(200%) blur(28px);
+  box-shadow: inset 0 -0.5px 0 var(--line);
+}
+.cook-recipe-name { font-size: 22px; line-height: 1.1; letter-spacing: -0.022em; }
+.cook-recipe-meta { font-size: 12px; color: var(--ink-4); margin-top: 4px; letter-spacing: 0.02em; }
+.cook-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 8vw;
+  max-width: 1040px;
+  margin: 0 auto;
+  width: 100%;
+}
+.cook-step-num {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 22px;
+}
+.cook-step-text {
+  font-size: clamp(28px, 5vw, 56px);
+  line-height: 1.15;
+  text-align: center;
+  letter-spacing: -0.028em;
+  color: var(--ink);
+  font-weight: 400;
+  max-width: 22ch;
+}
+.cook-done { font-size: 72px; margin-bottom: 18px; line-height: 1; }
+.cook-done-sub { color: var(--ink-3); margin-top: 12px; font-size: 17px; letter-spacing: -0.005em; }
+.cook-progress {
+  display: flex;
+  gap: 4px;
+  padding: 18px 32px 0;
+  justify-content: center;
+}
+.cook-tick {
+  height: 4px;
+  flex: 1;
+  max-width: 60px;
+  background: var(--bg-sunken);
+  border-radius: 999px;
+  transition: background 220ms var(--ease);
+}
+.cook-tick.done { background: var(--accent); }
+.cook-tick.current {
+  background: var(--accent);
+  opacity: 0.55;
+  animation: cook-pulse 1.6s var(--ease) infinite;
+}
+@keyframes cook-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+.cook-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 32px calc(22px + env(safe-area-inset-bottom));
+  gap: 14px;
+  box-shadow: inset 0 0.5px 0 var(--line);
+}
+.cook-foot .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.cook-foot .btn-primary { padding: 11px 24px; font-size: 15px; min-height: 44px; }
+.cook-foot .btn-outline { padding: 11px 18px; min-height: 44px; }
+
+/* ──────── Inline Edit ──────── */
+.inline-edit {
+  cursor: text;
+  border-radius: 5px;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  transition: background var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
+}
+.inline-edit:hover { background: var(--bg-hover); }
+.inline-edit:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+
+/* ──────── Undo Toast ──────── */
+.undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 16px;
+  background: var(--ink);
+  color: var(--bg-elev);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 80;
+  animation: toast-in 280ms var(--ease-out);
+}
+[data-theme="midnight"] .undo-toast, [data-theme="forest"] .undo-toast {
+  background: var(--bg-elev); color: var(--ink);
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.undo-label { white-space: nowrap; }
+.undo-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bg-elev) 18%, transparent);
+  color: var(--bg-elev);
+  font-weight: 600;
+  font-size: 13px;
+}
+[data-theme="midnight"] .undo-btn, [data-theme="forest"] .undo-btn {
+  background: var(--accent-soft); color: var(--accent-ink);
+}
+.undo-btn:hover { background: color-mix(in oklab, var(--bg-elev) 28%, transparent); }
+
+/* ──────── Sticky group/section heads ──────── */
+.lists-group-head,
+.lists-card .row.row-head {
+  position: sticky;
+  top: 64px;
+  z-index: 2;
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  background: color-mix(in oklab, var(--bg-elev) 88%, transparent);
+}
+
+/* ──────── Smart row context (home shopping, etc) ──────── */
+.row-added {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ink-4);
+}
+.row-added .avatar { width: 18px; height: 18px; font-size: 9px; flex-shrink: 0; }
+.row-ago { color: var(--ink-4); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Mobile: command palette gets nearly full screen */
+@media (max-width: 640px) {
+  .cmdk-scrim { padding-top: 6vh; }
+  .cmdk { max-width: 100%; }
+  .cmdk-foot { display: none; }
+}
