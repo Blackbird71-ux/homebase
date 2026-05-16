@@ -4,10 +4,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  ResizableDialogContent,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -164,11 +163,16 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <ResizableDialogContent
+        className="flex flex-col overflow-hidden gap-0 p-0"
+        fitViewport
+        storageKey="dialog-size-v2:chore-dialog"
+        showCloseButton={false}
+      >
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <DialogTitle>{chore ? 'Edit Chore' : 'Add Chore'}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="chore-title">Title</Label>
             <Input
@@ -363,13 +367,13 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
             )}
           </div>
         </div>
-        <DialogFooter>
+        <div className="px-6 py-4 border-t border-border shrink-0 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving...' : chore ? 'Update' : 'Create'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
+        </div>
+      </ResizableDialogContent>
     </Dialog>
   )
 }

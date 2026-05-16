@@ -203,7 +203,7 @@ function ResizableDialogContent({
 
     if (fitViewport) {
       const w = Math.max(minWidth,  Math.round(window.innerWidth  * 0.88))
-      const h = Math.max(minHeight, Math.round(window.innerHeight * 0.88))
+      const h = Math.max(minHeight, Math.round(window.innerHeight * 0.92))
       el.style.width  = `${w}px`
       el.style.height = `${h}px`
     }
