@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  ResizableDialogContent,
+  WideDialogContent,
 } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
@@ -481,7 +481,7 @@ export function AssignMealModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <ResizableDialogContent fitViewport storageKey="dialog-size-v2:assign-meal">
+      <WideDialogContent>
         <DialogHeader>
           <DialogTitle>
             {displayDate} — {mealType}
@@ -644,7 +644,7 @@ export function AssignMealModal({
             </form>
           </TabsContent>
         </Tabs>
-      </ResizableDialogContent>
+      </WideDialogContent>
     </Dialog>
   )
 }

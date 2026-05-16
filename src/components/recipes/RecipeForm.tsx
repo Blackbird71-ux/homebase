@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   Dialog,
-  ResizableDialogContent,
+  WideDialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -230,7 +230,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden p-0 gap-0" fitViewport storageKey="dialog-size-v2:recipe-form">
+      <WideDialogContent className="flex flex-col overflow-hidden p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
           <DialogTitle>{editMode ? 'Edit recipe' : 'Add recipe'}</DialogTitle>
         </DialogHeader>
@@ -464,12 +464,13 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
             </TabsContent>
           </Tabs>
         </div>
-        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background">
-          <Button type="submit" form="recipe-form" disabled={saving || !title.trim()}>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background flex-col sm:flex-row gap-2">
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="submit" form="recipe-form" className="w-full sm:w-auto" disabled={saving || !title.trim()}>
             {saving ? 'Saving...' : editMode ? 'Update recipe' : 'Save recipe'}
           </Button>
         </DialogFooter>
-      </ResizableDialogContent>
+      </WideDialogContent>
     </Dialog>
   )
 }

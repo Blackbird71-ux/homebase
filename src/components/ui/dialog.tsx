@@ -146,27 +146,93 @@ function DialogDescription({
   )
 }
 
-// ── ResizableDialogContent ────────────────────────────────────────────────
-// Drop-in replacement for DialogContent on large screens.
+// ── WideDialogContent ────────────────────────────────────────────────────────────────
+// Large, CSS-only dialog for complex two-column finance forms (Bills, Income,
+// Templates). No JavaScript sizing — just Tailwind viewport units.
 //
-// Fixes over previous version:
-//  1. Resize drag uses window-level pointermove/pointerup listeners instead of
-//     React synthetic events — this prevents the "jump to fullscreen" bug that
-//     occurred when the pointer left the dialog box during a drag.
-//  2. Size is saved to localStorage on every pointerup (not just drag-end on
-//     the dialog element), so releasing outside the window still saves.
-//  3. Size is re-read from localStorage on every mount AND every time the
-//     dialog opens (via a separate useEffect keyed on open state detection),
-//     so navigating away and back correctly restores the last-used size.
-//  4. Dialog opens at a smart viewport-relative default on first open:
-//     min(88vw, 1400px) × min(90vh, 920px), clamped to minWidth/minHeight.
+// Desktop (≥ md / 768px):
+//   • Centred modal: up to 1200px wide × 820px tall, fills big screens nicely
+// Mobile (< md):
+//   • Bottom sheet: slides up from the bottom, full width, auto height,
+//     scrolls internally so all content is reachable with one-thumb scrolling
+function WideDialogContent({
+  className,
+  children,
+  showCloseButton = true,
+  ...props
+}: DialogPrimitive.Popup.Props & {
+  className?: string
+  showCloseButton?: boolean
+}) {
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Popup
+        data-slot="dialog-content"
+        className={cn(
+          // —— Shared ——
+          "fixed z-50 flex flex-col",
+          "bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10",
+          "duration-150 outline-none",
+          // —— Mobile: bottom sheet ——
+          // Anchored to the bottom, full width, auto height up to 92dvh.
+          // Rounded top corners only. Slides in from below.
+          "bottom-0 left-0 right-0 md:bottom-auto md:left-1/2 md:right-auto",
+          "w-full md:w-[min(calc(100vw-1rem),1200px)]",
+          "max-h-[92dvh] md:max-h-none",
+          "h-auto md:h-[min(90dvh,820px)]",
+          "rounded-t-2xl md:rounded-xl md:-translate-x-1/2 md:-translate-y-1/2 md:top-1/2",
+          // Open/close animations: slide-up on mobile, zoom on desktop
+          "data-open:animate-in data-closed:animate-out",
+          "data-open:max-md:slide-in-from-bottom data-closed:max-md:slide-out-to-bottom",
+          "data-open:md:fade-in-0 data-open:md:zoom-in-95",
+          "data-closed:md:fade-out-0 data-closed:md:zoom-out-95",
+          className
+        )}
+        {...props}
+      >
+        {/* Drag pill — mobile only, gives a visual affordance for the bottom sheet */}
+        <div className="flex justify-center pt-2.5 pb-1 shrink-0 md:hidden">
+          <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+        </div>
+
+        {children}
+
+        {showCloseButton && (
+          <DialogPrimitive.Close
+            data-slot="dialog-close"
+            render={
+              <Button
+                variant="ghost"
+                className="absolute top-2 right-2 z-10"
+                size="icon-sm"
+              />
+            }
+          >
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
+      </DialogPrimitive.Popup>
+    </DialogPortal>
+  )
+}
+
+// ── ResizableDialogContent ──────────────────────────────────────────────────
+// Kept for backward compatibility with any dialog that explicitly needs
+// user-resizable behaviour. For the main finance forms, use WideDialogContent.
+//
+// Key architectural fix: base-ui does NOT unmount Popup content on close — it
+// hides it via CSS. This means useLayoutEffect(()=>{},[]) only fires ONCE ever
+// (on first mount), not on every open. To restore saved size on re-open we
+// watch the Popup’s data-open attribute via a MutationObserver instead of
+// relying on mount/unmount lifecycle.
 function ResizableDialogContent({
   className,
   children,
   showCloseButton = true,
   minWidth = 480,
   minHeight = 300,
-  fitViewport = false,
   storageKey,
   ...props
 }: Omit<DialogPrimitive.Popup.Props, 'className'> & {
@@ -174,195 +240,180 @@ function ResizableDialogContent({
   showCloseButton?: boolean
   minWidth?: number
   minHeight?: number
-  /** Open at a smart viewport-relative default; user can resize from there */
-  fitViewport?: boolean
-  /** localStorage key — persists the user's chosen size across opens and navigation */
+  /** localStorage key — persists the user’s chosen size across sessions */
   storageKey?: string
 }) {
-  const innerRef = React.useRef<HTMLDivElement>(null)
+  const popupRef = React.useRef<HTMLDivElement>(null)
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /** Read saved size from localStorage.  Returns null if nothing saved or key absent. */
-  const readSaved = React.useCallback((): { w: number; h: number } | null => {
+  function readSaved(): { w: number; h: number } | null {
     if (!storageKey) return null
     try {
       const raw = localStorage.getItem(storageKey)
       if (!raw) return null
-      const parsed = JSON.parse(raw) as { w: number; h: number }
-      if (typeof parsed.w === 'number' && typeof parsed.h === 'number') return parsed
+      const p = JSON.parse(raw) as { w: number; h: number }
+      if (typeof p.w === 'number' && typeof p.h === 'number') return p
     } catch { /* corrupt */ }
     return null
-  }, [storageKey])
+  }
 
-  /** Write size to localStorage. */
-  const writeSaved = React.useCallback((w: number, h: number) => {
+  function writeSaved(w: number, h: number) {
     if (!storageKey) return
     try { localStorage.setItem(storageKey, JSON.stringify({ w, h })) } catch { /* quota */ }
-  }, [storageKey])
+  }
 
-  /** Apply a size to the dialog element, clamping to viewport and min values. */
-  const applySize = React.useCallback((el: HTMLDivElement, w: number, h: number) => {
-    const maxW = Math.floor(window.innerWidth  * 0.99)
-    const maxH = Math.floor(window.innerHeight * 0.99)
+  function applySize(el: HTMLElement, w: number, h: number) {
+    const maxW = Math.floor(window.innerWidth  * 0.98)
+    const maxH = Math.floor(window.innerHeight * 0.98)
+    el.style.width     = `${Math.min(maxW, Math.max(minWidth,  w))}px`
+    el.style.height    = `${Math.min(maxH, Math.max(minHeight, h))}px`
     el.style.maxWidth  = 'none'
     el.style.maxHeight = 'none'
-    el.style.width  = `${Math.min(maxW, Math.max(minWidth,  w))}px`
-    el.style.height = `${Math.min(maxH, Math.max(minHeight, h))}px`
-  }, [minWidth, minHeight])
+  }
 
-  /** Compute the default open size for this dialog (first-open / no saved state). */
-  const defaultSize = React.useCallback((): { w: number; h: number } => {
-    if (fitViewport) {
-      return {
-        w: Math.min(1400, Math.round(window.innerWidth  * 0.88)),
-        h: Math.min(920,  Math.round(window.innerHeight * 0.90)),
+  function computeDefaultSize(): { w: number; h: number } {
+    return {
+      w: Math.min(1200, Math.round(window.innerWidth  * 0.88)),
+      h: Math.min(820,  Math.round(window.innerHeight * 0.88)),
+    }
+  }
+
+  // ── Apply size whenever the dialog becomes visible ───────────────────────────
+  // base-ui keeps the Popup mounted (hidden via CSS) so we cannot rely on
+  // mount/unmount. Instead we watch for the data-open attribute appearing on
+  // the popup element via a MutationObserver, which fires on every open.
+  React.useEffect(() => {
+    const el = popupRef.current
+    if (!el) return
+
+    function applyOnOpen() {
+      if (!el) return
+      const saved = readSaved()
+      if (saved) {
+        applySize(el, saved.w, saved.h)
+      } else {
+        const { w, h } = computeDefaultSize()
+        applySize(el, w, h)
       }
     }
-    return {
-      w: Math.min(Math.round(window.innerWidth * 0.98), minWidth),
-      h: minHeight,
-    }
-  }, [fitViewport, minWidth, minHeight])
 
-  // ── Size on mount / re-open ─────────────────────────────────────────────────
-  // useLayoutEffect runs synchronously after DOM paint — no size flash.
-  // The dep array is intentionally empty so it only runs once per mount.
-  // base-ui unmounts the Popup content when closed, so every open = fresh mount.
-  React.useLayoutEffect(() => {
-    const el = innerRef.current
-    if (!el) return
-    const saved = readSaved()
-    if (saved) {
-      applySize(el, saved.w, saved.h)
-    } else {
-      const { w, h } = defaultSize()
-      applySize(el, w, h)
-    }
+    // Apply immediately in case the dialog starts open
+    if (el.dataset.open !== undefined) applyOnOpen()
+
+    const observer = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        if (m.attributeName === 'data-open') {
+          // data-open was added — dialog just opened
+          if ((m.target as HTMLElement).dataset.open !== undefined) {
+            applyOnOpen()
+          }
+        }
+      }
+    })
+    observer.observe(el, { attributes: true, attributeFilter: ['data-open'] })
+    return () => observer.disconnect()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally run once per mount — every open is a fresh mount
+  }, [storageKey, minWidth, minHeight])
 
   // ── Resize drag via window listeners ───────────────────────────────────────
-  // Using window-level listeners (not React synthetic events on the div)
-  // prevents the "jump to fullscreen" bug: when the pointer moves outside the
-  // dialog box during a drag, React stops receiving events on the dialog div
-  // even with pointer capture — but window listeners always fire.
+  // Window-level pointermove/pointerup listeners fire even when the pointer
+  // leaves the dialog box, preventing the "jump to fullscreen" bug.
   type Edge = 'se' | 's' | 'e'
   const dragging = React.useRef<Edge | null>(null)
   const origin   = React.useRef({ x: 0, y: 0, w: 0, h: 0 })
 
-  // Register / unregister window listeners once on mount
   React.useEffect(() => {
     function onMove(e: PointerEvent) {
       const edge = dragging.current
       if (!edge) return
-      const el = innerRef.current
+      const el = popupRef.current
       if (!el) return
       const dx = e.clientX - origin.current.x
       const dy = e.clientY - origin.current.y
       if (edge === 'se' || edge === 'e') {
-        const maxW = Math.floor(window.innerWidth  * 0.99)
-        el.style.width  = `${Math.min(maxW, Math.max(minWidth,  origin.current.w + dx))}px`
+        el.style.width  = `${Math.min(Math.floor(window.innerWidth * 0.98),  Math.max(minWidth,  origin.current.w + dx))}px`
       }
       if (edge === 'se' || edge === 's') {
-        const maxH = Math.floor(window.innerHeight * 0.99)
-        el.style.height = `${Math.min(maxH, Math.max(minHeight, origin.current.h + dy))}px`
+        el.style.height = `${Math.min(Math.floor(window.innerHeight * 0.98), Math.max(minHeight, origin.current.h + dy))}px`
       }
     }
-
     function onUp() {
       if (!dragging.current) return
       dragging.current = null
-      const el = innerRef.current
+      const el = popupRef.current
       if (!el) return
       writeSaved(el.offsetWidth, el.offsetHeight)
     }
-
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup',   onUp)
     return () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup',   onUp)
     }
-  // minWidth / minHeight / writeSaved are stable references — safe to include
-  }, [minWidth, minHeight, writeSaved])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minWidth, minHeight, storageKey])
 
   const startResize = React.useCallback((e: React.PointerEvent<HTMLDivElement>, edge: Edge) => {
-    if (window.innerWidth < 768) return   // no resize on mobile
+    if (window.innerWidth < 768) return
     e.preventDefault()
     e.stopPropagation()
-    const el = innerRef.current
+    const el = popupRef.current
     if (!el) return
-    // Snap out of any CSS max-width/max-height before recording the origin size
     el.style.maxWidth  = 'none'
     el.style.maxHeight = 'none'
-    // Record start state AFTER clearing constraints so offsetWidth/Height are correct
     dragging.current = edge
     origin.current = { x: e.clientX, y: e.clientY, w: el.offsetWidth, h: el.offsetHeight }
-    // Capture pointer on the handle element so we keep receiving events even if
-    // the mouse leaves the dialog — window listeners will also fire regardless.
     ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
   }, [])
 
   return (
     <DialogPortal>
       <DialogOverlay />
-      {/*
-        DialogPrimitive.Popup: handles portal lifecycle + open/close animation only.
-        It is a full-viewport invisible container (fixed inset-0, pointer-events-none)
-        so the inner div can be centred with flexbox without affecting hit testing.
-      */}
       <DialogPrimitive.Popup
+        ref={popupRef}
         data-slot="dialog-content"
-        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none outline-none duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+        className={cn(
+          "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50",
+          "flex flex-col",
+          "rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10",
+          "duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          className
+        )}
         {...props}
       >
-        {/* Inner div is the actual visible dialog box — ref is 100% reliable here */}
-        <div
-          ref={innerRef}
-          className={cn(
-            // No max-w or max-h here — those are overridden by applySize() in
-            // useLayoutEffect. We keep the rounded corners, bg, ring, and padding.
-            "relative pointer-events-auto flex flex-col w-full rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10",
-            className
-          )}
-        >
-          {children}
-          {showCloseButton && (
-            <DialogPrimitive.Close
-              data-slot="dialog-close"
-              render={
-                <Button
-                  variant="ghost"
-                  className="absolute top-2 right-2 z-10"
-                  size="icon-sm"
-                />
-              }
-            >
-              <XIcon />
-              <span className="sr-only">Close</span>
-            </DialogPrimitive.Close>
-          )}
-
-          {/* ── Resize handles (desktop only, hidden on mobile) ───────────── */}
-          {/* Right edge — drag left/right to change width */}
-          <div
-            className="absolute top-8 right-0 bottom-8 hidden md:block w-2 cursor-e-resize select-none touch-none hover:bg-primary/20 rounded-r-xl transition-colors"
-            onPointerDown={e => startResize(e, 'e')}
-          />
-          {/* Bottom edge — drag up/down to change height */}
-          <div
-            className="absolute left-8 right-8 bottom-0 hidden md:block h-2 cursor-s-resize select-none touch-none hover:bg-primary/20 rounded-b-xl transition-colors"
-            onPointerDown={e => startResize(e, 's')}
-          />
-          {/* SE corner — drag diagonally to resize both axes */}
-          <div
-            className="absolute bottom-0 right-0 hidden md:flex items-center justify-center w-7 h-7 cursor-se-resize select-none touch-none text-muted-foreground/40 hover:text-primary/70 transition-colors rounded-br-xl"
-            onPointerDown={e => startResize(e, 'se')}
-            title="Drag to resize"
+        {children}
+        {showCloseButton && (
+          <DialogPrimitive.Close
+            data-slot="dialog-close"
+            render={
+              <Button
+                variant="ghost"
+                className="absolute top-2 right-2 z-10"
+                size="icon-sm"
+              />
+            }
           >
-            <GripHorizontal className="h-3.5 w-3.5 rotate-45" />
-          </div>
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
+
+        {/* ── Resize handles (desktop only) ──────────────────────────── */}
+        <div
+          className="absolute top-8 right-0 bottom-8 hidden md:block w-2 cursor-e-resize select-none touch-none hover:bg-primary/20 rounded-r-xl transition-colors"
+          onPointerDown={e => startResize(e, 'e')}
+        />
+        <div
+          className="absolute left-8 right-8 bottom-0 hidden md:block h-2 cursor-s-resize select-none touch-none hover:bg-primary/20 rounded-b-xl transition-colors"
+          onPointerDown={e => startResize(e, 's')}
+        />
+        <div
+          className="absolute bottom-0 right-0 hidden md:flex items-center justify-center w-7 h-7 cursor-se-resize select-none touch-none text-muted-foreground/40 hover:text-primary/70 transition-colors rounded-br-xl"
+          onPointerDown={e => startResize(e, 'se')}
+          title="Drag to resize"
+        >
+          <GripHorizontal className="h-3.5 w-3.5 rotate-45" />
         </div>
       </DialogPrimitive.Popup>
     </DialogPortal>
@@ -380,5 +431,6 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  WideDialogContent,
   ResizableDialogContent,
 }

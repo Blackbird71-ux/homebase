@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  ResizableDialogContent,
+  WideDialogContent,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
@@ -222,7 +222,7 @@ export function ExportGroceriesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" fitViewport storageKey="dialog-size-v2:export-groceries">
+      <WideDialogContent className="flex flex-col overflow-hidden gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <DialogTitle>Add to Groceries</DialogTitle>
           {status !== 'loading' && (
@@ -415,7 +415,7 @@ export function ExportGroceriesModal({
             )}
           </>
         )}
-      </ResizableDialogContent>
+      </WideDialogContent>
     </Dialog>
   )
 }

@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  ResizableDialogContent,
+  WideDialogContent,
 } from '@/components/ui/dialog'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
@@ -170,7 +170,7 @@ export default function BillsPage() {
 
       {/* Bill form dialog */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); } }}>
-        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400} fitViewport storageKey="dialog-size-v2:bill-form">
+        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
 
           {/* Fixed header */}
           <div className="px-4 pt-4 pb-0 shrink-0">
@@ -381,13 +381,13 @@ export default function BillsPage() {
           </div>
           </div>
 
-          <DialogFooter className="mx-0 mb-0 shrink-0">
-            <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
+          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+            <button onClick={closeForm} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
+            <button onClick={handleSave} className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
           </DialogFooter>
-        </ResizableDialogContent>
+        </WideDialogContent>
       </Dialog>
 
       {/* Date paid confirmation */}

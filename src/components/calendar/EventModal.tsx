@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Dialog, ResizableDialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, WideDialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -213,7 +213,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
   return (
     <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size-v2:event-modal">
+      <WideDialogContent className="flex flex-col overflow-hidden">
         {showDeleteConfirm ? (
           <>
             <DialogHeader>
@@ -444,18 +444,18 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                 <EventAttendeePanel eventId={getEventId(event)} currentUserId={currentUserId} />
               )}
             </div>
-            <DialogFooter className="gap-2 shrink-0">
+            <DialogFooter className="gap-2 shrink-0 flex-col sm:flex-row">
               {event && (
-                <Button variant="destructive" onClick={handleDelete} disabled={loading}>Delete</Button>
+                <Button variant="destructive" className="w-full sm:w-auto" onClick={handleDelete} disabled={loading}>Delete</Button>
               )}
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button onClick={handleSave} disabled={loading}>
+              <Button variant="outline" className="w-full sm:w-auto" onClick={onClose}>Cancel</Button>
+              <Button className="w-full sm:w-auto" onClick={handleSave} disabled={loading}>
                 {loading ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
           </>
         )}
-      </ResizableDialogContent>
+      </WideDialogContent>
     </Dialog>
   )
 }

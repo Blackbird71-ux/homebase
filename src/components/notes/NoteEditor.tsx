@@ -178,6 +178,17 @@ export function NoteEditor({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      {/* Save / Cancel — sticky so always visible without scrolling */}
+      <div className="sticky top-0 z-10 flex justify-end gap-2 pb-2 bg-background/95 backdrop-blur-sm border-b border-border/50 -mx-4 px-4 mb-1">
+        {onCancel && (
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={isLoading}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" size="sm" disabled={isLoading}>
+          {isLoading ? 'Saving…' : 'Save Note'}
+        </Button>
+      </div>
       {/* Title */}
       <div className="space-y-1">
         <Label onClick={() => titleRef.current?.focus()}>Title</Label>
@@ -293,19 +304,7 @@ export function NoteEditor({
         `}</style>
       </div>
 
-      {/* Save / Cancel — at the top so you don't have to scroll past content */}
-      <div className="flex justify-end gap-2">
-        {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving…' : 'Save Note'}
-        </Button>
-      </div>
-
-      {/* Category + Tags + Visibility + PIN — fixed, no scroll */}
+      {/* Category + Tags + Visibility + PIN */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label>Category</Label>

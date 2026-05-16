@@ -6,7 +6,7 @@ import {
 import { format } from 'date-fns'
 import {
   Dialog, DialogHeader, DialogTitle, DialogFooter,
-  ResizableDialogContent,
+  WideDialogContent,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -822,13 +822,8 @@ export function TemplateFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      {/* Opens at 88 % of the viewport; user can drag any edge/corner to resize */}
-      <ResizableDialogContent
+      <WideDialogContent
         className="flex flex-col gap-0 p-0 overflow-hidden"
-        minWidth={900}
-        minHeight={500}
-        fitViewport
-        storageKey="dialog-size-v3:template-form"
       >
         {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
@@ -929,7 +924,7 @@ export function TemplateFormDialog({
             {saving ? 'Saving…' : isEdit ? 'Update Template' : 'Create Template'}
           </Button>
         </DialogFooter>
-      </ResizableDialogContent>
+      </WideDialogContent>
     </Dialog>
   )
 }

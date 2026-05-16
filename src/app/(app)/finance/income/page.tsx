@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  ResizableDialogContent,
+  WideDialogContent,
 } from '@/components/ui/dialog'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
@@ -194,7 +194,7 @@ export default function IncomePage() {
       </Dialog>
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
-        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400} fitViewport storageKey="dialog-size-v2:income-form">
+        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
 
           {/* Fixed header — title, errors, income type toggle */}
           <div className="px-4 pt-4 pb-0 shrink-0">
@@ -527,17 +527,17 @@ export default function IncomePage() {
           </div>
           </div>
 
-          <DialogFooter className="mx-0 mb-0 shrink-0">
-            <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
-            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
+          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+            <button onClick={closeForm} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
+            <button onClick={handleSave} className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
           </DialogFooter>
-        </ResizableDialogContent>
+        </WideDialogContent>
       </Dialog>
 
       <Dialog open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>
-        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={480} minHeight={300} fitViewport storageKey="dialog-size-v2:income-received">
+        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
           <div className="px-4 pt-4 pb-0 shrink-0">
             <DialogHeader>
               <DialogTitle>Confirm Income Received</DialogTitle>
@@ -810,19 +810,19 @@ export default function IncomePage() {
             </div>
           )}
 
-          <DialogFooter className="mx-0 mb-0 shrink-0 px-4 pb-4">
-            <button onClick={() => setReceivedConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+            <button onClick={() => setReceivedConfirm(null)} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
             <button
               onClick={confirmMarkReceived}
               disabled={payslipForm.enabled
                 ? !payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId
                 : !receivedConfirmGlAccountId
               }
-              className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+              className="w-full sm:w-auto rounded-md bg-green-600 text-white px-4 py-2.5 sm:py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               Mark as received
             </button>
           </DialogFooter>
-        </ResizableDialogContent>
+        </WideDialogContent>
       </Dialog>
 
       {entries.length === 0 ? (

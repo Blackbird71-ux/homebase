@@ -5,7 +5,7 @@ import { Plus, Trash2, Send, Clock, CheckCircle2, AlertTriangle } from 'lucide-r
 import { toast } from 'sonner'
 import { cn, todayAU } from '@/lib/utils'
 import {
-  Dialog, DialogHeader, DialogTitle, DialogFooter, ResizableDialogContent,
+  Dialog, DialogHeader, DialogTitle, DialogFooter, WideDialogContent,
 } from '@/components/ui/dialog'
 import {
   type GLAccount, type Entity, type JournalEntry, type FormLine,
@@ -117,7 +117,7 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={true} fitViewport storageKey="dialog-size-v2:journal-entry-form">
+      <WideDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={true}>
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
           <DialogTitle>{editing ? 'Edit Journal Entry' : 'New Journal Entry'}</DialogTitle>
         </DialogHeader>
@@ -189,7 +189,8 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
             <p className="text-xs text-muted-foreground">Debits must equal credits</p>
           </div>
 
-          <div className="grid gap-2 mb-1 px-1" style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
+          {/* Desktop column headers */}
+          <div className="hidden sm:grid gap-2 mb-1 px-1" style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Amount ($)</span>
@@ -202,14 +203,50 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
               const hasAccountError = !!errors[`line_${i}_account`]
               const hasAmountError  = !!errors[`line_${i}_amount`]
               return (
-                <div key={i} className="grid gap-2 items-start" style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
-                  <div>
-                    <select
-                      value={line.glAccountId}
-                      onChange={e => updateLine(i, 'glAccountId', e.target.value)}
-                      className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm', hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}
-                      disabled={saving}
-                    >
+                <div key={i}>
+                  {/* Desktop: 4-col grid */}
+                  <div className="hidden sm:grid gap-2 items-start" style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
+                    <div>
+                      <select value={line.glAccountId} onChange={e => updateLine(i, 'glAccountId', e.target.value)}
+                        className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm', hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}
+                        disabled={saving}>
+                        <option value="">Select account…</option>
+                        {['asset', 'liability', 'equity', 'income', 'expense'].map(type => {
+                          const groupAccounts = sortedGlAccounts(glAccounts).filter(a => a.type === type)
+                          if (groupAccounts.length === 0) return null
+                          return (
+                            <optgroup key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
+                              {groupAccounts.map(a => <option key={a.id} value={a.id}>{glAccountLabel(a)}</option>)}
+                            </optgroup>
+                          )
+                        })}
+                      </select>
+                      {acct && <p className="text-xs text-muted-foreground/70 mt-0.5 pl-0.5">Normal: {normalSide(acct.type)} balance ({acct.type})</p>}
+                      {hasAccountError && <p className="text-xs text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>}
+                    </div>
+                    <div className="flex rounded-md border border-input overflow-hidden">
+                      <button type="button" onClick={() => updateLine(i, 'side', 'debit')} disabled={saving}
+                        className={cn('flex-1 py-1.5 text-xs font-medium transition-colors', line.side === 'debit' ? 'bg-green-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground')}>DR</button>
+                      <button type="button" onClick={() => updateLine(i, 'side', 'credit')} disabled={saving}
+                        className={cn('flex-1 py-1.5 text-xs font-medium transition-colors', line.side === 'credit' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground')}>CR</button>
+                    </div>
+                    <div>
+                      <input type="number" step="0.01" min="0" value={line.amount}
+                        onChange={e => updateLine(i, 'amount', e.target.value)} placeholder="0.00"
+                        className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm text-right', hasAmountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}
+                        disabled={saving} />
+                      {hasAmountError && <p className="text-xs text-red-500 mt-0.5 text-right">{errors[`line_${i}_amount`]}</p>}
+                    </div>
+                    <button type="button" onClick={() => removeLine(i)} disabled={saving || form.lines.length <= 2}
+                      className="p-1 hover:bg-accent rounded text-red-500 disabled:opacity-30 disabled:cursor-not-allowed mt-0.5">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {/* Mobile: stacked card */}
+                  <div className="sm:hidden rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
+                    <select value={line.glAccountId} onChange={e => updateLine(i, 'glAccountId', e.target.value)}
+                      className={cn('w-full rounded-md border bg-background px-2 py-2 text-sm', hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}
+                      disabled={saving}>
                       <option value="">Select account…</option>
                       {['asset', 'liability', 'equity', 'income', 'expense'].map(type => {
                         const groupAccounts = sortedGlAccounts(glAccounts).filter(a => a.type === type)
@@ -221,38 +258,26 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
                         )
                       })}
                     </select>
-                    {acct && (
-                      <p className="text-xs text-muted-foreground/70 mt-0.5 pl-0.5">
-                        Normal: {normalSide(acct.type)} balance ({acct.type})
-                      </p>
-                    )}
+                    {acct && <p className="text-xs text-muted-foreground/70 -mt-1 pl-0.5">Normal: {normalSide(acct.type)} balance ({acct.type})</p>}
+                    {hasAccountError && <p className="text-xs text-red-500">{errors[`line_${i}_account`]}</p>}
+                    <div className="flex items-center gap-2">
+                      <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+                        <button type="button" onClick={() => updateLine(i, 'side', 'debit')} disabled={saving}
+                          className={cn('px-3.5 py-2 text-sm font-semibold transition-colors', line.side === 'debit' ? 'bg-green-600 text-white' : 'bg-background text-muted-foreground')}>DR</button>
+                        <button type="button" onClick={() => updateLine(i, 'side', 'credit')} disabled={saving}
+                          className={cn('px-3.5 py-2 text-sm font-semibold transition-colors', line.side === 'credit' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground')}>CR</button>
+                      </div>
+                      <input type="number" step="0.01" min="0" value={line.amount}
+                        onChange={e => updateLine(i, 'amount', e.target.value)} placeholder="0.00"
+                        className={cn('flex-1 rounded-md border bg-background px-3 py-2 text-base text-right', hasAmountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}
+                        disabled={saving} />
+                      <button type="button" onClick={() => removeLine(i)} disabled={saving || form.lines.length <= 2}
+                        className="p-2 hover:bg-accent rounded text-red-400 disabled:opacity-30 shrink-0">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {hasAmountError && <p className="text-xs text-red-500 text-right">{errors[`line_${i}_amount`]}</p>}
                   </div>
-
-                  <div className="flex rounded-md border border-input overflow-hidden">
-                    <button type="button" onClick={() => updateLine(i, 'side', 'debit')} disabled={saving}
-                      className={cn('flex-1 py-1.5 text-xs font-medium transition-colors', line.side === 'debit' ? 'bg-green-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground')}>
-                      DR
-                    </button>
-                    <button type="button" onClick={() => updateLine(i, 'side', 'credit')} disabled={saving}
-                      className={cn('flex-1 py-1.5 text-xs font-medium transition-colors', line.side === 'credit' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground')}>
-                      CR
-                    </button>
-                  </div>
-
-                  <div>
-                    <input type="number" step="0.01" min="0" value={line.amount}
-                      onChange={e => updateLine(i, 'amount', e.target.value)}
-                      placeholder="0.00"
-                      className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm text-right', hasAmountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <button type="button" onClick={() => removeLine(i)} disabled={saving || form.lines.length <= 2}
-                    title="Remove line"
-                    className="p-1 hover:bg-accent rounded text-red-500 disabled:opacity-30 disabled:cursor-not-allowed mt-0.5">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
                 </div>
               )
             })}
@@ -287,23 +312,21 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
         </div>
 
         </div>
-        <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
-          <button onClick={onClose} disabled={saving} className="rounded-md border border-border px-4 py-1.5 text-sm disabled:opacity-50">
-            Cancel
-          </button>
+        <DialogFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
+          <button onClick={onClose} disabled={saving} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm disabled:opacity-50">Cancel</button>
           <button onClick={() => handleSave(false)} disabled={saving}
-            className="rounded-md border border-border bg-background px-4 py-1.5 text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5">
+            className="w-full sm:w-auto rounded-md border border-border bg-background px-4 py-2.5 sm:py-1.5 text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
             <Clock className="h-3.5 w-3.5 text-amber-500" />
             {saving ? 'Saving…' : editing ? 'Update Draft' : 'Save as Draft'}
           </button>
           <button onClick={() => handleSave(true)} disabled={saving || !balanced}
             title={!balanced ? 'Entry must be balanced before posting' : undefined}
-            className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+            className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5">
             <Send className="h-3.5 w-3.5" />
             {saving ? 'Posting…' : 'Save & Post'}
           </button>
         </DialogFooter>
-      </ResizableDialogContent>
+      </WideDialogContent>
     </Dialog>
   )
 }

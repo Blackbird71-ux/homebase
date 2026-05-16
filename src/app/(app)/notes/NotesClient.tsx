@@ -6,7 +6,7 @@ import { NoteEditor } from '@/components/notes/NoteEditor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogHeader, DialogTitle, ResizableDialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogHeader, DialogTitle, WideDialogContent } from '@/components/ui/dialog'
 import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, FolderIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
@@ -518,31 +518,33 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         }
         setEditorOpen(open)
       }}>
-        <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size-v2:note-editor">
-          <DialogHeader>
+        <WideDialogContent className="flex flex-col overflow-hidden p-0">
+          {/* Sticky header */}
+          <DialogHeader className="px-4 pt-4 pb-3 shrink-0 border-b border-border">
             <DialogTitle>
               {editingNote ? 'Edit Note' : 'Create New Note'}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          <NoteEditor
-            initialTitle={editingNote?.title || ''}
-            initialContent={editingNote?.content || ''}
-            initialCategory={editingNote?.category || null}
-            initialTags={editingNote?.tags || []}
-            initialIsPrivate={editingNote?.isPrivate ?? false}
-            initialIsArchived={editingNote?.isArchived ?? false}
-            categories={initialCategories}
-            tagColors={tagColors}
-            onSubmit={handleEditorSubmit}
-            onCancel={() => {
-              setEditorOpen(false)
-              setEditingNote(null)
-            }}
-            isLoading={isLoading}
-          />
+          {/* Scrollable body */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+            <NoteEditor
+              initialTitle={editingNote?.title || ''}
+              initialContent={editingNote?.content || ''}
+              initialCategory={editingNote?.category || null}
+              initialTags={editingNote?.tags || []}
+              initialIsPrivate={editingNote?.isPrivate ?? false}
+              initialIsArchived={editingNote?.isArchived ?? false}
+              categories={initialCategories}
+              tagColors={tagColors}
+              onSubmit={handleEditorSubmit}
+              onCancel={() => {
+                setEditorOpen(false)
+                setEditingNote(null)
+              }}
+              isLoading={isLoading}
+            />
           </div>
-        </ResizableDialogContent>
+        </WideDialogContent>
       </Dialog>
     </div>
   )

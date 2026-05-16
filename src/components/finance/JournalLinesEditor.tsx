@@ -137,16 +137,14 @@ export function JournalLinesEditor({
   return (
     <div className={cn('space-y-2', className)}>
 
-      {/* ── Section header ──────────────────────────────────────────────── */}
+      {/* ── Section header ───────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Journal Lines
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Journal Lines</p>
         <p className="text-xs text-muted-foreground">Debits must equal credits</p>
       </div>
 
-      {/* ── Column headers ───────────────────────────────────────────────── */}
-      <div className="grid gap-2 px-1 mb-1"
+      {/* ── Column headers — desktop only ────────────────────────────────── */}
+      <div className="hidden sm:grid gap-2 px-1 mb-1"
         style={{ gridTemplateColumns: 'minmax(160px, 1fr) 90px 110px 28px' }}>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
@@ -154,7 +152,7 @@ export function JournalLinesEditor({
         <span />
       </div>
 
-      {/* ── Line rows ────────────────────────────────────────────────────── */}
+      {/* ── Line rows ─────────────────────────────────────────────────── */}
       <div className="space-y-2">
         {lines.map((line, i) => {
           const acct = glAccounts.find(a => a.id === line.glAccountId)
@@ -162,107 +160,98 @@ export function JournalLinesEditor({
           const hasAmountError  = !!errors[`line_${i}_amount`]
 
           return (
-            <div key={i} className="grid gap-2 items-start"
-              style={{ gridTemplateColumns: 'minmax(160px, 1fr) 90px 110px 28px' }}>
+            <div key={i}>
 
-              {/* GL account selector */}
-              <div>
-                <select
-                  value={line.glAccountId}
-                  onChange={e => updateLine(i, 'glAccountId', e.target.value)}
-                  disabled={disabled}
-                  className={cn(
-                    'w-full rounded-md border bg-background px-2 py-1.5 text-sm',
-                    hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input',
-                  )}
-                >
+              {/* Desktop: single-row 4-column grid (sm+) */}
+              <div className="hidden sm:grid gap-2 items-start"
+                style={{ gridTemplateColumns: 'minmax(160px, 1fr) 90px 110px 28px' }}>
+                <div>
+                  <select value={line.glAccountId} onChange={e => updateLine(i, 'glAccountId', e.target.value)} disabled={disabled}
+                    className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm',
+                      hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}>
+                    <option value="">Select account…</option>
+                    {(['asset', 'liability', 'equity', 'income', 'expense'] as const).map(type => {
+                      const group = grouped.filter(a => a.type === type)
+                      if (!group.length) return null
+                      return (
+                        <optgroup key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
+                          {group.map(a => <option key={a.id} value={a.id}>{accountLabel(a)}</option>)}
+                        </optgroup>
+                      )
+                    })}
+                  </select>
+                  {acct ? (
+                    <p className="text-xs text-muted-foreground/70 mt-0.5 pl-0.5">Normal: {normalSide(acct.type)} balance ({acct.type})</p>
+                  ) : lineHints[i] ? (
+                    <p className="text-xs text-muted-foreground/60 mt-0.5 pl-0.5 italic">{lineHints[i]}</p>
+                  ) : null}
+                  {hasAccountError && <p className="text-xs text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>}
+                </div>
+                <div className="flex rounded-md border border-input overflow-hidden">
+                  <button type="button" onClick={() => updateLine(i, 'side', 'debit')} disabled={disabled}
+                    className={cn('flex-1 py-1.5 text-xs font-medium transition-colors',
+                      line.side === 'debit' ? 'bg-green-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground')}>DR</button>
+                  <button type="button" onClick={() => updateLine(i, 'side', 'credit')} disabled={disabled}
+                    className={cn('flex-1 py-1.5 text-xs font-medium transition-colors',
+                      line.side === 'credit' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground')}>CR</button>
+                </div>
+                <div>
+                  <input type="number" step="0.01" min="0" value={line.amount}
+                    onChange={e => updateLine(i, 'amount', e.target.value)}
+                    placeholder="0.00" disabled={disabled}
+                    className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm text-right',
+                      hasAmountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')} />
+                  {hasAmountError && <p className="text-xs text-red-500 mt-0.5 text-right">{errors[`line_${i}_amount`]}</p>}
+                </div>
+                <button type="button" onClick={() => removeLine(i)} disabled={disabled || lines.length <= 2}
+                  title="Remove line"
+                  className="p-1 hover:bg-accent rounded text-red-500 disabled:opacity-30 disabled:cursor-not-allowed mt-0.5">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Mobile: stacked card layout (< sm) */}
+              <div className="sm:hidden rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
+                {/* Account — full width */}
+                <select value={line.glAccountId} onChange={e => updateLine(i, 'glAccountId', e.target.value)} disabled={disabled}
+                  className={cn('w-full rounded-md border bg-background px-2 py-2 text-sm',
+                    hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}>
                   <option value="">Select account…</option>
                   {(['asset', 'liability', 'equity', 'income', 'expense'] as const).map(type => {
                     const group = grouped.filter(a => a.type === type)
                     if (!group.length) return null
                     return (
                       <optgroup key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
-                        {group.map(a => (
-                          <option key={a.id} value={a.id}>{accountLabel(a)}</option>
-                        ))}
+                        {group.map(a => <option key={a.id} value={a.id}>{accountLabel(a)}</option>)}
                       </optgroup>
                     )
                   })}
                 </select>
-                {acct ? (
-                  <p className="text-xs text-muted-foreground/70 mt-0.5 pl-0.5">
-                    Normal: {normalSide(acct.type)} balance ({acct.type})
-                  </p>
-                ) : lineHints[i] ? (
-                  <p className="text-xs text-muted-foreground/60 mt-0.5 pl-0.5 italic">
-                    {lineHints[i]}
-                  </p>
-                ) : null}
-                {hasAccountError && (
-                  <p className="text-xs text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>
-                )}
+                {acct && <p className="text-xs text-muted-foreground/70 -mt-1 pl-0.5">Normal: {normalSide(acct.type)} balance ({acct.type})</p>}
+                {hasAccountError && <p className="text-xs text-red-500">{errors[`line_${i}_account`]}</p>}
+                {/* DR/CR + amount + delete on one row */}
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+                    <button type="button" onClick={() => updateLine(i, 'side', 'debit')} disabled={disabled}
+                      className={cn('px-3.5 py-2 text-sm font-semibold transition-colors',
+                        line.side === 'debit' ? 'bg-green-600 text-white' : 'bg-background text-muted-foreground')}>DR</button>
+                    <button type="button" onClick={() => updateLine(i, 'side', 'credit')} disabled={disabled}
+                      className={cn('px-3.5 py-2 text-sm font-semibold transition-colors',
+                        line.side === 'credit' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground')}>CR</button>
+                  </div>
+                  <input type="number" step="0.01" min="0" value={line.amount}
+                    onChange={e => updateLine(i, 'amount', e.target.value)}
+                    placeholder="0.00" disabled={disabled}
+                    className={cn('flex-1 rounded-md border bg-background px-3 py-2 text-base text-right',
+                      hasAmountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')} />
+                  <button type="button" onClick={() => removeLine(i)} disabled={disabled || lines.length <= 2}
+                    className="p-2 hover:bg-accent rounded text-red-400 disabled:opacity-30 shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                {hasAmountError && <p className="text-xs text-red-500 text-right">{errors[`line_${i}_amount`]}</p>}
               </div>
 
-              {/* DR / CR toggle */}
-              <div className="flex rounded-md border border-input overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => updateLine(i, 'side', 'debit')}
-                  disabled={disabled}
-                  className={cn(
-                    'flex-1 py-1.5 text-xs font-medium transition-colors',
-                    line.side === 'debit'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-background text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  DR
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateLine(i, 'side', 'credit')}
-                  disabled={disabled}
-                  className={cn(
-                    'flex-1 py-1.5 text-xs font-medium transition-colors',
-                    line.side === 'credit'
-                      ? 'bg-red-600 text-white'
-                      : 'bg-background text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  CR
-                </button>
-              </div>
-
-              {/* Amount */}
-              <div>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={line.amount}
-                  onChange={e => updateLine(i, 'amount', e.target.value)}
-                  placeholder="0.00"
-                  disabled={disabled}
-                  className={cn(
-                    'w-full rounded-md border bg-background px-2 py-1.5 text-sm text-right',
-                    hasAmountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input',
-                  )}
-                />
-                {hasAmountError && (
-                  <p className="text-xs text-red-500 mt-0.5 text-right">{errors[`line_${i}_amount`]}</p>
-                )}
-              </div>
-
-              {/* Remove */}
-              <button
-                type="button"
-                onClick={() => removeLine(i)}
-                disabled={disabled || lines.length <= 2}
-                title="Remove line"
-                className="p-1 hover:bg-accent rounded text-red-500 disabled:opacity-30 disabled:cursor-not-allowed mt-0.5"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
             </div>
           )
         })}

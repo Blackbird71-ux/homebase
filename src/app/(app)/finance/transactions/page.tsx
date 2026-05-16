@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { formatCurrency } from '@/lib/financeShared'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, WideDialogContent } from '@/components/ui/dialog'
 import { useTransactionCrud, type Transaction } from '@/hooks/finance/useTransactionCrud'
 
 export type { Transaction } from '@/hooks/finance/useTransactionCrud'
@@ -94,10 +94,13 @@ export default function TransactionsPage() {
       )}
 
       <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
-        <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
-          </DialogHeader>
+        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
+          <div className="px-4 pt-4 pb-0 shrink-0">
+            <DialogHeader>
+              <DialogTitle>{editing ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3">
           {Object.keys(errors).length > 0 && (
             <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mb-3">
               <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
@@ -228,12 +231,14 @@ export default function TransactionsPage() {
               </label>
             </div>
           </div>
-          <DialogFooter>
-            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
+          </div>
+          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+            <button onClick={closeForm} className="rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
+            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
           </DialogFooter>
-        </DialogContent>
+        </WideDialogContent>
       </Dialog>
 
       {fetchError && (
