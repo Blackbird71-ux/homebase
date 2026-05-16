@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   Dialog,
-  DialogContent,
+  ResizableDialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -230,7 +230,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl flex flex-col max-h-[90vh] p-0 gap-0">
+      <ResizableDialogContent className="flex flex-col overflow-hidden p-0 gap-0" fitViewport storageKey="dialog-size:recipe-form">
         <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
           <DialogTitle>{editMode ? 'Edit recipe' : 'Add recipe'}</DialogTitle>
         </DialogHeader>
@@ -469,7 +469,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
             {saving ? 'Saving...' : editMode ? 'Update recipe' : 'Save recipe'}
           </Button>
         </DialogFooter>
-      </DialogContent>
+      </ResizableDialogContent>
     </Dialog>
   )
 }

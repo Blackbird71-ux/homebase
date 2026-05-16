@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, ResizableDialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -213,10 +213,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
   return (
     <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      {/* max-h-[90dvh] uses dynamic viewport height so the dialog shrinks when
-          the mobile keyboard opens, keeping the footer (Delete/Save) visible.
-          flex flex-col lets the body scroll while the footer stays pinned. */}
-      <DialogContent className="sm:max-w-xl flex flex-col max-h-[90dvh]">
+      <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size:event-modal">
         {showDeleteConfirm ? (
           <>
             <DialogHeader>
@@ -458,7 +455,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
             </DialogFooter>
           </>
         )}
-      </DialogContent>
+      </ResizableDialogContent>
     </Dialog>
   )
 }

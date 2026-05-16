@@ -5,7 +5,7 @@ import { Plus, Trash2, Send, Clock, CheckCircle2, AlertTriangle } from 'lucide-r
 import { toast } from 'sonner'
 import { cn, todayAU } from '@/lib/utils'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogHeader, DialogTitle, DialogFooter, ResizableDialogContent,
 } from '@/components/ui/dialog'
 import {
   type GLAccount, type Entity, type JournalEntry, type FormLine,
@@ -117,11 +117,12 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={true}>
-        <DialogHeader>
+      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={true} fitViewport storageKey="dialog-size:journal-entry-form">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
           <DialogTitle>{editing ? 'Edit Journal Entry' : 'New Journal Entry'}</DialogTitle>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 space-y-4">
         {Object.keys(errors).length > 0 && (
           <div className="rounded-md bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-600 dark:text-red-400 mb-1">
             <p className="font-medium mb-1">Please fix the following:</p>
@@ -285,7 +286,8 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
           </div>
         </div>
 
-        <DialogFooter>
+        </div>
+        <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
           <button onClick={onClose} disabled={saving} className="rounded-md border border-border px-4 py-1.5 text-sm disabled:opacity-50">
             Cancel
           </button>
@@ -301,7 +303,7 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
             {saving ? 'Posting…' : 'Save & Post'}
           </button>
         </DialogFooter>
-      </DialogContent>
+      </ResizableDialogContent>
     </Dialog>
   )
 }

@@ -6,7 +6,7 @@ import { NoteEditor } from '@/components/notes/NoteEditor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogHeader, DialogTitle, ResizableDialogContent } from '@/components/ui/dialog'
 import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, FolderIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
@@ -518,7 +518,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         }
         setEditorOpen(open)
       }}>
-        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <ResizableDialogContent className="flex flex-col overflow-hidden" fitViewport storageKey="dialog-size:note-editor">
           <DialogHeader>
             <DialogTitle>
               {editingNote ? 'Edit Note' : 'Create New Note'}
@@ -542,7 +542,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
             isLoading={isLoading}
           />
           </div>
-        </DialogContent>
+        </ResizableDialogContent>
       </Dialog>
     </div>
   )

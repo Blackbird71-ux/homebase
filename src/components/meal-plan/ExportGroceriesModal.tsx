@@ -4,10 +4,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ResizableDialogContent,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
@@ -222,7 +222,7 @@ export function ExportGroceriesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col gap-0 p-0">
+      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" fitViewport storageKey="dialog-size:export-groceries">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <DialogTitle>Add to Groceries</DialogTitle>
           {status !== 'loading' && (
@@ -415,7 +415,7 @@ export function ExportGroceriesModal({
             )}
           </>
         )}
-      </DialogContent>
+      </ResizableDialogContent>
     </Dialog>
   )
 }

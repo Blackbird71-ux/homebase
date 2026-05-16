@@ -21,7 +21,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogHeader, DialogTitle, DialogFooter, ResizableDialogContent,
 } from '@/components/ui/dialog'
 import {
   type JournalEntry, type GLAccount, type Entity, type FormLine, type AmendmentState,
@@ -203,14 +203,15 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
 
   return (
     <Dialog open={!!amendment} onOpenChange={o => { if (!o && !saving) onClose() }}>
-      <DialogContent className="sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto" showCloseButton={!saving}>
-        <DialogHeader>
+      <ResizableDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={!saving} fitViewport storageKey="dialog-size:amendment-dialog">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
           <DialogTitle className="flex items-center gap-2">
             <FilePenLine className="h-4 w-4 text-blue-500" />
             Correct Posted Journal Entry
           </DialogTitle>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 space-y-4">
         {entry && (
           <>
             {/* Original entry summary */}
@@ -430,7 +431,8 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
           </>
         )}
 
-        <DialogFooter>
+        </div>
+        <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
           <button onClick={onClose} disabled={saving}
             className="rounded-md border border-border px-4 py-1.5 text-sm disabled:opacity-50">
             Cancel
@@ -450,7 +452,7 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
             {saving ? 'Posting amendment…' : confirmed ? 'Confirm & Post Amendment' : 'Review & Amend'}
           </button>
         </DialogFooter>
-      </DialogContent>
+      </ResizableDialogContent>
     </Dialog>
   )
 }

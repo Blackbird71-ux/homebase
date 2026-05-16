@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  ResizableDialogContent,
 } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
@@ -481,7 +481,7 @@ export function AssignMealModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <ResizableDialogContent fitViewport storageKey="dialog-size:assign-meal">
         <DialogHeader>
           <DialogTitle>
             {displayDate} — {mealType}
@@ -644,7 +644,7 @@ export function AssignMealModal({
             </form>
           </TabsContent>
         </Tabs>
-      </DialogContent>
+      </ResizableDialogContent>
     </Dialog>
   )
 }

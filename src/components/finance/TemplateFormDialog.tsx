@@ -822,10 +822,13 @@ export function TemplateFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      {/* Wide dialog on lg+: renders all three columns side-by-side */}
+      {/* Opens at 88 % of the viewport; user can drag any edge/corner to resize */}
       <ResizableDialogContent
-        className="flex flex-col gap-0 p-0 overflow-hidden lg:max-w-[1100px]"
-        minWidth={480}
+        className="flex flex-col gap-0 p-0 overflow-hidden"
+        minWidth={560}
+        minHeight={400}
+        fitViewport
+        storageKey="dialog-size:template-form"
       >
         {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
@@ -842,9 +845,8 @@ export function TemplateFormDialog({
           )}
         </DialogHeader>
 
-        {/* ── Narrow layout (< lg): tabbed ───────────────────────── */}
-        <div className="lg:hidden flex flex-col flex-1 min-h-0">
-          {/* Tab strip */}
+        {/* ── Narrow layout (< md): tabbed ───────────────────────── */}
+        <div className="md:hidden flex flex-col flex-1 min-h-0">
           <div className="flex border-b border-border shrink-0 px-5 mt-3">
             {(['Overview', 'Frequency', 'Transaction'] as const).map(t => (
               <button
@@ -862,7 +864,6 @@ export function TemplateFormDialog({
               </button>
             ))}
           </div>
-          {/* Tab content */}
           <div className="flex-1 overflow-y-auto min-h-0">
             {tab === 'Overview' && (
               <OverviewTab
@@ -884,35 +885,37 @@ export function TemplateFormDialog({
           </div>
         </div>
 
-        {/* ── Wide layout (≥ lg): two columns — Overview | Frequency + Transaction ───── */}
-        <div className="hidden lg:flex flex-1 min-h-0 overflow-hidden mt-3">
-          {/* Column 1 — Overview */}
+        {/* ── Wide layout (≥ md): two columns — Overview+Frequency | Transaction ── */}
+        {/* Left: Overview (top half) + Frequency (bottom half), each scrollable   */}
+        {/* Right: Transaction, full column height, scrollable                      */}
+        <div className="hidden md:flex flex-1 min-h-0 overflow-hidden mt-3">
           <div className="flex-1 flex flex-col border-r border-border min-w-0 overflow-hidden">
-            <div className="px-4 py-2 border-b border-border bg-muted/30">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overview</span>
+            <div className="flex flex-col border-b border-border" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+              <div className="px-4 py-2 border-b border-border bg-muted/30 shrink-0">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overview</span>
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                <OverviewTab
+                  form={form} setForm={setForm} errors={errors} isEdit={isEdit}
+                  contacts={contacts} accounts={accounts} categories={categories}
+                  entities={entities} members={members} locations={locations}
+                />
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
-              <OverviewTab
-                form={form} setForm={setForm} errors={errors} isEdit={isEdit}
-                contacts={contacts} accounts={accounts} categories={categories}
-                entities={entities} members={members} locations={locations}
-              />
-            </div>
-          </div>
-          {/* Column 2 — Frequency + Transaction stacked, scrolls as one */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-            {/* Frequency section */}
-            <div className="shrink-0 border-b border-border">
-              <div className="px-4 py-2 border-b border-border bg-muted/30">
+            <div className="flex flex-col" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+              <div className="px-4 py-2 border-b border-border bg-muted/30 shrink-0">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Frequency</span>
               </div>
-              <FrequencyTab form={form} setForm={setForm} errors={errors} />
-            </div>
-            {/* Transaction section */}
-            <div className="shrink-0">
-              <div className="px-4 py-2 border-b border-border bg-muted/30">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transaction</span>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                <FrequencyTab form={form} setForm={setForm} errors={errors} />
               </div>
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="px-4 py-2 border-b border-border bg-muted/30 shrink-0">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transaction</span>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
               <TransactionTab
                 form={form} setForm={setForm}
                 errors={errors} setErrors={setErrors}

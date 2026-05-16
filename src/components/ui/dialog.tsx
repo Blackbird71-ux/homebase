@@ -156,52 +156,92 @@ function ResizableDialogContent({
   showCloseButton = true,
   minWidth = 480,
   minHeight = 300,
+  fitViewport = false,
+  storageKey,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
   minWidth?: number
   minHeight?: number
+  /** Open at 88% of the viewport and let the user shrink/grow from there */
+  fitViewport?: boolean
+  /** localStorage key — persists the user's chosen size across opens */
+  storageKey?: string
 }) {
   const popupRef = React.useRef<HTMLDivElement>(null)
-  const dragging = React.useRef(false)
+
+  // ── Initial sizing ─────────────────────────────────────────────────────────
+  // Priority: saved size > fitViewport default > Tailwind classes.
+  // Runs before paint so there's no size flash.
+  React.useLayoutEffect(() => {
+    if (!fitViewport && !storageKey) return
+    const el = popupRef.current
+    if (!el) return
+
+    if (storageKey) {
+      try {
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
+          const { w, h } = JSON.parse(saved) as { w: number; h: number }
+          const maxW = Math.floor(window.innerWidth  * 0.98)
+          const maxH = Math.floor(window.innerHeight * 0.98)
+          el.style.width  = `${Math.min(maxW, Math.max(minWidth,  w))}px`
+          el.style.height = `${Math.min(maxH, Math.max(minHeight, h))}px`
+          return
+        }
+      } catch { /* ignore corrupt storage */ }
+    }
+
+    if (fitViewport) {
+      const w = Math.max(minWidth,  Math.round(window.innerWidth  * 0.88))
+      const h = Math.max(minHeight, Math.round(window.innerHeight * 0.88))
+      el.style.width  = `${w}px`
+      el.style.height = `${h}px`
+    }
+  }, [fitViewport, storageKey, minWidth, minHeight])
+
+  // ── Resize drag ────────────────────────────────────────────────────────────
+  type Edge = 'se' | 's' | 'e'
+  const dragging = React.useRef<Edge | null>(null)
   const origin   = React.useRef({ x: 0, y: 0, w: 0, h: 0 })
 
-  // Only wire up resize on md+ (≥768 px). Below that the dialog is full-width
-  // and resizing makes no sense.
-  const onPointerDown = React.useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const startResize = React.useCallback((e: React.PointerEvent<HTMLDivElement>, edge: Edge) => {
     if (window.innerWidth < 768) return
     e.preventDefault()
     const el = popupRef.current
     if (!el) return
-    dragging.current = true
-    origin.current = {
-      x: e.clientX,
-      y: e.clientY,
-      w: el.offsetWidth,
-      h: el.offsetHeight,
-    }
+    dragging.current = edge
+    origin.current = { x: e.clientX, y: e.clientY, w: el.offsetWidth, h: el.offsetHeight }
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }, [])
 
   const onPointerMove = React.useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return
+    const edge = dragging.current
+    if (!edge) return
     const el = popupRef.current
     if (!el) return
     const dx = e.clientX - origin.current.x
     const dy = e.clientY - origin.current.y
-    // Cap at 96% of viewport so the dialog never overflows the screen
-    const maxW = Math.floor(window.innerWidth  * 0.96)
-    const maxH = Math.floor(window.innerHeight * 0.96)
-    const newW = Math.min(maxW, Math.max(minWidth,  origin.current.w + dx))
-    const newH = Math.min(maxH, Math.max(minHeight, origin.current.h + dy))
-    el.style.width  = `${newW}px`
-    el.style.height = `${newH}px`
-    // Inline style overrides Tailwind max-w-* constraints so resize always wins.
+    const maxW = Math.floor(window.innerWidth  * 0.98)
+    const maxH = Math.floor(window.innerHeight * 0.98)
+    if (edge === 'se' || edge === 'e') {
+      el.style.width  = `${Math.min(maxW, Math.max(minWidth,  origin.current.w + dx))}px`
+    }
+    if (edge === 'se' || edge === 's') {
+      el.style.height = `${Math.min(maxH, Math.max(minHeight, origin.current.h + dy))}px`
+    }
   }, [minWidth, minHeight])
 
   const onPointerUp = React.useCallback(() => {
-    dragging.current = false
-  }, [])
+    if (!dragging.current) return
+    dragging.current = null
+    if (!storageKey) return
+    const el = popupRef.current
+    if (!el) return
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ w: el.offsetWidth, h: el.offsetHeight }))
+    } catch { /* quota exceeded or private mode */ }
+  }, [storageKey])
 
   return (
     <DialogPortal>
@@ -213,6 +253,8 @@ function ResizableDialogContent({
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
         {...props}
       >
         {children}
@@ -231,15 +273,24 @@ function ResizableDialogContent({
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
-        {/* Resize handle — hidden on mobile */}
+        {/* ── Resize handles (hidden on mobile) ───────────────────────────── */}
+        {/* Right edge */}
         <div
-          className="absolute bottom-1 right-1 hidden md:flex items-center justify-center w-5 h-5 rounded cursor-se-resize text-muted-foreground/40 hover:text-muted-foreground/70 hover:bg-muted/60 transition-colors select-none touch-none"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
+          className="absolute top-8 right-0 bottom-8 hidden md:block w-1.5 cursor-e-resize select-none touch-none hover:bg-primary/20 rounded-r-xl transition-colors"
+          onPointerDown={e => startResize(e, 'e')}
+        />
+        {/* Bottom edge */}
+        <div
+          className="absolute left-8 right-8 bottom-0 hidden md:block h-1.5 cursor-s-resize select-none touch-none hover:bg-primary/20 rounded-b-xl transition-colors"
+          onPointerDown={e => startResize(e, 's')}
+        />
+        {/* Corner SE — most prominent */}
+        <div
+          className="absolute bottom-0 right-0 hidden md:flex items-center justify-center w-6 h-6 cursor-se-resize select-none touch-none text-muted-foreground/30 hover:text-primary/60 transition-colors rounded-br-xl"
+          onPointerDown={e => startResize(e, 'se')}
           title="Drag to resize"
         >
-          <GripHorizontal className="h-3 w-3 rotate-45" />
+          <GripHorizontal className="h-3.5 w-3.5 rotate-45" />
         </div>
       </DialogPrimitive.Popup>
     </DialogPortal>

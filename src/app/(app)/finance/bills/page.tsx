@@ -170,7 +170,7 @@ export default function BillsPage() {
 
       {/* Bill form dialog */}
       <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); } }}>
-        <ResizableDialogContent className="w-full sm:max-w-2xl md:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400}>
+        <ResizableDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true} minWidth={600} minHeight={400} fitViewport storageKey="dialog-size:bill-form">
 
           {/* Fixed header */}
           <div className="px-4 pt-4 pb-0 shrink-0">
