@@ -353,14 +353,12 @@ export default function BillsPage() {
                   <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
                   <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
                 </label>
-                {form.invoiceReceived && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground">Invoice date</label>
-                    <input type="date" value={form.invoiceReceivedDate}
-                      onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
-                      className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">Invoice date</label>
+                  <input type="date" value={form.invoiceReceivedDate}
+                    onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                </div>
               </div>
               <div className={cn('rounded-md border px-3 py-2.5 flex items-start gap-3', form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border')}>
                 <input type="checkbox" id="addToBudget" checked={form.addToBudget}

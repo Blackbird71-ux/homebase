@@ -316,7 +316,7 @@ export function useBillCrud() {
       memberId: form.memberId || null, locationId: form.locationId || null,
       billType: form.billType || 'recurring', recurrenceInterval: form.recurrenceInterval || null,
       invoiceReceived: form.invoiceReceived,
-      invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
+      invoiceReceivedDate: form.invoiceReceivedDate || null,
       taxClassification: form.taxClassification || null,
     }
   }

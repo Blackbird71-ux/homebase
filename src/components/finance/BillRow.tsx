@@ -129,6 +129,11 @@ export function BillRow({
                 <Receipt className="h-2.5 w-2.5" /> POSTED (no GL)
               </span>
             )}
+            {!bill.invoiceReceived && !bill.paid && (
+              <span className="text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 px-1.5 rounded flex items-center gap-0.5">
+                <Clock className="h-2.5 w-2.5" /> DRAFT
+              </span>
+            )}
             {inBudget && (
               <span className="text-xs bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
                 <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET

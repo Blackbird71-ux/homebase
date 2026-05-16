@@ -343,7 +343,7 @@ export function useIncomeCrud() {
       incomeType: form.incomeType || 'recurring',
       recurrenceInterval: form.recurrenceInterval || null,
       invoiceReceived: form.invoiceReceived,
-      invoiceReceivedDate: form.invoiceReceived && form.invoiceReceivedDate ? form.invoiceReceivedDate : null,
+      invoiceReceivedDate: form.invoiceReceivedDate || null,
       isTaxTracked: form.isTaxTracked,
       taxRate: form.taxRate !== '' ? parseFloat(form.taxRate) : null,
       taxClassification: form.taxClassification || null,

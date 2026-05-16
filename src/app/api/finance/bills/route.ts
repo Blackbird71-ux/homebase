@@ -274,7 +274,13 @@ async function nextNJournalReferences(familyId: string, n: number): Promise<stri
 export async function GET() {
   const session = await requireSession()
   const bills = await prisma.financeRecurringBill.findMany({
-    where: { familyId: session.familyId, isVoided: false },
+    where: {
+      familyId: session.familyId,
+      isVoided: false,
+      // Exclude template-spawned drafts (status='draft') — they belong in the Drafts inbox only.
+      // The OR preserves legacy rows (status=null) which predate the status field.
+      OR: [{ status: null }, { status: { not: 'draft' } }],
+    },
     include: BILL_INCLUDE,
     orderBy: { nextDueDate: 'asc' },
   })
@@ -1122,6 +1128,9 @@ export async function PATCH(request: NextRequest) {
     const priorPaid = (existing.payments ?? []).reduce((s, p) => s + p.amount, 0)
     const isFullyPaid = (priorPaid + payAmount) >= existing.amount - 0.005
 
+    let spawnedBillId: string | null = null
+    let spawnedBillDueDate: Date | null = null
+
     try {
       await prisma.$transaction(async (tx) => {
         const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
@@ -1263,7 +1272,7 @@ export async function PATCH(request: NextRequest) {
         if (existing.billType !== 'one-off' && isFullyPaid) {
           const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
           if (!existing.endDate || newDueDate <= existing.endDate) {
-            await tx.financeRecurringBill.create({
+            const spawned = await tx.financeRecurringBill.create({
               data: {
                 name: existing.name,
                 amount: existing.amount,
@@ -1293,7 +1302,10 @@ export async function PATCH(request: NextRequest) {
                 taxClassification: existing.taxClassification,
                 familyId: session.familyId,
               },
+              select: { id: true },
             })
+            spawnedBillId = spawned.id
+            spawnedBillDueDate = newDueDate
           }
         }
       })
@@ -1303,6 +1315,35 @@ export async function PATCH(request: NextRequest) {
         { error: 'Failed to record payment in General Ledger. No changes were saved.' },
         { status: 422 }
       )
+    }
+
+    // Copy parent journal lines to spawned bill draft — preserves custom splits (GST, etc.)
+    // Must run OUTSIDE the payment transaction because upsertBillDraftJournal uses its own $transaction.
+    if (spawnedBillId && spawnedBillDueDate && existing.journalEntryId) {
+      try {
+        const parentLines = await prisma.financeJournalLine.findMany({
+          where: { journalEntryId: existing.journalEntryId },
+          select: { glAccountId: true, side: true, amount: true, description: true },
+        })
+        if (parentLines.length >= 2) {
+          const lines: JournalLine[] = parentLines.map(l => ({
+            glAccountId: l.glAccountId,
+            side: l.side as 'debit' | 'credit',
+            amount: l.amount,
+            description: l.description ?? undefined,
+          }))
+          const draftJeId = await upsertBillDraftJournal(
+            spawnedBillId, existing.name, null, lines, spawnedBillDueDate, session.familyId, existing.entityId ?? null,
+          )
+          await prisma.financeRecurringBill.update({
+            where: { id: spawnedBillId },
+            data: { journalEntryId: draftJeId },
+          })
+        }
+      } catch (err) {
+        console.error('[bills PATCH] Failed to create draft journal for spawned bill:', err)
+        // Non-fatal — spawned bill exists; user can set lines manually
+      }
     }
 
     const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId }, include: BILL_INCLUDE })

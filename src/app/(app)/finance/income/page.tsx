@@ -464,14 +464,12 @@ export default function IncomePage() {
                   <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
                   <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
                 </label>
-                {form.invoiceReceived && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground">Remittance date</label>
-                    <input type="date" value={form.invoiceReceivedDate}
-                      onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
-                      className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">Remittance date</label>
+                  <input type="date" value={form.invoiceReceivedDate}
+                    onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                </div>
               </div>
 
               <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
