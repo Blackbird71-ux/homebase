@@ -112,6 +112,25 @@ export function useCardLayout(
     buildDefaultLayouts(cardIds, initialLayouts)
   )
 
+  // When cards become visible (cardIds gains new entries), add default layouts
+  const cardIdsKey = cardIds.join(',')
+  useEffect(() => {
+    setLayouts(prev => {
+      const missing = cardIds.filter(id => !prev[id])
+      if (missing.length === 0) return prev
+      const maxY = Object.values(prev).reduce((max, l) => {
+        const h = l.height === 'auto' ? AUTO_HEIGHT_EST_PX : (l.height as number)
+        return Math.max(max, l.y + h + GAP_PX)
+      }, 0)
+      const additions: CardLayoutMap = {}
+      missing.forEach((id, i) => {
+        additions[id] = { x: 0, y: maxY + i * (AUTO_HEIGHT_EST_PX + GAP_PX), width: 100, height: 'auto' }
+      })
+      return { ...prev, ...additions }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardIdsKey])
+
   const draggingRef = useRef<DragState | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragCardId, setDragCardId] = useState<string | null>(null)

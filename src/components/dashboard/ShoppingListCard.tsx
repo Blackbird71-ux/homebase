@@ -19,9 +19,9 @@ interface ShoppingListCardProps {
   onListChange?: (listId: string) => void
 }
 
-const ITEM_ROW_HEIGHT = 20 // px per item row (text-xs line)
-const HEADER_HEIGHT = 80   // px for card header + title area
-const FOOTER_HEIGHT = 24   // px for "+N more" footer
+const ITEM_ROW_HEIGHT = 20  // px per item row (text-xs leading-5)
+const CONTENT_OVERHEAD = 48 // px for list name + item-count rows inside CardContent
+const FOOTER_HEIGHT = 24    // px for "+N more" footer
 const MIN_ITEMS = 1
 const MAX_ITEMS = 10
 
@@ -42,7 +42,7 @@ export function ShoppingListCard({
     function calculateMaxItems() {
       const contentHeight = el!.clientHeight
       if (contentHeight <= 0) return
-      const availableHeight = contentHeight - HEADER_HEIGHT - FOOTER_HEIGHT
+      const availableHeight = contentHeight - CONTENT_OVERHEAD - FOOTER_HEIGHT
       const items = Math.max(MIN_ITEMS, Math.min(MAX_ITEMS, Math.floor(availableHeight / ITEM_ROW_HEIGHT)))
       setMaxItems(items)
     }

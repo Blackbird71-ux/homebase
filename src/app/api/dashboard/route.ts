@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
         ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
       },
       include: {
-        items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true, assignedToUserId: true } },
+        items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 10, select: { content: true, assignedToUserId: true } },
         _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
       },
       ...(dashboardTodoListId ? {} : { take: 1 }),

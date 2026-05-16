@@ -100,7 +100,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
             ...(dashboardShoppingListId ? { id: dashboardShoppingListId } : {}),
           },
           include: {
-            items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 3, select: { content: true } },
+            items: { where: { isCompleted: false }, orderBy: { sortOrder: 'asc' }, take: 10, select: { content: true } },
             _count: { select: { items: { where: { isCompleted: false } } } },
           },
           // If a specific list is chosen, fetch that one; otherwise fall back to most recent
@@ -116,7 +116,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
             ...(dashboardTodoListId ? { id: dashboardTodoListId } : {}),
           },
           include: {
-            items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 3, select: { content: true, assignedToUserId: true } },
+            items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: weekEnd } }, orderBy: { dueDate: 'asc' }, take: 10, select: { content: true, assignedToUserId: true } },
             _count: { select: { items: { where: { isCompleted: false, dueDate: { gte: todayStart, lt: todayEnd } } } } },
           },
           ...(dashboardTodoListId ? {} : { take: 1 }),
