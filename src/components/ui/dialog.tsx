@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
@@ -150,6 +150,11 @@ function DialogDescription({
 // Drop-in replacement for DialogContent on large screens.
 // Renders a drag handle in the bottom-right corner; on mobile it behaves
 // identically to the regular DialogContent (no resize logic runs).
+//
+// Implementation note: ref={} on DialogPrimitive.Popup does not reliably
+// forward to the DOM node in all base-ui versions. We instead wrap content
+// in a plain <div> (guaranteed ref) and let DialogPrimitive.Popup handle
+// only the portal lifecycle and open/close animation.
 function ResizableDialogContent({
   className,
   children,
@@ -159,7 +164,8 @@ function ResizableDialogContent({
   fitViewport = false,
   storageKey,
   ...props
-}: DialogPrimitive.Popup.Props & {
+}: Omit<DialogPrimitive.Popup.Props, 'className'> & {
+  className?: string
   showCloseButton?: boolean
   minWidth?: number
   minHeight?: number
@@ -168,14 +174,14 @@ function ResizableDialogContent({
   /** localStorage key — persists the user's chosen size across opens */
   storageKey?: string
 }) {
-  const popupRef = React.useRef<HTMLDivElement>(null)
+  const innerRef = React.useRef<HTMLDivElement>(null)
 
   // ── Initial sizing ─────────────────────────────────────────────────────────
-  // Priority: saved size > fitViewport default > Tailwind classes.
+  // Priority: saved size > fitViewport default > CSS fallback.
   // Runs before paint so there's no size flash.
   React.useLayoutEffect(() => {
     if (!fitViewport && !storageKey) return
-    const el = popupRef.current
+    const el = innerRef.current
     if (!el) return
 
     el.style.maxWidth  = 'none'
@@ -211,7 +217,7 @@ function ResizableDialogContent({
   const startResize = React.useCallback((e: React.PointerEvent<HTMLDivElement>, edge: Edge) => {
     if (window.innerWidth < 768) return
     e.preventDefault()
-    const el = popupRef.current
+    const el = innerRef.current
     if (!el) return
     dragging.current = edge
     origin.current = { x: e.clientX, y: e.clientY, w: el.offsetWidth, h: el.offsetHeight }
@@ -221,7 +227,7 @@ function ResizableDialogContent({
   const onPointerMove = React.useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const edge = dragging.current
     if (!edge) return
-    const el = popupRef.current
+    const el = innerRef.current
     if (!el) return
     const dx = e.clientX - origin.current.x
     const dy = e.clientY - origin.current.y
@@ -239,7 +245,7 @@ function ResizableDialogContent({
     if (!dragging.current) return
     dragging.current = null
     if (!storageKey) return
-    const el = popupRef.current
+    const el = innerRef.current
     if (!el) return
     try {
       localStorage.setItem(storageKey, JSON.stringify({ w: el.offsetWidth, h: el.offsetHeight }))
@@ -249,51 +255,57 @@ function ResizableDialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
+      {/* DialogPrimitive.Popup handles portal lifecycle and open/close animation only */}
       <DialogPrimitive.Popup
-        ref={popupRef}
         data-slot="dialog-content"
-        className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90dvh] sm:max-w-2xl -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
-        )}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none outline-none duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
         {...props}
       >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-2 right-2"
-                size="icon-sm"
-              />
-            }
-          >
-            <XIcon />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-        {/* ── Resize handles (hidden on mobile) ───────────────────────────── */}
-        {/* Right edge */}
+        {/* This div is the real dialog box — ref always works on a plain div */}
         <div
-          className="absolute top-8 right-0 bottom-8 hidden md:block w-1.5 cursor-e-resize select-none touch-none hover:bg-primary/20 rounded-r-xl transition-colors"
-          onPointerDown={e => startResize(e, 'e')}
-        />
-        {/* Bottom edge */}
-        <div
-          className="absolute left-8 right-8 bottom-0 hidden md:block h-1.5 cursor-s-resize select-none touch-none hover:bg-primary/20 rounded-b-xl transition-colors"
-          onPointerDown={e => startResize(e, 's')}
-        />
-        {/* Corner SE — most prominent */}
-        <div
-          className="absolute bottom-0 right-0 hidden md:flex items-center justify-center w-6 h-6 cursor-se-resize select-none touch-none text-muted-foreground/30 hover:text-primary/60 transition-colors rounded-br-xl"
-          onPointerDown={e => startResize(e, 'se')}
-          title="Drag to resize"
+          ref={innerRef}
+          className={cn(
+            "relative pointer-events-auto grid w-full max-w-[calc(100%-2rem)] max-h-[90dvh] sm:max-w-2xl rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10",
+            className
+          )}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
         >
-          <GripHorizontal className="h-3.5 w-3.5 rotate-45" />
+          {children}
+          {showCloseButton && (
+            <DialogPrimitive.Close
+              data-slot="dialog-close"
+              render={
+                <Button
+                  variant="ghost"
+                  className="absolute top-2 right-2"
+                  size="icon-sm"
+                />
+              }
+            >
+              <XIcon />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          )}
+          {/* ── Resize handles (hidden on mobile) ───────────────────────────── */}
+          {/* Right edge */}
+          <div
+            className="absolute top-8 right-0 bottom-8 hidden md:block w-1.5 cursor-e-resize select-none touch-none hover:bg-primary/20 rounded-r-xl transition-colors"
+            onPointerDown={e => startResize(e, 'e')}
+          />
+          {/* Bottom edge */}
+          <div
+            className="absolute left-8 right-8 bottom-0 hidden md:block h-1.5 cursor-s-resize select-none touch-none hover:bg-primary/20 rounded-b-xl transition-colors"
+            onPointerDown={e => startResize(e, 's')}
+          />
+          {/* Corner SE — most prominent */}
+          <div
+            className="absolute bottom-0 right-0 hidden md:flex items-center justify-center w-6 h-6 cursor-se-resize select-none touch-none text-muted-foreground/30 hover:text-primary/60 transition-colors rounded-br-xl"
+            onPointerDown={e => startResize(e, 'se')}
+            title="Drag to resize"
+          >
+            <GripHorizontal className="h-3.5 w-3.5 rotate-45" />
+          </div>
         </div>
       </DialogPrimitive.Popup>
     </DialogPortal>
