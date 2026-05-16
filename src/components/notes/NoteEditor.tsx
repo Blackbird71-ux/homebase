@@ -4,9 +4,16 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BoldIcon, ItalicIcon, XIcon, LockIcon, UsersIcon, ArchiveIcon, BaselineIcon, HighlighterIcon, RemoveFormattingIcon } from 'lucide-react'
+import { BoldIcon, ItalicIcon, XIcon, LockIcon, UsersIcon, ArchiveIcon, BaselineIcon, HighlighterIcon, RemoveFormattingIcon, PaletteIcon } from 'lucide-react'
 import { NoteEditorToolbar } from './NoteEditorToolbar'
+
+const TAG_COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
+  '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+  '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#78716c',
+]
 
 interface NoteEditorProps {
   initialTitle?: string
@@ -23,6 +30,7 @@ interface NoteEditorProps {
     content: string
     category?: string | null
     tags?: string[]
+    newTagColors?: Record<string, string>
     isPrivate?: boolean
     isArchived?: boolean
     pin?: string | null
@@ -49,6 +57,8 @@ export function NoteEditor({
   const [category, setCategory] = useState<string | null>(initialCategory)
   const [tags, setTags] = useState<string[]>(initialTags)
   const [newTag, setNewTag] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#6366f1')
+  const [pendingTagColors, setPendingTagColors] = useState<Record<string, string>>({})
   const [isPrivate, setIsPrivate] = useState(initialIsPrivate)
   const [isArchived, setIsArchived] = useState(initialIsArchived)
   const [pinCode, setPinCode] = useState('')
@@ -97,6 +107,7 @@ export function NoteEditor({
       content,
       category: category || null,
       tags: tags.length > 0 ? tags : undefined,
+      newTagColors: Object.keys(pendingTagColors).length > 0 ? pendingTagColors : undefined,
       isPrivate,
       isArchived,
       pin: hasPin && pinCode ? pinCode : undefined,
@@ -107,7 +118,10 @@ export function NoteEditor({
   const addTag = () => {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
       setTags([...tags, newTag.trim()])
+      // Save the chosen color for this new tag
+      setPendingTagColors(prev => ({ ...prev, [newTag.trim()]: newTagColor }))
       setNewTag('')
+      setNewTagColor('#6366f1')
     }
   }
 
@@ -321,21 +335,53 @@ export function NoteEditor({
         <div className="space-y-2">
           <Label>Tags</Label>
           <div className="flex gap-2">
-            <Input
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              placeholder="Add a tag"
-              disabled={isLoading}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); addTag() }
-              }}
-            />
-            <Button type="button" onClick={addTag} disabled={isLoading}>Add</Button>
+            <div className="flex-1">
+              <Input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="Add a tag"
+                disabled={isLoading}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); addTag() }
+                }}
+              />
+              {/* Color picker — shown when user is typing a new tag */}
+              {newTag.trim() && (
+                <div className="mt-1.5 space-y-1">
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <PaletteIcon className="h-3 w-3" />
+                    Choose tag colour:
+                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {TAG_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewTagColor(color)}
+                        className={`w-5 h-5 rounded-full border transition-all ${
+                          newTagColor === color
+                            ? 'border-white scale-110 ring-1 ring-offset-1 ring-foreground'
+                            : 'border-transparent hover:scale-110'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        title={color}
+                      />
+                    ))}
+                    <ColorPicker
+                      value={newTagColor}
+                      onChange={setNewTagColor}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <Button type="button" onClick={addTag} disabled={isLoading || !newTag.trim()}>Add</Button>
           </div>
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {tags.map((tag) => {
-                const color = tagColors?.[tag]
+                // Use pending tag color first (if just added in this session), then existing color
+                const color = pendingTagColors[tag] || tagColors?.[tag]
                 return (
                   <div
                     key={tag}
@@ -343,6 +389,7 @@ export function NoteEditor({
                     style={{
                       backgroundColor: color ? `${color}20` : undefined,
                       color: color || undefined,
+                      borderColor: color || undefined,
                     }}
                   >
                     {color && (

@@ -104,15 +104,21 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
     content: string
     category?: string | null
     tags?: string[]
+    newTagColors?: Record<string, string>
     isPrivate?: boolean
     pin?: string | null
   }) => {
     setIsLoading(true)
     try {
+      const { newTagColors, ...rest } = data
+      const body: Record<string, unknown> = { ...rest }
+      if (newTagColors && Object.keys(newTagColors).length > 0) {
+        body.newTagColors = newTagColors
+      }
       const response = await fetch(`/api/notes/${note.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
       })
 
       if (!response.ok) {
