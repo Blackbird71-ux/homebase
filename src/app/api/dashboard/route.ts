@@ -3,80 +3,17 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
-import type { DashboardData, TodaysMeal, ChoreScheduleDay, ChoreScheduleItem } from '@/types'
+import { buildChoreSchedule } from '@/lib/chore-helpers'
+import type { DashboardData, TodaysMeal } from '@/types'
 
 function normalizeToUtcMidnight(dateStr: string): Date {
   const d = new Date(dateStr + 'T00:00:00Z')
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-function buildChoreSchedule(
-  chores: any[],
-  todayStart: Date,
-  todayEnd: Date,
-  timezone: string,
-  days: number = 30
-): ChoreScheduleDay[] {
-  if (!chores || !Array.isArray(chores)) return []
-  const schedule: ChoreScheduleDay[] = []
-
-  // ── Overdue section: chores whose nextDueDate is before today ────────────
-  // nextDueDate is now stored as the UTC equivalent of midnight in the user's
-  // timezone, so a simple Date comparison is correct.
-  const overdueChores = chores.filter((c: any) => {
-    if (!c.nextDueDate) return false
-    return c.nextDueDate < todayStart
-  })
-  if (overdueChores.length > 0) {
-    schedule.push({
-      day: 'Overdue',
-      date: '',
-      chores: overdueChores.map((c: any): ChoreScheduleItem => ({
-        id: c.id,
-        title: c.title,
-        frequency: c.frequency,
-        note: c.note,
-        currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
-        lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
-        lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
-        isOverdue: true,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
-      })),
-    })
-  }
-
-  for (let i = 0; i < days; i++) {
-    // Use timezone-aware day boundaries derived from todayStart (already local midnight in UTC form)
-    const dayStart = new Date(todayStart.getTime() + i * 86400000)
-    const dayEnd = new Date(todayStart.getTime() + (i + 1) * 86400000)
-    // Use the midpoint of the local day to reliably determine the day name/date in the target timezone
-    const midDay = new Date(dayStart.getTime() + 12 * 3600000)
-    const dayChores = chores.filter((c: any) => {
-      if (!c.nextDueDate) return false
-      return c.nextDueDate >= dayStart && c.nextDueDate < dayEnd
-    })
-    schedule.push({
-      day: new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(midDay),
-      date: new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(midDay),
-      chores: dayChores.map((c: any): ChoreScheduleItem => ({
-        id: c.id,
-        title: c.title,
-        frequency: c.frequency,
-        note: c.note,
-        currentAssignee: c.currentAssignee ? { id: c.currentAssignee.id, name: c.currentAssignee.name } : null,
-        lastCompletedBy: c.completions?.[0]?.completedBy ? { id: c.completions[0].completedBy.id, name: c.completions[0].completedBy.name } : null,
-        lastCompletedAt: c.completions?.[0]?.completedAt?.toISOString() ?? null,
-        isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
-        isCompletable: c.allowEarlyStart || (c.nextDueDate ? c.nextDueDate <= todayEnd : false),
-      })),
-    })
-  }
-  return schedule
-}
-
 export async function GET(request: NextRequest) {
   const user = await requireSession()
-  const timezone = user.timezone ?? 'Australia/Sydney'
+  const timezone = user.timezone ?? 'UTC'
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const now = new Date()
 
@@ -208,12 +145,15 @@ export async function GET(request: NextRequest) {
       take: 5,
       select: { content: true },
     }),
-    // Chore data for chore schedule card
+    // Chore data for chore schedule card — OR ensures overdue chores are always included
     prisma.chore.findMany({
       where: {
         familyId: user.familyId,
         isActive: true,
-        nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+        OR: [
+          { nextDueDate: { lt: todayStart } },
+          { nextDueDate: { gte: todayStart, lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) } },
+        ],
       },
       include: {
         currentAssignee: { select: { id: true, name: true } },
@@ -281,9 +221,12 @@ export async function GET(request: NextRequest) {
   const dinnerMeal = mealByType(todayMealPlans, 'dinner')
 
   // Build weekly summary
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const fmtDay   = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' })
+  const fmtShort = new Intl.DateTimeFormat('en-AU', { timeZone: timezone, day: 'numeric', month: 'short' })
+  const fmtLong  = new Intl.DateTimeFormat('en-AU', { timeZone: timezone, day: 'numeric', month: 'short', year: 'numeric' })
+  const weekLabelEnd = new Date(weekEndDate.getTime() - 86_400_000)
   const weeklySummary = {
-    weekLabel: `${weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} - ${new Date(weekEndDate.getTime() - 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+    weekLabel: `${fmtShort.format(weekStart)} - ${fmtLong.format(weekLabelEnd)}`,
     eventCount: weekEvents.length,
     mealCount: weekMeals.length,
     pendingTodoCount: weekTodos.length,
@@ -292,7 +235,7 @@ export async function GET(request: NextRequest) {
       title: e.title,
       start: e.start.toISOString(),
       color: e.color,
-      dayLabel: dayNames[e.start.getDay()],
+      dayLabel: fmtDay.format(e.start),
     })),
     topMeals: [...weekMeals]
       .sort((a, b) => {
@@ -302,11 +245,10 @@ export async function GET(request: NextRequest) {
         return mealOrder.indexOf(a.mealType) - mealOrder.indexOf(b.mealType)
       })
       .map(m => {
-        const dayIndex = m.date.getDay()
         const recipeName = m.recipes?.[0]?.recipe?.title ?? m.recipe?.title ?? m.note ?? m.mealType
         const recipeNote = m.recipes?.[0]?.recipe?.description ?? m.recipe?.description ?? m.note ?? null
         const note = recipeNote && recipeNote !== recipeName ? recipeNote : null
-        return { day: dayNames[dayIndex], meal: recipeName, note }
+        return { day: fmtDay.format(m.date), meal: recipeName, note }
       }),
 
     topTodos: weekTodos.map(t => t.content),

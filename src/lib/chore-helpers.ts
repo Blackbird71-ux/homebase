@@ -129,8 +129,10 @@ export function calculateInitialDueDate(
   startDate: Date | null,
   timezone: string
 ): Date {
-  const base = startDate ? new Date(startDate) : new Date()
-  base.setUTCHours(0, 0, 0, 0)
+  // Convert start date (or now) to UTC midnight of the same LOCAL calendar day.
+  const rawBase = startDate ? new Date(startDate) : new Date()
+  const baseDateLocalStr = rawBase.toLocaleDateString('en-CA', { timeZone: timezone })
+  const base = new Date(`${baseDateLocalStr}T00:00:00Z`)
 
   let result: Date
 
@@ -213,7 +215,13 @@ export function calculateNextDueDate(
     baseDate = completedAt
   }
 
-  const next = advanceByFrequency(baseDate, chore.frequency, chore.dayOfWeek, chore.dayOfMonth)
+  // baseDate may be a local-midnight timestamp (e.g. 2026-05-16T14:00:00Z for UTC+10)
+  // or an arbitrary completedAt time. Convert to UTC midnight of the same LOCAL calendar
+  // day before passing to advanceByFrequency, which performs UTC-based date arithmetic.
+  const baseDateLocalStr = baseDate.toLocaleDateString('en-CA', { timeZone: timezone })
+  const baseDateUTCMidnight = new Date(`${baseDateLocalStr}T00:00:00Z`)
+
+  const next = advanceByFrequency(baseDateUTCMidnight, chore.frequency, chore.dayOfWeek, chore.dayOfMonth)
 
   if (chore.endDate && next > chore.endDate) {
     return null // signal caller to deactivate
@@ -238,10 +246,11 @@ export function calculateNextDueDateFromNow(
   chore: ChoreForSchedule,
   timezone: string
 ): Date | null {
-  const now = new Date()
-  now.setUTCHours(0, 0, 0, 0)
+  // Use UTC midnight of the LOCAL calendar today, not UTC midnight of the UTC date.
+  const todayLocalStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+  const baseDateUTCMidnight = new Date(`${todayLocalStr}T00:00:00Z`)
 
-  const next = advanceByFrequency(now, chore.frequency, chore.dayOfWeek, chore.dayOfMonth)
+  const next = advanceByFrequency(baseDateUTCMidnight, chore.frequency, chore.dayOfWeek, chore.dayOfMonth)
 
   if (chore.endDate && next > chore.endDate) {
     return null
