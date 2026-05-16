@@ -51,7 +51,8 @@ export function TagManager() {
       const res = await fetch(`/api/tags?includeCounts=true${search ? `&search=${encodeURIComponent(search)}` : ''}`)
       if (!res.ok) throw new Error('Failed to fetch tags')
       const data = await res.json()
-      setTags(data)
+      // Sort alphabetically by name (case-insensitive)
+      setTags(data.sort((a: Tag, b: Tag) => a.name.localeCompare(b.name)))
     } catch (error) {
       toast.error('Failed to load tags')
       console.error(error)
