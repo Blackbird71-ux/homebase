@@ -12,12 +12,15 @@ export default async function CalendarPage() {
   const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const to = new Date(now.getFullYear(), now.getMonth() + 3, 31)
 
-  // Fetch events including recurring ones that start before the range
+  // Fetch events including recurring ones and multi-month events that span into the range
+  // Must check both start AND end so events like "Qld road trip" (Aug 1 – Sep 30)
+  // appear in September even though they started before the September range
   const events = await prisma.event.findMany({
     where: {
       familyId: user.familyId,
       OR: [
         { start: { gte: from, lte: to } },
+        { start: { lte: from }, end: { gte: from } },
         { isRecurring: true },
       ],
     },

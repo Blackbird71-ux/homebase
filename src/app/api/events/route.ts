@@ -16,12 +16,16 @@ export async function GET(req: Request) {
   const rangeStart = from ? new Date(from) : null
   const rangeEnd = to ? new Date(to) : null
 
-  // Fetch all events for the family (we need recurring events even if outside range to expand them)
+  // Fetch all events for the family
+  // We need three categories:
+  // 1. Events that start within the visible range
+  // 2. Events that started BEFORE the range but END within it (multi-month events e.g. "Qld road trip")
+  // 3. All recurring events (they get expanded into instances below)
   const where: Record<string, unknown> = { familyId: user.familyId }
   if (rangeStart && rangeEnd) {
-    // For recurring events, we need to fetch events that start before the range too
     where.OR = [
       { start: { gte: rangeStart, lte: rangeEnd } },
+      { start: { lte: rangeStart }, end: { gte: rangeStart } },
       { isRecurring: true },
     ]
   }
