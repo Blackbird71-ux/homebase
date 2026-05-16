@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  Plus, RefreshCw, AlertTriangle,
+  RefreshCw, AlertTriangle,
   TrendingDown, TrendingUp,
 } from 'lucide-react'
 import {
@@ -35,9 +35,24 @@ export default function TemplatesPage() {
             {templates.filter(t => t.enabled).length} active
           </p>
         </div>
-        <Button onClick={openCreate} size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" /> New Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => openCreate('bill')}
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950"
+          >
+            <TrendingDown className="h-3.5 w-3.5" /> New Bill
+          </Button>
+          <Button
+            onClick={() => openCreate('income')}
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50 hover:border-green-300 dark:text-green-400 dark:border-green-900 dark:hover:bg-green-950"
+          >
+            <TrendingUp className="h-3.5 w-3.5" /> New Income
+          </Button>
+        </div>
       </div>
 
       {/* Bills section */}
@@ -69,9 +84,14 @@ export default function TemplatesPage() {
           <RefreshCw className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">No recurring templates yet.</p>
           <p className="text-xs text-muted-foreground mt-1">Create a template to auto-spawn drafts on a schedule.</p>
-          <Button onClick={openCreate} size="sm" className="mt-4 gap-1.5">
-            <Plus className="h-4 w-4" /> New Template
-          </Button>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <Button onClick={() => openCreate('bill')} size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900">
+              <TrendingDown className="h-3.5 w-3.5" /> New Bill
+            </Button>
+            <Button onClick={() => openCreate('income')} size="sm" variant="outline" className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50 dark:text-green-400 dark:border-green-900">
+              <TrendingUp className="h-3.5 w-3.5" /> New Income
+            </Button>
+          </div>
         </div>
       )}
 

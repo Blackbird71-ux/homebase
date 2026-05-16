@@ -58,9 +58,42 @@ export function useTemplatesCrud() {
   useEffect(() => { loadRefs() }, [])
   useEffect(() => { if (glAccounts.length > 0) load() }, [glAccounts])
 
-  function openCreate() {
+  function openCreate(kind: 'bill' | 'income' = 'bill') {
     const saved = loadTemplateDefaults()
-    setForm(saved ? { ...emptyForm, ...saved, startDate: todayAU(), firstDueDate: todayAU() } : { ...emptyForm, startDate: todayAU(), firstDueDate: todayAU() })
+
+    // Auto-detect Accounts Payable (bill) or Accounts Receivable (income)
+    // by matching the canonical name in the chart of accounts.
+    const apAccount = glAccounts.find(a =>
+      a.type === 'liability' &&
+      (a.name.toLowerCase().includes('accounts payable') || a.name.toLowerCase().includes('account payable'))
+    )
+    const arAccount = glAccounts.find(a =>
+      a.type === 'asset' &&
+      (a.name.toLowerCase().includes('accounts receivable') || a.name.toLowerCase().includes('account receivable'))
+    )
+
+    // Build default journal lines with the appropriate offsetting GL account pre-filled
+    const defaultLines =
+      kind === 'bill'
+        ? [
+            { glAccountId: '',                        side: 'debit'  as const, amount: '', description: '' },
+            { glAccountId: apAccount?.id ?? '',       side: 'credit' as const, amount: '', description: '' },
+          ]
+        : [
+            { glAccountId: arAccount?.id ?? '',       side: 'debit'  as const, amount: '', description: '' },
+            { glAccountId: '',                        side: 'credit' as const, amount: '', description: '' },
+          ]
+
+    const base: FormState = {
+      ...emptyForm,
+      ...(saved ?? {}),
+      kind,
+      lines: defaultLines,
+      startDate: todayAU(),
+      firstDueDate: todayAU(),
+    }
+
+    setForm(base)
     setErrors({})
     setTab('Overview')
     setEditId(null)

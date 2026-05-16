@@ -822,9 +822,13 @@ export function TemplateFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <ResizableDialogContent className="flex flex-col gap-0 p-0 overflow-hidden">
+      {/* Wide dialog on lg+: renders all three columns side-by-side */}
+      <ResizableDialogContent
+        className="flex flex-col gap-0 p-0 overflow-hidden lg:max-w-[1100px]"
+        minWidth={480}
+      >
         {/* Header */}
-        <DialogHeader className="px-4 pt-4 pb-0 shrink-0">
+        <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {form.kind === 'bill'
               ? <TrendingDown className="h-4 w-4 text-red-500" />
@@ -838,47 +842,88 @@ export function TemplateFormDialog({
           )}
         </DialogHeader>
 
-        {/* Tab strip */}
-        <div className="flex border-b border-border shrink-0 px-4 mt-3">
-          {(['Overview', 'Frequency', 'Transaction'] as const).map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={cn(
-                'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                tab === t
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t}
-            </button>
-          ))}
+        {/* ── Narrow layout (< lg): tabbed ───────────────────────── */}
+        <div className="lg:hidden flex flex-col flex-1 min-h-0">
+          {/* Tab strip */}
+          <div className="flex border-b border-border shrink-0 px-5 mt-3">
+            {(['Overview', 'Frequency', 'Transaction'] as const).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cn(
+                  'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                  tab === t
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          {/* Tab content */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {tab === 'Overview' && (
+              <OverviewTab
+                form={form} setForm={setForm} errors={errors} isEdit={isEdit}
+                contacts={contacts} accounts={accounts} categories={categories}
+                entities={entities} members={members} locations={locations}
+              />
+            )}
+            {tab === 'Frequency' && (
+              <FrequencyTab form={form} setForm={setForm} errors={errors} />
+            )}
+            {tab === 'Transaction' && (
+              <TransactionTab
+                form={form} setForm={setForm}
+                errors={errors} setErrors={setErrors}
+                glAccounts={glAccounts}
+              />
+            )}
+          </div>
         </div>
 
-        {/* Tab content */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {tab === 'Overview' && (
-            <OverviewTab
-              form={form} setForm={setForm} errors={errors} isEdit={isEdit}
-              contacts={contacts} accounts={accounts} categories={categories}
-              entities={entities} members={members} locations={locations}
-            />
-          )}
-          {tab === 'Frequency' && (
-            <FrequencyTab form={form} setForm={setForm} errors={errors} />
-          )}
-          {tab === 'Transaction' && (
-            <TransactionTab
-              form={form} setForm={setForm}
-              errors={errors} setErrors={setErrors}
-              glAccounts={glAccounts}
-            />
-          )}
+        {/* ── Wide layout (≥ lg): all three panels side-by-side ───── */}
+        <div className="hidden lg:flex flex-1 min-h-0 overflow-hidden mt-3">
+          {/* Column 1 — Overview */}
+          <div className="flex-1 flex flex-col border-r border-border min-w-0 overflow-hidden">
+            <div className="px-4 py-2 border-b border-border bg-muted/30">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overview</span>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <OverviewTab
+                form={form} setForm={setForm} errors={errors} isEdit={isEdit}
+                contacts={contacts} accounts={accounts} categories={categories}
+                entities={entities} members={members} locations={locations}
+              />
+            </div>
+          </div>
+          {/* Column 2 — Frequency */}
+          <div className="flex-1 flex flex-col border-r border-border min-w-0 overflow-hidden">
+            <div className="px-4 py-2 border-b border-border bg-muted/30">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Frequency</span>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <FrequencyTab form={form} setForm={setForm} errors={errors} />
+            </div>
+          </div>
+          {/* Column 3 — Transaction */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="px-4 py-2 border-b border-border bg-muted/30">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transaction</span>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <TransactionTab
+                form={form} setForm={setForm}
+                errors={errors} setErrors={setErrors}
+                glAccounts={glAccounts}
+              />
+            </div>
+          </div>
         </div>
 
-        <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+        <DialogFooter className="px-5 py-4 border-t border-border shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Update Template' : 'Create Template'}
