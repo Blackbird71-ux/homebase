@@ -9,5 +9,8 @@ export async function register() {
 
     const { startReportScheduler } = await import('@/lib/reportScheduler')
     startReportScheduler()
+
+    const { startSpawnScheduler } = await import('@/lib/spawnScheduler')
+    startSpawnScheduler()
   }
 }

@@ -2,7 +2,12 @@ import { prisma } from '@/lib/prisma'
 import type { SessionUser } from '@/types'
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'undo'
-export type AuditEntity = 'event' | 'list' | 'listItem' | 'recipe' | 'chore' | 'contact' | 'note' | 'document' | 'mealPlan' | 'tag'
+export type AuditEntity =
+  | 'event' | 'list' | 'listItem' | 'recipe' | 'chore' | 'contact' | 'note' | 'document' | 'mealPlan' | 'tag'
+  // Finance — Block 2 (repeating transaction templates)
+  | 'financeRecurringTemplate'   // Master template CRUD
+  | 'financeDraftBill'           // Bill draft approve/cancel/edit (spawned from template)
+  | 'financeDraftIncome'         // Income draft approve/cancel/edit (spawned from template)
 
 export interface AuditLogEntry {
   id: string

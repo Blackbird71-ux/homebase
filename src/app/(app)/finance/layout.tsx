@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -27,6 +27,8 @@ import {
   Menu,
   CreditCard,
   Banknote,
+  Repeat2,
+  Inbox,
 } from 'lucide-react'
 
 const groups = [
@@ -38,6 +40,8 @@ const groups = [
       { href: '/finance/transactions', label: 'Transactions',       icon: ArrowLeftRight,  exact: false },
       { href: '/finance/bills',        label: 'Bills',              icon: FileText,        exact: false },
       { href: '/finance/income',       label: 'Income',             icon: TrendingUp,      exact: false },
+      { href: '/finance/templates',    label: 'Templates',          icon: Repeat2,         exact: false },
+      { href: '/finance/drafts',       label: 'Drafts',             icon: Inbox,           exact: false },
     ],
   },
   {
@@ -83,7 +87,16 @@ function useActiveItem(pathname: string) {
 
 // ─── Mobile: dropdown sheet ───────────────────────────────────────────────────
 
-function MobileNav({ pathname }: { pathname: string }) {
+function DraftBadge({ count }: { count: number }) {
+  if (count === 0) return null
+  return (
+    <span className="ml-auto shrink-0 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none px-1.5 py-0.5 min-w-[1.25rem] text-center">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
+function MobileNav({ pathname, draftCount }: { pathname: string; draftCount: number }) {
   const [open, setOpen] = useState(false)
   const activeItem = useActiveItem(pathname)
   const ActiveIcon = activeItem.icon
@@ -98,6 +111,7 @@ function MobileNav({ pathname }: { pathname: string }) {
       >
         <ActiveIcon className="h-4 w-4 text-primary shrink-0" />
         <span className="flex-1 text-left text-sm font-medium">{activeItem.label}</span>
+        {activeItem.href === '/finance/drafts' && <DraftBadge count={draftCount} />}
         <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} />
       </button>
 
@@ -133,7 +147,8 @@ function MobileNav({ pathname }: { pathname: string }) {
                       )}
                     >
                       <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-primary' : 'text-muted-foreground/60')} />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {item.href === '/finance/drafts' && <DraftBadge count={draftCount} />}
                     </Link>
                   )
                 })}
@@ -148,7 +163,7 @@ function MobileNav({ pathname }: { pathname: string }) {
 
 // ─── Desktop: sidebar ─────────────────────────────────────────────────────────
 
-function DesktopSidebar({ pathname }: { pathname: string }) {
+function DesktopSidebar({ pathname, draftCount }: { pathname: string; draftCount: number }) {
   return (
     <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border bg-muted/30 overflow-y-auto">
       <div className="px-4 pt-5 pb-3 shrink-0">
@@ -181,7 +196,8 @@ function DesktopSidebar({ pathname }: { pathname: string }) {
                       )}
                     >
                       <Icon className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-primary' : 'text-muted-foreground/70')} />
-                      <span className="truncate">{item.label}</span>
+                      <span className="truncate flex-1">{item.label}</span>
+                      {item.href === '/finance/drafts' && <DraftBadge count={draftCount} />}
                     </Link>
                   </li>
                 )
@@ -194,17 +210,38 @@ function DesktopSidebar({ pathname }: { pathname: string }) {
   )
 }
 
+// ─── Draft count badge ────────────────────────────────────────────────────────
+
+function useDraftCount() {
+  const [count, setCount] = useState(0)
+  const pathname = usePathname()
+
+  useEffect(() => {
+    fetch('/api/finance/drafts')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) setCount((d.bills?.length ?? 0) + (d.income?.length ?? 0))
+      })
+      .catch(() => {})
+  // Re-fetch when navigating away from the drafts page (user may have cleared drafts)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  return count
+}
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const draftCount = useDraftCount()
 
   return (
     <div className="flex h-full overflow-hidden relative">
-      <DesktopSidebar pathname={pathname} />
+      <DesktopSidebar pathname={pathname} draftCount={draftCount} />
 
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-        <MobileNav pathname={pathname} />
+        <MobileNav pathname={pathname} draftCount={draftCount} />
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>

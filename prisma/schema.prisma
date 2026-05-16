@@ -51,6 +51,7 @@ model Family {
   financeSnapshots       FinanceSnapshot[]
   financeJournalEntries  FinanceJournalEntry[]
   financeBillPayments    FinanceBillPayment[]
+  financeRecurringTemplates  FinanceRecurringTemplate[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
 }
 
@@ -603,6 +604,7 @@ model FinanceCategory {
   billPayments    FinanceBillPayment[]
   vendors         FinanceVendor[]
   journalLines    FinanceJournalLine[]
+  recurringTemplateLines FinanceRecurringTemplateLine[] @relation("TemplateLineGlAccount")
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -721,6 +723,13 @@ model FinanceRecurringBill {
   payments        FinanceBillPayment[]
   attachments     BillAttachment[]
   budgetRules     FinanceBudget[]
+  // ── Recurring template lifecycle (Block 1: repeating transactions) ──
+  templateId            String?
+  template              FinanceRecurringTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  status                String?    // "draft" | "awaiting_payment" | "paid" | "cancelled" — null = legacy row
+  spawnedAt             DateTime?
+  postedAt              DateTime?
+  spawnedSnapshotHash   String?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -735,6 +744,8 @@ model FinanceRecurringBill {
   @@index([vendorId])
   @@index([entityId])
   @@index([transactionId])
+  @@index([familyId, status])
+  @@index([templateId])
 }
 
 model FinancePayslip {
@@ -847,6 +858,13 @@ model FinanceIncomeEntry {
   isVoided            Boolean              @default(false)
   voidedAt            DateTime?
   voidNote            String?
+  // ── Recurring template lifecycle (Block 1: repeating transactions) ──
+  templateId            String?
+  template              FinanceRecurringTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  status                String?    // "draft" | "awaiting_receipt" | "received" | "cancelled" — null = legacy row
+  spawnedAt             DateTime?
+  postedAt              DateTime?
+  spawnedSnapshotHash   String?
   familyId            String
   family              Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   createdAt           DateTime             @default(now())
@@ -861,6 +879,8 @@ model FinanceIncomeEntry {
   @@index([entityId])
   @@index([vendorId])
   @@index([transactionId])
+  @@index([familyId, status])
+  @@index([templateId])
 }
 
 model IncomeAttachment {
@@ -1190,4 +1210,121 @@ model TripActivity {
   createdAt DateTime @default(now())
 
   @@index([dayId])
+}
+
+// ─── Recurring Transaction Templates (Xero-style master → drafts → posted) ──
+// The master template never posts to the GL. Drafts spawn from the template on
+// a schedule and live in FinanceRecurringBill / FinanceIncomeEntry with
+// status='draft' until the user approves them. Approval calls the existing
+// posting helpers (postBillToGL / upsertIncomeJournalEntry / payslip-aware
+// path) to write the balanced journal entry. Editing a draft has no effect on
+// the template; editing the template has no effect on already-spawned drafts.
+
+model FinanceRecurringTemplate {
+  id                      String   @id @default(cuid())
+  familyId                String
+  family                  Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  kind                    String   // "bill" | "income"
+  name                    String
+
+  // Counterparty / defaults inherited by spawned drafts (mirrors existing
+  // FinanceRecurringBill / FinanceIncomeEntry shape so the spawn worker can
+  // copy fields 1:1).
+  counterpartyId          String?
+  accountId               String?
+  categoryId              String?
+  entityId                String?
+  locationId              String?
+  memberId                String?
+
+  // Options (GnuCash "Overview" tab)
+  enabled                 Boolean  @default(true)
+  createAutomatically     Boolean  @default(true)
+  notifyOnCreate          Boolean  @default(false)
+  createInAdvanceDays     Int      @default(0)
+  remindInAdvanceDays     Int?
+
+  // Frequency (GnuCash "Frequency" tab)
+  frequency               String   // weekly | fortnightly | monthly | bimonthly | quarterly | halfyearly | yearly | custom
+  interval                Int      @default(1)
+  daysOfWeek              String?  // JSON array as TEXT — matches existing convention
+  dayOfMonth              Int?
+  monthOfYear             Int?
+  startDate               DateTime
+  endMode                 String   @default("forever") // forever | until | for_n_occurrences
+  endDate                 DateTime?
+  totalOccurrences        Int?
+  occurrencesRemaining    Int?
+
+  // Spawn tracking
+  lastSpawnedDate         DateTime?
+  nextOccurrenceDate      DateTime
+  defaultDueOffsetDays    Int      @default(0)   // bills: due = occurrence + N days
+
+  // Tax classification carried into spawned drafts
+  isTaxTracked            Boolean  @default(false)
+  taxClassification       String?
+  taxRate                 Float?
+
+  // ── Payslip template fields (income templates only; null for bills) ──
+  // Mirrors FinancePayslip shape so spawn can copy into a real payslip on the
+  // drafted FinanceIncomeEntry. Approval then runs the payslip-aware posting
+  // path (multi-line: DR Bank net + DR PAYG + DR deductions / CR Gross).
+  payslipEnabled          Boolean  @default(false)
+  grossPay                Float?
+  netPay                  Float?
+  grossIncomeGlAccountId  String?
+  bankGlAccountId         String?
+  paygWithheld            Float?
+  paygGlAccountId         String?
+  sgcAmount               Float?
+  sgcGlAccountId          String?
+  payslipComponents       String?  // JSON array as TEXT
+  payslipDeductions       String?  // JSON array as TEXT
+
+  // Standard
+  createdBy               String
+  notes                   String?
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  lines                   FinanceRecurringTemplateLine[]
+  spawnedBills            FinanceRecurringBill[]
+  spawnedIncomeEntries    FinanceIncomeEntry[]
+
+  @@index([familyId, kind])
+  @@index([familyId, enabled, nextOccurrenceDate])
+  @@index([familyId, name])
+  @@index([familyId, isActive])
+}
+
+model FinanceRecurringTemplateLine {
+  id            String                    @id @default(cuid())
+  templateId    String
+  template      FinanceRecurringTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  description   String
+  qty           Float    @default(1)
+  unitPrice     Float
+  amount        Float                                          // cached qty * unitPrice
+  side          String                                         // "debit" | "credit"
+
+  glAccountId   String
+  glAccount     FinanceCategory  @relation("TemplateLineGlAccount", fields: [glAccountId], references: [id], onDelete: Restrict)
+
+  taxRateId     String?
+  memberId      String?
+  sortOrder     Int      @default(0)
+
+  // GST split metadata — populated when glAccount.gstApplicable=true.
+  // At spawn time, the spawn worker uses these to write three draft lines
+  // (ex-GST + GST + counter-account) per Q1 decision.
+  gstApplicable Boolean  @default(false)
+  gstRate       Float    @default(0)
+
+  createdAt     DateTime @default(now())
+
+  @@index([templateId])
+  @@index([glAccountId])
 }
