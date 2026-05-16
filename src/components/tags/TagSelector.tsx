@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -32,6 +32,14 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(false)
   const [pending, setPending] = useState<string[]>([])
+
+  // Load all tags on mount so inline display has colors from the start
+  useEffect(() => {
+    fetch('/api/tags')
+      .then((res) => res.ok ? res.json() : [])
+      .then((data) => setAllTags(data))
+      .catch(() => {})
+  }, [])
 
   async function openModal() {
     setPending([...value])
