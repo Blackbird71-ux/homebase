@@ -65,6 +65,7 @@ next-env.d.ts
 .cline/
 .claude/
 dist/
+.zoomodes.json
 
 # docker build artifacts
 homebase.tar
