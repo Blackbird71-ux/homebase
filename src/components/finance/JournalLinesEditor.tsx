@@ -147,7 +147,7 @@ export function JournalLinesEditor({
 
       {/* ── Column headers ───────────────────────────────────────────────── */}
       <div className="grid gap-2 px-1 mb-1"
-        style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
+        style={{ gridTemplateColumns: 'minmax(160px, 1fr) 90px 110px 28px' }}>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Amount ($)</span>
@@ -163,7 +163,7 @@ export function JournalLinesEditor({
 
           return (
             <div key={i} className="grid gap-2 items-start"
-              style={{ gridTemplateColumns: '1fr 90px 110px 28px' }}>
+              style={{ gridTemplateColumns: 'minmax(160px, 1fr) 90px 110px 28px' }}>
 
               {/* GL account selector */}
               <div>

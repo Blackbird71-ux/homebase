@@ -412,6 +412,13 @@ export default function IncomePage() {
                     </select>
                   </div>
                 )}
+
+                {/* Notes — left column, full width */}
+                <div>
+                  <label className="text-xs text-muted-foreground">Notes</label>
+                  <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
+                </div>
               </div>
 
               {/* Right panel — journal lines + options + tax + notes */}
@@ -516,11 +523,6 @@ export default function IncomePage() {
                 )}
               </div>
 
-              <div>
-                <label className="text-xs text-muted-foreground">Notes</label>
-                <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
-              </div>
             </div>
           </div>
           </div>

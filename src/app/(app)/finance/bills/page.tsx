@@ -307,6 +307,12 @@ export default function BillsPage() {
                     ))}
                   </select>
                 </div>
+                {/* Notes — left column, full width */}
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Notes</label>
+                  <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
+                </div>
               </div>
               </div>
 
@@ -370,11 +376,6 @@ export default function BillsPage() {
                     </p>
                   )}
                 </label>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Notes</label>
-                <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
               </div>
             </div>
           </div>

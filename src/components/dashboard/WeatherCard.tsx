@@ -24,6 +24,8 @@ export function WeatherCard() {
   const [state, setState] = useState<WeatherState>('loading')
   const [locationName, setLocationName] = useState<string>('')
 
+  const CACHE_KEY = 'weather_last_coords'
+
   const fetchByCoords = useCallback(async (lat: number, lon: number) => {
     try {
       const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`)
@@ -36,6 +38,8 @@ export function WeatherCard() {
         return
       }
       const data: WeatherData = await res.json()
+      // Cache coords so next load is instant
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ lat, lon })) } catch { /* ignore */ }
       setWeather(data)
       setLocationName(data.location || `${lat.toFixed(2)}, ${lon.toFixed(2)}`)
       setState('loaded')
@@ -48,22 +52,32 @@ export function WeatherCard() {
     setState('loading')
     setWeather(null)
 
-    // Try geolocation first
+    // Use cached coords immediately if available (avoids geo permission delay on first paint)
+    try {
+      const cached = localStorage.getItem(CACHE_KEY)
+      if (cached) {
+        const { lat, lon } = JSON.parse(cached) as { lat: number; lon: number }
+        fetchByCoords(lat, lon)
+        return
+      }
+    } catch { /* ignore */ }
+
+    // No cache — request fresh geolocation
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           fetchByCoords(position.coords.latitude, position.coords.longitude)
         },
         () => {
-          // Geolocation denied or unavailable – try a default city
+          // Geolocation denied or unavailable
           setState('geo-denied')
         },
-        { timeout: 5000, enableHighAccuracy: false },
+        { timeout: 10000, enableHighAccuracy: false, maximumAge: 60000 },
       )
     } else {
       setState('geo-denied')
     }
-  }, [fetchByCoords])
+  }, [fetchByCoords, CACHE_KEY])
 
   useEffect(() => {
     loadWeather()

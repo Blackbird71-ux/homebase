@@ -825,10 +825,10 @@ export function TemplateFormDialog({
       {/* Opens at 88 % of the viewport; user can drag any edge/corner to resize */}
       <ResizableDialogContent
         className="flex flex-col gap-0 p-0 overflow-hidden"
-        minWidth={560}
-        minHeight={400}
+        minWidth={900}
+        minHeight={500}
         fitViewport
-        storageKey="dialog-size-v2:template-form"
+        storageKey="dialog-size-v3:template-form"
       >
         {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
@@ -909,7 +909,7 @@ export function TemplateFormDialog({
               </div>
             </div>
           </div>
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex-1 flex flex-col min-w-[420px] overflow-hidden">
             <div className="px-4 py-2 border-b border-border bg-muted/30 shrink-0">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transaction</span>
             </div>

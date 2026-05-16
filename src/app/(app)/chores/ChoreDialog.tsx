@@ -164,210 +164,219 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <ResizableDialogContent
-        className="flex flex-col overflow-hidden gap-0 p-0"
-        fitViewport
+        className="overflow-y-auto"
+        minWidth={700}
         storageKey="dialog-size-v2:chore-dialog"
         showCloseButton={false}
       >
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
+        <DialogHeader>
           <DialogTitle>{chore ? 'Edit Chore' : 'Add Chore'}</DialogTitle>
         </DialogHeader>
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="chore-title">Title</Label>
-            <Input
-              id="chore-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Take out bins"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="chore-desc">Description (optional)</Label>
-            <Input
-              id="chore-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the task"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="chore-note">Notes</Label>
-            <textarea
-              id="chore-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Add any notes or instructions for this chore..."
-              className={textareaClass}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+
+        <div className="mt-4 grid gap-x-6 gap-y-3 md:grid-cols-2">
+          {/* ── Left column: schedule ── */}
+          <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="chore-freq">Frequency</Label>
-              <Select value={frequency} onValueChange={(v) => v && setFrequency(v)}>
-                <SelectTrigger id="chore-freq">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="bimonthly">Bi-monthly</SelectItem>
-                  <SelectItem value="quarterly">Quarterly</SelectItem>
-                  <SelectItem value="halfyearly">Half-yearly</SelectItem>
-                  <SelectItem value="yearly">Yearly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="chore-rotate">Rotate every</Label>
+              <Label htmlFor="chore-title">Title</Label>
               <Input
-                id="chore-rotate"
-                type="number"
-                min={1}
-                value={rotationInterval}
-                onChange={(e) => setRotationInterval(e.target.value)}
+                id="chore-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Take out bins"
               />
             </div>
-          </div>
-          {frequency === 'weekly' && (
             <div className="space-y-1.5">
-              <Label htmlFor="chore-day">Day of week</Label>
-              <Select value={dayOfWeek} onValueChange={(v) => setDayOfWeek(v ?? '')}>
-                <SelectTrigger id="chore-day">
-                  <SelectValue placeholder="Any day" />
+              <Label htmlFor="chore-desc">Description (optional)</Label>
+              <Input
+                id="chore-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Brief description of the task"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="chore-note">Notes</Label>
+              <textarea
+                id="chore-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Add any notes or instructions for this chore..."
+                className={textareaClass}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="chore-freq">Frequency</Label>
+                <Select value={frequency} onValueChange={(v) => v && setFrequency(v)}>
+                  <SelectTrigger id="chore-freq">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="bimonthly">Bi-monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="halfyearly">Half-yearly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="chore-rotate">Rotate every</Label>
+                <Input
+                  id="chore-rotate"
+                  type="number"
+                  min={1}
+                  value={rotationInterval}
+                  onChange={(e) => setRotationInterval(e.target.value)}
+                />
+              </div>
+            </div>
+            {frequency === 'weekly' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="chore-day">Day of week</Label>
+                <Select value={dayOfWeek} onValueChange={(v) => setDayOfWeek(v ?? '')}>
+                  <SelectTrigger id="chore-day">
+                    <SelectValue placeholder="Any day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAY_OPTIONS.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {(frequency === 'monthly' || frequency === 'bimonthly' || frequency === 'quarterly' || frequency === 'halfyearly' || frequency === 'yearly') && (
+              <div className="space-y-1.5">
+                <Label htmlFor="chore-day-month">Day of month</Label>
+                <Input
+                  id="chore-day-month"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={dayOfMonth}
+                  onChange={(e) => setDayOfMonth(e.target.value)}
+                  placeholder="1-31 (auto from start date)"
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="chore-start-date">Start date</Label>
+                <Input
+                  id="chore-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="chore-end-date">End date (optional)</Label>
+                <Input
+                  id="chore-end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Right column: assignment + options ── */}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="chore-assignee">Assign to</Label>
+              <Select value={currentAssigneeId} onValueChange={(v) => setCurrentAssigneeId(v ?? '')}>
+                <SelectTrigger id="chore-assignee">
+                  <SelectValue placeholder="Unassigned">
+                    {currentAssigneeId
+                      ? members.find((m) => m.id === currentAssigneeId)?.name ?? currentAssigneeId
+                      : undefined}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {DAY_OPTIONS.map((d) => (
-                    <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                  <SelectItem value="">Unassigned</SelectItem>
+                  {members.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
-          {(frequency === 'monthly' || frequency === 'bimonthly' || frequency === 'quarterly' || frequency === 'halfyearly' || frequency === 'yearly') && (
-            <div className="space-y-1.5">
-              <Label htmlFor="chore-day-month">Day of month</Label>
-              <Input
-                id="chore-day-month"
-                type="number"
-                min={1}
-                max={31}
-                value={dayOfMonth}
-                onChange={(e) => setDayOfMonth(e.target.value)}
-                placeholder="1-31 (auto from start date)"
-              />
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="chore-start-date">Start date</Label>
-              <Input
-                id="chore-start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="chore-end-date">End date (optional)</Label>
-              <Input
-                id="chore-end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="chore-assignee">Assign to</Label>
-            <Select value={currentAssigneeId} onValueChange={(v) => setCurrentAssigneeId(v ?? '')}>
-              <SelectTrigger id="chore-assignee">
-                <SelectValue placeholder="Unassigned">
-                  {currentAssigneeId
-                    ? members.find((m) => m.id === currentAssigneeId)?.name ?? currentAssigneeId
-                    : undefined}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Unassigned</SelectItem>
-                {members.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-3 pt-2 border-t border-border/50">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="chore-trigger">Next occurrence starts after completion</Label>
-                <p className="text-xs text-muted-foreground">
-                  When off, next due date is based on the schedule (e.g. every Monday)
-                </p>
-              </div>
-              <Switch
-                id="chore-trigger"
-                checked={triggerOnComplete}
-                onCheckedChange={setTriggerOnComplete}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="chore-auto-rotate">Auto-rotate assignee on completion</Label>
-                <p className="text-xs text-muted-foreground">
-                  Automatically assign to the next family member when completed
-                </p>
-              </div>
-              <Switch
-                id="chore-auto-rotate"
-                checked={autoRotateOnComplete}
-                onCheckedChange={setAutoRotateOnComplete}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="chore-early-start">Allow early completion</Label>
-                <p className="text-xs text-muted-foreground">
-                  Allow marking done and creating the next occurrence before the current one is due
-                </p>
-              </div>
-              <Switch
-                id="chore-early-start"
-                checked={allowEarlyStart}
-                onCheckedChange={setAllowEarlyStart}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="chore-email-reminder">Email reminder</Label>
-                <p className="text-xs text-muted-foreground">
-                  Send an email to the assignee before the due date
-                </p>
-              </div>
-              <Switch
-                id="chore-email-reminder"
-                checked={emailReminder}
-                onCheckedChange={setEmailReminder}
-              />
-            </div>
-            {emailReminder && (
-              <div className="space-y-1.5 pl-1">
-                <Label htmlFor="chore-reminder-days">Remind how many days before due?</Label>
-                <Input
-                  id="chore-reminder-days"
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={emailReminderDays}
-                  onChange={(e) => setEmailReminderDays(e.target.value)}
-                  className="w-24"
+            <div className="space-y-3 pt-2 border-t border-border/50">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="chore-trigger">Next occurrence starts after completion</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When off, next due date is based on the schedule (e.g. every Monday)
+                  </p>
+                </div>
+                <Switch
+                  id="chore-trigger"
+                  checked={triggerOnComplete}
+                  onCheckedChange={setTriggerOnComplete}
                 />
               </div>
-            )}
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="chore-auto-rotate">Auto-rotate assignee on completion</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically assign to the next family member when completed
+                  </p>
+                </div>
+                <Switch
+                  id="chore-auto-rotate"
+                  checked={autoRotateOnComplete}
+                  onCheckedChange={setAutoRotateOnComplete}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="chore-early-start">Allow early completion</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Allow marking done and creating the next occurrence before the current one is due
+                  </p>
+                </div>
+                <Switch
+                  id="chore-early-start"
+                  checked={allowEarlyStart}
+                  onCheckedChange={setAllowEarlyStart}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="chore-email-reminder">Email reminder</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Send an email to the assignee before the due date
+                  </p>
+                </div>
+                <Switch
+                  id="chore-email-reminder"
+                  checked={emailReminder}
+                  onCheckedChange={setEmailReminder}
+                />
+              </div>
+              {emailReminder && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="chore-reminder-days">Remind how many days before due?</Label>
+                  <Input
+                    id="chore-reminder-days"
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={emailReminderDays}
+                    onChange={(e) => setEmailReminderDays(e.target.value)}
+                    className="w-24"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-border shrink-0 flex justify-end gap-2">
+
+        <div className="mt-6 pt-4 border-t border-border flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving...' : chore ? 'Update' : 'Create'}
