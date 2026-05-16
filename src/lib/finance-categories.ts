@@ -28,7 +28,12 @@ export interface FlatCategory {
 export function sortedCategoryList(cats: FlatCategory[]): FlatCategory[] {
   const roots = cats
     .filter(c => !c.parentId)
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => {
+      const aArchive = a.name === 'NOT IN USE'
+      const bArchive = b.name === 'NOT IN USE'
+      if (aArchive !== bArchive) return aArchive ? 1 : -1
+      return a.name.localeCompare(b.name)
+    })
 
   const childMap = new Map<string, FlatCategory[]>()
   for (const c of cats) {

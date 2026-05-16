@@ -135,6 +135,40 @@ const emptyForm: FormState = {
   payslipDeductions: [],
 }
 
+// ── Template "last used" defaults (persisted in localStorage) ─────────────────
+
+const TEMPLATE_DEFAULTS_KEY = 'finance_template_defaults'
+
+type TemplateDefaults = Pick<FormState,
+  'accountId' | 'entityId' | 'memberId' | 'locationId' |
+  'createInAdvanceDays' | 'remindInAdvanceDays' | 'defaultDueOffsetDays' |
+  'createAutomatically' | 'notifyOnCreate'
+>
+
+function loadTemplateDefaults(): TemplateDefaults | null {
+  try {
+    const raw = localStorage.getItem(TEMPLATE_DEFAULTS_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveTemplateDefaults(form: FormState) {
+  try {
+    const defaults: TemplateDefaults = {
+      accountId: form.accountId,
+      entityId: form.entityId,
+      memberId: form.memberId,
+      locationId: form.locationId,
+      createInAdvanceDays: form.createInAdvanceDays,
+      remindInAdvanceDays: form.remindInAdvanceDays,
+      defaultDueOffsetDays: form.defaultDueOffsetDays,
+      createAutomatically: form.createAutomatically,
+      notifyOnCreate: form.notifyOnCreate,
+    }
+    localStorage.setItem(TEMPLATE_DEFAULTS_KEY, JSON.stringify(defaults))
+  } catch { /* ignore */ }
+}
+
 // ── Client-side occurrence preview ────────────────────────────────────────────
 // Replicates the server-side logic without node:crypto.
 
@@ -391,7 +425,8 @@ function useTemplatesCrud() {
   useEffect(() => { if (glAccounts.length > 0) load() }, [glAccounts])
 
   function openCreate() {
-    setForm(emptyForm)
+    const saved = loadTemplateDefaults()
+    setForm(saved ? { ...emptyForm, ...saved } : emptyForm)
     setErrors({})
     setTab('Overview')
     setEditId(null)
@@ -439,6 +474,7 @@ function useTemplatesCrud() {
         return
       }
       toast.success(editId ? 'Template updated' : 'Template created')
+      saveTemplateDefaults(form)
       closeForm()
       await load()
     } finally {
@@ -1436,7 +1472,10 @@ function TemplateListRow({
     : '—'
 
   return (
-    <div className={cn('flex items-center gap-3 px-4 py-3', !template.enabled && 'opacity-50')}>
+    <div
+      className={cn('flex items-center gap-3 px-4 py-3 cursor-pointer', !template.enabled && 'opacity-50')}
+      onDoubleClick={() => onEdit(template)}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium truncate">{template.name}</span>
