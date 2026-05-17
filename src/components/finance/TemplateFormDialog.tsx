@@ -944,7 +944,7 @@ export function TemplateFormDialog({
           </div>
         </div>
 
-        <DialogFooter className="px-5 py-2.5 border-t border-border shrink-0">
+        <DialogFooter className="px-5 pt-2.5 pb-4 border-t border-border shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Update Template' : 'Create Template'}
