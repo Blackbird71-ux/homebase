@@ -4,24 +4,16 @@
 export async function register() {
   // Only run on the Node.js server (not Edge runtime or client)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    // Patch console methods into the in-memory log buffer first so scheduler
-    // output is captured from the very start.
     const { logBuffer, rawLogBuffer } = await import('@/lib/logBuffer')
 
-    // ── Structured console capture ──────────────────────────────────────────
-    const levels = ['log', 'info', 'warn', 'error'] as const
-    for (const level of levels) {
-      const orig = console[level].bind(console)
-      console[level] = (...args: unknown[]) => {
-        logBuffer.push(level, args)
-        orig(...args)
-      }
-    }
-
-    // ── Raw stdout / stderr capture (equivalent to `docker logs` output) ────
+    // ── Grab original stdout/stderr writers before we patch anything ───────
     const origStdout = process.stdout.write.bind(process.stdout)
     const origStderr = process.stderr.write.bind(process.stderr)
 
+    // ── Raw stdout / stderr capture (equivalent to `docker logs` output) ────
+    // This catches anything that writes to process.stdout/stderr directly
+    // without going through console.log (e.g. Next.js internal output, native
+    // module printf, child processes inheriting our fds).
     process.stdout.write = function (
       this: typeof process.stdout,
       ...args: Parameters<typeof process.stdout.write>
@@ -39,6 +31,38 @@ export async function register() {
       rawLogBuffer.write(chunk)
       return origStderr(...args)
     } as typeof process.stderr.write
+
+    // ── Structured console capture ──────────────────────────────────────────
+    // We write to BOTH the structured logBuffer (for the /api/admin/logs
+    // endpoint) AND the rawLogBuffer (for the /api/admin/docker-logs endpoint)
+    // directly from the console patch.  We bypass the original console.log
+    // and write formatted output straight to the real stdout/stderr so there
+    // are no duplicates in rawLogBuffer (one from us, one from the
+    // process.stdout.write patch forwarding the original console output).
+    const levels = ['log', 'info', 'warn', 'error'] as const
+    for (const level of levels) {
+      console[level] = (...args: unknown[]) => {
+        const msg = args
+          .map(a => (typeof a === 'string' ? a : safeStringify(a)))
+          .join(' ')
+        const line = `[${new Date().toISOString()}] [${level}] ${msg}\n`
+        logBuffer.push(level, args)
+        rawLogBuffer.write(line)
+        // Write to real stdout/stderr so `docker logs` still shows output.
+        // warn/error go to stderr; log/info go to stdout (Unix convention).
+        const output = (level === 'error' || level === 'warn') ? origStderr : origStdout
+        output(line)
+      }
+    }
+
+    function safeStringify(v: unknown): string {
+      try {
+        if (v instanceof Error) return v.stack ?? v.message
+        return JSON.stringify(v)
+      } catch {
+        return String(v)
+      }
+    }
 
     // ── HTTP request logging (feeds both structured + raw log buffers) ─────
     // Uses Node.js diagnostics_channel (available since Node 19) to intercept

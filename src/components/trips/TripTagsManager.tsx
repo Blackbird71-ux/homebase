@@ -121,7 +121,7 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+      <div className="bg-popover border border-border rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
@@ -195,12 +195,12 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
                     value={editEmoji}
                     onChange={(e) => setEditEmoji(e.target.value)}
                     maxLength={2}
-                    className="w-10 px-1.5 py-1 text-center rounded border border-input bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-10 px-1.5 py-1 text-center rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="flex-1 px-2 py-1 rounded border border-input bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     autoFocus
                   />
                   <div className="flex items-center gap-1">

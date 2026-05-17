@@ -156,6 +156,8 @@ function SpawnResultView({ result }: { result: SpawnResponse }) {
 
 // ── Log Viewer ────────────────────────────────────────────────────────────────
 
+const AUTO_SCROLL_THRESHOLD = 50 // px from bottom — if closer, stay pinned
+
 // These colours are chosen for the hardcoded dark terminal background
 // (bg-[#0d1117]) and ignore the current theme so text is always legible.
 const LEVEL_STYLES: Record<LogLine['level'], string> = {
@@ -169,8 +171,10 @@ function LogViewer() {
   const [lines, setLines] = useState<LogLine[]>([])
   const [polling, setPolling] = useState(true)
   const [error, setError] = useState('')
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [pinned, setPinned] = useState(true)
+  const viewportRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isNearBottom = useRef(true)
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -197,9 +201,23 @@ function LogViewer() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [polling, fetchLogs])
 
-  // Auto-scroll to bottom when new lines arrive (only while polling)
+  // Smart auto-scroll — only when the user is at/near the bottom
   useEffect(() => {
-    if (polling) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = viewportRef.current
+    if (!el) return
+    const onScroll = () => {
+      const near = el.scrollHeight - el.scrollTop - el.clientHeight < AUTO_SCROLL_THRESHOLD
+      isNearBottom.current = near
+      setPinned(near)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    if (!polling) return
+    if (!isNearBottom.current) return
+    viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' })
   }, [lines, polling])
 
   async function clearLogs() {
@@ -216,6 +234,9 @@ function LogViewer() {
             <p className="font-semibold text-sm">Server Logs</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Last {lines.length} lines from the in-memory buffer · refreshes every 3 s
+              {polling && !pinned && (
+                <span className="text-amber-400 ml-1">(scroll paused — scroll to bottom to resume)</span>
+              )}
             </p>
           </div>
         </div>
@@ -253,7 +274,7 @@ function LogViewer() {
             Error fetching logs: {error}
           </div>
         )}
-        <div className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3 space-y-0.5">
+        <div ref={viewportRef} className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3 space-y-0.5">
           {lines.length === 0 && (
             <p className="text-slate-500 italic">No log lines captured yet. Logs appear after server actions.</p>
           )}
@@ -270,7 +291,6 @@ function LogViewer() {
               </span>
             </div>
           ))}
-          <div ref={bottomRef} />
         </div>
       </div>
     </div>
@@ -286,9 +306,12 @@ function DockerLogViewer() {
   const [polling, setPolling] = useState(true)
   const [error, setError] = useState('')
   const [n, setN] = useState(100)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [pinned, setPinned] = useState(true) // user is at the bottom → auto-scroll
+  const viewportRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isNearBottom = useRef(true) // sync ref so scroll handler can read latest
 
+  // ── fetch ────────────────────────────────────────────────────────────────
   const fetchDockerLogs = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/docker-logs?n=${n}`)
@@ -305,6 +328,7 @@ function DockerLogViewer() {
     fetchDockerLogs()
   }, [fetchDockerLogs])
 
+  // ── polling interval ─────────────────────────────────────────────────────
   useEffect(() => {
     if (polling) {
       intervalRef.current = setInterval(fetchDockerLogs, 5000)
@@ -314,10 +338,27 @@ function DockerLogViewer() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [polling, fetchDockerLogs])
 
+  // ── smart auto-scroll — only when the user is at/near the bottom ─────────
   useEffect(() => {
-    if (polling) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = viewportRef.current
+    if (!el) return
+    const onScroll = () => {
+      const near = el.scrollHeight - el.scrollTop - el.clientHeight < AUTO_SCROLL_THRESHOLD
+      isNearBottom.current = near
+      setPinned(near)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  // After new text arrives, scroll to bottom ONLY if pinned
+  useEffect(() => {
+    if (!polling) return
+    if (!isNearBottom.current) return
+    viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' })
   }, [text, polling])
 
+  // ── render ───────────────────────────────────────────────────────────────
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
@@ -327,6 +368,9 @@ function DockerLogViewer() {
             <p className="font-semibold text-sm">Docker Logs</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               docker logs homebase-app --tail {n} · refreshes every 5 s
+              {polling && !pinned && (
+                <span className="text-amber-400 ml-1">(scroll paused — scroll to bottom to resume)</span>
+              )}
             </p>
           </div>
         </div>
@@ -366,14 +410,13 @@ function DockerLogViewer() {
             Error fetching Docker logs: {error}
           </div>
         )}
-        <div className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3">
+        <div ref={viewportRef} className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3">
           {!text && !error && (
             <p className="text-slate-500 italic">Loading Docker logs…</p>
           )}
           {text && (
             <pre className="text-slate-300 whitespace-pre-wrap break-all leading-5">{text}</pre>
           )}
-          <div ref={bottomRef} />
         </div>
       </div>
     </div>

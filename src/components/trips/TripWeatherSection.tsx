@@ -67,17 +67,19 @@ export function TripWeatherSection({
   const showLegsTab = isLongTrip && legs && legs.length > 0
 
   // ── Fetch weather for a location ─────────────────────────────────
-  async function fetchWeather(location: string): Promise<{ current: WeatherData | null; forecast: ForecastDay[] | null }> {
+  async function fetchWeather(location: string): Promise<{ current: WeatherData | null; forecast: ForecastDay[] | null; needsConfig: boolean }> {
     const city = location.split(',')[0].trim()
     const [currentRes, forecastRes] = await Promise.all([
       fetch(`/api/weather?location=${encodeURIComponent(city)}`),
       fetch(`/api/weather?type=forecast&location=${encodeURIComponent(city)}`),
     ])
 
-    let current: WeatherData | null = null
-    if (currentRes.ok) {
-      current = await currentRes.json()
+    if (!currentRes.ok) {
+      const body = await currentRes.json().catch(() => ({})) as { needsConfig?: boolean }
+      return { current: null, forecast: null, needsConfig: !!body.needsConfig }
     }
+
+    const current = await currentRes.json() as WeatherData
 
     let forecast: ForecastDay[] | null = null
     if (forecastRes.ok) {
@@ -85,7 +87,7 @@ export function TripWeatherSection({
       forecast = data.forecast ?? null
     }
 
-    return { current, forecast }
+    return { current, forecast, needsConfig: false }
   }
 
   // ── Fetch destination weather ────────────────────────────────────
@@ -95,13 +97,13 @@ export function TripWeatherSection({
     setDestState('loading')
 
     fetchWeather(destination)
-      .then(({ current, forecast }) => {
+      .then(({ current, forecast, needsConfig }) => {
         if (cancelled) return
         if (current) {
           setDestWeather(current)
           setDestState('loaded')
         } else {
-          setDestState('unconfigured')
+          setDestState(needsConfig ? 'unconfigured' : 'error')
         }
         setDestForecast(forecast)
       })
@@ -119,13 +121,13 @@ export function TripWeatherSection({
     setStartState('loading')
 
     fetchWeather(startLocation)
-      .then(({ current, forecast }) => {
+      .then(({ current, forecast, needsConfig }) => {
         if (cancelled) return
         if (current) {
           setStartWeather(current)
           setStartState('loaded')
         } else {
-          setStartState('unconfigured')
+          setStartState(needsConfig ? 'unconfigured' : 'error')
         }
         setStartForecast(forecast)
       })
@@ -148,14 +150,14 @@ export function TripWeatherSection({
       }))
 
       try {
-        const { current, forecast } = await fetchWeather(leg.destination)
+        const { current, forecast, needsConfig } = await fetchWeather(leg.destination)
         if (!cancelled) {
           setLegsWeather((prev) => ({
             ...prev,
             [index]: {
               weather: current,
               forecast,
-              state: current ? 'loaded' : 'unconfigured',
+              state: current ? 'loaded' : needsConfig ? 'unconfigured' : 'error',
             },
           }))
         }
