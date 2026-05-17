@@ -2,35 +2,27 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  X, Loader2, MapPin, Clock, Tag, FileText,
-  Sun, UtensilsCrossed, Car, Hotel, Ticket, Settings2,
+  X, Loader2, MapPin, Clock, Tag, FileText, Settings2,
+  Sun, UtensilsCrossed, Car, Hotel, Ticket,
 } from 'lucide-react'
-import {
-  Dialog,
-  WideDialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { NoteEditorToolbar } from '@/components/notes/NoteEditorToolbar'
 import type { TripActivityShape, TripTagShape } from '@/types'
 
-// ── Category config ────────────────────────────────────────────────────────
+// ── Category config ────────────────────────────────────────────────────────────
 
 export const CATEGORIES = [
-  { value: 'sightseeing',    label: 'Sightseeing',    icon: Sun,             color: 'text-amber-500  bg-amber-50  dark:bg-amber-950/30'  },
-  { value: 'meal',           label: 'Meal',           icon: UtensilsCrossed, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/30' },
-  { value: 'transport',      label: 'Transport',      icon: Car,             color: 'text-blue-500   bg-blue-50   dark:bg-blue-950/30'   },
-  { value: 'accommodation',  label: 'Accommodation',  icon: Hotel,           color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/30' },
-  { value: 'activity',       label: 'Activity',       icon: Ticket,          color: 'text-green-500  bg-green-50  dark:bg-green-950/30'  },
+  { value: 'sightseeing',   label: 'Sightseeing',   icon: Sun,             color: 'text-amber-500  bg-amber-50  dark:bg-amber-950/30',  cssClass: 'hb-cat-sightseeing' },
+  { value: 'meal',          label: 'Meal',           icon: UtensilsCrossed, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/30', cssClass: 'hb-cat-meal' },
+  { value: 'transport',     label: 'Transport',      icon: Car,             color: 'text-blue-500   bg-blue-50   dark:bg-blue-950/30',   cssClass: 'hb-cat-transport' },
+  { value: 'accommodation', label: 'Stay',           icon: Hotel,           color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/30', cssClass: 'hb-cat-stay' },
+  { value: 'activity',      label: 'Activity',       icon: Ticket,          color: 'text-green-500  bg-green-50  dark:bg-green-950/30',  cssClass: 'hb-cat-activity-c' },
 ]
 
 export function getCategoryMeta(value: string | null) {
   return CATEGORIES.find((c) => c.value === value) ?? null
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function timeFromIso(iso: string | null): string {
   if (!iso) return ''
@@ -52,7 +44,7 @@ function buildIsoDateTime(dayDate: string, timeStr: string): string | null {
   } catch { return null }
 }
 
-// ── Props ──────────────────────────────────────────────────────────────────
+// ── Props ──────────────────────────────────────────────────────────────────────
 
 interface ActivityEditDialogProps {
   activity: TripActivityShape
@@ -72,7 +64,7 @@ interface ActivityEditDialogProps {
   onOpenTagManager: () => void
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────────────
 
 export function ActivityEditDialog({
   activity,
@@ -97,7 +89,7 @@ export function ActivityEditDialog({
   const [activityTags, setActivityTags]   = useState<TripActivityShape['tags']>(activity.tags ?? [])
   const [togglingTag, setTogglingTag]     = useState<string | null>(null)
 
-  // Rich text editor
+  // Rich text editor refs
   const editorRef              = useRef<HTMLDivElement>(null)
   const textColorInputRef      = useRef<HTMLInputElement>(null)
   const highlightColorInputRef = useRef<HTMLInputElement>(null)
@@ -106,10 +98,6 @@ export function ActivityEditDialog({
   const [textColor, setTextColor]           = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
 
-  // Callback ref: initialises notes the instant the element attaches to the DOM,
-  // avoiding the race where useEffect fires before base-ui's portal renders it.
-  // useCallback with [] keeps the ref function stable across re-renders so React
-  // doesn't call it again on every render and overwrite in-progress edits.
   const editorCallbackRef = useCallback((el: HTMLDivElement | null) => {
     editorRef.current = el
     if (el) el.innerHTML = activity.notes ?? ''
@@ -123,6 +111,13 @@ export function ActivityEditDialog({
       .then((data: TripTagShape[]) => setAvailableTags(data))
       .catch(() => {})
   }, [])
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const exec = useCallback((command: string, value?: string) => {
     document.execCommand(command, false, value)
@@ -168,11 +163,7 @@ export function ActivityEditDialog({
     try {
       const res = await fetch(
         `/api/trips/${tripId}/days/${dayId}/activities/${activity.id}/tags`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tagId }),
-        },
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tagId }) },
       )
       if (res.ok) {
         const updatedTags = await res.json()
@@ -204,173 +195,164 @@ export function ActivityEditDialog({
     }
   }
 
-  const selectedCat = getCategoryMeta(category)
-
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <WideDialogContent showCloseButton={false}>
+    <>
+      {/* Backdrop */}
+      <div className="hb-drawer-backdrop" onClick={onClose} role="presentation" />
 
+      {/* Drawer panel */}
+      <aside className="hb-drawer" role="dialog" aria-modal="true" aria-label="Edit Activity">
         {/* Header */}
-        <DialogHeader className="flex-row items-center justify-between px-5 py-4 border-b border-border shrink-0 gap-0">
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            Edit Activity
-          </DialogTitle>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </DialogHeader>
+        <div className="hb-drawer__head">
+          <div>
+            <p className="hb-drawer__eyebrow">Activity</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <FileText size={14} style={{ color: 'var(--muted-foreground)' }} aria-hidden />
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Edit Activity</span>
+            <button className="hb-drawer__close" onClick={onClose} aria-label="Close">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        {/* Body */}
+        <div className="hb-drawer__body">
+          {error && (
+            <div className="p-3 rounded-lg" style={{ background: 'color-mix(in srgb, var(--destructive) 12%, transparent)', color: 'var(--destructive)', fontSize: 13 }}>
+              {error}
+            </div>
+          )}
 
-          {/* Fields */}
-          <div className="px-5 pt-4 pb-3 space-y-3">
-            {error && (
-              <div className="p-2.5 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
-            )}
+          {/* Title */}
+          <div className="hb-field">
+            <label className="hb-field__label">Title *</label>
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus() } }}
+              disabled={saving}
+              placeholder="What are you doing?"
+              className="hb-input hb-input--title"
+            />
+          </div>
 
-            {/* Title — natural first focus target */}
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Title <span className="text-destructive">*</span>
-              </label>
+          {/* Location */}
+          <div className="hb-field">
+            <label className="hb-field__label"><MapPin size={12} /> Location</label>
+            <div className="hb-input-with-icon">
+              <MapPin size={14} aria-hidden />
               <input
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus() } }}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
                 disabled={saving}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="What are you doing?"
+                placeholder="e.g. Eiffel Tower"
+                className="hb-input"
               />
-            </div>
-
-            {/* Location + Category */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                  <MapPin className="h-3 w-3" /> Location
-                </label>
-                <input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  disabled={saving}
-                  placeholder="e.g. Eiffel Tower"
-                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                  <Tag className="h-3 w-3" /> Type
-                </label>
-                <div className="flex items-center gap-2">
-                  {selectedCat && (
-                    <span className={`shrink-0 p-1.5 rounded-md ${selectedCat.color}`}>
-                      <selectedCat.icon className="h-3.5 w-3.5" />
-                    </span>
-                  )}
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    disabled={saving}
-                    className="flex-1 px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">None</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Times */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Start time
-                </label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  disabled={saving}
-                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> End time
-                </label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  disabled={saving}
-                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            </div>
-
-            {/* Tags */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Tag className="h-3 w-3" /> Tags
-                </label>
-                <button
-                  type="button"
-                  onClick={onOpenTagManager}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                >
-                  <Settings2 className="h-3 w-3" />
-                  Manage tags
-                </button>
-              </div>
-              {availableTags.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">
-                  No tags yet —{' '}
-                  <button type="button" onClick={onOpenTagManager} className="underline hover:text-foreground">
-                    create some in Tag Manager
-                  </button>
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {availableTags.map((tag) => {
-                    const isActive = activityTags.some((t) => t.id === tag.id)
-                    const toggling = togglingTag === tag.id
-                    return (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        onClick={() => handleToggleTag(tag.id)}
-                        disabled={toggling || saving}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all disabled:opacity-60"
-                        style={{
-                          backgroundColor: isActive ? (tag.color ?? '#64748b') : 'transparent',
-                          color: isActive ? 'white' : (tag.color ?? '#64748b'),
-                          border: `1.5px solid ${tag.color ?? '#64748b'}`,
-                          opacity: toggling ? 0.6 : 1,
-                        }}
-                      >
-                        {tag.emoji && <span>{tag.emoji}</span>}
-                        {tag.name}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
             </div>
           </div>
 
+          {/* Category visual grid */}
+          <div className="hb-field">
+            <label className="hb-field__label"><Tag size={12} /> Type</label>
+            <div className="hb-cat-grid">
+              {CATEGORIES.map((c) => {
+                const active = category === c.value
+                const Icon = c.icon
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    className={`hb-cat-tile ${c.cssClass}`}
+                    aria-pressed={active}
+                    onClick={() => setCategory(active ? '' : c.value)}
+                    disabled={saving}
+                  >
+                    <span className="hb-cat-tile__icon"><Icon size={16} aria-hidden /></span>
+                    <span className="hb-cat-tile__label">{c.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Time range */}
+          <div className="hb-field">
+            <label className="hb-field__label"><Clock size={12} /> Time</label>
+            <div className="hb-time-range">
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                disabled={saving}
+                className="hb-input"
+                aria-label="Start time"
+              />
+              <span className="hb-time-range__sep">–</span>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                disabled={saving}
+                className="hb-input"
+                aria-label="End time"
+              />
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div className="hb-field">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label className="hb-field__label"><Tag size={12} /> Tags</label>
+              <button
+                type="button"
+                onClick={onOpenTagManager}
+                style={{ fontSize: 11, color: 'var(--muted-foreground)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                <Settings2 size={11} />
+                Manage
+              </button>
+            </div>
+            {availableTags.length === 0 ? (
+              <p style={{ fontSize: 12, color: 'var(--muted-foreground)', fontStyle: 'italic', margin: 0 }}>
+                No tags yet —{' '}
+                <button type="button" onClick={onOpenTagManager} style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', color: 'inherit', fontSize: 'inherit', fontStyle: 'italic', padding: 0 }}>
+                  create some in Tag Manager
+                </button>
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {availableTags.map((tag) => {
+                  const isActive  = activityTags.some((t) => t.id === tag.id)
+                  const toggling  = togglingTag === tag.id
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => handleToggleTag(tag.id)}
+                      disabled={toggling || saving}
+                      className={`hb-chip ${isActive ? 'hb-chip--filled' : ''}`}
+                      style={{
+                        background: isActive ? (tag.color ?? '#64748b') : undefined,
+                        borderColor: isActive ? 'transparent' : `color-mix(in srgb, ${tag.color ?? '#64748b'} 60%, transparent)`,
+                        color: isActive ? 'white' : (tag.color ?? '#64748b'),
+                        opacity: toggling ? 0.6 : 1,
+                      }}
+                    >
+                      {tag.emoji && <span>{tag.emoji}</span>}
+                      {tag.name}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Rich text notes */}
-          <div className="px-5 pb-4">
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">Notes</label>
-            <div className="rounded-md border border-input overflow-hidden">
+          <div className="hb-field">
+            <label className="hb-field__label"><FileText size={12} /> Notes</label>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
               <NoteEditorToolbar
                 exec={exec}
                 insertLink={insertLink}
@@ -389,28 +371,29 @@ export function ActivityEditDialog({
                 contentEditable={!saving}
                 suppressContentEditableWarning
                 data-placeholder="Add notes, links, tips, booking references…"
-                className="min-h-[140px] max-h-[260px] overflow-y-auto p-3 text-sm outline-none focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 prose prose-sm max-w-none"
+                className="min-h-[120px] max-h-[240px] overflow-y-auto p-3 text-sm outline-none focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 prose prose-sm max-w-none"
               />
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <DialogFooter className="px-5 py-3 shrink-0">
-          <Button variant="outline" type="button" onClick={onClose} disabled={saving}>
+        <div className="hb-drawer__foot">
+          <button type="button" className="hb-btn hb-btn--outline" onClick={onClose} disabled={saving}>
             Cancel
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
+            className="hb-btn hb-btn--primary"
             onClick={handleSave}
             disabled={saving || !title.trim()}
+            style={{ opacity: saving || !title.trim() ? 0.6 : 1 }}
           >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+            {saving && <Loader2 size={14} className="animate-spin" style={{ marginRight: 6 }} />}
             Save
-          </Button>
-        </DialogFooter>
-
-      </WideDialogContent>
-    </Dialog>
+          </button>
+        </div>
+      </aside>
+    </>
   )
 }
