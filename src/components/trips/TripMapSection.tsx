@@ -56,48 +56,70 @@ function buildStops(departureLocation: string | null | undefined, days: TripDayS
 function MapSearch() {
   const map = useMap()
   const placesLib = useMapsLibrary('places')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const elementRef = useRef<any>(null)
   const [searchMarker, setSearchMarker] = useState<google.maps.LatLngLiteral | null>(null)
   const [searchName, setSearchName] = useState('')
 
   useEffect(() => {
-    if (!placesLib || !map || !inputRef.current) return
+    if (!placesLib || !map || !containerRef.current) return
+    const mapRef = map
 
-    const autocomplete = new placesLib.Autocomplete(inputRef.current, {
-      fields: ['geometry', 'name'],
-    })
+    // PlaceAutocompleteElement — replacement for the deprecated Autocomplete class
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const PAE = (google.maps.places as any).PlaceAutocompleteElement
+    if (!PAE) return
 
-    const listener = autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace()
-      if (!place.geometry?.location) return
-      const pos = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() }
-      map.panTo(pos)
-      map.setZoom(15)
+    const pac = new PAE({ placeholder: 'Search places…' })
+
+    // Strip the element's own visual chrome so our wrapper provides the styling
+    pac.style.cssText = 'width:100%;--gmp-mat-color-surface:transparent;' +
+      '--gmp-mat-color-outline:transparent;--gmp-mat-color-on-surface:inherit;' +
+      '--gmp-mat-color-on-surface-variant:inherit;--gmp-mat-shape-medium:0;' +
+      'box-shadow:none;font-size:0.875rem;'
+
+    elementRef.current = pac
+    containerRef.current.appendChild(pac)
+
+    async function handleSelect(event: Event) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const place = (event as any).place
+      if (!place) return
+      await place.fetchFields({ fields: ['location', 'displayName'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const loc: google.maps.LatLng | null = (place as any).location
+      if (!loc) return
+      const pos = { lat: loc.lat(), lng: loc.lng() }
+      mapRef.panTo(pos)
+      mapRef.setZoom(15)
       setSearchMarker(pos)
-      setSearchName(place.name ?? '')
-    })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setSearchName((place as any).displayName ?? '')
+    }
 
-    return () => google.maps.event.removeListener(listener)
+    pac.addEventListener('gmp-placeselect', handleSelect)
+
+    return () => {
+      pac.removeEventListener('gmp-placeselect', handleSelect)
+      try { containerRef.current?.removeChild(pac) } catch {}
+      elementRef.current = null
+    }
   }, [placesLib, map])
 
   function clear() {
-    if (inputRef.current) inputRef.current.value = ''
     setSearchMarker(null)
     setSearchName('')
+    if (elementRef.current) elementRef.current.value = ''
   }
 
   return (
     <>
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-background rounded-lg shadow-lg border border-border px-3 py-2 w-72">
         <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Search places…"
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-        />
+        <div ref={containerRef} className="flex-1 min-w-0 overflow-hidden" />
         {searchMarker && (
-          <button onClick={clear} className="text-muted-foreground hover:text-foreground">
+          <button onClick={clear} className="text-muted-foreground hover:text-foreground shrink-0">
             <X className="h-4 w-4" />
           </button>
         )}
