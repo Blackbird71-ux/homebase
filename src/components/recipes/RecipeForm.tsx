@@ -337,6 +337,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
                   onChange={setTags}
                   placeholder="Add tags like Italian, pasta, quick"
                   disabled={saving}
+                  scope="recipe"
                 />
 
                 {books && books.length > 0 && (

@@ -40,9 +40,9 @@ export default async function NoteDetailPage({
     isLocked = !(unlockCookie?.value && isUnlockTokenValid(unlockCookie.value))
   }
 
-  // Fetch tag colors for the family
-  const tags = await prisma.tag.findMany({
-    where: { familyId: user.familyId },
+  // Fetch tag colors for note-scoped and general tags only
+  const tags = await (prisma as any).tag.findMany({
+    where: { familyId: user.familyId, scope: { in: ['general', 'note'] } },
     select: { name: true, color: true },
   })
   const tagColors: Record<string, string> = {}

@@ -30,9 +30,9 @@ async function getData(familyId: string, userId: string) {
 
   const categories = Array.from(new Set(notes.map(note => note.category).filter(Boolean))) as string[]
 
-  // Fetch tag colors for the family
-  const tags = await prisma.tag.findMany({
-    where: { familyId },
+  // Fetch tag colors for note-scoped and general tags only
+  const tags = await (prisma as any).tag.findMany({
+    where: { familyId, scope: { in: ['general', 'note'] } },
     select: { name: true, color: true },
   })
   const tagColors: Record<string, string> = {}

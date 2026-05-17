@@ -40,6 +40,7 @@ async function syncTagsToTagTable(
     .map((name) => ({
       name,
       familyId,
+      scope: 'note',
       ...(tagColors?.[name] ? { color: tagColors[name] } : {}),
     }))
 
