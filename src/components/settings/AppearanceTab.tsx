@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, MapPin, LayoutList, LayoutGrid } from 'lucide-react'
+import { PillNav } from '@/components/shared/PillNav'
+import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, MapPin, LayoutList, LayoutGrid, Palette, Type, LayoutDashboard, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AppearanceTabProps {
@@ -231,6 +231,15 @@ export function AppearanceTab({
   }
 
   const isHighContrast = theme.startsWith('high-contrast')
+  type AppTab = 'theme' | 'text' | 'dashboard' | 'advanced'
+  const [appTab, setAppTab] = useState<AppTab>('theme')
+
+  const APPEARANCE_TABS = [
+    { id: 'theme' as const,     label: 'Theme',     icon: Palette },
+    { id: 'text' as const,      label: 'Text',      icon: Type },
+    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'advanced' as const,  label: 'Advanced',  icon: Settings2 },
+  ]
 
   function SaveBar() {
     return (
@@ -259,16 +268,19 @@ export function AppearanceTab({
   }
 
   return (
-    <Tabs defaultValue="theme" className="w-full">
-      <TabsList className="mb-6">
-        <TabsTrigger value="theme">Theme</TabsTrigger>
-        <TabsTrigger value="text">Text</TabsTrigger>
-        <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-        <TabsTrigger value="advanced">Advanced</TabsTrigger>
-      </TabsList>
+    <div className="space-y-6">
+      {/* Inner PillNav */}
+      <div className="overflow-x-auto pb-1">
+        <PillNav
+          items={APPEARANCE_TABS}
+          active={appTab}
+          onChange={(id) => setAppTab(id as AppTab)}
+          size="sm"
+        />
+      </div>
 
       {/* ── THEME TAB ── */}
-      <TabsContent value="theme" className="space-y-6">
+      {appTab === 'theme' && <div className="space-y-6">
 
       {/* Theme */}
       <Card>
@@ -307,10 +319,10 @@ export function AppearanceTab({
       </Card>
 
       <SaveBar />
-      </TabsContent>
+      </div>}
 
       {/* ── TEXT TAB ── */}
-      <TabsContent value="text" className="space-y-6">
+      {appTab === 'text' && <div className="space-y-6">
 
       {/* Font Size */}
       <Card>
@@ -407,10 +419,10 @@ export function AppearanceTab({
       </Card>
 
       <SaveBar />
-      </TabsContent>
+      </div>}
 
       {/* ── DASHBOARD TAB ── */}
-      <TabsContent value="dashboard" className="space-y-6">
+      {appTab === 'dashboard' && <div className="space-y-6">
 
       {/* Week Start */}
       <Card>
@@ -648,10 +660,10 @@ export function AppearanceTab({
       </Card>
 
       <SaveBar />
-      </TabsContent>
+      </div>}
 
       {/* ── ADVANCED TAB ── */}
-      <TabsContent value="advanced" className="space-y-6">
+      {appTab === 'advanced' && <div className="space-y-6">
 
       {/* Secure Card Appearance */}
       <Card>
@@ -712,8 +724,7 @@ export function AppearanceTab({
       </Card>
 
       <SaveBar />
-      </TabsContent>
-
-    </Tabs>
+      </div>}
+    </div>
   )
 }

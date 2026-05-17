@@ -167,20 +167,20 @@ function TripMapInner({
   const [markers, setMarkers] = useState<MarkerData[]>([])
   const [routePath, setRoutePath] = useState<google.maps.LatLngLiteral[]>([])
   const [geoStatus, setGeoStatus] = useState<string>('locating stops…')
+  // Track whether we've already fitted the map to the resolved bounds
+  const fittedRef = useRef(false)
 
+  // Geocoding runs independently of the map instance so map re-initialisation
+  // doesn't cancel mid-loop.
   useEffect(() => {
-    if (!map) return
-    const mapRef = map
-
     let cancelled = false
+    fittedRef.current = false
 
     async function run() {
       const targets = stops.length > 0 ? stops : null
 
       if (!targets) {
         setGeoStatus('no stops with locations')
-        const pos = await nominatimGeocode(destination)
-        if (!cancelled && pos) { mapRef.setCenter(pos); mapRef.setZoom(9) }
         return
       }
 
@@ -200,30 +200,43 @@ function TripMapInner({
 
       setGeoStatus(`${resolved.length}/${targets.length} located`)
       setMarkers(resolved.map((r, i) => ({ position: r.position, stop: r.stop, index: i })))
-
-      const path = resolved.map(r => r.position)
-      setRoutePath(path)
-
-      if (path.length >= 2) {
-        const bounds = path.reduce(
-          (b, p) => ({
-            north: Math.max(b.north, p.lat),
-            south: Math.min(b.south, p.lat),
-            east: Math.max(b.east, p.lng),
-            west: Math.min(b.west, p.lng),
-          }),
-          { north: -90, south: 90, east: -180, west: 180 }
-        )
-        mapRef.fitBounds(bounds, 48)
-      } else if (path.length === 1) {
-        mapRef.setCenter(path[0])
-        mapRef.setZoom(9)
-      }
+      setRoutePath(resolved.map(r => r.position))
     }
 
     run()
     return () => { cancelled = true }
-  }, [map, stops, destination])
+  }, [stops])
+
+  // Fit the map once markers are resolved and the map instance is available.
+  useEffect(() => {
+    if (!map || fittedRef.current) return
+
+    if (routePath.length === 0 && markers.length === 0) {
+      // No stops resolved — centre on destination
+      nominatimGeocode(destination).then(pos => {
+        if (pos) { map.setCenter(pos); map.setZoom(9) }
+      })
+      return
+    }
+
+    if (routePath.length >= 2) {
+      const bounds = routePath.reduce(
+        (b, p) => ({
+          north: Math.max(b.north, p.lat),
+          south: Math.min(b.south, p.lat),
+          east: Math.max(b.east, p.lng),
+          west: Math.min(b.west, p.lng),
+        }),
+        { north: -90, south: 90, east: -180, west: 180 }
+      )
+      map.fitBounds(bounds, 48)
+      fittedRef.current = true
+    } else if (routePath.length === 1) {
+      map.setCenter(routePath[0])
+      map.setZoom(9)
+      fittedRef.current = true
+    }
+  }, [map, routePath, markers, destination])
 
   return (
     <>
@@ -287,7 +300,7 @@ function TripMapInner({
           ) : (
             <ol className="space-y-3">
               {stops.map((stop, i) => {
-                const marker = markers[i]
+                const marker = markers.find(m => m.stop === stop)
                 return (
                   <li
                     key={i}

@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { TripDetail, TripDayShape, TripPackingEntryShape } from '@/types'
+import { PillNav } from '@/components/shared/PillNav'
 import { ItinerarySection } from '@/components/trips/ItinerarySection'
 import { TripBudgetSection } from '@/components/trips/TripBudgetSection'
 import { TripWeatherSection } from '@/components/trips/TripWeatherSection'
@@ -256,27 +257,16 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
         </div>
       </div>
 
-      {/* ── MOBILE: tab bar + tab content ── */}
+      {/* ── MOBILE: pill nav + tab content ── */}
       <div className="flex md:hidden flex-col flex-1 min-h-0 overflow-hidden">
-        {/* Tab bar */}
-        <div className="border-b border-border shrink-0 overflow-x-auto">
-          <div className="flex items-end px-4 min-w-max">
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                  activeTab === id
-                    ? 'border-foreground text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40',
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
-          </div>
+        {/* Pill nav bar */}
+        <div className="border-b border-border shrink-0 px-4 py-2.5 overflow-x-auto">
+          <PillNav
+            items={TABS}
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as TripTab)}
+            size="sm"
+          />
         </div>
 
         {/* Tab content */}

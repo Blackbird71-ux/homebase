@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PillNav } from '@/components/shared/PillNav'
 import { toast } from 'sonner'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 
@@ -409,24 +409,19 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
           </CardContent>
         </Card>
       ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="overflow-x-auto pb-1">
-            <TabsList className="w-max">
-              <TabsTrigger value="all">
-                All ({contacts.length})
-              </TabsTrigger>
-              {grouped.map((g) => (
-                <TabsTrigger key={g.value} value={g.value} className={g.color}>
-                  {g.label} ({g.contacts.length})
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
+        <PillNav
+            items={[
+              { id: 'all', label: `All (${contacts.length})` },
+              ...grouped.map((g) => ({ id: g.value, label: `${g.label} (${g.contacts.length})` })),
+            ]}
+            active={activeTab}
+            onChange={setActiveTab}
+            size="sm"
+          />
 
-          <TabsContent value={activeTab} className="mt-4">
+          <div className="mt-4">
             {renderGrid(contactsForTab(activeTab))}
-          </TabsContent>
-        </Tabs>
+          </div>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

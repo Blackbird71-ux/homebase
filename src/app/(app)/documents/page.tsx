@@ -5,23 +5,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DocumentCard, type DocumentData } from '@/components/documents/DocumentCard'
 import { DocumentUploadDialog } from '@/components/documents/DocumentUploadDialog'
-import { Plus, Search, AlertTriangle, FileText } from 'lucide-react'
-import { toast } from 'sonner'
+import { Plus, Search, AlertTriangle, FileText, Bell } from 'lucide-react'
+import { PillNav } from '@/components/shared/PillNav'
 
 const CATEGORY_LABELS: Record<string, string> = {
-  all: 'All Categories',
-  insurance: 'Insurance',
-  warranty: 'Warranty',
-  passport: 'Passport',
-  id: 'ID Document',
-  medical: 'Medical',
-  financial: 'Financial',
-  legal: 'Legal',
-  tax: 'Tax',
-  education: 'Education',
-  vehicle: 'Vehicle',
-  property: 'Property',
-  other: 'Other',
+  all:        'All',
+  insurance:  'Insurance',
+  warranty:   'Warranty',
+  passport:   'Passport',
+  id:         'ID',
+  medical:    'Medical',
+  financial:  'Financial',
+  legal:      'Legal',
+  tax:        'Tax',
+  education:  'Education',
+  vehicle:    'Vehicle',
+  property:   'Property',
+  other:      'Other',
 }
 
 export default function DocumentsPage() {
@@ -40,11 +40,9 @@ export default function DocumentsPage() {
       const params = new URLSearchParams()
       if (categoryFilter !== 'all') params.set('category', categoryFilter)
       if (showExpiringOnly) params.set('expiringSoon', 'true')
-
       const res = await fetch(`/api/documents?${params}`)
       if (!res.ok) throw new Error('Failed to fetch')
-      const data = await res.json()
-      setDocuments(data)
+      setDocuments(await res.json())
     } catch {
       setFetchError(true)
     } finally {
@@ -52,9 +50,7 @@ export default function DocumentsPage() {
     }
   }, [categoryFilter, showExpiringOnly])
 
-  useEffect(() => {
-    fetchDocuments()
-  }, [fetchDocuments])
+  useEffect(() => { fetchDocuments() }, [fetchDocuments])
 
   const filtered = documents.filter((doc) => {
     if (!search) return true
@@ -80,21 +76,15 @@ export default function DocumentsPage() {
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       <div className="p-4 md:p-6 pb-0">
+
+        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold">Document Vault</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Document Vault</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
               Store and manage household documents
-              {expiringCount > 0 && (
-                <span className="ml-2 text-amber-500">
-                  · {expiringCount} expiring soon
-                </span>
-              )}
-              {expiredCount > 0 && (
-                <span className="ml-2 text-destructive">
-                  · {expiredCount} expired
-                </span>
-              )}
+              {expiringCount > 0 && <span className="ml-2 text-amber-500">· {expiringCount} expiring soon</span>}
+              {expiredCount > 0 && <span className="ml-2 text-destructive">· {expiredCount} expired</span>}
             </p>
           </div>
           <Button onClick={() => setUploadOpen(true)}>
@@ -103,26 +93,17 @@ export default function DocumentsPage() {
           </Button>
         </div>
 
-        {/* Category Tabs */}
-        <div className="overflow-x-auto -mx-4 md:-mx-6 mb-4">
-          <div className="flex gap-1 px-4 md:px-6 min-w-max border-b border-border">
-            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => setCategoryFilter(value)}
-                className={`whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-md transition-colors border-b-2 -mb-px ${
-                  categoryFilter === value
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        {/* Category filter pills */}
+        <div className="overflow-x-auto mb-3 pb-1">
+          <PillNav
+            items={Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ id: value, label }))}
+            active={categoryFilter}
+            onChange={setCategoryFilter}
+            size="sm"
+          />
         </div>
 
-        {/* Search & Expiring Filter */}
+        {/* Search + expiring toggle */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -133,18 +114,16 @@ export default function DocumentsPage() {
               className="pl-8"
             />
           </div>
-          <Button
-            variant={showExpiringOnly ? 'default' : 'outline'}
+          <PillNav
+            items={[{ id: 'expiring', label: 'Expiring Soon', icon: Bell }]}
+            active={showExpiringOnly ? 'expiring' : ''}
+            onChange={() => setShowExpiringOnly((v) => !v)}
             size="sm"
-            onClick={() => setShowExpiringOnly(!showExpiringOnly)}
-          >
-            <AlertTriangle className="h-4 w-4 mr-1" />
-            Expiring Soon
-          </Button>
+          />
         </div>
       </div>
 
-      {/* Document Grid */}
+      {/* Document grid */}
       <div className="flex-1 p-4 md:p-6 pt-0">
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -157,9 +136,7 @@ export default function DocumentsPage() {
             <AlertTriangle className="h-12 w-12 mb-3 text-destructive opacity-70" />
             <p className="text-lg font-medium">Failed to load documents</p>
             <p className="text-sm mt-1">There was a problem connecting to the server.</p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={fetchDocuments}>
-              Try again
-            </Button>
+            <Button variant="outline" size="sm" className="mt-4" onClick={fetchDocuments}>Try again</Button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -172,8 +149,7 @@ export default function DocumentsPage() {
             </p>
             {!search && categoryFilter === 'all' && !showExpiringOnly && (
               <Button variant="outline" className="mt-4" onClick={() => setUploadOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                Upload Document
+                <Plus className="h-4 w-4 mr-1" />Upload Document
               </Button>
             )}
           </div>
@@ -184,9 +160,7 @@ export default function DocumentsPage() {
                 key={doc.id}
                 document={doc}
                 onDeleted={(id) => setDocuments((prev) => prev.filter((d) => d.id !== id))}
-                onUpdated={(updated) =>
-                  setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
-                }
+                onUpdated={(updated) => setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))}
               />
             ))}
           </div>
@@ -196,9 +170,7 @@ export default function DocumentsPage() {
       <DocumentUploadDialog
         open={uploadOpen}
         onOpenChange={setUploadOpen}
-        onUploaded={(doc) => {
-          setDocuments((prev) => [doc, ...prev])
-        }}
+        onUploaded={(doc) => setDocuments((prev) => [doc, ...prev])}
       />
     </div>
   )

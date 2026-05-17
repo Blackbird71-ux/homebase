@@ -10,6 +10,7 @@ import { Dialog, DialogHeader, DialogTitle, WideDialogContent } from '@/componen
 import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, FolderIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { PillNav } from '@/components/shared/PillNav'
 
 interface Note {
   id: string
@@ -307,90 +308,25 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         </Button>
       </div>
 
-      {/* Tab bar - horizontal scrollable */}
-      <div className="flex border-b border-border shrink-0 overflow-x-auto scrollbar-thin">
-        <button
-          type="button"
-          onClick={() => setActiveTab('family')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === 'family'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-          }`}
-        >
-          <UsersIcon className="h-4 w-4" />
-          Family
-          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-            {tabCounts.family}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('private')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === 'private'
-              ? 'border-amber-500 text-amber-600 dark:text-amber-400'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-          }`}
-        >
-          <LockIcon className="h-4 w-4" />
-          Private
-          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-            {tabCounts.private}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('secure')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === 'secure'
-              ? 'border-green-500 text-green-600 dark:text-green-400'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-          }`}
-        >
-          <ShieldCheckIcon className="h-4 w-4" />
-          Secure
-          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-            {tabCounts.secure}
-          </span>
-        </button>
-
-        {/* Dynamic category tabs */}
-        {allCategories.map(category => (
-          <button
-            key={category}
-            type="button"
-            onClick={() => setActiveTab(category)}
-            className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === category
-                ? 'border-purple-500 text-purple-600 dark:text-purple-400'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-            }`}
-          >
-            <FolderIcon className="h-4 w-4" />
-            {category}
-            <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-              {notes.filter(n => n.category === category && !n.isArchived).length}
-            </span>
-          </button>
-        ))}
-
-        {/* Archived tab */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('archived')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === 'archived'
-              ? 'border-gray-500 text-gray-600 dark:text-gray-400'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-          }`}
-        >
-          <ArchiveIcon className="h-4 w-4" />
-          Archived
-          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-            {tabCounts.archived}
-          </span>
-        </button>
+      {/* Tab bar — PillNav standard */}
+      <div className="shrink-0 overflow-x-auto pb-1">
+        <PillNav
+          items={[
+            { id: 'family',   label: 'Family',   icon: UsersIcon,       badge: tabCounts.family },
+            { id: 'private',  label: 'Private',  icon: LockIcon,        badge: tabCounts.private },
+            { id: 'secure',   label: 'Secure',   icon: ShieldCheckIcon, badge: tabCounts.secure },
+            ...allCategories.map(cat => ({
+              id: cat,
+              label: cat,
+              icon: FolderIcon,
+              badge: notes.filter(n => n.category === cat && !n.isArchived).length,
+            })),
+            { id: 'archived', label: 'Archived', icon: ArchiveIcon,     badge: tabCounts.archived },
+          ]}
+          active={activeTab}
+          onChange={setActiveTab}
+          size="sm"
+        />
       </div>
 
       {/* Filters */}

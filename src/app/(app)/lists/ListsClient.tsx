@@ -12,8 +12,8 @@ import { TemplateDialog } from '@/components/lists/TemplateDialog'
 import { ListPresence } from '@/components/lists/ListPresence'
 import type { ListItemShape } from '@/lib/list-helpers'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { ListIcon, CalendarDays } from 'lucide-react'
+import { ListIcon, CalendarDays, Users, User } from 'lucide-react'
+import { PillNav } from '@/components/shared/PillNav'
 
 interface SerializedItem {
   id: string
@@ -65,33 +65,23 @@ interface ListsClientProps {
 export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId, members }: ListsClientProps) {
   const searchParams = useSearchParams()
 
-  // Master list — always the full family set; never replaced by a filtered fetch
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
   const [listFilter, setListFilter] = useState<'all' | 'mine'>('mine')
   const [todoView, setTodoView] = useState<'list' | 'calendar'>('list')
 
-  // Filtered view — pure client-side derivation, no extra network round-trip needed
-  // "mine"   → lists owned by the current user OR unowned (createdBy '' / null)
-  // "family" → lists owned by other family members only
   const visibleLists = listFilter === 'mine'
     ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
     : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
 
-  // Determine initial active list: prefer ?list= param, then defaultListId, fall back to first visible
   const initialActiveId = (() => {
     const urlListId = searchParams.get('list')
     if (urlListId && initialLists.some((l) => l.id === urlListId)) return urlListId
-    if (initialDefaultListId && initialLists.some((l) => l.id === initialDefaultListId)) {
-      return initialDefaultListId
-    }
+    if (initialDefaultListId && initialLists.some((l) => l.id === initialDefaultListId)) return initialDefaultListId
     return initialLists[0]?.id ?? null
   })()
   const [activeListId, setActiveListId] = useState<string | null>(initialActiveId)
 
-  // Always resolve the active list from the full list, not the filtered view,
-  // so the main panel doesn't blank out when you change filter while viewing a
-  // list that happens to be hidden in the sidebar.
   const activeList = lists.find((l) => l.id === activeListId) ?? null
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -101,13 +91,11 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   const renameInputRef = useRef<HTMLInputElement>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Edit list dialog state
   const [editListDialogOpen, setEditListDialogOpen] = useState(false)
   const [editingList, setEditingList] = useState<SerializedList | null>(null)
 
   function handleOpenEditList(id: string) {
-    const list = lists.find((l) => l.id === id) ?? null
-    setEditingList(list)
+    setEditingList(lists.find((l) => l.id === id) ?? null)
     setEditListDialogOpen(true)
   }
 
@@ -126,9 +114,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),
     })
-    if (res.ok) {
-      setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: trimmed } : l)))
-    }
+    if (res.ok) setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: trimmed } : l)))
     setRenamingListId(null)
   }
 
@@ -170,17 +156,13 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   async function handleSetDefault(listId: string) {
     const list = listId ? lists.find((l) => l.id === listId) : null
     const uiPrefs: Record<string, string | null> = { defaultListId: listId || null }
-    if (list?.type === 'SHOPPING') {
-      uiPrefs.dashboardShoppingListId = listId || null
-    }
+    if (list?.type === 'SHOPPING') uiPrefs.dashboardShoppingListId = listId || null
     const res = await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uiPreferences: uiPrefs }),
     })
-    if (res.ok) {
-      setDefaultListId(listId || null)
-    }
+    if (res.ok) setDefaultListId(listId || null)
   }
 
   async function handleConvert(id: string, newType: 'SHOPPING' | 'TODO') {
@@ -210,15 +192,12 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       const remaining = prev.filter((l) => !reorderedIds.has(l.id))
       return [...updates, ...remaining]
     })
-
     const res = await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uiPreferences: { listOrder: orderedIds } }),
     })
-    if (!res.ok) {
-      toast.error('Failed to save list order')
-    }
+    if (!res.ok) toast.error('Failed to save list order')
   }, [])
 
   const listsMeta = visibleLists.map((l) => ({
@@ -231,124 +210,109 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
 
   function handleFilterChange(filter: 'all' | 'mine') {
     setListFilter(filter)
-    // If the currently active list is hidden by the new filter, switch to the first visible list
     const newVisible = filter === 'mine'
       ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
       : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
     if (activeListId && !newVisible.some((l) => l.id === activeListId)) {
-      const firstVisible = newVisible[0]
-      if (firstVisible) {
-        setActiveListId(firstVisible.id)
-      }
+      const first = newVisible[0]
+      if (first) setActiveListId(first.id)
     }
   }
 
-  const filterButtons = (
-    <div className="flex gap-1">
-      <button
-        type="button"
-        onClick={() => handleFilterChange('all')}
-        className={`flex-1 text-xs font-medium py-1 px-2 rounded transition-colors ${
-          listFilter === 'all'
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:bg-muted'
-        }`}
-      >
-        Family
-      </button>
-      <button
-        type="button"
-        onClick={() => handleFilterChange('mine')}
-        className={`flex-1 text-xs font-medium py-1 px-2 rounded transition-colors ${
-          listFilter === 'mine'
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:bg-muted'
-        }`}
-      >
-        Mine
-      </button>
-    </div>
+  // ── Shared PillNav definitions ─────────────────────────────────────────────
+
+  const filterNav = (
+    <PillNav
+      items={[
+        { id: 'mine',   label: 'Mine',   icon: User },
+        { id: 'all',    label: 'Family', icon: Users },
+      ]}
+      active={listFilter}
+      onChange={(id) => handleFilterChange(id as 'all' | 'mine')}
+      size="sm"
+    />
   )
+
+  const todoViewNav = (
+    <PillNav
+      items={[
+        { id: 'list',     label: 'List',     icon: ListIcon },
+        { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+      ]}
+      active={todoView}
+      onChange={(id) => setTodoView(id as 'list' | 'calendar')}
+      size="sm"
+    />
+  )
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-full overflow-hidden flex-col md:flex-row">
 
-      {/* ── Mobile: filter row ── */}
-      <div className="md:hidden flex items-center gap-2 px-2 py-1 border-b border-border shrink-0">
-        <div className="flex gap-1 w-full">
-          <Button
-            variant={listFilter === 'all' ? 'default' : 'outline'}
-            size="sm"
-            className="flex-1 h-7 text-xs px-2"
-            onClick={() => handleFilterChange('all')}
-          >
-            Family
-          </Button>
-          <Button
-            variant={listFilter === 'mine' ? 'default' : 'outline'}
-            size="sm"
-            className="flex-1 h-7 text-xs px-2"
-            onClick={() => handleFilterChange('mine')}
-          >
-            Mine
-          </Button>
+      {/* ── Mobile: filter + horizontal list chip bar ── */}
+      <div className="md:hidden flex flex-col shrink-0 border-b border-border">
+        {/* Filter pills */}
+        <div className="flex items-center px-3 py-2 border-b border-border">
+          {filterNav}
         </div>
-      </div>
 
-      {/* ── Mobile: horizontal chip bar ── */}
-      <div className="md:hidden flex items-center gap-2 px-2 py-1.5 border-b border-border overflow-x-auto shrink-0 scroll-smooth">
-        {listsMeta.map((list) => (
-          renamingListId === list.id ? (
-            <form
-              key={list.id}
-              onSubmit={(e) => { e.preventDefault(); handleRenameSubmit(list.id) }}
-              className="flex items-center gap-1 shrink-0"
-            >
-              <input
-                ref={renameInputRef}
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onBlur={() => handleRenameSubmit(list.id)}
-                onKeyDown={(e) => { if (e.key === 'Escape') setRenamingListId(null) }}
-                className="px-2 py-1 rounded-full text-sm border border-primary bg-background w-32 outline-none"
-                maxLength={100}
-              />
-            </form>
-          ) : (
-            <button
-              key={list.id}
-              type="button"
-              onClick={() => setActiveListId(list.id)}
-              onTouchStart={() => {
-                longPressTimer.current = setTimeout(() => startMobileRename(lists.find((l) => l.id === list.id)!), 600)
-              }}
-              onTouchEnd={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
-              onTouchMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0 ${
-                activeListId === list.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-              title="Long-press to rename"
-            >
-              {list.name}
-              <span className="text-xs opacity-70">({list._count.items})</span>
-            </button>
-          )
-        ))}
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm whitespace-nowrap shrink-0 border border-dashed border-border text-muted-foreground hover:bg-muted transition-colors"
-        >
-          + New
-        </button>
+        {/* Horizontal list chips — long-press to rename */}
+        <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto scroll-smooth">
+          {listsMeta.map((list) =>
+            renamingListId === list.id ? (
+              <form
+                key={list.id}
+                onSubmit={(e) => { e.preventDefault(); handleRenameSubmit(list.id) }}
+                className="flex items-center gap-1 shrink-0"
+              >
+                <input
+                  ref={renameInputRef}
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => handleRenameSubmit(list.id)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setRenamingListId(null) }}
+                  className="px-2 py-1 rounded-full text-sm border border-primary bg-background w-32 outline-none"
+                  maxLength={100}
+                />
+              </form>
+            ) : (
+              <button
+                key={list.id}
+                type="button"
+                onClick={() => setActiveListId(list.id)}
+                onTouchStart={() => {
+                  longPressTimer.current = setTimeout(() => startMobileRename(lists.find((l) => l.id === list.id)!), 600)
+                }}
+                onTouchEnd={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
+                onTouchMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors whitespace-nowrap shrink-0 text-xs px-2.5 py-1',
+                  activeListId === list.id
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 bg-background',
+                ].join(' ')}
+                title="Long-press to rename"
+              >
+                {list.name}
+                <span className="opacity-60">({list._count.items})</span>
+              </button>
+            )
+          )}
+          <button
+            type="button"
+            onClick={() => setDialogOpen(true)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs whitespace-nowrap shrink-0 border border-dashed border-border text-muted-foreground hover:bg-muted transition-colors"
+          >
+            + New
+          </button>
+        </div>
       </div>
 
       {/* ── Desktop: sidebar ── */}
       <aside className="hidden md:flex md:flex-col w-[200px] shrink-0 border-r border-border overflow-y-auto">
-        <div className="px-2 pt-2 pb-1 border-b border-border">
-          {filterButtons}
+        <div className="px-3 py-2 border-b border-border">
+          {filterNav}
         </div>
         <div className="flex-1 overflow-y-auto">
           <ListSelector
@@ -442,37 +406,8 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
                     title="Double-click to rename"
                   >{activeList.name}</h1>
                 )}
-                {/* View toggle */}
-                <div className="flex items-center border border-border/60 rounded-md overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setTodoView('list')}
-                    className={[
-                      'p-1.5 transition-colors',
-                      todoView === 'list'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted',
-                    ].join(' ')}
-                    aria-label="List view"
-                    title="List view"
-                  >
-                    <ListIcon className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTodoView('calendar')}
-                    className={[
-                      'p-1.5 transition-colors',
-                      todoView === 'calendar'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted',
-                    ].join(' ')}
-                    aria-label="Calendar view"
-                    title="Calendar view"
-                  >
-                    <CalendarDays className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {/* View toggle — PillNav standard */}
+                {todoViewNav}
               </div>
               <button
                 onClick={() => setTemplateDialogOpen(true)}
