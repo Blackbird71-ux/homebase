@@ -23,6 +23,7 @@ import {
   Utensils,
   Bot,
   HelpCircle,
+  Plane,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +38,7 @@ const navItems = [
   { href: '/finance',   label: 'Finance',  icon: DollarSign },
   { href: '/recipes',   label: 'Recipes',  icon: ChefHat },
   { href: '/meal-plan', label: 'Meals',    icon: CalendarDays },
+  { href: '/trips',     label: 'Trips',    icon: Plane },
   { href: '/notes',     label: 'Notes',    icon: StickyNote },
   { href: '/settings',  label: 'Settings', icon: Settings },
 ]

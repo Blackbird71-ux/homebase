@@ -2,13 +2,34 @@
 
 import { useState, useEffect, useRef } from 'react'
 import {
-  Plus, X, Loader2, Sun, MapPin, Clock, StickyNote,
-  Pencil, Trash2, Check, Tag, Settings2, ChevronsUpDown, ChevronsDownUp,
+  Plus, Loader2, Sun, MapPin, Clock, StickyNote,
+  Pencil, Trash2, Check, Tag, Settings2, GripVertical,
 } from 'lucide-react'
 import type { TripDayShape, TripActivityShape, TripTagShape } from '@/types'
-import { ActivityEditDialog, getCategoryMeta, CATEGORIES } from './ActivityEditDialog'
+import { ActivityEditDialog, getCategoryMeta } from './ActivityEditDialog'
 import { TripTagsManager } from './TripTagsManager'
 import { TripAttachmentsSection } from './TripAttachmentsSection'
+import { useSortable } from '@/hooks/trips/useSortable'
+
+// ── Category badge ─────────────────────────────────────────────────────────────
+function CategoryBadge({ category, size = 36 }: { category: string | null; size?: number }) {
+  const meta = getCategoryMeta(category)
+  if (!meta) {
+    return (
+      <span className="hb-cat-badge hb-cat-default" style={{ width: size, height: size }}>
+        <Sun size={size === 36 ? 18 : 14} />
+      </span>
+    )
+  }
+  const Icon = meta.icon
+  return (
+    <span className={`hb-cat-badge ${meta.cssClass}`} style={{ width: size, height: size }}>
+      <Icon size={size === 36 ? 18 : 14} />
+    </span>
+  )
+}
+
+// ── Props ──────────────────────────────────────────────────────────────────────
 
 interface ItinerarySectionProps {
   days: TripDayShape[]
@@ -19,11 +40,11 @@ interface ItinerarySectionProps {
 }
 
 export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdated }: ItinerarySectionProps) {
-  const [addingDay, setAddingDay]           = useState(false)
-  const [newDayDate, setNewDayDate]         = useState('')
-  const [newDayLabel, setNewDayLabel]       = useState('')
-  const [savingDay, setSavingDay]           = useState(false)
-  const [expandedDayIds, setExpandedDayIds] = useState<Set<string>>(new Set())
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(days[0]?.id ?? null)
+  const [addingDay, setAddingDay]         = useState(false)
+  const [newDayDate, setNewDayDate]       = useState('')
+  const [newDayLabel, setNewDayLabel]     = useState('')
+  const [savingDay, setSavingDay]         = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
 
   const [editingDayId, setEditingDayId]   = useState<string | null>(null)
@@ -37,11 +58,12 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     activity: TripActivityShape
   } | null>(null)
 
-  // ── Day tags state ─────────────────────────────────────────────────────────
-  const [availableTags, setAvailableTags]     = useState<TripTagShape[]>([])
-  const [togglingDayTag, setTogglingDayTag]   = useState<string | null>(null)
+  const [availableTags, setAvailableTags]   = useState<TripTagShape[]>([])
+  const [togglingDayTag, setTogglingDayTag] = useState<string | null>(null)
 
-  // Load available tags once
+  // Local activity order for drag-reorder (resets on navigation/refresh — visual only)
+  const [localActivities, setLocalActivities] = useState<TripActivityShape[]>([])
+
   useEffect(() => {
     fetch('/api/trips/tags')
       .then((r) => r.json())
@@ -49,16 +71,27 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
       .catch(() => {})
   }, [])
 
+  // Sync local activities whenever selected day or days array changes
+  useEffect(() => {
+    const d = days.find((d) => d.id === selectedDayId)
+    setLocalActivities(d?.activities ?? [])
+  }, [selectedDayId, days])
+
+  const activitySortable = useSortable(localActivities, setLocalActivities, {
+    id: `activities-${selectedDayId ?? 'none'}`,
+    handleOnly: true,
+  })
+
   const tripStart = new Date(startDate)
   const tripEnd   = new Date(endDate)
+  const selectedDay = days.find((d) => d.id === selectedDayId) ?? null
 
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('en-AU', {
-      weekday: 'short', day: 'numeric', month: 'short',
-    })
+  function formatDate(dateStr: string, opts?: Intl.DateTimeFormatOptions): string {
+    return new Date(dateStr).toLocaleDateString('en-AU', opts ?? { weekday: 'short', day: 'numeric', month: 'short' })
   }
 
   // ── Day tag toggling ───────────────────────────────────────────────────────
+
   async function handleToggleDayTag(dayId: string, tagId: string) {
     setTogglingDayTag(tagId)
     try {
@@ -69,18 +102,14 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
       })
       if (res.ok) {
         const updatedTags = await res.json()
-        onDaysUpdated(
-          days.map((d) =>
-            d.id === dayId ? { ...d, tags: updatedTags } : d,
-          ),
-        )
+        onDaysUpdated(days.map((d) => d.id === dayId ? { ...d, tags: updatedTags } : d))
       }
     } finally {
       setTogglingDayTag(null)
     }
   }
 
-  // ── Day CRUD ──────────────────────────────────────────────────────────────
+  // ── Day CRUD ────────────────────────────────────────────────────────────────
 
   async function handleAddDay() {
     if (!newDayDate) return
@@ -93,11 +122,12 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
       })
       if (res.ok) {
         const day = await res.json()
-        onDaysUpdated([...days, day].sort((a, b) => a.date.localeCompare(b.date)))
+        const updated = [...days, day].sort((a, b) => a.date.localeCompare(b.date))
+        onDaysUpdated(updated)
         setNewDayDate('')
         setNewDayLabel('')
         setAddingDay(false)
-        setExpandedDayIds((prev) => new Set([...prev, day.id]))
+        setSelectedDayId(day.id)
       }
     } finally {
       setSavingDay(false)
@@ -108,8 +138,9 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     if (!confirm('Remove this day and all its activities?')) return
     const res = await fetch(`/api/trips/${tripId}/days/${dayId}`, { method: 'DELETE' })
     if (res.ok) {
-      onDaysUpdated(days.filter((d) => d.id !== dayId))
-      setExpandedDayIds((prev) => { const s = new Set(prev); s.delete(dayId); return s })
+      const updated = days.filter((d) => d.id !== dayId)
+      onDaysUpdated(updated)
+      if (selectedDayId === dayId) setSelectedDayId(updated[0]?.id ?? null)
     }
   }
 
@@ -125,10 +156,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
       const res = await fetch(`/api/trips/${tripId}/days/${dayId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: editDayLabel.trim() || null,
-          notes: editDayNotes.trim() || null,
-        }),
+        body: JSON.stringify({ label: editDayLabel.trim() || null, notes: editDayNotes.trim() || null }),
       })
       if (res.ok) {
         const updated = await res.json()
@@ -140,48 +168,31 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     }
   }
 
-  // ── Activity CRUD ─────────────────────────────────────────────────────────
+  // ── Activity CRUD ────────────────────────────────────────────────────────────
 
-  async function handleSaveActivity(
-    dayId: string,
-    activityId: string,
-    data: {
-      title: string
-      location: string | null
-      startTime: string | null
-      endTime: string | null
-      notes: string | null
-      category: string | null
-    },
-  ) {
-    const res = await fetch(
-      `/api/trips/${tripId}/days/${dayId}/activities/${activityId}`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      },
-    )
+  async function handleSaveActivity(dayId: string, activityId: string, data: {
+    title: string; location: string | null; startTime: string | null; endTime: string | null; notes: string | null; category: string | null
+  }) {
+    const res = await fetch(`/api/trips/${tripId}/days/${dayId}/activities/${activityId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
     if (!res.ok) throw new Error('Save failed')
     const updated = await res.json()
-    // Spread updated over existing activity — server returns all fields including tags
-    onDaysUpdated(
-      days.map((d) =>
-        d.id === dayId
-          ? { ...d, activities: d.activities.map((a) => a.id === activityId ? { ...a, ...updated } : a) }
-          : d,
-      ),
-    )
+    onDaysUpdated(days.map((d) =>
+      d.id === dayId
+        ? { ...d, activities: d.activities.map((a) => a.id === activityId ? { ...a, ...updated } : a) }
+        : d,
+    ))
   }
 
   function handleActivityTagsChanged(dayId: string, activityId: string, tags: TripActivityShape['tags']) {
-    onDaysUpdated(
-      days.map((d) =>
-        d.id === dayId
-          ? { ...d, activities: d.activities.map((a) => a.id === activityId ? { ...a, tags } : a) }
-          : d,
-      ),
-    )
+    onDaysUpdated(days.map((d) =>
+      d.id === dayId
+        ? { ...d, activities: d.activities.map((a) => a.id === activityId ? { ...a, tags } : a) }
+        : d,
+    ))
     if (editDialog && editDialog.activity.id === activityId) {
       setEditDialog((prev) => prev ? { ...prev, activity: { ...prev.activity, tags } } : null)
     }
@@ -189,22 +200,17 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
   async function handleDeleteActivity(dayId: string, activityId: string) {
     if (!confirm('Delete this activity?')) return
-    const res = await fetch(
-      `/api/trips/${tripId}/days/${dayId}/activities/${activityId}`,
-      { method: 'DELETE' },
-    )
+    const res = await fetch(`/api/trips/${tripId}/days/${dayId}/activities/${activityId}`, { method: 'DELETE' })
     if (res.ok) {
-      onDaysUpdated(
-        days.map((d) =>
-          d.id === dayId
-            ? { ...d, activities: d.activities.filter((a) => a.id !== activityId) }
-            : d,
-        ),
-      )
+      onDaysUpdated(days.map((d) =>
+        d.id === dayId
+          ? { ...d, activities: d.activities.filter((a) => a.id !== activityId) }
+          : d,
+      ))
     }
   }
 
-  // ── Missing-day quick-add ─────────────────────────────────────────────────
+  // ── Missing days ────────────────────────────────────────────────────────────
 
   function generateMissingDays() {
     const existing = new Set(days.map((d) => d.date.slice(0, 10)))
@@ -212,9 +218,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     const cur = new Date(tripStart)
     while (cur <= tripEnd) {
       const ds = cur.toISOString().slice(0, 10)
-      if (!existing.has(ds)) {
-        missing.push({ date: ds, label: `Day ${missing.length + days.length + 1}` })
-      }
+      if (!existing.has(ds)) missing.push({ date: ds, label: `Day ${missing.length + days.length + 1}` })
       cur.setDate(cur.getDate() + 1)
     }
     return missing
@@ -228,326 +232,282 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     })
     if (res.ok) {
       const day = await res.json()
-      onDaysUpdated([...days, day].sort((a, b) => a.date.localeCompare(b.date)))
+      const updated = [...days, day].sort((a, b) => a.date.localeCompare(b.date))
+      onDaysUpdated(updated)
+      setSelectedDayId(day.id)
     }
+  }
+
+  async function refreshTags() {
+    try {
+      const res = await fetch('/api/trips/tags')
+      if (res.ok) setAvailableTags(await res.json())
+    } catch { /* ignore */ }
   }
 
   const missingDays = generateMissingDays()
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <section>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <Sun className="h-4 w-4" />
-          Itinerary
-        </h2>
-        <div className="flex items-center gap-2">
-          {days.length > 0 && (
-            <button
-              onClick={() => {
-                if (expandedDayIds.size === days.length) {
-                  setExpandedDayIds(new Set())
-                } else {
-                  setExpandedDayIds(new Set(days.map((d) => d.id)))
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors"
-              title={expandedDayIds.size === days.length ? 'Collapse all days' : 'Expand all days'}
-            >
-              {expandedDayIds.size === days.length
-                ? <><ChevronsDownUp className="h-4 w-4" /> Collapse All</>
-                : <><ChevronsUpDown className="h-4 w-4" /> Expand All</>}
-            </button>
-          )}
+    <div className="hb-itinerary">
+      {/* ── Left: Day Rail ── */}
+      <div className="hb-day-rail">
+        <div className="hb-day-rail__head">
+          <span>Days</span>
           <button
-            onClick={() => setAddingDay(!addingDay)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="hb-btn hb-btn--ghost hb-btn--sm hb-btn--icon"
+            title="Add day"
+            onClick={() => setAddingDay((v) => !v)}
           >
-            <Plus className="h-4 w-4" />
-            Add Day
+            <Plus size={14} />
           </button>
         </div>
-      </div>
 
-      {/* Quick-add missing days */}
-      {missingDays.length > 0 && days.length > 0 && (
-        <div className="mb-3 p-2.5 rounded-md bg-muted/30 border border-border">
-          <p className="text-xs text-muted-foreground mb-2">
-            {missingDays.length} day{missingDays.length !== 1 ? 's' : ''} in your trip range not yet added
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {missingDays.map((m) => (
-              <button
-                key={m.date}
-                onClick={() => quickAddDay(m.date, m.label)}
-                className="px-2 py-1 rounded text-xs border border-input hover:bg-accent transition-colors"
-              >
-                + {formatDate(m.date)}
-              </button>
-            ))}
+        {/* Missing-days quick-add banner */}
+        {missingDays.length > 0 && days.length > 0 && (
+          <div style={{ padding: '6px 8px', marginBottom: 4, borderRadius: 8, background: 'color-mix(in srgb, var(--primary) 6%, transparent)', fontSize: 11, color: 'var(--muted-foreground)' }}>
+            <p style={{ margin: '0 0 4px' }}>{missingDays.length} trip day{missingDays.length !== 1 ? 's' : ''} not yet added:</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {missingDays.map((m) => (
+                <button
+                  key={m.date}
+                  onClick={() => quickAddDay(m.date, m.label)}
+                  className="hb-chip hb-chip--ghost"
+                  style={{ fontSize: 10 }}
+                >
+                  + {formatDate(m.date, { day: 'numeric', month: 'short' })}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Add-day form */}
-      {addingDay && (
-        <div className="mb-3 p-3 rounded-lg border border-border bg-card space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Date *</label>
+        {/* Add-day form */}
+        {addingDay && (
+          <div style={{ padding: '8px', marginBottom: 4, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--card)' }}>
+            <div className="hb-field" style={{ marginBottom: 6 }}>
+              <label className="hb-field__label">Date *</label>
               <input
                 type="date"
                 value={newDayDate}
                 onChange={(e) => setNewDayDate(e.target.value)}
                 min={startDate.slice(0, 10)}
                 max={endDate.slice(0, 10)}
-                className="w-full px-2 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="hb-input"
+                style={{ fontSize: 12, padding: '6px 8px' }}
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Label</label>
+            <div className="hb-field" style={{ marginBottom: 8 }}>
+              <label className="hb-field__label">Label</label>
               <input
                 value={newDayLabel}
                 onChange={(e) => setNewDayLabel(e.target.value)}
                 placeholder="e.g. Travel Day"
-                className="w-full px-2 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="hb-input"
+                style={{ fontSize: 12, padding: '6px 8px' }}
               />
             </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setAddingDay(false)}
-              className="px-3 py-1.5 rounded text-sm font-medium border border-input hover:bg-accent transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleAddDay}
-              disabled={!newDayDate || savingDay}
-              className="px-3 py-1.5 rounded text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {savingDay ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Day'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {days.length === 0 && !addingDay && (
-        <div className="p-8 text-center text-muted-foreground rounded-lg border border-dashed border-border">
-          <Sun className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm font-medium">No itinerary yet</p>
-          <p className="text-xs mt-1">Add days to plan your trip activities</p>
-        </div>
-      )}
-
-      {/* Days list */}
-      <div className="space-y-3">
-        {days.map((day) => {
-          const isExpanded = expandedDayIds.has(day.id)
-          return (
-            <div key={day.id} className="rounded-lg border border-border overflow-hidden">
-              {editingDayId === day.id ? (
-                <div className="p-3 space-y-2 bg-primary/5 border-b border-border" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2">
-                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
-                      <span className="text-xs font-bold leading-none">{new Date(day.date).getDate()}</span>
-                      <span className="text-[10px] uppercase leading-none mt-0.5">
-                        {new Date(day.date).toLocaleDateString('en-AU', { month: 'short' })}
-                      </span>
-                    </div>
-                    <input
-                      value={editDayLabel}
-                      onChange={(e) => setEditDayLabel(e.target.value)}
-                      placeholder={`Label (e.g. Travel Day) — default: ${formatDate(day.date)}`}
-                      className="flex-1 px-2.5 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      autoFocus
-                    />
-                  </div>
-                  <textarea
-                    value={editDayNotes}
-                    onChange={(e) => setEditDayNotes(e.target.value)}
-                    placeholder="Day notes (optional)"
-                    rows={2}
-                    className="w-full px-2.5 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setEditingDayId(null)}
-                      className="px-3 py-1.5 rounded text-sm font-medium border border-input hover:bg-accent transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleSaveDay(day.id)}
-                      disabled={savingDayEdit}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                    >
-                      {savingDayEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                      Save
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className="flex items-start justify-between p-3 cursor-pointer bg-primary/8 hover:bg-primary/12 transition-colors"
-                  onClick={() => setExpandedDayIds((prev) => {
-                    const s = new Set(prev)
-                    if (s.has(day.id)) s.delete(day.id); else s.add(day.id)
-                    return s
-                  })}
-                >
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
-                      <span className="text-xs font-bold leading-none">{new Date(day.date).getDate()}</span>
-                      <span className="text-[10px] uppercase leading-none mt-0.5">
-                        {new Date(day.date).toLocaleDateString('en-AU', { month: 'short' })}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium">{day.label || formatDate(day.date)}</span>
-                        {day.label && <span className="text-xs text-muted-foreground">{formatDate(day.date)}</span>}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          {day.activities.length === 0
-                            ? 'No activities yet'
-                            : `${day.activities.length} activit${day.activities.length === 1 ? 'y' : 'ies'}`}
-                        </span>
-                        {/* All tags: day tags + unique activity tags — shown collapsed */}
-                        <CollapsedDayTags
-                          day={day}
-                          availableTags={availableTags}
-                          tripId={tripId}
-                          onDayTagToggled={(updatedTags) =>
-                            onDaysUpdated(days.map((d) => d.id === day.id ? { ...d, tags: updatedTags } : d))
-                          }
-                          onOpenTagManager={() => setShowTagManager(true)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openEditDay(day) }}
-                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                      title="Edit day"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteDay(day.id) }}
-                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {isExpanded && (
-                <div className="border-t border-border bg-card">
-                  {/* ── Day tags picker (expanded view) ── */}
-                  <div className="px-3 py-2 border-b border-border bg-muted/20">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        <Tag className="h-3 w-3" />
-                        Day Tags
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowTagManager(true) }}
-                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                      >
-                        <Settings2 className="h-3 w-3" />
-                        Manage tags
-                      </button>
-                    </div>
-                    {availableTags.length === 0 ? (
-                      <p className="text-[10px] text-muted-foreground italic">
-                        No tags yet —{' '}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setShowTagManager(true) }}
-                          className="underline hover:text-foreground"
-                        >
-                          create some in Tag Manager
-                        </button>
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {availableTags.map((tag) => {
-                          const isActive = day.tags?.some((t) => t.id === tag.id) ?? false
-                          const toggling = togglingDayTag === tag.id
-                          return (
-                            <button
-                              key={tag.id}
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleToggleDayTag(day.id, tag.id) }}
-                              disabled={toggling}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all disabled:opacity-60"
-                              style={{
-                                backgroundColor: isActive ? (tag.color ?? '#64748b') : 'transparent',
-                                color: isActive ? 'white' : (tag.color ?? '#64748b'),
-                                border: `1.5px solid ${tag.color ?? '#64748b'}`,
-                                opacity: toggling ? 0.6 : 1,
-                              }}
-                            >
-                              {tag.emoji && <span>{tag.emoji}</span>}
-                              {tag.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {day.activities.length > 0 && (
-                    <div className="divide-y divide-border">
-                      {day.activities.map((activity) => (
-                        <ActivityRow
-                          key={activity.id}
-                          activity={activity}
-                          tripId={tripId}
-                          dayId={day.id}
-                          availableTags={availableTags}
-                          onEdit={() => setEditDialog({ dayId: day.id, dayDate: day.date, activity })}
-                          onDelete={() => handleDeleteActivity(day.id, activity.id)}
-                          onTagsChanged={(tags) => handleActivityTagsChanged(day.id, activity.id, tags)}
-                          onOpenTagManager={() => setShowTagManager(true)}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  <TripAttachmentsSection tripId={tripId} dayId={day.id} label="Day Attachments" />
-
-                  <div className="p-3 border-t border-border">
-                    <ActivityForm
-                      dayId={day.id}
-                      tripId={tripId}
-                      onCreated={(activity) => {
-                        onDaysUpdated(
-                          days.map((d) =>
-                            d.id === day.id
-                              ? { ...d, activities: [...d.activities, activity] }
-                              : d,
-                          ),
-                        )
-                        setEditDialog({ dayId: day.id, dayDate: day.date, activity })
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <button className="hb-btn hb-btn--ghost hb-btn--sm" onClick={() => setAddingDay(false)}>Cancel</button>
+              <button
+                className="hb-btn hb-btn--primary hb-btn--sm"
+                onClick={handleAddDay}
+                disabled={!newDayDate || savingDay}
+              >
+                {savingDay ? <Loader2 size={12} className="animate-spin" /> : 'Add'}
+              </button>
             </div>
+          </div>
+        )}
+
+        {/* Day chips */}
+        {days.length === 0 && !addingDay && (
+          <div style={{ padding: '16px 8px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 12 }}>
+            <Sun size={20} style={{ margin: '0 auto 6px', opacity: 0.3, display: 'block' }} />
+            No days yet
+          </div>
+        )}
+
+        {days.map((day) => {
+          const d = new Date(day.date)
+          const dayNum = d.getDate()
+          const monthStr = d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()
+          const actCount = day.activities.length
+          const tags = day.tags ?? []
+          return (
+            <button
+              key={day.id}
+              className="hb-day-chip"
+              aria-selected={selectedDayId === day.id}
+              onClick={() => setSelectedDayId(day.id)}
+              onDoubleClick={() => { setSelectedDayId(day.id); openEditDay(day) }}
+              title={formatDate(day.date) + ' — double-click to edit'}
+            >
+              <div className="hb-day-chip__date">
+                <span className="hb-day-chip__day-num">{dayNum}</span>
+                <span className="hb-day-chip__month">{monthStr}</span>
+              </div>
+              <div className="hb-day-chip__body">
+                <p className="hb-day-chip__label">{day.label || formatDate(day.date)}</p>
+                <p className="hb-day-chip__count">
+                  {actCount === 0 ? 'No activities' : `${actCount} activit${actCount === 1 ? 'y' : 'ies'}`}
+                </p>
+                {tags.length > 0 && (
+                  <div className="hb-day-chip__tags">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="hb-day-chip__tag"
+                        style={{ background: tag.color ?? '#64748b' }}
+                      >
+                        {tag.emoji && <span>{tag.emoji}</span>}
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </button>
           )
         })}
       </div>
 
-      {/* Activity edit modal */}
+      {/* ── Right: Timeline ── */}
+      <div className="hb-timeline">
+        {!selectedDay ? (
+          <div className="hb-empty" style={{ maxWidth: 400, margin: '40px auto' }}>
+            <div className="hb-empty__icon"><Sun size={24} /></div>
+            <p className="hb-empty__title">No day selected</p>
+            <p className="hb-empty__hint">Add a day on the left to start planning</p>
+          </div>
+        ) : (
+          <>
+            {/* Day head */}
+            {editingDayId === selectedDay.id ? (
+              <div style={{ marginBottom: 20, padding: '16px', border: '1px solid var(--border)', borderRadius: 14, background: 'var(--card)' }}>
+                <div className="hb-field" style={{ marginBottom: 12 }}>
+                  <label className="hb-field__label">Day label</label>
+                  <input
+                    value={editDayLabel}
+                    onChange={(e) => setEditDayLabel(e.target.value)}
+                    placeholder={`e.g. Travel Day — default: ${formatDate(selectedDay.date)}`}
+                    className="hb-input"
+                    autoFocus
+                  />
+                </div>
+                <div className="hb-field" style={{ marginBottom: 12 }}>
+                  <label className="hb-field__label">Day notes</label>
+                  <textarea
+                    value={editDayNotes}
+                    onChange={(e) => setEditDayNotes(e.target.value)}
+                    placeholder="Optional day notes…"
+                    rows={2}
+                    className="hb-textarea"
+                    style={{ minHeight: 60 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button className="hb-btn hb-btn--outline hb-btn--sm" onClick={() => setEditingDayId(null)}>Cancel</button>
+                  <button
+                    className="hb-btn hb-btn--primary hb-btn--sm"
+                    onClick={() => handleSaveDay(selectedDay.id)}
+                    disabled={savingDayEdit}
+                  >
+                    {savingDayEdit ? <Loader2 size={12} className="animate-spin" /> : <><Check size={12} /> Save</>}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="hb-timeline__day-head">
+                <div>
+                  <h2
+                    className="hb-timeline__day-title"
+                    onDoubleClick={() => openEditDay(selectedDay)}
+                    title="Double-click to edit"
+                    style={{ cursor: 'text' }}
+                  >
+                    {selectedDay.label || formatDate(selectedDay.date, { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </h2>
+                  <p className="hb-timeline__day-date">
+                    {formatDate(selectedDay.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    {selectedDay.notes && (
+                      <span style={{ marginLeft: 8, fontStyle: 'italic', opacity: 0.7 }}> — {selectedDay.notes}</span>
+                    )}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button className="hb-btn hb-btn--ghost hb-btn--sm hb-btn--icon" title="Edit day" onClick={() => openEditDay(selectedDay)}>
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    className="hb-btn hb-btn--ghost hb-btn--sm hb-btn--icon"
+                    title="Delete day"
+                    onClick={() => handleDeleteDay(selectedDay.id)}
+                    style={{ color: 'var(--destructive)' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Day tags */}
+            <DayTagRow
+              day={selectedDay}
+              availableTags={availableTags}
+              togglingTag={togglingDayTag}
+              onToggle={(tagId) => handleToggleDayTag(selectedDay.id, tagId)}
+              onOpenTagManager={() => setShowTagManager(true)}
+            />
+
+            {/* Activities */}
+            {localActivities.length === 0 && (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
+                No activities yet — add one below
+              </div>
+            )}
+
+            {localActivities.map((activity, i) => (
+              <div key={activity.id} {...activitySortable.itemProps(i)} style={{ position: 'relative' }}>
+                <span
+                  className="hb-activity__handle"
+                  {...activitySortable.handleProps(i)}
+                  title="Drag to reorder"
+                >
+                  <GripVertical size={14} />
+                </span>
+                <ActivityCard
+                  activity={activity}
+                  onEdit={() => setEditDialog({ dayId: selectedDay.id, dayDate: selectedDay.date, activity })}
+                  onDelete={() => handleDeleteActivity(selectedDay.id, activity.id)}
+                />
+              </div>
+            ))}
+
+            {/* Quick-add row */}
+            <ActivityForm
+              dayId={selectedDay.id}
+              tripId={tripId}
+              onCreated={(activity) => {
+                onDaysUpdated(days.map((d) =>
+                  d.id === selectedDay.id
+                    ? { ...d, activities: [...d.activities, activity] }
+                    : d,
+                ))
+                setEditDialog({ dayId: selectedDay.id, dayDate: selectedDay.date, activity })
+              }}
+            />
+
+            {/* Day attachments */}
+            <div style={{ marginTop: 24 }}>
+              <TripAttachmentsSection tripId={tripId} dayId={selectedDay.id} label="Day Attachments" />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Activity edit drawer */}
       {editDialog && (
         <ActivityEditDialog
           activity={editDialog.activity}
@@ -566,136 +526,75 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
         open={showTagManager}
         onClose={() => { setShowTagManager(false); refreshTags() }}
       />
-    </section>
+    </div>
   )
-
-  async function refreshTags() {
-    try {
-      const res = await fetch('/api/trips/tags')
-      if (res.ok) {
-        setAvailableTags(await res.json())
-      }
-    } catch { /* ignore */ }
-  }
 }
 
-// ── Activity row ──────────────────────────────────────────────────────────────
+// ── Day tag row ────────────────────────────────────────────────────────────────
 
-// ── CollapsedDayTags ─ day tags + activity tags shown on the collapsed day row ─
-
-function CollapsedDayTags({
+function DayTagRow({
   day,
   availableTags,
-  tripId,
-  onDayTagToggled,
+  togglingTag,
+  onToggle,
   onOpenTagManager,
 }: {
   day: TripDayShape
   availableTags: TripTagShape[]
-  tripId: string
-  onDayTagToggled: (tags: TripDayShape['tags']) => void
+  togglingTag: string | null
+  onToggle: (tagId: string) => void
   onOpenTagManager: () => void
 }) {
-  const [showPicker, setShowPicker]   = useState(false)
-  const [togglingTag, setTogglingTag] = useState<string | null>(null)
+  const [showPicker, setShowPicker] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
+  const dayTagIds = new Set((day.tags ?? []).map((t) => t.id))
 
   useEffect(() => {
     if (!showPicker) return
     function handleClick(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false)
-      }
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showPicker])
 
-  async function handleToggleDayTag(tagId: string) {
-    setTogglingTag(tagId)
-    try {
-      const res = await fetch(`/api/trips/${tripId}/days/${day.id}/tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagId }),
-      })
-      if (res.ok) {
-        const updatedTags = await res.json()
-        onDayTagToggled(updatedTags)
-      }
-    } finally {
-      setTogglingTag(null)
-    }
-  }
-
-  // Collect unique activity tags across all activities in this day
-  const activityTagsMap = new Map<string, TripDayShape['tags'][0]>()
-  for (const act of day.activities) {
-    for (const t of act.tags ?? []) {
-      activityTagsMap.set(t.id, t)
-    }
-  }
-  const dayTagIds = new Set((day.tags ?? []).map((t) => t.id))
-  // Day tags shown solid; activity-only tags shown as outlines
-  const activityOnlyTags = [...activityTagsMap.values()].filter((t) => !dayTagIds.has(t.id))
-  const allDisplayTags = [...(day.tags ?? []), ...activityOnlyTags]
-
   return (
-    <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
-      {allDisplayTags.map((tag) => {
-        const isDayTag = dayTagIds.has(tag.id)
-        return (
-          <span
-            key={tag.id}
-            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-            style={{
-              backgroundColor: isDayTag ? (tag.color ?? '#64748b') : 'transparent',
-              color: isDayTag ? 'white' : (tag.color ?? '#64748b'),
-              border: isDayTag ? 'none' : `1.5px solid ${tag.color ?? '#64748b'}`,
-            }}
-            title={isDayTag ? 'Day tag' : 'Activity tag'}
-          >
-            {tag.emoji && <span>{tag.emoji}</span>}
-            {tag.name}
-          </span>
-        )
-      })}
-
-      {/* Inline picker: add / remove day tags */}
-      <div className="relative">
+    <div className="hb-tag-row">
+      {(day.tags ?? []).map((tag) => (
+        <span
+          key={tag.id}
+          className="hb-chip hb-chip--filled"
+          style={{ background: tag.color ?? '#64748b' }}
+        >
+          {tag.emoji && <span>{tag.emoji}</span>}
+          {tag.name}
+        </span>
+      ))}
+      {/* Tag picker */}
+      <div style={{ position: 'relative' }}>
         <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setShowPicker((v) => !v) }}
-          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          className="hb-chip hb-chip--ghost"
+          onClick={() => setShowPicker((v) => !v)}
           title="Add / remove day tags"
         >
-          <Tag className="h-2.5 w-2.5" />
-          <Plus className="h-2 w-2" />
+          <Tag size={10} />
+          <Plus size={9} />
         </button>
-
         {showPicker && (
-          <div
-            ref={pickerRef}
-            className="absolute z-[200] top-full mt-1 left-0 min-w-[180px] rounded-lg border border-border bg-popover shadow-xl p-2 space-y-1"
-          >
-            <div className="flex items-center justify-between mb-1.5 px-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Day Tags</span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setShowPicker(false); onOpenTagManager() }}
-                className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
-              >
-                <Settings2 className="h-3 w-3" /> Manage
+          <div ref={pickerRef} className="hb-popover" style={{ top: 'calc(100% + 6px)', left: 0 }}>
+            <div className="hb-popover__head">
+              <span>Day Tags</span>
+              <button type="button" onClick={() => { setShowPicker(false); onOpenTagManager() }}>
+                <Settings2 size={12} />Manage
               </button>
             </div>
             {availableTags.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground italic px-0.5 pb-1">
+              <p style={{ fontSize: 12, color: 'var(--muted-foreground)', padding: '6px 8px', margin: 0 }}>
                 No tags yet —{' '}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setShowPicker(false); onOpenTagManager() }}
-                  className="underline hover:text-foreground"
-                >create some</button>
+                <button type="button" onClick={() => { setShowPicker(false); onOpenTagManager() }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', color: 'inherit', fontSize: 'inherit', padding: 0 }}>
+                  create some
+                </button>
               </p>
             ) : (
               availableTags.map((tag) => {
@@ -705,18 +604,19 @@ function CollapsedDayTags({
                   <button
                     key={tag.id}
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); handleToggleDayTag(tag.id) }}
+                    className="hb-popover__row"
+                    aria-pressed={isActive}
+                    onClick={() => onToggle(tag.id)}
                     disabled={toggling}
-                    className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs transition-colors hover:bg-accent disabled:opacity-60"
                   >
                     {toggling
-                      ? <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                      : <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tag.color ?? '#64748b' }} />}
-                    <span className="flex-1 text-left">
-                      {tag.emoji && <span className="mr-0.5">{tag.emoji}</span>}
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <span className="hb-chip__dot" style={{ background: tag.color ?? '#64748b', width: 10, height: 10 }} />}
+                    <span style={{ flex: 1 }}>
+                      {tag.emoji && <span style={{ marginRight: 4 }}>{tag.emoji}</span>}
                       {tag.name}
                     </span>
-                    {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
+                    {isActive && <Check size={13} style={{ color: 'var(--primary)' }} />}
                   </button>
                 )
               })
@@ -728,229 +628,101 @@ function CollapsedDayTags({
   )
 }
 
-function ActivityRow({
+// ── Activity card (timeline row) ───────────────────────────────────────────────
+
+function ActivityCard({
   activity,
-  tripId,
-  dayId,
-  availableTags,
   onEdit,
   onDelete,
-  onTagsChanged,
-  onOpenTagManager,
 }: {
   activity: TripActivityShape
-  tripId: string
-  dayId: string
-  availableTags: TripTagShape[]
   onEdit: () => void
   onDelete: () => void
-  onTagsChanged: (tags: TripActivityShape['tags']) => void
-  onOpenTagManager: () => void
 }) {
-  const [notesExpanded, setNotesExpanded] = useState(false)
-  const [showTagPicker, setShowTagPicker] = useState(false)
-  const [togglingTag, setTogglingTag]     = useState<string | null>(null)
-  const tagPickerRef = useRef<HTMLDivElement>(null)
-  const cat = getCategoryMeta(activity.category)
-
-  useEffect(() => {
-    if (!showTagPicker) return
-    function handleClick(e: MouseEvent) {
-      if (tagPickerRef.current && !tagPickerRef.current.contains(e.target as Node)) {
-        setShowTagPicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [showTagPicker])
-
-  async function handleToggleTag(tagId: string) {
-    setTogglingTag(tagId)
-    try {
-      const res = await fetch(
-        `/api/trips/${tripId}/days/${dayId}/activities/${activity.id}/tags`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tagId }) },
-      )
-      if (res.ok) {
-        const updatedTags = await res.json()
-        onTagsChanged(updatedTags)
-      }
-    } finally {
-      setTogglingTag(null)
-    }
-  }
-
-  function formatTimeDisplay(iso: string): string {
-    return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
+  function formatTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false })
   }
 
   const noteText = activity.notes
     ? (typeof window !== 'undefined'
         ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.trim() ?? ''
-        : activity.notes
-            .replace(/<[^>]+>/g, '')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&nbsp;/g, ' ')
-            .trim())
+        : activity.notes.replace(/<[^>]+>/g, '').trim())
     : ''
-  const notePreview  = noteText.slice(0, 120)
-  const hasMoreNotes = noteText.length > 120
 
   return (
-    <div
-      className="flex items-start gap-3 px-3 py-2.5 bg-card hover:bg-muted/40 group cursor-pointer transition-colors"
-      onDoubleClick={onEdit}
-      title="Double-click to edit"
-    >
-      {cat ? (
-        <span className={`shrink-0 p-1 rounded mt-0.5 ${cat.color}`}>
-          <cat.icon className="h-3.5 w-3.5" />
-        </span>
-      ) : (
-        <span className="shrink-0 p-1 rounded mt-0.5 text-muted-foreground">
-          <Sun className="h-3.5 w-3.5" />
-        </span>
-      )}
-
-      <div className="flex-1 min-w-0 space-y-1">
-        <p className="text-sm font-medium leading-snug">{activity.title}</p>
-
-        {(activity.location || activity.startTime || activity.endTime) && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            {activity.location && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 shrink-0" />
-                {activity.location}
-              </span>
+    <div className="hb-activity" onDoubleClick={onEdit} title="Double-click to edit">
+      {/* Time column */}
+      <div className="hb-activity__time">
+        {activity.startTime ? (
+          <>
+            <span className="hb-activity__time-start">{formatTime(activity.startTime)}</span>
+            {activity.endTime && (
+              <span className="hb-activity__time-end">{formatTime(activity.endTime)}</span>
             )}
-            {(activity.startTime || activity.endTime) && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3 shrink-0" />
-                {activity.startTime && formatTimeDisplay(activity.startTime)}
-                {activity.startTime && activity.endTime && ' – '}
-                {activity.endTime && formatTimeDisplay(activity.endTime)}
-              </span>
-            )}
-          </div>
+          </>
+        ) : (
+          <span className="hb-activity__time--empty">
+            <Clock size={12} />
+          </span>
         )}
-
-        {noteText && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setNotesExpanded((v) => !v) }}
-            className="flex items-start gap-1.5 text-xs text-muted-foreground w-full text-left hover:text-foreground transition-colors"
-          >
-            <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
-            <span className={`leading-relaxed ${notesExpanded ? '' : 'line-clamp-2'}`}>
-              {notesExpanded ? noteText : notePreview}
-              {!notesExpanded && hasMoreNotes && <span className="ml-1 text-primary font-medium">more</span>}
-              {notesExpanded && <span className="ml-1 text-primary font-medium">less</span>}
-            </span>
-          </button>
-        )}
-
-        {/* Tags row — pills + inline add button */}
-        <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {(activity.tags ?? []).map((tag) => (
-            <span
-              key={tag.id}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white"
-              style={{ backgroundColor: tag.color ?? '#64748b' }}
-            >
-              {tag.emoji && <span>{tag.emoji}</span>}
-              {tag.name}
-            </span>
-          ))}
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setShowTagPicker((v) => !v) }}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-              title="Add / remove tags"
-            >
-              <Tag className="h-2.5 w-2.5" />
-              <Plus className="h-2 w-2" />
-            </button>
-
-            {showTagPicker && (
-              <div
-                ref={tagPickerRef}
-                className="absolute z-[200] top-full mt-1 left-0 min-w-[180px] rounded-lg border border-border bg-popover shadow-xl p-2 space-y-1"
-              >
-                <div className="flex items-center justify-between mb-1.5 px-0.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tags</span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setShowTagPicker(false); onOpenTagManager() }}
-                    className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
-                  >
-                    <Settings2 className="h-3 w-3" /> Manage
-                  </button>
-                </div>
-                {availableTags.length === 0 ? (
-                  <p className="text-[10px] text-muted-foreground italic px-0.5 pb-1">
-                    No tags yet —{' '}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setShowTagPicker(false); onOpenTagManager() }}
-                      className="underline hover:text-foreground"
-                    >create some</button>
-                  </p>
-                ) : (
-                  availableTags.map((tag) => {
-                    const isActive = (activity.tags ?? []).some((t) => t.id === tag.id)
-                    const toggling = togglingTag === tag.id
-                    return (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleToggleTag(tag.id) }}
-                        disabled={toggling}
-                        className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs transition-colors hover:bg-accent disabled:opacity-60"
-                      >
-                        {toggling
-                          ? <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                          : <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tag.color ?? '#64748b' }} />}
-                        <span className="flex-1 text-left">
-                          {tag.emoji && <span className="mr-0.5">{tag.emoji}</span>}
-                          {tag.name}
-                        </span>
-                        {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Edit / delete — visible on hover */}
-      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
+      {/* Main content */}
+      <div className="hb-activity__main">
+        <div className="hb-activity__top">
+          <CategoryBadge category={activity.category} size={32} />
+          <h4 className="hb-activity__title">{activity.title}</h4>
+        </div>
+        {activity.location && (
+          <p className="hb-activity__location">
+            <MapPin size={12} aria-hidden />
+            {activity.location}
+          </p>
+        )}
+        {noteText && (
+          <p className="hb-activity__note-text" style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '4px 0 0', lineHeight: 1.5 }}>
+            <StickyNote size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-top' }} />
+            {noteText}
+          </p>
+        )}
+        {(activity.tags ?? []).length > 0 && (
+          <div className="hb-activity__tags">
+            {(activity.tags ?? []).map((tag) => (
+              <span
+                key={tag.id}
+                className="hb-chip hb-chip--filled"
+                style={{ background: tag.color ?? '#64748b', fontSize: 10, height: 18 }}
+              >
+                {tag.emoji && <span>{tag.emoji}</span>}
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quick actions — shown on hover */}
+      <div className="hb-activity__quick">
         <button
+          className="hb-quick--edit"
+          title="Edit"
           onClick={(e) => { e.stopPropagation(); onEdit() }}
-          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Pencil size={13} />
         </button>
         <button
+          className="hb-quick--danger"
+          title="Delete"
           onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 size={13} />
         </button>
       </div>
     </div>
   )
 }
 
-// ── Quick-add form ────────────────────────────────────────────────────────────
+// ── Quick-add form ─────────────────────────────────────────────────────────────
 
 function ActivityForm({
   dayId,
@@ -961,9 +733,8 @@ function ActivityForm({
   tripId: string
   onCreated: (activity: TripActivityShape) => void
 }) {
-  const [title, setTitle]       = useState('')
-  const [category, setCategory] = useState('')
-  const [saving, setSaving]     = useState(false)
+  const [title, setTitle]   = useState('')
+  const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -973,13 +744,12 @@ function ActivityForm({
       const res = await fetch(`/api/trips/${tripId}/days/${dayId}/activities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), category: category || null }),
+        body: JSON.stringify({ title: title.trim() }),
       })
       if (res.ok) {
         const activity = await res.json()
         onCreated({ ...activity, tags: activity.tags ?? [] })
         setTitle('')
-        setCategory('')
       }
     } finally {
       setSaving(false)
@@ -987,30 +757,27 @@ function ActivityForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2">
+    <form onSubmit={handleSubmit} className="hb-quickadd">
+      <div className="hb-quickadd__icon">
+        <Plus size={16} />
+      </div>
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Add activity — press Enter, then fill in details…"
-        className="flex-1 px-2.5 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        disabled={saving}
       />
-      <select
-        value={category}
-        onChange={(e) => setCategory(e.target.value)}
-        className="px-2 py-1.5 rounded border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-      >
-        <option value="">Type</option>
-        {CATEGORIES.map((c) => (
-          <option key={c.value} value={c.value}>{c.label}</option>
-        ))}
-      </select>
       <button
         type="submit"
         disabled={saving || !title.trim()}
-        className="shrink-0 p-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        className="hb-btn hb-btn--primary hb-btn--sm hb-btn--icon"
+        style={{ opacity: saving || !title.trim() ? 0.5 : 1 }}
       >
-        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
       </button>
     </form>
   )
 }
+
+// Keep CollapsedDayTags for backward compat if anything imports it
+export { }

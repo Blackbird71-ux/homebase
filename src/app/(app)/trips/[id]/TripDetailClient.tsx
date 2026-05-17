@@ -27,6 +27,7 @@ import { TripAttachmentsSection } from '@/components/trips/TripAttachmentsSectio
 import { TripPackingSection } from '@/components/trips/TripPackingSection'
 import { TripMapSection } from '@/components/trips/TripMapSection'
 
+// Mobile-only tabs (desktop shows split pane)
 type TripTab = 'overview' | 'itinerary' | 'packing' | 'weather' | 'budget' | 'maps'
 
 const TABS: { id: TripTab; label: string; icon: LucideIcon }[] = [
@@ -93,112 +94,158 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
+      {/* Header — shared across mobile and desktop */}
       <div className="border-b border-border shrink-0">
-        <div className="flex items-center justify-between p-4 md:p-6">
-          <div className="flex items-center gap-3">
-            <Link href="/trips" className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+        <div className="flex items-center justify-between p-4 md:px-6 md:py-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/trips" className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0">
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-semibold">{trip.title}</h1>
-                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.color} bg-muted`}>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1
+                  className="text-xl font-semibold truncate"
+                  onDoubleClick={() => setIsEditing(true)}
+                  title="Double-click to edit"
+                  style={{ cursor: 'text' }}
+                >{trip.title}</h1>
+                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.color} bg-muted shrink-0`}>
                   <StatusIcon className="h-3 w-3" />
                   {statusInfo.label}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-0.5">
-                <MapPin className="h-3.5 w-3.5" />
-                {trip.destination}
+              <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5 flex-wrap">
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {trip.destination}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {formatDateRange()}
+                </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setIsEditing(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors"
             >
               <Pencil className="h-4 w-4" />
-              Edit
+              <span className="hidden sm:inline">Edit</span>
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
-              Delete
+              <span className="hidden sm:inline">Delete</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div className="border-b border-border shrink-0 overflow-x-auto">
-        <div className="flex items-end px-4 min-w-max">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                activeTab === id
-                  ? 'border-foreground text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40',
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* ── DESKTOP: two-pane split layout ── */}
+      <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
+        {/* Left pane — overview info, always visible */}
+        <div className="w-72 lg:w-80 xl:w-96 shrink-0 border-r border-border flex flex-col overflow-hidden">
+          <div className="overflow-y-auto flex-1 p-5 space-y-5">
 
-      {/* Tab content — maps tab fills full height with no padding; others scroll */}
-      <div className={cn(
-        'flex-1 min-h-0',
-        activeTab === 'maps' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-6',
-      )}>
-
-        {/* Overview */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>{formatDateRange()}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {trip.accommodation && (
-                <div className="p-3 rounded-lg border border-border bg-card">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
-                    <Hotel className="h-4 w-4" /> Accommodation
-                  </div>
-                  <p className="text-sm">{trip.accommodation}</p>
+            {/* Quick info cards */}
+            {trip.accommodation && (
+              <div className="p-3 rounded-lg border border-border bg-card">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                  <Hotel className="h-3.5 w-3.5" /> Accommodation
                 </div>
-              )}
-              {trip.transport && (
-                <div className="p-3 rounded-lg border border-border bg-card">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
-                    <Car className="h-4 w-4" /> Transport
-                  </div>
-                  <p className="text-sm">{trip.transport}</p>
+                <p className="text-sm">{trip.accommodation}</p>
+              </div>
+            )}
+            {trip.transport && (
+              <div className="p-3 rounded-lg border border-border bg-card">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                  <Car className="h-3.5 w-3.5" /> Transport
                 </div>
-              )}
-            </div>
+                <p className="text-sm">{trip.transport}</p>
+              </div>
+            )}
             {trip.notes && (
               <div className="p-3 rounded-lg border border-border bg-card">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
-                  <StickyNote className="h-4 w-4" /> Notes
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                  <StickyNote className="h-3.5 w-3.5" /> Notes
                 </div>
                 <p className="text-sm whitespace-pre-wrap">{trip.notes}</p>
               </div>
             )}
-            <TripAttachmentsSection tripId={trip.id} label="Trip Documents" />
-          </div>
-        )}
 
-        {/* Itinerary */}
-        {activeTab === 'itinerary' && (
+            {/* Additional tabs as sections below overview */}
+            <div className="border-t border-border pt-4 space-y-4">
+              {/* Packing */}
+              <details className="group" open>
+                <summary className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer select-none list-none py-1">
+                  <Package className="h-3.5 w-3.5" /> Packing
+                  <svg className="h-3.5 w-3.5 ml-auto transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </summary>
+                <div className="mt-3">
+                  <TripPackingSection
+                    tripId={trip.id}
+                    entries={packingEntries}
+                    currentUserId={currentUserId}
+                    onEntriesUpdated={setPackingEntries}
+                  />
+                </div>
+              </details>
+
+              {/* Weather */}
+              <details className="group border-t border-border pt-4">
+                <summary className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer select-none list-none py-1">
+                  <Cloud className="h-3.5 w-3.5" /> Weather
+                  <svg className="h-3.5 w-3.5 ml-auto transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </summary>
+                <div className="mt-3">
+                  <TripWeatherSection
+                    destination={trip.destination}
+                    startDate={trip.startDate}
+                    endDate={trip.endDate}
+                    startLocation={trip.departureLocation}
+                  />
+                </div>
+              </details>
+
+              {/* Budget */}
+              <details className="group border-t border-border pt-4">
+                <summary className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer select-none list-none py-1">
+                  <Wallet className="h-3.5 w-3.5" /> Budget
+                  <svg className="h-3.5 w-3.5 ml-auto transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </summary>
+                <div className="mt-3">
+                  <TripBudgetSection
+                    tripId={trip.id}
+                    estimatedBudget={trip.estimatedBudget ?? null}
+                    actualCost={trip.actualCost ?? null}
+                    budgetBreakdown={trip.budgetBreakdown ?? null}
+                    onBudgetUpdated={(estimatedBudget, actualCost, budgetBreakdown) => {
+                      setTrip((prev) => ({ ...prev, estimatedBudget, actualCost, budgetBreakdown }))
+                    }}
+                  />
+                </div>
+              </details>
+
+              {/* Documents */}
+              <details className="group border-t border-border pt-4">
+                <summary className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer select-none list-none py-1">
+                  <Map className="h-3.5 w-3.5" /> Documents
+                  <svg className="h-3.5 w-3.5 ml-auto transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </summary>
+                <div className="mt-3">
+                  <TripAttachmentsSection tripId={trip.id} label="" />
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        {/* Right pane — itinerary always fully expanded */}
+        <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
           <ItinerarySection
             days={days}
             tripId={trip.id}
@@ -206,50 +253,128 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
             endDate={trip.endDate}
             onDaysUpdated={setDays}
           />
-        )}
+        </div>
+      </div>
 
-        {/* Packing */}
-        {activeTab === 'packing' && (
-          <TripPackingSection
-            tripId={trip.id}
-            entries={packingEntries}
-            currentUserId={currentUserId}
-            onEntriesUpdated={setPackingEntries}
-          />
-        )}
+      {/* ── MOBILE: tab bar + tab content ── */}
+      <div className="flex md:hidden flex-col flex-1 min-h-0 overflow-hidden">
+        {/* Tab bar */}
+        <div className="border-b border-border shrink-0 overflow-x-auto">
+          <div className="flex items-end px-4 min-w-max">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                  activeTab === id
+                    ? 'border-foreground text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40',
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {/* Weather */}
-        {activeTab === 'weather' && (
-          <TripWeatherSection
-            destination={trip.destination}
-            startDate={trip.startDate}
-            endDate={trip.endDate}
-            startLocation={trip.departureLocation}
-          />
-        )}
+        {/* Tab content */}
+        <div className={cn(
+          'flex-1 min-h-0',
+          activeTab === 'maps' || activeTab === 'itinerary' ? 'overflow-hidden' : 'overflow-y-auto p-4',
+        )}>
 
-        {/* Budget */}
-        {activeTab === 'budget' && (
-          <TripBudgetSection
-            tripId={trip.id}
-            estimatedBudget={trip.estimatedBudget ?? null}
-            actualCost={trip.actualCost ?? null}
-            budgetBreakdown={trip.budgetBreakdown ?? null}
-            onBudgetUpdated={(estimatedBudget, actualCost, budgetBreakdown) => {
-              setTrip((prev) => ({ ...prev, estimatedBudget, actualCost, budgetBreakdown }))
-            }}
-          />
-        )}
+          {/* Overview */}
+          {activeTab === 'overview' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span>{formatDateRange()}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {trip.accommodation && (
+                  <div className="p-3 rounded-lg border border-border bg-card">
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
+                      <Hotel className="h-4 w-4" /> Accommodation
+                    </div>
+                    <p className="text-sm">{trip.accommodation}</p>
+                  </div>
+                )}
+                {trip.transport && (
+                  <div className="p-3 rounded-lg border border-border bg-card">
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
+                      <Car className="h-4 w-4" /> Transport
+                    </div>
+                    <p className="text-sm">{trip.transport}</p>
+                  </div>
+                )}
+              </div>
+              {trip.notes && (
+                <div className="p-3 rounded-lg border border-border bg-card">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
+                    <StickyNote className="h-4 w-4" /> Notes
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{trip.notes}</p>
+                </div>
+              )}
+              <TripAttachmentsSection tripId={trip.id} label="Trip Documents" />
+            </div>
+          )}
 
-        {/* Maps */}
-        {activeTab === 'maps' && (
-          <TripMapSection
-            destination={trip.destination}
-            departureLocation={trip.departureLocation}
-            days={days}
-          />
-        )}
+          {/* Itinerary */}
+          {activeTab === 'itinerary' && (
+            <ItinerarySection
+              days={days}
+              tripId={trip.id}
+              startDate={trip.startDate}
+              endDate={trip.endDate}
+              onDaysUpdated={setDays}
+            />
+          )}
 
+          {/* Packing */}
+          {activeTab === 'packing' && (
+            <TripPackingSection
+              tripId={trip.id}
+              entries={packingEntries}
+              currentUserId={currentUserId}
+              onEntriesUpdated={setPackingEntries}
+            />
+          )}
+
+          {/* Weather */}
+          {activeTab === 'weather' && (
+            <TripWeatherSection
+              destination={trip.destination}
+              startDate={trip.startDate}
+              endDate={trip.endDate}
+              startLocation={trip.departureLocation}
+            />
+          )}
+
+          {/* Budget */}
+          {activeTab === 'budget' && (
+            <TripBudgetSection
+              tripId={trip.id}
+              estimatedBudget={trip.estimatedBudget ?? null}
+              actualCost={trip.actualCost ?? null}
+              budgetBreakdown={trip.budgetBreakdown ?? null}
+              onBudgetUpdated={(estimatedBudget, actualCost, budgetBreakdown) => {
+                setTrip((prev) => ({ ...prev, estimatedBudget, actualCost, budgetBreakdown }))
+              }}
+            />
+          )}
+
+          {/* Maps */}
+          {activeTab === 'maps' && (
+            <TripMapSection
+              destination={trip.destination}
+              departureLocation={trip.departureLocation}
+              days={days}
+            />
+          )}
+        </div>
       </div>
 
       {/* Edit Dialog */}
