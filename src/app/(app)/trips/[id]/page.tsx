@@ -46,6 +46,9 @@ export default async function TripDetailPage({
               },
             },
           },
+          tags: {
+            include: { tag: true },
+          },
         },
       },
     },
@@ -82,6 +85,12 @@ export default async function TripDetailPage({
       notes: day.notes,
       sortOrder: day.sortOrder,
       createdAt: day.createdAt.toISOString(),
+      tags: day.tags.map((t) => ({
+        id: t.tag.id,
+        name: t.tag.name,
+        emoji: t.tag.emoji,
+        color: t.tag.color,
+      })),
       activities: day.activities.map((act) => ({
         id: act.id,
         title: act.title,

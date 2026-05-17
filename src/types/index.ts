@@ -358,6 +358,7 @@ export interface TripDayShape {
   notes: string | null
   sortOrder: number
   activities: TripActivityShape[]
+  tags: { id: string; name: string; emoji: string | null; color: string | null }[]
 }
 
 export interface TripDetail extends Omit<TripSummary, 'packingList'> {

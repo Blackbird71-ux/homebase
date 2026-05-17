@@ -37,17 +37,33 @@ export async function PATCH(
       ...(sortOrder !== undefined ? { sortOrder } : {}),
     },
     include: {
-      activities: { orderBy: { sortOrder: 'asc' } },
+      activities: {
+        orderBy: { sortOrder: 'asc' },
+        include: { tags: { include: { tag: true } } },
+      },
+      tags: { include: { tag: true } },
     },
   })
 
   return NextResponse.json({
     ...updated,
     date: updated.date.toISOString(),
+    tags: updated.tags.map((t) => ({
+      id: t.tag.id,
+      name: t.tag.name,
+      emoji: t.tag.emoji,
+      color: t.tag.color,
+    })),
     activities: updated.activities.map((a) => ({
       ...a,
       startTime: a.startTime?.toISOString() ?? null,
       endTime: a.endTime?.toISOString() ?? null,
+      tags: a.tags.map((t) => ({
+        id: t.tag.id,
+        name: t.tag.name,
+        emoji: t.tag.emoji,
+        color: t.tag.color,
+      })),
     })),
     createdAt: updated.createdAt.toISOString(),
   })

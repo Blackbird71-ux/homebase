@@ -1163,6 +1163,7 @@ model TripDay {
   sortOrder   Int              @default(0)
   activities  TripActivity[]
   attachments TripAttachment[] @relation("DayAttachments")
+  tags        TripDayTag[]
   createdAt   DateTime         @default(now())
 
   @@unique([tripId, date])
@@ -1215,6 +1216,7 @@ model TripTag {
   color      String?
   sortOrder  Int               @default(0)
   activities TripActivityTag[]
+  days       TripDayTag[]
   createdAt  DateTime          @default(now())
 
   @@unique([familyId, name])
@@ -1231,6 +1233,19 @@ model TripActivityTag {
 
   @@id([activityId, tagId])
   @@index([activityId])
+  @@index([tagId])
+}
+
+// Join table: tags on days
+model TripDayTag {
+  dayId String
+  tagId String
+  day   TripDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  tag   TripTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([dayId, tagId])
+  @@index([dayId])
   @@index([tagId])
 }
 

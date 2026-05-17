@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Plus, X, Loader2, Sun, MapPin, Clock, StickyNote,
-  Pencil, Trash2, Check, ChevronsUpDown, ChevronsDownUp,
+  Pencil, Trash2, Check, Tag, Settings2,
 } from 'lucide-react'
-import type { TripDayShape, TripActivityShape } from '@/types'
+import type { TripDayShape, TripActivityShape, TripTagShape } from '@/types'
 import { ActivityEditDialog, getCategoryMeta, CATEGORIES } from './ActivityEditDialog'
 import { TripTagsManager } from './TripTagsManager'
 import { TripAttachmentsSection } from './TripAttachmentsSection'
@@ -23,7 +23,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
   const [newDayDate, setNewDayDate]         = useState('')
   const [newDayLabel, setNewDayLabel]       = useState('')
   const [savingDay, setSavingDay]           = useState(false)
-  const [expandedDayIds, setExpandedDayIds] = useState<Set<string>>(new Set())
+  const [expandedDayId, setExpandedDayId]   = useState<string | null>(null)
   const [showTagManager, setShowTagManager] = useState(false)
 
   const [editingDayId, setEditingDayId]   = useState<string | null>(null)
@@ -37,6 +37,18 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     activity: TripActivityShape
   } | null>(null)
 
+  // ── Day tags state ─────────────────────────────────────────────────────────
+  const [availableTags, setAvailableTags]     = useState<TripTagShape[]>([])
+  const [togglingDayTag, setTogglingDayTag]   = useState<string | null>(null)
+
+  // Load available tags once
+  useEffect(() => {
+    fetch('/api/trips/tags')
+      .then((r) => r.json())
+      .then((data: TripTagShape[]) => setAvailableTags(data))
+      .catch(() => {})
+  }, [])
+
   const tripStart = new Date(startDate)
   const tripEnd   = new Date(endDate)
 
@@ -44,6 +56,28 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     return new Date(dateStr).toLocaleDateString('en-AU', {
       weekday: 'short', day: 'numeric', month: 'short',
     })
+  }
+
+  // ── Day tag toggling ───────────────────────────────────────────────────────
+  async function handleToggleDayTag(dayId: string, tagId: string) {
+    setTogglingDayTag(tagId)
+    try {
+      const res = await fetch(`/api/trips/${tripId}/days/${dayId}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId }),
+      })
+      if (res.ok) {
+        const updatedTags = await res.json()
+        onDaysUpdated(
+          days.map((d) =>
+            d.id === dayId ? { ...d, tags: updatedTags } : d,
+          ),
+        )
+      }
+    } finally {
+      setTogglingDayTag(null)
+    }
   }
 
   // ── Day CRUD ──────────────────────────────────────────────────────────────
@@ -63,7 +97,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
         setNewDayDate('')
         setNewDayLabel('')
         setAddingDay(false)
-        setExpandedDayIds((prev) => new Set([...prev, day.id]))
+        setExpandedDayId(day.id)
       }
     } finally {
       setSavingDay(false)
@@ -75,7 +109,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     const res = await fetch(`/api/trips/${tripId}/days/${dayId}`, { method: 'DELETE' })
     if (res.ok) {
       onDaysUpdated(days.filter((d) => d.id !== dayId))
-      setExpandedDayIds((prev) => { const s = new Set(prev); s.delete(dayId); return s })
+      if (expandedDayId === dayId) setExpandedDayId(null)
     }
   }
 
@@ -209,32 +243,13 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
           <Sun className="h-4 w-4" />
           Itinerary
         </h2>
-        <div className="flex items-center gap-2">
-          {days.length > 0 && (
-            <button
-              onClick={() => {
-                if (expandedDayIds.size === days.length) {
-                  setExpandedDayIds(new Set())
-                } else {
-                  setExpandedDayIds(new Set(days.map((d) => d.id)))
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors"
-              title={expandedDayIds.size === days.length ? 'Collapse all days' : 'Expand all days'}
-            >
-              {expandedDayIds.size === days.length
-                ? <><ChevronsDownUp className="h-4 w-4" /> Collapse All</>
-                : <><ChevronsUpDown className="h-4 w-4" /> Expand All</>}
-            </button>
-          )}
-          <button
-            onClick={() => setAddingDay(!addingDay)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Day
-          </button>
-        </div>
+        <button
+          onClick={() => setAddingDay(!addingDay)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add Day
+        </button>
       </div>
 
       {/* Quick-add missing days */}
@@ -311,11 +326,11 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
       {/* Days list */}
       <div className="space-y-3">
         {days.map((day) => {
-          const isExpanded = expandedDayIds.has(day.id)
+          const isExpanded = expandedDayId === day.id
           return (
-            <div key={day.id} className="rounded-lg border border-border overflow-hidden">
+            <div key={day.id} className="rounded-lg border border-border bg-card overflow-hidden">
               {editingDayId === day.id ? (
-                <div className="p-3 space-y-2 bg-primary/5 border-b border-border" onClick={(e) => e.stopPropagation()}>
+                <div className="p-3 space-y-2" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
                       <span className="text-xs font-bold leading-none">{new Date(day.date).getDate()}</span>
@@ -357,12 +372,8 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                 </div>
               ) : (
                 <div
-                  className="flex items-center justify-between p-3 cursor-pointer bg-primary/8 hover:bg-primary/12 transition-colors"
-                  onClick={() => setExpandedDayIds((prev) => {
-                    const s = new Set(prev)
-                    if (s.has(day.id)) s.delete(day.id); else s.add(day.id)
-                    return s
-                  })}
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent/30 transition-colors"
+                  onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
@@ -376,11 +387,32 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                         <span className="text-sm font-medium">{day.label || formatDate(day.date)}</span>
                         {day.label && <span className="text-xs text-muted-foreground">{formatDate(day.date)}</span>}
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {day.activities.length === 0
-                          ? 'No activities yet'
-                          : `${day.activities.length} activit${day.activities.length === 1 ? 'y' : 'ies'}`}
-                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-muted-foreground">
+                          {day.activities.length === 0
+                            ? 'No activities yet'
+                            : `${day.activities.length} activit${day.activities.length === 1 ? 'y' : 'ies'}`}
+                        </span>
+                        {/* Collapsed day tags */}
+                        {day.tags && day.tags.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            {day.tags.slice(0, 3).map((tag) => (
+                              <span
+                                key={tag.id}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white"
+                                style={{ backgroundColor: tag.color ?? '#64748b' }}
+                              >
+                                {tag.emoji && <span>{tag.emoji}</span>}
+                                {tag.name}
+                              </span>
+                            ))}
+                            {day.tags.length > 3 && (
+                              <span className="text-[10px] text-muted-foreground">+{day.tags.length - 3}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -402,7 +434,62 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
               )}
 
               {isExpanded && (
-                <div className="border-t border-border bg-card">
+                <div className="border-t border-border">
+                  {/* ── Day tags picker (expanded view) ── */}
+                  <div className="px-3 py-2 border-b border-border bg-muted/20">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        <Tag className="h-3 w-3" />
+                        Day Tags
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowTagManager(true) }}
+                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                      >
+                        <Settings2 className="h-3 w-3" />
+                        Manage tags
+                      </button>
+                    </div>
+                    {availableTags.length === 0 ? (
+                      <p className="text-[10px] text-muted-foreground italic">
+                        No tags yet —{' '}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowTagManager(true) }}
+                          className="underline hover:text-foreground"
+                        >
+                          create some in Tag Manager
+                        </button>
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {availableTags.map((tag) => {
+                          const isActive = day.tags?.some((t) => t.id === tag.id) ?? false
+                          const toggling = togglingDayTag === tag.id
+                          return (
+                            <button
+                              key={tag.id}
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleToggleDayTag(day.id, tag.id) }}
+                              disabled={toggling}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all disabled:opacity-60"
+                              style={{
+                                backgroundColor: isActive ? (tag.color ?? '#64748b') : 'transparent',
+                                color: isActive ? 'white' : (tag.color ?? '#64748b'),
+                                border: `1.5px solid ${tag.color ?? '#64748b'}`,
+                                opacity: toggling ? 0.6 : 1,
+                              }}
+                            >
+                              {tag.emoji && <span>{tag.emoji}</span>}
+                              {tag.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                   {day.activities.length > 0 && (
                     <div className="divide-y divide-border">
                       {day.activities.map((activity) => (
@@ -455,13 +542,22 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
         />
       )}
 
-      {/* Tag Manager — opened from activity dialog's "Manage tags" link */}
+      {/* Tag Manager */}
       <TripTagsManager
         open={showTagManager}
-        onClose={() => setShowTagManager(false)}
+        onClose={() => { setShowTagManager(false); refreshTags() }}
       />
     </section>
   )
+
+  async function refreshTags() {
+    try {
+      const res = await fetch('/api/trips/tags')
+      if (res.ok) {
+        setAvailableTags(await res.json())
+      }
+    } catch { /* ignore */ }
+  }
 }
 
 // ── Activity row ──────────────────────────────────────────────────────────────
@@ -490,11 +586,11 @@ function ActivityRow({
         ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.trim() ?? ''
         : activity.notes
             .replace(/<[^>]+>/g, '')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
+            .replace(/&/g, '&')
+            .replace(/</g, '<')
+            .replace(/>/g, '>')
+            .replace(/"/g, '"')
+            .replace(/'/g, "'")
             .replace(/&nbsp;/g, ' ')
             .trim())
     : ''
@@ -503,7 +599,7 @@ function ActivityRow({
 
   return (
     <div
-      className="flex items-start gap-3 px-3 py-2.5 bg-card hover:bg-muted/40 group cursor-pointer transition-colors"
+      className="flex items-start gap-3 px-3 py-2.5 hover:bg-accent/30 group cursor-pointer"
       onDoubleClick={onEdit}
       title="Double-click to edit"
     >
