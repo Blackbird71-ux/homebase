@@ -919,7 +919,7 @@ export function TemplateFormDialog({
                 />
               </div>
             </div>
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="shrink-0 flex flex-col overflow-hidden max-h-[45%]">
               <div className="px-3 py-1 border-b border-border shrink-0">
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Schedule</span>
               </div>
