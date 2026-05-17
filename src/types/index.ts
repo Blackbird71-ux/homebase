@@ -183,26 +183,26 @@ export interface CustomThemeColors {
   sidebarAccentForeground?: string
   sidebarBorder?: string
   sidebarRing?: string
-  
+
   // Calendar
   calendarBackground?: string
   calendarEvent?: string
   calendarEventHover?: string
   calendarText?: string
   calendarBorder?: string
-  
+
   // Cards
   card?: string
   cardForeground?: string
   cardBorder?: string
   cardHover?: string
-  
+
   // Text
   textPrimary?: string
   textSecondary?: string
   textMuted?: string
   textAccent?: string
-  
+
   // Buttons
   buttonPrimary?: string
   buttonPrimaryForeground?: string
@@ -210,7 +210,7 @@ export interface CustomThemeColors {
   buttonSecondaryForeground?: string
   buttonAccent?: string
   buttonAccentForeground?: string
-  
+
   // General
   background?: string
   foreground?: string
@@ -230,7 +230,6 @@ export interface CustomThemeColors {
 
 export interface UIPreferences {
   customTheme?: CustomThemeColors
-  // other UI preferences can be added here
 }
 
 export interface WeatherData {
@@ -244,9 +243,6 @@ export interface WeatherData {
   description: string
 }
 
-// Extend NextAuth session types
-// Note: next-auth v5 beta augmentation — kept for reference
-// The actual augmentation is in src/auth.ts once next-auth is configured
 export type NextAuthSession = {
   user: {
     id: string
@@ -256,6 +252,8 @@ export type NextAuthSession = {
     familyId: string
   }
 }
+
+// ─── Trip types ───────────────────────────────────────────────────────────────
 
 export interface TripSummary {
   id: string
@@ -282,6 +280,16 @@ export interface TripSummary {
   updatedAt: string
 }
 
+export interface TripTagShape {
+  id: string
+  name: string
+  emoji: string | null
+  color: string | null
+  sortOrder: number
+  usageCount?: number
+  createdAt: string
+}
+
 export interface TripActivityShape {
   id: string
   title: string
@@ -291,6 +299,44 @@ export interface TripActivityShape {
   notes: string | null
   category: string | null
   sortOrder: number
+  tags: { id: string; name: string; emoji: string | null; color: string | null }[]
+}
+
+export interface TripPackingListItem {
+  id: string
+  content: string
+  isCompleted: boolean
+  isLocked: boolean
+  category: string | null
+  sortOrder: number
+  dueDate: string | null
+  recipeId: string | null
+  recipeName: string | null
+  unitPrice: number | null
+  quantity: number | null
+  createdBy: string
+  assignedToUserId: string | null
+  createdAt: string
+}
+
+export interface TripPackingEntryShape {
+  id: string
+  tripId: string
+  listId: string
+  label: string | null
+  sortOrder: number
+  createdAt: string
+  list: {
+    id: string
+    name: string
+    type: string
+    isActive: boolean
+    categoryOrder: string | null
+    sortOrder: number
+    createdAt: string
+    _count: { items: number }
+    items: TripPackingListItem[]
+  }
 }
 
 export interface TripAttachmentShape {
@@ -315,6 +361,7 @@ export interface TripDayShape {
 }
 
 export interface TripDetail extends Omit<TripSummary, 'packingList'> {
+  // Legacy single packing list (kept for backward compat)
   packingList: {
     id: string
     name: string
@@ -322,29 +369,14 @@ export interface TripDetail extends Omit<TripSummary, 'packingList'> {
     isActive: boolean
     categoryOrder: string | null
     sortOrder: number
-    items: {
-      id: string
-      content: string
-      isCompleted: boolean
-      isLocked: boolean
-      category: string | null
-      sortOrder: number
-      dueDate: string | null
-      recipeId: string | null
-      recipeName: string | null
-      unitPrice: number | null
-      quantity: number | null
-      createdBy: string
-      assignedToUserId: string | null
-      createdAt: string
-    }[]
-    _count: {
-      items: number
-    }
+    items: TripPackingListItem[]
+    _count: { items: number }
     createdAt: string
   } | null
   estimatedBudget: number | null
   actualCost: number | null
   budgetBreakdown: string | null
   days: TripDayShape[]
+  // New: multiple named packing lists
+  packingEntries: TripPackingEntryShape[]
 }

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import type { TripDayShape, TripActivityShape } from '@/types'
 import { ActivityEditDialog, getCategoryMeta, CATEGORIES } from './ActivityEditDialog'
+import { TripTagsManager } from './TripTagsManager'
 import { TripAttachmentsSection } from './TripAttachmentsSection'
 
 interface ItinerarySectionProps {
@@ -17,20 +18,17 @@ interface ItinerarySectionProps {
   onDaysUpdated: (days: TripDayShape[]) => void
 }
 
-// ── Main section ───────────────────────────────────────────────────────────
-
 export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdated }: ItinerarySectionProps) {
   const [addingDay, setAddingDay]         = useState(false)
   const [newDayDate, setNewDayDate]       = useState('')
   const [newDayLabel, setNewDayLabel]     = useState('')
   const [savingDay, setSavingDay]         = useState(false)
   const [expandedDayId, setExpandedDayId] = useState<string | null>(null)
+  const [showTagManager, setShowTagManager] = useState(false)
 
-  // Which activity is open in the edit modal — store dayDate so the dialog
-  // can build correct ISO datetime values for start/end times.
   const [editDialog, setEditDialog] = useState<{
     dayId: string
-    dayDate: string          // ISO date string of the parent day
+    dayDate: string
     activity: TripActivityShape
   } | null>(null)
 
@@ -114,6 +112,25 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     )
   }
 
+  function handleActivityTagsChanged(dayId: string, activityId: string, tags: TripActivityShape['tags']) {
+    onDaysUpdated(
+      days.map((d) =>
+        d.id === dayId
+          ? {
+              ...d,
+              activities: d.activities.map((a) =>
+                a.id === activityId ? { ...a, tags } : a,
+              ),
+            }
+          : d,
+      ),
+    )
+    // Keep the editDialog activity in sync so tags display correctly while dialog is open
+    if (editDialog && editDialog.activity.id === activityId) {
+      setEditDialog((prev) => prev ? { ...prev, activity: { ...prev.activity, tags } } : null)
+    }
+  }
+
   async function handleDeleteActivity(dayId: string, activityId: string) {
     if (!confirm('Delete this activity?')) return
     const res = await fetch(
@@ -165,19 +182,26 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
   return (
     <section>
-      {/* Section header */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
           <Sun className="h-4 w-4" />
           Itinerary
         </h2>
-        <button
-          onClick={() => setAddingDay(!addingDay)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add Day
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTagManager(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-input hover:bg-accent transition-colors text-muted-foreground"
+          >
+            Tags
+          </button>
+          <button
+            onClick={() => setAddingDay(!addingDay)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Day
+          </button>
+        </div>
       </div>
 
       {/* Quick-add missing days */}
@@ -243,7 +267,6 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
         </div>
       )}
 
-      {/* Empty state */}
       {days.length === 0 && !addingDay && (
         <div className="p-8 text-center text-muted-foreground rounded-lg border border-dashed border-border">
           <Sun className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -258,8 +281,6 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
           const isExpanded = expandedDayId === day.id
           return (
             <div key={day.id} className="rounded-lg border border-border bg-card overflow-hidden">
-
-              {/* Day header — click to expand */}
               <div
                 className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent/30 transition-colors"
                 onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
@@ -274,9 +295,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{day.label || formatDate(day.date)}</span>
-                      {day.label && (
-                        <span className="text-xs text-muted-foreground">{formatDate(day.date)}</span>
-                      )}
+                      {day.label && <span className="text-xs text-muted-foreground">{formatDate(day.date)}</span>}
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {day.activities.length === 0
@@ -288,17 +307,13 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDeleteDay(day.id) }}
                   className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive shrink-0"
-                  title="Remove day"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
 
-              {/* Expanded content */}
               {isExpanded && (
                 <div className="border-t border-border">
-
-                  {/* Activity rows */}
                   {day.activities.length > 0 && (
                     <div className="divide-y divide-border">
                       {day.activities.map((activity) => (
@@ -312,10 +327,8 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                     </div>
                   )}
 
-                  {/* Day attachments */}
                   <TripAttachmentsSection tripId={tripId} dayId={day.id} label="Day Attachments" />
 
-                  {/* Add activity */}
                   <div className="p-3 border-t border-border">
                     <ActivityForm
                       dayId={day.id}
@@ -328,7 +341,6 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                               : d,
                           ),
                         )
-                        // Open the modal so the user can fill in all details straight away
                         setEditDialog({ dayId: day.id, dayDate: day.date, activity })
                       }}
                     />
@@ -345,15 +357,25 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
         <ActivityEditDialog
           activity={editDialog.activity}
           dayDate={editDialog.dayDate}
+          tripId={tripId}
+          dayId={editDialog.dayId}
           onSave={(data) => handleSaveActivity(editDialog.dayId, editDialog.activity.id, data)}
+          onTagsChanged={(tags) => handleActivityTagsChanged(editDialog.dayId, editDialog.activity.id, tags)}
           onClose={() => setEditDialog(null)}
+          onOpenTagManager={() => { setEditDialog(null); setShowTagManager(true) }}
         />
       )}
+
+      {/* Tag Manager modal */}
+      <TripTagsManager
+        open={showTagManager}
+        onClose={() => setShowTagManager(false)}
+      />
     </section>
   )
 }
 
-// ── Activity row — read-only display, double-click or pencil to edit ───────
+// ── Activity row ─────────────────────────────────────────────────────────────
 
 function ActivityRow({
   activity,
@@ -370,7 +392,6 @@ function ActivityRow({
     return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
   }
 
-  // Strip HTML tags for the notes preview shown inline under the title
   const notePreview = activity.notes
     ? (typeof window !== 'undefined'
         ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.slice(0, 120) ?? ''
@@ -383,7 +404,6 @@ function ActivityRow({
       onDoubleClick={onEdit}
       title="Double-click to edit"
     >
-      {/* Category icon */}
       {cat ? (
         <span className={`shrink-0 p-1 rounded mt-0.5 ${cat.color}`}>
           <cat.icon className="h-3.5 w-3.5" />
@@ -394,7 +414,6 @@ function ActivityRow({
         </span>
       )}
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium leading-snug">{activity.title}</span>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
@@ -419,21 +438,33 @@ function ActivityRow({
             </span>
           )}
         </div>
+        {/* Tags inline */}
+        {activity.tags && activity.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {activity.tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white"
+                style={{ backgroundColor: tag.color ?? '#64748b' }}
+              >
+                {tag.emoji && <span>{tag.emoji}</span>}
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Action buttons — visible on row hover */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
         <button
           onClick={(e) => { e.stopPropagation(); onEdit() }}
           className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          title="Edit activity"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
-          title="Delete activity"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -442,9 +473,7 @@ function ActivityRow({
   )
 }
 
-// ── Activity quick-add form ────────────────────────────────────────────────
-// Title + type only. After creation the edit modal opens so the user can
-// fill in location, times, and rich-text notes without an extra click.
+// ── Quick-add form ────────────────────────────────────────────────────────────
 
 function ActivityForm({
   dayId,
@@ -471,7 +500,8 @@ function ActivityForm({
       })
       if (res.ok) {
         const activity = await res.json()
-        onCreated(activity)
+        // Ensure tags array exists
+        onCreated({ ...activity, tags: activity.tags ?? [] })
         setTitle('')
         setCategory('')
       }
@@ -502,7 +532,6 @@ function ActivityForm({
         type="submit"
         disabled={saving || !title.trim()}
         className="shrink-0 p-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-        title="Add activity"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
       </button>

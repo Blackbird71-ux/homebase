@@ -24,10 +24,28 @@ export default async function TripDetailPage({
           _count: { select: { items: { where: { isCompleted: false } } } },
         },
       },
+      packingEntries: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          list: {
+            include: {
+              items: { orderBy: { sortOrder: 'asc' } },
+              _count: { select: { items: { where: { isCompleted: false } } } },
+            },
+          },
+        },
+      },
       days: {
         orderBy: { sortOrder: 'asc' },
         include: {
-          activities: { orderBy: { sortOrder: 'asc' } },
+          activities: {
+            orderBy: { sortOrder: 'asc' },
+            include: {
+              tags: {
+                include: { tag: true },
+              },
+            },
+          },
         },
       },
     },
@@ -53,6 +71,10 @@ export default async function TripDetailPage({
     estimatedBudget: trip.estimatedBudget ?? null,
     actualCost: trip.actualCost ?? null,
     budgetBreakdown: trip.budgetBreakdown ?? null,
+    createdBy: trip.createdBy,
+    createdAt: trip.createdAt.toISOString(),
+    updatedAt: trip.updatedAt.toISOString(),
+
     days: trip.days.map((day) => ({
       id: day.id,
       date: day.date.toISOString(),
@@ -70,8 +92,16 @@ export default async function TripDetailPage({
         category: act.category,
         sortOrder: act.sortOrder,
         createdAt: act.createdAt.toISOString(),
+        tags: act.tags.map((t) => ({
+          id: t.tag.id,
+          name: t.tag.name,
+          emoji: t.tag.emoji,
+          color: t.tag.color,
+        })),
       })),
     })),
+
+    // Legacy single packing list
     packingList: trip.packingList
       ? {
           id: trip.packingList.id,
@@ -96,15 +126,46 @@ export default async function TripDetailPage({
             assignedToUserId: item.assignedToUserId,
             createdAt: item.createdAt.toISOString(),
           })),
-          _count: {
-            items: trip.packingList._count.items,
-          },
+          _count: { items: trip.packingList._count.items },
           createdAt: trip.packingList.createdAt.toISOString(),
         }
       : null,
-    createdBy: trip.createdBy,
-    createdAt: trip.createdAt.toISOString(),
-    updatedAt: trip.updatedAt.toISOString(),
+
+    // New: multiple named packing lists
+    packingEntries: trip.packingEntries.map((e) => ({
+      id: e.id,
+      tripId: e.tripId,
+      listId: e.listId,
+      label: e.label,
+      sortOrder: e.sortOrder,
+      createdAt: e.createdAt.toISOString(),
+      list: {
+        id: e.list.id,
+        name: e.list.name,
+        type: e.list.type,
+        isActive: e.list.isActive,
+        categoryOrder: e.list.categoryOrder,
+        sortOrder: e.list.sortOrder,
+        createdAt: e.list.createdAt.toISOString(),
+        _count: { items: e.list._count.items },
+        items: e.list.items.map((item) => ({
+          id: item.id,
+          content: item.content,
+          isCompleted: item.isCompleted,
+          isLocked: item.isLocked,
+          category: item.category,
+          sortOrder: item.sortOrder,
+          dueDate: item.dueDate?.toISOString() ?? null,
+          recipeId: item.recipeId,
+          recipeName: item.recipeName,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          createdBy: item.createdBy,
+          assignedToUserId: item.assignedToUserId,
+          createdAt: item.createdAt.toISOString(),
+        })),
+      },
+    })),
   }
 
   return <TripDetailClient trip={serialized} currentUserId={user.id} />

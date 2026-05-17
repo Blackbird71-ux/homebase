@@ -37,6 +37,7 @@ model Family {
   documents            Document[]
   listTemplates        ListTemplate[]
   trips                Trip[]
+  tripTags             TripTag[]
   financeAccounts        FinanceAccount[]
   financeTransactions    FinanceTransaction[]
   financeCategories      FinanceCategory[]
@@ -155,8 +156,9 @@ model List {
   createdBy     String     @default("")
   createdAt     DateTime   @default(now())
 
-  // Trip packing list link (reverse navigation — FK is on Trip.packingListId)
-  trip Trip? @relation("TripPackingList")
+  // Trip packing list links
+  trip               Trip?              @relation("TripPackingList")
+  tripPackingEntries TripPackingEntry[] @relation("TripPackingEntries")
 }
 
 model ListTemplate {
@@ -750,56 +752,23 @@ model FinanceRecurringBill {
 }
 
 model FinancePayslip {
-  // ── Per-occurrence payslip breakdown ────────────────────────────────────
-  // Linked 1:1 to a FinanceIncomeEntry (the received occurrence).
-  // Stores structured pay components so the GL journal reflects gross pay,
-  // PAYG withheld, deductions (e.g. salary sacrifice), and net take-home.
-  //
-  // GL journal built from this record when marking received:
-  //   DR  bankGlAccountId              netPay        (take-home hits the bank)
-  //   DR  paygGlAccountId              paygWithheld  (PAYG withheld liability)
-  //   DR  deduction[n].glAccountId     amount        (per deduction with GL)
-  //   CR  grossIncomeGlAccountId       grossPay      (gross income on P&L)
-  //
-  // SGC (employer super) is stored for informational reporting only.
-  // It does NOT auto-create a journal line — add via components if desired.
-
   id                    String             @id @default(cuid())
   incomeEntryId         String             @unique
   incomeEntry           FinanceIncomeEntry @relation(fields: [incomeEntryId], references: [id], onDelete: Cascade)
   familyId              String
   family                Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
-
-  // Pay period dates (display only — do not affect GL date)
   payPeriodStart        DateTime?
   payPeriodEnd          DateTime?
-
-  // Core amounts
-  grossPay              Float              // Total gross before any deductions
-  netPay                Float              // Take-home (what hits the bank account)
-
-  // GL accounts for the auto-built journal (user picks from their own COA)
-  grossIncomeGlAccountId  String?          // CR — e.g. "Gross Wages - Mark"
-  bankGlAccountId         String?          // DR — e.g. the bank/asset GL account
-
-  // PAYG withholding
+  grossPay              Float
+  netPay                Float
+  grossIncomeGlAccountId  String?
+  bankGlAccountId         String?
   paygWithheld          Float              @default(0)
-  paygGlAccountId       String?            // DR — e.g. "Taxes - Mark"
-
-  // SGC (employer super) — informational only, stored for tax reporting
+  paygGlAccountId       String?
   sgcAmount             Float              @default(0)
-  sgcGlAccountId        String?            // Optional DR — e.g. "Accrued SGC - Mark"
-
-  // Variable pay components (allowances, overtime, public holiday pay, etc.)
-  // JSON: [{label: string, amount: number}]
-  // Additive breakdown of grossPay for display; grossPay already includes them.
+  sgcGlAccountId        String?
   components            String             @default("[]")
-
-  // Deductions from gross pay (salary sacrifice, union fees, etc.)
-  // JSON: [{label: string, amount: number, glAccountId: string | null}]
-  // Each entry with a glAccountId creates a DR journal line.
   deductions            String             @default("[]")
-
   notes                 String?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
@@ -810,41 +779,41 @@ model FinancePayslip {
 
 model FinanceIncomeEntry {
   id                  String               @id @default(cuid())
-  name                String               // e.g. "Salary - May", "Rental Income", "Tax Refund"
-  amount              Float                // Expected/template amount (used for forecasting & next-occurrence spawn)
-  actualAmountReceived Float?              // Actual net received this occurrence (overrides amount for GL posting)
-  frequency           String               @default("monthly") // weekly | fortnightly | monthly | quarterly | halfyearly | yearly | one-off
-  incomeType          String               @default("recurring") // recurring | one-off
-  isTaxTracked        Boolean              @default(false)   // Track this income for ATO/tax purposes
-  taxRate             Float?               // Estimated tax rate (e.g. 30 for 30%). Null = not set
-  taxClassification   String?              // personal | business | investment | super; null = not classified
-  nextExpectedDate    DateTime             // When next income is expected
+  name                String
+  amount              Float
+  actualAmountReceived Float?
+  frequency           String               @default("monthly")
+  incomeType          String               @default("recurring")
+  isTaxTracked        Boolean              @default(false)
+  taxRate             Float?
+  taxClassification   String?
+  nextExpectedDate    DateTime
   endDate             DateTime?
   isActive            Boolean              @default(true)
-  received            Boolean              @default(false)  // Has this occurrence been received?
+  received            Boolean              @default(false)
   receivedDate        DateTime?
-  autoPay             Boolean              @default(false)  // Auto/direct deposit indicator
-  emailReminder       Boolean              @default(false)  // Send reminder when income is expected
-  reminderDays        Int                  @default(3)      // Days before nextExpectedDate to remind
-  dayOfMonth          Int?                 // Expected day of month (1-31)
-  monthOfYear         Int?                 // For yearly income (1-12)
-  recurrenceInterval  String?              // Custom recurrence detail
-  invoiceReceived     Boolean              @default(false)  // Invoice/remittance advice received
+  autoPay             Boolean              @default(false)
+  emailReminder       Boolean              @default(false)
+  reminderDays        Int                  @default(3)
+  dayOfMonth          Int?
+  monthOfYear         Int?
+  recurrenceInterval  String?
+  invoiceReceived     Boolean              @default(false)
   invoiceReceivedDate DateTime?
-  invoiceTxId         String?              @unique // FK -> income transaction when remittance received (stage 1: CR income / DR AR)
-  receiptTxId         String?              @unique // FK -> bank transaction when cash received (stage 2: DR bank / CR AR)
-  journalEntryId      String?              // FK -> FinanceJournalEntry — the accrual journal entry (DR AR / CR income lines) created at save
+  invoiceTxId         String?              @unique
+  receiptTxId         String?              @unique
+  journalEntryId      String?
   journalEntry        FinanceJournalEntry? @relation("IncomeJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
-  receiptJournalEntryId String?            // FK -> FinanceJournalEntry — the cash-receipt journal posted when received=true
+  receiptJournalEntryId String?
   receiptJournalEntry   FinanceJournalEntry? @relation("IncomeReceiptJournal", fields: [receiptJournalEntryId], references: [id], onDelete: SetNull)
-  payslip             FinancePayslip?      // Linked per-occurrence payslip breakdown (created when marking received)
+  payslip             FinancePayslip?
   notes               String?
-  memberId            String?              // Which family member earns this
+  memberId            String?
   accountId           String?
   account             FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
   categoryId          String?
   category            FinanceCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  vendorId            String?              // Payer / source (employer, tenant, etc.)
+  vendorId            String?
   vendor              FinanceVendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   entityId            String?
   entity              FinanceEntity?       @relation(fields: [entityId], references: [id], onDelete: SetNull)
@@ -853,19 +822,18 @@ model FinanceIncomeEntry {
   parentIncomeId      String?
   parentIncome        FinanceIncomeEntry?  @relation("IncomeOccurrences", fields: [parentIncomeId], references: [id], onDelete: SetNull)
   childEntries        FinanceIncomeEntry[] @relation("IncomeOccurrences")
-  transactionId       String?              @unique // FK -> FinanceTransaction (legacy: first tx created; prefer invoiceTxId/receiptTxId)
+  transactionId       String?              @unique
   transaction         FinanceTransaction?  @relation("IncomeTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
   attachments         IncomeAttachment[]
   isVoided            Boolean              @default(false)
   voidedAt            DateTime?
   voidNote            String?
-  // ── Recurring template lifecycle (Block 1: repeating transactions) ──
-  templateId            String?
-  template              FinanceRecurringTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  status                String?    // "draft" | "awaiting_receipt" | "received" | "cancelled" — null = legacy row
-  spawnedAt             DateTime?
-  postedAt              DateTime?
-  spawnedSnapshotHash   String?
+  templateId          String?
+  template            FinanceRecurringTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  status              String?
+  spawnedAt           DateTime?
+  postedAt            DateTime?
+  spawnedSnapshotHash String?
   familyId            String
   family              Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   createdAt           DateTime             @default(now())
@@ -889,8 +857,8 @@ model IncomeAttachment {
   incomeId     String
   income       FinanceIncomeEntry @relation(fields: [incomeId], references: [id], onDelete: Cascade)
   familyId     String
-  title        String             // Display name (e.g. "Payslip May 2026")
-  fileName     String             // UUID-based filename on disk
+  title        String
+  fileName     String
   fileSize     Int                @default(0)
   mimeType     String             @default("application/octet-stream")
   uploadedById String
@@ -905,8 +873,8 @@ model BillAttachment {
   billId       String
   bill         FinanceRecurringBill @relation(fields: [billId], references: [id], onDelete: Cascade)
   familyId     String
-  title        String               // Display name (e.g. "Invoice Jan 2026")
-  fileName     String               // UUID-based filename on disk
+  title        String
+  fileName     String
   fileSize     Int                  @default(0)
   mimeType     String               @default("application/octet-stream")
   uploadedById String
@@ -920,15 +888,15 @@ model FinanceBillPayment {
   id              String               @id @default(cuid())
   billId          String
   bill            FinanceRecurringBill @relation(fields: [billId], references: [id], onDelete: Cascade)
-  amount          Float                // Amount paid in this installment
+  amount          Float
   paymentDate     DateTime
-  accountId       String?              // Bank account the payment came from
+  accountId       String?
   account         FinanceAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  glAccountId     String?              // GL category for balance sheet tracking
+  glAccountId     String?
   glAccount       FinanceCategory?     @relation(fields: [glAccountId], references: [id], onDelete: SetNull)
-  transactionId   String?              @unique // FK -> FinanceTransaction created for this payment
+  transactionId   String?              @unique
   transaction     FinanceTransaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  journalEntryId  String?              // FK -> FinanceJournalEntry (DR AP / CR Bank payment journal)
+  journalEntryId  String?
   journalEntry    FinanceJournalEntry? @relation("BillPaymentJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
   notes           String?
   createdBy       String
@@ -944,20 +912,20 @@ model FinanceBillPayment {
 
 model FinanceBudget {
   id                  String             @id @default(cuid())
-  name                String             // e.g. "Groceries - monthly"
+  name                String
   categoryId          String?
   category            FinanceCategory?   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  amount              Float              // Budget limit for the period
-  period              String             @default("monthly")  // weekly | monthly | yearly
-  startDate           DateTime           // Period start
-  endDate             DateTime           // Period end
+  amount              Float
+  period              String             @default("monthly")
+  startDate           DateTime
+  endDate             DateTime
   rollover            Boolean            @default(false)
-  alertThreshold      Int                @default(80)  // Notify at X% spent
+  alertThreshold      Int                @default(80)
   emailAlert          Boolean            @default(false)
-  billId              String?            // FK to bill that auto-created this rule
+  billId              String?
   bill                FinanceRecurringBill? @relation(fields: [billId], references: [id], onDelete: SetNull)
-  isIncludedInPlanner Boolean            @default(true)  // Show in budget planner cashflow
-  entityId            String?            // FK -> FinanceEntity; null = personal/default
+  isIncludedInPlanner Boolean            @default(true)
+  entityId            String?
   entity              FinanceEntity?     @relation(fields: [entityId], references: [id], onDelete: SetNull)
   familyId            String
   family              Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
@@ -975,19 +943,19 @@ model FinanceLocation {
   id        String   @id @default(cuid())
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  name      String   // e.g. "Address A - 12 Oak St", "Address B - 45 Elm Ave"
-  address   String?  // Full street address
-  type      String   @default("primary")  // primary | investment | business | other
+  name      String
+  address   String?
+  type      String   @default("primary")
   isActive  Boolean  @default(true)
-  color     String?  // Display colour hex for UI chips
-  icon      String?  // lucide icon name
+  color     String?
+  icon      String?
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transactions FinanceTransaction[]
+  transactions   FinanceTransaction[]
   recurringBills FinanceRecurringBill[]
-  incomeEntries FinanceIncomeEntry[]
+  incomeEntries  FinanceIncomeEntry[]
 
   @@index([familyId])
   @@index([familyId, isActive])
@@ -995,7 +963,7 @@ model FinanceLocation {
 
 model FinanceSavingsGoal {
   id              String             @id @default(cuid())
-  name            String             // e.g. "Holiday to Japan 2027"
+  name            String
   targetAmount    Float
   currentAmount   Float              @default(0)
   targetDate      DateTime?
@@ -1018,7 +986,7 @@ model FinanceVendor {
   name                String
   website             String?
   phone               String?
-  accountRef          String?              // e.g. customer / account number
+  accountRef          String?
   notes               String?
   defaultCategoryId   String?
   defaultCategory     FinanceCategory?     @relation(fields: [defaultCategoryId], references: [id], onDelete: SetNull)
@@ -1036,12 +1004,12 @@ model FinanceVendor {
 
 model FinanceEntity {
   id          String   @id @default(cuid())
-  name        String   // e.g. "Personal", "Super Fund", "Unitrak", "Hopevale"
-  type        String   @default("personal")  // personal | superfund | trust | business | investment | other
+  name        String
+  type        String   @default("personal")
   description String?
-  color       String?  // hex colour for UI tabs/chips
-  icon        String?  // lucide icon name
-  isDefault   Boolean  @default(false)  // true = the primary personal/family entity
+  color       String?
+  icon        String?
+  isDefault   Boolean  @default(false)
   sortOrder   Int      @default(0)
   isActive    Boolean  @default(true)
   familyId    String
@@ -1061,15 +1029,14 @@ model FinanceEntity {
 
 model FinanceSnapshot {
   id             String        @id @default(cuid())
-  financialYear  String        // "2026-27"
-  snapshotMonth  Int           // calendar month snapshot was taken (1-12)
-  snapshotYear   Int           // calendar year snapshot was taken
-  periodLabel    String        // "Jul 2026 – Jan 2027"
+  financialYear  String
+  snapshotMonth  Int
+  snapshotYear   Int
+  periodLabel    String
   monthsComplete Int           @default(0)
-  reportJson     String        // JSON stringified — SQLite has no Json column type
+  reportJson     String
   createdAt      DateTime      @default(now())
   emails         ReportEmail[]
-
   familyId       String
   family         Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
@@ -1084,7 +1051,7 @@ model ReportEmail {
   snapshot       FinanceSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   recipientEmail String
   subject        String
-  status         String          @default("pending") // pending | sent | failed
+  status         String          @default("pending")
   errorMessage   String?
   sentAt         DateTime?
   createdAt      DateTime        @default(now())
@@ -1097,19 +1064,19 @@ model ReportEmail {
 
 model FinanceJournalEntry {
   id                    String   @id @default(cuid())
-  reference             String?  // e.g. "JE-0012" — auto-assigned on create
+  reference             String?
   date                  DateTime
   description           String
-  type                  String   @default("manual")  // manual | adjustment | reversal | opening_balance | auto_transaction
+  type                  String   @default("manual")
   isPosted              Boolean  @default(false)
   isReversed            Boolean  @default(false)
-  reversalOfId          String?  // FK to the entry this reverses (used by both void reversals and amendment reversals)
+  reversalOfId          String?
   reversalOf            FinanceJournalEntry?  @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
   reversals             FinanceJournalEntry[] @relation("JournalReversal")
-  amendmentOfId         String?  // FK to the original entry this corrects — set only on the new corrective entry
+  amendmentOfId         String?
   amendmentOf           FinanceJournalEntry?  @relation("JournalAmendment", fields: [amendmentOfId], references: [id], onDelete: SetNull)
   amendments            FinanceJournalEntry[] @relation("JournalAmendment")
-  sourceTransactionId   String?  // FK to the FinanceTransaction that auto-generated this entry
+  sourceTransactionId   String?
   entityId              String?
   entity                FinanceEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
   familyId              String
@@ -1143,7 +1110,7 @@ model FinanceJournalLine {
   side           String              // 'debit' | 'credit'
   amount         Float
   description    String?
-  memberId       String?             // FK -> User (optional)
+  memberId       String?
   createdAt      DateTime            @default(now())
 
   @@index([journalEntryId])
@@ -1154,83 +1121,131 @@ model FinanceJournalLine {
 // ─── Trip Planning ─────────────────────────────────────────────────────────────────────────────
 
 model Trip {
-  id               String   @id @default(cuid())
-  title            String   // e.g. "Japan 2027"
-  destination      String
-  departureLocation String? // City/place the traveller is departing from
-  startDate        DateTime
-  endDate          DateTime
-  accommodation    String?  // Hotel name, address, booking ref
-  transport        String?  // Flight info, car rental, booking ref
-  notes            String?
-  status           String   @default("planning") // planning | confirmed | in_progress | completed | cancelled
-  color            String?  // Display colour hex
-  icon             String?  // Lucide icon name
-  packingListId    String?  @unique // FK -> List (reuse existing List model for packing)
-  packingList      List?    @relation("TripPackingList", fields: [packingListId], references: [id], onDelete: SetNull)
-  estimatedBudget  Float?   // Overall estimated trip cost
-  actualCost       Float?   // Sum of logged expenses (manual or linked)
-  budgetBreakdown  String?  // JSON: { "flights": 2000, "hotel": 1500, "food": 800, "activities": 500, "transport": 400, "other": 300 }
-  days             TripDay[] @relation("TripDays")
-  attachments     TripAttachment[] @relation("TripAttachments")
-  createdBy        String
-  familyId         String
-  family           Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String             @id @default(cuid())
+  title             String
+  destination       String
+  departureLocation String?
+  startDate         DateTime
+  endDate           DateTime
+  accommodation     String?
+  transport         String?
+  notes             String?
+  status            String             @default("planning")
+  color             String?
+  icon              String?
+  // Legacy single packing list FK — kept for backward compat
+  packingListId     String?            @unique
+  packingList       List?              @relation("TripPackingList", fields: [packingListId], references: [id], onDelete: SetNull)
+  estimatedBudget   Float?
+  actualCost        Float?
+  budgetBreakdown   String?
+  days              TripDay[]          @relation("TripDays")
+  attachments       TripAttachment[]   @relation("TripAttachments")
+  packingEntries    TripPackingEntry[]
+  createdBy         String
+  familyId          String
+  family            Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@index([familyId])
   @@index([familyId, startDate])
 }
 
 model TripDay {
-  id         String         @id @default(cuid())
-  tripId     String
-  trip       Trip           @relation("TripDays", fields: [tripId], references: [id], onDelete: Cascade)
-  date       DateTime       // Specific calendar date of this trip day
-  label      String?        // e.g. "Travel Day", "Exploring Tokyo"
-  notes      String?
-  sortOrder  Int            @default(0)
-  activities   TripActivity[]
-  attachments  TripAttachment[] @relation("DayAttachments")
-  createdAt    DateTime       @default(now())
+  id          String           @id @default(cuid())
+  tripId      String
+  trip        Trip             @relation("TripDays", fields: [tripId], references: [id], onDelete: Cascade)
+  date        DateTime
+  label       String?
+  notes       String?
+  sortOrder   Int              @default(0)
+  activities  TripActivity[]
+  attachments TripAttachment[] @relation("DayAttachments")
+  createdAt   DateTime         @default(now())
 
   @@unique([tripId, date])
   @@index([tripId])
 }
 
 model TripActivity {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   dayId     String
-  day       TripDay  @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  day       TripDay           @relation(fields: [dayId], references: [id], onDelete: Cascade)
   title     String
   location  String?
   startTime DateTime?
   endTime   DateTime?
   notes     String?
-  category  String?  // e.g. "sightseeing", "meal", "transport", "accommodation", "activity"
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-@@index([dayId])
+  category  String?
+  sortOrder Int               @default(0)
+  tags      TripActivityTag[]
+  createdAt DateTime          @default(now())
+
+  @@index([dayId])
 }
 
 model TripAttachment {
-id           String   @id @default(cuid())
-tripId       String
-trip         Trip     @relation("TripAttachments", fields: [tripId], references: [id], onDelete: Cascade)
-dayId        String?
-day          TripDay? @relation("DayAttachments", fields: [dayId], references: [id], onDelete: SetNull)
-familyId     String
-title        String
-fileName     String
-fileSize     Int      @default(0)
-mimeType     String   @default("application/octet-stream")
-uploadedById String
-createdAt    DateTime @default(now())
+  id           String   @id @default(cuid())
+  tripId       String
+  trip         Trip     @relation("TripAttachments", fields: [tripId], references: [id], onDelete: Cascade)
+  dayId        String?
+  day          TripDay? @relation("DayAttachments", fields: [dayId], references: [id], onDelete: SetNull)
+  familyId     String
+  title        String
+  fileName     String
+  fileSize     Int      @default(0)
+  mimeType     String   @default("application/octet-stream")
+  uploadedById String
+  createdAt    DateTime @default(now())
 
-@@index([tripId])
-@@index([dayId])
-@@index([familyId])
+  @@index([tripId])
+  @@index([dayId])
+  @@index([familyId])
+}
+
+// Trip-specific emoji tags (separate from the recipe Tag system)
+model TripTag {
+  id         String            @id @default(cuid())
+  familyId   String
+  family     Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name       String
+  emoji      String?
+  color      String?
+  sortOrder  Int               @default(0)
+  activities TripActivityTag[]
+  createdAt  DateTime          @default(now())
+
+  @@unique([familyId, name])
+  @@index([familyId])
+}
+
+// Join table: tags on activities
+model TripActivityTag {
+  activityId String
+  tagId      String
+  activity   TripActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  tag        TripTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now())
+
+  @@id([activityId, tagId])
+  @@index([activityId])
+  @@index([tagId])
+}
+
+// Multiple named packing lists per trip (Mark / Michelle / Shared / etc.)
+model TripPackingEntry {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  listId    String
+  list      List     @relation("TripPackingEntries", fields: [listId], references: [id], onDelete: Cascade)
+  label     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([tripId, listId])
+  @@index([tripId])
 }
 
 // ─── Recurring Transaction Templates (Xero-style master → drafts → posted) ──
@@ -1248,9 +1263,6 @@ model FinanceRecurringTemplate {
   kind                    String   // "bill" | "income"
   name                    String
 
-  // Counterparty / defaults inherited by spawned drafts (mirrors existing
-  // FinanceRecurringBill / FinanceIncomeEntry shape so the spawn worker can
-  // copy fields 1:1).
   counterpartyId          String?
   accountId               String?
   categoryId              String?
@@ -1258,39 +1270,31 @@ model FinanceRecurringTemplate {
   locationId              String?
   memberId                String?
 
-  // Options (GnuCash "Overview" tab)
   enabled                 Boolean  @default(true)
   createAutomatically     Boolean  @default(true)
   notifyOnCreate          Boolean  @default(false)
   createInAdvanceDays     Int      @default(0)
   remindInAdvanceDays     Int?
 
-  // Frequency (GnuCash "Frequency" tab)
-  frequency               String   // weekly | fortnightly | monthly | bimonthly | quarterly | halfyearly | yearly | custom
+  frequency               String
   interval                Int      @default(1)
-  daysOfWeek              String?  // JSON array as TEXT — matches existing convention
+  daysOfWeek              String?
   dayOfMonth              Int?
   monthOfYear             Int?
   startDate               DateTime
-  endMode                 String   @default("forever") // forever | until | for_n_occurrences
+  endMode                 String   @default("forever")
   endDate                 DateTime?
   totalOccurrences        Int?
   occurrencesRemaining    Int?
 
-  // Spawn tracking
   lastSpawnedDate         DateTime?
   nextOccurrenceDate      DateTime
-  defaultDueOffsetDays    Int      @default(0)   // bills: due = occurrence + N days
+  defaultDueOffsetDays    Int      @default(0)
 
-  // Tax classification carried into spawned drafts
   isTaxTracked            Boolean  @default(false)
   taxClassification       String?
   taxRate                 Float?
 
-  // ── Payslip template fields (income templates only; null for bills) ──
-  // Mirrors FinancePayslip shape so spawn can copy into a real payslip on the
-  // drafted FinanceIncomeEntry. Approval then runs the payslip-aware posting
-  // path (multi-line: DR Bank net + DR PAYG + DR deductions / CR Gross).
   payslipEnabled          Boolean  @default(false)
   grossPay                Float?
   netPay                  Float?
@@ -1300,10 +1304,9 @@ model FinanceRecurringTemplate {
   paygGlAccountId         String?
   sgcAmount               Float?
   sgcGlAccountId          String?
-  payslipComponents       String?  // JSON array as TEXT
-  payslipDeductions       String?  // JSON array as TEXT
+  payslipComponents       String?
+  payslipDeductions       String?
 
-  // Standard
   createdBy               String
   notes                   String?
   isActive                Boolean  @default(true)
@@ -1328,8 +1331,8 @@ model FinanceRecurringTemplateLine {
   description   String
   qty           Float    @default(1)
   unitPrice     Float
-  amount        Float                                          // cached qty * unitPrice
-  side          String                                         // "debit" | "credit"
+  amount        Float
+  side          String
 
   glAccountId   String
   glAccount     FinanceCategory  @relation("TemplateLineGlAccount", fields: [glAccountId], references: [id], onDelete: Restrict)
@@ -1338,9 +1341,6 @@ model FinanceRecurringTemplateLine {
   memberId      String?
   sortOrder     Int      @default(0)
 
-  // GST split metadata — populated when glAccount.gstApplicable=true.
-  // At spawn time, the spawn worker uses these to write three draft lines
-  // (ex-GST + GST + counter-account) per Q1 decision.
   gstApplicable Boolean  @default(false)
   gstRate       Float    @default(0)
 

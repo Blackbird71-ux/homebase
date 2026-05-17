@@ -3,10 +3,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   X, Loader2, MapPin, Clock, Tag, FileText,
-  Sun, UtensilsCrossed, Car, Hotel, Ticket,
+  Sun, UtensilsCrossed, Car, Hotel, Ticket, Settings2,
 } from 'lucide-react'
 import { NoteEditorToolbar } from '@/components/notes/NoteEditorToolbar'
-import type { TripActivityShape } from '@/types'
+import type { TripActivityShape, TripTagShape } from '@/types'
 
 // ── Category config ────────────────────────────────────────────────────────
 
@@ -48,7 +48,9 @@ function buildIsoDateTime(dayDate: string, timeStr: string): string | null {
 
 interface ActivityEditDialogProps {
   activity: TripActivityShape
-  dayDate: string           // ISO date string for building datetime values
+  dayDate: string
+  tripId: string        // needed to call the tag-toggle API
+  dayId: string         // needed to call the tag-toggle API
   onSave: (data: {
     title: string
     location: string | null
@@ -57,7 +59,9 @@ interface ActivityEditDialogProps {
     notes: string | null
     category: string | null
   }) => Promise<void>
+  onTagsChanged: (tags: TripActivityShape['tags']) => void
   onClose: () => void
+  onOpenTagManager: () => void
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -65,8 +69,12 @@ interface ActivityEditDialogProps {
 export function ActivityEditDialog({
   activity,
   dayDate,
+  tripId,
+  dayId,
   onSave,
+  onTagsChanged,
   onClose,
+  onOpenTagManager,
 }: ActivityEditDialogProps) {
   const [title, setTitle]         = useState(activity.title)
   const [location, setLocation]   = useState(activity.location ?? '')
@@ -75,6 +83,11 @@ export function ActivityEditDialog({
   const [endTime, setEndTime]     = useState(timeFromIso(activity.endTime))
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
+
+  // Tags
+  const [availableTags, setAvailableTags]   = useState<TripTagShape[]>([])
+  const [activityTags, setActivityTags]     = useState<TripActivityShape['tags']>(activity.tags ?? [])
+  const [togglingTag, setTogglingTag]       = useState<string | null>(null)
 
   // Rich text editor
   const editorRef              = useRef<HTMLDivElement>(null)
@@ -85,14 +98,17 @@ export function ActivityEditDialog({
   const [textColor, setTextColor]           = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
 
-  // Seed editor content once on mount
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.innerHTML = activity.notes ?? ''
     }
+    // Load available tags
+    fetch('/api/trips/tags')
+      .then((r) => r.json())
+      .then((data: TripTagShape[]) => setAvailableTags(data))
+      .catch(() => {})
   }, [activity.notes])
 
-  // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -110,20 +126,17 @@ export function ActivityEditDialog({
     const url = prompt('Enter URL:', 'https://')
     if (url) exec('createLink', url)
   }
-
   const insertImage = () => {
     const url = prompt('Enter image URL:', 'https://')
     if (url) exec('insertImage', url)
   }
-
   const saveSelection = () => {
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0) {
-      savedRangeRef.current      = sel.getRangeAt(0).cloneRange()
-      savedEditableRef.current   = editorRef.current
+      savedRangeRef.current    = sel.getRangeAt(0).cloneRange()
+      savedEditableRef.current = editorRef.current
     }
   }
-
   const restoreSelection = () => {
     savedEditableRef.current?.focus()
     const sel = window.getSelection()
@@ -132,19 +145,36 @@ export function ActivityEditDialog({
       sel.addRange(savedRangeRef.current)
     }
   }
-
   const applyTextColor = (color: string) => {
-    setTextColor(color)
-    restoreSelection()
+    setTextColor(color); restoreSelection()
     document.execCommand('foreColor', false, color)
     editorRef.current?.focus()
   }
-
   const applyHighlightColor = (color: string) => {
-    setHighlightColor(color)
-    restoreSelection()
+    setHighlightColor(color); restoreSelection()
     document.execCommand('hiliteColor', false, color)
     editorRef.current?.focus()
+  }
+
+  async function handleToggleTag(tagId: string) {
+    setTogglingTag(tagId)
+    try {
+      const res = await fetch(
+        `/api/trips/${tripId}/days/${dayId}/activities/${activity.id}/tags`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tagId }),
+        },
+      )
+      if (res.ok) {
+        const updatedTags = await res.json()
+        setActivityTags(updatedTags)
+        onTagsChanged(updatedTags)
+      }
+    } finally {
+      setTogglingTag(null)
+    }
   }
 
   async function handleSave() {
@@ -173,7 +203,7 @@ export function ActivityEditDialog({
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -184,10 +214,10 @@ export function ActivityEditDialog({
           </button>
         </div>
 
-        {/* ── Scrollable body ── */}
+        {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* Fields section */}
+          {/* Fields */}
           <div className="px-5 pt-4 pb-3 space-y-3">
             {error && (
               <div className="p-2.5 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
@@ -195,7 +225,9 @@ export function ActivityEditDialog({
 
             {/* Title */}
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Title <span className="text-destructive">*</span></label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Title <span className="text-destructive">*</span>
+              </label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -206,7 +238,7 @@ export function ActivityEditDialog({
               />
             </div>
 
-            {/* Location + Category row */}
+            {/* Location + Category */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
@@ -245,7 +277,7 @@ export function ActivityEditDialog({
               </div>
             </div>
 
-            {/* Time row */}
+            {/* Times */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
@@ -272,9 +304,59 @@ export function ActivityEditDialog({
                 />
               </div>
             </div>
+
+            {/* Tags */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Tags
+                </label>
+                <button
+                  type="button"
+                  onClick={onOpenTagManager}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                >
+                  <Settings2 className="h-3 w-3" />
+                  Manage tags
+                </button>
+              </div>
+              {availableTags.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  No tags yet —{' '}
+                  <button type="button" onClick={onOpenTagManager} className="underline hover:text-foreground">
+                    create some in Tag Manager
+                  </button>
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {availableTags.map((tag) => {
+                    const isActive = activityTags.some((t) => t.id === tag.id)
+                    const toggling = togglingTag === tag.id
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => handleToggleTag(tag.id)}
+                        disabled={toggling || saving}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all disabled:opacity-60"
+                        style={{
+                          backgroundColor: isActive ? (tag.color ?? '#64748b') : 'transparent',
+                          color: isActive ? 'white' : (tag.color ?? '#64748b'),
+                          border: `1.5px solid ${tag.color ?? '#64748b'}`,
+                          opacity: toggling ? 0.6 : 1,
+                        }}
+                      >
+                        {tag.emoji && <span>{tag.emoji}</span>}
+                        {tag.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Rich text notes section */}
+          {/* Rich text notes */}
           <div className="px-5 pb-4">
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">Notes</label>
             <div className="rounded-md border border-input overflow-hidden">
@@ -302,7 +384,7 @@ export function ActivityEditDialog({
           </div>
         </div>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border shrink-0 bg-muted/20">
           <button
             type="button"
