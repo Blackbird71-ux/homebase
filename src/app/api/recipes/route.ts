@@ -30,8 +30,8 @@ async function processTagsInput(tagsInput: any, familyId: string, userId: string
     // Separate IDs and names
     tagsInput.forEach((tag) => {
       if (typeof tag === 'string') {
-        if (tag.match(/^[0-9a-f-]+$/i)) {
-          // Looks like an ID
+        // CUIDs are 25 chars, UUIDs are 36 — only treat as ID if long enough to be one
+        if (tag.length >= 20 && tag.match(/^[0-9a-f-]+$/i)) {
           tagIds.push(tag)
         } else {
           tagNames.push(tag.trim())
