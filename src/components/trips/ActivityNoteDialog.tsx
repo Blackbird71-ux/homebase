@@ -1,7 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { NoteEditorToolbar } from '@/components/notes/NoteEditorToolbar'
 
 interface ActivityNoteDialogProps {
@@ -19,14 +27,14 @@ export function ActivityNoteDialog({
   initialContent,
   onSave,
 }: ActivityNoteDialogProps) {
-  const editorRef = useRef<HTMLDivElement>(null)
-  const textColorInputRef = useRef<HTMLInputElement>(null)
+  const editorRef              = useRef<HTMLDivElement>(null)
+  const textColorInputRef      = useRef<HTMLInputElement>(null)
   const highlightColorInputRef = useRef<HTMLInputElement>(null)
-  const savedRangeRef = useRef<Range | null>(null)
-  const savedEditableRef = useRef<HTMLDivElement | null>(null)
-  const [textColor, setTextColor] = useState('#e11d48')
+  const savedRangeRef          = useRef<Range | null>(null)
+  const savedEditableRef       = useRef<HTMLDivElement | null>(null)
+  const [textColor, setTextColor]           = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving]                 = useState(false)
 
   // Initialise editor content when dialog opens
   useEffect(() => {
@@ -58,7 +66,7 @@ export function ActivityNoteDialog({
   const saveSelection = () => {
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0) {
-      savedRangeRef.current = sel.getRangeAt(0).cloneRange()
+      savedRangeRef.current    = sel.getRangeAt(0).cloneRange()
       savedEditableRef.current = editorRef.current
     }
   }
@@ -97,50 +105,40 @@ export function ActivityNoteDialog({
     }
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[80vh]">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg flex flex-col max-h-[80vh] overflow-hidden p-0 gap-0" showCloseButton>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <div>
-            <h3 className="text-sm font-semibold">Notes</h3>
-            <p className="text-xs text-muted-foreground truncate max-w-[300px]">
-              {activityTitle}
-            </p>
-          </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border shrink-0">
+          <DialogTitle>Notes</DialogTitle>
+          <p className="text-xs text-muted-foreground truncate">{activityTitle}</p>
+        </DialogHeader>
+
+        {/* Toolbar — sits flush against the editor */}
+        <div className="shrink-0 px-4 pt-3">
+          <NoteEditorToolbar
+            exec={exec}
+            insertLink={insertLink}
+            insertImage={insertImage}
+            saveSelection={saveSelection}
+            applyTextColor={applyTextColor}
+            applyHighlightColor={applyHighlightColor}
+            textColorInputRef={textColorInputRef}
+            highlightColorInputRef={highlightColorInputRef}
+            textColor={textColor}
+            highlightColor={highlightColor}
+            isLoading={saving}
+          />
         </div>
 
-        {/* Toolbar */}
-        <NoteEditorToolbar
-          exec={exec}
-          insertLink={insertLink}
-          insertImage={insertImage}
-          saveSelection={saveSelection}
-          applyTextColor={applyTextColor}
-          applyHighlightColor={applyHighlightColor}
-          textColorInputRef={textColorInputRef}
-          highlightColorInputRef={highlightColorInputRef}
-          textColor={textColor}
-          highlightColor={highlightColor}
-          isLoading={saving}
-        />
-
         {/* Editor area */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto px-4 pb-2 min-h-0">
           <div
             ref={editorRef}
             contentEditable={!saving}
             suppressContentEditableWarning
             data-placeholder="Add notes with rich formatting…"
-            className="min-h-[120px] text-sm outline-none focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/60 prose prose-sm max-w-none"
+            className="min-h-[140px] py-3 text-sm outline-none focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/60 prose prose-sm max-w-none border-x border-b border-input rounded-b-md px-3"
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.preventDefault()
@@ -151,26 +149,13 @@ export function ActivityNoteDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 p-4 border-t border-border">
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-            className="px-3 py-1.5 rounded text-sm font-medium border border-input hover:bg-accent disabled:opacity-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="px-3 py-1.5 rounded text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
-          >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        <DialogFooter showCloseButton>
+          <Button type="button" onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             Save
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

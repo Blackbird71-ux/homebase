@@ -6,14 +6,18 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { toast } from 'sonner'
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowRightLeftIcon } from 'lucide-react'
+
+type TagScope = 'general' | 'recipe' | 'note'
 
 interface Tag {
   id: string
   name: string
   color: string | null
+  scope: TagScope
   createdAt: string
   recipeCount: number
 }
@@ -24,18 +28,40 @@ const TAG_COLORS = [
   '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#78716c',
 ]
 
+const SCOPE_OPTIONS: { value: TagScope; label: string; description: string }[] = [
+  { value: 'general', label: 'General', description: 'Appears in all tag selectors' },
+  { value: 'recipe', label: 'Recipe', description: 'Only appears when tagging recipes' },
+  { value: 'note', label: 'Notes', description: 'Only appears when tagging notes' },
+]
+
+const SCOPE_TABS: { value: TagScope | 'all'; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'general', label: 'General' },
+  { value: 'recipe', label: 'Recipe' },
+  { value: 'note', label: 'Notes' },
+]
+
+function scopeBadge(scope: TagScope) {
+  if (scope === 'recipe') return { label: 'Recipe', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' }
+  if (scope === 'note') return { label: 'Notes', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' }
+  return { label: 'General', className: 'bg-muted text-muted-foreground' }
+}
+
 export function TagManager() {
   const [tags, setTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [activeTab, setActiveTab] = useState<TagScope | 'all'>('all')
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedTag, setSelectedTag] = useState<Tag | null>(null)
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('#6366f1')
+  const [newTagScope, setNewTagScope] = useState<TagScope>('general')
   const [editTagName, setEditTagName] = useState('')
   const [editTagColor, setEditTagColor] = useState('#6366f1')
+  const [editTagScope, setEditTagScope] = useState<TagScope>('general')
   const [submitting, setSubmitting] = useState(false)
   const [legacyCount, setLegacyCount] = useState(0)
   const [migrating, setMigrating] = useState(false)
@@ -51,7 +77,6 @@ export function TagManager() {
       const res = await fetch(`/api/tags?includeCounts=true${search ? `&search=${encodeURIComponent(search)}` : ''}`)
       if (!res.ok) throw new Error('Failed to fetch tags')
       const data = await res.json()
-      // Sort alphabetically by name (case-insensitive)
       setTags(data.sort((a: Tag, b: Tag) => a.name.localeCompare(b.name)))
     } catch (error) {
       toast.error('Failed to load tags')
@@ -99,16 +124,17 @@ export function TagManager() {
       const res = await fetch('/api/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTagName.trim(), color: newTagColor }),
+        body: JSON.stringify({ name: newTagName.trim(), color: newTagColor, scope: newTagScope }),
       })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to create tag')
       }
       const newTag = await res.json()
-      setTags([newTag, ...tags])
+      setTags(prev => [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name)))
       setNewTagName('')
       setNewTagColor('#6366f1')
+      setNewTagScope('general')
       setCreateOpen(false)
       toast.success('Tag created successfully')
     } catch (error: any) {
@@ -129,14 +155,17 @@ export function TagManager() {
       const res = await fetch(`/api/tags/${selectedTag.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editTagName.trim(), color: editTagColor }),
+        body: JSON.stringify({ name: editTagName.trim(), color: editTagColor, scope: editTagScope }),
       })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to update tag')
       }
       const updatedTag = await res.json()
-      setTags(tags.map(tag => tag.id === selectedTag.id ? { ...updatedTag, recipeCount: selectedTag.recipeCount } : tag))
+      setTags(tags.map(tag => tag.id === selectedTag.id
+        ? { ...updatedTag, recipeCount: selectedTag.recipeCount }
+        : tag
+      ))
       setEditOpen(false)
       setSelectedTag(null)
       toast.success('Tag updated successfully')
@@ -174,6 +203,7 @@ export function TagManager() {
     setSelectedTag(tag)
     setEditTagName(tag.name)
     setEditTagColor(tag.color ?? '#6366f1')
+    setEditTagScope(tag.scope ?? 'general')
     setEditOpen(true)
   }
 
@@ -182,12 +212,14 @@ export function TagManager() {
     setDeleteOpen(true)
   }
 
+  const visibleTags = activeTab === 'all' ? tags : tags.filter(t => t.scope === activeTab)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Tag Management</h2>
-          <p className="text-muted-foreground">Create, edit, and delete tags for organizing recipes</p>
+          <p className="text-muted-foreground">Create, edit, and organise tags by category</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger>
@@ -200,7 +232,7 @@ export function TagManager() {
             <DialogHeader>
               <DialogTitle>Create New Tag</DialogTitle>
               <DialogDescription>
-                Tags help organize recipes. Enter a name and choose a color for your new tag.
+                Choose a category to control where this tag appears.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -213,6 +245,22 @@ export function TagManager() {
                   placeholder="e.g., Italian, Quick, Vegetarian"
                   autoFocus
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={newTagScope} onValueChange={(v) => setNewTagScope(v as TagScope)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SCOPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        <span className="font-medium">{opt.label}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">{opt.description}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>Tag Color</Label>
@@ -278,8 +326,32 @@ export function TagManager() {
         <CardHeader>
           <CardTitle>All Tags</CardTitle>
           <CardDescription>
-            Tags are shared across your family. Deleting a tag will remove it from all recipes.
+            Tags are shared across your family. Use categories to control where each tag appears.
           </CardDescription>
+
+          {/* Scope filter tabs */}
+          <div className="flex gap-1 mt-3 p-1 bg-muted rounded-lg w-fit">
+            {SCOPE_TABS.map(tab => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setActiveTab(tab.value)}
+                className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+                  activeTab === tab.value
+                    ? 'bg-background shadow-sm text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+                {tab.value !== 'all' && (
+                  <span className="ml-1.5 text-xs opacity-60">
+                    {tags.filter(t => t.scope === tab.value).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
           <div className="relative mt-4">
             <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -296,58 +368,67 @@ export function TagManager() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : tags.length === 0 ? (
+          ) : visibleTags.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              {search ? 'No tags found matching your search' : 'No tags yet. Create your first tag!'}
+              {search ? 'No tags found matching your search' : 'No tags in this category yet.'}
             </div>
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-medium text-muted-foreground border-b">
                 <div className="col-span-4">Name</div>
-                <div className="col-span-3">Used In</div>
-                <div className="col-span-3">Created</div>
+                <div className="col-span-2">Category</div>
+                <div className="col-span-2">Recipes</div>
+                <div className="col-span-2">Created</div>
                 <div className="col-span-2 text-right">Actions</div>
               </div>
-              {tags.map((tag) => (
-                <div key={tag.id} className="grid grid-cols-12 gap-4 px-4 py-3 items-center border rounded-lg hover:bg-muted/50">
-                  <div className="col-span-4 font-medium">
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
-                      style={tag.color ? { borderColor: tag.color, backgroundColor: tag.color + '20', color: tag.color } : {}}
-                    >
-                      {tag.color && (
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
-                      )}
-                      {tag.name}
-                    </span>
-                  </div>
-                  <div className="col-span-3 text-muted-foreground">
-                    {tag.recipeCount} recipe{tag.recipeCount !== 1 ? 's' : ''}
-                  </div>
-                  <div className="col-span-3">
-                    {new Date(tag.createdAt).toLocaleDateString()}
-                  </div>
-                  <div className="col-span-2 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditClick(tag)}
+              {visibleTags.map((tag) => {
+                const badge = scopeBadge(tag.scope)
+                return (
+                  <div key={tag.id} className="grid grid-cols-12 gap-4 px-4 py-3 items-center border rounded-lg hover:bg-muted/50">
+                    <div className="col-span-4 font-medium">
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                        style={tag.color ? { borderColor: tag.color, backgroundColor: tag.color + '20', color: tag.color } : {}}
                       >
-                        <EditIcon className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteClick(tag)}
-                        title="Delete tag"
-                      >
-                        <TrashIcon className="h-3.5 w-3.5" />
-                      </Button>
+                        {tag.color && (
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                        )}
+                        {tag.name}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+                    <div className="col-span-2 text-muted-foreground text-sm">
+                      {tag.recipeCount}
+                    </div>
+                    <div className="col-span-2 text-sm text-muted-foreground">
+                      {new Date(tag.createdAt).toLocaleDateString()}
+                    </div>
+                    <div className="col-span-2 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditClick(tag)}
+                        >
+                          <EditIcon className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteClick(tag)}
+                          title="Delete tag"
+                        >
+                          <TrashIcon className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
@@ -359,7 +440,7 @@ export function TagManager() {
           <DialogHeader>
             <DialogTitle>Edit Tag</DialogTitle>
             <DialogDescription>
-              Update the name and color of this tag.
+              Update the name, category, and colour of this tag.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -371,6 +452,22 @@ export function TagManager() {
                 onChange={(e) => setEditTagName(e.target.value)}
                 autoFocus
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={editTagScope} onValueChange={(v) => setEditTagScope(v as TagScope)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SCOPE_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className="font-medium">{opt.label}</span>
+                      <span className="text-muted-foreground ml-2 text-xs">{opt.description}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Tag Color</Label>
@@ -412,7 +509,7 @@ export function TagManager() {
           <DialogHeader>
             <DialogTitle>Delete Tag</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the tag "{selectedTag?.name}"?
+              Are you sure you want to delete the tag &ldquo;{selectedTag?.name}&rdquo;?
               {selectedTag && selectedTag.recipeCount > 0 && (
                 <span className="text-destructive block mt-1">
                   This tag is used in {selectedTag.recipeCount} recipe{selectedTag.recipeCount !== 1 ? 's' : ''}.

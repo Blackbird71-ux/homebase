@@ -24,22 +24,25 @@ interface TagSelectorProps {
   onChange: (tags: string[]) => void
   placeholder?: string
   disabled?: boolean
+  scope?: string
 }
 
-export function TagSelector({ value, onChange, placeholder = 'Add tags...', disabled = false }: TagSelectorProps) {
+export function TagSelector({ value, onChange, placeholder = 'Add tags...', disabled = false, scope }: TagSelectorProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(false)
   const [pending, setPending] = useState<string[]>([])
 
-  // Load all tags on mount so inline display has colors from the start
+  const tagsUrl = scope ? `/api/tags?scope=${encodeURIComponent(scope)}` : '/api/tags'
+
+  // Load tags on mount so inline display has colors from the start
   useEffect(() => {
-    fetch('/api/tags')
+    fetch(tagsUrl)
       .then((res) => res.ok ? res.json() : [])
       .then((data) => setAllTags(data))
       .catch(() => {})
-  }, [])
+  }, [tagsUrl])
 
   async function openModal() {
     setPending([...value])
@@ -47,7 +50,7 @@ export function TagSelector({ value, onChange, placeholder = 'Add tags...', disa
     setOpen(true)
     setLoading(true)
     try {
-      const res = await fetch('/api/tags')
+      const res = await fetch(tagsUrl)
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
       setAllTags(data)

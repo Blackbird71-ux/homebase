@@ -30,6 +30,7 @@ export async function GET(
     id: tag.id,
     name: tag.name,
     color: tag.color,
+    scope: tag.scope ?? 'general',
     createdAt: tag.createdAt.toISOString(),
     recipeCount: tag._count.recipes,
   })
@@ -42,7 +43,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { name, color } = body
+  const { name, color, scope } = body
 
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
@@ -82,9 +83,14 @@ export async function PUT(
     )
   }
 
+  const trimmedScope = scope && typeof scope === 'string' ? scope.trim() : undefined
+
   const updateData: Record<string, unknown> = { name: trimmedName }
   if (trimmedColor !== undefined) {
     updateData.color = trimmedColor
+  }
+  if (trimmedScope !== undefined) {
+    updateData.scope = trimmedScope
   }
 
   const updatedTag = await (prisma as any).tag.update({
@@ -105,6 +111,7 @@ export async function PUT(
     id: updatedTag.id,
     name: updatedTag.name,
     color: updatedTag.color,
+    scope: updatedTag.scope ?? 'general',
     createdAt: updatedTag.createdAt.toISOString(),
   })
 }

@@ -26,11 +26,16 @@ interface DraftBill {
   name: string
   amount: number
   nextDueDate: string
+  billDate: string | null
   status: string | null
   spawnedSnapshotHash: string | null
   templateId: string | null
   categoryId: string | null
   vendorId: string | null
+  memberId: string | null
+  entityId: string | null
+  taxClassification: string | null
+  frequency: string | null
   notes: string | null
   template: { id: string; name: string } | null
   vendor: { id: string; name: string } | null
@@ -47,6 +52,10 @@ interface DraftIncome {
   templateId: string | null
   categoryId: string | null
   vendorId: string | null
+  memberId: string | null
+  entityId: string | null
+  taxClassification: string | null
+  frequency: string | null
   notes: string | null
   template: { id: string; name: string } | null
   vendor: { id: string; name: string } | null
@@ -83,6 +92,7 @@ interface EditFormState {
   name: string
   amount: string
   date: string
+  billDate: string
   endDate: string
   categoryId: string
   vendorId: string
@@ -109,7 +119,7 @@ function fmtDate(iso: string) {
 function emptyEditForm(kind: 'bill' | 'income', id: string): EditFormState {
   return {
     kind, id,
-    name: '', amount: '', date: '', endDate: '',
+    name: '', amount: '', date: '', billDate: '', endDate: '',
     categoryId: '', vendorId: '', memberId: '', entityId: '',
     notes: '', billType: 'recurring', frequency: 'monthly',
     autoPay: false, emailReminder: false, reminderDays: 3,
@@ -229,9 +239,6 @@ function EditDialog({
               ))}
             </div>
           )}
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            Some fields (frequency, entity, tax, budget) are preview-only on drafts. Full configuration applies when the draft is approved.
-          </div>
         </div>
 
         {/* Two-column body */}
@@ -294,14 +301,20 @@ function EditDialog({
                       title="Manage contacts"><Building2 className="h-3.5 w-3.5" /></Link>
                   </div>
                 </div>
-                {/* Due Date + End Date */}
+                {/* Due Date + Invoice Date (bills) or End Date */}
                 <div>
                   <label className="text-xs text-muted-foreground">{dateLabel}</label>
                   <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
                     className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.date && 'border-red-500')} />
                   {errors.date && <p className="text-xs text-red-500 mt-0.5">{errors.date}</p>}
                 </div>
-                {form.billType === 'recurring' ? (
+                {form.kind === 'bill' ? (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Invoice Date</label>
+                    <input type="date" value={form.billDate} onChange={e => set('billDate', e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                  </div>
+                ) : form.billType === 'recurring' ? (
                   <div>
                     <label className="text-xs text-muted-foreground">End Date (optional)</label>
                     <input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)}
@@ -333,8 +346,17 @@ function EditDialog({
                   <select value={form.taxClassification} onChange={e => set('taxClassification', e.target.value)}
                     className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                     <option value="">Not classified</option>
-                    <option value="tax_deduction">Tax Deduction</option>
-                    <option value="tax_payment">Tax Payment (PAYG)</option>
+                    {form.kind === 'bill' ? (
+                      <>
+                        <option value="tax_deduction">Tax Deduction</option>
+                        <option value="tax_payment">Tax Payment (PAYG)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="taxable_income">Taxable Income</option>
+                        <option value="exempt_income">Exempt Income</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -686,7 +708,7 @@ export default function DraftsPage() {
   function openEdit(kind: 'bill' | 'income', d: DraftBill | DraftIncome) {
     const isBill = 'nextDueDate' in d
     const date = isBill
-      ? new Date(d.nextDueDate).toISOString().slice(0, 10)
+      ? new Date((d as DraftBill).nextDueDate).toISOString().slice(0, 10)
       : new Date((d as DraftIncome).nextExpectedDate).toISOString().slice(0, 10)
     const form = emptyEditForm(kind, d.id)
     form.name = d.name
@@ -694,7 +716,14 @@ export default function DraftsPage() {
     form.date = date
     form.categoryId = d.categoryId ?? ''
     form.vendorId = d.vendorId ?? ''
+    form.memberId = d.memberId ?? ''
+    form.entityId = d.entityId ?? ''
+    form.taxClassification = d.taxClassification ?? ''
+    form.frequency = d.frequency ?? 'monthly'
     form.notes = d.notes ?? ''
+    if (isBill && (d as DraftBill).billDate) {
+      form.billDate = new Date((d as DraftBill).billDate!).toISOString().slice(0, 10)
+    }
     setEditState(form)
   }
 
@@ -706,7 +735,12 @@ export default function DraftsPage() {
       [s.kind === 'bill' ? 'nextDueDate' : 'nextExpectedDate']: s.date,
       categoryId: s.categoryId || null,
       vendorId: s.vendorId || null,
+      memberId: s.memberId || null,
+      entityId: s.entityId || null,
+      taxClassification: s.taxClassification || null,
+      frequency: s.frequency || null,
       notes: s.notes || null,
+      ...(s.kind === 'bill' && s.billDate ? { billDate: s.billDate } : {}),
     }
     const res = await fetch(`/api/finance/drafts/${s.id}`, {
       method: 'PATCH',

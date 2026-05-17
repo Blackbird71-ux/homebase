@@ -19,11 +19,11 @@ interface ItinerarySectionProps {
 }
 
 export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdated }: ItinerarySectionProps) {
-  const [addingDay, setAddingDay]         = useState(false)
-  const [newDayDate, setNewDayDate]       = useState('')
-  const [newDayLabel, setNewDayLabel]     = useState('')
-  const [savingDay, setSavingDay]         = useState(false)
-  const [expandedDayId, setExpandedDayId] = useState<string | null>(null)
+  const [addingDay, setAddingDay]           = useState(false)
+  const [newDayDate, setNewDayDate]         = useState('')
+  const [newDayLabel, setNewDayLabel]       = useState('')
+  const [savingDay, setSavingDay]           = useState(false)
+  const [expandedDayId, setExpandedDayId]   = useState<string | null>(null)
   const [showTagManager, setShowTagManager] = useState(false)
 
   const [editDialog, setEditDialog] = useState<{
@@ -98,15 +98,11 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     )
     if (!res.ok) throw new Error('Save failed')
     const updated = await res.json()
+    // Spread updated over existing activity — server returns all fields including tags
     onDaysUpdated(
       days.map((d) =>
         d.id === dayId
-          ? {
-              ...d,
-              activities: d.activities.map((a) =>
-                a.id === activityId ? { ...a, ...updated } : a,
-              ),
-            }
+          ? { ...d, activities: d.activities.map((a) => a.id === activityId ? { ...a, ...updated } : a) }
           : d,
       ),
     )
@@ -116,16 +112,10 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     onDaysUpdated(
       days.map((d) =>
         d.id === dayId
-          ? {
-              ...d,
-              activities: d.activities.map((a) =>
-                a.id === activityId ? { ...a, tags } : a,
-              ),
-            }
+          ? { ...d, activities: d.activities.map((a) => a.id === activityId ? { ...a, tags } : a) }
           : d,
       ),
     )
-    // Keep the editDialog activity in sync so tags display correctly while dialog is open
     if (editDialog && editDialog.activity.id === activityId) {
       setEditDialog((prev) => prev ? { ...prev, activity: { ...prev.activity, tags } } : null)
     }
@@ -187,21 +177,13 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
           <Sun className="h-4 w-4" />
           Itinerary
         </h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowTagManager(true)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-input hover:bg-accent transition-colors text-muted-foreground"
-          >
-            Tags
-          </button>
-          <button
-            onClick={() => setAddingDay(!addingDay)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Day
-          </button>
-        </div>
+        <button
+          onClick={() => setAddingDay(!addingDay)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add Day
+        </button>
       </div>
 
       {/* Quick-add missing days */}
@@ -366,7 +348,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
         />
       )}
 
-      {/* Tag Manager modal */}
+      {/* Tag Manager — opened from activity dialog's "Manage tags" link */}
       <TripTagsManager
         open={showTagManager}
         onClose={() => setShowTagManager(false)}
@@ -375,7 +357,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
   )
 }
 
-// ── Activity row ─────────────────────────────────────────────────────────────
+// ── Activity row ──────────────────────────────────────────────────────────────
 
 function ActivityRow({
   activity,
@@ -392,12 +374,23 @@ function ActivityRow({
     return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
   }
 
+  // Strip HTML and decode entities for the plain-text preview line.
+  // DOMParser is client-only; the SSR fallback strips tags then decodes
+  // the most common named entities so they never appear raw on screen.
   const noteText = activity.notes
     ? (typeof window !== 'undefined'
         ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.trim() ?? ''
-        : activity.notes.replace(/<[^>]+>/g, '').trim())
+        : activity.notes
+            .replace(/<[^>]+>/g, '')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, ' ')
+            .trim())
     : ''
-  const notePreview = noteText.slice(0, 120)
+  const notePreview  = noteText.slice(0, 120)
   const hasMoreNotes = noteText.length > 120
 
   return (
@@ -406,6 +399,7 @@ function ActivityRow({
       onDoubleClick={onEdit}
       title="Double-click to edit"
     >
+      {/* Category icon — always takes a fixed slot so title stays on its own line */}
       {cat ? (
         <span className={`shrink-0 p-1 rounded mt-0.5 ${cat.color}`}>
           <cat.icon className="h-3.5 w-3.5" />
@@ -417,38 +411,40 @@ function ActivityRow({
       )}
 
       <div className="flex-1 min-w-0 space-y-1">
-        <span className="text-sm font-medium leading-snug">{activity.title}</span>
+        {/* Title on its own block so it never flows inline with the icon */}
+        <p className="text-sm font-medium leading-snug">{activity.title}</p>
 
-        {/* Meta row: location, time */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          {activity.location && (
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3 shrink-0" />
-              {activity.location}
-            </span>
-          )}
-          {(activity.startTime || activity.endTime) && (
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3 shrink-0" />
-              {activity.startTime && formatTimeDisplay(activity.startTime)}
-              {activity.startTime && activity.endTime && ' – '}
-              {activity.endTime && formatTimeDisplay(activity.endTime)}
-            </span>
-          )}
-        </div>
+        {/* Location + times */}
+        {(activity.location || activity.startTime || activity.endTime) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            {activity.location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                {activity.location}
+              </span>
+            )}
+            {(activity.startTime || activity.endTime) && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3 shrink-0" />
+                {activity.startTime && formatTimeDisplay(activity.startTime)}
+                {activity.startTime && activity.endTime && ' – '}
+                {activity.endTime && formatTimeDisplay(activity.endTime)}
+              </span>
+            )}
+          </div>
+        )}
 
-        {/* Notes preview — separate row so it's clearly visible */}
+        {/* Notes preview */}
         {notePreview && (
           <div className="flex items-start gap-1.5 text-xs text-muted-foreground/80">
             <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
             <span className="line-clamp-2 leading-relaxed">
-              {notePreview}
-              {hasMoreNotes && '…'}
+              {notePreview}{hasMoreNotes && '…'}
             </span>
           </div>
         )}
 
-        {/* Tags inline */}
+        {/* Tags */}
         {activity.tags && activity.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {activity.tags.map((tag) => (
@@ -465,6 +461,7 @@ function ActivityRow({
         )}
       </div>
 
+      {/* Edit / delete — visible on hover */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
         <button
           onClick={(e) => { e.stopPropagation(); onEdit() }}
@@ -510,7 +507,6 @@ function ActivityForm({
       })
       if (res.ok) {
         const activity = await res.json()
-        // Ensure tags array exists
         onCreated({ ...activity, tags: activity.tags ?? [] })
         setTitle('')
         setCategory('')

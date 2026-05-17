@@ -8,15 +8,23 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const search = searchParams.get('search') ?? ''
   const includeCounts = searchParams.get('includeCounts') === 'true'
+  const scopeFilter = searchParams.get('scope')
+
+  const where: Record<string, unknown> = {
+    familyId: user.familyId,
+    name: {
+      not: 'legacy-tags',
+      ...(search && { contains: search, mode: 'insensitive' }),
+    },
+  }
+
+  // When a scope is provided, return tags for that scope plus general-purpose tags
+  if (scopeFilter) {
+    where.scope = { in: ['general', scopeFilter] }
+  }
 
   const tags = await (prisma as any).tag.findMany({
-    where: {
-      familyId: user.familyId,
-      name: {
-        not: 'legacy-tags',
-        ...(search && { contains: search, mode: 'insensitive' }),
-      },
-    },
+    where,
     orderBy: { createdAt: 'desc' },
     include: includeCounts
       ? {
@@ -42,13 +50,13 @@ export async function GET(req: Request) {
 
     // Create a map of tag name to count from tags string
     const tagNameToCountFromString: Record<string, number> = {}
-    
+
     for (const recipe of recipes) {
       if (!recipe.tags) continue
-      
+
       // Parse comma-separated tags
       const recipeTags = recipe.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
-      
+
       for (const tagName of recipeTags) {
         if (tagName === 'legacy-tags') continue
         tagNameToCountFromString[tagName] = (tagNameToCountFromString[tagName] || 0) + 1
@@ -59,14 +67,13 @@ export async function GET(req: Request) {
     const response = tags.map((tag: any) => {
       const countFromRelationship = tag._count?.recipes || 0
       const countFromString = tagNameToCountFromString[tag.name] || 0
-      // Sum both counts (a recipe could be counted twice if it has both relationship and string tag,
-      // but that's unlikely and acceptable for display purposes)
       const totalCount = countFromRelationship + countFromString
-      
+
       return {
         id: tag.id,
         name: tag.name,
         color: tag.color,
+        scope: tag.scope ?? 'general',
         createdAt: tag.createdAt.toISOString(),
         recipeCount: totalCount,
       }
@@ -79,6 +86,7 @@ export async function GET(req: Request) {
     id: tag.id,
     name: tag.name,
     color: tag.color,
+    scope: tag.scope ?? 'general',
     createdAt: tag.createdAt.toISOString(),
   }))
 
@@ -88,7 +96,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { name, color } = body
+  const { name, color, scope } = body
 
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
@@ -99,6 +107,7 @@ export async function POST(req: Request) {
 
   const trimmedName = name.trim()
   const trimmedColor = color && typeof color === 'string' ? color.trim() : null
+  const trimmedScope = scope && typeof scope === 'string' ? scope.trim() : 'general'
 
   // Check if tag already exists for this family
   const existingTag = await (prisma as any).tag.findFirst({
@@ -119,6 +128,7 @@ export async function POST(req: Request) {
     data: {
       name: trimmedName,
       color: trimmedColor,
+      scope: trimmedScope,
       familyId: user.familyId,
     },
   })
@@ -129,7 +139,7 @@ export async function POST(req: Request) {
     'tag',
     tag.id,
     `Created tag "${trimmedName}"`,
-    { tag: { name: trimmedName, color: trimmedColor } }
+    { tag: { name: trimmedName, color: trimmedColor, scope: trimmedScope } }
   )
 
   return NextResponse.json(
@@ -137,6 +147,7 @@ export async function POST(req: Request) {
       id: tag.id,
       name: tag.name,
       color: tag.color,
+      scope: tag.scope ?? 'general',
       createdAt: tag.createdAt.toISOString(),
     },
     { status: 201 }

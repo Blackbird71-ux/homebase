@@ -29,8 +29,13 @@ export async function PATCH(
       if (fields.name !== undefined) data.name = fields.name
       if (fields.amount !== undefined) data.amount = parseFloat(fields.amount)
       if (fields.nextDueDate !== undefined) data.nextDueDate = new Date(fields.nextDueDate)
+      if (fields.billDate !== undefined) data.billDate = fields.billDate ? new Date(fields.billDate) : null
       if (fields.categoryId !== undefined) data.categoryId = fields.categoryId || null
       if (fields.vendorId !== undefined) data.vendorId = fields.vendorId || null
+      if (fields.memberId !== undefined) data.memberId = fields.memberId || null
+      if (fields.entityId !== undefined) data.entityId = fields.entityId || null
+      if (fields.taxClassification !== undefined) data.taxClassification = fields.taxClassification || null
+      if (fields.frequency !== undefined) data.frequency = fields.frequency || null
       if (fields.notes !== undefined) data.notes = fields.notes || null
 
       const updated = await prisma.financeRecurringBill.update({
@@ -60,6 +65,10 @@ export async function PATCH(
       if (fields.nextExpectedDate !== undefined) data.nextExpectedDate = new Date(fields.nextExpectedDate)
       if (fields.categoryId !== undefined) data.categoryId = fields.categoryId || null
       if (fields.vendorId !== undefined) data.vendorId = fields.vendorId || null
+      if (fields.memberId !== undefined) data.memberId = fields.memberId || null
+      if (fields.entityId !== undefined) data.entityId = fields.entityId || null
+      if (fields.taxClassification !== undefined) data.taxClassification = fields.taxClassification || null
+      if (fields.frequency !== undefined) data.frequency = fields.frequency || null
       if (fields.notes !== undefined) data.notes = fields.notes || null
 
       const updated = await prisma.financeIncomeEntry.update({

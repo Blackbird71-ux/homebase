@@ -8,6 +8,14 @@ import {
   CheckCircle2, Clock, AlertTriangle, X,
   Hotel, Car, StickyNote,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import type { TripDetail, TripDayShape, TripPackingEntryShape } from '@/types'
 import { ItinerarySection } from '@/components/trips/ItinerarySection'
 import { TripBudgetSection } from '@/components/trips/TripBudgetSection'
@@ -29,11 +37,9 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
   const [days, setDays] = useState<TripDayShape[]>(initialTrip.days ?? [])
   const [packingEntries, setPackingEntries] = useState<TripPackingEntryShape[]>(initialTrip.packingEntries ?? [])
 
-  // ── Status helpers ─────────────────────────────────────────────────
-
-  const now = new Date()
+  const now   = new Date()
   const start = new Date(trip.startDate)
-  const end = new Date(trip.endDate)
+  const end   = new Date(trip.endDate)
 
   function getStatusInfo() {
     if (trip.status === 'cancelled') return { label: 'Cancelled', color: 'text-muted-foreground', icon: AlertTriangle }
@@ -93,11 +99,17 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors"
+            >
               <Pencil className="h-4 w-4" />
               Edit
             </button>
-            <button onClick={() => setShowDeleteConfirm(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+            >
               <Trash2 className="h-4 w-4" />
               Delete
             </button>
@@ -118,8 +130,7 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           {trip.accommodation && (
             <div className="p-3 rounded-lg border border-border bg-card">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
-                <Hotel className="h-4 w-4" />
-                Accommodation
+                <Hotel className="h-4 w-4" /> Accommodation
               </div>
               <p className="text-sm">{trip.accommodation}</p>
             </div>
@@ -127,8 +138,7 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           {trip.transport && (
             <div className="p-3 rounded-lg border border-border bg-card">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
-                <Car className="h-4 w-4" />
-                Transport
+                <Car className="h-4 w-4" /> Transport
               </div>
               <p className="text-sm">{trip.transport}</p>
             </div>
@@ -139,14 +149,12 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
         {trip.notes && (
           <div className="p-3 rounded-lg border border-border bg-card">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-1">
-              <StickyNote className="h-4 w-4" />
-              Notes
+              <StickyNote className="h-4 w-4" /> Notes
             </div>
             <p className="text-sm whitespace-pre-wrap">{trip.notes}</p>
           </div>
         )}
 
-        {/* Packing Lists — multiple named lists (Mark / Michelle / Shared) */}
         <TripPackingSection
           tripId={trip.id}
           entries={packingEntries}
@@ -154,7 +162,6 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           onEntriesUpdated={setPackingEntries}
         />
 
-        {/* Weather */}
         <TripWeatherSection
           destination={trip.destination}
           startDate={trip.startDate}
@@ -162,7 +169,6 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           startLocation={trip.departureLocation}
         />
 
-        {/* Itinerary */}
         <ItinerarySection
           days={days}
           tripId={trip.id}
@@ -171,10 +177,8 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           onDaysUpdated={setDays}
         />
 
-        {/* Trip-level Attachments */}
         <TripAttachmentsSection tripId={trip.id} label="Trip Documents" />
 
-        {/* Budget */}
         <TripBudgetSection
           tripId={trip.id}
           estimatedBudget={trip.estimatedBudget ?? null}
@@ -187,37 +191,33 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
       </div>
 
       {/* Edit Dialog */}
-      {isEditing && (
-        <EditTripDialog
-          trip={trip}
-          onClose={() => setIsEditing(false)}
-          onUpdated={(updated) => {
-            setTrip(updated)
-            setIsEditing(false)
-            router.refresh()
-          }}
-        />
-      )}
+      <EditTripDialog
+        open={isEditing}
+        trip={trip}
+        onClose={() => setIsEditing(false)}
+        onUpdated={(updated) => {
+          setTrip(updated)
+          setIsEditing(false)
+          router.refresh()
+        }}
+      />
 
       {/* Delete confirm */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border border-border rounded-lg shadow-xl p-6 max-w-sm mx-4">
-            <h3 className="text-lg font-semibold mb-2">Delete Trip</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Are you sure you want to delete &ldquo;{trip.title}&rdquo;? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 rounded-md text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors">
-                {deleting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={showDeleteConfirm} onOpenChange={(o) => { if (!o) setShowDeleteConfirm(false) }}>
+        <DialogContent className="sm:max-w-sm" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>Delete Trip</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete &ldquo;{trip.title}&rdquo;? This action cannot be undone.
+          </p>
+          <DialogFooter showCloseButton>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -225,24 +225,38 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
 // ── Edit Trip Dialog ────────────────────────────────────────────────────────
 
 function EditTripDialog({
+  open,
   trip,
   onClose,
   onUpdated,
 }: {
+  open: boolean
   trip: TripDetail
   onClose: () => void
   onUpdated: (trip: TripDetail) => void
 }) {
-  const [title, setTitle] = useState(trip.title)
-  const [destination, setDestination] = useState(trip.destination)
-  const [startDate, setStartDate] = useState(trip.startDate.slice(0, 10))
-  const [endDate, setEndDate] = useState(trip.endDate.slice(0, 10))
+  const [title, setTitle]               = useState(trip.title)
+  const [destination, setDestination]   = useState(trip.destination)
+  const [startDate, setStartDate]       = useState(trip.startDate.slice(0, 10))
+  const [endDate, setEndDate]           = useState(trip.endDate.slice(0, 10))
   const [accommodation, setAccommodation] = useState(trip.accommodation ?? '')
-  const [transport, setTransport] = useState(trip.transport ?? '')
-  const [notes, setNotes] = useState(trip.notes ?? '')
-  const [status, setStatus] = useState(trip.status)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [transport, setTransport]       = useState(trip.transport ?? '')
+  const [notes, setNotes]               = useState(trip.notes ?? '')
+  const [status, setStatus]             = useState(trip.status)
+  const [saving, setSaving]             = useState(false)
+  const [error, setError]               = useState('')
+
+  // Reset form when trip changes
+  useState(() => {
+    setTitle(trip.title)
+    setDestination(trip.destination)
+    setStartDate(trip.startDate.slice(0, 10))
+    setEndDate(trip.endDate.slice(0, 10))
+    setAccommodation(trip.accommodation ?? '')
+    setTransport(trip.transport ?? '')
+    setNotes(trip.notes ?? '')
+    setStatus(trip.status)
+  })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -275,50 +289,79 @@ function EditTripDialog({
       onUpdated({ ...trip, ...updated, packingList: trip.packingList, packingEntries: trip.packingEntries })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update trip')
-    } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-lg font-semibold">Edit Trip</h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {error && <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>}
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" showCloseButton>
+        <DialogHeader>
+          <DialogTitle>Edit Trip</DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium mb-1">Title *</label>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium mb-1">Destination *</label>
-              <input value={destination} onChange={(e) => setDestination(e.target.value)} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Start Date *</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">End Date *</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Accommodation</label>
-              <input value={accommodation} onChange={(e) => setAccommodation(e.target.value)} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                value={accommodation}
+                onChange={(e) => setAccommodation(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Transport</label>
-              <input value={transport} onChange={(e) => setTransport(e.target.value)} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input
+                value={transport}
+                onChange={(e) => setTransport(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium mb-1">Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
                 <option value="planning">Planning</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="in_progress">In Progress</option>
@@ -328,17 +371,21 @@ function EditTripDialog({
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium mb-1">Notes</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
+          <DialogFooter showCloseButton>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

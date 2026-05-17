@@ -5,17 +5,25 @@ import {
   X, Loader2, MapPin, Clock, Tag, FileText,
   Sun, UtensilsCrossed, Car, Hotel, Ticket, Settings2,
 } from 'lucide-react'
+import {
+  Dialog,
+  WideDialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { NoteEditorToolbar } from '@/components/notes/NoteEditorToolbar'
 import type { TripActivityShape, TripTagShape } from '@/types'
 
 // ── Category config ────────────────────────────────────────────────────────
 
 export const CATEGORIES = [
-  { value: 'sightseeing',    label: 'Sightseeing',    icon: Sun,            color: 'text-amber-500  bg-amber-50  dark:bg-amber-950/30'  },
+  { value: 'sightseeing',    label: 'Sightseeing',    icon: Sun,             color: 'text-amber-500  bg-amber-50  dark:bg-amber-950/30'  },
   { value: 'meal',           label: 'Meal',           icon: UtensilsCrossed, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/30' },
-  { value: 'transport',      label: 'Transport',      icon: Car,            color: 'text-blue-500   bg-blue-50   dark:bg-blue-950/30'   },
-  { value: 'accommodation',  label: 'Accommodation',  icon: Hotel,          color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/30' },
-  { value: 'activity',       label: 'Activity',       icon: Ticket,         color: 'text-green-500  bg-green-50  dark:bg-green-950/30'  },
+  { value: 'transport',      label: 'Transport',      icon: Car,             color: 'text-blue-500   bg-blue-50   dark:bg-blue-950/30'   },
+  { value: 'accommodation',  label: 'Accommodation',  icon: Hotel,           color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/30' },
+  { value: 'activity',       label: 'Activity',       icon: Ticket,          color: 'text-green-500  bg-green-50  dark:bg-green-950/30'  },
 ]
 
 export function getCategoryMeta(value: string | null) {
@@ -49,8 +57,8 @@ function buildIsoDateTime(dayDate: string, timeStr: string): string | null {
 interface ActivityEditDialogProps {
   activity: TripActivityShape
   dayDate: string
-  tripId: string        // needed to call the tag-toggle API
-  dayId: string         // needed to call the tag-toggle API
+  tripId: string
+  dayId: string
   onSave: (data: {
     title: string
     location: string | null
@@ -85,9 +93,9 @@ export function ActivityEditDialog({
   const [error, setError]         = useState('')
 
   // Tags
-  const [availableTags, setAvailableTags]   = useState<TripTagShape[]>([])
-  const [activityTags, setActivityTags]     = useState<TripActivityShape['tags']>(activity.tags ?? [])
-  const [togglingTag, setTogglingTag]       = useState<string | null>(null)
+  const [availableTags, setAvailableTags] = useState<TripTagShape[]>([])
+  const [activityTags, setActivityTags]   = useState<TripActivityShape['tags']>(activity.tags ?? [])
+  const [togglingTag, setTogglingTag]     = useState<string | null>(null)
 
   // Rich text editor
   const editorRef              = useRef<HTMLDivElement>(null)
@@ -97,38 +105,24 @@ export function ActivityEditDialog({
   const savedEditableRef       = useRef<HTMLDivElement | null>(null)
   const [textColor, setTextColor]           = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
-  const notesInitialisedRef    = useRef(false)
+  const notesInitialisedRef = useRef(false)
 
-  // Initialise editor on mount only — DON'T re-run on activity.notes changes,
-  // otherwise tag toggles (which update the activity prop) would wipe user edits.
+  // Initialise editor content exactly once on mount — do NOT focus the editor.
+  // The title field is the natural first focus target (user just quick-added
+  // the activity and may want to edit the title). Stealing focus to the editor
+  // caused keystrokes to be swallowed into the notes div instead of the title.
   useEffect(() => {
     if (editorRef.current && !notesInitialisedRef.current) {
       editorRef.current.innerHTML = activity.notes ?? ''
       notesInitialisedRef.current = true
     }
-    // Load available tags
+    // Load available tags in parallel
     fetch('/api/trips/tags')
       .then((r) => r.json())
       .then((data: TripTagShape[]) => setAvailableTags(data))
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Focus the notes editor when the dialog mounts so users can start typing
-  // body text immediately, not the title.
-  useEffect(() => {
-    if (editorRef.current) {
-      editorRef.current.focus()
-    }
-  }, [])
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   const exec = useCallback((command: string, value?: string) => {
     document.execCommand(command, false, value)
@@ -213,22 +207,25 @@ export function ActivityEditDialog({
   const selectedCat = getCategoryMeta(category)
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-popover border border-border rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <WideDialogContent showCloseButton={false}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-2">
+        <DialogHeader className="flex-row items-center justify-between px-5 py-4 border-b border-border shrink-0 gap-0">
+          <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">Edit Activity</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+            Edit Activity
+          </DialogTitle>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          >
             <X className="h-4 w-4" />
           </button>
-        </div>
+        </DialogHeader>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto min-h-0">
 
           {/* Fields */}
           <div className="px-5 pt-4 pb-3 space-y-3">
@@ -236,14 +233,16 @@ export function ActivityEditDialog({
               <div className="p-2.5 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
             )}
 
-            {/* Title */}
+            {/* Title — natural first focus target */}
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Title <span className="text-destructive">*</span>
               </label>
               <input
+                autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus() } }}
                 disabled={saving}
                 className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="What are you doing?"
@@ -397,26 +396,21 @@ export function ActivityEditDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border shrink-0 bg-muted/20">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="px-4 py-2 rounded-md text-sm font-medium border border-input hover:bg-accent disabled:opacity-50 transition-colors"
-          >
+        <DialogFooter className="px-5 py-3 shrink-0">
+          <Button variant="outline" type="button" onClick={onClose} disabled={saving}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleSave}
             disabled={saving || !title.trim()}
-            className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
           >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             Save
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+
+      </WideDialogContent>
+    </Dialog>
   )
 }
