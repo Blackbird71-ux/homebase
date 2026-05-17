@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Homebase · Trips Redesign</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Match Homebase's intended font system -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Local Homebase theme tokens (light theme — drop-in proxy of globals.css apple-aqua) -->
+  <style>
+    :root {
+      --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+      /* Apple-aqua-inspired tokens (matches one of Homebase's actual themes) */
+      --background: oklch(0.97 0.005 240);
+      --foreground: oklch(0.15 0.01 240);
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.15 0.01 240);
+      --popover: oklch(1 0 0);
+      --popover-foreground: oklch(0.15 0.01 240);
+      --primary: oklch(0.55 0.22 255);
+      --primary-foreground: oklch(1 0 0);
+      --secondary: oklch(0.92 0.01 240);
+      --secondary-foreground: oklch(0.15 0.01 240);
+      --muted: oklch(0.94 0.008 240);
+      --muted-foreground: oklch(0.50 0.01 240);
+      --accent: oklch(0.92 0.015 255);
+      --accent-foreground: oklch(0.55 0.22 255);
+      --destructive: oklch(0.58 0.22 25);
+      --border: oklch(0.88 0.008 240);
+      --input: oklch(0.93 0.008 240);
+      --ring: oklch(0.55 0.22 255);
+      --radius: 0.75rem;
+    }
+
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--background);
+      color: var(--foreground);
+      -webkit-font-smoothing: antialiased;
+    }
+    #root { height: 100%; }
+
+    /* Tweaks: card style variants */
+    .hb-cardstyle-minimal .hb-trip-card__cover { display: none; }
+    .hb-cardstyle-minimal .hb-trip-card { padding: 4px; }
+    .hb-cardstyle-minimal .hb-trip-card__body {
+      padding: 14px 16px;
+      gap: 8px;
+    }
+    .hb-cardstyle-minimal .hb-trip-card__body::before {
+      content: attr(data-title);
+    }
+    /* Minimal cards: synthesise a title block from cover meta */
+    .hb-cardstyle-minimal .hb-trip-card { padding: 0; }
+    .hb-cardstyle-minimal .hb-trip-card__cover-text {
+      color: var(--foreground);
+    }
+    /* Promote header into the card body when cover is hidden */
+    .hb-cardstyle-minimal .hb-trip-card__body {
+      padding-top: 16px;
+    }
+    .hb-cardstyle-minimal .hb-trip-card__body .hb-trip-card__row:first-child {
+      font-size: 14px;
+      color: var(--foreground);
+    }
+
+    /* Tab style variants */
+    .hb-tabstyle-pill .hb-segmented {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      gap: 6px;
+    }
+    .hb-tabstyle-pill .hb-segmented__item {
+      height: 34px;
+      padding: 0 14px;
+      border-radius: 999px;
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+    .hb-tabstyle-pill .hb-segmented__item[aria-selected="true"] {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: transparent;
+      box-shadow: none;
+    }
+
+    .hb-tabstyle-underline .hb-segmented {
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 0;
+      border-radius: 0;
+      gap: 0;
+    }
+    .hb-tabstyle-underline .hb-segmented__item {
+      height: 38px;
+      padding: 0 14px;
+      border-radius: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+    .hb-tabstyle-underline .hb-segmented__item[aria-selected="true"] {
+      background: transparent;
+      box-shadow: none;
+      border-bottom-color: var(--foreground);
+    }
+
+    /* Density variants */
+    .hb-density-compact .hb-page__body { padding: 16px; }
+    .hb-density-compact .hb-trips-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+    .hb-density-compact .hb-trip-card__cover { height: 80px; }
+    .hb-density-compact .hb-trip-card__cover-title { font-size: 17px; }
+    .hb-density-compact .hb-trip-card__body { padding: 12px 14px; gap: 8px; }
+    .hb-density-compact .hb-activity { padding: 10px; margin-bottom: 8px; }
+    .hb-density-compact .hb-activity__title { font-size: 14px; }
+    .hb-density-compact .hb-timeline { padding: 16px 20px 60px; }
+
+    /* ── App-wide themes (derived from cover palettes) ── */
+    /* Ocean — Byron Bay deep blue */
+    .hb-theme-ocean {
+      --background: oklch(0.97 0.012 230);
+      --foreground: oklch(0.18 0.04 240);
+      --card: oklch(1 0 0);
+      --popover: oklch(1 0 0);
+      --primary: oklch(0.45 0.13 240);
+      --primary-foreground: oklch(1 0 0);
+      --muted: oklch(0.93 0.012 230);
+      --muted-foreground: oklch(0.45 0.03 240);
+      --accent: oklch(0.92 0.02 230);
+      --accent-foreground: oklch(0.18 0.04 240);
+      --border: oklch(0.86 0.015 230);
+      --input: oklch(0.93 0.015 230);
+      --ring: oklch(0.45 0.13 240);
+    }
+    /* Alpine — Ring Road slate */
+    .hb-theme-alpine {
+      --background: oklch(0.97 0.005 235);
+      --foreground: oklch(0.20 0.02 235);
+      --card: oklch(1 0 0);
+      --popover: oklch(1 0 0);
+      --primary: oklch(0.42 0.05 235);
+      --primary-foreground: oklch(1 0 0);
+      --muted: oklch(0.93 0.005 235);
+      --muted-foreground: oklch(0.42 0.015 235);
+      --accent: oklch(0.92 0.012 235);
+      --accent-foreground: oklch(0.20 0.02 235);
+      --border: oklch(0.86 0.008 235);
+      --input: oklch(0.93 0.008 235);
+      --ring: oklch(0.42 0.05 235);
+    }
+    /* Blossom — Cherry Blossom sunset */
+    .hb-theme-blossom {
+      --background: oklch(0.97 0.012 35);
+      --foreground: oklch(0.20 0.06 25);
+      --card: oklch(1 0 0);
+      --popover: oklch(1 0 0);
+      --primary: oklch(0.52 0.20 15);
+      --primary-foreground: oklch(1 0 0);
+      --muted: oklch(0.94 0.018 35);
+      --muted-foreground: oklch(0.42 0.04 25);
+      --accent: oklch(0.93 0.025 35);
+      --accent-foreground: oklch(0.52 0.20 15);
+      --border: oklch(0.87 0.018 35);
+      --input: oklch(0.93 0.02 35);
+      --ring: oklch(0.52 0.20 15);
+    }
+  </style>
+
+  <!-- Drop-in trips stylesheet -->
+  <link rel="stylesheet" href="homebase-trips.css" />
+
+  <!-- Leaflet (map pane) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- React + Babel (pinned versions) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Data + helpers (non-JSX) -->
+  <script src="data.js"></script>
+  <!-- User-fillable cover photo slots -->
+  <script src="image-slot.js"></script>
+
+  <!-- JSX components — load in dependency order -->
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="shared.jsx"></script>
+  <script type="text/babel" src="drag-reorder.jsx"></script>
+  <script type="text/babel" src="view-trips.jsx"></script>
+  <script type="text/babel" src="view-trip-detail.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

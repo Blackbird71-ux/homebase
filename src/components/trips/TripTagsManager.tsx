@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Tag, Plus, X, Pencil, Loader2, Check, Smile } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Tag, Plus, X, Pencil, Loader2, Check } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import type { TripTagShape } from '@/types'
 
 // ── Preset colours ──────────────────────────────────────────────────────────
@@ -20,130 +19,14 @@ const PRESET_COLORS = [
   '#64748b', '#000000',
 ]
 
-// ── Emoji picker data ───────────────────────────────────────────────────────
-const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
-  {
-    label: 'Travel',
-    emojis: [
-      '✈️','🚂','🚢','🚗','🏍️','🛺','🚐','🚁','🛸','🛩️',
-      '⛵','🚤','🗺️','🧭','🏔️','🏖️','🏕️','🌍','🌏','🗼',
-      '🗽','🏯','🕌','⛩️','🎡','🎢','🎠','🚀','🛳️','🚞',
-    ],
-  },
-  {
-    label: 'Food & Drink',
-    emojis: [
-      '🍕','🍔','🍣','🍜','🍛','🍱','🌮','🌯','🥗','🍝',
-      '🍦','🍰','☕','🍵','🧋','🍺','🍷','🥤','🍹','🧃',
-      '🥐','🍳','🥞','🧇','🥓','🍗','🦐','🦞','🍤','🥩',
-    ],
-  },
-  {
-    label: 'Activities',
-    emojis: [
-      '⛽','📶','🚿','🏊','🎿','🏄','🧗','🚵','🎭','🎨',
-      '🎬','🎵','🎤','🎸','🎮','🎯','🎳','🏋️','🤸','🧘',
-      '🏌️','🎾','⚽','🏀','🎱','🪂','🤿','🧜','🚴','🏇',
-    ],
-  },
-  {
-    label: 'Places',
-    emojis: [
-      '🏨','🏩','🏪','🏫','🏬','🏭','🏦','🏥','⛪','🕍',
-      '🛖','🏠','🏡','🏢','🌇','🌆','🌃','🌉','🌁','🏟️',
-      '🏛️','🏗️','⛺','🗿','🗻','🌋','🏝️','🏜️','🏞️','🌄',
-    ],
-  },
-  {
-    label: 'Symbols',
-    emojis: [
-      '⭐','❤️','🔥','💫','✅','❌','⚠️','💡','📍','📌',
-      '🔑','💎','🎁','🏆','🥇','🎖️','🚩','🔔','💬','📞',
-      '💰','💳','🧾','📋','📝','🗒️','📅','⏰','🔋','💊',
-    ],
-  },
+// Common trip emojis
+const TRIP_EMOJIS = [
+  '⚡','⛽','📶','🚿','🏊','🍕','☕','🎭','🎨','🚗',
+  '✈️','🚂','🚢','🏔️','🏖️','🏕️','⭐','🔥','📍','💡',
+  '🔑','🎁','🏆','🚩','🔔','💰','📅','⏰','🧾','💊',
 ]
 
-// ── Emoji Picker component ──────────────────────────────────────────────────
-function EmojiPicker({
-  value,
-  onChange,
-  onClose,
-}: {
-  value: string
-  onChange: (emoji: string) => void
-  onClose: () => void
-}) {
-  const [activeTab, setActiveTab] = useState(0)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [onClose])
-
-  return (
-    <div
-      ref={ref}
-      className="absolute z-[100] bottom-full mb-1 left-0 w-72 rounded-lg border border-border bg-popover shadow-xl overflow-hidden"
-    >
-      {/* Tab bar */}
-      <div className="flex border-b border-border bg-muted/40 overflow-x-auto">
-        {EMOJI_CATEGORIES.map((cat, i) => (
-          <button
-            key={cat.label}
-            type="button"
-            onClick={() => setActiveTab(i)}
-            className={`flex-1 px-2 py-1.5 text-[10px] font-medium whitespace-nowrap transition-colors ${
-              activeTab === i
-                ? 'bg-popover text-foreground border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Emoji grid */}
-      <div className="p-2 grid grid-cols-8 gap-0.5 max-h-48 overflow-y-auto">
-        {/* Clear option */}
-        <button
-          type="button"
-          onClick={() => { onChange(''); onClose() }}
-          className={`flex items-center justify-center w-8 h-8 rounded text-xs hover:bg-accent transition-colors ${value === '' ? 'bg-accent' : ''}`}
-          title="No emoji"
-        >
-          <X className="h-3 w-3 text-muted-foreground" />
-        </button>
-        {EMOJI_CATEGORIES[activeTab].emojis.map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            onClick={() => { onChange(emoji); onClose() }}
-            className={`flex items-center justify-center w-8 h-8 rounded text-base hover:bg-accent transition-colors ${value === emoji ? 'bg-primary/15 ring-1 ring-primary' : ''}`}
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ── Colour swatch row ───────────────────────────────────────────────────────
-function ColorSwatches({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (c: string) => void
-}) {
+function ColorSwatches({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {PRESET_COLORS.map((c) => (
@@ -159,6 +42,31 @@ function ColorSwatches({
             boxShadow: value === c ? '0 0 0 1px white inset' : 'none',
           }}
         />
+      ))}
+    </div>
+  )
+}
+
+function EmojiRow({ value, onChange }: { value: string; onChange: (e: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      <button
+        type="button"
+        onClick={() => onChange('')}
+        className={`w-7 h-7 flex items-center justify-center rounded border text-xs transition-colors ${value === '' ? 'border-primary bg-primary/10' : 'border-input hover:bg-accent'}`}
+        title="No emoji"
+      >
+        <X className="h-3 w-3 text-muted-foreground" />
+      </button>
+      {TRIP_EMOJIS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          onClick={() => onChange(emoji)}
+          className={`w-7 h-7 flex items-center justify-center rounded border text-sm transition-colors ${value === emoji ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-input hover:bg-accent'}`}
+        >
+          {emoji}
+        </button>
       ))}
     </div>
   )
@@ -182,7 +90,6 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
   const [newEmoji, setNewEmoji] = useState('')
   const [newColor, setNewColor] = useState('#3b82f6')
   const [saving, setSaving]     = useState(false)
-  const [showNewEmojiPicker, setShowNewEmojiPicker] = useState(false)
 
   // Edit state
   const [editId, setEditId]           = useState<string | null>(null)
@@ -190,7 +97,6 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
   const [editEmoji, setEditEmoji]     = useState('')
   const [editColor, setEditColor]     = useState('')
   const [editSaving, setEditSaving]   = useState(false)
-  const [showEditEmojiPicker, setShowEditEmojiPicker] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -264,7 +170,7 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this tag? It will be removed from all activities.')) return
+    if (!confirm('Delete this tag? It will be removed from all activities and days.')) return
     const res = await fetch(`/api/trips/tags/${id}`, { method: 'DELETE' })
     if (res.ok) {
       const updated = tags.filter((t) => t.id !== id)
@@ -278,7 +184,6 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
     setEditName(tag.name)
     setEditEmoji(tag.emoji ?? '')
     setEditColor(tag.color ?? '#64748b')
-    setShowEditEmojiPicker(false)
   }
 
   return (
@@ -292,7 +197,9 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
         </DialogHeader>
 
         <p className="text-xs text-muted-foreground -mt-2">
-          Tags are shared across all trips. Use them to label activities — WiFi, Fuel, Dump Point, Flying, etc.
+          Tags are shared across all trips. Use them to label days and activities — WiFi, Fuel, Dump Point, etc.
+          <br />
+          <span className="text-primary">Tip: manage all tags in Settings → Tags.</span>
         </p>
 
         {/* Create form */}
@@ -300,32 +207,12 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">New Tag</p>
 
           <div className="flex items-center gap-2">
-            {/* Emoji picker trigger */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowNewEmojiPicker((v) => !v)}
-                className="w-9 h-9 flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent transition-colors text-base shrink-0"
-                title="Pick emoji"
-              >
-                {newEmoji || <Smile className="h-4 w-4 text-muted-foreground" />}
-              </button>
-              {showNewEmojiPicker && (
-                <EmojiPicker
-                  value={newEmoji}
-                  onChange={(e) => setNewEmoji(e)}
-                  onClose={() => setShowNewEmojiPicker(false)}
-                />
-              )}
-            </div>
-
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Tag name…"
               className="flex-1 px-2.5 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
-
             <button
               type="submit"
               disabled={saving || !newName.trim()}
@@ -336,7 +223,15 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
             </button>
           </div>
 
-          <ColorSwatches value={newColor} onChange={setNewColor} />
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-muted-foreground font-medium">Emoji</p>
+            <EmojiRow value={newEmoji} onChange={setNewEmoji} />
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-muted-foreground font-medium">Colour</p>
+            <ColorSwatches value={newColor} onChange={setNewColor} />
+          </div>
 
           {/* Preview */}
           {newName && (
@@ -369,31 +264,10 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
           )}
 
           {!loading && tags.map((tag) => (
-            <div
-              key={tag.id}
-              className="rounded-lg border border-border bg-background overflow-hidden"
-            >
+            <div key={tag.id} className="rounded-lg border border-border bg-background overflow-hidden">
               {editId === tag.id ? (
-                /* ── Edit row ── */
                 <div className="p-3 space-y-2.5">
                   <div className="flex items-center gap-2">
-                    {/* Emoji picker for edit */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowEditEmojiPicker((v) => !v)}
-                        className="w-9 h-9 flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent transition-colors text-base shrink-0"
-                      >
-                        {editEmoji || <Smile className="h-4 w-4 text-muted-foreground" />}
-                      </button>
-                      {showEditEmojiPicker && (
-                        <EmojiPicker
-                          value={editEmoji}
-                          onChange={(e) => setEditEmoji(e)}
-                          onClose={() => setShowEditEmojiPicker(false)}
-                        />
-                      )}
-                    </div>
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
@@ -414,8 +288,14 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  <ColorSwatches value={editColor} onChange={setEditColor} />
-                  {/* Edit preview */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-muted-foreground font-medium">Emoji</p>
+                    <EmojiRow value={editEmoji} onChange={setEditEmoji} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-muted-foreground font-medium">Colour</p>
+                    <ColorSwatches value={editColor} onChange={setEditColor} />
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Preview:</span>
                     <span
@@ -428,7 +308,6 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
                   </div>
                 </div>
               ) : (
-                /* ── Display row ── */
                 <div className="flex items-center gap-3 px-3 py-2.5 group">
                   <span
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white shrink-0"

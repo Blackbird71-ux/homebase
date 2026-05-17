@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,14 +9,16 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { toast } from 'sonner'
-import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowRightLeftIcon } from 'lucide-react'
+import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowRightLeftIcon, Smile, X } from 'lucide-react'
 
-type TagScope = 'general' | 'recipe' | 'note'
+type TagScope = 'general' | 'recipe' | 'note' | 'trip'
 
 interface Tag {
   id: string
   name: string
   color: string | null
+  emoji: string | null
+  sortOrder: number
   scope: TagScope
   createdAt: string
   recipeCount: number
@@ -28,10 +30,18 @@ const TAG_COLORS = [
   '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#78716c',
 ]
 
+// Common emojis for trip tags
+const TRIP_EMOJI_PRESETS = [
+  '⚡','⛽','📶','🚿','🏊','🍕','☕','🎭','🎨','🚗',
+  '✈️','🚂','🚢','🏔️','🏖️','🏕️','⭐','🔥','📍','💡',
+  '🔑','🎁','🏆','🚩','🔔','💰','📅','⏰','🧾','💊',
+]
+
 const SCOPE_OPTIONS: { value: TagScope; label: string; description: string }[] = [
   { value: 'general', label: 'General', description: 'Appears in all tag selectors' },
   { value: 'recipe', label: 'Recipe', description: 'Only appears when tagging recipes' },
   { value: 'note', label: 'Notes', description: 'Only appears when tagging notes' },
+  { value: 'trip', label: 'Trip', description: 'Appears on trip days and activities' },
 ]
 
 const SCOPE_TABS: { value: TagScope | 'all'; label: string }[] = [
@@ -39,12 +49,40 @@ const SCOPE_TABS: { value: TagScope | 'all'; label: string }[] = [
   { value: 'general', label: 'General' },
   { value: 'recipe', label: 'Recipe' },
   { value: 'note', label: 'Notes' },
+  { value: 'trip', label: 'Trip' },
 ]
 
 function scopeBadge(scope: TagScope) {
   if (scope === 'recipe') return { label: 'Recipe', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' }
   if (scope === 'note') return { label: 'Notes', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' }
+  if (scope === 'trip') return { label: 'Trip', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' }
   return { label: 'General', className: 'bg-muted text-muted-foreground' }
+}
+
+// Minimal inline emoji picker for trip tags
+function EmojiPresetPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => onChange('')}
+        className={`w-8 h-8 flex items-center justify-center rounded-md border text-xs transition-colors ${value === '' ? 'border-primary bg-primary/10' : 'border-input hover:bg-accent'}`}
+        title="No emoji"
+      >
+        <X className="h-3 w-3 text-muted-foreground" />
+      </button>
+      {TRIP_EMOJI_PRESETS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          onClick={() => onChange(emoji)}
+          className={`w-8 h-8 flex items-center justify-center rounded-md border text-base transition-colors ${value === emoji ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-input hover:bg-accent'}`}
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 export function TagManager() {
@@ -56,12 +94,19 @@ export function TagManager() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedTag, setSelectedTag] = useState<Tag | null>(null)
+
+  // Create form state
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('#6366f1')
   const [newTagScope, setNewTagScope] = useState<TagScope>('general')
+  const [newTagEmoji, setNewTagEmoji] = useState('')
+
+  // Edit form state
   const [editTagName, setEditTagName] = useState('')
   const [editTagColor, setEditTagColor] = useState('#6366f1')
   const [editTagScope, setEditTagScope] = useState<TagScope>('general')
+  const [editTagEmoji, setEditTagEmoji] = useState('')
+
   const [submitting, setSubmitting] = useState(false)
   const [legacyCount, setLegacyCount] = useState(0)
   const [migrating, setMigrating] = useState(false)
@@ -118,13 +163,17 @@ export function TagManager() {
       toast.error('Tag name is required')
       return
     }
-
     setSubmitting(true)
     try {
       const res = await fetch('/api/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTagName.trim(), color: newTagColor, scope: newTagScope }),
+        body: JSON.stringify({
+          name: newTagName.trim(),
+          color: newTagColor,
+          scope: newTagScope,
+          emoji: newTagEmoji || null,
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -135,6 +184,7 @@ export function TagManager() {
       setNewTagName('')
       setNewTagColor('#6366f1')
       setNewTagScope('general')
+      setNewTagEmoji('')
       setCreateOpen(false)
       toast.success('Tag created successfully')
     } catch (error: any) {
@@ -149,13 +199,17 @@ export function TagManager() {
       toast.error('Tag name is required')
       return
     }
-
     setSubmitting(true)
     try {
       const res = await fetch(`/api/tags/${selectedTag.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editTagName.trim(), color: editTagColor, scope: editTagScope }),
+        body: JSON.stringify({
+          name: editTagName.trim(),
+          color: editTagColor,
+          scope: editTagScope,
+          emoji: editTagEmoji || null,
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -178,7 +232,6 @@ export function TagManager() {
 
   async function handleDelete() {
     if (!selectedTag) return
-
     setSubmitting(true)
     try {
       const res = await fetch(`/api/tags/${selectedTag.id}?action=delete`, {
@@ -204,6 +257,7 @@ export function TagManager() {
     setEditTagName(tag.name)
     setEditTagColor(tag.color ?? '#6366f1')
     setEditTagScope(tag.scope ?? 'general')
+    setEditTagEmoji(tag.emoji ?? '')
     setEditOpen(true)
   }
 
@@ -222,7 +276,7 @@ export function TagManager() {
           <p className="text-muted-foreground">Create, edit, and organise tags by category</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger>
+          <DialogTrigger asChild>
             <Button>
               <PlusIcon className="h-4 w-4 mr-2" />
               New Tag
@@ -242,7 +296,7 @@ export function TagManager() {
                   id="tag-name"
                   value={newTagName}
                   onChange={(e) => setNewTagName(e.target.value)}
-                  placeholder="e.g., Italian, Quick, Vegetarian"
+                  placeholder="e.g., Italian, Quick, WiFi, Fuel"
                   autoFocus
                 />
               </div>
@@ -262,6 +316,18 @@ export function TagManager() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Emoji picker — only shown for trip scope */}
+              {newTagScope === 'trip' && (
+                <div className="space-y-2">
+                  <Label>Emoji (optional)</Label>
+                  <EmojiPresetPicker value={newTagEmoji} onChange={setNewTagEmoji} />
+                  {newTagEmoji && (
+                    <p className="text-xs text-muted-foreground">Selected: {newTagEmoji}</p>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Tag Color</Label>
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -278,16 +344,25 @@ export function TagManager() {
                     />
                   ))}
                 </div>
-                <ColorPicker
-                  value={newTagColor}
-                  onChange={setNewTagColor}
-                />
+                <ColorPicker value={newTagColor} onChange={setNewTagColor} />
               </div>
+
+              {/* Preview */}
+              {newTagName && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Preview:</span>
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                    style={newTagColor ? { borderColor: newTagColor, backgroundColor: newTagColor + '20', color: newTagColor } : {}}
+                  >
+                    {newTagEmoji && <span>{newTagEmoji}</span>}
+                    {newTagName}
+                  </span>
+                </div>
+              )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
               <Button onClick={handleCreate} disabled={submitting || !newTagName.trim()}>
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Create Tag
@@ -330,13 +405,13 @@ export function TagManager() {
           </CardDescription>
 
           {/* Scope filter tabs */}
-          <div className="flex gap-1 mt-3 p-1 bg-muted rounded-lg w-fit">
+          <div className="flex gap-1 mt-3 p-1 bg-muted rounded-lg w-fit overflow-x-auto">
             {SCOPE_TABS.map(tab => (
               <button
                 key={tab.value}
                 type="button"
                 onClick={() => setActiveTab(tab.value)}
-                className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors whitespace-nowrap ${
                   activeTab === tab.value
                     ? 'bg-background shadow-sm text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -377,7 +452,7 @@ export function TagManager() {
               <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-medium text-muted-foreground border-b">
                 <div className="col-span-4">Name</div>
                 <div className="col-span-2">Category</div>
-                <div className="col-span-2">Recipes</div>
+                <div className="col-span-2">Uses</div>
                 <div className="col-span-2">Created</div>
                 <div className="col-span-2 text-right">Actions</div>
               </div>
@@ -390,7 +465,8 @@ export function TagManager() {
                         className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
                         style={tag.color ? { borderColor: tag.color, backgroundColor: tag.color + '20', color: tag.color } : {}}
                       >
-                        {tag.color && (
+                        {tag.emoji && <span>{tag.emoji}</span>}
+                        {tag.color && !tag.emoji && (
                           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
                         )}
                         {tag.name}
@@ -409,19 +485,10 @@ export function TagManager() {
                     </div>
                     <div className="col-span-2 text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditClick(tag)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => handleEditClick(tag)}>
                           <EditIcon className="h-3.5 w-3.5" />
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteClick(tag)}
-                          title="Delete tag"
-                        >
+                        <Button variant="outline" size="sm" onClick={() => handleDeleteClick(tag)} title="Delete tag">
                           <TrashIcon className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -439,9 +506,7 @@ export function TagManager() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Tag</DialogTitle>
-            <DialogDescription>
-              Update the name, category, and colour of this tag.
-            </DialogDescription>
+            <DialogDescription>Update the name, category, and colour of this tag.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -469,6 +534,15 @@ export function TagManager() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Emoji picker — shown for trip scope */}
+            {editTagScope === 'trip' && (
+              <div className="space-y-2">
+                <Label>Emoji (optional)</Label>
+                <EmojiPresetPicker value={editTagEmoji} onChange={setEditTagEmoji} />
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Tag Color</Label>
               <div className="flex flex-wrap gap-2 mb-2">
@@ -485,16 +559,25 @@ export function TagManager() {
                   />
                 ))}
               </div>
-              <ColorPicker
-                value={editTagColor}
-                onChange={setEditTagColor}
-              />
+              <ColorPicker value={editTagColor} onChange={setEditTagColor} />
             </div>
+
+            {/* Preview */}
+            {editTagName && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Preview:</span>
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                  style={editTagColor ? { borderColor: editTagColor, backgroundColor: editTagColor + '20', color: editTagColor } : {}}
+                >
+                  {editTagEmoji && <span>{editTagEmoji}</span>}
+                  {editTagName}
+                </span>
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={handleUpdate} disabled={submitting || !editTagName.trim()}>
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Update Tag
@@ -512,16 +595,14 @@ export function TagManager() {
               Are you sure you want to delete the tag &ldquo;{selectedTag?.name}&rdquo;?
               {selectedTag && selectedTag.recipeCount > 0 && (
                 <span className="text-destructive block mt-1">
-                  This tag is used in {selectedTag.recipeCount} recipe{selectedTag.recipeCount !== 1 ? 's' : ''}.
-                  Deleting it will remove it from all those recipes.
+                  This tag is used {selectedTag.recipeCount} time{selectedTag.recipeCount !== 1 ? 's' : ''}.
+                  Deleting it will remove it from all associated recipes, days, and activities.
                 </span>
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Delete Tag

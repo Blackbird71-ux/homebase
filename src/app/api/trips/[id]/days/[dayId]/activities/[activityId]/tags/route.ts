@@ -29,22 +29,20 @@ export async function POST(
   const { tagId } = body
   if (!tagId) return NextResponse.json({ error: 'tagId is required' }, { status: 400 })
 
-  // Verify tag belongs to family
-  const tag = await prisma.tripTag.findFirst({
-    where: { id: tagId, familyId: user.familyId },
+  // Verify tag belongs to family (trip-scoped)
+  const tag = await prisma.tag.findFirst({
+    where: { id: tagId, familyId: user.familyId, scope: 'trip' },
   })
   if (!tag) return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
 
   const exists = activity.tags.some((t) => t.tagId === tagId)
 
   if (exists) {
-    // Remove
-    await prisma.tripActivityTag.delete({
+    await prisma.activityTag.delete({
       where: { activityId_tagId: { activityId, tagId } },
     })
   } else {
-    // Add
-    await prisma.tripActivityTag.create({
+    await prisma.activityTag.create({
       data: { activityId, tagId },
     })
   }

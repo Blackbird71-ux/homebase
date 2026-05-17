@@ -11,15 +11,8 @@ export async function GET(
   const { id } = await params
 
   const tag = await (prisma as any).tag.findFirst({
-    where: {
-      id,
-      familyId: user.familyId,
-    },
-    include: {
-      _count: {
-        select: { recipes: true },
-      },
-    },
+    where: { id, familyId: user.familyId },
+    include: { _count: { select: { recipes: true } } },
   })
 
   if (!tag) {
@@ -30,6 +23,8 @@ export async function GET(
     id: tag.id,
     name: tag.name,
     color: tag.color,
+    emoji: tag.emoji ?? null,
+    sortOrder: tag.sortOrder ?? 0,
     scope: tag.scope ?? 'general',
     createdAt: tag.createdAt.toISOString(),
     recipeCount: tag._count.recipes,
@@ -43,7 +38,7 @@ export async function PUT(
   const user = await requireSession()
   const { id } = await params
   const body = await req.json()
-  const { name, color, scope } = body
+  const { name, color, scope, emoji, sortOrder } = body
 
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
@@ -54,28 +49,19 @@ export async function PUT(
 
   const trimmedName = name.trim()
   const trimmedColor = color !== undefined ? (color && typeof color === 'string' ? color.trim() : null) : undefined
+  const trimmedScope = scope && typeof scope === 'string' ? scope.trim() : undefined
+  const trimmedEmoji = emoji !== undefined ? (emoji && typeof emoji === 'string' ? emoji.trim() : null) : undefined
 
-  // Check if tag exists and belongs to user's family
   const existingTag = await (prisma as any).tag.findFirst({
-    where: {
-      id,
-      familyId: user.familyId,
-    },
+    where: { id, familyId: user.familyId },
   })
-
   if (!existingTag) {
     return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
   }
 
-  // Check if new name already exists for this family
   const duplicateTag = await (prisma as any).tag.findFirst({
-    where: {
-      familyId: user.familyId,
-      name: trimmedName,
-      NOT: { id },
-    },
+    where: { familyId: user.familyId, name: trimmedName, NOT: { id } },
   })
-
   if (duplicateTag) {
     return NextResponse.json(
       { error: 'A tag with this name already exists for your family' },
@@ -83,15 +69,11 @@ export async function PUT(
     )
   }
 
-  const trimmedScope = scope && typeof scope === 'string' ? scope.trim() : undefined
-
   const updateData: Record<string, unknown> = { name: trimmedName }
-  if (trimmedColor !== undefined) {
-    updateData.color = trimmedColor
-  }
-  if (trimmedScope !== undefined) {
-    updateData.scope = trimmedScope
-  }
+  if (trimmedColor !== undefined) updateData.color = trimmedColor
+  if (trimmedScope !== undefined) updateData.scope = trimmedScope
+  if (trimmedEmoji !== undefined) updateData.emoji = trimmedEmoji
+  if (sortOrder !== undefined) updateData.sortOrder = sortOrder
 
   const updatedTag = await (prisma as any).tag.update({
     where: { id },
@@ -111,6 +93,8 @@ export async function PUT(
     id: updatedTag.id,
     name: updatedTag.name,
     color: updatedTag.color,
+    emoji: updatedTag.emoji ?? null,
+    sortOrder: updatedTag.sortOrder ?? 0,
     scope: updatedTag.scope ?? 'general',
     createdAt: updatedTag.createdAt.toISOString(),
   })
@@ -125,28 +109,16 @@ export async function DELETE(
   const { searchParams } = new URL(req.url)
   const action = searchParams.get('action') || 'detach'
 
-  // Check if tag exists and belongs to user's family
   const tag = await (prisma as any).tag.findFirst({
-    where: {
-      id,
-      familyId: user.familyId,
-    },
-    include: {
-      _count: {
-        select: { recipes: true },
-      },
-    },
+    where: { id, familyId: user.familyId },
+    include: { _count: { select: { recipes: true } } },
   })
-
   if (!tag) {
     return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
   }
 
   if (action === 'delete') {
-    // Delete tag and all relationships (cascade)
-    await (prisma as any).tag.delete({
-      where: { id },
-    })
+    await (prisma as any).tag.delete({ where: { id } })
 
     void createAuditLog(
       user,
@@ -162,10 +134,7 @@ export async function DELETE(
       message: `Tag "${tag.name}" and its ${tag._count.recipes} recipe associations have been deleted`,
     })
   } else {
-    // Detach: remove tag from all recipes but keep tag record
-    await (prisma as any).recipeTag.deleteMany({
-      where: { tagId: id },
-    })
+    await (prisma as any).recipeTag.deleteMany({ where: { tagId: id } })
 
     void createAuditLog(
       user,

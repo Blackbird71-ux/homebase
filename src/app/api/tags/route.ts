@@ -35,49 +35,33 @@ export async function GET(req: Request) {
       : undefined,
   })
 
-  // If we need counts, we also need to count recipes that have the tag in their tags string field
   if (includeCounts) {
-    // Get all recipes for this family to check tags string
+    // Get all recipes for this family to check tags string field (legacy)
     const recipes = await (prisma as any).recipe.findMany({
-      where: {
-        familyId: user.familyId,
-      },
-      select: {
-        id: true,
-        tags: true,
-      },
+      where: { familyId: user.familyId },
+      select: { id: true, tags: true },
     })
 
-    // Create a map of tag name to count from tags string
     const tagNameToCountFromString: Record<string, number> = {}
-
     for (const recipe of recipes) {
       if (!recipe.tags) continue
-
-      // Parse comma-separated tags
       const recipeTags = recipe.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
-
       for (const tagName of recipeTags) {
         if (tagName === 'legacy-tags') continue
         tagNameToCountFromString[tagName] = (tagNameToCountFromString[tagName] || 0) + 1
       }
     }
 
-    // Combine counts
-    const response = tags.map((tag: any) => {
-      const countFromRelationship = tag._count?.recipes || 0
-      const countFromString = tagNameToCountFromString[tag.name] || 0
-      const totalCount = countFromRelationship + countFromString
-
-      return {
-        id: tag.id,
-        name: tag.name,
-        color: tag.color,
-        scope: tag.scope ?? 'general',
-        createdAt: tag.createdAt.toISOString(),
-        recipeCount: totalCount,
-      }
-    })
+    const response = tags.map((tag: any) => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      emoji: tag.emoji ?? null,
+      sortOrder: tag.sortOrder ?? 0,
+      scope: tag.scope ?? 'general',
+      createdAt: tag.createdAt.toISOString(),
+      recipeCount: (tag._count?.recipes || 0) + (tagNameToCountFromString[tag.name] || 0),
+    }))
 
     return NextResponse.json(response)
   }
@@ -86,6 +70,8 @@ export async function GET(req: Request) {
     id: tag.id,
     name: tag.name,
     color: tag.color,
+    emoji: tag.emoji ?? null,
+    sortOrder: tag.sortOrder ?? 0,
     scope: tag.scope ?? 'general',
     createdAt: tag.createdAt.toISOString(),
   }))
@@ -96,7 +82,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireSession()
   const body = await req.json()
-  const { name, color, scope } = body
+  const { name, color, scope, emoji, sortOrder } = body
 
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return NextResponse.json(
@@ -108,13 +94,10 @@ export async function POST(req: Request) {
   const trimmedName = name.trim()
   const trimmedColor = color && typeof color === 'string' ? color.trim() : null
   const trimmedScope = scope && typeof scope === 'string' ? scope.trim() : 'general'
+  const trimmedEmoji = emoji && typeof emoji === 'string' ? emoji.trim() : null
 
-  // Check if tag already exists for this family
   const existingTag = await (prisma as any).tag.findFirst({
-    where: {
-      familyId: user.familyId,
-      name: trimmedName,
-    },
+    where: { familyId: user.familyId, name: trimmedName },
   })
 
   if (existingTag) {
@@ -124,11 +107,24 @@ export async function POST(req: Request) {
     )
   }
 
+  // For trip-scoped tags, compute next sortOrder
+  let nextSortOrder = 0
+  if (trimmedScope === 'trip') {
+    const maxOrder = await (prisma as any).tag.aggregate({
+      where: { familyId: user.familyId, scope: 'trip' },
+      _max: { sortOrder: true },
+    })
+    nextSortOrder = (maxOrder._max?.sortOrder ?? -1) + 1
+  }
+  if (sortOrder !== undefined) nextSortOrder = sortOrder
+
   const tag = await (prisma as any).tag.create({
     data: {
       name: trimmedName,
       color: trimmedColor,
+      emoji: trimmedEmoji,
       scope: trimmedScope,
+      sortOrder: nextSortOrder,
       familyId: user.familyId,
     },
   })
@@ -147,6 +143,8 @@ export async function POST(req: Request) {
       id: tag.id,
       name: tag.name,
       color: tag.color,
+      emoji: tag.emoji ?? null,
+      sortOrder: tag.sortOrder ?? 0,
       scope: tag.scope ?? 'general',
       createdAt: tag.createdAt.toISOString(),
     },

@@ -156,6 +156,8 @@ if [ -f "$DB_PATH" ]; then
 20260548000000_add_repeating_transaction_templates|FinanceRecurringBill|status
 20260548000000_add_repeating_transaction_templates|FinanceIncomeEntry|templateId
 20260548000000_add_repeating_transaction_templates|FinanceIncomeEntry|status
+20260555000000_consolidate_trip_tags|Tag|emoji
+20260555000000_consolidate_trip_tags|Tag|sortOrder
 "
   echo "$COLUMN_CHECKS" | while IFS='|' read -r MIGRATION TABLE COLUMN; do
     # Skip blank lines

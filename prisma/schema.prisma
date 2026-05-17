@@ -37,7 +37,6 @@ model Family {
   documents            Document[]
   listTemplates        ListTemplate[]
   trips                Trip[]
-  tripTags             TripTag[]
   financeAccounts        FinanceAccount[]
   financeTransactions    FinanceTransaction[]
   financeCategories      FinanceCategory[]
@@ -1163,7 +1162,7 @@ model TripDay {
   sortOrder   Int              @default(0)
   activities  TripActivity[]
   attachments TripAttachment[] @relation("DayAttachments")
-  tags        TripDayTag[]
+  tags        DayTag[]
   createdAt   DateTime         @default(now())
 
   @@unique([tripId, date])
@@ -1181,7 +1180,7 @@ model TripActivity {
   notes     String?
   category  String?
   sortOrder Int               @default(0)
-  tags      TripActivityTag[]
+  tags      ActivityTag[]
   createdAt DateTime          @default(now())
 
   @@index([dayId])
@@ -1206,29 +1205,12 @@ model TripAttachment {
   @@index([familyId])
 }
 
-// Trip-specific emoji tags (separate from the recipe Tag system)
-model TripTag {
-  id         String            @id @default(cuid())
-  familyId   String
-  family     Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  name       String
-  emoji      String?
-  color      String?
-  sortOrder  Int               @default(0)
-  activities TripActivityTag[]
-  days       TripDayTag[]
-  createdAt  DateTime          @default(now())
-
-  @@unique([familyId, name])
-  @@index([familyId])
-}
-
-// Join table: tags on activities
-model TripActivityTag {
+// Join table: trip tags on activities (uses unified Tag model with scope='trip')
+model ActivityTag {
   activityId String
   tagId      String
   activity   TripActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  tag        TripTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tag        Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
   createdAt  DateTime     @default(now())
 
   @@id([activityId, tagId])
@@ -1236,12 +1218,12 @@ model TripActivityTag {
   @@index([tagId])
 }
 
-// Join table: tags on days
-model TripDayTag {
-  dayId String
-  tagId String
-  day   TripDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  tag   TripTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+// Join table: trip tags on days (uses unified Tag model with scope='trip')
+model DayTag {
+  dayId     String
+  tagId     String
+  day       TripDay  @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@id([dayId, tagId])
