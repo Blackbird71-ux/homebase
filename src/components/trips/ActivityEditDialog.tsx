@@ -105,23 +105,23 @@ export function ActivityEditDialog({
   const savedEditableRef       = useRef<HTMLDivElement | null>(null)
   const [textColor, setTextColor]           = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
-  const notesInitialisedRef = useRef(false)
 
-  // Initialise editor content exactly once on mount — do NOT focus the editor.
-  // The title field is the natural first focus target (user just quick-added
-  // the activity and may want to edit the title). Stealing focus to the editor
-  // caused keystrokes to be swallowed into the notes div instead of the title.
+  // Callback ref: initialises notes the instant the element attaches to the DOM,
+  // avoiding the race where useEffect fires before base-ui's portal renders it.
+  // useCallback with [] keeps the ref function stable across re-renders so React
+  // doesn't call it again on every render and overwrite in-progress edits.
+  const editorCallbackRef = useCallback((el: HTMLDivElement | null) => {
+    editorRef.current = el
+    if (el) el.innerHTML = activity.notes ?? ''
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Load available tags on mount
   useEffect(() => {
-    if (editorRef.current && !notesInitialisedRef.current) {
-      editorRef.current.innerHTML = activity.notes ?? ''
-      notesInitialisedRef.current = true
-    }
-    // Load available tags in parallel
     fetch('/api/trips/tags')
       .then((r) => r.json())
       .then((data: TripTagShape[]) => setAvailableTags(data))
       .catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const exec = useCallback((command: string, value?: string) => {
@@ -385,7 +385,7 @@ export function ActivityEditDialog({
                 isLoading={saving}
               />
               <div
-                ref={editorRef}
+                ref={editorCallbackRef}
                 contentEditable={!saving}
                 suppressContentEditableWarning
                 data-placeholder="Add notes, links, tips, booking references…"

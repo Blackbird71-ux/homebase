@@ -436,7 +436,7 @@ function ActivityRow({
 
         {/* Notes preview */}
         {notePreview && (
-          <div className="flex items-start gap-1.5 text-xs text-muted-foreground/80">
+          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
             <span className="line-clamp-2 leading-relaxed">
               {notePreview}{hasMoreNotes && '…'}
