@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   APIProvider,
   Map,
   AdvancedMarker,
+  Polyline,
   useMap,
   useMapsLibrary,
 } from '@vis.gl/react-google-maps'
@@ -127,7 +128,7 @@ function TripMapInner({
   const map = useMap()
   const geocodingLib = useMapsLibrary('geocoding')
   const [markers, setMarkers] = useState<MarkerData[]>([])
-  const polylineRef = useRef<google.maps.Polyline | null>(null)
+  const [routePath, setRoutePath] = useState<google.maps.LatLngLiteral[]>([])
 
   useEffect(() => {
     if (!geocodingLib || !map) return
@@ -165,33 +166,28 @@ function TripMapInner({
 
       setMarkers(resolved.map((r, i) => ({ position: r.position, stop: r.stop, index: i })))
 
-      polylineRef.current?.setMap(null)
-      polylineRef.current = null
+      const path = resolved.map(r => r.position)
+      setRoutePath(path)
 
-      if (resolved.length >= 2) {
-        const path = resolved.map(r => r.position)
-        polylineRef.current = new google.maps.Polyline({
-          path,
-          map,
-          strokeColor: '#6366f1',
-          strokeWeight: 5,
-          strokeOpacity: 0.8,
-          geodesic: true,
-        })
-        const bounds = new google.maps.LatLngBounds()
-        path.forEach(p => bounds.extend(p))
+      if (path.length >= 2) {
+        // Compute bounds without google.maps.LatLngBounds
+        const bounds = path.reduce(
+          (b, p) => ({
+            north: Math.max(b.north, p.lat),
+            south: Math.min(b.south, p.lat),
+            east: Math.max(b.east, p.lng),
+            west: Math.min(b.west, p.lng),
+          }),
+          { north: -90, south: 90, east: -180, west: 180 }
+        )
         map.fitBounds(bounds, 48)
-      } else if (resolved.length === 1) {
-        map.setCenter(resolved[0].position)
+      } else if (path.length === 1) {
+        map.setCenter(path[0])
         map.setZoom(9)
       }
     })
 
-    return () => {
-      cancelled = true
-      polylineRef.current?.setMap(null)
-      polylineRef.current = null
-    }
+    return () => { cancelled = true }
   }, [geocodingLib, map, stops, destination])
 
   return (
@@ -207,6 +203,15 @@ function TripMapInner({
           disableDefaultUI={false}
         >
           <MapSearch />
+          {routePath.length >= 2 && (
+            <Polyline
+              path={routePath}
+              strokeColor="#6366f1"
+              strokeWeight={5}
+              strokeOpacity={0.8}
+              geodesic={true}
+            />
+          )}
           {markers.map((m) => (
             <AdvancedMarker
               key={m.index}
@@ -290,6 +295,13 @@ interface TripMapSectionProps {
 export function TripMapSection({ destination, departureLocation, days }: TripMapSectionProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
+  // Stable reference — prevents the geocoding effect from cancelling itself on every parent render
+  const stops = useMemo(
+    () => buildStops(departureLocation, days),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [departureLocation, JSON.stringify(days)]
+  )
+
   if (!apiKey) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
@@ -300,8 +312,6 @@ export function TripMapSection({ destination, departureLocation, days }: TripMap
       </div>
     )
   }
-
-  const stops = buildStops(departureLocation, days)
 
   return (
     <APIProvider apiKey={apiKey}>
