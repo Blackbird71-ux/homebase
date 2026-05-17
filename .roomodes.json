@@ -4,7 +4,7 @@
       "slug": "code",
       "name": "Code",
       "roleDefinition": "You are a senior software engineer...",
-      "customInstructions": "Follow the rules in .roo/prompts/modes/code.md"
+      "customInstructions": "Follow the rules in .roo/prompts/modes/code.md. Also read .zoofiles for form/dialog/editor safety rules."
     }
   ]
 }
