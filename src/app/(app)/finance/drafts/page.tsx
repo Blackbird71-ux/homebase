@@ -4,16 +4,20 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   CheckCircle2, XCircle, Pencil, Inbox, AlertTriangle,
   RefreshCw, ChevronDown, ChevronUp,
+  Receipt, BookmarkCheck, Briefcase, Building2, Layers,
 } from 'lucide-react'
-import { formatCurrency } from '@/lib/financeShared'
+import { cn } from '@/lib/utils'
+import { formatCurrency, toMonthlyAmount } from '@/lib/financeShared'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  WideDialogContent,
 } from '@/components/ui/dialog'
+import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import Link from 'next/link'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -62,15 +66,38 @@ interface Vendor {
   name: string
 }
 
-interface EditState {
+interface Member {
+  id: string
+  name: string
+}
+
+interface Entity {
+  id: string
+  name: string
+  isDefault: boolean
+}
+
+interface EditFormState {
   kind: 'bill' | 'income'
   id: string
   name: string
   amount: string
   date: string
+  endDate: string
   categoryId: string
   vendorId: string
+  memberId: string
+  entityId: string
   notes: string
+  billType: string
+  frequency: string
+  autoPay: boolean
+  emailReminder: boolean
+  reminderDays: number
+  invoiceReceived: boolean
+  invoiceReceivedDate: string
+  taxClassification: string
+  addToBudget: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -79,156 +106,329 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// ── Edit Dialog ───────────────────────────────────────────────────────────────
+function emptyEditForm(kind: 'bill' | 'income', id: string): EditFormState {
+  return {
+    kind, id,
+    name: '', amount: '', date: '', endDate: '',
+    categoryId: '', vendorId: '', memberId: '', entityId: '',
+    notes: '', billType: 'recurring', frequency: 'monthly',
+    autoPay: false, emailReminder: false, reminderDays: 3,
+    invoiceReceived: false, invoiceReceivedDate: '',
+    taxClassification: '', addToBudget: false,
+  }
+}
+
+// ── Edit Dialog (full bills-style form) ───────────────────────────────────────
 
 function EditDialog({
   state,
   categories,
   vendors,
+  members,
+  entities,
+  glAccounts,
   onClose,
   onSave,
 }: {
-  state: EditState
+  state: EditFormState
   categories: Category[]
   vendors: Vendor[]
+  members: Member[]
+  entities: Entity[]
+  glAccounts: GLAccount[]
   onClose: () => void
-  onSave: (s: EditState) => Promise<void>
+  onSave: (s: EditFormState, journalLines: JournalFormLine[]) => Promise<void>
 }) {
   const [form, setForm] = useState(state)
+  const [journalLines, setJournalLines] = useState<JournalFormLine[]>([])
+  const [journalErrors, setJournalErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const set = (field: keyof EditState, value: string) =>
+  const set = <K extends keyof EditFormState>(field: K, value: EditFormState[K]) =>
     setForm(prev => ({ ...prev, [field]: value }))
 
-  async function handleSave() {
-    if (!form.name.trim()) { setError('Name is required'); return }
+  function validate(): Record<string, string> {
+    const errs: Record<string, string> = {}
+    if (!form.name.trim()) errs.name = 'Name is required'
     const amt = parseFloat(form.amount)
-    if (isNaN(amt) || amt <= 0) { setError('Amount must be a positive number'); return }
-    if (!form.date) { setError('Date is required'); return }
+    if (isNaN(amt) || amt <= 0) errs.amount = 'Amount must be a positive number'
+    if (!form.date) errs.date = 'Date is required'
+    return errs
+  }
+
+  async function handleSave() {
+    const errs = validate()
+    setErrors(errs)
+    if (Object.keys(errs).length > 0) return
     setSaving(true)
-    setError('')
     try {
-      await onSave(form)
+      await onSave(form, journalLines)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
+      setErrors({ save: err instanceof Error ? err.message : 'Save failed' })
     } finally {
       setSaving(false)
     }
   }
 
-  const catLabel = form.kind === 'bill' ? 'Expense Category' : 'Income Category'
-  const dateLabel = form.kind === 'bill' ? 'Due Date' : 'Expected Date'
-
   const targetType = form.kind === 'bill' ? 'expense' : 'income'
   const filteredCats = sortedCategoryList(
     categories
       .filter(c => c.type === targetType)
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        type: c.type,
-        parentId: c.parentId ?? null,
-      })),
+      .map(c => ({ id: c.id, name: c.name, type: c.type, parentId: c.parentId ?? null })),
   )
+
+  const dateLabel = form.kind === 'bill' ? 'Next Due Date *' : 'Next Expected Date *'
+
+  // Seed default journal lines for display
+  useEffect(() => {
+    const amtStr = form.amount && parseFloat(form.amount) > 0 ? parseFloat(form.amount).toFixed(2) : ''
+    const ap = glAccounts.find(a => a.name.toLowerCase().includes('accounts payable'))
+    const defaultLines: JournalFormLine[] = [
+      { glAccountId: form.categoryId ?? '', side: 'debit' as const, amount: amtStr, description: '' },
+      { glAccountId: ap?.id ?? '', side: 'credit' as const, amount: amtStr, description: '' },
+    ]
+    setJournalLines(defaultLines)
+  }, [form.categoryId, form.amount, glAccounts])
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit Draft</DialogTitle>
-        </DialogHeader>
-
-        {error && (
-          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Name</label>
-            <input
-              value={form.name}
-              onChange={e => set('name', e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Amount ($)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.amount}
-              onChange={e => set('amount', e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">{dateLabel}</label>
-            <input
-              type="date"
-              value={form.date}
-              onChange={e => set('date', e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">{catLabel}</label>
-            <select
-              value={form.categoryId}
-              onChange={e => set('categoryId', e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">— none —</option>
-              {filteredCats.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.parentId ? `  ${c.name}` : c.name}
-                </option>
+      <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
+        {/* Fixed header */}
+        <div className="px-4 pt-4 pb-0 shrink-0">
+          <DialogHeader>
+            <DialogTitle>Edit Draft {form.kind === 'bill' ? 'Bill' : 'Income'}</DialogTitle>
+          </DialogHeader>
+          {Object.keys(errors).length > 0 && (
+            <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mt-3">
+              <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
+              <ul className="list-disc list-inside text-xs text-red-500/80 mt-1">
+                {Object.values(errors).map((err, i) => <li key={i}>{err}</li>)}
+              </ul>
+            </div>
+          )}
+          {form.kind === 'bill' && (
+            <div className="flex gap-4 py-3">
+              {(['recurring', 'one-off'] as const).map(bt => (
+                <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="billType" value={bt} checked={form.billType === bt}
+                    onChange={() => set('billType', bt)} className="accent-primary" />
+                  {bt === 'recurring' ? <><RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring</> : <><Layers className="h-3.5 w-3.5 text-orange-500" /> One-off</>}
+                </label>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Vendor / Payer</label>
-            <select
-              value={form.vendorId}
-              onChange={e => set('vendorId', e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">— none —</option>
-              {vendors.map(v => (
-                <option key={v.id} value={v.id}>{v.name}</option>
+            </div>
+          )}
+          {form.kind === 'income' && (
+            <div className="flex gap-4 py-3">
+              {(['recurring', 'one-off'] as const).map(bt => (
+                <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="incomeType" value={bt} checked={form.billType === bt}
+                    onChange={() => set('billType', bt)} className="accent-primary" />
+                  {bt === 'recurring' ? <><RefreshCw className="h-3.5 w-3.5 text-blue-500" /> Recurring</> : <><Layers className="h-3.5 w-3.5 text-orange-500" /> One-off</>}
+                </label>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Notes</label>
-            <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              rows={2}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-            />
+            </div>
+          )}
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Some fields (frequency, entity, tax, budget) are preview-only on drafts. Full configuration applies when the draft is approved.
           </div>
         </div>
 
-        <DialogFooter>
-          <button
-            onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm border border-border text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="rounded-md px-4 py-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
+        {/* Two-column body */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex flex-col md:flex-row">
+            {/* Left panel */}
+            <div className="md:w-1/2 px-4 pb-4 space-y-2.5 md:border-r md:border-border">
+              <div className="grid grid-cols-2 gap-2">
+                {/* Name — full width */}
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Name *</label>
+                  <input value={form.name} onChange={e => set('name', e.target.value)}
+                    className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.name && 'border-red-500')} />
+                  {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
+                </div>
+                {/* Amount + Frequency (or Assigned To for one-off) */}
+                <div>
+                  <label className="text-xs text-muted-foreground">Amount *</label>
+                  <input type="number" step="0.01" value={form.amount || ''}
+                    onChange={e => set('amount', e.target.value)}
+                    onFocus={e => e.target.select()}
+                    className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.amount && 'border-red-500')} />
+                  {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
+                </div>
+                {form.billType === 'recurring' ? (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Frequency *</label>
+                    <select value={form.frequency} onChange={e => set('frequency', e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="weekly">Weekly</option>
+                      <option value="fortnightly">Fortnightly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="bimonthly">Bi-Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="halfyearly">Half-Yearly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Assigned To</label>
+                    <select value={form.memberId} onChange={e => set('memberId', e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">Shared</option>
+                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                {/* Financial Contact — full width */}
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Financial Contact</label>
+                  <div className="flex gap-1">
+                    <select value={form.vendorId} onChange={e => set('vendorId', e.target.value)}
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">No contact</option>
+                      {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                    <Link href="/finance/contacts"
+                      className="shrink-0 inline-flex items-center justify-center rounded-md border border-input bg-background px-2 py-1.5 text-muted-foreground hover:text-foreground"
+                      title="Manage contacts"><Building2 className="h-3.5 w-3.5" /></Link>
+                  </div>
+                </div>
+                {/* Due Date + End Date */}
+                <div>
+                  <label className="text-xs text-muted-foreground">{dateLabel}</label>
+                  <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
+                    className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.date && 'border-red-500')} />
+                  {errors.date && <p className="text-xs text-red-500 mt-0.5">{errors.date}</p>}
+                </div>
+                {form.billType === 'recurring' ? (
+                  <div>
+                    <label className="text-xs text-muted-foreground">End Date (optional)</label>
+                    <input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                  </div>
+                ) : <div />}
+                {/* Assigned To + Entity (recurring only) */}
+                {form.billType === 'recurring' && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Assigned To</label>
+                    <select value={form.memberId} onChange={e => set('memberId', e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">Shared</option>
+                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
+                  <select value={form.entityId} onChange={e => set('entityId', e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">Select entity…</option>
+                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
+                  </select>
+                </div>
+                {/* Tax Classification + Category */}
+                <div>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+                  <select value={form.taxClassification} onChange={e => set('taxClassification', e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">Not classified</option>
+                    <option value="tax_deduction">Tax Deduction</option>
+                    <option value="tax_payment">Tax Payment (PAYG)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">{form.kind === 'bill' ? 'Expense Category (GL)' : 'Income Category (GL)'}</label>
+                  <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">No category</option>
+                    {filteredCats.map(c => (
+                      <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Notes — full width */}
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Notes</label>
+                  <textarea value={form.notes} rows={2} onChange={e => set('notes', e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Right panel */}
+            <div className="md:w-1/2 px-4 pb-4 space-y-2.5">
+              <div className="rounded-md border border-border bg-muted/20 p-3">
+                <JournalLinesEditor
+                  lines={journalLines}
+                  onChange={setJournalLines}
+                  glAccounts={glAccounts}
+                  expectedTotal={parseFloat(form.amount) || 0}
+                  errors={journalErrors}
+                  onErrorsClear={keys => setJournalErrors(p => { const n = { ...p }; keys.forEach(k => delete n[k]); return n })}
+                  lineHints={form.kind === 'bill'
+                    ? ['Expense account (what you\'re paying for)', 'Accounts Payable — liability (what you owe)']
+                    : ['Accounts Receivable — asset (what you\'re owed)', 'Income account (what you\'re earning)']}
+                />
+              </div>
+              <div className="flex flex-wrap gap-4 pt-1">
+                {form.billType === 'recurring' && (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={form.autoPay} onChange={e => set('autoPay', e.target.checked)} className="rounded border-input" />
+                    Auto-pay
+                  </label>
+                )}
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.emailReminder} onChange={e => set('emailReminder', e.target.checked)} className="rounded border-input" />
+                  Email reminder
+                </label>
+                {form.emailReminder && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground">Remind</label>
+                    <input type="number" min={0} max={30} value={form.reminderDays}
+                      onChange={e => set('reminderDays', parseInt(e.target.value) || 0)}
+                      className="w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center" />
+                    <span className="text-xs text-muted-foreground">days before</span>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.invoiceReceived} onChange={e => set('invoiceReceived', e.target.checked)} className="rounded border-input" />
+                  <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">Invoice date</label>
+                  <input type="date" value={form.invoiceReceivedDate}
+                    onChange={e => set('invoiceReceivedDate', e.target.value)}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                </div>
+              </div>
+              <div className={cn('rounded-md border px-3 py-2.5 flex items-start gap-3', form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border')}>
+                <input type="checkbox" id="draftAddToBudget" checked={form.addToBudget}
+                  onChange={e => set('addToBudget', e.target.checked)} className="rounded border-input mt-0.5" />
+                <label htmlFor="draftAddToBudget" className="cursor-pointer flex-1">
+                  <div className="flex items-center gap-1.5 text-sm font-medium">
+                    <BookmarkCheck className="h-3.5 w-3.5 text-primary" /> Include in budget planner
+                  </div>
+                  {form.addToBudget && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Creates a budget rule for <strong>{formatCurrency(toMonthlyAmount(parseFloat(form.amount) || 0, form.frequency))}</strong>/month
+                      {form.frequency !== 'monthly' ? ` (${form.frequency} normalised to monthly)` : ''}.
+                    </p>
+                  )}
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+          <button onClick={onClose} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium disabled:opacity-50">
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
         </DialogFooter>
-      </DialogContent>
+      </WideDialogContent>
     </Dialog>
   )
 }
@@ -392,10 +592,13 @@ export default function DraftsPage() {
   const [income, setIncome] = useState<DraftIncome[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [vendors, setVendors] = useState<Vendor[]>([])
+  const [members, setMembers] = useState<Member[]>([])
+  const [entities, setEntities] = useState<Entity[]>([])
+  const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
-  const [editState, setEditState] = useState<EditState | null>(null)
+  const [editState, setEditState] = useState<EditFormState | null>(null)
   const [bulkBusyBills, setBulkBusyBills] = useState(false)
   const [bulkBusyIncome, setBulkBusyIncome] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
@@ -405,22 +608,40 @@ export default function DraftsPage() {
     setTimeout(() => setToastMsg(''), 3500)
   }
 
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  const loadRefs = useCallback(async () => {
+    const [cRes, mRes, eRes, glRes] = await Promise.all([
+      fetch('/api/finance/categories'),
+      fetch('/api/finance/members'),
+      fetch('/api/finance/entities'),
+      fetch('/api/finance/categories?forPicker=true'),
+    ])
+    if (cRes.ok) {
+      const catsData = await cRes.json()
+      setCategories(Array.isArray(catsData) ? catsData : (catsData.categories ?? []))
+    }
+    if (mRes.ok) setMembers(await mRes.json())
+    if (eRes.ok) setEntities(await eRes.json())
+    if (glRes.ok) {
+      const glCats = await glRes.json()
+      setGLAccounts(glCats.filter((c: any) => c.type !== 'transfer'))
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError('')
     try {
-      const [draftsRes, catsRes, vendorsRes] = await Promise.all([
+      const [draftsRes, vendorsRes] = await Promise.all([
         fetch('/api/finance/drafts'),
-        fetch('/api/finance/categories'),
         fetch('/api/finance/contacts'),
       ])
       if (!draftsRes.ok) throw new Error('Failed to load drafts')
       const draftsData = await draftsRes.json()
-      const catsData = catsRes.ok ? await catsRes.json() : []
       const vendorsData = vendorsRes.ok ? await vendorsRes.json() : []
       setBills(draftsData.bills ?? [])
       setIncome(draftsData.income ?? [])
-      setCategories(Array.isArray(catsData) ? catsData : (catsData.categories ?? []))
       setVendors(Array.isArray(vendorsData) ? vendorsData : [])
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Load failed')
@@ -429,7 +650,10 @@ export default function DraftsPage() {
     }
   }, [])
 
+  useEffect(() => { loadRefs() }, [loadRefs])
   useEffect(() => { load() }, [load])
+
+  // ── Actions ───────────────────────────────────────────────────────────────
 
   async function handleApprove(kind: 'bill' | 'income', id: string) {
     const res = await fetch(`/api/finance/drafts/${id}/approve`, {
@@ -460,22 +684,21 @@ export default function DraftsPage() {
   }
 
   function openEdit(kind: 'bill' | 'income', d: DraftBill | DraftIncome) {
-    const date = 'nextDueDate' in d
+    const isBill = 'nextDueDate' in d
+    const date = isBill
       ? new Date(d.nextDueDate).toISOString().slice(0, 10)
       : new Date((d as DraftIncome).nextExpectedDate).toISOString().slice(0, 10)
-    setEditState({
-      kind,
-      id: d.id,
-      name: d.name,
-      amount: String(d.amount),
-      date,
-      categoryId: d.categoryId ?? '',
-      vendorId: d.vendorId ?? '',
-      notes: d.notes ?? '',
-    })
+    const form = emptyEditForm(kind, d.id)
+    form.name = d.name
+    form.amount = String(d.amount)
+    form.date = date
+    form.categoryId = d.categoryId ?? ''
+    form.vendorId = d.vendorId ?? ''
+    form.notes = d.notes ?? ''
+    setEditState(form)
   }
 
-  async function handleEditSave(s: EditState) {
+  async function handleEditSave(s: EditFormState, _journalLines: JournalFormLine[]) {
     const body: Record<string, unknown> = {
       kind: s.kind,
       name: s.name,
@@ -525,6 +748,8 @@ export default function DraftsPage() {
       setter(false)
     }
   }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -647,6 +872,9 @@ export default function DraftsPage() {
           state={editState}
           categories={categories}
           vendors={vendors}
+          members={members}
+          entities={entities}
+          glAccounts={glAccounts}
           onClose={() => setEditState(null)}
           onSave={handleEditSave}
         />
