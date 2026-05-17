@@ -10,6 +10,7 @@ function serializeDay(day: {
   notes: string | null
   sortOrder: number
   createdAt: Date
+  tags: { tag: { id: string; name: string; emoji: string | null; color: string | null } }[]
   activities: {
     id: string
     dayId: string
@@ -32,6 +33,12 @@ function serializeDay(day: {
     notes: day.notes,
     sortOrder: day.sortOrder,
     createdAt: day.createdAt.toISOString(),
+    tags: day.tags.map((t) => ({
+      id: t.tag.id,
+      name: t.tag.name,
+      emoji: t.tag.emoji,
+      color: t.tag.color,
+    })),
     activities: day.activities.map((a) => ({
       id: a.id,
       dayId: a.dayId,
@@ -53,11 +60,6 @@ function serializeDay(day: {
   }
 }
 
-const ACTIVITY_INCLUDE = {
-  orderBy: { sortOrder: 'asc' as const },
-  include: { tags: { include: { tag: true } } },
-}
-
 // GET /api/trips/[id]/days
 export async function GET(
   _req: NextRequest,
@@ -74,8 +76,14 @@ export async function GET(
 
   const days = await prisma.tripDay.findMany({
     where: { tripId: id },
-    orderBy: { sortOrder: 'asc' },
-    include: { activities: ACTIVITY_INCLUDE },
+    orderBy: { date: 'asc' },
+    include: {
+      activities: {
+        orderBy: { sortOrder: 'asc' },
+        include: { tags: { include: { tag: true } } },
+      },
+      tags: { include: { tag: true } },
+    },
   })
 
   return NextResponse.json(days.map(serializeDay))
@@ -124,7 +132,13 @@ export async function POST(
       notes: notes ?? null,
       sortOrder: sortOrder ?? (maxOrder._max.sortOrder ?? -1) + 1,
     },
-    include: { activities: ACTIVITY_INCLUDE },
+    include: {
+      activities: {
+        orderBy: { sortOrder: 'asc' },
+        include: { tags: { include: { tag: true } } },
+      },
+      tags: { include: { tag: true } },
+    },
   })
 
   return NextResponse.json(serializeDay(day), { status: 201 })

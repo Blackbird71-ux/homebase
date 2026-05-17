@@ -36,7 +36,7 @@ export default async function TripDetailPage({
         },
       },
       days: {
-        orderBy: { sortOrder: 'asc' },
+        orderBy: { date: 'asc' },
         include: {
           activities: {
             orderBy: { sortOrder: 'asc' },
