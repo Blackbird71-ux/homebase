@@ -166,19 +166,21 @@ function OverviewTab({
       </div>
 
       {/* Name */}
-      <div>
-        <label className="block text-xs font-medium mb-1">Name <span className="text-red-500">*</span></label>
-        <input
-          type="text"
-          value={form.name}
-          onChange={e => set('name', e.target.value)}
-          placeholder="e.g. Monthly mortgage, Weekly groceries…"
-          className={cn(
-            'w-full rounded-md border bg-background px-2 py-1.5 text-sm',
-            errors.name ? 'border-red-500' : 'border-input',
-          )}
-        />
-        {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
+      <div className="flex items-center gap-2">
+        <label className="text-xs font-medium shrink-0">Name <span className="text-red-500">*</span></label>
+        <div className="flex-1">
+          <input
+            type="text"
+            value={form.name}
+            onChange={e => set('name', e.target.value)}
+            placeholder="e.g. Monthly mortgage, Weekly groceries…"
+            className={cn(
+              'w-full rounded-md border bg-background px-2 py-1.5 text-sm',
+              errors.name ? 'border-red-500' : 'border-input',
+            )}
+          />
+          {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
+        </div>
       </div>
 
       {/* Settings row */}
