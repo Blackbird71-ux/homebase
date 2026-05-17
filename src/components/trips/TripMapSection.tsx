@@ -116,6 +116,22 @@ function MapSearch() {
   )
 }
 
+// ── Nominatim geocoder (free, no billing required) ───────────────────────────
+
+async function nominatimGeocode(address: string): Promise<google.maps.LatLngLiteral | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
+      { headers: { 'User-Agent': 'HomeBase-Travel-App/1.0' } }
+    )
+    const data = await res.json()
+    if (Array.isArray(data) && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    }
+  } catch {}
+  return null
+}
+
 // ── Inner map (must live inside APIProvider) ─────────────────────────────────
 
 function TripMapInner({
@@ -126,57 +142,47 @@ function TripMapInner({
   stops: RouteStop[]
 }) {
   const map = useMap('trip-route-map')
-  const geocodingLib = useMapsLibrary('geocoding')
   const [markers, setMarkers] = useState<MarkerData[]>([])
   const [routePath, setRoutePath] = useState<google.maps.LatLngLiteral[]>([])
-  const [geoStatus, setGeoStatus] = useState<string>('waiting for map…')
+  const [geoStatus, setGeoStatus] = useState<string>('locating stops…')
 
   useEffect(() => {
-    if (!map) { setGeoStatus('map not ready'); return }
-    if (!geocodingLib) { setGeoStatus('geocoding library not ready'); return }
+    if (!map) return
+    const mapRef = map
 
     let cancelled = false
-    const geocoder = new geocodingLib.Geocoder()
 
-    if (stops.length === 0) {
-      setGeoStatus('no stops with locations')
-      geocoder.geocode({ address: destination }, (results, status) => {
+    async function run() {
+      const targets = stops.length > 0 ? stops : null
+
+      if (!targets) {
+        setGeoStatus('no stops with locations')
+        const pos = await nominatimGeocode(destination)
+        if (!cancelled && pos) { mapRef.setCenter(pos); mapRef.setZoom(9) }
+        return
+      }
+
+      setGeoStatus(`locating ${targets.length} stop(s)…`)
+
+      // Sequential with 1 s gap to respect Nominatim's usage policy
+      const resolved: { position: google.maps.LatLngLiteral; stop: RouteStop }[] = []
+      for (let i = 0; i < targets.length; i++) {
         if (cancelled) return
-        if (status === 'OK' && results?.[0]) {
-          map.setCenter(results[0].geometry.location)
-          map.setZoom(9)
-        }
-      })
-      return () => { cancelled = true }
-    }
+        if (i > 0) await new Promise(r => setTimeout(r, 1100))
+        if (cancelled) return
+        const pos = await nominatimGeocode(targets[i].location)
+        if (pos) resolved.push({ position: pos, stop: targets[i] })
+      }
 
-    setGeoStatus(`geocoding ${stops.length} stop(s)…`)
-    Promise.all(
-      stops.map(stop =>
-        new Promise<{ position: google.maps.LatLngLiteral; stop: RouteStop } | null>(resolve => {
-          geocoder.geocode({ address: stop.location }, (results, status) => {
-            console.log(`[TripMap] geocode "${stop.location}" → ${status}`, results?.[0]?.geometry?.location?.toString())
-            if (status === 'OK' && results?.[0]) {
-              const loc = results[0].geometry.location
-              resolve({ position: { lat: loc.lat(), lng: loc.lng() }, stop })
-            } else {
-              resolve(null)
-            }
-          })
-        })
-      )
-    ).then(results => {
       if (cancelled) return
-      const resolved = results.filter((r): r is NonNullable<typeof r> => r !== null)
-      setGeoStatus(`${resolved.length}/${stops.length} geocoded`)
 
+      setGeoStatus(`${resolved.length}/${targets.length} located`)
       setMarkers(resolved.map((r, i) => ({ position: r.position, stop: r.stop, index: i })))
 
       const path = resolved.map(r => r.position)
       setRoutePath(path)
 
       if (path.length >= 2) {
-        // Compute bounds without google.maps.LatLngBounds
         const bounds = path.reduce(
           (b, p) => ({
             north: Math.max(b.north, p.lat),
@@ -186,15 +192,16 @@ function TripMapInner({
           }),
           { north: -90, south: 90, east: -180, west: 180 }
         )
-        map.fitBounds(bounds, 48)
+        mapRef.fitBounds(bounds, 48)
       } else if (path.length === 1) {
-        map.setCenter(path[0])
-        map.setZoom(9)
+        mapRef.setCenter(path[0])
+        mapRef.setZoom(9)
       }
-    })
+    }
 
+    run()
     return () => { cancelled = true }
-  }, [geocodingLib, map, stops, destination])
+  }, [map, stops, destination])
 
   return (
     <>
