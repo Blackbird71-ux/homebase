@@ -40,6 +40,26 @@ export async function register() {
       return origStderr(...args)
     } as typeof process.stderr.write
 
+    // ── HTTP request logging (feeds both structured + raw log buffers) ─────
+    // Uses Node.js diagnostics_channel (available since Node 19) to intercept
+    // every incoming HTTP request without middleware overhead.  Filters out
+    // static assets and health checks to keep the log readable.
+    try {
+      const dc = await import('node:diagnostics_channel')
+      dc.subscribe('http.server.request.start', (message: unknown) => {
+        const req = (message as { request?: { method?: string; url?: string } })?.request
+        if (!req) return
+        const url = req.url ?? ''
+        const method = req.method ?? ''
+        // Skip health-check pings (every 30 s) and static file requests
+        if (url === '/api/health') return
+        if (/^\/(_next|static|favicon\.ico|file\.svg|globe\.svg|next\.svg|vercel\.svg|window\.svg|sw\.js|offline\.html)/.test(url)) return
+        console.log(`[http] ${method} ${url}`)
+      })
+    } catch {
+      // diagnostics_channel may not exist in older Node.js — fail silently
+    }
+
     const { initScheduler } = await import('@/lib/scheduler')
     initScheduler()
 
