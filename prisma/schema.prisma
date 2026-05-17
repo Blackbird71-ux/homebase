@@ -344,14 +344,18 @@ model RecipeBook {
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String
-  color     String?
-  scope     String   @default("general")
-  familyId  String
-  family    Family   @relation(fields: [familyId], references: [id])
-  recipes   RecipeTag[]
-  createdAt DateTime @default(now())
+  id            String        @id @default(cuid())
+  name          String
+  color         String?
+  emoji         String?
+  sortOrder     Int           @default(0)
+  scope         String        @default("general")
+  familyId      String
+  family        Family        @relation(fields: [familyId], references: [id])
+  recipes       RecipeTag[]
+  activityTags  ActivityTag[]
+  dayTags       DayTag[]
+  createdAt     DateTime      @default(now())
 
   @@unique([familyId, name])
 }
