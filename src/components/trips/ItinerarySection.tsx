@@ -368,6 +368,7 @@ function ActivityRow({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const [notesExpanded, setNotesExpanded] = useState(false)
   const cat = getCategoryMeta(activity.category)
 
   function formatTimeDisplay(iso: string): string {
@@ -434,14 +435,24 @@ function ActivityRow({
           </div>
         )}
 
-        {/* Notes preview */}
-        {notePreview && (
-          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+        {/* Notes — tap to expand */}
+        {noteText && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setNotesExpanded((v) => !v) }}
+            className="flex items-start gap-1.5 text-xs text-muted-foreground w-full text-left hover:text-foreground transition-colors"
+          >
             <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
-            <span className="line-clamp-2 leading-relaxed">
-              {notePreview}{hasMoreNotes && '…'}
+            <span className={`leading-relaxed ${notesExpanded ? '' : 'line-clamp-2'}`}>
+              {notesExpanded ? noteText : notePreview}
+              {!notesExpanded && hasMoreNotes && (
+                <span className="ml-1 text-primary font-medium">more</span>
+              )}
+              {notesExpanded && (
+                <span className="ml-1 text-primary font-medium">less</span>
+              )}
             </span>
-          </div>
+          </button>
         )}
 
         {/* Tags */}
