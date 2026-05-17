@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Plus, X, Loader2, Sun, MapPin, Clock, StickyNote,
   Pencil, Trash2, Check, Tag, Settings2, ChevronsUpDown, ChevronsDownUp,
@@ -391,54 +391,45 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                 </div>
               ) : (
                 <div
-                  className="flex items-center justify-between p-3 cursor-pointer bg-primary/8 hover:bg-primary/12 transition-colors"
+                  className="flex items-start justify-between p-3 cursor-pointer bg-primary/8 hover:bg-primary/12 transition-colors"
                   onClick={() => setExpandedDayIds((prev) => {
                     const s = new Set(prev)
                     if (s.has(day.id)) s.delete(day.id); else s.add(day.id)
                     return s
                   })}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
                       <span className="text-xs font-bold leading-none">{new Date(day.date).getDate()}</span>
                       <span className="text-[10px] uppercase leading-none mt-0.5">
                         {new Date(day.date).toLocaleDateString('en-AU', { month: 'short' })}
                       </span>
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium">{day.label || formatDate(day.date)}</span>
                         {day.label && <span className="text-xs text-muted-foreground">{formatDate(day.date)}</span>}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-xs text-muted-foreground shrink-0">
                           {day.activities.length === 0
                             ? 'No activities yet'
                             : `${day.activities.length} activit${day.activities.length === 1 ? 'y' : 'ies'}`}
                         </span>
-                        {/* Collapsed day tags */}
-                        {day.tags && day.tags.length > 0 && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-muted-foreground">·</span>
-                            {day.tags.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag.id}
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white"
-                                style={{ backgroundColor: tag.color ?? '#64748b' }}
-                              >
-                                {tag.emoji && <span>{tag.emoji}</span>}
-                                {tag.name}
-                              </span>
-                            ))}
-                            {day.tags.length > 3 && (
-                              <span className="text-[10px] text-muted-foreground">+{day.tags.length - 3}</span>
-                            )}
-                          </div>
-                        )}
+                        {/* All tags: day tags + unique activity tags — shown collapsed */}
+                        <CollapsedDayTags
+                          day={day}
+                          availableTags={availableTags}
+                          tripId={tripId}
+                          onDayTagToggled={(updatedTags) =>
+                            onDaysUpdated(days.map((d) => d.id === day.id ? { ...d, tags: updatedTags } : d))
+                          }
+                          onOpenTagManager={() => setShowTagManager(true)}
+                        />
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); openEditDay(day) }}
                       className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
@@ -519,8 +510,13 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                         <ActivityRow
                           key={activity.id}
                           activity={activity}
+                          tripId={tripId}
+                          dayId={day.id}
+                          availableTags={availableTags}
                           onEdit={() => setEditDialog({ dayId: day.id, dayDate: day.date, activity })}
                           onDelete={() => handleDeleteActivity(day.id, activity.id)}
+                          onTagsChanged={(tags) => handleActivityTagsChanged(day.id, activity.id, tags)}
+                          onOpenTagManager={() => setShowTagManager(true)}
                         />
                       ))}
                     </div>
@@ -585,35 +581,219 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
 // ── Activity row ──────────────────────────────────────────────────────────────
 
+// ── CollapsedDayTags ─ day tags + activity tags shown on the collapsed day row ─
+
+function CollapsedDayTags({
+  day,
+  availableTags,
+  tripId,
+  onDayTagToggled,
+  onOpenTagManager,
+}: {
+  day: TripDayShape
+  availableTags: TripTagShape[]
+  tripId: string
+  onDayTagToggled: (tags: TripDayShape['tags']) => void
+  onOpenTagManager: () => void
+}) {
+  const [showPicker, setShowPicker]   = useState(false)
+  const [togglingTag, setTogglingTag] = useState<string | null>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showPicker) return
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showPicker])
+
+  async function handleToggleDayTag(tagId: string) {
+    setTogglingTag(tagId)
+    try {
+      const res = await fetch(`/api/trips/${tripId}/days/${day.id}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId }),
+      })
+      if (res.ok) {
+        const updatedTags = await res.json()
+        onDayTagToggled(updatedTags)
+      }
+    } finally {
+      setTogglingTag(null)
+    }
+  }
+
+  // Collect unique activity tags across all activities in this day
+  const activityTagsMap = new Map<string, TripDayShape['tags'][0]>()
+  for (const act of day.activities) {
+    for (const t of act.tags ?? []) {
+      activityTagsMap.set(t.id, t)
+    }
+  }
+  const dayTagIds = new Set((day.tags ?? []).map((t) => t.id))
+  // Day tags shown solid; activity-only tags shown as outlines
+  const activityOnlyTags = [...activityTagsMap.values()].filter((t) => !dayTagIds.has(t.id))
+  const allDisplayTags = [...(day.tags ?? []), ...activityOnlyTags]
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+      {allDisplayTags.map((tag) => {
+        const isDayTag = dayTagIds.has(tag.id)
+        return (
+          <span
+            key={tag.id}
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+            style={{
+              backgroundColor: isDayTag ? (tag.color ?? '#64748b') : 'transparent',
+              color: isDayTag ? 'white' : (tag.color ?? '#64748b'),
+              border: isDayTag ? 'none' : `1.5px solid ${tag.color ?? '#64748b'}`,
+            }}
+            title={isDayTag ? 'Day tag' : 'Activity tag'}
+          >
+            {tag.emoji && <span>{tag.emoji}</span>}
+            {tag.name}
+          </span>
+        )
+      })}
+
+      {/* Inline picker: add / remove day tags */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowPicker((v) => !v) }}
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          title="Add / remove day tags"
+        >
+          <Tag className="h-2.5 w-2.5" />
+          <Plus className="h-2 w-2" />
+        </button>
+
+        {showPicker && (
+          <div
+            ref={pickerRef}
+            className="absolute z-[200] top-full mt-1 left-0 min-w-[180px] rounded-lg border border-border bg-popover shadow-xl p-2 space-y-1"
+          >
+            <div className="flex items-center justify-between mb-1.5 px-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Day Tags</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowPicker(false); onOpenTagManager() }}
+                className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
+              >
+                <Settings2 className="h-3 w-3" /> Manage
+              </button>
+            </div>
+            {availableTags.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground italic px-0.5 pb-1">
+                No tags yet —{' '}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowPicker(false); onOpenTagManager() }}
+                  className="underline hover:text-foreground"
+                >create some</button>
+              </p>
+            ) : (
+              availableTags.map((tag) => {
+                const isActive = dayTagIds.has(tag.id)
+                const toggling = togglingTag === tag.id
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleToggleDayTag(tag.id) }}
+                    disabled={toggling}
+                    className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs transition-colors hover:bg-accent disabled:opacity-60"
+                  >
+                    {toggling
+                      ? <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                      : <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tag.color ?? '#64748b' }} />}
+                    <span className="flex-1 text-left">
+                      {tag.emoji && <span className="mr-0.5">{tag.emoji}</span>}
+                      {tag.name}
+                    </span>
+                    {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ActivityRow({
   activity,
+  tripId,
+  dayId,
+  availableTags,
   onEdit,
   onDelete,
+  onTagsChanged,
+  onOpenTagManager,
 }: {
   activity: TripActivityShape
+  tripId: string
+  dayId: string
+  availableTags: TripTagShape[]
   onEdit: () => void
   onDelete: () => void
+  onTagsChanged: (tags: TripActivityShape['tags']) => void
+  onOpenTagManager: () => void
 }) {
   const [notesExpanded, setNotesExpanded] = useState(false)
+  const [showTagPicker, setShowTagPicker] = useState(false)
+  const [togglingTag, setTogglingTag]     = useState<string | null>(null)
+  const tagPickerRef = useRef<HTMLDivElement>(null)
   const cat = getCategoryMeta(activity.category)
+
+  useEffect(() => {
+    if (!showTagPicker) return
+    function handleClick(e: MouseEvent) {
+      if (tagPickerRef.current && !tagPickerRef.current.contains(e.target as Node)) {
+        setShowTagPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showTagPicker])
+
+  async function handleToggleTag(tagId: string) {
+    setTogglingTag(tagId)
+    try {
+      const res = await fetch(
+        `/api/trips/${tripId}/days/${dayId}/activities/${activity.id}/tags`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tagId }) },
+      )
+      if (res.ok) {
+        const updatedTags = await res.json()
+        onTagsChanged(updatedTags)
+      }
+    } finally {
+      setTogglingTag(null)
+    }
+  }
 
   function formatTimeDisplay(iso: string): string {
     return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
   }
 
-  // Strip HTML and decode entities for the plain-text preview line.
-  // DOMParser is client-only; the SSR fallback strips tags then decodes
-  // the most common named entities so they never appear raw on screen.
   const noteText = activity.notes
     ? (typeof window !== 'undefined'
         ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.trim() ?? ''
         : activity.notes
             .replace(/<[^>]+>/g, '')
-            .replace(/&/g, '&')
-            .replace(/</g, '<')
-            .replace(/>/g, '>')
-            .replace(/"/g, '"')
-            .replace(/'/g, "'")
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
             .replace(/&nbsp;/g, ' ')
             .trim())
     : ''
@@ -626,7 +806,6 @@ function ActivityRow({
       onDoubleClick={onEdit}
       title="Double-click to edit"
     >
-      {/* Category icon — always takes a fixed slot so title stays on its own line */}
       {cat ? (
         <span className={`shrink-0 p-1 rounded mt-0.5 ${cat.color}`}>
           <cat.icon className="h-3.5 w-3.5" />
@@ -638,10 +817,8 @@ function ActivityRow({
       )}
 
       <div className="flex-1 min-w-0 space-y-1">
-        {/* Title on its own block so it never flows inline with the icon */}
         <p className="text-sm font-medium leading-snug">{activity.title}</p>
 
-        {/* Location + times */}
         {(activity.location || activity.startTime || activity.endTime) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {activity.location && (
@@ -661,7 +838,6 @@ function ActivityRow({
           </div>
         )}
 
-        {/* Notes — tap to expand */}
         {noteText && (
           <button
             type="button"
@@ -671,31 +847,88 @@ function ActivityRow({
             <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
             <span className={`leading-relaxed ${notesExpanded ? '' : 'line-clamp-2'}`}>
               {notesExpanded ? noteText : notePreview}
-              {!notesExpanded && hasMoreNotes && (
-                <span className="ml-1 text-primary font-medium">more</span>
-              )}
-              {notesExpanded && (
-                <span className="ml-1 text-primary font-medium">less</span>
-              )}
+              {!notesExpanded && hasMoreNotes && <span className="ml-1 text-primary font-medium">more</span>}
+              {notesExpanded && <span className="ml-1 text-primary font-medium">less</span>}
             </span>
           </button>
         )}
 
-        {/* Tags */}
-        {activity.tags && activity.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {activity.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white"
-                style={{ backgroundColor: tag.color ?? '#64748b' }}
+        {/* Tags row — pills + inline add button */}
+        <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {(activity.tags ?? []).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white"
+              style={{ backgroundColor: tag.color ?? '#64748b' }}
+            >
+              {tag.emoji && <span>{tag.emoji}</span>}
+              {tag.name}
+            </span>
+          ))}
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowTagPicker((v) => !v) }}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+              title="Add / remove tags"
+            >
+              <Tag className="h-2.5 w-2.5" />
+              <Plus className="h-2 w-2" />
+            </button>
+
+            {showTagPicker && (
+              <div
+                ref={tagPickerRef}
+                className="absolute z-[200] top-full mt-1 left-0 min-w-[180px] rounded-lg border border-border bg-popover shadow-xl p-2 space-y-1"
               >
-                {tag.emoji && <span>{tag.emoji}</span>}
-                {tag.name}
-              </span>
-            ))}
+                <div className="flex items-center justify-between mb-1.5 px-0.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tags</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowTagPicker(false); onOpenTagManager() }}
+                    className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
+                  >
+                    <Settings2 className="h-3 w-3" /> Manage
+                  </button>
+                </div>
+                {availableTags.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground italic px-0.5 pb-1">
+                    No tags yet —{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setShowTagPicker(false); onOpenTagManager() }}
+                      className="underline hover:text-foreground"
+                    >create some</button>
+                  </p>
+                ) : (
+                  availableTags.map((tag) => {
+                    const isActive = (activity.tags ?? []).some((t) => t.id === tag.id)
+                    const toggling = togglingTag === tag.id
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleToggleTag(tag.id) }}
+                        disabled={toggling}
+                        className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs transition-colors hover:bg-accent disabled:opacity-60"
+                      >
+                        {toggling
+                          ? <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                          : <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tag.color ?? '#64748b' }} />}
+                        <span className="flex-1 text-left">
+                          {tag.emoji && <span className="mr-0.5">{tag.emoji}</span>}
+                          {tag.name}
+                        </span>
+                        {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Edit / delete — visible on hover */}
