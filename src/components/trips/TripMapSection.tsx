@@ -125,18 +125,21 @@ function TripMapInner({
   destination: string
   stops: RouteStop[]
 }) {
-  const map = useMap()
+  const map = useMap('trip-route-map')
   const geocodingLib = useMapsLibrary('geocoding')
   const [markers, setMarkers] = useState<MarkerData[]>([])
   const [routePath, setRoutePath] = useState<google.maps.LatLngLiteral[]>([])
+  const [geoStatus, setGeoStatus] = useState<string>('waiting for map…')
 
   useEffect(() => {
-    if (!geocodingLib || !map) return
+    if (!map) { setGeoStatus('map not ready'); return }
+    if (!geocodingLib) { setGeoStatus('geocoding library not ready'); return }
 
     let cancelled = false
     const geocoder = new geocodingLib.Geocoder()
 
     if (stops.length === 0) {
+      setGeoStatus('no stops with locations')
       geocoder.geocode({ address: destination }, (results, status) => {
         if (cancelled) return
         if (status === 'OK' && results?.[0]) {
@@ -147,10 +150,12 @@ function TripMapInner({
       return () => { cancelled = true }
     }
 
+    setGeoStatus(`geocoding ${stops.length} stop(s)…`)
     Promise.all(
       stops.map(stop =>
         new Promise<{ position: google.maps.LatLngLiteral; stop: RouteStop } | null>(resolve => {
           geocoder.geocode({ address: stop.location }, (results, status) => {
+            console.log(`[TripMap] geocode "${stop.location}" → ${status}`, results?.[0]?.geometry?.location?.toString())
             if (status === 'OK' && results?.[0]) {
               const loc = results[0].geometry.location
               resolve({ position: { lat: loc.lat(), lng: loc.lng() }, stop })
@@ -163,6 +168,7 @@ function TripMapInner({
     ).then(results => {
       if (cancelled) return
       const resolved = results.filter((r): r is NonNullable<typeof r> => r !== null)
+      setGeoStatus(`${resolved.length}/${stops.length} geocoded`)
 
       setMarkers(resolved.map((r, i) => ({ position: r.position, stop: r.stop, index: i })))
 
@@ -195,6 +201,7 @@ function TripMapInner({
       {/* Map panel */}
       <div className="flex-1 relative min-h-[300px]">
         <Map
+          id="trip-route-map"
           defaultCenter={{ lat: 15, lng: 101 }}
           defaultZoom={5}
           mapId="DEMO_MAP_ID"
@@ -236,9 +243,10 @@ function TripMapInner({
       {/* Stop list sidebar */}
       <div className="w-full md:w-64 shrink-0 border-t md:border-t-0 md:border-l border-border overflow-y-auto bg-card">
         <div className="p-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Route · {stops.length} stop{stops.length !== 1 ? 's' : ''}
           </p>
+          <p className="text-[10px] text-muted-foreground/60 mb-3">{geoStatus}</p>
 
           {stops.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
