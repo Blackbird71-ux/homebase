@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     include: includeCounts
       ? {
           _count: {
-            select: { recipes: true },
+            select: { recipes: true, activityTags: true, dayTags: true },
           },
         }
       : undefined,
@@ -60,7 +60,7 @@ export async function GET(req: Request) {
       sortOrder: tag.sortOrder ?? 0,
       scope: tag.scope ?? 'general',
       createdAt: tag.createdAt.toISOString(),
-      recipeCount: (tag._count?.recipes || 0) + (tagNameToCountFromString[tag.name] || 0),
+      recipeCount: (tag._count?.recipes || 0) + (tag._count?.activityTags || 0) + (tag._count?.dayTags || 0) + (tagNameToCountFromString[tag.name] || 0),
     }))
 
     return NextResponse.json(response)

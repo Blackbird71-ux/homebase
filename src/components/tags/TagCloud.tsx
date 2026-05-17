@@ -16,20 +16,22 @@ interface TagCloudProps {
   onTagClick?: (tag: string | null) => void
   maxTags?: number
   showCounts?: boolean
+  scope?: string
 }
 
-export function TagCloud({ selectedTag, onTagClick, maxTags = 20, showCounts = true }: TagCloudProps) {
+export function TagCloud({ selectedTag, onTagClick, maxTags = 20, showCounts = true, scope }: TagCloudProps) {
   const [tags, setTags] = useState<TagWithCount[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchTags()
-  }, [])
+  }, [scope])
 
   async function fetchTags() {
     try {
       setLoading(true)
-      const res = await fetch('/api/tags?includeCounts=true')
+      const url = scope ? `/api/tags?includeCounts=true&scope=${encodeURIComponent(scope)}` : '/api/tags?includeCounts=true'
+      const res = await fetch(url)
       if (!res.ok) throw new Error('Failed to fetch tags')
       const data = await res.json()
       // Sort by count descending, then by name

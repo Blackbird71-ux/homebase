@@ -191,6 +191,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
               onTagClick={setActiveTag}
               maxTags={15}
               showCounts={true}
+              scope="recipe"
             />
           </div>
         </div>
