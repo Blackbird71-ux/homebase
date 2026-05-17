@@ -76,6 +76,11 @@
   --button-secondary-foreground: var(--secondary-foreground);
   --button-accent: var(--accent);
   --button-accent-foreground: var(--accent-foreground);
+
+  /* Pill / navigation tab inactive state — overridable in theme editor */
+  --pill-inactive-bg: color-mix(in srgb, var(--primary) 10%, transparent);
+  --pill-inactive-border: color-mix(in srgb, var(--primary) 30%, transparent);
+  --pill-inactive-fg: var(--primary);
 }
 
 /* Utility classes using dynamic viewport height */
@@ -84,6 +89,18 @@
 }
 .min-h-screen-dvh {
   min-height: calc(var(--vh) * 100);
+}
+
+/* Pill / nav tab — inactive state driven by theme variables */
+.hb-pill-inactive {
+  background: var(--pill-inactive-bg) !important;
+  border-color: var(--pill-inactive-border) !important;
+  color: var(--pill-inactive-fg) !important;
+}
+.hb-pill-inactive:hover {
+  background: color-mix(in srgb, var(--primary) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent) !important;
+  color: var(--primary) !important;
 }
 
 :root {

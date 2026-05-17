@@ -161,7 +161,7 @@ export function MealSlotCell({
       <button
         onClick={onClick}
         className={cn(
-          'w-full h-8 flex items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors',
+          'w-full h-8 flex items-center justify-center rounded-lg border transition-colors hb-pill-inactive',
           mealColor
         )}
         aria-label="Add meal"

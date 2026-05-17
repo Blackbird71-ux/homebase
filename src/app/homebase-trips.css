@@ -461,6 +461,12 @@
   height: 100%;
   min-height: 0;
 }
+@media (min-width: 1280px) {
+  .hb-itinerary { grid-template-columns: 300px 1fr; }
+}
+@media (min-width: 1536px) {
+  .hb-itinerary { grid-template-columns: 360px 1fr; }
+}
 @media (max-width: 800px) {
   .hb-itinerary {
     grid-template-columns: 1fr;
@@ -810,11 +816,16 @@
   border-color: transparent;
 }
 .hb-chip--ghost {
-  border-style: dashed;
-  color: var(--muted-foreground);
-  background: transparent;
+  border-style: solid;
+  color: color-mix(in srgb, var(--primary) 80%, var(--foreground));
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
 }
-.hb-chip--ghost:hover { color: var(--foreground); border-color: var(--primary); }
+.hb-chip--ghost:hover {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+}
 
 .hb-chip--lg { height: 28px; padding: 0 12px; font-size: 12px; }
 

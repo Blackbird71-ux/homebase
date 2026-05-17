@@ -48,6 +48,11 @@ const CSS_VARIABLE_MAPPINGS: Record<keyof CustomThemeColors, string[]> = {
   buttonSecondaryForeground: ['--button-secondary-foreground'],
   buttonAccent: ['--button-accent'],
   buttonAccentForeground: ['--button-accent-foreground'],
+
+  // Pills & navigation tabs
+  pillInactiveBg: ['--pill-inactive-bg'],
+  pillInactiveBorder: ['--pill-inactive-border'],
+  pillInactiveFg: ['--pill-inactive-fg'],
   
   // General - map to both base variables and --color-* for Tailwind
   background: ['--background', '--color-background'],

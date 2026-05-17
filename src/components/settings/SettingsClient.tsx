@@ -137,11 +137,11 @@ export function SettingsClient({ isAdmin, user, coziImports, supportedTimezones 
         )}
         {activeTab === 'appearance' && (
           <AppearanceTab
-            initialTheme={user.theme}
-            initialFontSize={user.fontSize}
-            initialLineHeight={user.lineHeight}
-            initialFontWeight={user.fontWeight}
-            initialWeekStartsOn={user.weekStartsOn}
+            initialTheme={user.theme ?? 'dark'}
+            initialFontSize={user.fontSize ?? 'base'}
+            initialLineHeight={user.lineHeight ?? 'normal'}
+            initialFontWeight={user.fontWeight ?? 'normal'}
+            initialWeekStartsOn={user.weekStartsOn ?? 0}
             initialDoneItemColor={user.doneItemColor || 'RED'}
             initialSecureCardStyle={uiPrefs?.secureCardStyle ?? 'blur'}
             initialSecureCardColor={uiPrefs?.secureCardColor ?? 'default'}

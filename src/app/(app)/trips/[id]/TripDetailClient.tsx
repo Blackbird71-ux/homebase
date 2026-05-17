@@ -149,7 +149,7 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
       {/* ── DESKTOP: two-pane split layout ── */}
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
         {/* Left pane — overview info, always visible */}
-        <div className="w-72 lg:w-80 xl:w-96 shrink-0 border-r border-border flex flex-col overflow-hidden">
+        <div className="w-72 lg:w-80 shrink-0 border-r border-border flex flex-col overflow-hidden">
           <div className="overflow-y-auto flex-1 p-5 space-y-5">
 
             {/* Quick info cards */}

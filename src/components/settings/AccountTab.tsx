@@ -36,7 +36,7 @@ interface AccountTabProps {
       id: string
       name: string
       timezone: string
-      financeYearStartMonth?: number  // Spec §2.7 — 1=Jan … 12=Dec, default 7=July (AU)
+      financeYearStartMonth?: number | null  // Spec §2.7 — 1=Jan … 12=Dec, default 7=July (AU)
     }
   }
   supportedTimezones: string[]

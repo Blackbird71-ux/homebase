@@ -432,7 +432,7 @@ function MealTypePicker({
           <button
             key={mt.id}
             onClick={() => onPick(mt.id)}
-            className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+            className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border transition-colors hb-pill-inactive"
           >
             <Icon className="h-2.5 w-2.5" />
             {mt.label}

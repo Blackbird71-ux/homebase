@@ -73,19 +73,19 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
   return (
     <div className="flex flex-col gap-2 sm:gap-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+        <div className="flex gap-1.5">
           <button onClick={() => setViewMode('aisle')}
-            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === 'aisle' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            className={`px-3 py-1 rounded-full border text-sm font-medium transition-colors ${viewMode === 'aisle' ? 'bg-primary text-primary-foreground border-primary shadow-sm' : 'hb-pill-inactive'}`}>
             By Aisle
           </button>
           <button onClick={() => setViewMode('recipe')}
-            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === 'recipe' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            className={`px-3 py-1 rounded-full border text-sm font-medium transition-colors ${viewMode === 'recipe' ? 'bg-primary text-primary-foreground border-primary shadow-sm' : 'hb-pill-inactive'}`}>
             By Recipe
           </button>
         </div>
         {viewMode === 'aisle' && (
           <button onClick={() => setShowRecipePills(v => !v)}
-            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors border ${showRecipePills ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-transparent border-border text-muted-foreground hover:text-foreground'}`}>
+            className={`px-2 py-1 rounded-full border text-xs font-medium transition-colors ${showRecipePills ? 'bg-primary text-primary-foreground border-primary' : 'hb-pill-inactive'}`}>
             {showRecipePills ? 'Hide Recipes' : 'Show Recipes'}
           </button>
         )}

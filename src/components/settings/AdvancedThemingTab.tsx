@@ -53,6 +53,11 @@ const DEFAULT_CUSTOM_THEME: CustomThemeColors = {
   buttonSecondaryForeground: '',
   buttonAccent: '',
   buttonAccentForeground: '',
+
+  // Pills & navigation tabs
+  pillInactiveBg: '',
+  pillInactiveBorder: '',
+  pillInactiveFg: '',
   
   // General
   background: '',
@@ -128,6 +133,15 @@ const COLOR_GROUPS = [
       { key: 'buttonSecondaryForeground', label: 'Secondary Text' },
       { key: 'buttonAccent', label: 'Accent Background' },
       { key: 'buttonAccentForeground', label: 'Accent Text' },
+    ],
+  },
+  {
+    title: 'Pills & Navigation',
+    description: 'Unselected tab and filter pill colors (selected pills use the Primary color)',
+    colors: [
+      { key: 'pillInactiveBg', label: 'Background' },
+      { key: 'pillInactiveBorder', label: 'Border' },
+      { key: 'pillInactiveFg', label: 'Text' },
     ],
   },
   {

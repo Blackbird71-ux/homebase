@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { Paperclip, Upload, X, Loader2, Eye, Trash2, FileText, Image } from 'lucide-react'
+import { Paperclip, Upload, X, Loader2, Eye, Trash2, FileText, Image, ChevronDown } from 'lucide-react'
 import {
   useTripAttachments,
   type TripAttachmentRecord,
@@ -133,29 +133,47 @@ export function TripAttachmentsSection({
   }
 
   return (
-    <div className="border-t border-border">
-      {/* Toggle header */}
+    <div>
+      {/* Toggle pill */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between w-full p-3 text-xs font-medium text-muted-foreground hover:bg-accent/30 transition-colors"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '5px 12px',
+          borderRadius: 999,
+          border: '1px solid color-mix(in srgb, var(--primary) 40%, transparent)',
+          background: expanded
+            ? 'color-mix(in srgb, var(--primary) 18%, transparent)'
+            : 'color-mix(in srgb, var(--primary) 10%, transparent)',
+          color: 'var(--primary)',
+          fontSize: 12,
+          fontWeight: 500,
+          cursor: 'pointer',
+          transition: 'background 0.15s',
+        }}
       >
-        <span className="flex items-center gap-1.5">
-          <Paperclip className="h-3.5 w-3.5" />
-          {label}
-          {attachments.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-muted text-xs">
-              {attachments.length}
-            </span>
-          )}
-        </span>
-        <span className="text-muted-foreground/60 text-xs">
-          {expanded ? '▲' : '▼'}
-        </span>
+        <Paperclip size={12} />
+        {label || 'Attachments'}
+        {attachments.length > 0 && (
+          <span style={{
+            background: 'var(--primary)',
+            color: 'var(--primary-foreground)',
+            borderRadius: 999,
+            padding: '1px 6px',
+            fontSize: 11,
+            fontWeight: 600,
+          }}>
+            {attachments.length}
+          </span>
+        )}
+        <ChevronDown size={11} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
       </button>
 
       {expanded && (
-        <div className="px-3 pb-3 space-y-2">
+        <div style={{ marginTop: 8, padding: '12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)' }} className="space-y-2">
           {/* Upload zone */}
           <div
             ref={dropRef}

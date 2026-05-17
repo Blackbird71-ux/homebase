@@ -211,6 +211,11 @@ export interface CustomThemeColors {
   buttonAccent?: string
   buttonAccentForeground?: string
 
+  // Pills & navigation tabs (inactive state)
+  pillInactiveBg?: string
+  pillInactiveBorder?: string
+  pillInactiveFg?: string
+
   // General
   background?: string
   foreground?: string

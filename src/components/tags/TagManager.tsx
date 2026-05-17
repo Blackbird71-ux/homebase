@@ -405,21 +405,25 @@ export function TagManager() {
           </CardDescription>
 
           {/* Scope filter tabs */}
-          <div className="flex gap-1 mt-3 p-1 bg-muted rounded-lg w-fit overflow-x-auto">
+          <div className="flex gap-1.5 mt-3 flex-wrap">
             {SCOPE_TABS.map(tab => (
               <button
                 key={tab.value}
                 type="button"
                 onClick={() => setActiveTab(tab.value)}
-                className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors whitespace-nowrap ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border font-medium transition-colors whitespace-nowrap ${
                   activeTab === tab.value
-                    ? 'bg-background shadow-sm text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                    : 'hb-pill-inactive'
                 }`}
               >
                 {tab.label}
                 {tab.value !== 'all' && (
-                  <span className="ml-1.5 text-xs opacity-60">
+                  <span className={`text-xs px-1.5 py-px rounded-full font-semibold leading-none ${
+                    activeTab === tab.value
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-primary/20 text-primary'
+                  }`}>
                     {tags.filter(t => t.scope === tab.value).length}
                   </span>
                 )}

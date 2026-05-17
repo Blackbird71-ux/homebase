@@ -56,7 +56,7 @@ export function PillNav({ items, active, onChange, className, size = 'md' }: Pil
       : 'px-3 py-1.5 text-sm',
   )
   const activeClass  = 'bg-primary text-primary-foreground border-primary shadow-sm'
-  const inactiveClass = 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 bg-background'
+  const inactiveClass = 'hb-pill-inactive'
 
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
