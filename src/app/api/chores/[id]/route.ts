@@ -26,7 +26,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // Build update payload
   const updateData: Record<string, unknown> = {}
   for (const key of changedFields) {
-    updateData[key] = body[key]
+    let val = body[key]
+    // Coerce empty-string assignee to null so Prisma saves null (not "")
+    if (key === 'currentAssigneeId' && val === '') val = null
+    updateData[key] = val
   }
 
   // If frequency or day-related fields changed, recalculate nextDueDate from now.

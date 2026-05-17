@@ -276,7 +276,7 @@ export function TagManager() {
           <p className="text-muted-foreground">Create, edit, and organise tags by category</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger>
             <Button>
               <PlusIcon className="h-4 w-4 mr-2" />
               New Tag

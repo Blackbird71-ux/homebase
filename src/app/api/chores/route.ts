@@ -79,7 +79,7 @@ export async function POST(req: Request) {
       dayOfWeek: dayOfWeek ?? null,
       dayOfMonth: dayOfMonth ?? null,
       rotationInterval: rotationInterval ?? 1,
-      currentAssigneeId: currentAssigneeId ?? null,
+      currentAssigneeId: currentAssigneeId || null,  // coerce "" → null
       startDate: parsedStartDate,
       endDate: endDate ? new Date(endDate) : null,
       nextDueDate,

@@ -9,9 +9,6 @@ export async function GET() {
   const tags = await prisma.tag.findMany({
     where: { familyId: user.familyId, scope: 'trip' },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-    include: {
-      _count: { select: { activities: true } },
-    },
   })
 
   return NextResponse.json(tags.map((t) => ({
@@ -21,7 +18,7 @@ export async function GET() {
     color: t.color,
     sortOrder: t.sortOrder,
     createdAt: t.createdAt.toISOString(),
-    usageCount: t._count.activities,
+    usageCount: 0,
   })))
 }
 
