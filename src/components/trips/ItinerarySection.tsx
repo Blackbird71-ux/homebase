@@ -392,11 +392,13 @@ function ActivityRow({
     return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
   }
 
-  const notePreview = activity.notes
+  const noteText = activity.notes
     ? (typeof window !== 'undefined'
-        ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.slice(0, 120) ?? ''
-        : activity.notes.replace(/<[^>]+>/g, '').slice(0, 120))
+        ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.trim() ?? ''
+        : activity.notes.replace(/<[^>]+>/g, '').trim())
     : ''
+  const notePreview = noteText.slice(0, 120)
+  const hasMoreNotes = noteText.length > 120
 
   return (
     <div
@@ -414,9 +416,11 @@ function ActivityRow({
         </span>
       )}
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 space-y-1">
         <span className="text-sm font-medium leading-snug">{activity.title}</span>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+
+        {/* Meta row: location, time */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           {activity.location && (
             <span className="flex items-center gap-1">
               <MapPin className="h-3 w-3 shrink-0" />
@@ -431,16 +435,22 @@ function ActivityRow({
               {activity.endTime && formatTimeDisplay(activity.endTime)}
             </span>
           )}
-          {notePreview && (
-            <span className="flex items-center gap-1 text-muted-foreground/70">
-              <StickyNote className="h-3 w-3 shrink-0" />
-              <span className="italic truncate max-w-[220px]">{notePreview}</span>
-            </span>
-          )}
         </div>
+
+        {/* Notes preview — separate row so it's clearly visible */}
+        {notePreview && (
+          <div className="flex items-start gap-1.5 text-xs text-muted-foreground/80">
+            <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
+            <span className="line-clamp-2 leading-relaxed">
+              {notePreview}
+              {hasMoreNotes && '…'}
+            </span>
+          </div>
+        )}
+
         {/* Tags inline */}
         {activity.tags && activity.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
+          <div className="flex flex-wrap gap-1">
             {activity.tags.map((tag) => (
               <span
                 key={tag.id}

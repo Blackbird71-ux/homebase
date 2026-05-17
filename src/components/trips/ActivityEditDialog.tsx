@@ -97,17 +97,30 @@ export function ActivityEditDialog({
   const savedEditableRef       = useRef<HTMLDivElement | null>(null)
   const [textColor, setTextColor]           = useState('#e11d48')
   const [highlightColor, setHighlightColor] = useState('#fef08a')
+  const notesInitialisedRef    = useRef(false)
 
+  // Initialise editor on mount only — DON'T re-run on activity.notes changes,
+  // otherwise tag toggles (which update the activity prop) would wipe user edits.
   useEffect(() => {
-    if (editorRef.current) {
+    if (editorRef.current && !notesInitialisedRef.current) {
       editorRef.current.innerHTML = activity.notes ?? ''
+      notesInitialisedRef.current = true
     }
     // Load available tags
     fetch('/api/trips/tags')
       .then((r) => r.json())
       .then((data: TripTagShape[]) => setAvailableTags(data))
       .catch(() => {})
-  }, [activity.notes])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Focus the notes editor when the dialog mounts so users can start typing
+  // body text immediately, not the title.
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.focus()
+    }
+  }, [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -231,7 +244,6 @@ export function ActivityEditDialog({
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                autoFocus
                 disabled={saving}
                 className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="What are you doing?"
