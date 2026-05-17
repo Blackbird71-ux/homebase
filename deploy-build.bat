@@ -6,12 +6,23 @@ cd /d "C:\Appdev\HomeBase"
 :: Clean up stale tar files
 if exist homebase.tar del homebase.tar
 
+:: Read NEXT_PUBLIC_GOOGLE_MAPS_API_KEY from .env.local so it can be baked
+:: into the Next.js bundle at build time (NEXT_PUBLIC_* vars are client-side
+:: and must be present during `next build`, not at container runtime).
+set MAPS_KEY=
+for /f "usebackq tokens=1,* delims==" %%a in (".env.local") do (
+    if "%%a"=="NEXT_PUBLIC_GOOGLE_MAPS_API_KEY" set MAPS_KEY=%%b
+)
+if not defined MAPS_KEY (
+    echo WARNING: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY not found in .env.local - maps tab will show config prompt
+)
+
 :: Build the image only - do NOT start it here.
 :: Starting on Windows would attempt migrations against a missing /data volume
 :: and could save a broken container state into the tar.
 echo.
 echo === Building image (this may take a few minutes)...
-docker build --no-cache -t homebase:latest .
+docker build --no-cache -t homebase:latest --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=%MAPS_KEY% .
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo ✗ Docker build failed - check output above

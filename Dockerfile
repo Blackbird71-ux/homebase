@@ -35,6 +35,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # database isn't available until the container starts on the NAS.
 ENV DATABASE_URL="file:/data/homebase.db"
 
+# NEXT_PUBLIC_* vars are baked into the client bundle at build time.
+# Pass them in via --build-arg when running docker build.
+ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
 # Generate the Prisma client (baked into the image, no write access needed at runtime)
 RUN npx prisma generate
 
