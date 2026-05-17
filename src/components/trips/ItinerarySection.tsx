@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   Plus, X, Loader2, Sun, MapPin, Clock, StickyNote,
-  Pencil, Trash2,
+  Pencil, Trash2, Check,
 } from 'lucide-react'
 import type { TripDayShape, TripActivityShape } from '@/types'
 import { ActivityEditDialog, getCategoryMeta, CATEGORIES } from './ActivityEditDialog'
@@ -25,6 +25,11 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
   const [savingDay, setSavingDay]           = useState(false)
   const [expandedDayId, setExpandedDayId]   = useState<string | null>(null)
   const [showTagManager, setShowTagManager] = useState(false)
+
+  const [editingDayId, setEditingDayId]   = useState<string | null>(null)
+  const [editDayLabel, setEditDayLabel]   = useState('')
+  const [editDayNotes, setEditDayNotes]   = useState('')
+  const [savingDayEdit, setSavingDayEdit] = useState(false)
 
   const [editDialog, setEditDialog] = useState<{
     dayId: string
@@ -71,6 +76,33 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     if (res.ok) {
       onDaysUpdated(days.filter((d) => d.id !== dayId))
       if (expandedDayId === dayId) setExpandedDayId(null)
+    }
+  }
+
+  function openEditDay(day: TripDayShape) {
+    setEditingDayId(day.id)
+    setEditDayLabel(day.label ?? '')
+    setEditDayNotes(day.notes ?? '')
+  }
+
+  async function handleSaveDay(dayId: string) {
+    setSavingDayEdit(true)
+    try {
+      const res = await fetch(`/api/trips/${tripId}/days/${dayId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: editDayLabel.trim() || null,
+          notes: editDayNotes.trim() || null,
+        }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        onDaysUpdated(days.map((d) => d.id === dayId ? { ...d, ...updated } : d))
+        setEditingDayId(null)
+      }
+    } finally {
+      setSavingDayEdit(false)
     }
   }
 
@@ -263,36 +295,88 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
           const isExpanded = expandedDayId === day.id
           return (
             <div key={day.id} className="rounded-lg border border-border bg-card overflow-hidden">
-              <div
-                className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent/30 transition-colors"
-                onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
-                    <span className="text-xs font-bold leading-none">{new Date(day.date).getDate()}</span>
-                    <span className="text-[10px] uppercase leading-none mt-0.5">
-                      {new Date(day.date).toLocaleDateString('en-AU', { month: 'short' })}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{day.label || formatDate(day.date)}</span>
-                      {day.label && <span className="text-xs text-muted-foreground">{formatDate(day.date)}</span>}
+              {editingDayId === day.id ? (
+                <div className="p-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
+                      <span className="text-xs font-bold leading-none">{new Date(day.date).getDate()}</span>
+                      <span className="text-[10px] uppercase leading-none mt-0.5">
+                        {new Date(day.date).toLocaleDateString('en-AU', { month: 'short' })}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {day.activities.length === 0
-                        ? 'No activities yet'
-                        : `${day.activities.length} activit${day.activities.length === 1 ? 'y' : 'ies'}`}
-                    </span>
+                    <input
+                      value={editDayLabel}
+                      onChange={(e) => setEditDayLabel(e.target.value)}
+                      placeholder={`Label (e.g. Travel Day) — default: ${formatDate(day.date)}`}
+                      className="flex-1 px-2.5 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      autoFocus
+                    />
+                  </div>
+                  <textarea
+                    value={editDayNotes}
+                    onChange={(e) => setEditDayNotes(e.target.value)}
+                    placeholder="Day notes (optional)"
+                    rows={2}
+                    className="w-full px-2.5 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setEditingDayId(null)}
+                      className="px-3 py-1.5 rounded text-sm font-medium border border-input hover:bg-accent transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleSaveDay(day.id)}
+                      disabled={savingDayEdit}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    >
+                      {savingDayEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Save
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDeleteDay(day.id) }}
-                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive shrink-0"
+              ) : (
+                <div
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent/30 transition-colors"
+                  onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
                 >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
+                      <span className="text-xs font-bold leading-none">{new Date(day.date).getDate()}</span>
+                      <span className="text-[10px] uppercase leading-none mt-0.5">
+                        {new Date(day.date).toLocaleDateString('en-AU', { month: 'short' })}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium">{day.label || formatDate(day.date)}</span>
+                        {day.label && <span className="text-xs text-muted-foreground">{formatDate(day.date)}</span>}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {day.activities.length === 0
+                          ? 'No activities yet'
+                          : `${day.activities.length} activit${day.activities.length === 1 ? 'y' : 'ies'}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEditDay(day) }}
+                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                      title="Edit day"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteDay(day.id) }}
+                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {isExpanded && (
                 <div className="border-t border-border">
