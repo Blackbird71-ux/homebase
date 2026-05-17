@@ -409,19 +409,21 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
           </CardContent>
         </Card>
       ) : (
-        <PillNav
-            items={[
-              { id: 'all', label: `All (${contacts.length})` },
-              ...grouped.map((g) => ({ id: g.value, label: `${g.label} (${g.contacts.length})` })),
-            ]}
-            active={activeTab}
-            onChange={setActiveTab}
-            size="sm"
-          />
+        <>
+          <PillNav
+              items={[
+                { id: 'all', label: `All (${contacts.length})` },
+                ...grouped.map((g) => ({ id: g.value, label: `${g.label} (${g.contacts.length})` })),
+              ]}
+              active={activeTab}
+              onChange={setActiveTab}
+              size="sm"
+            />
 
-          <div className="mt-4">
-            {renderGrid(contactsForTab(activeTab))}
-          </div>
+            <div className="mt-4">
+              {renderGrid(contactsForTab(activeTab))}
+            </div>
+        </>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
