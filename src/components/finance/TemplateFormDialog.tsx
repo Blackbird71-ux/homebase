@@ -370,11 +370,11 @@ function FrequencyTab({
       form.endMode, form.endDate, form.totalOccurrences])
 
   return (
-    <div className="space-y-2 p-3">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+    <div className="space-y-1.5 p-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
         {/* Frequency */}
         <div>
-          <label className="block text-xs font-medium mb-1">Frequency <span className="text-red-500">*</span></label>
+          <label className="block text-xs font-medium mb-0.5">Frequency <span className="text-red-500">*</span></label>
           <select
             value={form.frequency}
             onChange={e => set('frequency', e.target.value)}
@@ -387,7 +387,7 @@ function FrequencyTab({
         {/* Interval (custom only) */}
         {showInterval && (
           <div>
-            <label className="block text-xs font-medium mb-1">Every … days <span className="text-red-500">*</span></label>
+            <label className="block text-xs font-medium mb-0.5">Every … days <span className="text-red-500">*</span></label>
             <input
               type="number"
               min="1"
@@ -405,7 +405,7 @@ function FrequencyTab({
         {/* Day of month */}
         {showDayOfMonth && (
           <div>
-            <label className="block text-xs font-medium mb-1">
+            <label className="block text-xs font-medium mb-0.5">
               Day of month{' '}
               <span className="font-normal text-muted-foreground">(1–31, snaps to month-end)</span>
             </label>
@@ -424,7 +424,7 @@ function FrequencyTab({
         {/* Month of year (yearly) */}
         {showMonthOfYear && (
           <div>
-            <label className="block text-xs font-medium mb-1">Month</label>
+            <label className="block text-xs font-medium mb-0.5">Month</label>
             <select
               value={form.monthOfYear}
               onChange={e => set('monthOfYear', e.target.value)}
@@ -438,7 +438,7 @@ function FrequencyTab({
 
         {/* Start date = first bill / invoice date */}
         <div>
-          <label className="block text-xs font-medium mb-1">
+          <label className="block text-xs font-medium mb-0.5">
             {form.kind === 'bill' ? 'First bill date' : 'Start date'} <span className="text-red-500">*</span>
             {form.kind === 'bill' && (
               <span className="font-normal text-muted-foreground ml-1">(invoice received — hits P&amp;L)</span>
@@ -474,7 +474,7 @@ function FrequencyTab({
         {/* First due date (bills only) — drives defaultDueOffsetDays */}
         {form.kind === 'bill' && (
           <div>
-            <label className="block text-xs font-medium mb-1">
+            <label className="block text-xs font-medium mb-0.5">
               First payment due date{' '}
               <span className="font-normal text-muted-foreground">(sets bill-to-due gap)</span>
             </label>
@@ -504,7 +504,7 @@ function FrequencyTab({
 
       {/* End mode */}
       <div>
-        <label className="block text-xs font-medium mb-1">Ends</label>
+        <label className="block text-xs font-medium mb-0.5">Ends</label>
         <div className="flex flex-wrap gap-x-5 gap-y-1">
           {([['forever', 'Never'], ['until', 'On a date'], ['for_n_occurrences', 'After N occurrences']] as const).map(([v, l]) => (
             <label key={v} className="flex items-center gap-2 text-sm cursor-pointer">

@@ -178,9 +178,9 @@ function WideDialogContent({
           // Anchored to the bottom, full width, auto height up to 92dvh.
           // Rounded top corners only. Slides in from below.
           "bottom-0 left-0 right-0 md:bottom-auto md:left-1/2 md:right-auto",
-          "w-full md:w-[min(calc(100vw-1rem),1200px)]",
+          "w-full md:w-[min(calc(100vw-1rem),1360px)]",
           "max-h-[92dvh] md:max-h-none",
-          "h-auto md:h-[min(90dvh,820px)]",
+          "h-auto md:h-[min(90dvh,840px)]",
           "rounded-t-2xl md:rounded-xl md:-translate-x-1/2 md:-translate-y-1/2 md:top-1/2",
           // Open/close animations: slide-up on mobile, zoom on desktop
           "data-open:animate-in data-closed:animate-out",
