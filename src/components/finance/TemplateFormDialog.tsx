@@ -71,6 +71,41 @@ function GLAccountSelect({
   )
 }
 
+// ── Schedule preview (collapsed — expands on hover) ───────────────────────────
+
+function SchedulePreview({ preview, endMode }: { preview: Date[]; endMode: string }) {
+  if (preview.length === 0) return null
+  const summaryDates = preview.slice(0, 3).map(d => format(d, 'd MMM')).join(', ')
+  const hasMore = preview.length > 3 || endMode === 'forever'
+
+  return (
+    <div className="group">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-default select-none">
+        <CalendarClock className="h-3 w-3 shrink-0" />
+        <span className="underline decoration-dotted underline-offset-2">
+          {summaryDates}{hasMore ? '…' : ''}
+        </span>
+      </div>
+      {/* Expands inline on hover — avoids overflow-clip issues with absolutely positioned tooltips */}
+      <div className="max-h-0 overflow-hidden group-hover:max-h-44 transition-all duration-200 ease-in-out">
+        <div className="rounded-md bg-muted/50 border border-border mt-1.5 p-2.5">
+          <ol className="space-y-0.5">
+            {preview.map((d, i) => (
+              <li key={i} className="text-xs flex gap-2">
+                <span className="text-muted-foreground w-4 text-right tabular-nums">{i + 1}.</span>
+                <span>{format(d, 'EEE d MMM yyyy')}</span>
+              </li>
+            ))}
+          </ol>
+          {endMode === 'forever' && (
+            <p className="text-xs text-muted-foreground mt-1 pt-1 border-t border-border/50">…continues indefinitely</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Overview tab ──────────────────────────────────────────────────────────────
 
 function OverviewTab({
@@ -99,11 +134,11 @@ function OverviewTab({
   )
 
   return (
-    <div className="space-y-2.5 p-4">
+    <div className="space-y-2 p-3">
       {/* Kind toggle — locked on edit */}
       <div>
-        <label className="block text-xs font-medium mb-1.5">Type</label>
-        <div className="flex gap-3">
+        <label className="block text-xs font-medium mb-1">Type</label>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {(['bill', 'income'] as const).map(k => (
             <label key={k} className={cn(
               'flex items-center gap-2 text-sm cursor-pointer',
@@ -124,8 +159,10 @@ function OverviewTab({
               }
             </label>
           ))}
+          {isEdit && (
+            <span className="text-xs text-muted-foreground">Type cannot be changed after creation.</span>
+          )}
         </div>
-        {isEdit && <p className="text-xs text-muted-foreground mt-1">Type cannot be changed after creation.</p>}
       </div>
 
       {/* Name */}
@@ -145,7 +182,7 @@ function OverviewTab({
       </div>
 
       {/* Settings row */}
-      <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+      <div className="flex flex-wrap gap-x-5 gap-y-1">
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={form.enabled} onChange={e => set('enabled', e.target.checked)} className="accent-primary" />
           Enabled
@@ -160,7 +197,7 @@ function OverviewTab({
         </label>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* Counterparty */}
         <div>
           <label className="block text-xs font-medium mb-1">
@@ -259,7 +296,7 @@ function OverviewTab({
 
         {/* Remind in advance */}
         <div>
-          <label className="block text-xs font-medium mb-1">Remind … days in advance (optional)</label>
+          <label className="block text-xs font-medium mb-1">Remind … days in advance</label>
           <input
             type="number"
             min="0"
@@ -272,7 +309,7 @@ function OverviewTab({
 
         {/* Due offset (bills only) — computed from Frequency tab dates */}
         {form.kind === 'bill' && parseInt(form.defaultDueOffsetDays) > 0 && (
-          <div>
+          <div className="col-span-2">
             <p className="text-xs text-muted-foreground">
               Payment due <strong>{form.defaultDueOffsetDays} day{parseInt(form.defaultDueOffsetDays) !== 1 ? 's' : ''}</strong> after bill date — set via the <em>Frequency</em> tab.
             </p>
@@ -286,7 +323,7 @@ function OverviewTab({
         <textarea
           value={form.notes}
           onChange={e => set('notes', e.target.value)}
-          rows={2}
+          rows={1}
           className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm resize-none"
         />
       </div>
@@ -306,8 +343,8 @@ function FrequencyTab({
   const set = (field: keyof FormState, value: unknown) =>
     setForm(p => ({ ...p, [field]: value }))
 
-  const showInterval   = form.frequency === 'custom'
-  const showDayOfMonth = ['monthly', 'bimonthly', 'quarterly', 'halfyearly', 'yearly'].includes(form.frequency)
+  const showInterval    = form.frequency === 'custom'
+  const showDayOfMonth  = ['monthly', 'bimonthly', 'quarterly', 'halfyearly', 'yearly'].includes(form.frequency)
   const showMonthOfYear = form.frequency === 'yearly'
 
   const preview = useMemo(() => {
@@ -331,8 +368,8 @@ function FrequencyTab({
       form.endMode, form.endDate, form.totalOccurrences])
 
   return (
-    <div className="space-y-3 p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+    <div className="space-y-2 p-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* Frequency */}
         <div>
           <label className="block text-xs font-medium mb-1">Frequency <span className="text-red-500">*</span></label>
@@ -366,7 +403,10 @@ function FrequencyTab({
         {/* Day of month */}
         {showDayOfMonth && (
           <div>
-            <label className="block text-xs font-medium mb-1">Day of month</label>
+            <label className="block text-xs font-medium mb-1">
+              Day of month{' '}
+              <span className="font-normal text-muted-foreground">(1–31, snaps to month-end)</span>
+            </label>
             <input
               type="number"
               min="1"
@@ -376,7 +416,6 @@ function FrequencyTab({
               placeholder="Same as start date"
               className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
             />
-            <p className="text-xs text-muted-foreground mt-0.5">1–31. Snaps to month-end if month is shorter.</p>
           </div>
         )}
 
@@ -399,10 +438,10 @@ function FrequencyTab({
         <div>
           <label className="block text-xs font-medium mb-1">
             {form.kind === 'bill' ? 'First bill date' : 'Start date'} <span className="text-red-500">*</span>
+            {form.kind === 'bill' && (
+              <span className="font-normal text-muted-foreground ml-1">(invoice received — hits P&amp;L)</span>
+            )}
           </label>
-          {form.kind === 'bill' && (
-            <p className="text-xs text-muted-foreground mb-1">The date the invoice is received — hits P&L and AP from this date.</p>
-          )}
           <input
             type="date"
             value={form.startDate}
@@ -433,8 +472,10 @@ function FrequencyTab({
         {/* First due date (bills only) — drives defaultDueOffsetDays */}
         {form.kind === 'bill' && (
           <div>
-            <label className="block text-xs font-medium mb-1">First payment due date</label>
-            <p className="text-xs text-muted-foreground mb-1">When the first payment is due. Sets the bill-to-due gap for all occurrences.</p>
+            <label className="block text-xs font-medium mb-1">
+              First payment due date{' '}
+              <span className="font-normal text-muted-foreground">(sets bill-to-due gap)</span>
+            </label>
             <input
               type="date"
               value={form.firstDueDate}
@@ -461,8 +502,8 @@ function FrequencyTab({
 
       {/* End mode */}
       <div>
-        <label className="block text-xs font-medium mb-1.5">Ends</label>
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+        <label className="block text-xs font-medium mb-1">Ends</label>
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
           {([['forever', 'Never'], ['until', 'On a date'], ['for_n_occurrences', 'After N occurrences']] as const).map(([v, l]) => (
             <label key={v} className="flex items-center gap-2 text-sm cursor-pointer">
               <input
@@ -512,25 +553,8 @@ function FrequencyTab({
         </div>
       )}
 
-      {/* Occurrence preview */}
-      {preview.length > 0 && (
-        <div className="rounded-md bg-muted/50 border border-border p-3 space-y-1.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <CalendarClock className="h-3.5 w-3.5" /> Schedule preview
-          </p>
-          <ol className="space-y-0.5">
-            {preview.map((d, i) => (
-              <li key={i} className="text-sm flex gap-2">
-                <span className="text-muted-foreground w-5 text-right tabular-nums">{i + 1}.</span>
-                <span>{format(d, 'EEEE d MMMM yyyy')}</span>
-              </li>
-            ))}
-          </ol>
-          {form.endMode === 'forever' && (
-            <p className="text-xs text-muted-foreground">…continues indefinitely</p>
-          )}
-        </div>
-      )}
+      {/* Schedule preview — collapsed, expands on hover */}
+      <SchedulePreview preview={preview} endMode={form.endMode} />
     </div>
   )
 }
@@ -570,7 +594,7 @@ function TransactionTab({
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-3 p-3">
       {/* Journal lines */}
       <JournalLinesEditor
         lines={form.lines}
@@ -826,7 +850,7 @@ export function TemplateFormDialog({
         className="flex flex-col gap-0 p-0 overflow-hidden"
       >
         {/* Header */}
-        <DialogHeader className="px-5 pt-5 pb-0 shrink-0">
+        <DialogHeader className="px-5 pt-3 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {form.kind === 'bill'
               ? <TrendingDown className="h-4 w-4 text-red-500" />
@@ -881,13 +905,11 @@ export function TemplateFormDialog({
         </div>
 
         {/* ── Wide layout (≥ md): two columns — Overview+Frequency | Transaction ── */}
-        {/* Left: Overview (top half) + Frequency (bottom half), each scrollable   */}
-        {/* Right: Transaction, full column height, scrollable                     */}
-        <div className="hidden md:flex flex-1 min-h-0 overflow-hidden mt-3">
+        <div className="hidden md:flex flex-1 min-h-0 overflow-hidden mt-2">
           <div className="flex-1 flex flex-col border-r border-border min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-h-0 border-b border-border overflow-hidden">
-              <div className="px-4 py-2 border-b border-border bg-muted/30 shrink-0">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overview</span>
+              <div className="px-3 py-1 border-b border-border shrink-0">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Overview</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <OverviewTab
@@ -898,8 +920,8 @@ export function TemplateFormDialog({
               </div>
             </div>
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <div className="px-4 py-2 border-b border-border bg-muted/30 shrink-0">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Frequency</span>
+              <div className="px-3 py-1 border-b border-border shrink-0">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Schedule</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <FrequencyTab form={form} setForm={setForm} errors={errors} />
@@ -907,8 +929,8 @@ export function TemplateFormDialog({
             </div>
           </div>
           <div className="flex-1 flex flex-col min-w-[420px] overflow-hidden">
-            <div className="px-4 py-2 border-b border-border bg-muted/30 shrink-0">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transaction</span>
+            <div className="px-3 py-1 border-b border-border shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Transaction</span>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               <TransactionTab
@@ -920,7 +942,7 @@ export function TemplateFormDialog({
           </div>
         </div>
 
-        <DialogFooter className="px-5 py-4 border-t border-border shrink-0">
+        <DialogFooter className="px-5 py-2.5 border-t border-border shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Update Template' : 'Create Template'}
