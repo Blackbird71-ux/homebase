@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   APIProvider,
   Map,
@@ -8,7 +8,7 @@ import {
   useMap,
   useMapsLibrary,
 } from '@vis.gl/react-google-maps'
-import { MapPin } from 'lucide-react'
+import { MapPin, Search, X } from 'lucide-react'
 import type { TripDayShape } from '@/types'
 
 // One colour per day (cycles if more than 10 days)
@@ -50,6 +50,71 @@ function buildStops(departureLocation: string | null | undefined, days: TripDayS
   return stops
 }
 
+// ── Places search box (must live inside APIProvider + Map) ───────────────────
+
+function MapSearch() {
+  const map = useMap()
+  const placesLib = useMapsLibrary('places')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [searchMarker, setSearchMarker] = useState<google.maps.LatLngLiteral | null>(null)
+  const [searchName, setSearchName] = useState('')
+
+  useEffect(() => {
+    if (!placesLib || !map || !inputRef.current) return
+
+    const autocomplete = new placesLib.Autocomplete(inputRef.current, {
+      fields: ['geometry', 'name'],
+    })
+
+    const listener = autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace()
+      if (!place.geometry?.location) return
+      const pos = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() }
+      map.panTo(pos)
+      map.setZoom(15)
+      setSearchMarker(pos)
+      setSearchName(place.name ?? '')
+    })
+
+    return () => google.maps.event.removeListener(listener)
+  }, [placesLib, map])
+
+  function clear() {
+    if (inputRef.current) inputRef.current.value = ''
+    setSearchMarker(null)
+    setSearchName('')
+  }
+
+  return (
+    <>
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-background rounded-lg shadow-lg border border-border px-3 py-2 w-72">
+        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Search places…"
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        />
+        {searchMarker && (
+          <button onClick={clear} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      {searchMarker && (
+        <AdvancedMarker position={searchMarker} title={searchName}>
+          <div className="flex flex-col items-center">
+            <div className="bg-rose-500 text-white text-xs font-semibold px-2 py-1 rounded shadow-lg border border-white whitespace-nowrap max-w-[160px] truncate">
+              {searchName}
+            </div>
+            <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-rose-500" />
+          </div>
+        </AdvancedMarker>
+      )}
+    </>
+  )
+}
+
 // ── Inner map (must live inside APIProvider) ─────────────────────────────────
 
 function TripMapInner({
@@ -60,79 +125,74 @@ function TripMapInner({
   stops: RouteStop[]
 }) {
   const map = useMap()
-  const routesLib = useMapsLibrary('routes')
   const geocodingLib = useMapsLibrary('geocoding')
   const [markers, setMarkers] = useState<MarkerData[]>([])
+  const polylineRef = useRef<google.maps.Polyline | null>(null)
 
-  // Draw directions route when we have 2+ stops
   useEffect(() => {
-    if (!routesLib || !map || stops.length < 2) return
+    if (!geocodingLib || !map) return
 
-    const service = new routesLib.DirectionsService()
-    const renderer = new routesLib.DirectionsRenderer({
-      map,
-      suppressMarkers: true,
-      polylineOptions: { strokeColor: '#6366f1', strokeWeight: 5, strokeOpacity: 0.75 },
-    })
-
-    const waypoints = stops.slice(1, -1).map(s => ({ location: s.location, stopover: true }))
-
-    service.route(
-      {
-        origin: stops[0].location,
-        destination: stops[stops.length - 1].location,
-        waypoints,
-        travelMode: routesLib.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status !== 'OK' || !result) return
-        renderer.setDirections(result)
-        const bounds = result.routes[0]?.bounds
-        if (bounds) map.fitBounds(bounds, 48)
-
-        // Extract actual geocoded positions from the route legs
-        const legs = result.routes[0]?.legs ?? []
-        const positions: MarkerData[] = legs.map((leg, i) => ({
-          position: { lat: leg.start_location.lat(), lng: leg.start_location.lng() },
-          stop: stops[i],
-          index: i,
-        }))
-        const last = legs[legs.length - 1]
-        if (last) {
-          positions.push({
-            position: { lat: last.end_location.lat(), lng: last.end_location.lng() },
-            stop: stops[stops.length - 1],
-            index: stops.length - 1,
-          })
-        }
-        setMarkers(positions)
-      },
-    )
-
-    return () => renderer.setMap(null)
-  }, [routesLib, map, stops])
-
-  // For 0-1 stops: geocode the destination and centre the map
-  useEffect(() => {
-    if (!geocodingLib || !map || stops.length >= 2) return
+    let cancelled = false
     const geocoder = new geocodingLib.Geocoder()
-    geocoder.geocode({ address: destination }, (results, status) => {
-      if (status === 'OK' && results?.[0]) {
-        map.setCenter(results[0].geometry.location)
+
+    if (stops.length === 0) {
+      geocoder.geocode({ address: destination }, (results, status) => {
+        if (cancelled) return
+        if (status === 'OK' && results?.[0]) {
+          map.setCenter(results[0].geometry.location)
+          map.setZoom(9)
+        }
+      })
+      return () => { cancelled = true }
+    }
+
+    Promise.all(
+      stops.map(stop =>
+        new Promise<{ position: google.maps.LatLngLiteral; stop: RouteStop } | null>(resolve => {
+          geocoder.geocode({ address: stop.location }, (results, status) => {
+            if (status === 'OK' && results?.[0]) {
+              const loc = results[0].geometry.location
+              resolve({ position: { lat: loc.lat(), lng: loc.lng() }, stop })
+            } else {
+              resolve(null)
+            }
+          })
+        })
+      )
+    ).then(results => {
+      if (cancelled) return
+      const resolved = results.filter((r): r is NonNullable<typeof r> => r !== null)
+
+      setMarkers(resolved.map((r, i) => ({ position: r.position, stop: r.stop, index: i })))
+
+      polylineRef.current?.setMap(null)
+      polylineRef.current = null
+
+      if (resolved.length >= 2) {
+        const path = resolved.map(r => r.position)
+        polylineRef.current = new google.maps.Polyline({
+          path,
+          map,
+          strokeColor: '#6366f1',
+          strokeWeight: 5,
+          strokeOpacity: 0.8,
+          geodesic: true,
+        })
+        const bounds = new google.maps.LatLngBounds()
+        path.forEach(p => bounds.extend(p))
+        map.fitBounds(bounds, 48)
+      } else if (resolved.length === 1) {
+        map.setCenter(resolved[0].position)
         map.setZoom(9)
       }
     })
 
-    // If exactly 1 stop, geocode it for a marker
-    if (stops.length === 1) {
-      geocoder.geocode({ address: stops[0].location }, (results, status) => {
-        if (status === 'OK' && results?.[0]) {
-          const loc = results[0].geometry.location
-          setMarkers([{ position: { lat: loc.lat(), lng: loc.lng() }, stop: stops[0], index: 0 }])
-        }
-      })
+    return () => {
+      cancelled = true
+      polylineRef.current?.setMap(null)
+      polylineRef.current = null
     }
-  }, [geocodingLib, map, destination, stops])
+  }, [geocodingLib, map, stops, destination])
 
   return (
     <>
@@ -146,11 +206,20 @@ function TripMapInner({
           gestureHandling="greedy"
           disableDefaultUI={false}
         >
+          <MapSearch />
           {markers.map((m) => (
-            <AdvancedMarker key={m.index} position={m.position} title={m.stop.title}>
+            <AdvancedMarker
+              key={m.index}
+              position={m.position}
+              title={m.stop.title}
+              onClick={() => {
+                map?.panTo(m.position)
+                map?.setZoom(13)
+              }}
+            >
               <div
                 style={{ backgroundColor: m.stop.color }}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white cursor-pointer"
               >
                 {m.index + 1}
               </div>
@@ -175,21 +244,33 @@ function TripMapInner({
             </div>
           ) : (
             <ol className="space-y-3">
-              {stops.map((stop, i) => (
-                <li key={i} className="flex items-start gap-2.5">
-                  <span
-                    style={{ backgroundColor: stop.color }}
-                    className="mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
+              {stops.map((stop, i) => {
+                const marker = markers[i]
+                return (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2.5 cursor-pointer rounded-md p-1 -m-1 hover:bg-muted/50 transition-colors"
+                    onClick={() => {
+                      if (marker) {
+                        map?.panTo(marker.position)
+                        map?.setZoom(13)
+                      }
+                    }}
                   >
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium leading-snug">{stop.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{stop.location}</p>
-                    <p className="text-xs text-muted-foreground/70">{stop.dayLabel}</p>
-                  </div>
-                </li>
-              ))}
+                    <span
+                      style={{ backgroundColor: stop.color }}
+                      className="mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-snug">{stop.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{stop.location}</p>
+                      <p className="text-xs text-muted-foreground/70">{stop.dayLabel}</p>
+                    </div>
+                  </li>
+                )
+              })}
             </ol>
           )}
         </div>
