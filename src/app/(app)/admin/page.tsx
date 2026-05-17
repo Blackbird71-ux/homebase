@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle,
   ChevronDown, ChevronUp, Terminal, Trash2, Pause, CirclePlay,
+  Container,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -155,8 +156,10 @@ function SpawnResultView({ result }: { result: SpawnResponse }) {
 
 // ── Log Viewer ────────────────────────────────────────────────────────────────
 
+// These colours are chosen for the hardcoded dark terminal background
+// (bg-[#0d1117]) and ignore the current theme so text is always legible.
 const LEVEL_STYLES: Record<LogLine['level'], string> = {
-  log:   'text-foreground/80',
+  log:   'text-slate-300',
   info:  'text-blue-400',
   warn:  'text-amber-400',
   error: 'text-red-400',
@@ -252,11 +255,11 @@ function LogViewer() {
         )}
         <div className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3 space-y-0.5">
           {lines.length === 0 && (
-            <p className="text-muted-foreground/40 italic">No log lines captured yet. Logs appear after server actions.</p>
+            <p className="text-slate-500 italic">No log lines captured yet. Logs appear after server actions.</p>
           )}
           {lines.map((l, i) => (
             <div key={i} className="flex gap-2 leading-5">
-              <span className="text-muted-foreground/40 shrink-0 tabular-nums">
+              <span className="text-slate-500 shrink-0 tabular-nums">
                 {new Date(l.ts).toLocaleTimeString('en-AU')}
               </span>
               <span className={cn('shrink-0 uppercase w-8', LEVEL_STYLES[l.level])}>
@@ -267,6 +270,109 @@ function LogViewer() {
               </span>
             </div>
           ))}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Docker Log Viewer ─────────────────────────────────────────────────────────
+
+const DOCKER_LINE_OPTS = [100, 200, 500, 1000]
+
+function DockerLogViewer() {
+  const [text, setText] = useState('')
+  const [polling, setPolling] = useState(true)
+  const [error, setError] = useState('')
+  const [n, setN] = useState(100)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const fetchDockerLogs = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/admin/docker-logs?n=${n}`)
+      const data = await res.json() as { lines?: string; error?: string }
+      if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
+      setText(data.lines ?? '')
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed')
+    }
+  }, [n])
+
+  useEffect(() => {
+    fetchDockerLogs()
+  }, [fetchDockerLogs])
+
+  useEffect(() => {
+    if (polling) {
+      intervalRef.current = setInterval(fetchDockerLogs, 5000)
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [polling, fetchDockerLogs])
+
+  useEffect(() => {
+    if (polling) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [text, polling])
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
+        <div className="flex items-center gap-2">
+          <Container className="h-4 w-4 text-primary" />
+          <div>
+            <p className="font-semibold text-sm">Docker Logs</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              docker logs homebase-app --tail {n} · refreshes every 5 s
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-4">
+          <select
+            value={n}
+            onChange={e => setN(Number(e.target.value))}
+            className="rounded-md border border-border bg-card px-2 py-1.5 text-xs font-medium"
+          >
+            {DOCKER_LINE_OPTS.map(opt => (
+              <option key={opt} value={opt}>Tail {opt}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setPolling(p => !p)}
+            title={polling ? 'Pause auto-refresh' : 'Resume auto-refresh'}
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 transition-colors"
+          >
+            {polling
+              ? <><Pause className="h-3.5 w-3.5" /> Pause</>
+              : <><CirclePlay className="h-3.5 w-3.5" /> Resume</>
+            }
+          </button>
+          <button
+            onClick={fetchDockerLogs}
+            title="Refresh now"
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div className="relative">
+        {error && (
+          <div className="px-4 py-2 text-xs text-destructive bg-destructive/5 border-b border-border">
+            Error fetching Docker logs: {error}
+          </div>
+        )}
+        <div className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3">
+          {!text && !error && (
+            <p className="text-slate-500 italic">Loading Docker logs…</p>
+          )}
+          {text && (
+            <pre className="text-slate-300 whitespace-pre-wrap break-all leading-5">{text}</pre>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -307,10 +413,16 @@ export default function AdminPage() {
         />
       </section>
 
-      {/* Logs */}
+      {/* In-Memory Logs */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Server Logs</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Server Logs (in-memory buffer)</h2>
         <LogViewer />
+      </section>
+
+      {/* Docker Container Logs */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Docker Logs (container output)</h2>
+        <DockerLogViewer />
       </section>
     </div>
   )

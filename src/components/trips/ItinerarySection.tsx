@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Plus, X, Loader2, Sun, MapPin, Clock, StickyNote,
-  Pencil, Trash2, Hotel, Car, UtensilsCrossed,
+  Pencil, Trash2, Hotel, Car, UtensilsCrossed, Check, FileText,
 } from 'lucide-react'
 import type { TripDayShape, TripActivityShape } from '@/types'
+import { ActivityNoteDialog } from './ActivityNoteDialog'
+import { TripAttachmentsSection } from './TripAttachmentsSection'
 
 interface ItinerarySectionProps {
   days: TripDayShape[]
@@ -39,6 +41,13 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
   const [expandedDayId, setExpandedDayId] = useState<string | null>(null)
   const [addingActivityDayId, setAddingActivityDayId] = useState<string | null>(null)
+
+  // Note dialog state
+  const [noteDialog, setNoteDialog] = useState<{
+    dayId: string
+    activityId: string
+    activity: TripActivityShape
+  } | null>(null)
 
   const tripStart = new Date(startDate)
   const tripEnd = new Date(endDate)
@@ -101,6 +110,57 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
         )
       )
     }
+  }
+
+  async function handleUpdateActivity(
+    dayId: string,
+    activityId: string,
+    data: {
+      title?: string
+      location?: string | null
+      startTime?: string | null
+      endTime?: string | null
+      notes?: string | null
+      category?: string | null
+    },
+  ) {
+    const res = await fetch(
+      `/api/trips/${tripId}/days/${dayId}/activities/${activityId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+    )
+    if (res.ok) {
+      const updated = await res.json()
+      onDaysUpdated(
+        days.map((d) =>
+          d.id === dayId
+            ? {
+                ...d,
+                activities: d.activities.map((a) =>
+                  a.id === activityId
+                    ? {
+                        ...a,
+                        title: updated.title ?? a.title,
+                        location: updated.location ?? a.location,
+                        startTime: updated.startTime ?? a.startTime,
+                        endTime: updated.endTime ?? a.endTime,
+                        notes: updated.notes ?? a.notes,
+                        category: updated.category ?? a.category,
+                      }
+                    : a,
+                ),
+              }
+            : d,
+        ),
+      )
+    }
+  }
+
+  async function handleSaveNotes(dayId: string, activityId: string, htmlContent: string) {
+    await handleUpdateActivity(dayId, activityId, { notes: htmlContent })
   }
 
   async function handleDeleteActivity(dayId: string, activityId: string) {
@@ -287,12 +347,20 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                         key={activity.id}
                         activity={activity}
                         dayId={day.id}
+                        dayDate={day.date}
                         tripId={tripId}
+                        onUpdated={(data) => handleUpdateActivity(day.id, activity.id, data)}
+                        onEditNotes={() =>
+                          setNoteDialog({ dayId: day.id, activityId: activity.id, activity })
+                        }
                         onDeleted={() => handleDeleteActivity(day.id, activity.id)}
                       />
                     ))}
                   </div>
                 )}
+
+                {/* Day-level Attachments */}
+                <TripAttachmentsSection tripId={tripId} dayId={day.id} label="Day Attachments" />
 
                 {/* Add activity */}
                 <div className="p-3 border-t border-border">
@@ -315,6 +383,19 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
           </div>
         ))}
       </div>
+
+      {/* Rich Text Notes Dialog */}
+      {noteDialog && (
+        <ActivityNoteDialog
+          open={!!noteDialog}
+          onOpenChange={(open) => {
+            if (!open) setNoteDialog(null)
+          }}
+          activityTitle={noteDialog.activity.title}
+          initialContent={noteDialog.activity.notes}
+          onSave={(html) => handleSaveNotes(noteDialog.dayId, noteDialog.activityId, html)}
+        />
+      )}
     </section>
   )
 }
@@ -324,18 +405,195 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 function ActivityRow({
   activity,
   dayId,
+  dayDate,
   tripId,
+  onUpdated,
+  onEditNotes,
   onDeleted,
 }: {
   activity: TripActivityShape
   dayId: string
+  dayDate: string
   tripId: string
+  onUpdated: (data: {
+    title?: string
+    location?: string | null
+    startTime?: string | null
+    endTime?: string | null
+    category?: string | null
+  }) => void
+  onEditNotes: () => void
   onDeleted: () => void
 }) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(activity.title)
+  const [editLocation, setEditLocation] = useState(activity.location ?? '')
+  const [editCategory, setEditCategory] = useState(activity.category ?? '')
+
+  // Time inputs: extract HH:MM from ISO datetime strings
+  const timeFromIso = (iso: string | null): string => {
+    if (!iso) return ''
+    try {
+      const d = new Date(iso)
+      if (isNaN(d.getTime())) return ''
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    } catch { return '' }
+  }
+
+  const [editStartTime, setEditStartTime] = useState(timeFromIso(activity.startTime))
+  const [editEndTime, setEditEndTime] = useState(timeFromIso(activity.endTime))
+
   const categoryColor = CATEGORY_COLORS[activity.category ?? ''] ?? 'text-gray-500 bg-gray-50 dark:bg-gray-950/30'
 
+  function buildIsoDateTime(timeStr: string): string | null {
+    if (!timeStr) return null
+    try {
+      const [h, m] = timeStr.split(':').map(Number)
+      // Use the day date as base
+      const base = new Date(dayDate)
+      if (isNaN(base.getTime())) return null
+      base.setHours(h, m, 0, 0)
+      return base.toISOString()
+    } catch { return null }
+  }
+
+  function handleSave() {
+    if (!editTitle.trim()) return
+    onUpdated({
+      title: editTitle.trim(),
+      location: editLocation.trim() || null,
+      startTime: buildIsoDateTime(editStartTime),
+      endTime: buildIsoDateTime(editEndTime),
+      category: editCategory || null,
+    })
+    setIsEditing(false)
+  }
+
+  function handleCancel() {
+    setEditTitle(activity.title)
+    setEditLocation(activity.location ?? '')
+    setEditCategory(activity.category ?? '')
+    setEditStartTime(timeFromIso(activity.startTime))
+    setEditEndTime(timeFromIso(activity.endTime))
+    setIsEditing(false)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      handleCancel()
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSave()
+    }
+  }
+
+  // Strip HTML for StickyNote tooltip preview
+  const notePreview = activity.notes
+    ? new DOMParser().parseFromString(activity.notes, 'text/html').body.textContent?.slice(0, 100) ?? ''
+    : ''
+
+  function formatTimeDisplay(dateStr: string): string {
+    return new Date(dateStr).toLocaleTimeString('en-AU', {
+      hour: '2-digit', minute: '2-digit',
+    })
+  }
+
+  if (isEditing) {
+    return (
+      <div className="px-3 py-2.5 space-y-2 bg-accent/20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-muted-foreground mb-0.5">Title</label>
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={handleKeyDown}
+              autoFocus
+              className="w-full px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-0.5">Location</label>
+            <input
+              value={editLocation}
+              onChange={(e) => setEditLocation(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="e.g. Eiffel Tower"
+              className="w-full px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-0.5">Type</label>
+            <select
+              value={editCategory}
+              onChange={(e) => setEditCategory(e.target.value)}
+              className="w-full px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">None</option>
+              <option value="sightseeing">Sightseeing</option>
+              <option value="meal">Meal</option>
+              <option value="transport">Transport</option>
+              <option value="accommodation">Accommodation</option>
+              <option value="activity">Activity</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-0.5">Start</label>
+            <input
+              type="time"
+              value={editStartTime}
+              onChange={(e) => setEditStartTime(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-0.5">End</label>
+            <input
+              type="time"
+              value={editEndTime}
+              onChange={(e) => setEditEndTime(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onEditNotes}
+            className="px-2 py-1 rounded text-xs font-medium border border-input hover:bg-accent transition-colors flex items-center gap-1"
+          >
+            <FileText className="h-3 w-3" />
+            Notes
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="px-2 py-1 rounded text-xs font-medium border border-input hover:bg-accent transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!editTitle.trim()}
+            className="px-2 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1"
+          >
+            <Check className="h-3 w-3" />
+            Save
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex items-start gap-3 px-3 py-2.5 hover:bg-accent/30 group">
+    <div
+      className="flex items-start gap-3 px-3 py-2.5 hover:bg-accent/30 group cursor-pointer"
+      onDoubleClick={() => setIsEditing(true)}
+      title="Double-click to edit"
+    >
       {activity.category && CATEGORY_ICONS[activity.category] ? (
         <span className={`shrink-0 p-1 rounded ${categoryColor}`}>
           {CATEGORY_ICONS[activity.category]}
@@ -363,7 +621,10 @@ function ActivityRow({
             </span>
           )}
           {activity.notes && (
-            <span className="flex items-center gap-1" title={activity.notes}>
+            <span
+              className="flex items-center gap-1 cursor-help"
+              title={notePreview}
+            >
               <StickyNote className="h-3 w-3" />
             </span>
           )}
@@ -374,21 +635,30 @@ function ActivityRow({
           )}
         </div>
       </div>
-      <button
-        onClick={onDeleted}
-        className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground hover:text-destructive transition-all"
-        title="Delete activity"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsEditing(true)
+          }}
+          className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+          title="Edit activity"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onDeleted()
+          }}
+          className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
+          title="Delete activity"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   )
-}
-
-function formatTimeDisplay(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('en-AU', {
-    hour: '2-digit', minute: '2-digit',
-  })
 }
 
 // ── Activity Form ─────────────────────────────────────────────────────────────
@@ -435,7 +705,7 @@ function ActivityForm({
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Add activity..."
+        placeholder="Add Activity and Press Enter to Save..."
         className="flex-1 px-2.5 py-1.5 rounded border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
       />
       <select

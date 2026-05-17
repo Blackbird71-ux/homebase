@@ -293,6 +293,18 @@ export interface TripActivityShape {
   sortOrder: number
 }
 
+export interface TripAttachmentShape {
+  id: string
+  tripId: string
+  dayId: string | null
+  title: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  uploadedById: string
+  createdAt: string
+}
+
 export interface TripDayShape {
   id: string
   date: string

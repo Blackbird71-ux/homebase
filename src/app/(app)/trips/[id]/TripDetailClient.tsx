@@ -12,6 +12,7 @@ import type { TripDetail, TripDayShape } from '@/types'
 import { ItinerarySection } from '@/components/trips/ItinerarySection'
 import { TripBudgetSection } from '@/components/trips/TripBudgetSection'
 import { TripWeatherSection } from '@/components/trips/TripWeatherSection'
+import { TripAttachmentsSection } from '@/components/trips/TripAttachmentsSection'
 
 interface TripDetailClientProps {
   trip: TripDetail
@@ -214,6 +215,9 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           endDate={trip.endDate}
           onDaysUpdated={setDays}
         />
+
+        {/* Trip-level Attachments */}
+        <TripAttachmentsSection tripId={trip.id} label="Trip Documents" />
 
         {/* Budget */}
         <TripBudgetSection

@@ -1172,6 +1172,7 @@ model Trip {
   actualCost       Float?   // Sum of logged expenses (manual or linked)
   budgetBreakdown  String?  // JSON: { "flights": 2000, "hotel": 1500, "food": 800, "activities": 500, "transport": 400, "other": 300 }
   days             TripDay[] @relation("TripDays")
+  attachments     TripAttachment[] @relation("TripAttachments")
   createdBy        String
   familyId         String
   family           Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
@@ -1190,8 +1191,9 @@ model TripDay {
   label      String?        // e.g. "Travel Day", "Exploring Tokyo"
   notes      String?
   sortOrder  Int            @default(0)
-  activities TripActivity[]
-  createdAt  DateTime       @default(now())
+  activities   TripActivity[]
+  attachments  TripAttachment[] @relation("DayAttachments")
+  createdAt    DateTime       @default(now())
 
   @@unique([tripId, date])
   @@index([tripId])
@@ -1209,8 +1211,26 @@ model TripActivity {
   category  String?  // e.g. "sightseeing", "meal", "transport", "accommodation", "activity"
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+@@index([dayId])
+}
 
-  @@index([dayId])
+model TripAttachment {
+id           String   @id @default(cuid())
+tripId       String
+trip         Trip     @relation("TripAttachments", fields: [tripId], references: [id], onDelete: Cascade)
+dayId        String?
+day          TripDay? @relation("DayAttachments", fields: [dayId], references: [id], onDelete: SetNull)
+familyId     String
+title        String
+fileName     String
+fileSize     Int      @default(0)
+mimeType     String   @default("application/octet-stream")
+uploadedById String
+createdAt    DateTime @default(now())
+
+@@index([tripId])
+@@index([dayId])
+@@index([familyId])
 }
 
 // ─── Recurring Transaction Templates (Xero-style master → drafts → posted) ──

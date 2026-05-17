@@ -75,6 +75,7 @@ mkdir -p /data/uploads          # recipe images uploaded by users
 mkdir -p /data/documents        # document vault files
 mkdir -p /data/bill-attachments # invoice/reference docs attached to bills
 mkdir -p /data/income-attachments # payslips/remittance docs attached to income
+mkdir -p /data/trip-attachments   # booking confirmations, tickets, etc. for trips
 mkdir -p /data/images           # cached external recipe images
 mkdir -p /data/backups          # automated database backups
 
