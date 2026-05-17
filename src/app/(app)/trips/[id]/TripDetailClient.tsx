@@ -25,6 +25,7 @@ import { TripBudgetSection } from '@/components/trips/TripBudgetSection'
 import { TripWeatherSection } from '@/components/trips/TripWeatherSection'
 import { TripAttachmentsSection } from '@/components/trips/TripAttachmentsSection'
 import { TripPackingSection } from '@/components/trips/TripPackingSection'
+import { TripMapSection } from '@/components/trips/TripMapSection'
 
 type TripTab = 'overview' | 'itinerary' | 'packing' | 'weather' | 'budget' | 'maps'
 
@@ -153,8 +154,11 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
         </div>
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      {/* Tab content — maps tab fills full height with no padding; others scroll */}
+      <div className={cn(
+        'flex-1 min-h-0',
+        activeTab === 'maps' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-6',
+      )}>
 
         {/* Overview */}
         {activeTab === 'overview' && (
@@ -239,13 +243,11 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
 
         {/* Maps */}
         {activeTab === 'maps' && (
-          <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-            <Map className="h-12 w-12 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-muted-foreground">Maps coming soon</p>
-            <p className="text-xs text-muted-foreground/60 max-w-xs">
-              Route maps and destination previews will appear here once the feature is ready.
-            </p>
-          </div>
+          <TripMapSection
+            destination={trip.destination}
+            departureLocation={trip.departureLocation}
+            days={days}
+          />
         )}
 
       </div>
