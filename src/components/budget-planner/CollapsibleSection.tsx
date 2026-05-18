@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -8,8 +7,8 @@ interface CollapsibleSectionProps {
   title: string
   subtitle?: string
   colorDot?: string
-  defaultOpen?: boolean
-  forceOpen?: boolean
+  isOpen: boolean
+  onToggle: () => void
   children: React.ReactNode
 }
 
@@ -17,21 +16,15 @@ export function CollapsibleSection({
   title,
   subtitle,
   colorDot,
-  defaultOpen = true,
-  forceOpen = false,
+  isOpen,
+  onToggle,
   children,
 }: CollapsibleSectionProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
-
-  useEffect(() => {
-    if (forceOpen) setIsOpen(true)
-  }, [forceOpen])
-
   return (
     <div className="rounded-lg border border-border overflow-hidden">
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={onToggle}
         className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm font-medium bg-muted/30 hover:bg-muted/60 transition-colors"
       >
         {colorDot && (

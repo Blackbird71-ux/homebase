@@ -1,14 +1,25 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
+import { DEFAULT_ITEMS } from '@/components/budget-planner/defaultItems'
 
 export async function GET() {
   const session = await requireSession()
 
-  const items = await prisma.budgetPlannerItem.findMany({
+  let items = await prisma.budgetPlannerItem.findMany({
     where: { userId: session.id },
     orderBy: { sortOrder: 'asc' },
   })
+
+  if (items.length === 0) {
+    await prisma.budgetPlannerItem.createMany({
+      data: DEFAULT_ITEMS.map((item) => ({ ...item, userId: session.id })),
+    })
+    items = await prisma.budgetPlannerItem.findMany({
+      where: { userId: session.id },
+      orderBy: { sortOrder: 'asc' },
+    })
+  }
 
   return NextResponse.json(items)
 }

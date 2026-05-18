@@ -41,6 +41,8 @@ export const VIEW_LABELS: Record<ViewPeriod, string> = {
   yearly: 'Yearly',
 }
 
+const LS_KEY = 'budget-planner:open-sections'
+
 function toView(amount: number, itemFreq: string, vp: ViewPeriod): number {
   return Math.round(amount * (MONTHLY_MULT[itemFreq] ?? 1) * VIEW_MULT[vp] * 100) / 100
 }
@@ -153,6 +155,31 @@ export function BudgetPlannerClient() {
   const [loading, setLoading] = useState(true)
   const [viewPeriod, setViewPeriod] = useState<ViewPeriod>('monthly')
 
+  // All sections start collapsed; hydrate from localStorage after mount
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set())
+  const [lsLoaded, setLsLoaded] = useState(false)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LS_KEY)
+      if (saved) setOpenSections(new Set(JSON.parse(saved) as string[]))
+    } catch { /* ignore */ }
+    setLsLoaded(true)
+  }, [])
+
+  const toggleSection = useCallback((name: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) {
+        next.delete(name)
+      } else {
+        next.add(name)
+      }
+      try { localStorage.setItem(LS_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
+  }, [])
+
   // 'income' | category name | null
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [newSubcategory, setNewSubcategory] = useState('')
@@ -207,6 +234,14 @@ export function BudgetPlannerClient() {
     setNewSubcategory('')
     setNewAmount('')
     setNewFrequency('monthly')
+    // Ensure the section is open when the add form is triggered
+    setOpenSections((prev) => {
+      if (prev.has(section)) return prev
+      const next = new Set(prev)
+      next.add(section)
+      try { localStorage.setItem(LS_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
   }, [])
 
   const addItem = useCallback(async () => {
@@ -321,12 +356,18 @@ export function BudgetPlannerClient() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 md:px-6 py-4 space-y-1.5">
 
+          {/* Helper text */}
+          <p className="text-sm text-muted-foreground pb-1">
+            Expand each category, enter your income and costs, and add any extras you need. Your totals update as you go.
+          </p>
+
           {/* Income */}
           <CollapsibleSection
             title="Income"
             colorDot="#22C55E"
             subtitle={fmt(totalIncome)}
-            defaultOpen
+            isOpen={lsLoaded && openSections.has('income')}
+            onToggle={() => toggleSection('income')}
           >
             {incomeItems.map((item) => (
               <BudgetItemRow
@@ -361,8 +402,8 @@ export function BudgetPlannerClient() {
                 title={name}
                 colorDot={color}
                 subtitle={fmt(catTotal)}
-                defaultOpen={false}
-                forceOpen={addingTo === name}
+                isOpen={lsLoaded && openSections.has(name)}
+                onToggle={() => toggleSection(name)}
               >
                 {catItems.map((item) => (
                   <BudgetItemRow
