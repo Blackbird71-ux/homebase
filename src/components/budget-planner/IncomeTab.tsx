@@ -19,29 +19,27 @@ export function IncomeTab({
   onAdd,
   disabled = false,
 }: IncomeTabProps) {
-  if (items.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-sm text-muted-foreground mb-4">
-          No income sources yet. Add your first income source or load the defaults.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-3">
-      <CollapsibleSection title="Income Sources" defaultOpen>
-        {items.map((item) => (
-          <BudgetItemRow
-            key={item.id}
-            item={item}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-            disabled={disabled}
-          />
-        ))}
-      </CollapsibleSection>
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed border-border">
+          <p className="text-sm text-muted-foreground mb-4">
+            No income sources yet. Add your first one below.
+          </p>
+        </div>
+      ) : (
+        <CollapsibleSection title="Income Sources" defaultOpen>
+          {items.map((item) => (
+            <BudgetItemRow
+              key={item.id}
+              item={item}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              disabled={disabled}
+            />
+          ))}
+        </CollapsibleSection>
+      )}
 
       <button
         type="button"

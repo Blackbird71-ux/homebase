@@ -37,31 +37,29 @@ export function ExpensesTab({
     items: items.filter((i) => i.category === cat),
   })).filter((g) => g.items.length > 0)
 
-  if (grouped.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-sm text-muted-foreground mb-4">
-          No expenses yet. Add your first expense or load the defaults.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-3">
-      {grouped.map(({ category, items: categoryItems }) => (
-        <CollapsibleSection key={category} title={category} defaultOpen>
-          {categoryItems.map((item) => (
-            <BudgetItemRow
-              key={item.id}
-              item={item}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-              disabled={disabled}
-            />
-          ))}
-        </CollapsibleSection>
-      ))}
+      {grouped.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed border-border">
+          <p className="text-sm text-muted-foreground mb-4">
+            No expenses yet. Add your first one below.
+          </p>
+        </div>
+      ) : (
+        grouped.map(({ category, items: categoryItems }) => (
+          <CollapsibleSection key={category} title={category} defaultOpen>
+            {categoryItems.map((item) => (
+              <BudgetItemRow
+                key={item.id}
+                item={item}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+                disabled={disabled}
+              />
+            ))}
+          </CollapsibleSection>
+        ))
+      )}
 
       <button
         type="button"

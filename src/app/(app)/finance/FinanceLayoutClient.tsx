@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import type { FC } from 'react'
 import {
   LayoutDashboard,
   Landmark,
@@ -32,9 +33,22 @@ import {
   ShieldAlert,
   ClipboardList,
   FileCheck,
+  Calculator,
 } from 'lucide-react'
 
-const groups = [
+interface NavItem {
+  href: string
+  label: string
+  icon: FC<{ className?: string }>
+  exact: boolean
+}
+
+interface NavGroup {
+  label: string
+  items: NavItem[]
+}
+
+const groups: NavGroup[] = [
   {
     label: 'Day-to-day',
     items: [
@@ -68,6 +82,7 @@ const groups = [
     items: [
       { href: '/finance/budget',       label: 'Budget',             icon: Wallet,          exact: false },
       { href: '/finance/goals',        label: 'Goals',              icon: Target,          exact: false },
+      // Simple Budget Planner added dynamically below when user preference is enabled
     ],
   },
   {
@@ -82,12 +97,10 @@ const groups = [
   },
 ]
 
-const allItems = groups.flatMap((g) => g.items)
-
-function useActiveItem(pathname: string) {
-  return allItems.find((item) =>
+function useActiveItem(pathname: string, items: NavItem[]) {
+  return items.find((item) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href) && item.href !== '/finance'
-  ) ?? allItems[0]
+  ) ?? items[0]
 }
 
 // ─── Mobile: dropdown sheet ───────────────────────────────────────────────────
@@ -142,9 +155,10 @@ function AdminNavItem({ pathname, mobile = false }: { pathname: string; mobile?:
   )
 }
 
-function MobileNav({ pathname, draftCount, isAdmin }: { pathname: string; draftCount: number; isAdmin: boolean }) {
+function MobileNav({ pathname, draftCount, isAdmin, groups }: { pathname: string; draftCount: number; isAdmin: boolean; groups: NavGroup[] }) {
   const [open, setOpen] = useState(false)
-  const activeItem = useActiveItem(pathname)
+  const allItems = groups.flatMap((g) => g.items)
+  const activeItem = useActiveItem(pathname, allItems)
   const ActiveIcon = activeItem.icon
 
   return (
@@ -210,7 +224,7 @@ function MobileNav({ pathname, draftCount, isAdmin }: { pathname: string; draftC
 
 // ─── Desktop: sidebar ─────────────────────────────────────────────────────────
 
-function DesktopSidebar({ pathname, draftCount, isAdmin }: { pathname: string; draftCount: number; isAdmin: boolean }) {
+function DesktopSidebar({ pathname, draftCount, isAdmin, groups }: { pathname: string; draftCount: number; isAdmin: boolean; groups: NavGroup[] }) {
   return (
     <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border bg-muted/30 overflow-y-auto">
       <div className="px-4 pt-5 pb-3 shrink-0">
@@ -283,13 +297,40 @@ function useDraftCount() {
 export default function FinanceLayoutClient({ children, isAdmin }: { children: React.ReactNode; isAdmin: boolean }) {
   const pathname = usePathname()
   const draftCount = useDraftCount()
+  const [showBudgetPlanner, setShowBudgetPlanner] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => setShowBudgetPlanner(!!data.uiPreferences?.showBudgetPlanner))
+      .catch(() => {})
+  }, [pathname])
+
+  // Build items list dynamically — insert Budget Planner into Planning group if enabled
+  const groupsWithPlanner = groups.map((group) => {
+    if (group.label === 'Planning' && showBudgetPlanner) {
+      return {
+        ...group,
+        items: [
+          ...group.items,
+          {
+            href: '/budget-planner',
+            label: 'Budget Planner',
+            icon: Calculator,
+            exact: false,
+          },
+        ],
+      }
+    }
+    return group
+  })
 
   return (
     <div className="flex h-full overflow-hidden relative">
-      <DesktopSidebar pathname={pathname} draftCount={draftCount} isAdmin={isAdmin} />
+      <DesktopSidebar pathname={pathname} draftCount={draftCount} isAdmin={isAdmin} groups={groupsWithPlanner} />
 
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-        <MobileNav pathname={pathname} draftCount={draftCount} isAdmin={isAdmin} />
+        <MobileNav pathname={pathname} draftCount={draftCount} isAdmin={isAdmin} groups={groupsWithPlanner} />
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>

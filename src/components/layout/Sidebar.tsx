@@ -3,12 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { useState, useEffect } from 'react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, ChevronLeft, ChevronRight, FileText, DollarSign, Plane,
-  ShieldAlert, Calculator,
+  Plus, ChevronLeft, ChevronRight, FileText, DollarSign, Plane, ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -34,14 +32,6 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onToggle, isAdmin = false }: SidebarProps) {
   const pathname = usePathname()
-  const [showBudgetPlanner, setShowBudgetPlanner] = useState(false)
-
-  useEffect(() => {
-    fetch('/api/settings')
-      .then(r => r.json())
-      .then(data => setShowBudgetPlanner(!!data.uiPreferences?.showBudgetPlanner))
-      .catch(() => {})
-  }, [pathname])
 
   function openQuickAdd() {
     window.dispatchEvent(new CustomEvent('homebase:quickadd'))
@@ -124,23 +114,6 @@ export function Sidebar({ collapsed = false, onToggle, isAdmin = false }: Sideba
           )
         })}
 
-        {/* Budget Planner sub-item under Finance (toggleable from Settings > Finance) */}
-        {showBudgetPlanner && (
-          <Link
-            href="/budget-planner"
-            title={collapsed ? 'Budget Planner' : undefined}
-            className={cn(
-              'flex items-center rounded-md text-sm font-medium transition-colors',
-              collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2 pl-8',
-              pathname.startsWith('/budget-planner')
-                ? 'bg-primary text-primary-foreground'
-                : 'text-[var(--sidebar-foreground)]/50 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
-            )}
-          >
-            <Calculator className="h-4 w-4 shrink-0" />
-            {!collapsed && 'Budget Planner'}
-          </Link>
-        )}
       </nav>
 
       {/* Settings + Sign out */}
