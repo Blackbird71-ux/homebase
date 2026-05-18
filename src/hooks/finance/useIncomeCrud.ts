@@ -531,17 +531,45 @@ export function useIncomeCrud() {
     setReceivedConfirmDate(todayAU())
     setReceivedConfirmGlAccountId('')
     setReceivedConfirmActualAmount(entry.amount.toFixed(2))
-    setPayslipForm({
-      enabled: false,
-      payPeriodStart: '', payPeriodEnd: '',
-      grossPay: entry.amount.toFixed(2),
-      netPay: entry.amount.toFixed(2),
-      grossIncomeGlAccountId: entry.category?.id ?? '',
-      bankGlAccountId: '',
-      paygWithheld: '0', paygGlAccountId: '',
-      sgcAmount: '0', sgcGlAccountId: '',
-      components: [], deductions: [], notes: '',
-    })
+
+    if (entry.payslip) {
+      // Pre-populate from the spawned payslip so gross/PAYG/net survive to receipt
+      const ps = entry.payslip
+      let components: PayslipComponent[] = []
+      let deductions: PayslipDeduction[] = []
+      try { components = JSON.parse(ps.components) } catch { /* leave empty */ }
+      try { deductions = JSON.parse(ps.deductions) } catch { /* leave empty */ }
+      setPayslipForm({
+        enabled: true,
+        payPeriodStart: ps.payPeriodStart ? ps.payPeriodStart.split('T')[0] : '',
+        payPeriodEnd:   ps.payPeriodEnd   ? ps.payPeriodEnd.split('T')[0]   : '',
+        grossPay:               ps.grossPay.toFixed(2),
+        netPay:                 ps.netPay.toFixed(2),
+        grossIncomeGlAccountId: ps.grossIncomeGlAccountId ?? '',
+        bankGlAccountId:        ps.bankGlAccountId        ?? '',
+        paygWithheld:           ps.paygWithheld.toFixed(2),
+        paygGlAccountId:        ps.paygGlAccountId        ?? '',
+        sgcAmount:              ps.sgcAmount.toFixed(2),
+        sgcGlAccountId:         ps.sgcGlAccountId         ?? '',
+        components,
+        deductions,
+        notes: ps.notes ?? '',
+      })
+      // Actual amount = net take-home (what hits the bank)
+      setReceivedConfirmActualAmount(ps.netPay.toFixed(2))
+    } else {
+      setPayslipForm({
+        enabled: false,
+        payPeriodStart: '', payPeriodEnd: '',
+        grossPay: entry.amount.toFixed(2),
+        netPay: entry.amount.toFixed(2),
+        grossIncomeGlAccountId: entry.category?.id ?? '',
+        bankGlAccountId: '',
+        paygWithheld: '0', paygGlAccountId: '',
+        sgcAmount: '0', sgcGlAccountId: '',
+        components: [], deductions: [], notes: '',
+      })
+    }
     setReceivedConfirm({ entry })
   }
 

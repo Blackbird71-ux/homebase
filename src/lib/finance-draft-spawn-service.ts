@@ -358,7 +358,7 @@ export async function spawnDraftsForTemplate(
             },
           })
         } else {
-          await tx.financeIncomeEntry.create({
+          const draftEntry = await tx.financeIncomeEntry.create({
             data: {
               name: template.name,
               amount: headlineAmount,
@@ -387,40 +387,69 @@ export async function spawnDraftsForTemplate(
               spawnedAt: new Date(),
               spawnedSnapshotHash: snapshotHash,
             },
+            select: { id: true },
           })
 
-          // Payslip templates: create the linked FinancePayslip on the draft
-          // so approval can run the payslip-aware posting path. We need the
-          // just-created income entry id; re-query inside the tx.
-          if (template.payslipEnabled) {
-            const draftIncome = await tx.financeIncomeEntry.findFirst({
-              where: {
-                templateId: template.id,
-                familyId: template.familyId,
-                status: 'draft',
-                nextExpectedDate: { gte: dayStart, lte: dayEnd },
-              },
-              orderBy: { createdAt: 'desc' },
-              select: { id: true },
-            })
-            if (draftIncome) {
-              await tx.financePayslip.create({
+          // Non-payslip templates with ≥2 balanced lines: materialise the
+          // template lines into an unposted draft FinanceJournalEntry so the
+          // draft editor shows the correct split and approval promotes it
+          // via branch (a) of postIncomeAccrualJournal instead of generating
+          // a plain 2-line DR AR / CR Income fallback.
+          if (!template.payslipEnabled && snapshotLines.length >= 2) {
+            const totalDr = snapshotLines
+              .filter(l => l.side !== 'credit')
+              .reduce((s, l) => s + l.amount, 0)
+            const totalCr = snapshotLines
+              .filter(l => l.side === 'credit')
+              .reduce((s, l) => s + l.amount, 0)
+            if (Math.abs(totalDr - totalCr) <= 0.005) {
+              const draftJournal = await tx.financeJournalEntry.create({
                 data: {
-                  incomeEntryId: draftIncome.id,
+                  reference: null,
+                  date: occurrenceDate,
+                  description: template.name,
+                  type: 'auto_transaction',
+                  isPosted: false,
+                  entityId: template.entityId ?? null,
                   familyId: template.familyId,
-                  grossPay: template.grossPay ?? 0,
-                  netPay: template.netPay ?? 0,
-                  grossIncomeGlAccountId: template.grossIncomeGlAccountId,
-                  bankGlAccountId: template.bankGlAccountId,
-                  paygWithheld: template.paygWithheld ?? 0,
-                  paygGlAccountId: template.paygGlAccountId,
-                  sgcAmount: template.sgcAmount ?? 0,
-                  sgcGlAccountId: template.sgcGlAccountId,
-                  components: template.payslipComponents ?? '[]',
-                  deductions: template.payslipDeductions ?? '[]',
+                  lines: {
+                    create: snapshotLines.map(l => ({
+                      glAccountId: l.glAccountId,
+                      side: l.side,
+                      amount: l.amount,
+                      description: l.description || null,
+                    })),
+                  },
                 },
+                select: { id: true },
+              })
+              await tx.financeIncomeEntry.update({
+                where: { id: draftEntry.id },
+                data: { journalEntryId: draftJournal.id },
               })
             }
+          }
+
+          // Payslip templates: create the linked FinancePayslip on the draft
+          // so approval can run the payslip-aware posting path and the mark-
+          // received dialog pre-populates from stored gross/PAYG/net figures.
+          if (template.payslipEnabled) {
+            await tx.financePayslip.create({
+              data: {
+                incomeEntryId: draftEntry.id,
+                familyId: template.familyId,
+                grossPay: template.grossPay ?? 0,
+                netPay: template.netPay ?? 0,
+                grossIncomeGlAccountId: template.grossIncomeGlAccountId,
+                bankGlAccountId: template.bankGlAccountId,
+                paygWithheld: template.paygWithheld ?? 0,
+                paygGlAccountId: template.paygGlAccountId,
+                sgcAmount: template.sgcAmount ?? 0,
+                sgcGlAccountId: template.sgcGlAccountId,
+                components: template.payslipComponents ?? '[]',
+                deductions: template.payslipDeductions ?? '[]',
+              },
+            })
           }
         }
       })
