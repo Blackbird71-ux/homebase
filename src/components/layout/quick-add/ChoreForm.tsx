@@ -53,6 +53,7 @@ export function ChoreForm({ onSuccess, onBack }: QuickAddFormProps) {
         <Select value={frequency} onValueChange={v => v && setFrequency(v)}>
           <SelectTrigger id="qa-chore-freq"><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="one-off">One-off</SelectItem>
             <SelectItem value="daily">Daily</SelectItem>
             <SelectItem value="weekly">Weekly</SelectItem>
             <SelectItem value="biweekly">Bi-weekly</SelectItem>

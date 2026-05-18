@@ -51,6 +51,9 @@ function calculateNextDueDate(
   completedAt: Date
 ): Date | null {
   const now = new Date()
+  // One-off chores have no next occurrence — deactivate after completion
+  if (chore.frequency === 'one-off') return null
+
   let baseDate: Date
   if (chore.triggerOnComplete) {
     baseDate = completedAt

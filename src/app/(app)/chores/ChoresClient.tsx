@@ -61,6 +61,7 @@ const FREQUENCY_LABELS: Record<string, string> = {
   weekly: 'Weekly',
   biweekly: 'Bi-weekly',
   monthly: 'Monthly',
+  'one-off': 'One-off',
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -194,6 +195,12 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
 
   function getScheduleLabel(chore: Chore): string {
     const freq = FREQUENCY_LABELS[chore.frequency] ?? chore.frequency
+    if (chore.frequency === 'one-off') {
+      if (chore.nextDueDate) {
+        return `${freq} — due ${formatDate(chore.nextDueDate)}`
+      }
+      return freq
+    }
     if (chore.dayOfWeek !== null) return `${freq} on ${DAY_LABELS[chore.dayOfWeek]}`
     if (chore.dayOfMonth !== null) return `${freq} on day ${chore.dayOfMonth}`
     return freq

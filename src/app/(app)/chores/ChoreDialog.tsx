@@ -210,6 +210,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="one-off">One-off</SelectItem>
                     <SelectItem value="daily">Daily</SelectItem>
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="biweekly">Bi-weekly</SelectItem>
@@ -221,6 +222,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   </SelectContent>
                 </Select>
               </div>
+              {frequency !== 'one-off' && (
               <div className="space-y-1.5">
                 <Label htmlFor="chore-rotate">Rotate every</Label>
                 <Input
@@ -231,6 +233,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   onChange={(e) => setRotationInterval(e.target.value)}
                 />
               </div>
+              )}
             </div>
             {frequency === 'weekly' && (
               <div className="space-y-1.5">
@@ -263,7 +266,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="chore-start-date">Start date</Label>
+                <Label htmlFor="chore-start-date">{frequency === 'one-off' ? 'Due date' : 'Start date'}</Label>
                 <Input
                   id="chore-start-date"
                   type="date"
@@ -271,6 +274,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
+              {frequency !== 'one-off' && (
               <div className="space-y-1.5">
                 <Label htmlFor="chore-end-date">End date (optional)</Label>
                 <Input
@@ -280,6 +284,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   onChange={(e) => setEndDate(e.target.value)}
                 />
               </div>
+              )}
             </div>
             </div>{/* end left col */}
 
@@ -303,6 +308,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
               </Select>
             </div>
             <div className="space-y-3 pt-2 border-t border-border/50">
+              {frequency !== 'one-off' && (
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-0.5 min-w-0">
                   <Label htmlFor="chore-trigger">Next occurrence starts after completion</Label>
@@ -316,6 +322,8 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   onCheckedChange={setTriggerOnComplete}
                 />
               </div>
+              )}
+              {frequency !== 'one-off' && (
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-0.5 min-w-0">
                   <Label htmlFor="chore-auto-rotate">Auto-rotate assignee on completion</Label>
@@ -329,6 +337,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   onCheckedChange={setAutoRotateOnComplete}
                 />
               </div>
+              )}
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-0.5 min-w-0">
                   <Label htmlFor="chore-early-start">Allow early completion</Label>

@@ -15,6 +15,9 @@ function calculateNextDueDateAI(
   completedAt: Date,
   timezone: string
 ): Date | null {
+  // One-off chores have no next occurrence — deactivate after completion
+  if (chore.frequency === 'one-off') return null
+
   const baseDate = chore.triggerOnComplete ? completedAt : new Date()
   let next: Date
 

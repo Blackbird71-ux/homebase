@@ -138,7 +138,8 @@ export function calculateInitialDueDate(
 
   switch (frequency) {
     case 'daily':
-    case 'biweekly': {
+    case 'biweekly':
+    case 'one-off': {
       result = base
       break
     }
@@ -205,6 +206,9 @@ export function calculateNextDueDate(
   completedAt: Date,
   timezone: string
 ): Date | null {
+  // One-off chores have no next occurrence — deactivate after completion
+  if (chore.frequency === 'one-off') return null
+
   // Anchor: advance from the scheduled due date, not from "now"
   let baseDate: Date
   if (chore.triggerOnComplete) {
@@ -246,6 +250,9 @@ export function calculateNextDueDateFromNow(
   chore: ChoreForSchedule,
   timezone: string
 ): Date | null {
+  // One-off chores have no next occurrence — deactivate after completion
+  if (chore.frequency === 'one-off') return null
+
   // Use UTC midnight of the LOCAL calendar today, not UTC midnight of the UTC date.
   const todayLocalStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
   const baseDateUTCMidnight = new Date(`${todayLocalStr}T00:00:00Z`)
