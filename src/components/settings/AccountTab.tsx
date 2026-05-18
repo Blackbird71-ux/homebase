@@ -36,7 +36,6 @@ interface AccountTabProps {
       id: string
       name: string
       timezone: string
-      financeYearStartMonth?: number | null  // Spec §2.7 — 1=Jan … 12=Dec, default 7=July (AU)
     }
   }
   supportedTimezones: string[]
@@ -69,11 +68,6 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
   const [timezone, setTimezone] = useState(user.family.timezone)
   const [timezoneStatus, setTimezoneStatus] = useState<Status>(null)
   const [timezoneSaving, setTimezoneSaving] = useState(false)
-
-  // Financial Year Start Month (admin only) — Spec §2.7
-  const [fyStartMonth, setFyStartMonth] = useState<number>(user.family.financeYearStartMonth ?? 7)
-  const [fyStartMonthStatus, setFyStartMonthStatus] = useState<Status>(null)
-  const [fyStartMonthSaving, setFyStartMonthSaving] = useState(false)
 
   // Invite codes (admin only)
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([])
@@ -196,29 +190,6 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
       setTimezoneStatus({ type: 'error', message: 'Network error.' })
     } finally {
       setTimezoneSaving(false)
-    }
-  }
-
-  // Spec §2.7 — save financial year start month
-  async function saveFyStartMonth() {
-    setFyStartMonthSaving(true)
-    setFyStartMonthStatus(null)
-    try {
-      const res = await fetch('/api/settings/family', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ financeYearStartMonth: fyStartMonth }),
-      })
-      if (res.ok) {
-        setFyStartMonthStatus({ type: 'success', message: 'Financial year start month updated. All reports, P&L, and tax pages will now use this setting.' })
-      } else {
-        const data = await res.json()
-        setFyStartMonthStatus({ type: 'error', message: data.error ?? 'Failed to update financial year start month.' })
-      }
-    } catch {
-      setFyStartMonthStatus({ type: 'error', message: 'Network error.' })
-    } finally {
-      setFyStartMonthSaving(false)
     }
   }
 
@@ -442,41 +413,6 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
           ) : null}
         </CardContent>
       </Card>
-
-      {/* Financial Year Start Month */}
-      <Card>
-          <CardHeader>
-            <CardTitle>Financial Year Start Month</CardTitle>
-            <CardDescription>
-              Admin only — sets the start of the financial year used by P&amp;L reports,
-              Tax Report, Annual P&amp;L, and Snapshots. Australian default is 1 July.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="fy-start-month">Financial Year Start Month</Label>
-              <select
-                id="fy-start-month"
-                value={fyStartMonth}
-                onChange={e => setFyStartMonth(parseInt(e.target.value, 10))}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
-              >
-                <option value={1}>January (calendar year)</option>
-                <option value={4}>April</option>
-                <option value={7}>July (Australian FY — default)</option>
-                <option value={10}>October</option>
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Changing this affects all finance reports, budgets, and the Tax Report date range.
-                Australian financial year runs 1 July – 30 June.
-              </p>
-            </div>
-            <Button onClick={saveFyStartMonth} disabled={fyStartMonthSaving}>
-              {fyStartMonthSaving ? 'Saving...' : 'Save Financial Year Setting'}
-            </Button>
-            {fyStartMonthStatus && <StatusMessage status={fyStartMonthStatus} />}
-          </CardContent>
-        </Card>
 
       {/* Admin: Invite Codes */}
       <Card>
