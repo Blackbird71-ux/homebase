@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks, max } from 'date-fns'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -1127,5 +1128,14 @@ export async function PATCH(request: NextRequest) {
     where: { id, familyId: session.familyId },
     include: INCOME_INCLUDE,
   })
-  return NextResponse.json(finalEntry ?? entry)
+
+  // Period lock warning — only when Stage 1 just fired
+  let incomePeriodWarning: string | null = null
+  if (invoiceReceived === true && existing && !existing.invoiceReceived) {
+    const remittanceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
+    incomePeriodWarning = await getPeriodLockWarning(session.familyId, remittanceDate)
+  }
+
+  const incomeResult = finalEntry ?? entry
+  return NextResponse.json(incomePeriodWarning ? { ...incomeResult, periodWarning: incomePeriodWarning } : incomeResult)
 }

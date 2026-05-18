@@ -28,7 +28,7 @@ export async function GET() {
   const user = await requireSession()
   const family = await prisma.family.findUnique({
     where: { id: user.familyId },
-    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true, loginTagline: true, appVersion: true, financeYearStartMonth: true },
+    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true, loginTagline: true, appVersion: true, financeYearStartMonth: true, periodLockedUntil: true },
   })
   if (!family) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(family)
@@ -37,7 +37,7 @@ export async function GET() {
 export async function PATCH(req: Request) {
   const user = await requireAdmin()
   const body = await req.json()
-  const { timezone, name, umamiScriptUrl, umamiSiteId, loginTagline, appVersion, financeYearStartMonth } = body
+  const { timezone, name, umamiScriptUrl, umamiSiteId, loginTagline, appVersion, financeYearStartMonth, periodLockedUntil } = body
 
   if (timezone !== undefined && !SUPPORTED_TIMEZONES.includes(timezone)) {
     return NextResponse.json({ error: 'Unsupported timezone' }, { status: 400 })
@@ -65,10 +65,14 @@ export async function PATCH(req: Request) {
     updateData.financeYearStartMonth = m
   }
 
+  if (periodLockedUntil !== undefined) {
+    updateData.periodLockedUntil = periodLockedUntil ? new Date(periodLockedUntil) : null
+  }
+
   const updated = await prisma.family.update({
     where: { id: user.familyId },
     data: updateData,
-    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true, loginTagline: true, appVersion: true, financeYearStartMonth: true },
+    select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true, loginTagline: true, appVersion: true, financeYearStartMonth: true, periodLockedUntil: true },
   })
   return NextResponse.json(updated)
 }

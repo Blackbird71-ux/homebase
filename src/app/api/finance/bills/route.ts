@@ -7,6 +7,7 @@ import {
 } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
 import { postBillAccrualJournal } from '@/lib/finance-posting'
+import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -358,16 +359,20 @@ export async function POST(request: NextRequest) {
   // upsertBillDraftJournal step above so the draft is always written when
   // lines are provided, regardless of posting state.
 
+  const periodWarning = shouldPostInvoice
+    ? await getPeriodLockWarning(session.familyId, invoiceDate)
+    : null
+
   try {
     const finalBill = await prisma.financeRecurringBill.findFirst({
       where: { id: bill.id },
       include: BILL_INCLUDE,
     })
-    const result = finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : bill
-    return NextResponse.json(result, { status: 201 })
+    const base = finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : { ...bill, isGlPosted: false }
+    return NextResponse.json(periodWarning ? { ...base, periodWarning } : base, { status: 201 })
   } catch (err) {
     console.error('[bills POST] Final fetch failed (bill was saved):', err)
-    return NextResponse.json({ ...bill, isGlPosted: false }, { status: 201 })
+    return NextResponse.json(periodWarning ? { ...bill, isGlPosted: false, periodWarning } : { ...bill, isGlPosted: false }, { status: 201 })
   }
 }
 
@@ -496,14 +501,18 @@ export async function PUT(request: NextRequest) {
 
   // No separate "else if" for the draft-only update case: handled by Step 1 above.
 
+  const putPeriodWarning = invoiceReceivedTransition
+    ? await getPeriodLockWarning(session.familyId, invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
+    : null
+
   const finalBill = await prisma.financeRecurringBill.findFirst({
     where: { id, familyId: session.familyId },
     include: BILL_INCLUDE,
   })
-  return NextResponse.json(finalBill
+  const putBase = finalBill
     ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true }
     : { ...bill, isGlPosted: false }
-  )
+  return NextResponse.json(putPeriodWarning ? { ...putBase, periodWarning: putPeriodWarning } : putBase)
 }
 
 // ── DELETE ────────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 // ── Include shape used for all queries ───────────────────────────────────────
 
@@ -176,7 +177,11 @@ export async function POST(request: NextRequest) {
     session.familyId,
   )
 
-  return NextResponse.json(entry, { status: 201 })
+  const periodWarning = postImmediately
+    ? await getPeriodLockWarning(session.familyId, new Date(date))
+    : null
+
+  return NextResponse.json(periodWarning ? { ...entry, periodWarning } : entry, { status: 201 })
 }
 
 // ── PUT /api/finance/journals ─────────────────────────────────────────────────

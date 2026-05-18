@@ -16,6 +16,7 @@ model Family {
   loginTagline         String?
   appVersion           String?
   financeYearStartMonth  Int  @default(7)  // 1=Jan … 12=Dec. Default 7 = Australian 1 July FY start.
+  periodLockedUntil      DateTime?            // Finance period lock — posting before this date shows a warning
   openingBalancesCategoryId  String?  // FK → FinanceCategory (equity type, system, "Opening Balances")
   users                User[]
   events               Event[]

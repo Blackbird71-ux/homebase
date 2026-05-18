@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { signOut } from 'next-auth/react'
 
 interface FamilySettingsClientProps {
-  family: { name: string; timezone: string; loginTagline: string; financeYearStartMonth: number }
+  family: { name: string; timezone: string; loginTagline: string; financeYearStartMonth: number; periodLockedUntil: string | null }
   isAdmin: boolean
   supportedTimezones: string[]
 }
@@ -22,6 +22,7 @@ export function FamilySettingsClient({
   const [timezone, setTimezone] = useState(family.timezone)
   const [loginTagline, setLoginTagline] = useState(family.loginTagline)
   const [financeYearStartMonth, setFinanceYearStartMonth] = useState(family.financeYearStartMonth)
+  const [periodLockedUntil, setPeriodLockedUntil] = useState(family.periodLockedUntil ?? '')
   const [saving, setSaving] = useState(false)
 
   async function handleSave(e: React.FormEvent) {
@@ -31,7 +32,7 @@ export function FamilySettingsClient({
       const res = await fetch('/api/settings/family', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, timezone, loginTagline, financeYearStartMonth }),
+        body: JSON.stringify({ name, timezone, loginTagline, financeYearStartMonth, periodLockedUntil: periodLockedUntil || null }),
       })
       if (res.ok) {
         toast.success('Settings saved. Sign out and back in to apply timezone changes.')
@@ -65,6 +66,12 @@ export function FamilySettingsClient({
               family.financeYearStartMonth === 7 ? 'July (Australian FY)' :
               `Month ${family.financeYearStartMonth}`}</p>
         </div>
+        {family.periodLockedUntil && (
+          <div>
+            <p className="text-muted-foreground text-xs mb-1">Finance period locked until</p>
+            <p>{family.periodLockedUntil}</p>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">Only admins can change family settings.</p>
       </div>
     )
@@ -135,6 +142,21 @@ export function FamilySettingsClient({
         <p className="text-xs text-muted-foreground">
           Sets the start of the financial year for P&L, tax reports, budgets, and annual reporting.
           Australian default is 1 July.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="period-locked-until">Finance period locked until</Label>
+        <input
+          id="period-locked-until"
+          type="date"
+          value={periodLockedUntil}
+          onChange={(e) => setPeriodLockedUntil(e.target.value)}
+          className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm"
+        />
+        <p className="text-xs text-muted-foreground">
+          Posting a journal entry, bill, or income dated before this date will show a warning.
+          Leave blank to disable. Useful when a period has been filed (BAS, tax return).
         </p>
       </div>
 
