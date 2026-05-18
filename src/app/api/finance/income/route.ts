@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks, max } from 'date-fns'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { postPayslipReceiptJournal } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -913,72 +914,22 @@ export async function PATCH(request: NextRequest) {
             payPeriodStart, payPeriodEnd, notes: payslipNotes,
           } = payslipData
 
-          // Build journal lines from payslip components
-          // DR lines: bank (net), PAYG, each deduction with a GL account
-          // CR lines: gross income
-          const journalLines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[] = []
-
-          // CR: Gross income (e.g. Gross Wages - Mark)
-          journalLines.push({
-            glAccountId: grossIncomeGlAccountId,
-            side: 'credit',
-            amount: grossPay,
-            description: `${existing.name} — Gross Pay`,
+          const payslipResult = await postPayslipReceiptJournal(tx, {
+            familyId: session.familyId,
+            description: existing.name,
+            grossPay,
+            netPay,
+            grossIncomeGlAccountId,
+            bankGlAccountId,
+            paygWithheld,
+            paygGlAccountId,
+            deductions: (deductions as { label: string; amount: number; glAccountId?: string | null }[]),
+            entityId: existing.entityId ?? null,
+            memberId: existing.memberId ?? null,
+            date: actualReceivedDate,
+            reference: receiptRef,
           })
-
-          // DR: Net take-home into bank
-          journalLines.push({
-            glAccountId: bankGlAccountId,
-            side: 'debit',
-            amount: netPay,
-            description: `${existing.name} — Net Pay`,
-          })
-
-          // DR: PAYG withheld (if GL account specified)
-          if (paygWithheld > 0 && paygGlAccountId) {
-            journalLines.push({
-              glAccountId: paygGlAccountId,
-              side: 'debit',
-              amount: paygWithheld,
-              description: `${existing.name} — PAYG Withheld`,
-            })
-          }
-
-          // DR: Each deduction that has a GL account
-          for (const ded of deductions as { label: string; amount: number; glAccountId?: string | null }[]) {
-            if (ded.amount > 0 && ded.glAccountId) {
-              journalLines.push({
-                glAccountId: ded.glAccountId,
-                side: 'debit',
-                amount: ded.amount,
-                description: `${existing.name} — ${ded.label}`,
-              })
-            }
-          }
-
-          // Balance check before writing
-          const totalDR = journalLines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
-          const totalCR = journalLines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
-          if (Math.abs(totalDR - totalCR) > 0.005) {
-            throw new Error(
-              `Payslip journal is not balanced — debits ${totalDR.toFixed(2)} ≠ credits ${totalCR.toFixed(2)}. ` +
-              `Check that Net Pay + PAYG + Deductions = Gross Pay.`
-            )
-          }
-
-          receiptJe = await tx.financeJournalEntry.create({
-            data: {
-              reference: receiptRef,
-              date: actualReceivedDate,
-              description: `${existing.name} (payslip received)`,
-              type: 'auto_transaction',
-              isPosted: true,
-              entityId: existing.entityId ?? null,
-              familyId: session.familyId,
-              lines: { create: journalLines },
-            },
-            select: { id: true },
-          })
+          receiptJe = { id: payslipResult.journalEntryId }
 
           // Upsert FinancePayslip record (delete + create for clean replace)
           await tx.financePayslip.deleteMany({ where: { incomeEntryId: id } })
