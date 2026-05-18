@@ -95,6 +95,8 @@ export default async function TripDetailPage({
         id: act.id,
         title: act.title,
         location: act.location,
+        locationLat: act.locationLat ?? null,
+        locationLng: act.locationLng ?? null,
         startTime: act.startTime?.toISOString() ?? null,
         endTime: act.endTime?.toISOString() ?? null,
         notes: act.notes,

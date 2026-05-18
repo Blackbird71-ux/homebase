@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  APIProvider,
   Map,
   AdvancedMarker,
   Polyline,
@@ -23,6 +22,8 @@ interface RouteStop {
   title: string
   dayLabel: string
   color: string
+  lat?: number
+  lng?: number
 }
 
 interface MarkerData {
@@ -44,7 +45,14 @@ function buildStops(departureLocation: string | null | undefined, days: TripDayS
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .forEach(act => {
         if (act.location?.trim()) {
-          stops.push({ location: act.location.trim(), title: act.title, dayLabel, color })
+          stops.push({
+            location: act.location.trim(),
+            title: act.title,
+            dayLabel,
+            color,
+            lat: act.locationLat ?? undefined,
+            lng: act.locationLng ?? undefined,
+          })
         }
       })
   })
@@ -186,13 +194,22 @@ function TripMapInner({
 
       setGeoStatus(`locating ${targets.length} stop(s)…`)
 
-      // Sequential with 1 s gap to respect Nominatim's usage policy
+      // Use stored coordinates when available; fall back to Nominatim (1 s gap per policy)
       const resolved: { position: google.maps.LatLngLiteral; stop: RouteStop }[] = []
+      let lastWasNetworkCall = false
       for (let i = 0; i < targets.length; i++) {
         if (cancelled) return
-        if (i > 0) await new Promise(r => setTimeout(r, 1100))
+
+        if (targets[i].lat !== undefined && targets[i].lng !== undefined) {
+          resolved.push({ position: { lat: targets[i].lat!, lng: targets[i].lng! }, stop: targets[i] })
+          lastWasNetworkCall = false
+          continue
+        }
+
+        if (lastWasNetworkCall) await new Promise(r => setTimeout(r, 1100))
         if (cancelled) return
         const pos = await nominatimGeocode(targets[i].location)
+        lastWasNetworkCall = true
         if (pos) resolved.push({ position: pos, stop: targets[i] })
       }
 
@@ -364,10 +381,8 @@ export function TripMapSection({ destination, departureLocation, days }: TripMap
   }
 
   return (
-    <APIProvider apiKey={apiKey}>
-      <div className="flex flex-col md:flex-row h-full">
-        <TripMapInner destination={destination} stops={stops} />
-      </div>
-    </APIProvider>
+    <div className="flex flex-col md:flex-row h-full">
+      <TripMapInner destination={destination} stops={stops} />
+    </div>
   )
 }

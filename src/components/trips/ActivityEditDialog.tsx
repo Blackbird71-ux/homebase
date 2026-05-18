@@ -6,6 +6,7 @@ import {
   Sun, UtensilsCrossed, Car, Hotel, Ticket,
 } from 'lucide-react'
 import { NoteEditorToolbar } from '@/components/notes/NoteEditorToolbar'
+import { LocationAutocompleteInput } from '@/components/trips/LocationAutocompleteInput'
 import type { TripActivityShape, TripTagShape } from '@/types'
 
 // ── Category config ────────────────────────────────────────────────────────────
@@ -54,6 +55,8 @@ interface ActivityEditDialogProps {
   onSave: (data: {
     title: string
     location: string | null
+    locationLat: number | null
+    locationLng: number | null
     startTime: string | null
     endTime: string | null
     notes: string | null
@@ -77,7 +80,9 @@ export function ActivityEditDialog({
   onOpenTagManager,
 }: ActivityEditDialogProps) {
   const [title, setTitle]         = useState(activity.title)
-  const [location, setLocation]   = useState(activity.location ?? '')
+  const [location, setLocation]       = useState(activity.location ?? '')
+  const [locationLat, setLocationLat] = useState<number | null>(activity.locationLat ?? null)
+  const [locationLng, setLocationLng] = useState<number | null>(activity.locationLng ?? null)
   const [category, setCategory]   = useState(activity.category ?? '')
   const [startTime, setStartTime] = useState(timeFromIso(activity.startTime))
   const [endTime, setEndTime]     = useState(timeFromIso(activity.endTime))
@@ -181,12 +186,14 @@ export function ActivityEditDialog({
     setError('')
     try {
       await onSave({
-        title:     title.trim(),
-        location:  location.trim() || null,
-        startTime: buildIsoDateTime(dayDate, startTime),
-        endTime:   buildIsoDateTime(dayDate, endTime),
-        notes:     editorRef.current?.innerHTML?.trim() || null,
-        category:  category || null,
+        title:       title.trim(),
+        location:    location.trim() || null,
+        locationLat: location.trim() ? locationLat : null,
+        locationLng: location.trim() ? locationLng : null,
+        startTime:   buildIsoDateTime(dayDate, startTime),
+        endTime:     buildIsoDateTime(dayDate, endTime),
+        notes:       editorRef.current?.innerHTML?.trim() || null,
+        category:    category || null,
       })
       onClose()
     } catch {
@@ -241,16 +248,16 @@ export function ActivityEditDialog({
           {/* Location */}
           <div className="hb-field">
             <label className="hb-field__label"><MapPin size={12} /> Location</label>
-            <div className="hb-input-with-icon">
-              <MapPin size={14} aria-hidden />
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                disabled={saving}
-                placeholder="e.g. Eiffel Tower"
-                className="hb-input"
-              />
-            </div>
+            <LocationAutocompleteInput
+              value={location}
+              onChange={(text, lat, lng) => {
+                setLocation(text)
+                setLocationLat(lat ?? null)
+                setLocationLng(lng ?? null)
+              }}
+              disabled={saving}
+              placeholder="e.g. Eiffel Tower, Paris"
+            />
           </div>
 
           {/* Category visual grid */}

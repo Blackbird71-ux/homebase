@@ -1178,8 +1178,10 @@ model TripActivity {
   dayId     String
   day       TripDay           @relation(fields: [dayId], references: [id], onDelete: Cascade)
   title     String
-  location  String?
-  startTime DateTime?
+  location    String?
+  locationLat Float?
+  locationLng Float?
+  startTime   DateTime?
   endTime   DateTime?
   notes     String?
   category  String?

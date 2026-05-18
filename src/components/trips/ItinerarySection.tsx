@@ -175,7 +175,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
   // ── Activity CRUD ────────────────────────────────────────────────────────────
 
   async function handleSaveActivity(dayId: string, activityId: string, data: {
-    title: string; location: string | null; startTime: string | null; endTime: string | null; notes: string | null; category: string | null
+    title: string; location: string | null; locationLat: number | null; locationLng: number | null; startTime: string | null; endTime: string | null; notes: string | null; category: string | null
   }) {
     const res = await fetch(`/api/trips/${tripId}/days/${dayId}/activities/${activityId}`, {
       method: 'PATCH',

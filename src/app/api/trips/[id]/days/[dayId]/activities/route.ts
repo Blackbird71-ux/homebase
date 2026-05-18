@@ -7,6 +7,8 @@ function serializeActivity(activity: {
   dayId: string
   title: string
   location: string | null
+  locationLat: number | null
+  locationLng: number | null
   startTime: Date | null
   endTime: Date | null
   notes: string | null
@@ -20,6 +22,8 @@ function serializeActivity(activity: {
     dayId: activity.dayId,
     title: activity.title,
     location: activity.location,
+    locationLat: activity.locationLat,
+    locationLng: activity.locationLng,
     startTime: activity.startTime?.toISOString() ?? null,
     endTime: activity.endTime?.toISOString() ?? null,
     notes: activity.notes,
@@ -53,7 +57,7 @@ export async function POST(
   if (!day) return NextResponse.json({ error: 'Day not found' }, { status: 404 })
 
   const body = await req.json()
-  const { title, location, startTime, endTime, notes, category, sortOrder } = body
+  const { title, location, locationLat, locationLng, startTime, endTime, notes, category, sortOrder } = body
 
   if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 400 })
 
@@ -67,6 +71,8 @@ export async function POST(
       dayId,
       title: title.trim(),
       location: location ?? null,
+      locationLat: locationLat ?? null,
+      locationLng: locationLng ?? null,
       startTime: startTime ? new Date(startTime) : null,
       endTime: endTime ? new Date(endTime) : null,
       notes: notes ?? null,

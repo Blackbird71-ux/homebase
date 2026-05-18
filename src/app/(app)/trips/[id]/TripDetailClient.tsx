@@ -27,6 +27,7 @@ import { TripWeatherSection } from '@/components/trips/TripWeatherSection'
 import { TripAttachmentsSection } from '@/components/trips/TripAttachmentsSection'
 import { TripPackingSection } from '@/components/trips/TripPackingSection'
 import { TripMapSection } from '@/components/trips/TripMapSection'
+import { APIProvider } from '@vis.gl/react-google-maps'
 
 // Mobile-only tabs (desktop shows split pane)
 type TripTab = 'overview' | 'itinerary' | 'packing' | 'weather' | 'budget' | 'maps'
@@ -102,7 +103,10 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
     }
   }
 
+  const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ''
+
   return (
+    <APIProvider apiKey={mapsApiKey}>
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header — shared across mobile and desktop */}
       <div className="border-b border-border shrink-0">
@@ -449,6 +453,7 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
         </DialogContent>
       </Dialog>
     </div>
+    </APIProvider>
   )
 }
 

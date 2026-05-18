@@ -299,6 +299,8 @@ export interface TripActivityShape {
   id: string
   title: string
   location: string | null
+  locationLat: number | null
+  locationLng: number | null
   startTime: string | null
   endTime: string | null
   notes: string | null

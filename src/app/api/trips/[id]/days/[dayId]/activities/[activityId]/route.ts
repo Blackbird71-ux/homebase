@@ -7,6 +7,8 @@ function serializeActivity(activity: {
   dayId: string
   title: string
   location: string | null
+  locationLat: number | null
+  locationLng: number | null
   startTime: Date | null
   endTime: Date | null
   notes: string | null
@@ -20,6 +22,8 @@ function serializeActivity(activity: {
     dayId: activity.dayId,
     title: activity.title,
     location: activity.location,
+    locationLat: activity.locationLat,
+    locationLng: activity.locationLng,
     startTime: activity.startTime?.toISOString() ?? null,
     endTime: activity.endTime?.toISOString() ?? null,
     notes: activity.notes,
@@ -55,7 +59,7 @@ export async function PATCH(
   if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 })
 
   const body = await req.json()
-  const { title, location, startTime, endTime, notes, category, sortOrder, targetDayId } = body
+  const { title, location, locationLat, locationLng, startTime, endTime, notes, category, sortOrder, targetDayId } = body
 
   if (targetDayId !== undefined) {
     const targetDay = await prisma.tripDay.findFirst({
@@ -71,6 +75,8 @@ export async function PATCH(
       ...(targetDayId !== undefined ? { dayId: targetDayId } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(location !== undefined ? { location } : {}),
+      ...(locationLat !== undefined ? { locationLat: locationLat ?? null } : {}),
+      ...(locationLng !== undefined ? { locationLng: locationLng ?? null } : {}),
       ...(startTime !== undefined ? { startTime: startTime ? new Date(startTime) : null } : {}),
       ...(endTime !== undefined ? { endTime: endTime ? new Date(endTime) : null } : {}),
       ...(notes !== undefined ? { notes } : {}),
