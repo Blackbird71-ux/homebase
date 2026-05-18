@@ -274,13 +274,13 @@ export function useBillCrud() {
     setForm(emptyForm); setShowForm(true)
   }
 
-  function openEdit(b: Bill) {
+  async function openEdit(b: Bill) {
     setEditing(b)
     setErrors({})
     setJournalErrors({})
     if (b.journalEntryId) {
-      setJournalLines(defaultBillLines(b.amount, b.category?.id))
-      loadExistingBillJournalLines(b.journalEntryId).then(lines => { setJournalLines(lines) })
+      const lines = await loadExistingBillJournalLines(b.journalEntryId)
+      setJournalLines(lines)
     } else {
       setJournalLines(defaultBillLines(b.amount, b.category?.id))
     }

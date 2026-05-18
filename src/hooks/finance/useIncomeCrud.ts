@@ -281,13 +281,13 @@ export function useIncomeCrud() {
     setJournalLines(defaultIncomeLines()); setJournalErrors({}); setShowForm(true)
   }
 
-  function openEdit(e: IncomeEntry) {
+  async function openEdit(e: IncomeEntry) {
     setEditing(e)
     setErrors({})
     setJournalErrors({})
     if (e.journalEntryId) {
-      setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
-      loadExistingJournalLines(e.journalEntryId).then(lines => { setJournalLines(lines) })
+      const lines = await loadExistingJournalLines(e.journalEntryId)
+      setJournalLines(lines)
     } else {
       setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
     }
