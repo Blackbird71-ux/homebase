@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { ViewPeriod } from './BudgetPlannerClient'
 
 export interface BudgetItem {
   id: string
@@ -27,33 +28,31 @@ interface BudgetItemRowProps {
   onUpdate: (id: string, updates: Partial<BudgetItem>) => void
   onDelete: (id: string) => void
   disabled?: boolean
+  viewPeriod?: ViewPeriod
 }
 
 const FREQUENCIES = [
-  { value: 'weekly', label: 'Weekly' },
+  { value: 'weekly',      label: 'Weekly' },
   { value: 'fortnightly', label: 'Fortnightly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'yearly', label: 'Yearly' },
+  { value: 'monthly',     label: 'Monthly' },
+  { value: 'yearly',      label: 'Yearly' },
 ] as const
 
-const monthlyMultiplier: Record<string, number> = {
-  weekly: 4.33,
-  fortnightly: 2.17,
-  monthly: 1,
-  yearly: 1 / 12,
+const MONTHLY_MULT: Record<string, number> = {
+  weekly: 4.33, fortnightly: 2.17, monthly: 1, yearly: 1 / 12,
+}
+const VIEW_MULT: Record<ViewPeriod, number> = {
+  weekly: 1 / 4.33, fortnightly: 1 / 2.17, monthly: 1, yearly: 12,
+}
+const VIEW_ABBREV: Record<ViewPeriod, string> = {
+  weekly: 'wk', fortnightly: 'fn', monthly: 'mo', yearly: 'yr',
 }
 
-function calcMonthly(amount: number, frequency: string): number {
-  return Math.round(amount * (monthlyMultiplier[frequency] ?? 1) * 100) / 100
-}
-
-function formatShort(value: number): string {
+function fmtShort(v: number) {
   return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+    style: 'currency', currency: 'AUD',
+    minimumFractionDigits: 0, maximumFractionDigits: 0,
+  }).format(v)
 }
 
 export function BudgetItemRow({
@@ -61,31 +60,28 @@ export function BudgetItemRow({
   onUpdate,
   onDelete,
   disabled = false,
+  viewPeriod = 'monthly',
 }: BudgetItemRowProps) {
   const [inputValue, setInputValue] = useState(
     item.amount > 0 ? String(item.amount) : ''
   )
 
-  // Sync local input when item changes from outside (e.g. reset to defaults)
   useEffect(() => {
     setInputValue(item.amount > 0 ? String(item.amount) : '')
   }, [item.amount])
 
-  const monthly = calcMonthly(item.amount, item.frequency)
-  const showMonthly = item.amount > 0 && item.frequency !== 'monthly'
+  // Show view-period equivalent when item frequency differs from view period
+  const viewAmount = item.amount > 0 && item.frequency !== viewPeriod
+    ? Math.round(item.amount * (MONTHLY_MULT[item.frequency] ?? 1) * VIEW_MULT[viewPeriod] * 100) / 100
+    : null
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 group hover:bg-muted/20 transition-colors">
-      {/* Item label */}
       <span className="flex-1 min-w-0 text-sm truncate">{item.subcategory}</span>
 
-      {/* Monthly equivalent — only shown when frequency isn't monthly */}
-      <span
-        className={`shrink-0 text-xs text-muted-foreground/60 w-16 text-right transition-opacity ${
-          showMonthly ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-      >
-        {showMonthly ? `${formatShort(monthly)}/mo` : ''}
+      {/* View-period equivalent */}
+      <span className={`shrink-0 text-xs text-muted-foreground/60 w-20 text-right transition-opacity ${viewAmount !== null ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        {viewAmount !== null ? `≈ ${fmtShort(viewAmount)}/${VIEW_ABBREV[viewPeriod]}` : ''}
       </span>
 
       {/* Amount input */}
@@ -103,23 +99,19 @@ export function BudgetItemRow({
             const val = parseFloat(e.target.value)
             const clean = isNaN(val) || val < 0 ? 0 : val
             setInputValue(clean > 0 ? String(clean) : '')
-            if (clean !== item.amount) {
-              onUpdate(item.id, { amount: clean })
-            }
+            if (clean !== item.amount) onUpdate(item.id, { amount: clean })
           }}
           disabled={disabled}
-          className="h-7 pl-5 pr-2 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           placeholder="0.00"
+          className="h-7 pl-5 pr-2 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </div>
 
-      {/* Frequency select */}
+      {/* Frequency */}
       <div className="w-28 shrink-0">
         <Select
           value={item.frequency}
-          onValueChange={(value) => {
-            if (value) onUpdate(item.id, { frequency: value })
-          }}
+          onValueChange={(v) => { if (v) onUpdate(item.id, { frequency: v }) }}
           disabled={disabled}
         >
           <SelectTrigger size="sm" className="h-7 text-xs">
@@ -127,15 +119,13 @@ export function BudgetItemRow({
           </SelectTrigger>
           <SelectContent>
             {FREQUENCIES.map((f) => (
-              <SelectItem key={f.value} value={f.value}>
-                {f.label}
-              </SelectItem>
+              <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Delete button */}
+      {/* Delete */}
       <button
         type="button"
         onClick={() => onDelete(item.id)}
