@@ -55,11 +55,20 @@ export async function PATCH(
   if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 })
 
   const body = await req.json()
-  const { title, location, startTime, endTime, notes, category, sortOrder } = body
+  const { title, location, startTime, endTime, notes, category, sortOrder, targetDayId } = body
+
+  if (targetDayId !== undefined) {
+    const targetDay = await prisma.tripDay.findFirst({
+      where: { id: targetDayId, tripId: id },
+      select: { id: true },
+    })
+    if (!targetDay) return NextResponse.json({ error: 'Target day not found' }, { status: 404 })
+  }
 
   const updated = await prisma.tripActivity.update({
     where: { id: activityId },
     data: {
+      ...(targetDayId !== undefined ? { dayId: targetDayId } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(location !== undefined ? { location } : {}),
       ...(startTime !== undefined ? { startTime: startTime ? new Date(startTime) : null } : {}),

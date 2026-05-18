@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   MapPin, Calendar, ArrowLeft, Pencil, Trash2,
   CheckCircle2, Clock, AlertTriangle,
   Hotel, Car, StickyNote, CalendarDays, Package,
-  Cloud, Wallet, Map, LayoutDashboard,
+  Cloud, Wallet, Map, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Route,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -54,6 +54,15 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
   const [days, setDays] = useState<TripDayShape[]>(initialTrip.days ?? [])
   const [packingEntries, setPackingEntries] = useState<TripPackingEntryShape[]>(initialTrip.packingEntries ?? [])
   const [activeTab, setActiveTab] = useState<TripTab>('overview')
+  const [rightView, setRightView] = useState<'itinerary' | 'map'>('itinerary')
+  const [leftPaneOpen, setLeftPaneOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    return localStorage.getItem('trip-left-pane') !== 'closed'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('trip-left-pane', leftPaneOpen ? 'open' : 'closed')
+  }, [leftPaneOpen])
 
   const now   = new Date()
   const start = new Date(trip.startDate)
@@ -129,6 +138,39 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
+              onClick={() => setLeftPaneOpen(v => !v)}
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors text-muted-foreground"
+              title={leftPaneOpen ? 'Hide sidebar' : 'Show sidebar'}
+            >
+              {leftPaneOpen
+                ? <PanelLeftClose className="h-4 w-4" />
+                : <PanelLeftOpen  className="h-4 w-4" />
+              }
+            </button>
+            {/* Itinerary / Map toggle — desktop only */}
+            <div className="hidden md:flex items-center rounded-md border border-input overflow-hidden">
+              <button
+                onClick={() => setRightView('itinerary')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors',
+                  rightView === 'itinerary' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50',
+                )}
+              >
+                <CalendarDays className="h-4 w-4" />
+                <span className="hidden lg:inline">Itinerary</span>
+              </button>
+              <button
+                onClick={() => setRightView('map')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-input',
+                  rightView === 'map' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50',
+                )}
+              >
+                <Route className="h-4 w-4" />
+                <span className="hidden lg:inline">Map</span>
+              </button>
+            </div>
+            <button
               onClick={() => setIsEditing(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-input hover:bg-accent transition-colors"
             >
@@ -148,8 +190,11 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
 
       {/* ── DESKTOP: two-pane split layout ── */}
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
-        {/* Left pane — overview info, always visible */}
-        <div className="w-72 lg:w-80 shrink-0 border-r border-border flex flex-col overflow-hidden">
+        {/* Left pane — overview info, collapsible */}
+        <div className={cn(
+          'shrink-0 border-r border-border flex flex-col overflow-hidden transition-all duration-200',
+          leftPaneOpen ? 'w-72 lg:w-80' : 'w-0 border-r-0',
+        )}>
           <div className="overflow-y-auto flex-1 p-5 space-y-5">
 
             {/* Quick info cards */}
@@ -245,15 +290,23 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
           </div>
         </div>
 
-        {/* Right pane — itinerary always fully expanded */}
+        {/* Right pane — itinerary or map */}
         <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
-          <ItinerarySection
-            days={days}
-            tripId={trip.id}
-            startDate={trip.startDate}
-            endDate={trip.endDate}
-            onDaysUpdated={setDays}
-          />
+          {rightView === 'itinerary' ? (
+            <ItinerarySection
+              days={days}
+              tripId={trip.id}
+              startDate={trip.startDate}
+              endDate={trip.endDate}
+              onDaysUpdated={setDays}
+            />
+          ) : (
+            <TripMapSection
+              destination={trip.destination}
+              departureLocation={trip.departureLocation}
+              days={days}
+            />
+          )}
         </div>
       </div>
 

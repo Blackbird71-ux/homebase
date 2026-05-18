@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Plus, Loader2, Sun, MapPin, Clock, StickyNote,
-  Pencil, Trash2, Check, Tag, Settings2, GripVertical,
+  Pencil, Trash2, Check, Tag, Settings2, GripVertical, ArrowUpDown,
 } from 'lucide-react'
 import type { TripDayShape, TripActivityShape, TripTagShape } from '@/types'
 import { ActivityEditDialog, getCategoryMeta } from './ActivityEditDialog'
@@ -60,6 +60,10 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
   const [availableTags, setAvailableTags]   = useState<TripTagShape[]>([])
   const [togglingDayTag, setTogglingDayTag] = useState<string | null>(null)
+
+  const [isDraggingActivity, setIsDraggingActivity] = useState(false)
+  const [draggingOverDayId, setDraggingOverDayId]   = useState<string | null>(null)
+  const [isReversingDays, setIsReversingDays]       = useState(false)
 
   // Local activity order for drag-reorder (resets on navigation/refresh — visual only)
   const [localActivities, setLocalActivities] = useState<TripActivityShape[]>([])
@@ -245,6 +249,42 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
     } catch { /* ignore */ }
   }
 
+  async function handleMoveActivity(activityId: string, sourceDayId: string, targetDayId: string) {
+    const sourceDay = days.find((d) => d.id === sourceDayId)
+    const activity  = sourceDay?.activities.find((a) => a.id === activityId)
+    if (!activity) return
+
+    onDaysUpdated(days.map((d) => {
+      if (d.id === sourceDayId) return { ...d, activities: d.activities.filter((a) => a.id !== activityId) }
+      if (d.id === targetDayId) return { ...d, activities: [...d.activities, { ...activity, dayId: targetDayId }] }
+      return d
+    }))
+    setSelectedDayId(targetDayId)
+
+    const res = await fetch(`/api/trips/${tripId}/days/${sourceDayId}/activities/${activityId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetDayId }),
+    })
+    if (!res.ok) {
+      onDaysUpdated(days)
+      setSelectedDayId(sourceDayId)
+    }
+  }
+
+  async function handleReverseDays() {
+    if (!confirm(`Reverse the order of all ${days.length} days? Activities and labels will swap between days (dates stay fixed).`)) return
+    setIsReversingDays(true)
+    try {
+      const res = await fetch(`/api/trips/${tripId}/days/reverse`, { method: 'POST' })
+      if (res.ok) {
+        onDaysUpdated(await res.json())
+      }
+    } finally {
+      setIsReversingDays(false)
+    }
+  }
+
   const missingDays = generateMissingDays()
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -255,13 +295,25 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
       <div className="hb-day-rail">
         <div className="hb-day-rail__head">
           <span>Days</span>
-          <button
-            className="hb-btn hb-btn--ghost hb-btn--sm hb-btn--icon"
-            title="Add day"
-            onClick={() => setAddingDay((v) => !v)}
-          >
-            <Plus size={14} />
-          </button>
+          <div style={{ display: 'flex', gap: 2 }}>
+            {days.length >= 2 && (
+              <button
+                className="hb-btn hb-btn--ghost hb-btn--sm hb-btn--icon"
+                title="Reverse day order"
+                onClick={handleReverseDays}
+                disabled={isReversingDays}
+              >
+                {isReversingDays ? <Loader2 size={14} className="animate-spin" /> : <ArrowUpDown size={14} />}
+              </button>
+            )}
+            <button
+              className="hb-btn hb-btn--ghost hb-btn--sm hb-btn--icon"
+              title="Add day"
+              onClick={() => setAddingDay((v) => !v)}
+            >
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
 
         {/* Missing-days quick-add banner */}
@@ -335,14 +387,41 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
           const monthStr = d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()
           const actCount = day.activities.length
           const tags = day.tags ?? []
+          const isCurrentDay = selectedDayId === day.id
+          const isDragOver  = draggingOverDayId === day.id
           return (
             <button
               key={day.id}
               className="hb-day-chip"
-              aria-selected={selectedDayId === day.id}
+              aria-selected={isCurrentDay}
               onClick={() => setSelectedDayId(day.id)}
               onDoubleClick={() => { setSelectedDayId(day.id); openEditDay(day) }}
-              title={formatDate(day.date) + ' — double-click to edit'}
+              title={formatDate(day.date) + (isDraggingActivity && !isCurrentDay ? ' — drop to move activity here' : ' — double-click to edit')}
+              onDragOver={(e) => {
+                if (!isDraggingActivity || isCurrentDay) return
+                if (!e.dataTransfer.types.includes('text/x-trip-activity')) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (draggingOverDayId !== day.id) setDraggingOverDayId(day.id)
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setDraggingOverDayId(null)
+              }}
+              onDrop={async (e) => {
+                e.preventDefault()
+                setDraggingOverDayId(null)
+                const raw = e.dataTransfer.getData('text/x-trip-activity')
+                if (!raw) return
+                try {
+                  const { activityId, sourceDayId } = JSON.parse(raw) as { activityId: string; sourceDayId: string }
+                  if (sourceDayId !== day.id) await handleMoveActivity(activityId, sourceDayId, day.id)
+                } catch { /* ignore malformed data */ }
+              }}
+              style={
+                isDragOver ? { outline: '2px solid var(--primary)', outlineOffset: '-2px', background: 'color-mix(in srgb, var(--primary) 12%, transparent)' }
+                : isDraggingActivity && !isCurrentDay ? { outline: '1px dashed color-mix(in srgb, var(--primary) 45%, transparent)', outlineOffset: '-1px' }
+                : undefined
+              }
             >
               <div className="hb-day-chip__date">
                 <span className="hb-day-chip__day-num">{dayNum}</span>
@@ -468,22 +547,40 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
               </div>
             )}
 
-            {localActivities.map((activity, i) => (
-              <div key={activity.id} {...activitySortable.itemProps(i)} style={{ position: 'relative' }}>
-                <span
-                  className="hb-activity__handle"
-                  {...activitySortable.handleProps(i)}
-                  title="Drag to reorder"
-                >
-                  <GripVertical size={14} />
-                </span>
-                <ActivityCard
-                  activity={activity}
-                  onEdit={() => setEditDialog({ dayId: selectedDay.id, dayDate: selectedDay.date, activity })}
-                  onDelete={() => handleDeleteActivity(selectedDay.id, activity.id)}
-                />
-              </div>
-            ))}
+            {localActivities.map((activity, i) => {
+              const hp = activitySortable.handleProps(i)
+              return (
+                <div key={activity.id} {...activitySortable.itemProps(i)} style={{ position: 'relative' }}>
+                  <span
+                    className="hb-activity__handle"
+                    {...hp}
+                    onDragStart={(e) => {
+                      hp.onDragStart?.(e as unknown as React.DragEvent<HTMLElement>)
+                      try {
+                        e.dataTransfer.setData('text/x-trip-activity', JSON.stringify({
+                          activityId: activity.id,
+                          sourceDayId: selectedDay.id,
+                        }))
+                      } catch { /* ignore */ }
+                      setIsDraggingActivity(true)
+                    }}
+                    onDragEnd={(e) => {
+                      hp.onDragEnd?.(e as unknown as React.DragEvent<HTMLElement>)
+                      setIsDraggingActivity(false)
+                      setDraggingOverDayId(null)
+                    }}
+                    title="Drag to reorder · drag to another day to move"
+                  >
+                    <GripVertical size={14} />
+                  </span>
+                  <ActivityCard
+                    activity={activity}
+                    onEdit={() => setEditDialog({ dayId: selectedDay.id, dayDate: selectedDay.date, activity })}
+                    onDelete={() => handleDeleteActivity(selectedDay.id, activity.id)}
+                  />
+                </div>
+              )
+            })}
 
             {/* Quick-add row */}
             <ActivityForm
