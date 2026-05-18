@@ -30,6 +30,8 @@ import {
   Repeat2,
   Inbox,
   ShieldAlert,
+  ClipboardList,
+  FileCheck,
 } from 'lucide-react'
 
 const groups = [
@@ -56,7 +58,9 @@ const groups = [
       { href: '/finance/trial-balance',  label: 'Trial Balance / GL', icon: Table2,          exact: false },
       { href: '/finance/accounts-payable',    label: 'AP Aging',         icon: CreditCard,      exact: false },
       { href: '/finance/accounts-receivable', label: 'AR Aging',         icon: Banknote,        exact: false },
-      { href: '/finance/reports',      label: 'Reports',            icon: PieChart,        exact: false },
+      { href: '/finance/bas',           label: 'BAS Worksheet',     icon: FileCheck,       exact: false },
+      { href: '/finance/vendor-statement', label: 'Statements',      icon: ClipboardList,   exact: false },
+      { href: '/finance/reports',       label: 'Reports',           icon: PieChart,        exact: false },
     ],
   },
   {
