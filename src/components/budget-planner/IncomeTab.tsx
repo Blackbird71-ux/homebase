@@ -12,6 +12,27 @@ interface IncomeTabProps {
   disabled?: boolean
 }
 
+const monthlyMultiplier: Record<string, number> = {
+  weekly: 4.33,
+  fortnightly: 2.17,
+  monthly: 1,
+  yearly: 1 / 12,
+}
+
+function sectionTotal(items: BudgetItem[]): string | undefined {
+  const total = items.reduce(
+    (sum, i) => sum + i.amount * (monthlyMultiplier[i.frequency] ?? 1),
+    0
+  )
+  if (total === 0) return undefined
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(total) + '/mo'
+}
+
 export function IncomeTab({
   items,
   onUpdate,
@@ -28,7 +49,11 @@ export function IncomeTab({
           </p>
         </div>
       ) : (
-        <CollapsibleSection title="Income Sources" defaultOpen>
+        <CollapsibleSection
+          title="Income Sources"
+          subtitle={sectionTotal(items)}
+          defaultOpen
+        >
           {items.map((item) => (
             <BudgetItemRow
               key={item.id}

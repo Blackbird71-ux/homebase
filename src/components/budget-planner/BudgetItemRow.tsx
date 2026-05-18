@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -35,17 +36,56 @@ const FREQUENCIES = [
   { value: 'yearly', label: 'Yearly' },
 ] as const
 
+const monthlyMultiplier: Record<string, number> = {
+  weekly: 4.33,
+  fortnightly: 2.17,
+  monthly: 1,
+  yearly: 1 / 12,
+}
+
+function calcMonthly(amount: number, frequency: string): number {
+  return Math.round(amount * (monthlyMultiplier[frequency] ?? 1) * 100) / 100
+}
+
+function formatShort(value: number): string {
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
 export function BudgetItemRow({
   item,
   onUpdate,
   onDelete,
   disabled = false,
 }: BudgetItemRowProps) {
+  const [inputValue, setInputValue] = useState(
+    item.amount > 0 ? String(item.amount) : ''
+  )
+
+  // Sync local input when item changes from outside (e.g. reset to defaults)
+  useEffect(() => {
+    setInputValue(item.amount > 0 ? String(item.amount) : '')
+  }, [item.amount])
+
+  const monthly = calcMonthly(item.amount, item.frequency)
+  const showMonthly = item.amount > 0 && item.frequency !== 'monthly'
+
   return (
     <div className="flex items-center gap-2 px-3 py-2 group hover:bg-muted/20 transition-colors">
       {/* Item label */}
-      <span className="flex-1 min-w-0 text-sm truncate">
-        {item.subcategory}
+      <span className="flex-1 min-w-0 text-sm truncate">{item.subcategory}</span>
+
+      {/* Monthly equivalent — only shown when frequency isn't monthly */}
+      <span
+        className={`shrink-0 text-xs text-muted-foreground/60 w-16 text-right transition-opacity ${
+          showMonthly ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        {showMonthly ? `${formatShort(monthly)}/mo` : ''}
       </span>
 
       {/* Amount input */}
@@ -57,16 +97,14 @@ export function BudgetItemRow({
           type="number"
           min={0}
           step={0.01}
-          value={item.amount || ''}
-          onChange={(e) => {
-            const val = parseFloat(e.target.value)
-            onUpdate(item.id, { amount: isNaN(val) ? 0 : val })
-          }}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
           onBlur={(e) => {
-            // Ensure clean formatting on blur
             const val = parseFloat(e.target.value)
-            if (isNaN(val) || val < 0) {
-              onUpdate(item.id, { amount: 0 })
+            const clean = isNaN(val) || val < 0 ? 0 : val
+            setInputValue(clean > 0 ? String(clean) : '')
+            if (clean !== item.amount) {
+              onUpdate(item.id, { amount: clean })
             }
           }}
           disabled={disabled}

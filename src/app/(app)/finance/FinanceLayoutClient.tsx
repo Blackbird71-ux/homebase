@@ -80,8 +80,8 @@ const groups: NavGroup[] = [
   {
     label: 'Planning',
     items: [
-      { href: '/finance/budget',       label: 'Budget',             icon: Wallet,          exact: false },
-      { href: '/finance/goals',        label: 'Goals',              icon: Target,          exact: false },
+      { href: '/finance/budget',                 label: 'Budget',                icon: Wallet,      exact: false },
+      { href: '/finance/goals',                  label: 'Goals',                 icon: Target,      exact: false },
       // Simple Budget Planner added dynamically below when user preference is enabled
     ],
   },
@@ -306,7 +306,7 @@ export default function FinanceLayoutClient({ children, isAdmin }: { children: R
       .catch(() => {})
   }, [pathname])
 
-  // Build items list dynamically — insert Budget Planner into Planning group if enabled
+  // Build items list dynamically — insert Simple Budget Planner into Planning group if enabled
   const groupsWithPlanner = groups.map((group) => {
     if (group.label === 'Planning' && showBudgetPlanner) {
       return {
@@ -314,8 +314,8 @@ export default function FinanceLayoutClient({ children, isAdmin }: { children: R
         items: [
           ...group.items,
           {
-            href: '/budget-planner',
-            label: 'Budget Planner',
+            href: '/finance/simple-budget-planner',
+            label: 'Simple Budget Planner',
             icon: Calculator,
             exact: false,
           },

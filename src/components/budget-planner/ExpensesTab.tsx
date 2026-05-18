@@ -12,7 +12,6 @@ interface ExpensesTabProps {
   disabled?: boolean
 }
 
-// Ordered list of expense categories for display
 const CATEGORY_ORDER = [
   'Home & Utilities',
   'Insurance & Financial',
@@ -24,6 +23,27 @@ const CATEGORY_ORDER = [
   'Pets',
 ]
 
+const monthlyMultiplier: Record<string, number> = {
+  weekly: 4.33,
+  fortnightly: 2.17,
+  monthly: 1,
+  yearly: 1 / 12,
+}
+
+function sectionTotal(items: BudgetItem[]): string | undefined {
+  const total = items.reduce(
+    (sum, i) => sum + i.amount * (monthlyMultiplier[i.frequency] ?? 1),
+    0
+  )
+  if (total === 0) return undefined
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(total) + '/mo'
+}
+
 export function ExpensesTab({
   items,
   onUpdate,
@@ -31,7 +51,6 @@ export function ExpensesTab({
   onAdd,
   disabled = false,
 }: ExpensesTabProps) {
-  // Group items by category in the correct order
   const grouped = CATEGORY_ORDER.map((cat) => ({
     category: cat,
     items: items.filter((i) => i.category === cat),
@@ -47,7 +66,12 @@ export function ExpensesTab({
         </div>
       ) : (
         grouped.map(({ category, items: categoryItems }) => (
-          <CollapsibleSection key={category} title={category} defaultOpen>
+          <CollapsibleSection
+            key={category}
+            title={category}
+            subtitle={sectionTotal(categoryItems)}
+            defaultOpen
+          >
             {categoryItems.map((item) => (
               <BudgetItemRow
                 key={item.id}

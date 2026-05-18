@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
-import { RotateCcw, FileDown, Printer, Plus, Loader2 } from 'lucide-react'
+import { RotateCcw, FileDown, Printer, Loader2 } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import {
@@ -45,7 +45,6 @@ const NEW_ITEM_CATEGORIES = [
 export function BudgetPlannerClient() {
   const [items, setItems] = useState<BudgetItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<string | null>(null) // id of item being saved
 
   // New item creation state
   const [showNewForm, setShowNewForm] = useState<'income' | 'expense' | null>(null)
@@ -73,7 +72,6 @@ export function BudgetPlannerClient() {
   }, [fetchItems])
 
   const updateItem = useCallback(async (id: string, updates: Partial<BudgetItem>) => {
-    setSaving(id)
     try {
       const res = await fetch(`/api/budget-planner/items/${id}`, {
         method: 'PUT',
@@ -89,8 +87,6 @@ export function BudgetPlannerClient() {
       }
     } catch {
       toast.error('Failed to save item')
-    } finally {
-      setSaving(null)
     }
   }, [])
 
@@ -211,12 +207,7 @@ export function BudgetPlannerClient() {
       {/* Main content area with sticky summary */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Tabs defaultValue="income" className="w-full">
+          <Tabs defaultValue="income" className="w-full">
               <TabsList className="mb-4">
                 <TabsTrigger value="income">Income</TabsTrigger>
                 <TabsTrigger value="expenses">Expenses</TabsTrigger>
@@ -374,7 +365,6 @@ export function BudgetPlannerClient() {
                 )}
               </TabsContent>
             </Tabs>
-          )}
         </div>
 
         {/* Summary — sticky at bottom */}
