@@ -124,7 +124,7 @@ function emptyEditForm(kind: 'bill' | 'income', id: string): EditFormState {
     notes: '', billType: 'recurring', frequency: 'monthly',
     autoPay: false, emailReminder: false, reminderDays: 3,
     invoiceReceived: false, invoiceReceivedDate: '',
-    taxClassification: '', addToBudget: false,
+    taxClassification: '', addToBudget: true,
   }
 }
 

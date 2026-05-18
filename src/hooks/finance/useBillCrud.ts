@@ -99,7 +99,7 @@ export function useBillCrud() {
     billType: 'recurring', recurrenceInterval: '',
     invoiceReceived: false, invoiceReceivedDate: '',
     taxClassification: '',
-    addToBudget: false,
+    addToBudget: true,
   }
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
