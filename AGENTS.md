@@ -48,6 +48,24 @@ These rules exist because layout refactors repeatedly caused silent field loss (
 
 ---
 
+# Finance module architecture — shared functions over inline logic
+
+**Keep accounting logic in `src/lib/` helpers, not duplicated in routes or pages.**
+
+This rule exists because inline copies of accounting logic (journal creation, reversal, balance calculation) cause the same bug to exist in multiple places — fixing it in one route leaves the others broken, and inconsistent behavior erodes accounting integrity.
+
+## Rules
+
+1. **Never write GL posting logic inline in an API route.** If a route needs to create a journal entry, call a shared function in `src/lib/` (e.g., `postBillAccrualJournal`, `upsertBillDraftJournal`). If the shared function doesn't exist yet, create it before writing the route logic.
+
+2. **Pages call APIs; pages do not calculate GL amounts.** A `.tsx` page component must never compute account balances, post journal entries, or make accounting decisions. All such logic belongs in API routes and `src/lib/` helpers.
+
+3. **One fix, one place.** If you find yourself updating the same accounting logic in more than one file, stop — extract it to a shared function first, then update the callers.
+
+4. **Shared helpers are the source of truth.** If `src/lib/` has a function for an operation (e.g., `ensureAccountsPayableCategory`), every route that needs that operation must call that function. Never re-implement it inline.
+
+---
+
 # Regression Prevention
 
 See `QA.md` in the project root for:

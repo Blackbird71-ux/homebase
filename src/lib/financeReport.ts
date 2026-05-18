@@ -1,5 +1,9 @@
 // src/lib/financeReport.ts
 // Report data aggregation service — builds YTD report payload for Excel, Print, Email
+//
+// ARCHITECTURE: P&L income/expense figures read exclusively from posted
+// FinanceJournalLine entries (GL-first, same source as pnl/route.ts).
+// Tax estimates are computed from FinanceIncomeEntry (planning data).
 import { prisma } from '@/lib/prisma'
 import {
   fyDateRangeInTz,
@@ -113,6 +117,7 @@ export function fyDateRange(fy: string): { start: Date; end: Date } {
 
 /**
  * Calculate how many times a given frequency fires within a month.
+ * Used by the tax estimation section only.
  */
 function timesPerMonth(frequency: string): number {
   switch (frequency) {
@@ -129,7 +134,6 @@ function timesPerMonth(frequency: string): number {
 
 /**
  * True for frequencies that land on a specific date rather than recurring every month.
- * Lump-sum amounts must NOT be averaged across months — they go in one specific column.
  */
 function isLumpSumFrequency(frequency: string): boolean {
   return frequency === 'yearly' || frequency === 'annual' ||
@@ -138,16 +142,9 @@ function isLumpSumFrequency(frequency: string): boolean {
 }
 
 /**
- * Given an income entry or bill with a lump-sum frequency, return the FY month indices
+ * Given an income entry with a lump-sum frequency, return the FY month indices
  * (0-based within the FY) where the payment lands in the given FY.
- *
- * Uses the same logic as the Annual P&L page's lumpSumColumns() function.
- *
- * @param baseDate      The next expected / next due date (our reference anchor)
- * @param frequency     'quarterly' | 'halfyearly' | 'yearly' | 'annual' | 'one-off'
- * @param fyYear        The FY start year (e.g. 2025 for FY2025-26)
- * @param fyStartMonth  FY start month (1-12; 7 = July)
- * @param monthsComplete How many months of the FY have results so far
+ * Used to filter relevantIncomeEntries for the tax section.
  */
 function lumpSumMonthIndices(
   baseDate: Date,
@@ -162,17 +159,12 @@ function lumpSumMonthIndices(
     return []
   }
 
-  // Interval in months between occurrences
   const intervalMonths =
     frequency === 'quarterly'  ? 3  :
     frequency === 'halfyearly' ? 6  :
     /* yearly / annual */        12
 
-  // Walk backwards from baseDate by intervalMonths until we've covered the whole FY,
-  // and forwards as well, collecting indices that fall within the FY
   const indices: number[] = []
-
-  // Try up to 12 / intervalMonths + 2 occurrences in both directions
   const maxIterations = Math.ceil(12 / intervalMonths) + 2
 
   for (let i = -maxIterations; i <= maxIterations; i++) {
@@ -184,12 +176,11 @@ function lumpSumMonthIndices(
     }
   }
 
-  // Deduplicate and sort
   return [...new Set(indices)].sort((a, b) => a - b)
 }
 
 /**
- * Determine which FY month index a date falls in (AU FY default).
+ * Determine which FY month index a date falls in.
  */
 function monthIndexInFY(date: Date, fyYear: number, fyStartMonth: number = 7): number {
   return fyMonthIndexUtil(date, fyYear, fyStartMonth)
@@ -199,9 +190,13 @@ function monthIndexInFY(date: Date, fyYear: number, fyStartMonth: number = 7): n
 
 /**
  * Build a complete YTD report payload for the given family and financial year.
+ *
+ * P&L figures are GL-first: reads exclusively from posted FinanceJournalLine
+ * entries (income and expense GL account types). Matches the source used by
+ * pnl/route.ts — export and on-screen figures will always agree.
+ *
  * @param fyStartMonth The family's financial year start month (1-12). Default 7 (July).
  * @param tz          The family's IANA timezone. Default 'Australia/Sydney'.
- *                    Used to compute period boundaries correctly on the NAS server (P2 fix #2).
  */
 export async function buildYtdReport(
   familyId: string,
@@ -213,10 +208,7 @@ export async function buildYtdReport(
   const { start, end } = fyDateRangeInTz(fyYear, fyStartMonth, tz)
   const now = new Date()
 
-  // Determine months completed so far in this FY
   const monthsComplete = fyMonthsComplete(now, fyYear, fyStartMonth)
-
-  // Months display labels
   const monthLabels = fyMonthLabels(fyStartMonth)
   const months = monthLabels.slice(0, monthsComplete)
 
@@ -230,31 +222,38 @@ export async function buildYtdReport(
     orderBy: { sortOrder: 'asc' },
     select: { id: true, name: true, isDefault: true },
   })
-
-  // Create a map: entityId → { name, isDefault }
   const entityMap = new Map<string, { name: string; isDefault: boolean }>()
   for (const e of entities) {
     entityMap.set(e.id, { name: e.name, isDefault: e.isDefault })
   }
 
-  // ── Hidden category IDs (exclude from reports) ──────────────────────────
-  const hiddenCategoryIds = new Set(
-    (await prisma.financeCategory.findMany({
-      where: { familyId, hideFromReports: true },
-      select: { id: true },
-    })).map(c => c.id)
-  )
-
-  // ── Fetch income entries ─────────────────────────────────────────────────
-  // For lump-sum entries, we use the nextExpectedDate as the anchor. We need
-  // a wider window than just the FY because a lump-sum payment's nextExpectedDate
-  // might be just outside the FY while the actual occurrences fall inside.
-  // We extend the date window by one interval on each side.
-  const incomeEntries = await prisma.financeIncomeEntry.findMany({
+  // ── GL journal lines — single source of truth for P&L ───────────────────
+  // Fetches all posted income and expense lines for the FY.
+  // Income section: GL accounts with type 'income'
+  // Expense section: GL accounts with type 'expense'
+  const journalLines = await prisma.financeJournalLine.findMany({
     where: {
-      familyId,
-      isActive: true,
+      journalEntry: {
+        familyId,
+        isPosted: true,
+        date: { gte: start, lte: end },
+      },
+      glAccount: {
+        type: { in: ['expense', 'income'] },
+      },
     },
+    include: {
+      glAccount: { select: { id: true, name: true, type: true } },
+      journalEntry: {
+        select: { id: true, description: true, date: true, entityId: true },
+      },
+    },
+    orderBy: { journalEntry: { date: 'asc' } },
+  })
+
+  // ── Income entries — for tax estimation section only ─────────────────────
+  const incomeEntries = await prisma.financeIncomeEntry.findMany({
+    where: { familyId, isActive: true },
     select: {
       id: true,
       name: true,
@@ -272,97 +271,40 @@ export async function buildYtdReport(
     },
   })
 
-  // Filter to entries relevant to this FY
+  // Filter to entries that have occurrences in this FY (used by tax section)
   const relevantIncomeEntries = incomeEntries.filter(inc => {
     if (isLumpSumFrequency(inc.frequency) || inc.incomeType === 'one-off') {
-      // Lump sum: include if any occurrence falls within the FY months we're reporting
-      const indices = lumpSumMonthIndices(
-        new Date(inc.nextExpectedDate), inc.frequency, fyYear, fyStartMonth, monthsComplete
-      )
+      const baseDate = (inc.received && inc.receivedDate)
+        ? new Date(inc.receivedDate)
+        : new Date(inc.nextExpectedDate)
+      const indices = lumpSumMonthIndices(baseDate, inc.frequency, fyYear, fyStartMonth, monthsComplete)
       return indices.length > 0
     }
-    // Recurring: always include (we'll spread across months)
     return true
   })
 
-  // ── Fetch recurring bills ────────────────────────────────────────────────
-  const bills = await prisma.financeRecurringBill.findMany({
-    where: {
-      familyId,
-      isActive: true,
-    },
-    select: {
-      id: true,
-      name: true,
-      amount: true,
-      frequency: true,
-      billType: true,
-      billDate: true,
-      nextDueDate: true,
-      paid: true,
-      entityId: true,
-      taxClassification: true,
-      categoryId: true,
-      category: {
-        select: { id: true, name: true, isTaxDeduction: true },
-      },
-      payments: {
-        select: { amount: true, paymentDate: true },
-      },
-    },
-  })
-
-  // ── Fetch transactions (cash basis) ──────────────────────────────────────
-  const transactions = await prisma.financeTransaction.findMany({
-    where: {
-      familyId,
-      date: { gte: start, lte: end },
-      isCleared: true,
-      type: { not: 'opening_balance' }, // Exclude opening balance entries from P&L
-    },
-    select: {
-      id: true,
-      amount: true,
-      type: true,
-      date: true,
-      description: true,
-      entityId: true,
-      taxClassification: true,
-      categoryId: true,
-      category: {
-        select: { id: true, name: true, isTaxDeduction: true },
-      },
-    },
-  })
-
-  // ── Fetch members for tax reporting ──────────────────────────────────────
+  // ── Members for tax reporting ──────────────────────────────────────────
   const members = await prisma.user.findMany({
     where: { familyId },
     select: { id: true, name: true },
   })
-  const memberMap = new Map(members.map(m => [m.id, m.name]))
 
   // ── Build sections per entity ──────────────────────────────────────────
   const sections: ReportSection[] = []
 
-  // Collect all unique entity IDs from data
+  // Collect unique entityIds from GL lines only — sections only appear if
+  // there are actual posted entries for that entity.
   const entityIds = new Set<string | null>()
-  for (const inc of relevantIncomeEntries) entityIds.add(inc.entityId ?? null)
-  for (const bill of bills) entityIds.add(bill.entityId ?? null)
-  for (const tx of transactions) entityIds.add(tx.entityId ?? null)
+  for (const line of journalLines) entityIds.add(line.journalEntry.entityId ?? null)
 
-  // Include personal/default entity (null entityId)
-  // Sort entities: default first, then by name
   const sortedEntityIds = Array.from(entityIds).sort((a, b) => {
     if (a === null && b === null) return 0
     if (a === null) return -1
     if (b === null) return 1
     const aInfo = entityMap.get(a)
     const bInfo = entityMap.get(b)
-    const aDefault = aInfo?.isDefault ?? false
-    const bDefault = bInfo?.isDefault ?? false
-    if (aDefault && !bDefault) return -1
-    if (!aDefault && bDefault) return 1
+    if (aInfo?.isDefault && !bInfo?.isDefault) return -1
+    if (!aInfo?.isDefault && bInfo?.isDefault) return 1
     return (aInfo?.name ?? '').localeCompare(bInfo?.name ?? '')
   })
 
@@ -370,158 +312,84 @@ export async function buildYtdReport(
   let totalExpenses = 0
 
   for (const entityId of sortedEntityIds) {
+    const entityLines = journalLines.filter(
+      l => (l.journalEntry.entityId ?? null) === entityId
+    )
+    if (entityLines.length === 0) continue
+
     const entityInfo = entityId ? entityMap.get(entityId) : null
     const sectionName = entityInfo?.name ?? 'Personal'
 
-    // ── Income rows for this entity ────────────────────────────────────
-    const entityIncomeEntries = relevantIncomeEntries.filter(
-      inc => (inc.entityId ?? null) === entityId
-    )
+    // ── Income rows ────────────────────────────────────────────────────
+    // Group by GL account name; normal balance for income = credit.
+    const incomeByAccount = new Map<string, { monthly: number[]; total: number }>()
 
-    const incomeRows: ReportRow[] = []
-    let incomeSubtotal = 0
+    for (const line of entityLines.filter(l => l.glAccount.type === 'income')) {
+      const netAmount = line.side === 'credit' ? line.amount : -line.amount
+      if (netAmount === 0) continue
+      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth)
+      if (mi < 0 || mi >= monthsComplete) continue
 
-    // Process each income entry individually (not deduplicated by name, to preserve
-    // correct month placement for lump sums with the same name)
-    for (const inc of entityIncomeEntries) {
-      const monthly = new Array(monthsComplete).fill(0)
-      let total = 0
-
-      const isLumpSum = isLumpSumFrequency(inc.frequency) || inc.incomeType === 'one-off'
-
-      if (isLumpSum) {
-        // P1 fix: lump-sum income lands in specific months, not spread evenly.
-        // If the income has been received, use the actual receivedDate.
-        const baseDate = (inc.received && inc.receivedDate)
-          ? new Date(inc.receivedDate)
-          : new Date(inc.nextExpectedDate)
-
-        const indices = lumpSumMonthIndices(baseDate, inc.frequency, fyYear, fyStartMonth, monthsComplete)
-        for (const idx of indices) {
-          monthly[idx] = Math.round((monthly[idx] + inc.amount) * 100) / 100
-          total += inc.amount
-        }
-        total = Math.round(total * 100) / 100
-      } else {
-        // Genuinely recurring: spread evenly across all completed months
-        const perMonth = inc.amount * timesPerMonth(inc.frequency)
-        for (let m = 0; m < monthsComplete; m++) {
-          monthly[m] = Math.round(perMonth * 100) / 100
-        }
-        total = Math.round(perMonth * monthsComplete * 100) / 100
+      const key = line.glAccount.name
+      if (!incomeByAccount.has(key)) {
+        incomeByAccount.set(key, { monthly: new Array(monthsComplete).fill(0), total: 0 })
       }
-
-      if (total === 0) continue
-
-      // Merge with existing row of same label if present
-      const existingRow = incomeRows.find(r => r.label === inc.name)
-      if (existingRow) {
-        for (let m = 0; m < monthsComplete; m++) {
-          existingRow.monthly[m] = Math.round((existingRow.monthly[m] + monthly[m]) * 100) / 100
-        }
-        existingRow.total = Math.round((existingRow.total + total) * 100) / 100
-        incomeSubtotal += total
-      } else {
-        incomeRows.push({ label: inc.name, monthly, total })
-        incomeSubtotal += total
-      }
+      const g = incomeByAccount.get(key)!
+      g.monthly[mi] = Math.round((g.monthly[mi] + netAmount) * 100) / 100
+      g.total       = Math.round((g.total + netAmount) * 100) / 100
     }
 
-    // ── Expense rows for this entity ───────────────────────────────────
-    const entityBills = bills.filter(
-      bill => (bill.entityId ?? null) === entityId
-    )
-    const entityTransactions = transactions.filter(
-      tx => (tx.entityId ?? null) === entityId
-    )
+    const incomeRows: ReportRow[] = Array.from(incomeByAccount.entries())
+      .filter(([, d]) => d.total > 0)
+      .map(([label, d]) => ({ label, monthly: d.monthly, total: d.total }))
+      .sort((a, b) => b.total - a.total)
 
-    // Group bills by category
-    const expenseByCategory = new Map<string, ReportRow[]>()
+    const incomeSubtotal = Math.round(
+      incomeRows.reduce((s, r) => s + r.total, 0) * 100
+    ) / 100
 
-    function addExpenseRow(categoryName: string, label: string, monthly: number[], total: number) {
-      if (!expenseByCategory.has(categoryName)) {
-        expenseByCategory.set(categoryName, [])
+    // ── Expense categories ─────────────────────────────────────────────
+    // Group by GL account name (= category); rows grouped by journal description.
+    // Normal balance for expense = debit.
+    const expenseByAccount = new Map<string, Map<string, { monthly: number[]; total: number }>>()
+
+    for (const line of entityLines.filter(l => l.glAccount.type === 'expense')) {
+      const netAmount = line.side === 'debit' ? line.amount : -line.amount
+      if (netAmount === 0) continue
+      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth)
+      if (mi < 0 || mi >= monthsComplete) continue
+
+      const acctName = line.glAccount.name
+      const rowLabel = line.journalEntry.description || 'Transaction'
+
+      if (!expenseByAccount.has(acctName)) expenseByAccount.set(acctName, new Map())
+      const acctRows = expenseByAccount.get(acctName)!
+
+      if (!acctRows.has(rowLabel)) {
+        acctRows.set(rowLabel, { monthly: new Array(monthsComplete).fill(0), total: 0 })
       }
-      const rows = expenseByCategory.get(categoryName)!
-      const existingRow = rows.find(r => r.label === label)
-      if (existingRow) {
-        for (let m = 0; m < monthsComplete; m++) {
-          existingRow.monthly[m] = Math.round((existingRow.monthly[m] + monthly[m]) * 100) / 100
-        }
-        existingRow.total = Math.round((existingRow.total + total) * 100) / 100
-      } else {
-        rows.push({ label, monthly, total })
-      }
+      const r = acctRows.get(rowLabel)!
+      r.monthly[mi] = Math.round((r.monthly[mi] + netAmount) * 100) / 100
+      r.total       = Math.round((r.total + netAmount) * 100) / 100
     }
 
-    // Add bill-based expenses (P1 fix: use lumpSumMonthIndices for lump-sum bills)
-    // Bills with payment records via FinanceBillPayment are SKIPPED here because
-    // their individual payment transactions are already captured as cleared
-    // expense transactions in the transaction loop below. Skipping prevents
-    // double-counting (same logic as the PNL route's billIdWithTxInPeriod dedup).
-    for (const bill of entityBills) {
-      if (bill.categoryId && hiddenCategoryIds.has(bill.categoryId)) continue
-      const billPayments = (bill as any).payments
-      if (billPayments && billPayments.length > 0) continue
-
-      const catName = bill.category?.name ?? 'Uncategorised'
-      const monthly = new Array(monthsComplete).fill(0)
-      let total = 0
-
-      const isLumpSum = isLumpSumFrequency(bill.frequency) || bill.billType === 'one-off'
-
-      if (isLumpSum) {
-        const baseDate = (bill.paid && (bill as any).paidDate)
-          ? new Date((bill as any).paidDate)
-          : new Date(bill.billDate ?? bill.nextDueDate)
-        const indices = lumpSumMonthIndices(baseDate, bill.frequency, fyYear, fyStartMonth, monthsComplete)
-        for (const idx of indices) {
-          monthly[idx] = Math.round((monthly[idx] + bill.amount) * 100) / 100
-          total += bill.amount
-        }
-        total = Math.round(total * 100) / 100
-      } else {
-        const perMonth = bill.amount * timesPerMonth(bill.frequency)
-        for (let m = 0; m < monthsComplete; m++) {
-          monthly[m] = Math.round(perMonth * 100) / 100
-        }
-        total = Math.round(perMonth * monthsComplete * 100) / 100
-      }
-
-      if (total > 0) {
-        addExpenseRow(catName, bill.name, monthly, total)
-      }
-    }
-
-    // Add transaction-based expenses (cash basis — placed in actual month)
-    for (const tx of entityTransactions) {
-      if (tx.type === 'expense') {
-        if (tx.categoryId && hiddenCategoryIds.has(tx.categoryId)) continue
-        const catName = tx.category?.name ?? 'Uncategorised'
-        const label = tx.description || 'Transaction'
-        const monthly = new Array(monthsComplete).fill(0)
-        const mi = monthIndexInFY(tx.date, fyYear, fyStartMonth)
-        if (mi >= 0 && mi < monthsComplete) {
-          monthly[mi] = Math.round(tx.amount * 100) / 100
-        }
-        addExpenseRow(catName, label, monthly, Math.round(tx.amount * 100) / 100)
-      }
-    }
-
-    // Build expense categories
     const expenseCategories: ReportCategory[] = []
     let expenseSubtotal = 0
 
-    for (const [catName, rows] of expenseByCategory) {
-      const categorySubtotal = rows.reduce((sum, r) => sum + r.total, 0)
-      expenseCategories.push({
-        name: catName,
-        rows,
-        subtotal: Math.round(categorySubtotal * 100) / 100,
-      })
-      expenseSubtotal += categorySubtotal
+    for (const [catName, rowsMap] of expenseByAccount) {
+      const rows: ReportRow[] = Array.from(rowsMap.entries())
+        .filter(([, d]) => d.total > 0)
+        .map(([label, d]) => ({ label, monthly: d.monthly, total: d.total }))
+        .sort((a, b) => b.total - a.total)
+
+      const catSubtotal = Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100
+      if (catSubtotal <= 0) continue
+
+      expenseCategories.push({ name: catName, rows, subtotal: catSubtotal })
+      expenseSubtotal += catSubtotal
     }
 
+    expenseCategories.sort((a, b) => b.subtotal - a.subtotal)
     expenseSubtotal = Math.round(expenseSubtotal * 100) / 100
 
     const sectionNett = Math.round((incomeSubtotal - expenseSubtotal) * 100) / 100
@@ -529,53 +397,42 @@ export async function buildYtdReport(
     sections.push({
       name: sectionName,
       entityId,
-      income: {
-        rows: incomeRows,
-        subtotal: incomeSubtotal,
-      },
-      expenses: {
-        categories: expenseCategories,
-        subtotal: expenseSubtotal,
-      },
-      nett: sectionNett,
+      income:   { rows: incomeRows, subtotal: incomeSubtotal },
+      expenses: { categories: expenseCategories, subtotal: expenseSubtotal },
+      nett:     sectionNett,
     })
 
-    totalIncome += incomeSubtotal
-    totalExpenses += expenseSubtotal
+    totalIncome    += incomeSubtotal
+    totalExpenses  += expenseSubtotal
   }
 
-  // ── Tax data ─────────────────────────────────────────────────────────────
-  // Check if any taxClassification fields are populated
+  // ── Tax data (estimated — reads from income entries) ─────────────────────
+  // The tax section is a planning/estimation tool. It reads from FinanceIncomeEntry
+  // because that table carries fields (isTaxTracked, taxRate, memberId) that are
+  // not present on journal lines. Figures here are projections, not GL amounts.
   const hasTaxIncome = relevantIncomeEntries.some(inc => inc.taxClassification)
-  const hasTaxBills = bills.some(b => b.taxClassification)
-  const hasTaxTx = transactions.some(tx => tx.taxClassification)
 
   let tax: ReportPayload['tax'] = null
 
-  if (hasTaxIncome || hasTaxBills || hasTaxTx) {
-    // Build tax by entity (computed once, outside member loop)
+  if (hasTaxIncome) {
     const taxByEntity: TaxByEntity[] = []
     for (const entity of entities) {
       const entityIncome = relevantIncomeEntries
         .filter(inc => inc.entityId === entity.id && inc.isTaxTracked)
         .reduce((sum, inc) => sum + inc.amount * timesPerMonth(inc.frequency) * monthsComplete, 0)
-      const entityExpenses = bills
-        .filter(b => b.entityId === entity.id && b.category?.isTaxDeduction)
-        .reduce((sum, b) => sum + b.amount * timesPerMonth(b.frequency) * monthsComplete, 0)
 
-      if (entityIncome > 0 || entityExpenses > 0) {
+      if (entityIncome > 0) {
         taxByEntity.push({
-          entityId: entity.id,
-          entityName: entity.name,
-          income: Math.round(entityIncome * 100) / 100,
-          expenses: Math.round(entityExpenses * 100) / 100,
-          taxableIncome: Math.round((entityIncome - entityExpenses) * 100) / 100,
-          estimatedTax: Math.round(Math.max(0, entityIncome - entityExpenses) * 0.25 * 100) / 100,
+          entityId:       entity.id,
+          entityName:     entity.name,
+          income:         Math.round(entityIncome * 100) / 100,
+          expenses:       0,
+          taxableIncome:  Math.round(entityIncome * 100) / 100,
+          estimatedTax:   Math.round(Math.max(0, entityIncome) * 0.25 * 100) / 100,
         })
       }
     }
 
-    // Build tax by member
     const taxByMember: TaxByMember[] = []
     for (const member of members) {
       const memberIncome = relevantIncomeEntries.filter(
@@ -587,31 +444,27 @@ export async function buildYtdReport(
 
       if (taxableIncome > 0) {
         taxByMember.push({
-          memberId: member.id,
-          memberName: member.name,
-          taxableIncome: Math.round(taxableIncome * 100) / 100,
-          deductions: 0,
-          totalTaxable: Math.round(taxableIncome * 100) / 100,
-          paygWithheld: 0,
-          taxPayments: 0,
-          taxCreditForDivs: 0,
-          estimatedTaxPayable: Math.round(estimateTax(taxableIncome) * 100) / 100,
-          estimatedRefundOrOwing: 0,
-          sgcEmployer: 0,
+          memberId:                  member.id,
+          memberName:                member.name,
+          taxableIncome:             Math.round(taxableIncome * 100) / 100,
+          deductions:                0,
+          totalTaxable:              Math.round(taxableIncome * 100) / 100,
+          paygWithheld:              0,
+          taxPayments:               0,
+          taxCreditForDivs:          0,
+          estimatedTaxPayable:       Math.round(estimateTax(taxableIncome) * 100) / 100,
+          estimatedRefundOrOwing:    0,
+          sgcEmployer:               0,
           superContributionsVoluntary: 0,
-          superCapUsed: 0,
-          superCapLimit: 30000,
+          superCapUsed:              0,
+          superCapLimit:             30000,
         })
       }
     }
 
     tax = {
       byMember: taxByMember,
-      joint: {
-        bankInterest: 0,
-        otherJointIncome: 0,
-        total: 0,
-      },
+      joint: { bankInterest: 0, otherJointIncome: 0, total: 0 },
       byEntity: taxByEntity,
     }
   }
@@ -619,16 +472,16 @@ export async function buildYtdReport(
   return {
     meta: {
       financialYear: year,
-      generatedAt: new Date().toISOString(),
+      generatedAt:   new Date().toISOString(),
       periodLabel,
       monthsComplete,
       months,
     },
     sections,
     totals: {
-      totalIncome: Math.round(totalIncome * 100) / 100,
-      totalExpenses: Math.round(totalExpenses * 100) / 100,
-      totalNett: Math.round((totalIncome - totalExpenses) * 100) / 100,
+      totalIncome:    Math.round(totalIncome * 100) / 100,
+      totalExpenses:  Math.round(totalExpenses * 100) / 100,
+      totalNett:      Math.round((totalIncome - totalExpenses) * 100) / 100,
     },
     tax,
   }

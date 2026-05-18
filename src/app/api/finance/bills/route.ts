@@ -4,9 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks, max } from 'date-fns'
 import {
   ensureAccountsPayableCategory,
-  createGstJournalEntry,
 } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { postBillAccrualJournal } from '@/lib/finance-posting'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -28,79 +28,6 @@ interface JournalLine {
   side: 'debit' | 'credit'
   amount: number
   description?: string
-}
-
-// ── Core GL posting function for bills ───────────────────────────────────────
-// Called atomically from both POST (when invoiceReceived=true on create)
-// and PATCH (when invoiceReceived transitions false→true).
-//
-// Accounting: DR Expense Account / CR Accounts Payable
-// Creates the journal entry and posts it immediately.
-// Returns the journal entry ID.
-async function postBillToGL(
-  billId: string,
-  billName: string,
-  amount: number,
-  categoryId: string,
-  entityId: string | null,
-  familyId: string,
-  invoiceDate: Date,
-  existingJournalEntryId: string | null,
-): Promise<string> {
-  const apCategoryId = await ensureAccountsPayableCategory(familyId)
-
-  // Validate GL accounts
-  const glIds = [categoryId, apCategoryId]
-  const validAccounts = await prisma.financeCategory.findMany({
-    where: { id: { in: glIds }, familyId },
-    select: { id: true },
-  })
-  if (validAccounts.length !== glIds.length) {
-    throw new Error('One or more GL accounts not found for bill posting')
-  }
-
-  // If an existing draft journal entry exists, post it (update isPosted=true)
-  if (existingJournalEntryId) {
-    const existing = await prisma.financeJournalEntry.findFirst({
-      where: { id: existingJournalEntryId, familyId },
-      include: { lines: true },
-    })
-    if (existing && !existing.isPosted && existing.lines.length >= 2) {
-      // Verify the lines are balanced
-      const dr = existing.lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
-      const cr = existing.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
-      if (Math.abs(dr - cr) <= 0.005) {
-        await prisma.financeJournalEntry.update({
-          where: { id: existingJournalEntryId },
-          data: { isPosted: true, date: invoiceDate },
-        })
-        return existingJournalEntryId
-      }
-      // Unbalanced draft — fall through to create a fresh auto journal
-    }
-  }
-
-  // Auto-create the standard bill journal: DR expense / CR AP
-  const reference = await nextJournalReference(familyId)
-  const entry = await prisma.financeJournalEntry.create({
-    data: {
-      reference,
-      date: invoiceDate,
-      description: billName,
-      type: 'auto_transaction',
-      isPosted: true,   // Posted immediately — this IS the accrual recognition event
-      entityId: entityId ?? null,
-      familyId,
-      lines: {
-        create: [
-          { glAccountId: categoryId,   side: 'debit',  amount, description: billName },
-          { glAccountId: apCategoryId, side: 'credit', amount, description: `AP: ${billName}` },
-        ],
-      },
-    },
-    select: { id: true },
-  })
-  return entry.id
 }
 
 // ── Stage 2 GL posting: Bill paid → DR AP / CR Bank ──────────────────────────
@@ -364,13 +291,14 @@ export async function POST(request: NextRequest) {
   // Materialise custom journal split as a draft first (if provided).
   // GL-FIRST: when the client sends explicit `journalLines` (e.g. a 3-line GST
   // split), write them as a draft journal entry BEFORE posting. Then
-  // postBillToGL's existing "promote balanced draft as-is" branch will preserve
-  // the user's split end-to-end. Without this step, postBillToGL falls through
-  // to its hardcoded 2-line DR Expense / CR AP default and the GST line is lost.
+  // postBillAccrualJournal's "promote balanced draft as-is" branch will preserve
+  // the user's split end-to-end. Without this step, postBillAccrualJournal falls
+  // through to its hardcoded 2-line DR Expense / CR AP default and the GST line
+  // is lost.
   //
   // This step runs for BOTH posted and unposted bills:
   //   - shouldPostInvoice=false: ends here, bill keeps the draft journal for later promotion
-  //   - shouldPostInvoice=true:  draft is then promoted by postBillToGL below
+  //   - shouldPostInvoice=true:  draft is then promoted by postBillAccrualJournal below
   let draftJeId: string | null = null
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
@@ -397,16 +325,15 @@ export async function POST(request: NextRequest) {
 
   if (shouldPostInvoice && categoryId) {
     try {
-      const journalEntryId = await postBillToGL(
-        bill.id,
-        name,
-        parsedAmount,
-        categoryId,
-        entityId ?? null,
-        session.familyId,
-        invoiceDate,
-        draftJeId,
-      )
+      const { journalEntryId } = await postBillAccrualJournal(prisma, {
+        familyId: session.familyId,
+        description: name,
+        amount: parsedAmount,
+        expenseGlAccountId: categoryId,
+        entityId: entityId ?? null,
+        date: invoiceDate,
+        draftJournalEntryId: draftJeId,
+      })
       if (journalEntryId !== draftJeId) {
         await prisma.financeRecurringBill.update({
           where: { id: bill.id },
@@ -540,22 +467,21 @@ export async function PUT(request: NextRequest) {
   }
 
   // Step 2: promote to posted if the user is transitioning false->true.
-  // postBillToGL finds the just-written balanced draft via workingJeId and
+  // postBillAccrualJournal finds the just-written balanced draft via workingJeId and
   // promotes it as-is, preserving any custom split (e.g. 3-line GST entry).
   if (invoiceReceivedTransition) {
     try {
       const effectiveCategoryId = categoryId ?? existing.categoryId
       if (effectiveCategoryId) {
-        const journalEntryId = await postBillToGL(
-          bill.id,
-          name ?? existing.name,
-          amount !== undefined ? parseFloat(amount) : existing.amount,
-          effectiveCategoryId,
-          entityId !== undefined ? (entityId ?? null) : existing.entityId,
-          session.familyId,
-          invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
-          workingJeId,
-        )
+        const { journalEntryId } = await postBillAccrualJournal(prisma, {
+          familyId: session.familyId,
+          description: name ?? existing.name,
+          amount: amount !== undefined ? parseFloat(amount) : existing.amount,
+          expenseGlAccountId: effectiveCategoryId,
+          entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
+          date: invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
+          draftJournalEntryId: workingJeId,
+        })
         if (journalEntryId !== workingJeId) {
           await prisma.financeRecurringBill.update({
             where: { id: bill.id },
@@ -970,102 +896,18 @@ export async function PATCH(request: NextRequest) {
     // ATOMIC: post to GL + update bill status together
     try {
       await prisma.$transaction(async (tx) => {
-        // 1. Post the journal entry to the GL
-        const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
-
-        // Check for existing draft journal to post
-        const existingJeId: string | null = existing.journalEntryId ?? null
-        let journalEntryId: string
-
-        // GL-FIRST: if a draft journal exists with balanced lines (e.g. a user-entered
-        // GST split), promote it to posted rather than discarding it and building a
-        // generic 2-line DR expense / CR AP entry. The user's custom split IS the
-        // authoritative GL record — always honour it.
-        if (existingJeId) {
-          const existingJe = await tx.financeJournalEntry.findFirst({
-            where: { id: existingJeId, familyId: session.familyId },
-            include: { lines: true },
-          })
-          if (existingJe && !existingJe.isPosted && existingJe.lines.length >= 2) {
-            const dr = existingJe.lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
-            const cr = existingJe.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
-            if (Math.abs(dr - cr) <= 0.005) {
-              // ✅ Balanced draft — promote as-is; preserves GST splits and any
-              //    custom lines the user configured in the journal lines editor.
-              await tx.financeJournalEntry.update({
-                where: { id: existingJeId },
-                data: { isPosted: true, date: invoiceDate },
-              })
-              journalEntryId = existingJeId
-            } else {
-              // Unbalanced draft — fall back to standard 2-line auto entry
-              const reference = await nextJournalReference(session.familyId)
-              const je = await tx.financeJournalEntry.create({
-                data: {
-                  reference,
-                  date: invoiceDate,
-                  description: existing.name,
-                  type: 'auto_transaction',
-                  isPosted: true,
-                  entityId: existing.entityId ?? null,
-                  familyId: session.familyId,
-                  lines: {
-                    create: [
-                      { glAccountId: existing.categoryId!, side: 'debit',  amount: existing.amount, description: existing.name },
-                      { glAccountId: apCategoryId,         side: 'credit', amount: existing.amount, description: `AP: ${existing.name}` },
-                    ],
-                  },
-                },
-                select: { id: true },
-              })
-              journalEntryId = je.id
-            }
-          } else {
-            // Already posted or has no lines — create fresh standard entry
-            const reference = await nextJournalReference(session.familyId)
-            const je = await tx.financeJournalEntry.create({
-              data: {
-                reference,
-                date: invoiceDate,
-                description: existing.name,
-                type: 'auto_transaction',
-                isPosted: true,
-                entityId: existing.entityId ?? null,
-                familyId: session.familyId,
-                lines: {
-                  create: [
-                    { glAccountId: existing.categoryId!, side: 'debit',  amount: existing.amount, description: existing.name },
-                    { glAccountId: apCategoryId,         side: 'credit', amount: existing.amount, description: `AP: ${existing.name}` },
-                  ],
-                },
-              },
-              select: { id: true },
-            })
-            journalEntryId = je.id
-          }
-        } else {
-          // No draft journal at all — create standard 2-line entry
-          const reference = await nextJournalReference(session.familyId)
-          const je = await tx.financeJournalEntry.create({
-            data: {
-              reference,
-              date: invoiceDate,
-              description: existing.name,
-              type: 'auto_transaction',
-              isPosted: true,
-              entityId: existing.entityId ?? null,
-              familyId: session.familyId,
-              lines: {
-                create: [
-                  { glAccountId: existing.categoryId!, side: 'debit',  amount: existing.amount, description: existing.name },
-                  { glAccountId: apCategoryId,         side: 'credit', amount: existing.amount, description: `AP: ${existing.name}` },
-                ],
-              },
-            },
-            select: { id: true },
-          })
-          journalEntryId = je.id
-        }
+        // 1. Post the journal entry to the GL via the canonical shared helper.
+        //    Promotes a balanced draft (preserving GST splits) if one exists;
+        //    falls back to a fresh DR Expense / CR AP entry otherwise.
+        const { journalEntryId } = await postBillAccrualJournal(tx, {
+          familyId: session.familyId,
+          description: existing.name,
+          amount: existing.amount,
+          expenseGlAccountId: existing.categoryId!,
+          entityId: existing.entityId,
+          date: invoiceDate,
+          draftJournalEntryId: existing.journalEntryId ?? null,
+        })
 
         // 2. Create the invoice transaction record (for backward compat tracking)
         const invoiceTx = await tx.financeTransaction.create({
