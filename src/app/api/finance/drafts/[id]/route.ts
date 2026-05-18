@@ -19,7 +19,7 @@ export async function PATCH(
     if (kind === 'bill') {
       const existing = await prisma.financeRecurringBill.findFirst({
         where: { id, familyId: user.familyId, status: 'draft' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, journalEntryId: true, billDate: true, nextDueDate: true },
       })
       if (!existing) {
         return NextResponse.json({ error: 'Draft bill not found' }, { status: 404 })
@@ -38,9 +38,50 @@ export async function PATCH(
       if (fields.frequency !== undefined) data.frequency = fields.frequency || null
       if (fields.notes !== undefined) data.notes = fields.notes || null
 
-      const updated = await prisma.financeRecurringBill.update({
-        where: { id },
-        data,
+      const hasLines = fields.lines && Array.isArray(fields.lines) && fields.lines.length >= 2
+      const journalEntryId = existing.journalEntryId
+
+      const lineData = hasLines
+        ? (fields.lines as Record<string, unknown>[]).map(l => ({
+            glAccountId: String(l.glAccountId),
+            side: String(l.side),
+            amount: parseFloat(String(l.amount)) || 0,
+            description: l.description ? String(l.description) : null,
+          }))
+        : []
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const bill = await tx.financeRecurringBill.update({ where: { id }, data })
+
+        if (hasLines) {
+          if (journalEntryId) {
+            await tx.financeJournalEntry.update({
+              where: { id: journalEntryId },
+              data: { lines: { deleteMany: {}, create: lineData } },
+            })
+          } else {
+            // Old draft without a pre-spawn journal — create one now so approval
+            // can promote it via branch (a) of postBillAccrualJournal.
+            const draftJournal = await tx.financeJournalEntry.create({
+              data: {
+                reference: null,
+                date: existing.billDate ?? existing.nextDueDate,
+                description: existing.name,
+                type: 'auto_transaction',
+                isPosted: false,
+                familyId: user.familyId,
+                lines: { create: lineData },
+              },
+              select: { id: true },
+            })
+            await tx.financeRecurringBill.update({
+              where: { id },
+              data: { journalEntryId: draftJournal.id },
+            })
+          }
+        }
+
+        return bill
       })
 
       await createAuditLog(
@@ -53,7 +94,7 @@ export async function PATCH(
     } else if (kind === 'income') {
       const existing = await prisma.financeIncomeEntry.findFirst({
         where: { id, familyId: user.familyId, status: 'draft' },
-        select: { id: true, name: true, journalEntryId: true },
+        select: { id: true, name: true, journalEntryId: true, nextExpectedDate: true },
       })
       if (!existing) {
         return NextResponse.json({ error: 'Draft income entry not found' }, { status: 404 })
@@ -74,26 +115,44 @@ export async function PATCH(
       const hasLines = fields.lines && Array.isArray(fields.lines) && fields.lines.length >= 2
       const journalEntryId = existing.journalEntryId
 
+      const lineData = hasLines
+        ? (fields.lines as Record<string, unknown>[]).map(l => ({
+            glAccountId: String(l.glAccountId),
+            side: String(l.side),
+            amount: parseFloat(String(l.amount)) || 0,
+            description: l.description ? String(l.description) : null,
+          }))
+        : []
+
       const updated = await prisma.$transaction(async (tx) => {
         const entry = await tx.financeIncomeEntry.update({ where: { id }, data })
 
-        // Update the linked draft journal entry lines when provided.
-        // This is the unposted journal created by the spawn service from template lines.
-        if (hasLines && journalEntryId) {
-          await tx.financeJournalEntry.update({
-            where: { id: journalEntryId },
-            data: {
-              lines: {
-                deleteMany: {},
-                create: (fields.lines as Record<string, unknown>[]).map(l => ({
-                  glAccountId: String(l.glAccountId),
-                  side: String(l.side),
-                  amount: parseFloat(String(l.amount)) || 0,
-                  description: l.description ? String(l.description) : null,
-                })),
+        if (hasLines) {
+          if (journalEntryId) {
+            await tx.financeJournalEntry.update({
+              where: { id: journalEntryId },
+              data: { lines: { deleteMany: {}, create: lineData } },
+            })
+          } else {
+            // Old draft without a pre-spawn journal — create one now so approval
+            // can promote it via branch (a) of postIncomeAccrualJournal.
+            const draftJournal = await tx.financeJournalEntry.create({
+              data: {
+                reference: null,
+                date: existing.nextExpectedDate,
+                description: existing.name,
+                type: 'auto_transaction',
+                isPosted: false,
+                familyId: user.familyId,
+                lines: { create: lineData },
               },
-            },
-          })
+              select: { id: true },
+            })
+            await tx.financeIncomeEntry.update({
+              where: { id },
+              data: { journalEntryId: draftJournal.id },
+            })
+          }
         }
 
         return entry

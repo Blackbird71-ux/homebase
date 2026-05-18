@@ -12,6 +12,12 @@ export async function GET() {
         template: { select: { id: true, name: true } },
         vendor: { select: { id: true, name: true } },
         category: { select: { id: true, name: true, type: true } },
+        journalEntry: {
+          select: {
+            id: true,
+            lines: { select: { glAccountId: true, side: true, amount: true, description: true } },
+          },
+        },
       },
       orderBy: { nextDueDate: 'asc' },
     }),

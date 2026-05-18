@@ -326,7 +326,7 @@ export async function spawnDraftsForTemplate(
           // billDate = occurrence date (GL recognition date: when liability is incurred).
           // nextDueDate = occurrence + defaultDueOffsetDays (when payment is expected).
           const dueDate = addDays(occurrenceDate, template.defaultDueOffsetDays)
-          await tx.financeRecurringBill.create({
+          const draftBill = await tx.financeRecurringBill.create({
             data: {
               name: template.name,
               amount: headlineAmount,
@@ -356,7 +356,47 @@ export async function spawnDraftsForTemplate(
               spawnedAt: new Date(),
               spawnedSnapshotHash: snapshotHash,
             },
+            select: { id: true },
           })
+
+          // Templates with ≥2 balanced lines (e.g. expense + GST + AP): materialise
+          // the template lines into an unposted draft FinanceJournalEntry so the
+          // draft editor shows the correct split and approval promotes it via branch
+          // (a) of postBillAccrualJournal instead of a plain 2-line DR expense / CR AP.
+          if (snapshotLines.length >= 2) {
+            const totalDr = snapshotLines
+              .filter(l => l.side !== 'credit')
+              .reduce((s, l) => s + l.amount, 0)
+            const totalCr = snapshotLines
+              .filter(l => l.side === 'credit')
+              .reduce((s, l) => s + l.amount, 0)
+            if (Math.abs(totalDr - totalCr) <= 0.005) {
+              const draftJournal = await tx.financeJournalEntry.create({
+                data: {
+                  reference: null,
+                  date: occurrenceDate,
+                  description: template.name,
+                  type: 'auto_transaction',
+                  isPosted: false,
+                  entityId: template.entityId ?? null,
+                  familyId: template.familyId,
+                  lines: {
+                    create: snapshotLines.map(l => ({
+                      glAccountId: l.glAccountId,
+                      side: l.side,
+                      amount: l.amount,
+                      description: l.description || null,
+                    })),
+                  },
+                },
+                select: { id: true },
+              })
+              await tx.financeRecurringBill.update({
+                where: { id: draftBill.id },
+                data: { journalEntryId: draftJournal.id },
+              })
+            }
+          }
         } else {
           const draftEntry = await tx.financeIncomeEntry.create({
             data: {

@@ -342,6 +342,7 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 | **B7** Edit draft before approve | Open draft → change amount → save → approve | Edited amount used in journal (not template default) |
 | **B8** Void a bill | Overflow → Void → enter reason | `isVoided=true`; bill removed from active list; GL NOT automatically reversed |
 | **B9** Bill with GST | Create bill under GST-applicable category | GST component split correctly; net amount posted to expense |
+| **B10** Multi-leg bill template (e.g. GST split) | Create bill template with 3 lines (DR Expense / DR GST Receivable / CR AP) → spawn → open draft in edit dialog → approve | Draft editor shows all 3 lines from template (NOT the 2-line default); approval posts a 3-line journal; trial balance unchanged |
 
 ### 5.2 Income Flow Tests
 
@@ -434,7 +435,9 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 ```
 [ ] No drafts stuck in 'draft' status beyond expected spawn horizon
 [ ] No income entries with status='awaiting_receipt' that are older than 90 days (investigate)
-[ ] No unposted FinanceJournalEntries older than 30 days (investigate — did approval fail?)
+[ ] Unposted FinanceJournalEntries: pre-spawn draft journals (linked via bill.journalEntryId or
+    entry.journalEntryId on a status='draft' record) are intentionally unposted — exclude these
+    from the "older than 30 days" alert. Only flag unposted journals with no linked draft record.
 [ ] Bulk approve does not silently skip entries (check spawnedSnapshotHash match)
 ```
 
@@ -594,13 +597,15 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 
 **Contains:** `spawnTemplateDrafts()` — creates FinanceRecurringBill or FinanceIncomeEntry from templates.
 
-**If changed:** Run T4–T8, I6–I8, B5–B7.
+**If changed:** Run T4–T8, I6–I8, B5–B7, B10.
 
 **Critical invariants:**
-- Must capture `draftEntry.id` from create call (not re-query).
-- Must create linked unposted FinanceJournalEntry when template has ≥2 balanced lines AND payslipEnabled=false.
-- Must create FinancePayslip when payslipEnabled=true.
-- `snapshotHash` must be recorded for bulk-approve to work correctly.
+- Must capture `draftBill.id` / `draftEntry.id` from create call using `select: { id: true }` — never re-query (§12.1 anti-pattern).
+- **Bills:** Must create linked unposted FinanceJournalEntry when template has ≥2 balanced lines (balance tolerance ≤ $0.005). Linked via `bill.journalEntryId`. This is what approval branch (a) promotes.
+- **Income (non-payslip):** Must create linked unposted FinanceJournalEntry when template has ≥2 balanced lines AND `payslipEnabled=false`. Linked via `entry.journalEntryId`.
+- **Income (payslip):** Must create FinancePayslip when `payslipEnabled=true`. No pre-spawn journal — GL is deferred to receipt stage.
+- `spawnedSnapshotHash` must be recorded on the draft for bulk-approve to work correctly.
+- If any GL account referenced by template lines is missing, disable the template and skip the draft (GL-vanished Option B).
 
 ### 9.3 `src/lib/finance-draft-approval-service.ts`
 
@@ -828,6 +833,25 @@ When a bug is found in a shared function (e.g. `handleMarkReceived`), check all 
 **Fix shipped:** `TemplateFormDialog.tsx` FrequencyTab (edit mode) now shows "Override next spawn date" — leave blank for normal schedule computation, or set a date to force the next spawn. Amber warning shown when a date is entered. See `finance-template-helpers.ts` (`nextSpawnDate` / `currentNextSpawnDate`) and `finance-recurring-template-service.ts` (`UpdateTemplateInput.nextOccurrenceDate`).
 
 **Smoke test:** Delete a draft → open the template → set Override next spawn date to the deleted occurrence date → save → Run Spawn → draft recreated for correct date.
+
+### 12.9 Bill Draft Journal Lines Ignored — Fixed 2026-05-18
+
+**Problem:** Bill drafts spawned from templates with ≥2 lines (e.g. expense + GST + AP) always showed the wrong 2-line generic default in the draft edit dialog and posted the wrong 2-line journal at approval, regardless of what the template specified. This affected every bill template with a GST split line.
+
+**Root cause (three co-operating bugs):**
+1. The spawn service never pre-created a `FinanceJournalEntry` for bill drafts (unlike income). No pre-spawn journal meant no template lines were available to the edit dialog.
+2. The GET `/api/finance/drafts` route did not include `journalEntry` on the bills query, so even if a journal had existed it would not have been returned.
+3. The draft edit dialog `openEdit` fell back to a hardcoded 2-line bill default for all bills regardless of what was stored.
+4. `handleEditSave` only sent `lines` in the PATCH body for `kind === 'income'`, silently discarding any line edits the user made to a bill draft.
+
+**Fix shipped 2026-05-18:**
+- Spawn service now creates an unposted `FinanceJournalEntry` for bill drafts with ≥2 balanced template lines, linked via `bill.journalEntryId` (same pattern as income).
+- GET route now includes `journalEntry` on bills.
+- PATCH route now updates (or creates) the linked journal for both bills and income — "create if not exists" handles old drafts spawned before the fix.
+- `openEdit` loads from the linked journal for both kinds, falling back to per-kind defaults only when no linked journal exists.
+- `handleEditSave` sends `lines` for both bills and income.
+
+**Smoke test:** Create a bill template with 3 lines (DR Expense / DR GST Receivable / CR AP) → spawn → open draft in edit dialog → verify 3 lines shown with correct accounts → approve → verify posted journal has 3 lines → check trial balance unchanged. (See B10.)
 
 ---
 

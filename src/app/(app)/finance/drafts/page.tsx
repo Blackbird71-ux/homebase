@@ -37,9 +37,14 @@ interface DraftBill {
   taxClassification: string | null
   frequency: string | null
   notes: string | null
+  journalEntryId: string | null
   template: { id: string; name: string } | null
   vendor: { id: string; name: string } | null
   category: { id: string; name: string; type: string } | null
+  journalEntry: {
+    id: string
+    lines: { glAccountId: string; side: string; amount: number; description: string | null }[]
+  } | null
 }
 
 interface DraftIncome {
@@ -723,35 +728,36 @@ export default function DraftsPage() {
     if (isBill && (d as DraftBill).billDate) {
       form.billDate = new Date((d as DraftBill).billDate!).toISOString().slice(0, 10)
     }
-    if (!isBill) {
-      form.journalEntryId = (d as DraftIncome).journalEntryId ?? null
-    }
-
     // Build initial journal lines from the spawn-created linked journal entry.
-    // For income drafts the spawn service materialises the template lines into an
-    // unposted FinanceJournalEntry so the editor shows the correct split.
-    // For bills (no pre-created journal) or old drafts without one, fall back to
-    // sensible per-kind defaults.
+    // Both bill and income drafts now have an unposted FinanceJournalEntry with
+    // template lines created at spawn time. Fall back to sensible per-kind defaults
+    // for old drafts spawned before this fix was applied.
+    form.journalEntryId = isBill
+      ? (d as DraftBill).journalEntryId ?? null
+      : (d as DraftIncome).journalEntryId ?? null
+
     let initialLines: JournalFormLine[] = []
     const amtStr = d.amount > 0 ? d.amount.toFixed(2) : ''
-    if (!isBill) {
-      const je = (d as DraftIncome).journalEntry
-      if (je && je.lines.length >= 2) {
-        initialLines = je.lines.map(l => ({
-          glAccountId: l.glAccountId,
-          side: l.side as 'debit' | 'credit',
-          amount: String(l.amount),
-          description: l.description ?? '',
-        }))
-      } else {
-        // Fallback for old drafts without a linked journal entry
-        const ar = glAccounts.find(a => a.name.toLowerCase().includes('accounts receivable'))
-        initialLines = [
-          { glAccountId: ar?.id ?? '', side: 'debit' as const, amount: amtStr, description: '' },
-          { glAccountId: d.categoryId ?? '', side: 'credit' as const, amount: amtStr, description: '' },
-        ]
-      }
+    const linkedJournal = isBill
+      ? (d as DraftBill).journalEntry
+      : (d as DraftIncome).journalEntry
+
+    if (linkedJournal && linkedJournal.lines.length >= 2) {
+      initialLines = linkedJournal.lines.map(l => ({
+        glAccountId: l.glAccountId,
+        side: l.side as 'debit' | 'credit',
+        amount: String(l.amount),
+        description: l.description ?? '',
+      }))
+    } else if (!isBill) {
+      // Fallback for old income drafts without a linked journal entry
+      const ar = glAccounts.find(a => a.name.toLowerCase().includes('accounts receivable'))
+      initialLines = [
+        { glAccountId: ar?.id ?? '', side: 'debit' as const, amount: amtStr, description: '' },
+        { glAccountId: d.categoryId ?? '', side: 'credit' as const, amount: amtStr, description: '' },
+      ]
     } else {
+      // Fallback for old bill drafts without a linked journal entry
       const ap = glAccounts.find(a => a.name.toLowerCase().includes('accounts payable'))
       initialLines = [
         { glAccountId: d.categoryId ?? '', side: 'debit' as const, amount: amtStr, description: '' },
@@ -777,9 +783,9 @@ export default function DraftsPage() {
       frequency: s.frequency || null,
       notes: s.notes || null,
       ...(s.kind === 'bill' && s.billDate ? { billDate: s.billDate } : {}),
-      // For income drafts, send the journal lines so the linked unposted journal
-      // entry is updated. The API only applies them when journalEntryId exists.
-      ...(s.kind === 'income' && journalLines.length >= 2 ? { lines: journalLines } : {}),
+      // Send journal lines for both bills and income so the linked unposted journal
+      // entry is updated. The API creates one if it doesn't yet exist (old drafts).
+      ...(journalLines.length >= 2 ? { lines: journalLines } : {}),
     }
     const res = await fetch(`/api/finance/drafts/${s.id}`, {
       method: 'PATCH',
