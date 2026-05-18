@@ -1,0 +1,354 @@
+Simple Budget Planner -- Implementation Plan
+=============================================
+
+1. OVERVIEW
+===========
+
+Add a standalone Simple Budget Planner page to the existing Homebase app. It lives
+alongside the Finance section but is NOT linked to the accounting system -- pure
+budget tracking for non-finance users. A Settings toggle shows/hides the nav link.
+
+Key Design Decisions:
+- Data storage: New Prisma model BudgetPlannerItem (SQLite)
+- Preference storage: uiPreferences.showBudgetPlanner (existing JSON column on User)
+- Nav visibility: Client-side fetch in Sidebar component
+- Export: xlsx (already installed) + window.print()
+- Page route: (app)/budget-planner/page.tsx (Next.js App Router)
+
+
+2. CODEBASE CONTEXT (discovered during exploration)
+===================================================
+
+Framework: Next.js 16.2.4 with App Router
+Database: SQLite via Prisma (better-sqlite3)
+Auth: next-auth v5 beta, Credentials provider, JWT strategy
+Auth helper: requireSession() from @/lib/auth-helpers returns SessionUser
+  { id, email, name, role, familyId, weekStartsOn, timezone }
+Settings storage: uiPreferences JSON field on User model
+  Already stores: hideDeleteBills, customTheme, dashboardCards, dashboardCardLayouts,
+  dashboardScope, dashboardChoreShowOnlyMine, dashboardTodoListId,
+  dashboardShoppingListId, mealPlanLayout, defaultListId, listOrder,
+  favoriteRecipeBookId, smtp, weatherLocation
+Sidebar: Static navItems array in Sidebar.tsx client component
+UI library: shadcn/ui with @base-ui/react, tailwindcss v4, lucide-react
+Existing packages: xlsx (installed), @radix-ui/react-switch (installed)
+API route pattern: src/app/api/[resource]/route.ts with NextResponse + requireSession
+Page route pattern: src/app/(app)/[page]/page.tsx with server component layout
+Settings tabs: Managed in SettingsClient.tsx with BASE_TABS array + PillNav
+
+
+3. FILES TO CREATE
+==================
+
+src/app/(app)/budget-planner/page.tsx
+  -- Server component, calls requireSession(), renders BudgetPlannerClient
+
+src/components/budget-planner/BudgetPlannerClient.tsx
+  -- Main client component: tabs, state, API calls, summary, action buttons
+  -- Manages: items list, loading state, editing state
+  -- Functions: fetchItems, updateItem, deleteItem, addItem, resetToDefaults
+
+src/components/budget-planner/IncomeTab.tsx
+  -- Renders income items in a single list
+  -- "Add Income" button at bottom
+
+src/components/budget-planner/ExpensesTab.tsx
+  -- Groups expense items by category
+  -- Renders CollapsibleSection per category
+
+src/components/budget-planner/CollapsibleSection.tsx
+  -- Reusable collapsible wrapper with chevron toggle
+  -- Props: title, defaultOpen (boolean), children
+  -- Uses useState for isOpen, animated via Tailwind grid-rows
+
+src/components/budget-planner/BudgetItemRow.tsx
+  -- Single row: item name label, amount input (number), frequency select, delete button
+  -- Inline editing with save on blur or frequency change
+
+src/components/budget-planner/SummaryCard.tsx
+  -- Sticky summary card at bottom of page
+  -- Total Monthly Income, Total Monthly Expenses, Remaining (color-coded)
+  -- Visual bar showing proportion of income used
+
+src/components/budget-planner/defaultItems.ts
+  -- Default budget items array (all amount: 0, frequency: 'monthly')
+  -- Income: Salary/Wages, Freelance/Contract, Investment Income, etc.
+  -- Expense categories: Home & Utilities, Insurance & Financial, Groceries,
+     Transport & Auto, Entertainment, Personal & Medical, Children, Pets
+
+src/app/api/budget-planner/items/route.ts
+  -- GET: list all items for authenticated user
+  -- POST: create new custom item
+
+src/app/api/budget-planner/items/[id]/route.ts
+  -- PUT: update item amount/frequency
+  -- DELETE: delete item (verify ownership)
+
+src/app/api/budget-planner/reset/route.ts
+  -- POST: delete all user items, create default items from seed data
+
+
+4. FILES TO MODIFY
+==================
+
+prisma/schema.prisma
+  -- Add BudgetPlannerItem model (see section 5)
+
+src/components/settings/FinanceTab.tsx
+  -- Add toggle switch for "Show Simple Budget Planner in menu"
+  -- Store in uiPreferences.showBudgetPlanner via PATCH /api/settings
+
+src/components/layout/Sidebar.tsx
+  -- Add conditional Budget Planner nav link after Finance item
+  -- Fetch showBudgetPlanner preference on mount via GET /api/settings
+  -- Show/hide link based on preference
+
+
+5. PRISMA MODEL
+===============
+
+Add to prisma/schema.prisma:
+
+  model BudgetPlannerItem {
+    id          String   @id @default(cuid())
+    userId      String
+    type        String                    // "income" | "expense"
+    category    String                    // e.g. "Home & Utilities"
+    subcategory String                    // e.g. "Rent/Mortgage"
+    amount      Float    @default(0)
+    frequency   String   @default("monthly") // "weekly" | "fortnightly" | "monthly" | "yearly"
+    sortOrder   Int      @default(0)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@index([userId, type])
+    @@index([userId])
+  }
+
+Then run: npx prisma migrate dev --name add_budget_planner
+
+
+6. API ROUTE IMPLEMENTATION NOTES
+=================================
+
+All routes follow the existing pattern from src/app/api/settings/route.ts
+and src/app/api/export/route.ts:
+
+  import { NextResponse } from 'next/server'
+  import { prisma } from '@/lib/prisma'
+  import { requireSession } from '@/lib/auth-helpers'
+
+  export async function GET() {
+    const session = await requireSession()
+    const items = await prisma.budgetPlannerItem.findMany({
+      where: { userId: session.id },
+      orderBy: { sortOrder: 'asc' },
+    })
+    return NextResponse.json(items)
+  }
+
+PUT handler must verify ownership to prevent accessing other users' data:
+  const item = await prisma.budgetPlannerItem.findUnique({
+    where: { id: params.id },
+  })
+  if (!item || item.userId !== session.id) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+
+7. FREQUENCY CONVERSION LOGIC
+=============================
+
+Used in SummaryCard and Excel export:
+
+  const monthlyMultiplier: Record<string, number> = {
+    weekly: 4.33,
+    fortnightly: 2.17,
+    monthly: 1,
+    yearly: 1 / 12,
+  }
+
+  function calculateMonthlyAmount(amount: number, frequency: string): number {
+    return Math.round(amount * (monthlyMultiplier[frequency] ?? 1) * 100) / 100
+  }
+
+
+8. EXCEL EXPORT
+===============
+
+Uses existing xlsx package (already in package.json dependencies):
+
+  import * as XLSX from 'xlsx'
+
+  function exportToExcel(items: BudgetItem[]) {
+    const data = items.map(item => ({
+      Type: item.type === 'income' ? 'Income' : 'Expense',
+      Category: item.category,
+      Subcategory: item.subcategory,
+      Amount: item.amount,
+      Frequency: item.frequency,
+      'Monthly Amount': calculateMonthlyAmount(item.amount, item.frequency),
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Budget')
+    XLSX.writeFile(wb, `budget-planner-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+
+9. PDF EXPORT
+=============
+
+Uses window.print() with @media print CSS:
+
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    body { font-size: 12pt; }
+  }
+
+
+10. SETTINGS TOGGLE DESIGN
+==========================
+
+Location: FinanceTab.tsx (after the existing hideDelete toggle)
+Uses existing Switch component from @/components/ui/switch.tsx
+Stored in: uiPreferences.showBudgetPlanner (boolean)
+
+Effect on mount: fetch current preference via GET /api/settings
+On toggle: PATCH /api/settings with { uiPreferences: { showBudgetPlanner: checked } }
+Shows: Calculator icon next to the toggle label
+
+
+11. SIDEBAR NAV LINK DESIGN
+===========================
+
+Location: Sidebar.tsx, after the Finance nav item
+The Sidebar is a 'use client' component, so we fetch preferences client-side:
+
+  const [showBudgetPlanner, setShowBudgetPlanner] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => setShowBudgetPlanner(!!data.uiPreferences?.showBudgetPlanner))
+      .catch(() => {})
+  }, [])
+
+Conditional rendering:
+  {showBudgetPlanner && (
+    <Link href="/budget-planner" ...>
+      <Calculator className="h-4 w-4 shrink-0" />
+      {!collapsed && 'Budget Planner'}
+    </Link>
+  )}
+
+
+12. COMPONENT ARCHITECTURE
+==========================
+
+  budget-planner/page.tsx
+    -- Server: requireSession()
+    -- Renders: BudgetPlannerClient
+
+  BudgetPlannerClient.tsx
+    -- useState: items[], loading, editingItemId
+    -- useEffect: fetchItems() on mount
+    -- Renders: Tabs (Income / Expenses)
+    -- Renders: SummaryCard (sticky bottom)
+    -- Renders: Action buttons (Export Excel, Print, Reset)
+
+  IncomeTab.tsx
+    -- Receives: items[], onUpdate, onDelete, onAdd
+    -- Renders: BudgetItemRow per item
+    -- Renders: "Add Income" button
+
+  ExpensesTab.tsx
+    -- Receives: items[], onUpdate, onDelete, onAdd
+    -- Groups items by category
+    -- Renders: CollapsibleSection per category
+      -- Each contains BudgetItemRow per item
+    -- Renders: "Add Expense" button
+
+  CollapsibleSection.tsx
+    -- Props: title, defaultOpen, children
+    -- Local state: isOpen
+    -- Chevron icon that rotates on toggle
+
+  BudgetItemRow.tsx
+    -- Props: item, onUpdate, onDelete
+    -- Inline editing: amount input (number), frequency Select dropdown
+    -- Delete button (Trash2 icon)
+
+  SummaryCard.tsx
+    -- Props: items[]
+    -- Calculates: totalIncome, totalExpenses, remaining
+    -- Color-coded remaining: green (positive), red (negative), amber (tight)
+    -- Visual progress bar
+
+
+13. DEFAULT ITEMS (SEED DATA)
+=============================
+
+Income (all monthly, amount 0):
+  - Salary/Wages
+  - Freelance/Contract
+  - Investment Income
+  - Government Benefits
+  - Other Income
+
+Expense categories with sub-items (all monthly, amount 0):
+
+  Home & Utilities:
+    Rent/Mortgage, Electricity, Gas, Water, Internet, Phone, Council Rates, Home Insurance
+
+  Insurance & Financial:
+    Health Insurance, Life Insurance, Car Insurance, Loan Repayments, Credit Card Payments
+
+  Groceries:
+    Supermarket, Fruit & Vegetables, Meat & Seafood, Pantry Items, Household Supplies
+
+  Transport & Auto:
+    Fuel, Public Transport, Car Registration, Car Servicing, Parking/Tolls
+
+  Entertainment:
+    Dining Out, Takeaway, Movies/Events, Streaming Services, Hobbies
+
+  Personal & Medical:
+    Gym Membership, Hair/Beauty, Doctor Visits, Dental, Medications, Clothing
+
+  Children:
+    Childcare, School Fees, School Supplies, Extracurricular Activities, Pocket Money
+
+  Pets:
+    Pet Food, Vet Bills, Pet Insurance, Grooming
+
+
+14. RISKS & EDGE CASES
+======================
+
+  - First visit with no items: Show empty state with "Load Defaults" CTA
+  - Negative remaining balance: Color-coded red with friendly message
+  - Zero-amount items clutter: Show but dim with opacity-50
+  - SQLite float precision: Round to 2 decimal places on display
+  - Sidebar toggle stale value: Acceptable -- refreshes on page navigation
+  - Add item while already editing: Complete current edit first
+
+
+15. IMPLEMENTATION ORDER
+========================
+
+  1. Add BudgetPlannerItem model to prisma/schema.prisma
+  2. Create defaultItems.ts seed data
+  3. Create API routes (GET/POST items, PUT/DELETE [id], POST reset)
+  4. Create BudgetItemRow component
+  5. Create CollapsibleSection component
+  6. Create IncomeTab and ExpensesTab components
+  7. Create SummaryCard component
+  8. Create BudgetPlannerClient main component
+  9. Create budget-planner/page.tsx server page
+  10. Add toggle to FinanceTab.tsx
+  11. Add conditional nav link to Sidebar.tsx
+  12. Run prisma migrate dev
+
+  Each step builds on the previous one and can be verified independently.

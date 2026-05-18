@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { Ban, Trash2, ShieldAlert, Lock, Calculator } from 'lucide-react'
+import { Ban, Trash2, ShieldAlert, Lock, Calculator, Eye } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
+import { FINANCE_NAV_KEYS, FINANCE_NAV_GROUPS } from '@/lib/financeNavKeys'
 
 const MONTH_OPTIONS = [
   { value: 1,  label: 'January (calendar year)' },
@@ -15,6 +16,8 @@ const MONTH_OPTIONS = [
 export function FinanceTab() {
   const [hideDelete, setHideDelete] = useState(false)
   const [showBudgetPlanner, setShowBudgetPlanner] = useState(false)
+  const [financeNav, setFinanceNav] = useState<Record<string, boolean>>({})
+  const [savingFinanceNav, setSavingFinanceNav] = useState(false)
   const [fyStartMonth, setFyStartMonth] = useState(7)
   const [periodLockedUntil, setPeriodLockedUntil] = useState('')
   const [loading, setLoading] = useState(true)
@@ -30,6 +33,7 @@ export function FinanceTab() {
     ]).then(([userSettings, familySettings]) => {
       setHideDelete(!!userSettings.uiPreferences?.hideDeleteBills)
       setShowBudgetPlanner(!!userSettings.uiPreferences?.showBudgetPlanner)
+      setFinanceNav(userSettings.uiPreferences?.financeNav ?? {})
       setFyStartMonth(familySettings.financeYearStartMonth ?? 7)
       setPeriodLockedUntil(
         familySettings.periodLockedUntil
@@ -39,6 +43,34 @@ export function FinanceTab() {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  async function saveFinanceNav(updated: Record<string, boolean>) {
+    setSavingFinanceNav(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uiPreferences: { financeNav: updated } }),
+      })
+      if (res.ok) {
+        setFinanceNav(updated)
+      } else {
+        toast.error('Failed to save menu visibility')
+      }
+    } finally {
+      setSavingFinanceNav(false)
+    }
+  }
+
+  function toggleNavKey(key: string, visible: boolean) {
+    const updated = { ...financeNav, [key]: visible }
+    saveFinanceNav(updated)
+  }
+
+  function setAllNavKeys(visible: boolean) {
+    const updated = Object.fromEntries(FINANCE_NAV_KEYS.map(k => [k.key, visible]))
+    saveFinanceNav(updated)
+  }
 
   async function saveDelete(newVal: boolean) {
     setSavingDelete(true)
@@ -207,6 +239,56 @@ export function FinanceTab() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Finance Menu Visibility */}
+      <div className="rounded-lg border border-border p-4 space-y-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Eye className="h-4 w-4 text-blue-500" />
+            Finance menu visibility
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Show or hide individual items in the Finance sidebar. Overview is always visible.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setAllNavKeys(true)}
+            disabled={savingFinanceNav}
+            className="text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-50 transition-colors"
+          >
+            Show all
+          </button>
+          <button
+            onClick={() => setAllNavKeys(false)}
+            disabled={savingFinanceNav}
+            className="text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-50 transition-colors"
+          >
+            Hide all
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {FINANCE_NAV_GROUPS.map(group => (
+            <div key={group}>
+              <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground/60 mb-2">{group}</p>
+              <div className="space-y-2">
+                {FINANCE_NAV_KEYS.filter(k => k.group === group).map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-sm">{label}</span>
+                    <Switch
+                      checked={financeNav[key] !== false}
+                      onCheckedChange={visible => toggleNavKey(key, visible)}
+                      disabled={savingFinanceNav}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Show Simple Budget Planner */}

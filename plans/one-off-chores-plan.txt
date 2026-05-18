@@ -1,0 +1,101 @@
+# One-Off Chores — Implementation Plan
+
+## Summary
+
+Add "one-off" as a new frequency option for chores. A one-off chore has a specific due date (like a deadline), is completed once, and is then deactivated with no next occurrence. All existing features (assignees, notes, descriptions, email reminders, early completion) continue to work.
+
+## Approach
+
+Add "one-off" as a new frequency value alongside the existing daily/weekly/biweekly/monthly/bimonthly/quarterly/halfyearly/yearly. No new database fields are needed — the existing frequency string field already supports arbitrary values.
+
+=========================================================================
+FILES TO MODIFY (7 files)
+=========================================================================
+
+### 1. prisma/schema.prisma (line 423)
+- Update the comment on the frequency field to include "one-off" in the documented valid values.
+
+### 2. src/lib/chore-helpers.ts — Core schedule logic (3 changes)
+
+Function                    | Change
+----------------------------|-------
+calculateInitialDueDate     | Add "case 'one-off'" that returns the start date (or today) directly as the due date — same behaviour as "daily"
+calculateNextDueDate        | Before calling advanceByFrequency, add early return: "if (chore.frequency === 'one-off') return null" — signals caller to deactivate the chore
+calculateNextDueDateFromNow | Same early return: "if (chore.frequency === 'one-off') return null"
+
+No changes needed for frequencyToMonths, advanceByFrequency, choreIsCompletable, or buildChoreSchedule — they work correctly as-is.
+
+### 3. src/lib/ai/tools/chores.tool.ts (line 21)
+- In calculateNextDueDateAI, add "case 'one-off': return null" before the switch statement.
+
+### 4. src/app/api/complete/route.ts (line 41)
+- In the inline calculateNextDueDate function, add handling for one-off — return null immediately.
+
+### 5. src/app/(app)/chores/ChoreDialog.tsx — UI form (major changes)
+
+Add to frequency select:
+  <SelectItem value="one-off">One-off</SelectItem>
+
+Conditional rendering when frequency === "one-off":
+- Hide "Day of week" field
+- Hide "Day of month" field
+- Hide "Rotate every" field
+- Hide "Next occurrence starts after completion" switch
+- Hide "Auto-rotate assignee on completion" switch
+- Relabel "Start date" to "Due date" (still maps to startDate in the API)
+- End date can be hidden or irrelevant for one-off
+
+Still show when one-off:
+- Title, Description, Notes
+- Assignee selector
+- Allow early completion switch (completing before due date)
+- Email reminder switch + days before
+
+### 6. src/app/(app)/chores/ChoresClient.tsx (line 59) — Display
+
+- Add "one-off: 'One-off'" to FREQUENCY_LABELS
+- In getScheduleLabel, when frequency is "one-off", show "One-off — due [date]" using nextDueDate
+
+### 7. src/components/layout/quick-add/ChoreForm.tsx (line 56) — Quick-add form
+- Add <SelectItem value="one-off">One-off</SelectItem> to the frequency select options
+
+=========================================================================
+COMPLETION BEHAVIOUR
+=========================================================================
+
+Aspect                   | Behaviour for One-Off
+-------------------------|--------------------------------------------------
+After completion         | calculateNextDueDate returns null
+Chore state              | isActive set to false, nextDueDate set to null
+Auto-rotation            | Skipped (frequency is one-off)
+Email reminders          | Work as-is — reminder sent before nextDueDate
+Dashboard/Calendar       | Appears as normal chore until completed; disappears after
+Schedule list            | Shows in "Overdue" if past due, in day-by-day if due within range
+Display label            | "One-off — due 15 Jun"
+
+=========================================================================
+FILES NOT MODIFIED (verified no changes needed)
+=========================================================================
+
+- src/app/api/chores/route.ts — POST calls calculateInitialDueDate which handles one-off
+- src/app/api/chores/[id]/complete/route.ts — Already handles nextDueDate===null by deactivating
+- src/app/api/chores/[id]/route.ts — PATCH calls calculateNextDueDateFromNow which returns null for one-off
+- src/app/api/chores/schedule/route.ts — Calls buildChoreSchedule which works as-is
+- src/components/dashboard/ChoreScheduleCard.tsx — Works as-is
+- src/lib/reminders.ts — Works as-is, one-off chores with reminders trigger correctly
+- src/components/layout/quick-add/types.ts — No change needed
+- src/components/dashboard/CardQuickAdd.tsx — Quick-add always creates weekly, no change needed
+
+=========================================================================
+REGRESSION CHECKLIST
+=========================================================================
+
+[ ] Create a one-off chore with a due date -> appears in list with "One-off - due [date]" label
+[ ] One-off chore in dashboard schedule card -> appears correctly on its due date
+[ ] Complete a one-off chore -> deactivated, removed from list
+[ ] One-off chore with allowEarlyStart -> can be completed before due date
+[ ] One-off chore with email reminder -> reminder sent before due date
+[ ] Edit a one-off chore -> frequency remains one-off, due date can be changed
+[ ] AI "completeChore" tool -> correctly handles one-off (deactivates after completion)
+[ ] Quick-add form -> one-off option available
+[ ] Recurring chores still work exactly as before (no regression)

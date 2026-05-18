@@ -35,12 +35,14 @@ import {
   FileCheck,
   Calculator,
 } from 'lucide-react'
+import { isNavKeyVisible } from '@/lib/financeNavKeys'
 
 interface NavItem {
   href: string
   label: string
   icon: FC<{ className?: string }>
   exact: boolean
+  navKey?: string
 }
 
 interface NavGroup {
@@ -52,47 +54,47 @@ const groups: NavGroup[] = [
   {
     label: 'Day-to-day',
     items: [
-      { href: '/finance',              label: 'Overview',           icon: LayoutDashboard, exact: true  },
-      { href: '/finance/accounts',     label: 'Accounts',           icon: Landmark,        exact: false },
-      { href: '/finance/transactions', label: 'Transactions',       icon: ArrowLeftRight,  exact: false },
-      { href: '/finance/bills',        label: 'Bills',              icon: FileText,        exact: false },
-      { href: '/finance/income',       label: 'Income',             icon: TrendingUp,      exact: false },
-      { href: '/finance/templates',    label: 'Templates',          icon: Repeat2,         exact: false },
-      { href: '/finance/drafts',       label: 'Drafts',             icon: Inbox,           exact: false },
+      { href: '/finance',              label: 'Overview',           icon: LayoutDashboard, exact: true                         },
+      { href: '/finance/accounts',     label: 'Accounts',           icon: Landmark,        exact: false, navKey: 'accounts'     },
+      { href: '/finance/transactions', label: 'Transactions',       icon: ArrowLeftRight,  exact: false, navKey: 'transactions' },
+      { href: '/finance/bills',        label: 'Bills',              icon: FileText,        exact: false, navKey: 'bills'        },
+      { href: '/finance/income',       label: 'Income',             icon: TrendingUp,      exact: false, navKey: 'income'       },
+      { href: '/finance/templates',    label: 'Templates',          icon: Repeat2,         exact: false, navKey: 'templates'    },
+      { href: '/finance/drafts',       label: 'Drafts',             icon: Inbox,           exact: false, navKey: 'drafts'       },
     ],
   },
   {
     label: 'Reporting',
     items: [
-      { href: '/finance/profit-loss',  label: 'P&L',               icon: BarChart2,       exact: false },
-      { href: '/finance/annual-pnl',   label: 'Annual P&L',        icon: TrendingUp,      exact: false },
-      { href: '/finance/balance-sheet',label: 'Balance Sheet',      icon: Scale,           exact: false },
-      { href: '/finance/tax-report',   label: 'Tax Report',        icon: Receipt,         exact: false },
-      { href: '/finance/journals',     label: 'Journals',           icon: BookOpen,        exact: false },
-      { href: '/finance/trial-balance',  label: 'Trial Balance / GL', icon: Table2,          exact: false },
-      { href: '/finance/accounts-payable',    label: 'AP Aging',         icon: CreditCard,      exact: false },
-      { href: '/finance/accounts-receivable', label: 'AR Aging',         icon: Banknote,        exact: false },
-      { href: '/finance/bas',           label: 'BAS Worksheet',     icon: FileCheck,       exact: false },
-      { href: '/finance/vendor-statement', label: 'Statements',      icon: ClipboardList,   exact: false },
-      { href: '/finance/reports',       label: 'Reports',           icon: PieChart,        exact: false },
+      { href: '/finance/profit-loss',           label: 'P&L',                icon: BarChart2,    exact: false, navKey: 'profitLoss'      },
+      { href: '/finance/annual-pnl',            label: 'Annual P&L',         icon: TrendingUp,   exact: false, navKey: 'annualPnl'       },
+      { href: '/finance/balance-sheet',         label: 'Balance Sheet',      icon: Scale,        exact: false, navKey: 'balanceSheet'    },
+      { href: '/finance/tax-report',            label: 'Tax Report',         icon: Receipt,      exact: false, navKey: 'taxReport'       },
+      { href: '/finance/journals',              label: 'Journals',           icon: BookOpen,     exact: false, navKey: 'journals'        },
+      { href: '/finance/trial-balance',         label: 'Trial Balance / GL', icon: Table2,       exact: false, navKey: 'trialBalance'    },
+      { href: '/finance/accounts-payable',      label: 'AP Aging',           icon: CreditCard,   exact: false, navKey: 'apAging'         },
+      { href: '/finance/accounts-receivable',   label: 'AR Aging',           icon: Banknote,     exact: false, navKey: 'arAging'         },
+      { href: '/finance/bas',                   label: 'BAS Worksheet',      icon: FileCheck,    exact: false, navKey: 'bas'             },
+      { href: '/finance/vendor-statement',      label: 'Statements',         icon: ClipboardList,exact: false, navKey: 'vendorStatement' },
+      { href: '/finance/reports',               label: 'Reports',            icon: PieChart,     exact: false, navKey: 'reports'         },
     ],
   },
   {
     label: 'Planning',
     items: [
-      { href: '/finance/budget',                 label: 'Budget',                icon: Wallet,      exact: false },
-      { href: '/finance/goals',                  label: 'Goals',                 icon: Target,      exact: false },
+      { href: '/finance/budget', label: 'Budget', icon: Wallet,  exact: false, navKey: 'budget' },
+      { href: '/finance/goals',  label: 'Goals',  icon: Target,  exact: false, navKey: 'goals'  },
       // Simple Budget Planner added dynamically below when user preference is enabled
     ],
   },
   {
     label: 'Reference',
     items: [
-      { href: '/finance/contacts',     label: 'Financial Contacts', icon: Users,           exact: false },
-      { href: '/finance/entities',     label: 'Entities',           icon: Building2,       exact: false },
-      { href: '/finance/members',      label: 'Members',            icon: UserCircle,      exact: false },
-      { href: '/finance/locations',    label: 'Locations',          icon: MapPin,          exact: false },
-      { href: '/finance/categories',   label: 'Chart of Accounts',  icon: BookMarked,      exact: false },
+      { href: '/finance/contacts',    label: 'Financial Contacts', icon: Users,      exact: false, navKey: 'contacts'   },
+      { href: '/finance/entities',    label: 'Entities',           icon: Building2,  exact: false, navKey: 'entities'   },
+      { href: '/finance/members',     label: 'Members',            icon: UserCircle, exact: false, navKey: 'members'    },
+      { href: '/finance/locations',   label: 'Locations',          icon: MapPin,     exact: false, navKey: 'locations'  },
+      { href: '/finance/categories',  label: 'Chart of Accounts',  icon: BookMarked, exact: false, navKey: 'categories' },
     ],
   },
 ]
@@ -298,32 +300,36 @@ export default function FinanceLayoutClient({ children, isAdmin }: { children: R
   const pathname = usePathname()
   const draftCount = useDraftCount()
   const [showBudgetPlanner, setShowBudgetPlanner] = useState(false)
+  const [financeNav, setFinanceNav] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
-      .then(data => setShowBudgetPlanner(!!data.uiPreferences?.showBudgetPlanner))
+      .then(data => {
+        setShowBudgetPlanner(!!data.uiPreferences?.showBudgetPlanner)
+        setFinanceNav(data.uiPreferences?.financeNav ?? {})
+      })
       .catch(() => {})
   }, [pathname])
 
-  // Build items list dynamically — insert Simple Budget Planner into Planning group if enabled
+  // Build items list dynamically — filter hidden items, then insert Simple Budget Planner if enabled
   const groupsWithPlanner = groups.map((group) => {
+    let items = group.items.filter(
+      item => !item.navKey || isNavKeyVisible(financeNav, item.navKey)
+    )
     if (group.label === 'Planning' && showBudgetPlanner) {
-      return {
-        ...group,
-        items: [
-          ...group.items,
-          {
-            href: '/finance/simple-budget-planner',
-            label: 'Simple Budget Planner',
-            icon: Calculator,
-            exact: false,
-          },
-        ],
-      }
+      items = [
+        ...items,
+        {
+          href: '/finance/simple-budget-planner',
+          label: 'Simple Budget Planner',
+          icon: Calculator,
+          exact: false,
+        },
+      ]
     }
-    return group
-  })
+    return { ...group, items }
+  }).filter(group => group.items.length > 0)
 
   return (
     <div className="flex h-full overflow-hidden relative">
