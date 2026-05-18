@@ -1354,3 +1354,19 @@ model FinanceRecurringTemplateLine {
   @@index([templateId])
   @@index([glAccountId])
 }
+
+model BudgetPlannerItem {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String                    // "income" | "expense"
+  category    String                    // e.g. "Home & Utilities"
+  subcategory String                    // e.g. "Rent/Mortgage"
+  amount      Float    @default(0)
+  frequency   String   @default("monthly") // "weekly" | "fortnightly" | "monthly" | "yearly"
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, type])
+  @@index([userId])
+}

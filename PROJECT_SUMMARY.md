@@ -1,5 +1,5 @@
 # HomeBase — Project Summary
-## Current Build: Trip Planning with Packing Lists
+## Current Build: Simple Budget Planner
 
 ### Project Overview
 HomeBase is a comprehensive family management platform built with Next.js 16, TypeScript, Prisma, and SQLite. The application provides a centralised hub for family organisation including calendar management, meal planning, shopping lists, recipes, notes, chores, and a full household finance module.
@@ -71,6 +71,19 @@ HomeBase is a comprehensive family management platform built with Next.js 16, Ty
 - **AI tools**: `queryTrips` (upcoming/active/past filtering) and `createTrip` (natural language trip creation)
 - Dedicated `/trips` page with grouped overview, `/trips/[id]` detail page with inline packing list
 - Sidebar navigation with Plane icon, auto-sorting by start date
+
+#### 14. Simple Budget Planner ← *New*
+- Standalone budget tracking page at `/budget-planner` — **not linked** to the Finance accounting system
+- Toggleable nav link (Settings → Finance → "Show Simple Budget Planner") stored in `uiPreferences.showBudgetPlanner`
+- Appears as an indented sub-item under Finance in the sidebar
+- Income / Expenses tabs with category-grouped collapsible sections (Home & Utilities, Insurance & Financial, Groceries, Transport & Auto, Entertainment, Personal & Medical, Children, Pets)
+- Inline editing of amounts + frequency (weekly/fortnightly/monthly/yearly) with auto-conversion to monthly
+- Add custom income sources or expenses on-the-fly
+- Sticky summary card: Total Income, Total Expenses, Remaining (color-coded green/amber/red) + usage bar
+- Export to Excel via `xlsx`; Print/PDF via `window.print()`
+- Reset to defaults restores all pre-populated budget items
+- 5 API endpoints (CRUD + reset) under `/api/budget-planner/`
+- New `BudgetPlannerItem` Prisma model — standalone SQLite table, no links to finance tables
 
 #### 13. Finance Module ← *Balance Sheet & COA Opening Balances*
 

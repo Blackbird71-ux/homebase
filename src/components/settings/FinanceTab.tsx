@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { Ban, Trash2, ShieldAlert, Lock } from 'lucide-react'
+import { Ban, Trash2, ShieldAlert, Lock, Calculator } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 
 const MONTH_OPTIONS = [
   { value: 1,  label: 'January (calendar year)' },
@@ -13,12 +14,14 @@ const MONTH_OPTIONS = [
 
 export function FinanceTab() {
   const [hideDelete, setHideDelete] = useState(false)
+  const [showBudgetPlanner, setShowBudgetPlanner] = useState(false)
   const [fyStartMonth, setFyStartMonth] = useState(7)
   const [periodLockedUntil, setPeriodLockedUntil] = useState('')
   const [loading, setLoading] = useState(true)
   const [savingFy, setSavingFy] = useState(false)
   const [savingLock, setSavingLock] = useState(false)
   const [savingDelete, setSavingDelete] = useState(false)
+  const [savingBudgetPlanner, setSavingBudgetPlanner] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -26,6 +29,7 @@ export function FinanceTab() {
       fetch('/api/settings/family').then(r => r.json()),
     ]).then(([userSettings, familySettings]) => {
       setHideDelete(!!userSettings.uiPreferences?.hideDeleteBills)
+      setShowBudgetPlanner(!!userSettings.uiPreferences?.showBudgetPlanner)
       setFyStartMonth(familySettings.financeYearStartMonth ?? 7)
       setPeriodLockedUntil(
         familySettings.periodLockedUntil
@@ -203,6 +207,45 @@ export function FinanceTab() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Show Simple Budget Planner */}
+      <div className="rounded-lg border border-border p-4 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Calculator className="h-4 w-4 text-blue-500" />
+              Show Simple Budget Planner in menu
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Adds a Simple Budget Planner nav link under Finance in the sidebar.
+              Completely standalone — no link to the Finance accounting system.
+              Perfect for non-finance users who just want a simple budget.
+            </p>
+          </div>
+          <Switch
+            checked={showBudgetPlanner}
+            onCheckedChange={async (checked) => {
+              setSavingBudgetPlanner(true)
+              try {
+                const res = await fetch('/api/settings', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ uiPreferences: { showBudgetPlanner: checked } }),
+                })
+                if (res.ok) {
+                  setShowBudgetPlanner(checked)
+                  toast.success(checked ? 'Budget Planner shown in menu' : 'Budget Planner hidden')
+                } else {
+                  toast.error('Failed to save preference')
+                }
+              } finally {
+                setSavingBudgetPlanner(false)
+              }
+            }}
+            disabled={savingBudgetPlanner}
+          />
+        </div>
       </div>
     </div>
   )
