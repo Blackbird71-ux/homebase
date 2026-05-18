@@ -121,9 +121,11 @@ export async function GET(request: NextRequest) {
   const apCategory = apCandidates.find(c => c.name.toLowerCase().includes('accounts payable'))
   const arCategory = arCandidates.find(c => c.name.toLowerCase().includes('accounts receivable'))
 
-  // AP: balance of the Accounts Payable GL account (liability normal balance = credit)
+  // AP: balance of the Accounts Payable GL account.
+  // deriveJournalLineBalances uses credit-positive convention for liabilities,
+  // so a CR AP posting gives netBalance = +amount. No negation needed.
   const accountsPayable = apCategory
-    ? Math.round(Math.max(0, -(journalBalances.get(apCategory.id)?.netBalance ?? 0)) * 100) / 100
+    ? Math.round(Math.max(0, journalBalances.get(apCategory.id)?.netBalance ?? 0) * 100) / 100
     : 0
 
   // AR: balance of the Accounts Receivable GL account (asset normal balance = debit)
