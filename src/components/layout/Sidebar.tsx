@@ -41,7 +41,7 @@ export function Sidebar({ collapsed = false, onToggle, isAdmin = false }: Sideba
       .then(r => r.json())
       .then(data => setShowBudgetPlanner(!!data.uiPreferences?.showBudgetPlanner))
       .catch(() => {})
-  }, [])
+  }, [pathname])
 
   function openQuickAdd() {
     window.dispatchEvent(new CustomEvent('homebase:quickadd'))
