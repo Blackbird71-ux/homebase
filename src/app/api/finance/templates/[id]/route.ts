@@ -12,6 +12,12 @@ function parseDates(body: Record<string, unknown>) {
   if ('endDate' in body) {
     out.endDate = body.endDate ? new Date(body.endDate as string) : null
   }
+  // nextSpawnDate (UI name) maps to nextOccurrenceDate (service/DB name)
+  // Only convert when truthy — blank/null means "don't override", so we omit the key entirely
+  if ('nextSpawnDate' in body) {
+    if (body.nextSpawnDate) out.nextOccurrenceDate = new Date(body.nextSpawnDate as string)
+    delete out.nextSpawnDate
+  }
   return out
 }
 

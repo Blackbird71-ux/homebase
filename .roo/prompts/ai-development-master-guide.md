@@ -102,6 +102,7 @@ Before *any* implementation, perform these checks in one parallel batch:
 [ ] Git state — note current branch, uncommitted changes, current image tag
 [ ] Prisma schema — check latest schema.prisma for model changes
 [ ] AGENTS.md / CLAUDE.md — read project-level agent instructions
+[ ] QA.md — read regression prevention guide; mandatory before any finance change
 [ ] .rooignore — respect file access restrictions
 ```
 
@@ -792,12 +793,17 @@ Rules:
 
 ### 11.4 Finance-Specific Tests
 
+> **See `QA.md` §2–§6 for the complete accounting invariants, full lifecycle flows, and all named smoke tests (B1–B9, I1–I8, J1–J7, T1–T6, R1–R8). The checklist below is a minimum bar; QA.md is authoritative.**
+
 - Verify each transaction: total debits = total credits (down to 0.001 precision).
 - Verify Trial Balance: total debits = total credits.
 - Verify Balance Sheet: Assets = Liabilities + Equity.
 - Verify P&L: Revenue - Expenses = Net Income.
+- Verify payslip entries: grossPay = netPay + paygWithheld + sgcAmount.
+- Verify payslip journal: sum(DR lines) = grossPay = sum(CR lines).
 - Test timezone handling across DST boundaries (Oct & Apr in Australia).
 - Test date range filters on all reports.
+- After any change to `finance-posting.ts`, `finance-draft-spawn-service.ts`, or `finance-draft-approval-service.ts`: run the full bill and income lifecycle smoke tests.
 
 ---
 
@@ -1004,6 +1010,8 @@ docker compose exec app sqlite3 /data/database.sqlite "SELECT * FROM User;"
 | `.roo/prompts/global.md` | Global development preferences |
 | `.roo/prompts/all_modes.md` | Cross-mode behavior rules |
 | `.roo/prompts/ai-development-master-guide.md` | **This file** — master reference |
+| `QA.md` | **Regression prevention, finance accounting invariants, smoke tests, accountant checklist** |
+| `AGENTS.md` | Form field safety rules + pointer to QA.md |
 | `PROJECT_SUMMARY.md` | Current build state and finance module reference |
 | `prisma/schema.prisma` | Full database schema |
 | `docs/Chart of Accounts.txt` | COA design notes |

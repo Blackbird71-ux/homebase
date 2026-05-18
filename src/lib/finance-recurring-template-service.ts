@@ -427,7 +427,11 @@ export interface CreateTemplateInput {
 
 // UpdateTemplateInput is the same shape but all fields optional except those
 // that uniquely identify (none — id comes as a separate parameter).
-export type UpdateTemplateInput = Partial<CreateTemplateInput>
+// nextOccurrenceDate may be supplied directly to override the computed cursor
+// (e.g. after a draft is deleted and the user needs to reset the spawn date).
+export type UpdateTemplateInput = Partial<CreateTemplateInput> & {
+  nextOccurrenceDate?: Date | null
+}
 
 // ── Validation ───────────────────────────────────────────────────────────────
 
@@ -822,6 +826,9 @@ export async function updateTemplate(
 
   if (newNextOccurrenceDate !== undefined) data.nextOccurrenceDate = newNextOccurrenceDate
   if (newOccurrencesRemaining !== undefined) data.occurrencesRemaining = newOccurrencesRemaining
+  // Explicit "Next spawn date" override wins over any computed reset
+  // Null is never valid for nextOccurrenceDate (non-nullable column) so guard against it
+  if (input.nextOccurrenceDate != null) data.nextOccurrenceDate = input.nextOccurrenceDate
 
   // Atomic: update fields + replace lines (if provided)
   const updated = await prisma.$transaction(async (tx) => {

@@ -45,3 +45,18 @@ These rules exist because layout refactors repeatedly caused silent field loss (
 - [ ] `openEdit`/`openNew` populates every interface field
 - [ ] PATCH/PUT body includes every editable field
 - [ ] API handler accepts every field sent by the form
+
+---
+
+# Regression Prevention
+
+See `QA.md` in the project root for:
+- Developer blast-radius protocol (§1) — run before ANY change
+- Finance accounting invariants (§2) — GL rules an accountant would enforce
+- Complete end-to-end lifecycle flows (§4) — bill, income, payslip, journal, opening balances
+- Regression smoke tests by module (§5, §10) — run after any finance change
+- Accountant verification checklist (§6) — trial balance, P&L, balance sheet, AR/AP, PAYG
+- Shared code blast-radius reference (§9) — which files affect which flows
+- Known bug patterns to avoid repeating (§12)
+
+**The finance module has critical implications for real money. Always consult QA.md before and after any finance-related change.**

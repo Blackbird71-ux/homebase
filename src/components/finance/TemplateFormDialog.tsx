@@ -336,11 +336,12 @@ function OverviewTab({
 // ── Frequency tab ─────────────────────────────────────────────────────────────
 
 function FrequencyTab({
-  form, setForm, errors,
+  form, setForm, errors, isEdit,
 }: {
   form: FormState
   setForm: React.Dispatch<React.SetStateAction<FormState>>
   errors: Record<string, string>
+  isEdit?: boolean
 }) {
   const set = (field: keyof FormState, value: unknown) =>
     setForm(p => ({ ...p, [field]: value }))
@@ -557,6 +558,36 @@ function FrequencyTab({
 
       {/* Schedule preview — collapsed, expands on hover */}
       <SchedulePreview preview={preview} endMode={form.endMode} />
+
+      {/* Next spawn date — edit only; lets user reset after a deleted draft */}
+      {isEdit && (
+        <div className="pt-2 border-t border-border mt-1">
+          <label className="block text-xs font-medium mb-0.5">
+            Override next spawn date{' '}
+            <span className="font-normal text-muted-foreground">(leave blank to use schedule)</span>
+          </label>
+          {form.currentNextSpawnDate && (
+            <p className="text-xs text-muted-foreground mb-1">
+              Current: <span className="font-medium text-foreground">{form.currentNextSpawnDate}</span>
+            </p>
+          )}
+          <input
+            type="date"
+            value={form.nextSpawnDate}
+            onChange={e => set('nextSpawnDate', e.target.value)}
+            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+          />
+          {form.nextSpawnDate ? (
+            <div className="mt-1.5 rounded-md border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              <span className="font-semibold">Are you sure?</span> Saving will override the computed spawn date and set the next draft to be created on <span className="font-semibold">{form.nextSpawnDate}</span>. Clear this field to let the schedule compute the date automatically.
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Set this to recreate a deleted draft — the spawn service will use this date instead of the computed one.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -894,7 +925,7 @@ export function TemplateFormDialog({
               />
             )}
             {tab === 'Frequency' && (
-              <FrequencyTab form={form} setForm={setForm} errors={errors} />
+              <FrequencyTab form={form} setForm={setForm} errors={errors} isEdit={isEdit} />
             )}
             {tab === 'Transaction' && (
               <TransactionTab
@@ -926,7 +957,7 @@ export function TemplateFormDialog({
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Schedule</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
-                <FrequencyTab form={form} setForm={setForm} errors={errors} />
+                <FrequencyTab form={form} setForm={setForm} errors={errors} isEdit={isEdit} />
               </div>
             </div>
           </div>

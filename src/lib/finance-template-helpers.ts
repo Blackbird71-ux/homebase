@@ -41,6 +41,8 @@ export interface FormState {
   monthOfYear: string
   startDate: string
   firstDueDate: string
+  nextSpawnDate: string       // override input — blank means "don't override, compute from schedule"
+  currentNextSpawnDate: string // display only — current DB value, never sent to API
   endMode: string
   endDate: string
   totalOccurrences: string
@@ -100,6 +102,8 @@ export const emptyForm: FormState = {
   monthOfYear: '',
   startDate: '',
   firstDueDate: '',
+  nextSpawnDate: '',
+  currentNextSpawnDate: '',
   endMode: 'forever',
   endDate: '',
   totalOccurrences: '',
@@ -188,6 +192,8 @@ export function templateToForm(t: TemplateRow): FormState {
       const due = new Date(sd.getTime() + offset * 86_400_000)
       return due.toISOString().slice(0, 10)
     })(),
+    nextSpawnDate: '',
+    currentNextSpawnDate: t.nextOccurrenceDate ? (t.nextOccurrenceDate as string).slice(0, 10) : '',
     endMode: t.endMode ?? 'forever',
     endDate: t.endDate ? (t.endDate as string).slice(0, 10) : '',
     totalOccurrences: t.totalOccurrences != null ? String(t.totalOccurrences) : '',
@@ -240,6 +246,8 @@ export function formToBody(form: FormState) {
     dayOfMonth: form.dayOfMonth ? parseInt(form.dayOfMonth) : null,
     monthOfYear: form.monthOfYear ? parseInt(form.monthOfYear) : null,
     startDate: form.startDate,
+    // Only include nextSpawnDate when the user explicitly set it — blank means let the schedule compute
+    ...(form.nextSpawnDate ? { nextSpawnDate: form.nextSpawnDate } : {}),
     endMode: form.endMode,
     endDate: form.endDate || null,
     totalOccurrences: form.totalOccurrences ? parseInt(form.totalOccurrences) : null,
