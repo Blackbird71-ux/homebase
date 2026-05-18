@@ -22,6 +22,12 @@ export async function GET() {
         vendor: { select: { id: true, name: true } },
         category: { select: { id: true, name: true, type: true } },
         payslip: { select: { id: true, grossPay: true, netPay: true } },
+        journalEntry: {
+          select: {
+            id: true,
+            lines: { select: { glAccountId: true, side: true, amount: true, description: true } },
+          },
+        },
       },
       orderBy: { nextExpectedDate: 'asc' },
     }),

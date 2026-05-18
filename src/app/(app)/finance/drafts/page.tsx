@@ -57,10 +57,15 @@ interface DraftIncome {
   taxClassification: string | null
   frequency: string | null
   notes: string | null
+  journalEntryId: string | null
   template: { id: string; name: string } | null
   vendor: { id: string; name: string } | null
   category: { id: string; name: string; type: string } | null
   payslip: { id: string; grossPay: number; netPay: number } | null
+  journalEntry: {
+    id: string
+    lines: { glAccountId: string; side: string; amount: number; description: string | null }[]
+  } | null
 }
 
 interface Category {
@@ -108,6 +113,7 @@ interface EditFormState {
   invoiceReceivedDate: string
   taxClassification: string
   addToBudget: boolean
+  journalEntryId: string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,6 +131,7 @@ function emptyEditForm(kind: 'bill' | 'income', id: string): EditFormState {
     autoPay: false, emailReminder: false, reminderDays: 3,
     invoiceReceived: false, invoiceReceivedDate: '',
     taxClassification: '', addToBudget: true,
+    journalEntryId: null,
   }
 }
 
@@ -132,6 +139,7 @@ function emptyEditForm(kind: 'bill' | 'income', id: string): EditFormState {
 
 function EditDialog({
   state,
+  initialJournalLines,
   categories,
   vendors,
   members,
@@ -141,6 +149,7 @@ function EditDialog({
   onSave,
 }: {
   state: EditFormState
+  initialJournalLines: JournalFormLine[]
   categories: Category[]
   vendors: Vendor[]
   members: Member[]
@@ -150,7 +159,7 @@ function EditDialog({
   onSave: (s: EditFormState, journalLines: JournalFormLine[]) => Promise<void>
 }) {
   const [form, setForm] = useState(state)
-  const [journalLines, setJournalLines] = useState<JournalFormLine[]>([])
+  const [journalLines, setJournalLines] = useState<JournalFormLine[]>(initialJournalLines)
   const [journalErrors, setJournalErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -189,17 +198,6 @@ function EditDialog({
   )
 
   const dateLabel = form.kind === 'bill' ? 'Next Due Date *' : 'Next Expected Date *'
-
-  // Seed default journal lines for display
-  useEffect(() => {
-    const amtStr = form.amount && parseFloat(form.amount) > 0 ? parseFloat(form.amount).toFixed(2) : ''
-    const ap = glAccounts.find(a => a.name.toLowerCase().includes('accounts payable'))
-    const defaultLines: JournalFormLine[] = [
-      { glAccountId: form.categoryId ?? '', side: 'debit' as const, amount: amtStr, description: '' },
-      { glAccountId: ap?.id ?? '', side: 'credit' as const, amount: amtStr, description: '' },
-    ]
-    setJournalLines(defaultLines)
-  }, [form.categoryId, form.amount, glAccounts])
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -621,6 +619,7 @@ export default function DraftsPage() {
   const [loadError, setLoadError] = useState('')
 
   const [editState, setEditState] = useState<EditFormState | null>(null)
+  const [editJournalLines, setEditJournalLines] = useState<JournalFormLine[]>([])
   const [bulkBusyBills, setBulkBusyBills] = useState(false)
   const [bulkBusyIncome, setBulkBusyIncome] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
@@ -724,10 +723,47 @@ export default function DraftsPage() {
     if (isBill && (d as DraftBill).billDate) {
       form.billDate = new Date((d as DraftBill).billDate!).toISOString().slice(0, 10)
     }
+    if (!isBill) {
+      form.journalEntryId = (d as DraftIncome).journalEntryId ?? null
+    }
+
+    // Build initial journal lines from the spawn-created linked journal entry.
+    // For income drafts the spawn service materialises the template lines into an
+    // unposted FinanceJournalEntry so the editor shows the correct split.
+    // For bills (no pre-created journal) or old drafts without one, fall back to
+    // sensible per-kind defaults.
+    let initialLines: JournalFormLine[] = []
+    const amtStr = d.amount > 0 ? d.amount.toFixed(2) : ''
+    if (!isBill) {
+      const je = (d as DraftIncome).journalEntry
+      if (je && je.lines.length >= 2) {
+        initialLines = je.lines.map(l => ({
+          glAccountId: l.glAccountId,
+          side: l.side as 'debit' | 'credit',
+          amount: String(l.amount),
+          description: l.description ?? '',
+        }))
+      } else {
+        // Fallback for old drafts without a linked journal entry
+        const ar = glAccounts.find(a => a.name.toLowerCase().includes('accounts receivable'))
+        initialLines = [
+          { glAccountId: ar?.id ?? '', side: 'debit' as const, amount: amtStr, description: '' },
+          { glAccountId: d.categoryId ?? '', side: 'credit' as const, amount: amtStr, description: '' },
+        ]
+      }
+    } else {
+      const ap = glAccounts.find(a => a.name.toLowerCase().includes('accounts payable'))
+      initialLines = [
+        { glAccountId: d.categoryId ?? '', side: 'debit' as const, amount: amtStr, description: '' },
+        { glAccountId: ap?.id ?? '', side: 'credit' as const, amount: amtStr, description: '' },
+      ]
+    }
+
+    setEditJournalLines(initialLines)
     setEditState(form)
   }
 
-  async function handleEditSave(s: EditFormState, _journalLines: JournalFormLine[]) {
+  async function handleEditSave(s: EditFormState, journalLines: JournalFormLine[]) {
     const body: Record<string, unknown> = {
       kind: s.kind,
       name: s.name,
@@ -741,6 +777,9 @@ export default function DraftsPage() {
       frequency: s.frequency || null,
       notes: s.notes || null,
       ...(s.kind === 'bill' && s.billDate ? { billDate: s.billDate } : {}),
+      // For income drafts, send the journal lines so the linked unposted journal
+      // entry is updated. The API only applies them when journalEntryId exists.
+      ...(s.kind === 'income' && journalLines.length >= 2 ? { lines: journalLines } : {}),
     }
     const res = await fetch(`/api/finance/drafts/${s.id}`, {
       method: 'PATCH',
@@ -904,6 +943,7 @@ export default function DraftsPage() {
       {editState && (
         <EditDialog
           state={editState}
+          initialJournalLines={editJournalLines}
           categories={categories}
           vendors={vendors}
           members={members}

@@ -53,7 +53,7 @@ export async function PATCH(
     } else if (kind === 'income') {
       const existing = await prisma.financeIncomeEntry.findFirst({
         where: { id, familyId: user.familyId, status: 'draft' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, journalEntryId: true },
       })
       if (!existing) {
         return NextResponse.json({ error: 'Draft income entry not found' }, { status: 404 })
@@ -71,9 +71,32 @@ export async function PATCH(
       if (fields.frequency !== undefined) data.frequency = fields.frequency || null
       if (fields.notes !== undefined) data.notes = fields.notes || null
 
-      const updated = await prisma.financeIncomeEntry.update({
-        where: { id },
-        data,
+      const hasLines = fields.lines && Array.isArray(fields.lines) && fields.lines.length >= 2
+      const journalEntryId = existing.journalEntryId
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const entry = await tx.financeIncomeEntry.update({ where: { id }, data })
+
+        // Update the linked draft journal entry lines when provided.
+        // This is the unposted journal created by the spawn service from template lines.
+        if (hasLines && journalEntryId) {
+          await tx.financeJournalEntry.update({
+            where: { id: journalEntryId },
+            data: {
+              lines: {
+                deleteMany: {},
+                create: (fields.lines as Record<string, unknown>[]).map(l => ({
+                  glAccountId: String(l.glAccountId),
+                  side: String(l.side),
+                  amount: parseFloat(String(l.amount)) || 0,
+                  description: l.description ? String(l.description) : null,
+                })),
+              },
+            },
+          })
+        }
+
+        return entry
       })
 
       await createAuditLog(

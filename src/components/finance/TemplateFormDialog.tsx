@@ -19,7 +19,7 @@ import type {
   EntityRow, MemberRow, LocationRow, PayslipLine,
 } from '@/lib/finance-template-helpers'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { GLAccount } from '@/components/finance/JournalLinesEditor'
 
 // ── GL account select helper ──────────────────────────────────────────────────
@@ -346,6 +346,8 @@ function FrequencyTab({
   const set = (field: keyof FormState, value: unknown) =>
     setForm(p => ({ ...p, [field]: value }))
 
+  const [showSpawnOverride, setShowSpawnOverride] = useState(false)
+
   const showInterval    = form.frequency === 'custom'
   const showDayOfMonth  = ['monthly', 'bimonthly', 'quarterly', 'halfyearly', 'yearly'].includes(form.frequency)
   const showMonthOfYear = form.frequency === 'yearly'
@@ -562,29 +564,41 @@ function FrequencyTab({
       {/* Next spawn date — edit only; lets user reset after a deleted draft */}
       {isEdit && (
         <div className="pt-2 border-t border-border mt-1">
-          <label className="block text-xs font-medium mb-0.5">
-            Override next spawn date{' '}
-            <span className="font-normal text-muted-foreground">(leave blank to use schedule)</span>
+          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showSpawnOverride}
+              onChange={e => {
+                setShowSpawnOverride(e.target.checked)
+                if (!e.target.checked) set('nextSpawnDate', '')
+              }}
+              className="accent-primary"
+            />
+            Override next spawn date
           </label>
-          {form.currentNextSpawnDate && (
-            <p className="text-xs text-muted-foreground mb-1">
-              Current: <span className="font-medium text-foreground">{form.currentNextSpawnDate}</span>
-            </p>
-          )}
-          <input
-            type="date"
-            value={form.nextSpawnDate}
-            onChange={e => set('nextSpawnDate', e.target.value)}
-            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          />
-          {form.nextSpawnDate ? (
-            <div className="mt-1.5 rounded-md border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-              <span className="font-semibold">Are you sure?</span> Saving will override the computed spawn date and set the next draft to be created on <span className="font-semibold">{form.nextSpawnDate}</span>. Clear this field to let the schedule compute the date automatically.
+          {showSpawnOverride && (
+            <div className="mt-1.5 space-y-1.5 pl-5">
+              {form.currentNextSpawnDate && (
+                <p className="text-xs text-muted-foreground">
+                  Current: <span className="font-medium text-foreground">{form.currentNextSpawnDate}</span>
+                </p>
+              )}
+              <input
+                type="date"
+                value={form.nextSpawnDate}
+                onChange={e => set('nextSpawnDate', e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              />
+              {form.nextSpawnDate ? (
+                <div className="rounded-md border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                  <span className="font-semibold">Are you sure?</span> Saving will override the computed spawn date and set the next draft to be created on <span className="font-semibold">{form.nextSpawnDate}</span>. Clear this field to let the schedule compute the date automatically.
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Set this to recreate a deleted draft — the spawn service will use this date instead of the computed one.
+                </p>
+              )}
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Set this to recreate a deleted draft — the spawn service will use this date instead of the computed one.
-            </p>
           )}
         </div>
       )}
