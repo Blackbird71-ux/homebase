@@ -5,6 +5,7 @@ import {
   ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle,
   ChevronDown, ChevronUp, Terminal, Trash2, Pause, CirclePlay,
   Container, Users, Plus, Copy, Check, KeyRound, ChevronRight,
+  Info, Network, Eye, EyeOff,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -180,9 +181,12 @@ const LEVEL_STYLES: Record<LogLine['level'], string> = {
   error: 'text-red-400',
 }
 
+type LevelFilter = 'errors' | 'all'
+
 function LogViewer() {
   const [lines, setLines] = useState<LogLine[]>([])
-  const [polling, setPolling] = useState(true)
+  const [polling, setPolling] = useState(false)
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('errors')
   const [error, setError] = useState('')
   const [pinned, setPinned] = useState(true)
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -191,7 +195,7 @@ function LogViewer() {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/logs?n=200')
+      const res = await fetch('/api/admin/logs?n=500')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json() as { lines: LogLine[] }
       setLines(data.lines)
@@ -237,6 +241,10 @@ function LogViewer() {
     setLines([])
   }
 
+  const visible = levelFilter === 'errors'
+    ? lines.filter(l => l.level === 'error' || l.level === 'warn')
+    : lines
+
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
@@ -245,14 +253,23 @@ function LogViewer() {
           <div>
             <p className="font-semibold text-sm">Server Logs</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Last {lines.length} lines from the in-memory buffer · refreshes every 3 s
-              {polling && !pinned && (
-                <span className="text-amber-400 ml-1">(scroll paused — scroll to bottom to resume)</span>
-              )}
+              Structured console output (warn / error focus)
+              {polling
+                ? <span className="text-emerald-400 ml-1">· refreshes every 3 s{!pinned && ' (scroll paused)'}</span>
+                : <span className="text-amber-400 ml-1">· paused</span>
+              }
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
+          <select
+            value={levelFilter}
+            onChange={e => setLevelFilter(e.target.value as LevelFilter)}
+            className="rounded-md border border-border bg-card px-2 py-1.5 text-xs font-medium"
+          >
+            <option value="errors">Warn + Error</option>
+            <option value="all">All levels</option>
+          </select>
           <button
             onClick={() => setPolling(p => !p)}
             title={polling ? 'Pause auto-refresh' : 'Resume auto-refresh'}
@@ -287,10 +304,14 @@ function LogViewer() {
           </div>
         )}
         <div ref={viewportRef} className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3 space-y-0.5">
-          {lines.length === 0 && (
-            <p className="text-slate-500 italic">No log lines captured yet. Logs appear after server actions.</p>
+          {visible.length === 0 && (
+            <p className="text-slate-500 italic">
+              {lines.length === 0
+                ? 'No log lines captured yet.'
+                : 'No warn or error entries — looking good.'}
+            </p>
           )}
-          {lines.map((l, i) => (
+          {visible.map((l, i) => (
             <div key={i} className="flex gap-2 leading-5">
               <span className="text-slate-500 shrink-0 tabular-nums">
                 {new Date(l.ts).toLocaleTimeString('en-AU')}
@@ -311,11 +332,11 @@ function LogViewer() {
 
 // ── Docker Log Viewer ─────────────────────────────────────────────────────────
 
-const DOCKER_LINE_OPTS = [100, 200, 500, 1000]
+const DOCKER_LINE_OPTS = [100, 200, 500]
 
 function DockerLogViewer() {
   const [text, setText] = useState('')
-  const [polling, setPolling] = useState(true)
+  const [polling, setPolling] = useState(false)
   const [error, setError] = useState('')
   const [n, setN] = useState(100)
   const [pinned, setPinned] = useState(true)
@@ -374,10 +395,11 @@ function DockerLogViewer() {
           <div>
             <p className="font-semibold text-sm">Docker Logs</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              docker logs homebase-app --tail {n} · refreshes every 5 s
-              {polling && !pinned && (
-                <span className="text-amber-400 ml-1">(scroll paused — scroll to bottom to resume)</span>
-              )}
+              stdout/stderr captured in-process (equivalent to docker logs --tail {n})
+              {polling
+                ? <span className="text-emerald-400 ml-1">· refreshes every 5 s{!pinned && ' (scroll paused — scroll to bottom to resume)'}</span>
+                : <span className="text-amber-400 ml-1">· paused</span>
+              }
             </p>
           </div>
         </div>
@@ -411,6 +433,16 @@ function DockerLogViewer() {
         </div>
       </div>
 
+      <div className="px-4 py-2 flex items-start gap-2 border-t border-border bg-blue-500/5 text-xs text-blue-400/80">
+        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+        <span>
+          This buffer only captures output written <em>after</em> the server started — it misses early startup errors and native process output.
+          For crash diagnosis or startup failures, SSH to the NAS and run:{' '}
+          <code className="font-mono bg-muted/40 px-1 rounded">docker logs homebase-app --tail 100</code>
+          {' '}— or use the <strong>NAS Docker Logs</strong> panel below.
+        </span>
+      </div>
+
       <div className="relative">
         {error && (
           <div className="px-4 py-2 text-xs text-destructive bg-destructive/5 border-b border-border">
@@ -426,6 +458,156 @@ function DockerLogViewer() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── NAS Docker Log Viewer ─────────────────────────────────────────────────────
+// SSHes to the NAS host and runs `docker logs homebase-app --tail N`.
+// Credentials are entered at runtime and never persisted.
+
+const NAS_LINE_OPTS = [100, 200, 500]
+
+function NasLogViewer() {
+  const [host, setHost] = useState(() => sessionStorage.getItem('nas_ssh_host') ?? '')
+  const [username, setUsername] = useState(() => sessionStorage.getItem('nas_ssh_user') ?? '')
+  const [password, setPassword] = useState('')
+  const [port, setPort] = useState('22')
+  const [showPassword, setShowPassword] = useState(false)
+  const [n, setN] = useState(100)
+  const [output, setOutput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const viewportRef = useRef<HTMLDivElement>(null)
+
+  async function fetchNasLogs() {
+    if (!host || !username || !password) {
+      setError('Host, username, and password are required.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    // Persist host and user (not password) for convenience
+    sessionStorage.setItem('nas_ssh_host', host)
+    sessionStorage.setItem('nas_ssh_user', username)
+    try {
+      const res = await fetch('/api/admin/nas-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host, username, password, port: Number(port) || 22, n }),
+      })
+      const data = await res.json() as { output?: string; error?: string }
+      if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
+      setOutput(data.output ?? '')
+      // Scroll to bottom after load
+      requestAnimationFrame(() => {
+        viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight })
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 bg-muted/20">
+        <Network className="h-4 w-4 text-primary shrink-0" />
+        <div>
+          <p className="font-semibold text-sm">NAS Docker Logs</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            SSH to the NAS and run <code className="font-mono">docker logs homebase-app --tail {n}</code> — real container output including startup
+          </p>
+        </div>
+      </div>
+
+      <div className="px-4 py-3 border-t border-border space-y-3">
+        <div className="grid grid-cols-[1fr_auto_1fr_1fr_auto_auto] gap-2 items-end">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Host / IP</label>
+            <input
+              value={host}
+              onChange={e => setHost(e.target.value)}
+              placeholder="192.168.1.x"
+              className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Port</label>
+            <input
+              value={port}
+              onChange={e => setPort(e.target.value)}
+              placeholder="22"
+              className="h-8 w-16 rounded-md border border-input bg-transparent px-2 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Username</label>
+            <input
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="admin"
+              className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="h-8 w-full rounded-md border border-input bg-transparent px-2 pr-7 text-xs"
+                onKeyDown={e => { if (e.key === 'Enter') fetchNasLogs() }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(p => !p)}
+                className="absolute right-1.5 top-1.5 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Tail</label>
+            <select
+              value={n}
+              onChange={e => setN(Number(e.target.value))}
+              className="h-8 rounded-md border border-border bg-card px-2 text-xs font-medium"
+            >
+              {NAS_LINE_OPTS.map(opt => (
+                <option key={opt} value={opt}>Tail {opt}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-transparent select-none">Go</label>
+            <button
+              onClick={fetchNasLogs}
+              disabled={busy}
+              className="h-8 flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {busy ? 'Fetching…' : 'Fetch'}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-xs text-destructive">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {output && (
+        <div ref={viewportRef} className="h-96 overflow-y-auto bg-[#0d1117] font-mono text-xs p-3 border-t border-border">
+          <pre className="text-slate-300 whitespace-pre-wrap break-all leading-5">{output}</pre>
+        </div>
+      )}
     </div>
   )
 }
@@ -841,13 +1023,18 @@ export default function AdminPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Server Logs (in-memory buffer)</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Server Logs — Errors &amp; Warnings</h2>
             <LogViewer />
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Docker Logs (container output)</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Raw Output — Full stdout / stderr</h2>
             <DockerLogViewer />
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">NAS Docker Logs — Real Container Output</h2>
+            <NasLogViewer />
           </section>
         </>
       )}

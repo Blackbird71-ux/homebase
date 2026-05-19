@@ -764,6 +764,24 @@ System admin is the first-ever registered user (`User.isSystemAdmin=true`). Only
 [ ] All family API routes (/api/admin/families/**) return 403 for non-system-admin users
 ```
 
+### 10.11 System Admin — Diagnostic Log Panels
+
+Three log panels on the Operations tab. All are read-only diagnostic tools with no DB writes.
+
+```
+[ ] Server Logs — defaults to Warn+Error filter; "All levels" switch shows all structured console output
+[ ] Server Logs — starts paused; Resume/Pause toggle works; Refresh fetches latest
+[ ] Raw Output — starts paused; shows in-process stdout/stderr buffer; blue callout explains limitations
+[ ] Raw Output — tail dropdown (100/200/500) changes fetch depth
+[ ] NAS Docker Logs — Fetch button disabled until host, username, password are all filled
+[ ] NAS Docker Logs — successful SSH fetch populates the terminal panel, scrolled to bottom
+[ ] NAS Docker Logs — bad credentials or unreachable host shows an error message (not a crash)
+[ ] NAS Docker Logs — host and username persist in sessionStorage across page reloads; password does not
+[ ] All log API routes (/api/admin/logs, /api/admin/docker-logs, /api/admin/nas-logs) return 403 for non-admins
+```
+
+**Note on log panel limitations:** The Server Logs and Raw Output panels capture output written *after* `instrumentation.ts` registers (i.e., after the Next.js server starts). They will be empty following a container crash or startup failure. For those cases, SSH to the NAS and run: `docker logs homebase-app --tail 100` — or use the NAS Docker Logs panel which performs that command via SSH.
+
 ---
 
 ## 11. Build & Deploy Checks
@@ -915,3 +933,4 @@ The `/admin` page is a `'use client'` component with no server-side auth check o
 **Fixed 2026-05-19:** `src/app/(app)/admin/layout.tsx` added — calls `requireAdmin()` server-side, redirects non-admins to `/home`.
 
 *Last updated: 2026-05-19. Maintained by the development team — update on every significant feature or bug fix.*
+

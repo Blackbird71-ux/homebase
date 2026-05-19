@@ -75,8 +75,9 @@ export async function register() {
         if (!req) return
         const url = req.url ?? ''
         const method = req.method ?? ''
-        // Skip health-check pings (every 30 s) and static file requests
+        // Skip health-check pings, admin log-polling (would flood their own buffer), and static assets
         if (url === '/api/health') return
+        if (url.startsWith('/api/admin/logs') || url.startsWith('/api/admin/docker-logs')) return
         if (/^\/(_next|static|favicon\.ico|file\.svg|globe\.svg|next\.svg|vercel\.svg|window\.svg|sw\.js|offline\.html)/.test(url)) return
         console.log(`[http] ${method} ${url}`)
       })
