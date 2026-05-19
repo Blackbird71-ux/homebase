@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ClockIcon, UsersIcon, Trash2Icon, Heart } from 'lucide-react'
+import { ClockIcon, UsersIcon, Trash2Icon, Heart, Plane } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,8 @@ interface RecipeCardProps {
   calories?: string | null
   onDelete?: (id: string) => void
   onToggleFavourite?: (id: string) => void
+  onToggleFamily?: (id: string) => void
+  onToggleTrip?: (id: string) => void
 }
 
 export function RecipeCard({
@@ -33,8 +35,12 @@ export function RecipeCard({
   calories,
   onDelete,
   onToggleFavourite,
+  onToggleFamily,
+  onToggleTrip,
 }: RecipeCardProps) {
   const totalTime = (prepTime ?? 0) + (cookTime ?? 0)
+  const hasFamily = tags.some(t => t.toLowerCase() === 'family')
+  const hasTrip   = tags.some(t => t.toLowerCase() === 'trip')
 
   function formatTime(minutes: number): string {
     if (minutes < 60) return `${minutes} min`
@@ -117,6 +123,36 @@ export function RecipeCard({
         title={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
       >
         <Heart className={cn('h-3.5 w-3.5', isFavourite && 'fill-current')} />
+      </button>
+    )}
+    {onToggleFamily && (
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFamily(id) }}
+        className={cn(
+          'absolute top-10 left-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+          hasFamily
+            ? 'bg-orange-500 text-white'
+            : 'bg-black/20 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/90 hover:text-orange-500',
+        )}
+        title={hasFamily ? 'Remove family tag' : 'Mark as family-tested'}
+      >
+        <UsersIcon className="h-3.5 w-3.5" />
+      </button>
+    )}
+    {onToggleTrip && (
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleTrip(id) }}
+        className={cn(
+          'absolute top-[4.5rem] left-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+          hasTrip
+            ? 'bg-sky-500 text-white'
+            : 'bg-black/20 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/90 hover:text-sky-500',
+        )}
+        title={hasTrip ? 'Remove trip tag' : 'Mark as from the trip'}
+      >
+        <Plane className="h-3.5 w-3.5" />
       </button>
     )}
     {onDelete && (

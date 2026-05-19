@@ -10,7 +10,7 @@ import { TagCloud } from '@/components/tags/TagCloud'
 import { PillNav } from '@/components/shared/PillNav'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusIcon, SearchIcon, UploadIcon, ClockIcon, UsersIcon, Trash2Icon, LayoutGrid, Heart } from 'lucide-react'
+import { PlusIcon, SearchIcon, UploadIcon, ClockIcon, UsersIcon, Trash2Icon, LayoutGrid, Heart, Plane } from 'lucide-react'
 import type { RecipeBook } from '@/components/recipes/RecipeBookSidebar'
 import { cn } from '@/lib/utils'
 
@@ -54,10 +54,14 @@ function HeroRecipeCard({
   recipe,
   onDelete,
   onToggleFavourite,
+  onToggleFamily,
+  onToggleTrip,
 }: {
   recipe: RecipeSummary
   onDelete: (id: string) => void
   onToggleFavourite: (id: string) => void
+  onToggleFamily: (id: string) => void
+  onToggleTrip: (id: string) => void
 }) {
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
   return (
@@ -110,6 +114,32 @@ function HeroRecipeCard({
       </button>
       <button
         type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFamily(recipe.id) }}
+        className={cn(
+          'absolute top-10 left-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+          recipe.tags.some(t => t.toLowerCase() === 'family')
+            ? 'bg-orange-500 text-white'
+            : 'bg-black/20 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/90 hover:text-orange-500',
+        )}
+        title={recipe.tags.some(t => t.toLowerCase() === 'family') ? 'Remove family tag' : 'Mark as family-tested'}
+      >
+        <UsersIcon className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleTrip(recipe.id) }}
+        className={cn(
+          'absolute top-[4.5rem] left-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+          recipe.tags.some(t => t.toLowerCase() === 'trip')
+            ? 'bg-sky-500 text-white'
+            : 'bg-black/20 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/90 hover:text-sky-500',
+        )}
+        title={recipe.tags.some(t => t.toLowerCase() === 'trip') ? 'Remove trip tag' : 'Mark as from the trip'}
+      >
+        <Plane className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
         onClick={() => onDelete(recipe.id)}
         className="absolute top-2 right-2 p-1.5 rounded-md bg-background/80 text-muted-foreground/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-colors"
         title="Delete recipe"
@@ -127,6 +157,8 @@ function SectionGrid({
   tagColors,
   onDelete,
   onToggleFavourite,
+  onToggleFamily,
+  onToggleTrip,
 }: {
   title: string
   sub?: string
@@ -134,6 +166,8 @@ function SectionGrid({
   tagColors?: Record<string, string>
   onDelete: (id: string) => void
   onToggleFavourite: (id: string) => void
+  onToggleFamily: (id: string) => void
+  onToggleTrip: (id: string) => void
 }) {
   if (recipes.length === 0) return null
   return (
@@ -144,7 +178,7 @@ function SectionGrid({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {recipes.map(({ bookId: _b, createdAt: _c, ...cardProps }) => (
-          <RecipeCard key={cardProps.id} {...cardProps} tagColors={tagColors} onDelete={onDelete} onToggleFavourite={onToggleFavourite} />
+          <RecipeCard key={cardProps.id} {...cardProps} tagColors={tagColors} onDelete={onDelete} onToggleFavourite={onToggleFavourite} onToggleFamily={onToggleFamily} onToggleTrip={onToggleTrip} />
         ))}
       </div>
     </div>
@@ -277,6 +311,24 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
     }
   }
 
+  async function handleToggleTag(id: string, tagName: string) {
+    const recipe = recipes.find(r => r.id === id)
+    if (!recipe) return
+    const hasTag = recipe.tags.some(t => t.toLowerCase() === tagName)
+    const newTags = hasTag
+      ? recipe.tags.filter(t => t.toLowerCase() !== tagName)
+      : [...recipe.tags, tagName]
+    setRecipes(prev => prev.map(r => r.id === id ? { ...r, tags: newTags } : r))
+    const res = await fetch(`/api/recipes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: newTags }),
+    })
+    if (!res.ok) {
+      setRecipes(prev => prev.map(r => r.id === id ? { ...r, tags: recipe.tags } : r))
+    }
+  }
+
   function handleImported() {
     window.location.reload()
   }
@@ -380,7 +432,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
             ) : (
               <>
                 {featuredRecipe && (
-                  <HeroRecipeCard recipe={featuredRecipe} onDelete={handleDeleteRecipe} onToggleFavourite={handleToggleFavourite} />
+                  <HeroRecipeCard recipe={featuredRecipe} onDelete={handleDeleteRecipe} onToggleFavourite={handleToggleFavourite} onToggleFamily={(id) => handleToggleTag(id, 'family')} onToggleTrip={(id) => handleToggleTag(id, 'trip')} />
                 )}
                 <SectionGrid
                   title="Recently Added"
@@ -389,6 +441,8 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
                   tagColors={tagColors}
                   onDelete={handleDeleteRecipe}
                   onToggleFavourite={handleToggleFavourite}
+                  onToggleFamily={(id) => handleToggleTag(id, 'family')}
+                  onToggleTrip={(id) => handleToggleTag(id, 'trip')}
                 />
                 <SectionGrid
                   title="Family favourites"
@@ -397,6 +451,8 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
                   tagColors={tagColors}
                   onDelete={handleDeleteRecipe}
                   onToggleFavourite={handleToggleFavourite}
+                  onToggleFamily={(id) => handleToggleTag(id, 'family')}
+                  onToggleTrip={(id) => handleToggleTag(id, 'trip')}
                 />
               </>
             )}
@@ -417,7 +473,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {tabRecipes.map(({ bookId: _b, createdAt: _c, ...cardProps }) => (
-                  <RecipeCard key={cardProps.id} {...cardProps} tagColors={tagColors} onDelete={handleDeleteRecipe} onToggleFavourite={handleToggleFavourite} />
+                  <RecipeCard key={cardProps.id} {...cardProps} tagColors={tagColors} onDelete={handleDeleteRecipe} onToggleFavourite={handleToggleFavourite} onToggleFamily={(id) => handleToggleTag(id, 'family')} onToggleTrip={(id) => handleToggleTag(id, 'trip')} />
                 ))}
               </div>
             )}
