@@ -932,5 +932,66 @@ The `/admin` page is a `'use client'` component with no server-side auth check o
 
 **Fixed 2026-05-19:** `src/app/(app)/admin/layout.tsx` added — calls `requireAdmin()` server-side, redirects non-admins to `/home`.
 
+---
+
+### 12.12 `requireSession()` / `requireAdmin()` Must Not Be Used in API Route Handlers
+
+**Problem:** `requireSession()` and `requireAdmin()` call Next.js `redirect()` from `next/navigation` when the session is missing or the role check fails. In the App Router, `redirect()` works by **throwing** a special `NEXT_REDIRECT` error. Inside a Server Component or Server Action this is caught correctly. Inside an **API route handler** it propagates out of the handler, and Next.js returns an HTML redirect response (302 to `/login`) instead of JSON — causing the client to receive `<!DOCTYPE html>` where it expects `{"error": "..."}`.
+
+**Wrong — will return HTML on auth failure:**
+```typescript
+export async function POST(req: Request) {
+  const user = await requireSession()   // ← throws redirect, not a JSON 401
+  if (user.role !== 'admin') { ... }
+}
+```
+
+**Correct — returns JSON on auth failure:**
+```typescript
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
+
+export async function POST(req: Request) {
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+}
+```
+
+Use `requireSystemAdmin()` from `auth-helpers.ts` as the reference — it already follows the correct pattern (returns `NextResponse` instead of throwing).
+
+**How to spot the bug:** The client fetch callback receives `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`. Always use `auth()` directly in API route handlers.
+
+---
+
+### 12.13 Browser APIs in `useState` Initialisers Crash SSR
+
+**Problem:** `useState(() => someInitialiser())` runs on the server during SSR. Browser-only globals — `sessionStorage`, `localStorage`, `window`, `document` — do not exist in the Node.js runtime. Accessing them in a `useState` lazy initialiser throws `ReferenceError: sessionStorage is not defined` during server rendering.
+
+**Wrong:**
+```typescript
+const [host, setHost] = useState(() => sessionStorage.getItem('nas_ssh_host') ?? '')
+```
+
+**Correct:**
+```typescript
+const [host, setHost] = useState(() =>
+  typeof window !== 'undefined' ? (sessionStorage.getItem('nas_ssh_host') ?? '') : ''
+)
+```
+
+Alternatively, read from `sessionStorage` / `localStorage` inside a `useEffect` (runs client-only) and call the setter there.
+
+---
+
+### 12.14 Migration Column Defaults Do Not Backfill Existing Rows as Intended
+
+**Problem:** Adding a new column with `DEFAULT false` (or `DEFAULT 0`) to an existing table correctly assigns that default to all existing rows — but the default is sometimes chosen purely for SQL validity, not because `false` is the *correct* value for rows that already exist. If the intended business rule is "the first-created admin should have `isSystemAdmin=true`", that invariant must be enforced in a *separate* migration that runs after the column is added.
+
+**Example (fixed 2026-05-19):** `isSystemAdmin` was added with `DEFAULT 0`, zeroing out the flag for the existing system admin user. A follow-up migration (`20260561000000_backfill_system_admin`) applied the correct value with a conditional UPDATE.
+
+**Rule:** Whenever you add a column with a default, ask: *is `DEFAULT X` the correct value for every row that currently exists?* If not, write the backfill SQL in the same migration (or a subsequent one) before shipping.
+
 *Last updated: 2026-05-19. Maintained by the development team — update on every significant feature or bug fix.*
 
