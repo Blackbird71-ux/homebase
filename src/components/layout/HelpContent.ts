@@ -1198,6 +1198,784 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       },
     ],
   },
+  '/finance/income': {
+    title: 'Finance — Income',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Track recurring and one-off income — salary, rental income, dividends, freelance payments, and any other money coming in.',
+          'Income follows a similar two-step process to bills: first create the income entry, then mark it as received.',
+          'Use the sub-navigation to switch between Income (active) and Received (history) views.',
+        ],
+      },
+      {
+        title: 'Creating Income',
+        items: [
+          'Click "Add Income" to open the form. Choose Recurring or One-off.',
+          'Enter name, amount, category (must be an Income type category), account, entity, and the expected date.',
+          'For recurring income, set the frequency (Weekly, Fortnightly, Monthly, etc.) and the next expected date.',
+          'Assign a member and location if the income is specific to one person or property.',
+        ],
+      },
+      {
+        title: 'Payslip Support',
+        items: [
+          'For salary income, you can enter detailed payslip data including gross pay, PAYG withheld, superannuation guarantee (SGC), and individual pay components.',
+          'Payslip details are stored and viewable from the income row — click the "Payslip" badge to expand the breakdown.',
+          'Payslip data feeds into the Tax Report for accurate PAYG and SGC reporting.',
+        ],
+      },
+      {
+        title: 'Marking Received',
+        items: [
+          'When income arrives, click the green tick on the income row and confirm the received date.',
+          'Marking as received immediately posts the income to the P&L and increases the linked bank account balance.',
+          'The income entry moves from the active list to the Received history.',
+        ],
+      },
+      {
+        title: 'Category Column Picker',
+        items: [
+          'Toggle root category columns on/off using the checkboxes above the income list.',
+          'Each active category shows a mini-amount in that column, giving you a quick category breakdown.',
+          'The column total appears at the bottom of each column.',
+        ],
+      },
+    ],
+  },
+  '/finance/income/received': {
+    title: 'Finance — Income Received',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Received page shows a history of all income entries that have been marked as received.',
+          'Entries are listed chronologically by their received date, newest first.',
+          'Use this page to review past income, verify amounts, or undo a receipt if it was marked in error.',
+        ],
+      },
+      {
+        title: 'Filtering',
+        items: [
+          'Use the period selector to choose the lookback period: 1 month, 3 months, 6 months, or 12 months.',
+          'Toggle root category columns on/off to see a category breakdown of received amounts at a glance.',
+        ],
+      },
+      {
+        title: 'Undo Received & Voiding',
+        items: [
+          'Click the "Undo" icon on any received entry to move it back to the active Income list.',
+          'Undo is useful if income was accidentally marked as received.',
+          'Use "Void" to cancel an income entry while preserving the audit trail — the entry remains visible with a "Voided" status.',
+        ],
+      },
+    ],
+  },
+  '/finance/profit-loss': {
+    title: 'Finance — Profit & Loss',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Profit & Loss report shows your income vs expenses for any period — month, quarter, or year.',
+          'Toggle between Accrual (posted invoices only) and +Forecast (accrual plus upcoming recurring entries) views.',
+          'Use the period toggle (Month/Quarter/Year) and arrow buttons to navigate between periods.',
+        ],
+      },
+      {
+        title: 'Entity Filtering',
+        items: [
+          'Filter by entity using the entity tabs (Personal/Family, Super Fund, Trust, Business, etc.).',
+          'Each entity shows its own P&L breakdown, letting you see financial performance per legal structure.',
+          'The "All" tab combines all entities for a household-wide view.',
+        ],
+      },
+      {
+        title: 'Income & Expense Sections',
+        items: [
+          'Both income and expense sides show category breakdowns with amounts and proportional bars.',
+          'Click any category row to drill into the underlying bills and transactions that make up that total.',
+          'The drill-down panel shows each item\'s name, amount, date, and status.',
+        ],
+      },
+      {
+        title: 'Summary Bar',
+        items: [
+          'The summary bar at the top shows total income, total expenses, estimated tax, and net profit.',
+          'Net profit is shown in green (positive) or red (negative) for quick visual assessment.',
+        ],
+      },
+      {
+        title: 'Export',
+        items: [
+          'Use the Print button for a printer-friendly version.',
+          'Use the Excel button to download the report as a spreadsheet.',
+        ],
+      },
+    ],
+  },
+  '/finance/trial-balance': {
+    title: 'Finance — Trial Balance',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Trial Balance shows all GL account balances for a given date range, grouped by account type (Assets, Liabilities, Equity, Income, Expenses).',
+          'Total debits should equal total credits — a balanced ledger is indicated by a green checkmark.',
+          'Use this report to verify the integrity of your accounting data before running financial statements.',
+        ],
+      },
+      {
+        title: 'Date Range & Filtering',
+        items: [
+          'Set custom From/To dates to view balances for any period. Defaults to the current month.',
+          'Filter by entity to see the trial balance for a specific legal structure.',
+          'Use the search field to quickly find accounts by name or GL code.',
+        ],
+      },
+      {
+        title: 'Drill-Down',
+        items: [
+          'Click any account row to see the individual transactions (ledger entries) that make up that account\'s balance.',
+          'The ledger panel shows each transaction\'s date, description, and amount.',
+          'Click "Back to Trial Balance" to return to the full report.',
+        ],
+      },
+      {
+        title: 'Export',
+        items: [
+          'Use the Print button for a printer-friendly version.',
+          'Use the Excel button to download the trial balance as a spreadsheet.',
+        ],
+      },
+    ],
+  },
+  '/finance/balance-sheet': {
+    title: 'Finance — Balance Sheet',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Balance Sheet is a snapshot of your financial position at a given date — what you own (Assets) vs what you owe (Liabilities) and your Equity.',
+          'The fundamental accounting equation: Assets = Liabilities + Equity.',
+          'Use the date picker to set the snapshot date for the balance sheet.',
+        ],
+      },
+      {
+        title: 'Sections',
+        items: [
+          'Assets are split into Bank Accounts, Accounts Receivable (unpaid invoices), and Other Asset GL accounts.',
+          'Liabilities are split into Credit/Overdraft Accounts, Accounts Payable (unpaid bills), and Other Liability GL accounts.',
+          'Equity shows retained earnings (opening balances) and the current period net income.',
+        ],
+      },
+      {
+        title: 'Net Worth Check',
+        items: [
+          'A reconciliation indicator compares Total Equity against Net Worth (Assets minus Liabilities).',
+          'A green checkmark with "Balanced" confirms the accounting equation holds.',
+          'A warning indicator appears when there\'s a discrepancy — investigate missing opening balances or unposted entries.',
+        ],
+      },
+      {
+        title: 'Entity Tabs',
+        items: [
+          'Filter by entity to see the balance sheet per legal structure.',
+          'The "All" tab combines all entities for a household-wide balance sheet.',
+        ],
+      },
+      {
+        title: 'Export',
+        items: [
+          'Use the Print button for a printer-friendly version.',
+          'Use the Excel button to download the balance sheet as a spreadsheet.',
+        ],
+      },
+    ],
+  },
+  '/finance/bas': {
+    title: 'Finance — BAS (GST)',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The BAS (Business Activity Statement) page shows GST on sales and purchases, organised by quarterly periods aligned to your financial year.',
+          'Use this page to prepare your quarterly BAS lodgement — it summarises GST collected and paid.',
+          'Navigate between quarters using the left/right arrow buttons.',
+        ],
+      },
+      {
+        title: 'GST Summary Cards',
+        items: [
+          'G1 — Total sales (including GST) for the quarter.',
+          'G10 — Estimated GST on sales (G1 ÷ 11).',
+          'G11 — Total purchases (including GST) for the quarter.',
+          '1B — GST on purchases (G11 ÷ 11).',
+          'Net GST shows the amount payable (red) or refundable (green).',
+        ],
+      },
+      {
+        title: 'Sales & Purchases Detail',
+        items: [
+          'Expand the Sales and Purchases sections to see individual GST lines from posted journals.',
+          'Each line shows the journal reference, date, description, GL account, entity, and GST amount.',
+          'Use the entity filter to see BAS data per legal structure.',
+        ],
+      },
+      {
+        title: 'Export',
+        items: [
+          'Use the Print button for a printer-friendly version suitable for lodgement reference.',
+        ],
+      },
+    ],
+  },
+  '/finance/tax-report': {
+    title: 'Finance — Tax Report',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Tax Report provides an annual tax calculation per family member (or joint) showing income, deductions, estimated tax, and refund or amount owing.',
+          'Select a financial year using the arrow buttons to navigate between years.',
+          'Data is pulled from posted journal entries and income records for the selected period.',
+        ],
+      },
+      {
+        title: 'Entity Tabs',
+        items: [
+          'Filter by entity (Personal/Family, Super Fund, Trust, etc.) to see tax data per legal structure.',
+          'The "Joint" tab combines all entities for a complete household tax picture.',
+          'Member tabs (Mark, Sarah, etc.) show per-person tax calculations when members are set up.',
+        ],
+      },
+      {
+        title: 'Income & Deductions',
+        items: [
+          'Income breakdown includes wages, bank interest, other income, and franking credits — both actual and projected amounts.',
+          'Deductions include voluntary super contributions, charity/gifts, and other deductions.',
+          'Each section shows individual income lines from posted journals and income entries.',
+        ],
+      },
+      {
+        title: 'Tax Calculation',
+        items: [
+          'Uses ATO tax brackets to calculate income tax and Medicare levy.',
+          'Shows taxable income, estimated tax per week, total tax payable, and total credits.',
+          'Credits include PAYG withheld, PAYG instalments, and franking credit offsets.',
+          'The result shows a refund (green) or amount owing (red).',
+          'Superannuation guarantee (SGC) amount is shown separately.',
+        ],
+      },
+      {
+        title: 'Export',
+        items: [
+          'Use the Print button for a printer-friendly version.',
+          'Use the Excel button to download the tax report as a spreadsheet.',
+        ],
+      },
+    ],
+  },
+  '/finance/vendor-statement': {
+    title: 'Finance — Vendor Statement',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Vendor Statement shows all invoices and payments for a selected vendor within a date range, with a running balance.',
+          'Useful for reconciling your records with a supplier\'s or customer\'s statements.',
+          'Select the vendor from the dropdown to generate their statement.',
+        ],
+      },
+      {
+        title: 'Statement Type & Date Range',
+        items: [
+          'Choose AP (Accounts Payable — vendors you owe) or AR (Accounts Receivable — vendors who owe you) as the statement type.',
+          'Set custom From/To dates to define the period covered by the statement.',
+          'The statement shows an opening balance, all line items, and a closing balance.',
+        ],
+      },
+      {
+        title: 'Line Items',
+        items: [
+          'Each line shows the date, type (invoice/payment/receipt), description, reference number, charges, payments, and running balance.',
+          'The closing balance at the bottom shows the net position with the selected vendor.',
+        ],
+      },
+      {
+        title: 'Export',
+        items: [
+          'Use the Print button for a printer-friendly version suitable for sharing with vendors.',
+        ],
+      },
+    ],
+  },
+  '/finance/annual-pnl': {
+    title: 'Finance — Annual P&L',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Annual P&L shows a year-to-date profit and loss comparison across 12 months in a single view.',
+          'Each column represents a month of the financial year, with income and expense categories as rows.',
+          'Navigate between financial years using the arrow buttons.',
+        ],
+      },
+      {
+        title: 'Entity Filtering',
+        items: [
+          'Filter by entity using the entity tabs to see annual P&L per legal structure.',
+          'The "All" tab combines all entities for a household-wide view.',
+        ],
+      },
+      {
+        title: 'Reading the Report',
+        items: [
+          'Income category rows show monthly amounts with a total column on the right.',
+          'Expense category rows follow the same layout.',
+          'The summary row at the bottom shows total income, total expenses, and net profit/loss per month and for the full year.',
+          'Positive amounts are shown in green, negative in red.',
+        ],
+      },
+      {
+        title: 'Export',
+        items: [
+          'Use the Print button for a printer-friendly version.',
+          'Use the Excel button to download the annual P&L as a spreadsheet.',
+        ],
+      },
+    ],
+  },
+  '/finance/accounts-payable': {
+    title: 'Finance — Accounts Payable Aging',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Accounts Payable Aging report shows all unpaid bills grouped by vendor and aged by days since invoice date.',
+          'Aging buckets: 0-30 days, 31-60 days, 61-90 days, and 91+ days.',
+          'This helps you manage cash flow and prioritise which bills to pay first.',
+        ],
+      },
+      {
+        title: 'Reading the Report',
+        items: [
+          'Each vendor row shows the amounts in each aging bucket and a total column.',
+          'Expand a vendor row to see the individual bills that make up their total.',
+          'Each bill shows the invoice date, days since invoice, amount, and reference.',
+        ],
+      },
+      {
+        title: 'Reconciliation Check',
+        items: [
+          'The header shows the GL subledger balance vs the total from unpaid bills.',
+          'A green checkmark indicates the subledger is reconciled with the GL.',
+          'A warning indicator appears when there\'s a difference that may need investigation.',
+        ],
+      },
+      {
+        title: 'Filtering',
+        items: [
+          'Filter by entity to see AP aging per legal structure.',
+          'Use the search field to filter bills by name or vendor.',
+        ],
+      },
+    ],
+  },
+  '/finance/accounts-receivable': {
+    title: 'Finance — Accounts Receivable Aging',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Accounts Receivable Aging report shows all unpaid income entries grouped by payer and aged by days since invoice date.',
+          'Aging buckets: 0-30 days, 31-60 days, 61-90 days, and 91+ days.',
+          'This helps you track who owes you money and follow up on overdue amounts.',
+        ],
+      },
+      {
+        title: 'Reading the Report',
+        items: [
+          'Each payer row shows the amounts in each aging bucket and a total column.',
+          'Expand a payer row to see the individual income entries that make up their total.',
+          'Each entry shows the invoice date, days since invoice, and amount.',
+        ],
+      },
+      {
+        title: 'Reconciliation Check',
+        items: [
+          'The header shows the GL subledger balance vs the total from unpaid income entries.',
+          'A green checkmark indicates the subledger is reconciled with the GL.',
+          'A warning indicator appears when there\'s a difference that may need investigation.',
+        ],
+      },
+      {
+        title: 'Filtering',
+        items: [
+          'Filter by entity to see AR aging per legal structure.',
+        ],
+      },
+    ],
+  },
+  '/finance/drafts': {
+    title: 'Finance — Drafts (Approval)',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Drafts are pending bill and income entries that have been auto-generated from recurring templates.',
+          'Drafts sit in a holding state until approved or cancelled — nothing is posted to the GL until approved.',
+          'Switch between the "Draft Bills" and "Draft Income" tabs to see pending items of each type.',
+        ],
+      },
+      {
+        title: 'Reviewing Drafts',
+        items: [
+          'Each draft shows the template source, amount, due date, category, and vendor/payer.',
+          'Expand a draft to see its proposed journal lines (debit/credit breakdown).',
+          'Click the pencil icon to edit draft details — name, amount, category, account, etc. — before approving.',
+        ],
+      },
+      {
+        title: 'Approving & Rejecting',
+        items: [
+          'Click the green checkmark to approve a draft — it becomes an active bill or income entry and posts journal entries to the GL.',
+          'Click the red X to cancel a draft without posting anything to the GL.',
+          'Use "Approve All" to approve multiple drafts in bulk — useful at the start of a new period.',
+        ],
+      },
+    ],
+  },
+  '/finance/journals': {
+    title: 'Finance — Journal Entries',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Journal Entries allows you to make direct GL adjustments — corrections, accruals, depreciation, reclassifications, and opening balance entries.',
+          'Use the tabs to filter between Manual entries (posted), Drafts (unposted), and All Posted entries.',
+          'Entries are shown 50 per page, newest first.',
+        ],
+      },
+      {
+        title: 'Creating an Entry',
+        items: [
+          'Click "New Journal" to open the entry form. Enter a description, date, and at least two journal lines.',
+          'Each journal line requires a GL account, side (debit or credit), and amount — total debits must equal total credits.',
+          'Optionally assign the entry to an entity and add a reference number.',
+          'Click "Post" to submit the entry to the GL.',
+        ],
+      },
+      {
+        title: 'Entry Actions',
+        items: [
+          'Post — submit a draft entry to the GL. Once posted, the entry affects account balances.',
+          'Reverse — create an automatic reversing entry on the first day of the next period (useful for accruals).',
+          'Void — cancel a posted entry while preserving the audit trail (the entry remains visible with a "Voided" status).',
+          'Amend — modify a posted entry; the system creates an automatic reversal and re-posts the corrected version.',
+        ],
+      },
+      {
+        title: 'Viewing Entries',
+        items: [
+          'Each entry row shows the date, reference/description, total debits, total credits, and status badge.',
+          'Status badges: Posted (green), Draft (amber), Voided (red/grey).',
+          'Expand an entry to see its individual journal lines with GL account names, debit/credit amounts, and line descriptions.',
+        ],
+      },
+    ],
+  },
+  '/finance/templates': {
+    title: 'Finance — Recurring Templates',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Recurring Templates are the engine behind automated recurring transactions — they automatically spawn new bill or income entries on their schedule.',
+          'Templates are split into two sections: Bill Templates (expenses) and Income Templates (revenue).',
+          'Each section shows the next occurrence date, frequency, amount, and whether the template is currently enabled.',
+        ],
+      },
+      {
+        title: 'Creating a Template',
+        items: [
+          'Click "New Bill" or "New Income" to create a template. Enter name, amount, category, and frequency.',
+          'Frequency options: Weekly, Fortnightly, Monthly, Quarterly, Yearly, or Custom (set your own interval).',
+          'Set the next occurrence date to control when the first auto-spawn happens.',
+          'Templates can include GL account mappings, entity assignments, member/location assignments, and tax classifications.',
+        ],
+      },
+      {
+        title: 'Managing Templates',
+        items: [
+          'Toggle a template on/off using the switch — disabled templates stop spawning new entries.',
+          'Edit a template using the pencil icon. The form shows an occurrence preview so you can see upcoming dates.',
+          'Delete a template using the trash icon — this does not affect entries already spawned.',
+          'Each template shows its total occurrence count and next scheduled date.',
+        ],
+      },
+      {
+        title: 'Auto-Spawn',
+        items: [
+          'Templates are processed automatically by the scheduler (typically runs daily).',
+          'When processed, enabled templates with a past next occurrence date generate a new draft entry.',
+          'Use Finance → Admin → "Spawn Templates Now" to trigger immediate processing for testing or catch-up.',
+          'Newly spawned entries appear in Drafts (Approval) where they can be reviewed before posting.',
+        ],
+      },
+    ],
+  },
+  '/finance/admin': {
+    title: 'Finance — Admin',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Finance Admin page provides administrative tools for managing the finance module — template spawning, period locks, and system information.',
+          'These tools are intended for family administrators and system operators.',
+        ],
+      },
+      {
+        title: 'Spawn Templates Now',
+        items: [
+          'Manually trigger the recurring template spawner to process all enabled templates immediately.',
+          'Results show which families were processed, how many templates were considered, and how many entries were spawned.',
+          'Useful for testing template configurations or catching up after templates were disabled.',
+        ],
+      },
+      {
+        title: 'Period Locks',
+        items: [
+          'Lock financial periods to prevent changes to posted entries in closed periods.',
+          'Locked periods cannot have new journal entries posted to them, protecting the integrity of completed accounting periods.',
+          'Unlock a period if corrections are needed — but this should be done sparingly and documented.',
+        ],
+      },
+    ],
+  },
+  '/finance/simple-budget-planner': {
+    title: 'Finance — Simple Budget Planner',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Simple Budget Planner is a straightforward budgeting tool separate from the main Budget module.',
+          'Track planned income and expenses across categories for weekly, fortnightly, monthly, or yearly periods.',
+          'Toggle between view periods — all amounts are automatically recalculated to the selected period.',
+        ],
+      },
+      {
+        title: 'Income & Expense Sections',
+        items: [
+          'Add income items (salary, side hustle, rental income, etc.) under the Income section.',
+          'Add expense items under categories like Home & Utilities, Groceries, Transport, Entertainment, Personal, and more.',
+          'Each section shows a subtotal so you can see income vs expenses at a glance.',
+          'Items are colour-coded by category for quick visual identification.',
+        ],
+      },
+      {
+        title: 'Adding Items',
+        items: [
+          'Click the "+" button in any section to add a new budget line.',
+          'Enter a name, amount, and frequency for each item.',
+          'Use the inline form to quickly add multiple items.',
+        ],
+      },
+      {
+        title: 'Summary & Export',
+        items: [
+          'The summary at the bottom shows total income, total expenses, and the difference (surplus or deficit).',
+          'Surplus is shown in green, deficit in red.',
+          'Use the reset button to clear all budget data and start fresh.',
+          'Export to Excel or print using the toolbar buttons.',
+        ],
+      },
+    ],
+  },
+  '/trips': {
+    title: 'Trips',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Plan and manage family trips — browse all trips as cover cards showing destination, date range, and status.',
+          'Trip statuses: Planning (blue), Upcoming (amber), In Progress (green), Completed, and Cancelled.',
+          'Filter trips by status using the tab bar at the top.',
+        ],
+      },
+      {
+        title: 'Creating a Trip',
+        items: [
+          'Click "New Trip" and fill in the trip name, destination, start/end dates, and optional notes.',
+          'Trips are automatically assigned a cover colour palette based on the trip ID.',
+          'Once created, the trip appears on the list with its status badge and date range.',
+        ],
+      },
+      {
+        title: 'Managing Trips',
+        items: [
+          'Click any trip card to open its detail page with itinerary, packing, weather, budget, and maps.',
+          'Delete a trip using the trash icon on the card — you will be asked to confirm.',
+          'Use the tag manager to add tags for filtering and organisation.',
+        ],
+      },
+    ],
+  },
+  '/trips/\\[id\\]': {
+    title: 'Trip Detail',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Trip Detail page is your central hub for managing all aspects of a trip.',
+          'On desktop, the page uses a split-pane layout: the left sidebar shows trip info and day-by-day navigation, the right pane shows the selected view.',
+          'On mobile, use the tab bar at the bottom to switch between Overview, Itinerary, Packing, Weather, Budget, and Maps.',
+        ],
+      },
+      {
+        title: 'Itinerary',
+        items: [
+          'Plan activities for each day of your trip. Each day card shows the date and day number.',
+          'Click "Add Activity" to add an activity with a name, time, location, notes, and optional tags.',
+          'Reorder activities within a day using the drag handle on each activity card.',
+          'Click an activity to edit it, or use the note icon to add private notes.',
+        ],
+      },
+      {
+        title: 'Packing',
+        items: [
+          'Create one or more packing lists for the trip (e.g., by person or by bag type).',
+          'Add items with quantities and mark them as packed/unpacked using the checkbox.',
+          'Track overall packing progress per list with a progress indicator.',
+        ],
+      },
+      {
+        title: 'Weather',
+        items: [
+          'View the weather forecast for the trip destination and date range.',
+          'Weather data is displayed inline for quick reference while planning.',
+        ],
+      },
+      {
+        title: 'Budget',
+        items: [
+          'Set a budget amount for the trip and track expenses against it.',
+          'Add individual expense items with amounts and optional categories.',
+          'See total spending and remaining budget at a glance.',
+        ],
+      },
+      {
+        title: 'Maps',
+        items: [
+          'View the trip destination on an interactive Google Map.',
+          'Key locations from your itinerary may be shown on the map.',
+        ],
+      },
+      {
+        title: 'Attachments',
+        items: [
+          'Upload and attach files to the trip — documents, images, PDFs, etc.',
+          'Attachments are displayed as preview cards with download and delete options.',
+        ],
+      },
+      {
+        title: 'Editing & Deleting',
+        items: [
+          'Click the pencil icon next to the trip name to edit trip details.',
+          'Use the trash icon in the header to delete the entire trip — you will be asked to confirm.',
+        ],
+      },
+    ],
+  },
+  '/budget-planner': {
+    title: 'Budget Planner',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Budget Planner is a straightforward budgeting tool to track planned income and expenses across categories.',
+          'Toggle between Weekly, Fortnightly, Monthly, and Yearly views — all amounts are automatically recalculated.',
+          'Items are colour-coded by category for quick visual identification.',
+        ],
+      },
+      {
+        title: 'Income & Expense Sections',
+        items: [
+          'Add income items (salary, side hustle, rental income, etc.) under the Income section.',
+          'Add expense items under categories like Home & Utilities, Groceries, Transport, Entertainment, and more.',
+          'Each section shows a subtotal for quick comparison.',
+        ],
+      },
+      {
+        title: 'Adding Items',
+        items: [
+          'Click the "+" button in any section to add a new budget line.',
+          'Enter a name, amount, and frequency for each item.',
+          'Use the inline form to quickly add multiple items.',
+        ],
+      },
+      {
+        title: 'Summary & Export',
+        items: [
+          'The summary shows total income, total expenses, and the surplus or deficit.',
+          'Surplus is shown in green, deficit in red.',
+          'Use the reset button to clear all data and start fresh.',
+          'Export to Excel or print using the toolbar buttons.',
+        ],
+      },
+    ],
+  },
+  '/admin': {
+    title: 'System Admin',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The System Admin panel provides tools for managing families, users, and server operations.',
+          'This page is only accessible to system administrators.',
+        ],
+      },
+      {
+        title: 'Docker Logs',
+        items: [
+          'View real-time application logs directly from the admin panel.',
+          'Filter logs by level (log, info, warn, error) using the dropdown.',
+          'Toggle auto-refresh to monitor logs in real time.',
+        ],
+      },
+      {
+        title: 'Families',
+        items: [
+          'View all registered families with their member counts.',
+          'Click a family to see its users and manage their settings.',
+        ],
+      },
+      {
+        title: 'Users',
+        items: [
+          'View users within a selected family.',
+          'Change user roles between admin and member.',
+          'Reset user passwords if needed.',
+        ],
+      },
+      {
+        title: 'Server Actions',
+        items: [
+          'Trigger template spawning to process recurring templates immediately.',
+          'Restart the Cloudflare tunnel if needed.',
+          'Manage database and system backups.',
+        ],
+      },
+      {
+        title: 'Audit Trail',
+        items: [
+          'View the system-wide audit log showing changes made across all families.',
+          'Useful for troubleshooting and security monitoring.',
+        ],
+      },
+    ],
+  },
 }
 
 /**
@@ -1229,6 +2007,11 @@ export function getHelpForPath(pathname: string): HelpPage | null {
   // /documents/[id] -> /documents
   if (pathname.startsWith('/documents/') && pathname !== '/documents') {
     return HELP_CONTENT['/documents'] ?? null
+  }
+
+  // /trips/[id] -> /trips/\[id\]
+  if (pathname.startsWith('/trips/') && pathname !== '/trips') {
+    return HELP_CONTENT['/trips/\\[id\\]'] ?? null
   }
 
   // /finance/* — each sub-page has its own entry; fall back to /finance for unknown sub-paths
