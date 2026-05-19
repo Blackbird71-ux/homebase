@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { PageHero } from '@/components/shared/PageHero'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { formatCurrency } from '@/lib/financeShared'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, WideDialogContent } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { useTransactionCrud, type Transaction } from '@/hooks/finance/useTransactionCrud'
 
 export type { Transaction } from '@/hooks/finance/useTransactionCrud'
@@ -94,153 +94,150 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
-        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
-          <div className="px-4 pt-4 pb-0 shrink-0">
-            <DialogHeader>
-              <DialogTitle>{editing ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
-            </DialogHeader>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3">
-          {Object.keys(errors).length > 0 && (
-            <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mb-3">
-              <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
-              <ul className="list-disc list-inside text-xs text-red-500/80 mt-1">
-                {Object.values(errors).map((err, i) => <li key={i}>{err}</li>)}
-              </ul>
-            </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Type *</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value, taxClassification: '' }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="expense">Expense</option>
-                <option value="income">Income</option>
-                <option value="transfer">Transfer</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Amount *</label>
-              <input type="number" step="0.01" value={form.amount}
-                onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500 ring-1 ring-red-500' : 'border-input')} />
-              {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Date</label>
-              <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Payee</label>
-              <input value={form.payee} onChange={e => setForm(p => ({ ...p, payee: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Account</label>
-              <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No account</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Category</label>
-              <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">Uncategorized</option>
-                {sortedCategoryList(categories.filter(c => c.type === form.type)).map(c => (
-                  <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">GL Account (cash/asset side)</label>
-              <select value={form.glAccountId} onChange={e => setForm(p => ({ ...p, glAccountId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No GL account (no journal entry)</option>
-                {sortedCategoryList(categories.filter(c => ['asset','liability'].includes(c.type))).map(c => (
-                  <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground mt-0.5">Required for GL entry. Select bank account, term deposit, property, etc.</p>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Member</label>
-              <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No member</option>
-                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Location</label>
-              <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No location</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Entity</label>
-              <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No entity</option>
-                {entities.map(en => <option key={en.id} value={en.id}>{en.name}{en.isDefault ? ' (default)' : ''}</option>)}
-              </select>
-            </div>
-            {/* Tax Classification — spec §4.4; options depend on transaction type */}
-            <div>
-              <label className="text-xs text-muted-foreground flex items-center gap-1">
-                <Receipt className="h-3 w-3 text-amber-500" /> Tax Classification
-              </label>
-              <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">Not classified</option>
-                {(form.type === 'expense' || form.type === 'transfer') && (
-                  <>
-                    <option value="tax_deduction">Tax Deduction (ATO deductible)</option>
-                    <option value="tax_payment">Tax Payment (PAYG, BAS)</option>
-                  </>
-                )}
-                {form.type === 'income' && (
-                  <>
-                    <option value="taxable_income">Taxable Income</option>
-                    <option value="exempt_income">Exempt Income</option>
-                  </>
-                )}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Description</label>
-              <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-1.5 text-sm">
-                <input type="checkbox" checked={form.isCleared} onChange={e => setForm(p => ({ ...p, isCleared: e.target.checked }))} />
-                Cleared
-              </label>
-              <label className="flex items-center gap-1.5 text-sm">
-                <input type="checkbox" checked={form.isPrivate} onChange={e => setForm(p => ({ ...p, isPrivate: e.target.checked }))} />
-                Private
-              </label>
-              <label className="flex items-center gap-1.5 text-sm">
-                <input type="checkbox" checked={form.isTransfer} onChange={e => setForm(p => ({ ...p, isTransfer: e.target.checked }))} />
-                Transfer
-              </label>
+      <Drawer open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
+        <DrawerContent className="sm:max-w-[720px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editing ? 'Edit Transaction' : 'New Transaction'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+            {Object.keys(errors).length > 0 && (
+              <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mb-3">
+                <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
+                <ul className="list-disc list-inside text-xs text-red-500/80 mt-1">
+                  {Object.values(errors).map((err, i) => <li key={i}>{err}</li>)}
+                </ul>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Type *</label>
+                <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value, taxClassification: '' }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Amount *</label>
+                <input type="number" step="0.01" value={form.amount}
+                  onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                  className={cn('w-full rounded-md border bg-background px-3 py-1.5 text-sm', errors.amount ? 'border-red-500 ring-1 ring-red-500' : 'border-input')} />
+                {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Date</label>
+                <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Payee</label>
+                <input value={form.payee} onChange={e => setForm(p => ({ ...p, payee: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Account</label>
+                <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No account</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Category</label>
+                <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">Uncategorized</option>
+                  {sortedCategoryList(categories.filter(c => c.type === form.type)).map(c => (
+                    <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">GL Account (cash/asset side)</label>
+                <select value={form.glAccountId} onChange={e => setForm(p => ({ ...p, glAccountId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No GL account (no journal entry)</option>
+                  {sortedCategoryList(categories.filter(c => ['asset','liability'].includes(c.type))).map(c => (
+                    <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-0.5">Required for GL entry. Select bank account, term deposit, property, etc.</p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Member</label>
+                <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No member</option>
+                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Location</label>
+                <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No location</option>
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Entity</label>
+                <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No entity</option>
+                  {entities.map(en => <option key={en.id} value={en.id}>{en.name}{en.isDefault ? ' (default)' : ''}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Receipt className="h-3 w-3 text-amber-500" /> Tax Classification
+                </label>
+                <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">Not classified</option>
+                  {(form.type === 'expense' || form.type === 'transfer') && (
+                    <>
+                      <option value="tax_deduction">Tax Deduction (ATO deductible)</option>
+                      <option value="tax_payment">Tax Payment (PAYG, BAS)</option>
+                    </>
+                  )}
+                  {form.type === 'income' && (
+                    <>
+                      <option value="taxable_income">Taxable Income</option>
+                      <option value="exempt_income">Exempt Income</option>
+                    </>
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Description</label>
+                <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={form.isCleared} onChange={e => setForm(p => ({ ...p, isCleared: e.target.checked }))} />
+                  Cleared
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={form.isPrivate} onChange={e => setForm(p => ({ ...p, isPrivate: e.target.checked }))} />
+                  Private
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={form.isTransfer} onChange={e => setForm(p => ({ ...p, isTransfer: e.target.checked }))} />
+                  Transfer
+                </label>
+              </div>
             </div>
           </div>
-          </div>
-          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
-            <button onClick={closeForm} className="rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
-            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
+          <DrawerFooter className="border-t border-border">
+            <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
+            <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </WideDialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {fetchError && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6 text-center space-y-3">

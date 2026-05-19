@@ -2,13 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  WideDialogContent,
-} from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -480,20 +474,20 @@ export function AssignMealModal({
   const noResults = search.trim().length > 0 && filtered.length === 0
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <WideDialogContent>
-        <DialogHeader>
-          <DialogTitle>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[800px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>
             {displayDate} — {mealType}
-          </DialogTitle>
+          </DrawerTitle>
           {hasExisting && (
-            <DialogDescription>
+            <p className="text-sm text-muted-foreground mt-1">
               Currently has {existingRecipes.length} recipe{existingRecipes.length !== 1 ? 's' : ''}.
               Select more to add, or use the options below.
-            </DialogDescription>
+            </p>
           )}
-        </DialogHeader>
-
+        </DrawerHeader>
+        <div className="flex-1 overflow-y-auto px-4 py-3">
         <Tabs defaultValue="recipe">
           <TabsList>
             <TabsTrigger value="recipe">Recipe</TabsTrigger>
@@ -644,7 +638,8 @@ export function AssignMealModal({
             </form>
           </TabsContent>
         </Tabs>
-      </WideDialogContent>
-    </Dialog>
+        </div>
+      </DrawerContent>
+    </Drawer>
   )
 }

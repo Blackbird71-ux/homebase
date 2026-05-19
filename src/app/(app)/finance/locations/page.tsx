@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { ColorPicker } from '@/components/ui/color-picker'
 
 interface Location {
@@ -71,44 +71,47 @@ export default function LocationsPage() {
         </button>
       </div>
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
-        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Location' : 'New Location'}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Type</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                {LOCATION_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="text-xs text-muted-foreground">Address</label>
-              <input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
-              <ColorPicker
-                value={form.color}
-                onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
-              />
+      <Drawer open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DrawerContent className="sm:max-w-[480px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editing ? 'Edit Location' : 'New Location'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Name *</label>
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Type</label>
+                <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  {LOCATION_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Address</label>
+                <input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
+                <ColorPicker
+                  value={form.color}
+                  onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          <DrawerFooter className="border-t border-border">
+            <button onClick={() => { setShowForm(false); setEditing(null) }} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {locations.length === 0 ? (
         <p className="text-sm text-muted-foreground">No locations yet. Add your first location above.</p>

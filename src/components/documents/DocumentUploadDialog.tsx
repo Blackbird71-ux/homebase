@@ -2,13 +2,12 @@
 
 import { useState, useRef } from 'react'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -139,19 +138,16 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
   }
 
   return (
-    <Dialog open={open} onOpenChange={(open) => {
+    <Drawer open={open} onOpenChange={(open) => {
       if (!open) resetForm()
       onOpenChange(open)
     }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Upload Document</DialogTitle>
-          <DialogDescription>
-            Store a household document like insurance, warranty, or passport.
-          </DialogDescription>
-        </DialogHeader>
+      <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>Upload Document</DrawerTitle>
+        </DrawerHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 px-4 py-4 flex-1 overflow-y-auto">
           {/* File Drop Zone */}
           <div
             onDrop={handleDrop}
@@ -325,12 +321,12 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
           </div>
         </div>
 
-        <DialogFooter showCloseButton>
+        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2 sm:justify-end">
           <Button onClick={handleUpload} disabled={uploading || !file || !title}>
             {uploading ? 'Uploading...' : 'Upload'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

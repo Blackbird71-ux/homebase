@@ -9,7 +9,7 @@ import { PageHero } from '@/components/shared/PageHero'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { CategorySpendView, type BudgetRule } from '@/components/finance/CategorySpendView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -469,57 +469,60 @@ export default function BudgetPage() {
           </div>
         </div>
 
-        <Dialog open={showRuleForm} onOpenChange={open => { if (!open) { setShowRuleForm(false); setEditingRule(null) } }}>
-          <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
-            <DialogHeader>
-              <DialogTitle>{editingRule ? 'Edit budget rule' : 'New budget rule'}</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">Name *</label>
-                <input value={ruleForm.name} onChange={e => setRuleForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Groceries, Property rates"
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Monthly amount *</label>
-                <input type="number" step="0.01" value={ruleForm.amount}
-                  onChange={e => setRuleForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Period</label>
-                <select value={ruleForm.period} onChange={e => setRuleForm(p => ({ ...p, period: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Category (optional)</label>
-                <select value={ruleForm.categoryId} onChange={e => setRuleForm(p => ({ ...p, categoryId: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="">No category</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity</label>
-                <select value={ruleForm.entityId} onChange={e => setRuleForm(p => ({ ...p, entityId: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
-                </select>
+        <Drawer open={showRuleForm} onOpenChange={open => { if (!open) { setShowRuleForm(false); setEditingRule(null) } }}>
+          <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+            <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+              <DrawerTitle>{editingRule ? 'Edit budget rule' : 'New budget rule'}</DrawerTitle>
+            </DrawerHeader>
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Name *</label>
+                  <input value={ruleForm.name} onChange={e => setRuleForm(p => ({ ...p, name: e.target.value }))}
+                    placeholder="e.g. Groceries, Property rates"
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Amount *</label>
+                  <input type="number" step="0.01" value={ruleForm.amount}
+                    onChange={e => setRuleForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Period</label>
+                  <select value={ruleForm.period} onChange={e => setRuleForm(p => ({ ...p, period: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Category (optional)</label>
+                  <select value={ruleForm.categoryId} onChange={e => setRuleForm(p => ({ ...p, categoryId: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">No category</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity</label>
+                  <select value={ruleForm.entityId} onChange={e => setRuleForm(p => ({ ...p, entityId: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
-            <DialogFooter>
+            <DrawerFooter className="border-t border-border">
+              <button onClick={() => { setShowRuleForm(false); setEditingRule(null) }} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
               <button onClick={handleSaveRule}
                 className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
                 {editingRule ? 'Update' : 'Add rule'}
               </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
 
         {activeRules.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-6 text-center">

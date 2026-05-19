@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
@@ -67,12 +67,12 @@ export function EditListDialog({
   const ownerName = members.find((m) => m.id === (ownerId || list.createdBy))?.name ?? 'Family'
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit list — {list.name}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>Edit list — {list.name}</DrawerTitle>
+        </DrawerHeader>
+        <form id="edit-list-form" onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 py-4 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-list-owner">Owner</Label>
             <select
@@ -94,17 +94,16 @@ export function EditListDialog({
                 : 'This list is shared — it appears for everyone under "Mine" view.'}
             </p>
           </div>
-
-          <DialogFooter className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Saving…' : 'Save'}
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" form="edit-list-form" disabled={loading}>
+            {loading ? 'Saving…' : 'Save'}
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

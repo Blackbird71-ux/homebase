@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  WideDialogContent,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -162,14 +162,11 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <WideDialogContent
-        className="flex flex-col overflow-hidden p-0 gap-0"
-        showCloseButton={false}
-      >
-        <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
-          <DialogTitle>{chore ? 'Edit Chore' : 'Add Chore'}</DialogTitle>
-        </DialogHeader>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[720px] flex flex-col overflow-hidden p-0 gap-0" showCloseButton={true}>
+        <DrawerHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
+          <DrawerTitle>{chore ? 'Edit Chore' : 'Add Chore'}</DrawerTitle>
+        </DrawerHeader>
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
           <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
             {/* ── Left column: schedule ── */}
@@ -388,7 +385,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
             {saving ? 'Saving...' : chore ? 'Update' : 'Create'}
           </Button>
         </div>
-      </WideDialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   )
 }

@@ -86,6 +86,50 @@ This rule exists because inline copies of accounting logic (journal creation, re
 
 ---
 
+# Drawer pattern standards
+
+All form editors, detail panels, and complex dialogs must use the right-side Drawer from `@/components/ui/sheet`. Centred `Dialog` is only appropriate for small confirm/alert prompts (≤2 fields: void, delete, PIN unlock, import).
+
+## Required structure
+
+```tsx
+<Drawer open={open} onOpenChange={onOpenChange}>
+  <DrawerContent className="sm:max-w-[Npx]" showCloseButton={true}>
+    <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+      <DrawerTitle>Title</DrawerTitle>
+    </DrawerHeader>
+    <div className="flex-1 overflow-y-auto px-4 py-3">
+      {/* form fields */}
+    </div>
+    <DrawerFooter className="border-t border-border">
+      {/* Cancel / Save buttons */}
+    </DrawerFooter>
+  </DrawerContent>
+</Drawer>
+```
+
+## Width standards
+
+| Width | Use for |
+|---|---|
+| 480px | 2–3 simple fields |
+| 560px | Standard forms (~10 fields) |
+| 720px | Complex forms (10–15 fields) |
+| 800px | Tabbed editors or multi-section forms |
+| 900px | Two-column with journal lines (finance editors) |
+
+## Rules
+
+1. **`showCloseButton={true}` is required on every `DrawerContent`.** Without it, no X button is rendered.
+2. **`WideDialogContent` must not be used for editors.** All usages have been removed; the definition remains in `dialog.tsx` only.
+3. **After any layout change touching a Drawer, grep for missing `showCloseButton`:**
+   ```
+   grep -rn "DrawerContent" src/ --include="*.tsx" | grep -v "showCloseButton\|import\|sheet.tsx"
+   ```
+4. **`ActivityEditDialog` uses custom `hb-drawer` CSS and is a known exception** — do not convert without user instruction.
+
+---
+
 # Regression Prevention
 
 See `QA.md` in the project root for:

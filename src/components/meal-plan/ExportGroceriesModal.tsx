@@ -2,13 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  WideDialogContent,
-} from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ShoppingCategory } from '@/lib/list-helpers'
@@ -221,17 +215,17 @@ export function ExportGroceriesModal({
   const totalItems = selectedRecipes.reduce((sum, r) => sum + r.ingredients.length, 0)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <WideDialogContent className="flex flex-col overflow-hidden gap-0 p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <DialogTitle>Add to Groceries</DialogTitle>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[800px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>Add to Groceries</DrawerTitle>
           {status !== 'loading' && (
             <p className="text-sm text-muted-foreground mt-1">
               {checkedCount} of {totalItems} ingredient{totalItems !== 1 ? 's' : ''} selected from{' '}
               {selectedRecipes.length} of {recipes.length} recipe{recipes.length !== 1 ? 's' : ''}.
             </p>
           )}
-        </DialogHeader>
+        </DrawerHeader>
 
         {status === 'loading' && (
           <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
@@ -384,7 +378,7 @@ export function ExportGroceriesModal({
                 </div>
               </div>
             ) : (
-              <DialogFooter className="px-6 py-4 border-t border-border flex-col sm:flex-row items-start sm:items-center gap-3">
+              <DrawerFooter className="border-t border-border flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-3 text-xs text-muted-foreground flex-1">
                   <span className="flex items-center gap-1">
                     <span className="inline-block w-2 h-2 rounded-full bg-emerald-500/70" />
@@ -411,11 +405,11 @@ export function ExportGroceriesModal({
                     {status === 'saving' ? 'Saving…' : 'Add to Groceries'}
                   </Button>
                 </div>
-              </DialogFooter>
+              </DrawerFooter>
             )}
           </>
         )}
-      </WideDialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   )
 }

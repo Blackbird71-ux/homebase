@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
 import { cn } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 
 interface Category { id: string; name: string; type: string; parentId: string | null; color: string | null }
 interface Vendor {
@@ -109,73 +109,76 @@ export default function VendorsPage() {
         </button>
       </div>
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
-        <DialogContent className="sm:max-w-2xl" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Contact' : 'New Contact'}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                placeholder="e.g. Origin Energy"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Default category</label>
-              <select value={form.defaultCategoryId}
-                onChange={e => setForm(p => ({ ...p, defaultCategoryId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">None</option>
-                {(['income', 'expense', 'transfer'] as const).flatMap(type => {
-                  const group = sortedCategoryList(categories.filter(c => c.type === type))
-                  if (group.length === 0) return []
-                  const label = type === 'income' ? 'Income' : type === 'expense' ? 'Expense' : 'Transfer'
-                  return [
-                    <optgroup key={type} label={label}>
-                      {group.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.parentId ? `\u2014 ${c.name}` : c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ]
-                })}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Website</label>
-              <input value={form.website} onChange={e => setForm(p => ({ ...p, website: e.target.value }))}
-                placeholder="e.g. originenergy.com.au"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Phone</label>
-              <input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
-                placeholder="e.g. 1300 000 000"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Account / reference number</label>
-              <input value={form.accountRef} onChange={e => setForm(p => ({ ...p, accountRef: e.target.value }))}
-                placeholder="e.g. ACC-12345"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Notes</label>
-              <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                placeholder="e.g. Contract expires Jan 2027"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+      <Drawer open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editing ? 'Edit Contact' : 'New Contact'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Name *</label>
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Origin Energy"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Default category</label>
+                <select value={form.defaultCategoryId}
+                  onChange={e => setForm(p => ({ ...p, defaultCategoryId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">None</option>
+                  {(['income', 'expense', 'transfer'] as const).flatMap(type => {
+                    const group = sortedCategoryList(categories.filter(c => c.type === type))
+                    if (group.length === 0) return []
+                    const label = type === 'income' ? 'Income' : type === 'expense' ? 'Expense' : 'Transfer'
+                    return [
+                      <optgroup key={type} label={label}>
+                        {group.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.parentId ? `\u2014 ${c.name}` : c.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ]
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Website</label>
+                <input value={form.website} onChange={e => setForm(p => ({ ...p, website: e.target.value }))}
+                  placeholder="e.g. originenergy.com.au"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Phone</label>
+                <input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                  placeholder="e.g. 1300 000 000"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Account / reference number</label>
+                <input value={form.accountRef} onChange={e => setForm(p => ({ ...p, accountRef: e.target.value }))}
+                  placeholder="e.g. ACC-12345"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Notes</label>
+                <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                  placeholder="e.g. Contract expires Jan 2027"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          <DrawerFooter className="border-t border-border">
+            <button onClick={() => { setShowForm(false); setEditing(null) }} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave}
               className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {vendors.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center">

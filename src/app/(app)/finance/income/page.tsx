@@ -17,8 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  WideDialogContent,
 } from '@/components/ui/dialog'
+import {
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
+} from '@/components/ui/sheet'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { useIncomeCrud, type IncomeEntry, type PayslipFormData } from '@/hooks/finance/useIncomeCrud'
@@ -194,14 +196,14 @@ export default function IncomePage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
-        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
+      <Drawer open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
+        <DrawerContent className="sm:max-w-[900px]" showCloseButton={true}>
 
           {/* Fixed header — title, errors, income type toggle */}
           <div className="px-4 pt-4 pb-0 shrink-0">
-            <DialogHeader>
-              <DialogTitle>{editing ? 'Edit Income' : 'New Income'}</DialogTitle>
-            </DialogHeader>
+            <DrawerHeader className="p-0">
+              <DrawerTitle>{editing ? 'Edit Income' : 'New Income'}</DrawerTitle>
+            </DrawerHeader>
 
             {Object.keys(errors).length > 0 && (
               <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 mt-3">
@@ -526,22 +528,20 @@ export default function IncomePage() {
           </div>
           </div>
 
-          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+          <DrawerFooter className="px-4 py-3 border-t border-border shrink-0">
             <button onClick={closeForm} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </WideDialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
-      <Dialog open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>
-        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
-          <div className="px-4 pt-4 pb-0 shrink-0">
-            <DialogHeader>
-              <DialogTitle>Confirm Income Received</DialogTitle>
-            </DialogHeader>
-          </div>
+      <Drawer open={!!receivedConfirm} onOpenChange={open => { if (!open) setReceivedConfirm(null) }}>
+        <DrawerContent className="sm:max-w-[900px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>Confirm Income Received</DrawerTitle>
+          </DrawerHeader>
 
           {receivedConfirm && (
             <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-4 pt-3">
@@ -809,20 +809,20 @@ export default function IncomePage() {
             </div>
           )}
 
-          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
-            <button onClick={() => setReceivedConfirm(null)} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
+          <DrawerFooter className="border-t border-border">
+            <button onClick={() => setReceivedConfirm(null)} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button
               onClick={confirmMarkReceived}
               disabled={payslipForm.enabled
                 ? !payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId
                 : !receivedConfirmGlAccountId
               }
-              className="w-full sm:w-auto rounded-md bg-green-600 text-white px-4 py-2.5 sm:py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+              className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               Mark as received
             </button>
-          </DialogFooter>
-        </WideDialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">No income entries yet.</p>

@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Send, X } from 'lucide-react'
+import { Loader2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { getCurrentFY } from '@/lib/financeShared'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 
 interface EmailReportModalProps {
   open: boolean
@@ -16,8 +17,6 @@ export default function EmailReportModal({ open, onClose }: EmailReportModalProp
   const [recipientsText, setRecipientsText] = useState('')
   const [note, setNote] = useState('')
   const [sending, setSending] = useState(false)
-
-  if (!open) return null
 
   function parseRecipients(text: string): string[] {
     return text
@@ -63,22 +62,16 @@ export default function EmailReportModal({ open, onClose }: EmailReportModalProp
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-background rounded-xl border border-border shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
+    <Drawer open={open} onOpenChange={o => { if (!o) onClose() }}>
+      <DrawerContent className="sm:max-w-[480px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle className="flex items-center gap-2">
             <Send className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold text-sm">Email Report</h3>
-          </div>
-          <button onClick={onClose} className="p-1 hover:bg-accent rounded-md text-muted-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+            Email Report
+          </DrawerTitle>
+        </DrawerHeader>
 
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          {/* Year selector */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Financial Year</label>
             <select
@@ -93,7 +86,6 @@ export default function EmailReportModal({ open, onClose }: EmailReportModalProp
             </select>
           </div>
 
-          {/* Recipients */}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
               Recipients <span className="text-red-500">*</span>
@@ -110,7 +102,6 @@ export default function EmailReportModal({ open, onClose }: EmailReportModalProp
             </p>
           </div>
 
-          {/* Note */}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
               Note <span className="text-muted-foreground/60">(optional)</span>
@@ -125,25 +116,24 @@ export default function EmailReportModal({ open, onClose }: EmailReportModalProp
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-muted/20">
+        <DrawerFooter className="border-t border-border">
           <button
             onClick={onClose}
             disabled={sending}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50"
+            className="rounded-md border border-border px-4 py-1.5 text-sm disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSend}
             disabled={sending}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {sending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {sending ? 'Sending...' : 'Send Report'}
           </button>
-        </div>
-      </div>
-    </div>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

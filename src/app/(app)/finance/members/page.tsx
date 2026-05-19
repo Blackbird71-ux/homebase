@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 
 interface Member {
   id: string
@@ -89,45 +89,48 @@ export default function FinanceMembersPage() {
         </button>
       </div>
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
-        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Member' : 'Add Family Member'}</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            {editing
-              ? 'Update the member name.'
-              : 'Enter the email of an existing user to add them to your family.'}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input
-                value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                placeholder="Jane Smith"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Email *</label>
-              <input
-                value={form.email}
-                onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                placeholder="jane@example.com"
-                disabled={!!editing}
-              />
+      <Drawer open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DrawerContent className="sm:max-w-[480px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editing ? 'Edit Member' : 'Add Family Member'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {editing
+                ? 'Update the member name.'
+                : 'Enter the email of an existing user to add them to your family.'}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Name *</label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  placeholder="Jane Smith"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Email *</label>
+                <input
+                  value={form.email}
+                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  placeholder="jane@example.com"
+                  disabled={!!editing}
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          <DrawerFooter className="border-t border-border">
+            <button onClick={() => { setShowForm(false); setEditing(null) }} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave}
               className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Add'}
             </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {members.length === 0 ? (
         <p className="text-sm text-muted-foreground">No family members found.</p>

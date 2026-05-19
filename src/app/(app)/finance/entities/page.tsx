@@ -7,6 +7,7 @@ import { PageHero } from '@/components/shared/PageHero'
 import { StatusChip } from '@/components/shared/StatusChip'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 
 interface Entity {
   id: string
@@ -173,94 +174,97 @@ export default function EntitiesPage() {
         </div>
       </div>
 
-      {/* Dialog */}
-      <Dialog open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
-        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Entity' : 'New Entity'}</DialogTitle>
-          </DialogHeader>
+      {/* Drawer */}
+      <Drawer open={showForm} onOpenChange={open => { if (!open) closeForm() }}>
+        <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editing ? 'Edit Entity' : 'New Entity'}</DrawerTitle>
+          </DrawerHeader>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input
-                value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                placeholder="e.g. Smith Family Super"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                autoFocus
-                onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-              />
-            </div>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Name *</label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Smith Family Super"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+                />
+              </div>
 
-            <div>
-              <label className="text-xs text-muted-foreground">Type</label>
-              <select
-                value={form.type}
-                onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-              >
-                {ENTITY_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-              {typeHint(form.type) && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
-                  <Receipt className="h-3 w-3" /> {typeHint(form.type)}
-                </p>
-              )}
-            </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Type</label>
+                <select
+                  value={form.type}
+                  onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                >
+                  {ENTITY_TYPES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+                {typeHint(form.type) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
+                    <Receipt className="h-3 w-3" /> {typeHint(form.type)}
+                  </p>
+                )}
+              </div>
 
-            <div className="sm:col-span-2">
-              <label className="text-xs text-muted-foreground">Description (optional)</label>
-              <input
-                value={form.description}
-                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                placeholder="e.g. SMSF holding investment properties"
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-              />
-            </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Description (optional)</label>
+                <input
+                  value={form.description}
+                  onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                  placeholder="e.g. SMSF holding investment properties"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                />
+              </div>
 
-            <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Colour</label>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {PRESET_COLORS.map(c => (
-                  <button key={c} type="button" onClick={() => setForm(p => ({ ...p, color: c }))}
-                    className={cn('w-6 h-6 rounded-full border-2 transition-transform hover:scale-110',
-                      form.color === c ? 'border-foreground scale-110' : 'border-transparent')}
-                    style={{ backgroundColor: c }} title={c} />
-                ))}
-                <input type="color" value={form.color}
-                  onChange={e => setForm(p => ({ ...p, color: e.target.value }))}
-                  className="w-6 h-6 rounded cursor-pointer border border-input" title="Custom colour" />
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Colour</label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {PRESET_COLORS.map(c => (
+                    <button key={c} type="button" onClick={() => setForm(p => ({ ...p, color: c }))}
+                      className={cn('w-6 h-6 rounded-full border-2 transition-transform hover:scale-110',
+                        form.color === c ? 'border-foreground scale-110' : 'border-transparent')}
+                      style={{ backgroundColor: c }} title={c} />
+                  ))}
+                  <input type="color" value={form.color}
+                    onChange={e => setForm(p => ({ ...p, color: e.target.value }))}
+                    className="w-6 h-6 rounded cursor-pointer border border-input" title="Custom colour" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">Sort order</label>
+                <input type="number" min={0} value={form.sortOrder}
+                  onChange={e => setForm(p => ({ ...p, sortOrder: parseInt(e.target.value) || 0 }))}
+                  className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
               </div>
             </div>
 
-            <div>
-              <label className="text-xs text-muted-foreground">Sort order</label>
-              <input type="number" min={0} value={form.sortOrder}
-                onChange={e => setForm(p => ({ ...p, sortOrder: parseInt(e.target.value) || 0 }))}
-                className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer w-fit select-none">
+              <input type="checkbox" checked={form.isDefault}
+                onChange={e => setForm(p => ({ ...p, isDefault: e.target.checked }))}
+                className="rounded border-input" />
+              <Star className="h-3.5 w-3.5 text-yellow-500" />
+              Mark as default entity
+              <span className="text-xs text-muted-foreground">(shown first / pre-selected in dropdowns)</span>
+            </label>
           </div>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer w-fit select-none">
-            <input type="checkbox" checked={form.isDefault}
-              onChange={e => setForm(p => ({ ...p, isDefault: e.target.checked }))}
-              className="rounded border-input" />
-            <Star className="h-3.5 w-3.5 text-yellow-500" />
-            Mark as default entity
-            <span className="text-xs text-muted-foreground">(shown first / pre-selected in dropdowns)</span>
-          </label>
-
-          <DialogFooter>
+          <DrawerFooter className="border-t border-border">
+            <button onClick={closeForm} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} disabled={saving}
               className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50">
               {saving ? 'Saving…' : editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Empty state */}
       {activeEntities.length === 0 && !showForm && (

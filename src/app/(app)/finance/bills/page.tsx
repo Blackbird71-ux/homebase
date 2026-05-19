@@ -16,8 +16,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  WideDialogContent,
 } from '@/components/ui/dialog'
+import {
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
+} from '@/components/ui/sheet'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { useBillCrud, type Bill } from '@/hooks/finance/useBillCrud'
@@ -169,13 +171,13 @@ export default function BillsPage() {
         </div>
       )}
 
-      {/* Bill form dialog */}
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { closeForm(); } }}>
-        <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
+      {/* Bill form drawer */}
+      <Drawer open={showForm} onOpenChange={open => { if (!open) { closeForm(); } }}>
+        <DrawerContent className="sm:max-w-[900px]" showCloseButton={true}>
 
           {/* Fixed header */}
           <div className="px-4 pt-4 pb-0 shrink-0">
-            <DialogHeader><DialogTitle>{editing ? 'Edit Bill' : 'New Bill'}</DialogTitle></DialogHeader>
+            <DrawerHeader className="p-0"><DrawerTitle>{editing ? 'Edit Bill' : 'New Bill'}</DrawerTitle></DrawerHeader>
             {Object.keys(errors).length > 0 && (
               <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mt-3">
                 <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
@@ -380,14 +382,14 @@ export default function BillsPage() {
           </div>
           </div>
 
-          <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
+          <DrawerFooter className="px-4 py-3 border-t border-border shrink-0">
             <button onClick={closeForm} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </WideDialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Date paid confirmation */}
       <Dialog open={!!paidConfirm} onOpenChange={open => { if (!open) setPaidConfirm(null) }}>

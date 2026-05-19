@@ -1,13 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  Dialog,
-  WideDialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -230,11 +224,11 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <WideDialogContent className="flex flex-col overflow-hidden p-0 gap-0">
-        <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
-          <DialogTitle>{editMode ? 'Edit recipe' : 'Add recipe'}</DialogTitle>
-        </DialogHeader>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[800px]" showCloseButton={true}>
+        <DrawerHeader className="px-6 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>{editMode ? 'Edit recipe' : 'Add recipe'}</DrawerTitle>
+        </DrawerHeader>
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <Tabs defaultValue="manual">
             <TabsList className="sticky top-0 bg-background z-10">
@@ -466,13 +460,13 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
             </TabsContent>
           </Tabs>
         </div>
-        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background flex-col sm:flex-row gap-2">
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit" form="recipe-form" className="w-full sm:w-auto" disabled={saving || !title.trim()}>
+        <DrawerFooter className="border-t border-border">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="submit" form="recipe-form" disabled={saving || !title.trim()}>
             {saving ? 'Saving...' : editMode ? 'Update recipe' : 'Save recipe'}
           </Button>
-        </DialogFooter>
-      </WideDialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

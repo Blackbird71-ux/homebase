@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Dialog, WideDialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -212,14 +212,14 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
   }
 
   return (
-    <Dialog open={open} onOpenChange={open => !open && onClose()}>
-      <WideDialogContent className="flex flex-col overflow-hidden">
+    <Drawer open={open} onOpenChange={open => !open && onClose()}>
+      <DrawerContent className="sm:max-w-[720px] flex flex-col overflow-hidden p-0 gap-0" showCloseButton={true}>
         {showDeleteConfirm ? (
           <>
-            <DialogHeader>
-              <DialogTitle>Delete Recurring Event</DialogTitle>
-            </DialogHeader>
-            <div className="py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+            <DrawerHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
+              <DrawerTitle>Delete Recurring Event</DrawerTitle>
+            </DrawerHeader>
+            <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
               <p className="text-sm text-muted-foreground">
                 This event is part of a recurring series. What would you like to delete?
               </p>
@@ -252,21 +252,21 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                 </label>
               </div>
             </div>
-            <DialogFooter className="gap-2 shrink-0">
+            <DrawerFooter className="px-6 py-4 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
               <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setDeleteAll(false) }}>
                 Cancel
               </Button>
               <Button variant="destructive" onClick={handleDelete} disabled={loading}>
                 {loading ? 'Deleting...' : 'Delete'}
               </Button>
-            </DialogFooter>
+            </DrawerFooter>
           </>
         ) : (
           <>
-            <DialogHeader>
-              <DialogTitle>{event ? 'Edit Event' : 'New Event'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
+            <DrawerHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
+              <DrawerTitle>{event ? 'Edit Event' : 'New Event'}</DrawerTitle>
+            </DrawerHeader>
+            <div className="space-y-4 px-6 py-4 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-1">
                 <Label>Title</Label>
                 <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title" />
@@ -444,7 +444,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                 <EventAttendeePanel eventId={getEventId(event)} currentUserId={currentUserId} />
               )}
             </div>
-            <DialogFooter className="gap-2 shrink-0 flex-col sm:flex-row">
+            <DrawerFooter className="px-6 py-4 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
               {event && (
                 <Button variant="destructive" className="w-full sm:w-auto" onClick={handleDelete} disabled={loading}>Delete</Button>
               )}
@@ -452,10 +452,10 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
               <Button className="w-full sm:w-auto" onClick={handleSave} disabled={loading}>
                 {loading ? 'Saving...' : 'Save'}
               </Button>
-            </DialogFooter>
+            </DrawerFooter>
           </>
         )}
-      </WideDialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   )
 }

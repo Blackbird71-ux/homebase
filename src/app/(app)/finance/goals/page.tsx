@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { ColorPicker } from '@/components/ui/color-picker'
 
 interface Goal {
@@ -87,67 +87,70 @@ export default function GoalsPage() {
         </button>
       </div>
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
-        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Goal' : 'New Savings Goal'}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Target Amount *</label>
-              <input type="number" step="0.01" value={form.targetAmount}
-                onChange={e => setForm(p => ({ ...p, targetAmount: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">
-                Current Amount
-                {form.accountId && <span className="ml-1 text-muted-foreground/60">(auto from account balance)</span>}
-              </label>
-              <input type="number" step="0.01" value={form.currentAmount}
-                onChange={e => setForm(p => ({ ...p, currentAmount: parseFloat(e.target.value) || 0 }))}
-                disabled={!!form.accountId}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                title={form.accountId ? 'Progress is auto-derived from the linked account balance' : undefined}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Target Date</label>
-              <input type="date" value={form.targetDate}
-                onChange={e => setForm(p => ({ ...p, targetDate: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Linked Account</label>
-              <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                <option value="">No account (manual tracking)</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-              {form.accountId && (
-                <p className="text-xs text-muted-foreground mt-1">Progress will auto-update from this account's balance.</p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
-              <ColorPicker
-                value={form.color}
-                onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
-              />
+      <Drawer open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editing ? 'Edit Goal' : 'New Savings Goal'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Name *</label>
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Target Amount *</label>
+                <input type="number" step="0.01" value={form.targetAmount}
+                  onChange={e => setForm(p => ({ ...p, targetAmount: parseFloat(e.target.value) || 0 }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Current Amount
+                  {form.accountId && <span className="ml-1 text-muted-foreground/60">(auto from account balance)</span>}
+                </label>
+                <input type="number" step="0.01" value={form.currentAmount}
+                  onChange={e => setForm(p => ({ ...p, currentAmount: parseFloat(e.target.value) || 0 }))}
+                  disabled={!!form.accountId}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={form.accountId ? 'Progress is auto-derived from the linked account balance' : undefined}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Target Date</label>
+                <input type="date" value={form.targetDate}
+                  onChange={e => setForm(p => ({ ...p, targetDate: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Linked Account</label>
+                <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="">No account (manual tracking)</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                {form.accountId && (
+                  <p className="text-xs text-muted-foreground mt-1">Progress will auto-update from this account's balance.</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
+                <ColorPicker
+                  value={form.color}
+                  onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          <DrawerFooter className="border-t border-border">
+            <button onClick={() => { setShowForm(false); setEditing(null) }} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {goals.length === 0 ? (
         <p className="text-sm text-muted-foreground">No savings goals yet. Start saving by adding a goal!</p>

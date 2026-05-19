@@ -126,6 +126,54 @@ function SheetDescription({
   )
 }
 
+// ── Drawer aliases ──────────────────────────────────────────────────────────
+// Semantic aliases for Sheet used in add/edit form flows.
+// DrawerContent uses SheetPrimitive.Popup directly to avoid the default
+// sm:max-w-sm width class — callers supply width via className instead.
+
+const Drawer = Sheet
+const DrawerClose = SheetClose
+
+function DrawerContent({
+  className,
+  children,
+  showCloseButton = true,
+  ...props
+}: SheetPrimitive.Popup.Props & { showCloseButton?: boolean }) {
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Popup
+        data-slot="sheet-content"
+        data-side="right"
+        className={cn(
+          "fixed z-50 flex flex-col gap-0 bg-popover text-sm text-foreground shadow-lg transition duration-200 ease-in-out overflow-hidden p-0",
+          "inset-y-0 right-0 h-full border-l",
+          "data-ending-style:opacity-0 data-starting-style:opacity-0 data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]",
+          className
+        )}
+        {...props}
+      >
+        {children}
+        {showCloseButton && (
+          <SheetPrimitive.Close
+            data-slot="sheet-close"
+            render={<Button variant="ghost" className="absolute top-3 right-3" size="icon-sm" />}
+          >
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        )}
+      </SheetPrimitive.Popup>
+    </SheetPortal>
+  )
+}
+
+const DrawerHeader = SheetHeader
+const DrawerTitle = SheetTitle
+const DrawerFooter = SheetFooter
+const DrawerDescription = SheetDescription
+
 export {
   Sheet,
   SheetTrigger,
@@ -135,4 +183,11 @@ export {
   SheetFooter,
   SheetTitle,
   SheetDescription,
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+  DrawerDescription,
 }

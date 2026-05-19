@@ -993,5 +993,18 @@ Alternatively, read from `sessionStorage` / `localStorage` inside a `useEffect` 
 
 **Rule:** Whenever you add a column with a default, ask: *is `DEFAULT X` the correct value for every row that currently exists?* If not, write the backfill SQL in the same migration (or a subsequent one) before shipping.
 
-*Last updated: 2026-05-19. Maintained by the development team — update on every significant feature or bug fix.*
+### 12.15 `DrawerContent` Missing `showCloseButton={true}` Silently Loses Close Button
+
+**Problem:** The X close button inside a Drawer is opt-in — `DrawerContent` requires `showCloseButton={true}` to render it. Without it, the drawer has no visible dismiss control; users can only close it by clicking the backdrop or pressing Escape.
+
+**Detected:** 2026-05-20 audit found 5 `DrawerContent` components missing this prop: `EventModal`, `TemplateFormDialog`, `CategoryDialog`, `ChoreDialog`, `NotesClient`.
+
+**Rule:** After any layout refactor that touches `DrawerContent`, verify `showCloseButton={true}` is present. Grep to catch omissions:
+```
+grep -rn "DrawerContent" src/ --include="*.tsx" | grep -v "showCloseButton\|import\|sheet.tsx"
+```
+
+---
+
+*Last updated: 2026-05-20. Maintained by the development team — update on every significant feature or bug fix.*
 

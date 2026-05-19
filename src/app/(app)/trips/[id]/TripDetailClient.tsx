@@ -17,6 +17,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { TripDetail, TripDayShape, TripPackingEntryShape } from '@/types'
@@ -529,13 +536,13 @@ function EditTripDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" showCloseButton>
-        <DialogHeader>
-          <DialogTitle>Edit Trip</DialogTitle>
-        </DialogHeader>
+    <Drawer open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>Edit Trip</DrawerTitle>
+        </DrawerHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 px-4 py-4 flex-1 overflow-y-auto" id="edit-trip-form">
           {error && (
             <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
           )}
@@ -614,13 +621,14 @@ function EditTripDialog({
               />
             </div>
           </div>
-          <DialogFooter showCloseButton>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Saving…' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2 sm:justify-end">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" form="edit-trip-form" disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

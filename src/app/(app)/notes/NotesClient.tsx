@@ -7,7 +7,7 @@ import { NoteEditor } from '@/components/notes/NoteEditor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogHeader, DialogTitle, WideDialogContent } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { PlusIcon, SearchIcon, FilterIcon, XIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, FolderIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
@@ -442,19 +442,19 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
       )}
 
       {/* Editor Dialog */}
-      <Dialog open={editorOpen} onOpenChange={(open) => {
+      <Drawer open={editorOpen} onOpenChange={(open) => {
         if (!open) {
           setEditingNote(null)
         }
         setEditorOpen(open)
       }}>
-        <WideDialogContent className="flex flex-col overflow-hidden p-0">
+        <DrawerContent className="sm:max-w-[720px] flex flex-col overflow-hidden p-0 gap-0" showCloseButton={true}>
           {/* Sticky header */}
-          <DialogHeader className="px-4 pt-4 pb-3 shrink-0 border-b border-border">
-            <DialogTitle>
+          <DrawerHeader className="px-4 pt-4 pb-3 shrink-0 border-b border-border">
+            <DrawerTitle>
               {editingNote ? 'Edit Note' : 'Create New Note'}
-            </DialogTitle>
-          </DialogHeader>
+            </DrawerTitle>
+          </DrawerHeader>
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
             <NoteEditor
@@ -474,8 +474,8 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
               isLoading={isLoading}
             />
           </div>
-        </WideDialogContent>
-      </Dialog>
+        </DrawerContent>
+      </Drawer>
     </div>
   )
 }

@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -146,12 +146,12 @@ export function EditItemDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" showCloseButton>
-        <DialogHeader>
-          <DialogTitle>Edit Item</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-4 py-2">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>Edit Item</DrawerTitle>
+        </DrawerHeader>
+        <div className="flex flex-col gap-4 px-4 py-4 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-2">
             <Label htmlFor="edit-item-name">Name</Label>
             <Input
@@ -285,12 +285,12 @@ export function EditItemDialog({
             </div>
           )}
         </div>
-        <DialogFooter showCloseButton>
+        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2 sm:justify-end">
           <Button onClick={handleSave} disabled={isSaving || !content.trim()}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

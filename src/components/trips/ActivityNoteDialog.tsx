@@ -3,12 +3,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { NoteEditorToolbar } from '@/components/notes/NoteEditorToolbar'
 
@@ -106,13 +106,13 @@ export function ActivityNoteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg flex flex-col max-h-[80vh] overflow-hidden p-0 gap-0" showCloseButton>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[560px] flex flex-col overflow-hidden p-0 gap-0" showCloseButton={true}>
         {/* Header */}
-        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border shrink-0">
-          <DialogTitle>Notes</DialogTitle>
+        <DrawerHeader className="px-4 pt-4 pb-3 border-b border-border shrink-0">
+          <DrawerTitle>Notes</DrawerTitle>
           <p className="text-xs text-muted-foreground truncate">{activityTitle}</p>
-        </DialogHeader>
+        </DrawerHeader>
 
         {/* Toolbar — sits flush against the editor */}
         <div className="shrink-0 px-4 pt-3">
@@ -149,13 +149,13 @@ export function ActivityNoteDialog({
         </div>
 
         {/* Footer */}
-        <DialogFooter showCloseButton>
+        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2 sm:justify-end">
           <Button type="button" onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             Save
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

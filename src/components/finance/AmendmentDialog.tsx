@@ -21,8 +21,8 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import {
-  Dialog, DialogHeader, DialogTitle, DialogFooter, WideDialogContent,
-} from '@/components/ui/dialog'
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
+} from '@/components/ui/sheet'
 import {
   type JournalEntry, type GLAccount, type Entity, type FormLine, type AmendmentState,
   fmt, normalSide, MANUAL_TYPES,
@@ -202,14 +202,14 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
   const balanced = difference < 0.005
 
   return (
-    <Dialog open={!!amendment} onOpenChange={o => { if (!o && !saving) onClose() }}>
-      <WideDialogContent className="flex flex-col overflow-hidden gap-0 p-0" showCloseButton={!saving}>
-        <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
-          <DialogTitle className="flex items-center gap-2">
+    <Drawer open={!!amendment} onOpenChange={o => { if (!o && !saving) onClose() }}>
+      <DrawerContent className="sm:max-w-[720px]" showCloseButton={!saving}>
+        <DrawerHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
+          <DrawerTitle className="flex items-center gap-2">
             <FilePenLine className="h-4 w-4 text-blue-500" />
             Correct Posted Journal Entry
-          </DialogTitle>
-        </DialogHeader>
+          </DrawerTitle>
+        </DrawerHeader>
 
         <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 space-y-4">
         {entry && (
@@ -446,7 +446,7 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
         )}
 
         </div>
-        <DialogFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
+        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
           <button onClick={onClose} disabled={saving}
             className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm disabled:opacity-50">Cancel</button>
           <button onClick={handleSubmit} disabled={saving || !balanced}
@@ -458,8 +458,8 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
             <Send className="h-3.5 w-3.5" />
             {saving ? 'Posting amendment…' : confirmed ? 'Confirm & Post Amendment' : 'Review & Amend'}
           </button>
-        </DialogFooter>
-      </WideDialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

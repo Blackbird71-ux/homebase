@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -54,12 +54,12 @@ export function NewListDialog({ open, onOpenChange, onCreated, members, currentU
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => onOpenChange(isOpen)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New list</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>New list</DrawerTitle>
+        </DrawerHeader>
+        <form id="new-list-form" onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 py-4 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="list-name">Name</Label>
             <Input
@@ -108,17 +108,18 @@ export function NewListDialog({ open, onOpenChange, onCreated, members, currentU
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                The owner controls who sees this list in "My Lists" view
+                The owner controls who sees this list in &quot;My Lists&quot; view
               </p>
             </div>
           )}
-          <DialogFooter>
-                <Button type="submit" disabled={loading || !name.trim()}>
-                  {loading ? 'Creating...' : 'Create'}
-                </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2 sm:justify-end">
+          <Button type="button" onClick={() => onOpenChange(false)} variant="outline">Cancel</Button>
+          <Button type="submit" form="new-list-form" disabled={loading || !name.trim()}>
+            {loading ? 'Creating...' : 'Create'}
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

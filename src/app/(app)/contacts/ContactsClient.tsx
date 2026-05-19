@@ -8,12 +8,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import {
   Select,
   SelectContent,
@@ -426,12 +426,12 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
         </>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingContact ? 'Edit Contact' : 'Add Contact'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
+      <Drawer open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editingContact ? 'Edit Contact' : 'Add Contact'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="space-y-4 px-4 py-4 flex-1 overflow-y-auto">
             <div className="space-y-1.5">
               <Label htmlFor="contact-name">Name</Label>
               <Input id="contact-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dr. Smith" />
@@ -524,14 +524,14 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : editingContact ? 'Update' : 'Create'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Unlock Dialog */}
       {unlockContact && (

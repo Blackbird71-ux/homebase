@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { ColorPicker } from '@/components/ui/color-picker'
 
 interface Account {
@@ -188,74 +189,77 @@ export default function AccountsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
-        <DialogContent className="sm:max-w-lg" showCloseButton={true}>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Account' : 'New Account'}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Name *</label>
-              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" required />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Type *</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Institution</label>
-              <input value={form.institution} onChange={e => setForm(p => ({ ...p, institution: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Currency</label>
-              <input value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
-            </div>
-            {!editing && (
+      <Drawer open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditing(null) } }}>
+        <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>{editing ? 'Edit Account' : 'New Account'}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Opening Balance</label>
-                <input type="number" step="0.01" value={form.openingBalance}
-                  onChange={e => setForm(p => ({ ...p, openingBalance: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                  placeholder="0.00" />
+                <label className="text-xs text-muted-foreground">Name *</label>
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" required />
               </div>
-            )}
-            {!editing && (
               <div>
-                <label className="text-xs text-muted-foreground">Opening Balance Date</label>
-                <input type="date" value={form.openingBalanceDate}
-                  onChange={e => setForm(p => ({ ...p, openingBalanceDate: e.target.value }))}
+                <label className="text-xs text-muted-foreground">Type *</label>
+                <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Institution</label>
+                <input value={form.institution} onChange={e => setForm(p => ({ ...p, institution: e.target.value }))}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
               </div>
-            )}
-            {form.type === 'credit' && (
               <div>
-                <label className="text-xs text-muted-foreground">Credit Limit</label>
-                <input type="number" step="0.01" value={form.creditLimit}
-                  onChange={e => setForm(p => ({ ...p, creditLimit: e.target.value }))}
+                <label className="text-xs text-muted-foreground">Currency</label>
+                <input value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
               </div>
-            )}
-            <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
-              <ColorPicker
-                value={form.color}
-                onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
-              />
+              {!editing && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Opening Balance</label>
+                  <input type="number" step="0.01" value={form.openingBalance}
+                    onChange={e => setForm(p => ({ ...p, openingBalance: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                    placeholder="0.00" />
+                </div>
+              )}
+              {!editing && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Opening Balance Date</label>
+                  <input type="date" value={form.openingBalanceDate}
+                    onChange={e => setForm(p => ({ ...p, openingBalanceDate: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                </div>
+              )}
+              {form.type === 'credit' && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Credit Limit</label>
+                  <input type="number" step="0.01" value={form.creditLimit}
+                    onChange={e => setForm(p => ({ ...p, creditLimit: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                </div>
+              )}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
+                <ColorPicker
+                  value={form.color}
+                  onChange={newColor => setForm(p => ({ ...p, color: newColor }))}
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          <DrawerFooter className="border-t border-border">
+            <button onClick={() => { setShowForm(false); setEditing(null) }} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
             <button onClick={handleSave} className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {accounts.length === 0 ? (
         <p className="text-sm text-muted-foreground">No accounts yet. Add your first account above.</p>

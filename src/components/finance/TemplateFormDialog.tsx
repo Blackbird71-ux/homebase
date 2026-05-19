@@ -5,9 +5,8 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import {
-  Dialog, DialogHeader, DialogTitle, DialogFooter,
-  WideDialogContent,
-} from '@/components/ui/dialog'
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
@@ -892,24 +891,22 @@ export function TemplateFormDialog({
   const topErrors = errorKeys.filter(k => !k.startsWith('line_') && k !== 'balance' && k !== 'lines')
 
   return (
-    <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <WideDialogContent
-        className="flex flex-col gap-0 p-0 overflow-hidden"
-      >
+    <Drawer open={open} onOpenChange={o => { if (!o) onClose() }}>
+      <DrawerContent className="sm:max-w-[900px]" showCloseButton={true}>
         {/* Header */}
-        <DialogHeader className="px-5 pt-3 pb-0 shrink-0">
-          <DialogTitle className="flex items-center gap-2">
+        <DrawerHeader className="px-5 pt-3 pb-0 shrink-0">
+          <DrawerTitle className="flex items-center gap-2">
             {form.kind === 'bill'
               ? <TrendingDown className="h-4 w-4 text-red-500" />
               : <TrendingUp className="h-4 w-4 text-green-600" />}
             {isEdit ? 'Edit Recurring Template' : 'New Recurring Template'}
-          </DialogTitle>
+          </DrawerTitle>
           {topErrors.length > 0 && (
             <div className="mt-2 rounded-md bg-red-500/10 border border-red-500/30 px-3 py-2 text-xs text-red-600 dark:text-red-400 space-y-0.5">
               {topErrors.slice(0, 4).map(k => <p key={k}>{errors[k]}</p>)}
             </div>
           )}
-        </DialogHeader>
+        </DrawerHeader>
 
         {/* ── Narrow layout (< md): tabbed ───────────────────────── */}
         <div className="md:hidden flex flex-col flex-1 min-h-0">
@@ -989,13 +986,13 @@ export function TemplateFormDialog({
           </div>
         </div>
 
-        <DialogFooter className="px-5 pt-2.5 pb-4 border-t border-border shrink-0">
+        <DrawerFooter className="px-5 pt-2.5 pb-4 border-t border-border shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Update Template' : 'Create Template'}
           </Button>
-        </DialogFooter>
-      </WideDialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }

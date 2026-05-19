@@ -11,13 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 import { formatCurrency, toMonthlyAmount } from '@/lib/financeShared'
 import { sortedCategoryList } from '@/lib/finance-categories'
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  WideDialogContent,
-} from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 import Link from 'next/link'
 
@@ -207,15 +201,12 @@ function EditDialog({
   const dateLabel = form.kind === 'bill' ? 'Next Due Date *' : 'Next Expected Date *'
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <WideDialogContent className="flex flex-col overflow-hidden p-0" showCloseButton={true}>
-        {/* Fixed header */}
-        <div className="px-4 pt-4 pb-0 shrink-0">
-          <DialogHeader>
-            <DialogTitle>Edit Draft {form.kind === 'bill' ? 'Bill' : 'Income'}</DialogTitle>
-          </DialogHeader>
+    <Drawer open onOpenChange={onClose}>
+      <DrawerContent className="sm:max-w-[900px]" showCloseButton={true}>
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+          <DrawerTitle>Edit Draft {form.kind === 'bill' ? 'Bill' : 'Income'}</DrawerTitle>
           {Object.keys(errors).length > 0 && (
-            <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mt-3">
+            <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mt-2">
               <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
               <ul className="list-disc list-inside text-xs text-red-500/80 mt-1">
                 {Object.values(errors).map((err, i) => <li key={i}>{err}</li>)}
@@ -223,7 +214,7 @@ function EditDialog({
             </div>
           )}
           {form.kind === 'bill' && (
-            <div className="flex gap-4 py-3">
+            <div className="flex gap-4 pt-2">
               {(['recurring', 'one-off'] as const).map(bt => (
                 <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="radio" name="billType" value={bt} checked={form.billType === bt}
@@ -234,7 +225,7 @@ function EditDialog({
             </div>
           )}
           {form.kind === 'income' && (
-            <div className="flex gap-4 py-3">
+            <div className="flex gap-4 pt-2">
               {(['recurring', 'one-off'] as const).map(bt => (
                 <label key={bt} className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="radio" name="incomeType" value={bt} checked={form.billType === bt}
@@ -244,7 +235,7 @@ function EditDialog({
               ))}
             </div>
           )}
-        </div>
+        </DrawerHeader>
 
         {/* Two-column body */}
         <div className="flex-1 min-h-0 overflow-y-auto">
@@ -448,15 +439,15 @@ function EditDialog({
           </div>
         </div>
 
-        <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
-          <button onClick={onClose} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
+        <DrawerFooter className="border-t border-border">
+          <button onClick={onClose} className="rounded-md border border-border px-4 py-1.5 text-sm">Cancel</button>
           <button onClick={handleSave} disabled={saving}
-            className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium disabled:opacity-50">
+            className="rounded-md bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50">
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
-        </DialogFooter>
-      </WideDialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }
 
