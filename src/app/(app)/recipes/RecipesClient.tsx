@@ -282,7 +282,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
   }
 
   // Overview sections
-  const featuredRecipe   = baseRecipes[0] ?? null
+  const featuredRecipe   = baseRecipes.find(r => isFav(r) && r.image) ?? baseRecipes.find(isFav) ?? baseRecipes[0] ?? null
   const recentRecipes    = baseRecipes.slice(1, 7)
   const familyFavRecipes = baseRecipes.filter(isFamily).slice(0, 6)
 
