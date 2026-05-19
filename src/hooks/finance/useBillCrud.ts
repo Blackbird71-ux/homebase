@@ -532,7 +532,7 @@ export function useBillCrud() {
     : addMonths(todayStart, 3)
 
   const activeBills = bills.filter(b => {
-    if (!b.isActive || b.paid) return false
+    if (!b.isActive || b.paid || b.status === 'draft') return false
     if (quickFilter) {
       if (quickFilter.type === 'member'   && b.member?.id   !== quickFilter.id) return false
       if (quickFilter.type === 'vendor'   && b.vendor?.id   !== quickFilter.id) return false
