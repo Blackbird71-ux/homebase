@@ -4,9 +4,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle,
   ChevronDown, ChevronUp, Terminal, Trash2, Pause, CirclePlay,
-  Container,
+  Container, Users, Plus, Copy, Check, KeyRound, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,20 @@ interface LogLine {
   ts: string
   level: 'log' | 'info' | 'warn' | 'error'
   msg: string
+}
+
+interface FamilyRow {
+  id: string
+  name: string
+  memberCount: number
+}
+
+interface FamilyUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  createdAt: string
 }
 
 // ── Action Card ───────────────────────────────────────────────────────────────
@@ -156,10 +171,8 @@ function SpawnResultView({ result }: { result: SpawnResponse }) {
 
 // ── Log Viewer ────────────────────────────────────────────────────────────────
 
-const AUTO_SCROLL_THRESHOLD = 50 // px from bottom — if closer, stay pinned
+const AUTO_SCROLL_THRESHOLD = 50
 
-// These colours are chosen for the hardcoded dark terminal background
-// (bg-[#0d1117]) and ignore the current theme so text is always legible.
 const LEVEL_STYLES: Record<LogLine['level'], string> = {
   log:   'text-slate-300',
   info:  'text-blue-400',
@@ -201,7 +214,6 @@ function LogViewer() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [polling, fetchLogs])
 
-  // Smart auto-scroll — only when the user is at/near the bottom
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
@@ -306,12 +318,11 @@ function DockerLogViewer() {
   const [polling, setPolling] = useState(true)
   const [error, setError] = useState('')
   const [n, setN] = useState(100)
-  const [pinned, setPinned] = useState(true) // user is at the bottom → auto-scroll
+  const [pinned, setPinned] = useState(true)
   const viewportRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const isNearBottom = useRef(true) // sync ref so scroll handler can read latest
+  const isNearBottom = useRef(true)
 
-  // ── fetch ────────────────────────────────────────────────────────────────
   const fetchDockerLogs = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/docker-logs?n=${n}`)
@@ -328,7 +339,6 @@ function DockerLogViewer() {
     fetchDockerLogs()
   }, [fetchDockerLogs])
 
-  // ── polling interval ─────────────────────────────────────────────────────
   useEffect(() => {
     if (polling) {
       intervalRef.current = setInterval(fetchDockerLogs, 5000)
@@ -338,7 +348,6 @@ function DockerLogViewer() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [polling, fetchDockerLogs])
 
-  // ── smart auto-scroll — only when the user is at/near the bottom ─────────
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
@@ -351,14 +360,12 @@ function DockerLogViewer() {
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
-  // After new text arrives, scroll to bottom ONLY if pinned
   useEffect(() => {
     if (!polling) return
     if (!isNearBottom.current) return
     viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' })
   }, [text, polling])
 
-  // ── render ───────────────────────────────────────────────────────────────
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
@@ -423,9 +430,362 @@ function DockerLogViewer() {
   )
 }
 
+// ── Copy Code Button ──────────────────────────────────────────────────────────
+
+function CopyCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <button
+      onClick={copy}
+      className="flex items-center gap-1.5 font-mono text-sm bg-muted rounded px-3 py-1.5 hover:bg-muted/80 transition-colors"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+      {code}
+    </button>
+  )
+}
+
+// ── Create Family Dialog ──────────────────────────────────────────────────────
+
+function CreateFamilyDialog({
+  myFamilyId,
+  onCreated,
+}: {
+  myFamilyId: string | null
+  onCreated: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [copyRecipes, setCopyRecipes] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ inviteCode: string; recipesCopied: number } | null>(null)
+
+  function reset() {
+    setName('')
+    setCopyRecipes(false)
+    setResult(null)
+  }
+
+  async function handleCreate() {
+    if (!name.trim()) return
+    setBusy(true)
+    try {
+      const res = await fetch('/api/admin/families', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          copyRecipesFromFamilyId: copyRecipes ? myFamilyId : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      setResult({ inviteCode: data.inviteCode, recipesCopied: data.recipesCopied })
+      onCreated()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to create family')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors"
+      >
+        <Plus className="h-4 w-4" /> Create Family
+      </button>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm p-4 space-y-4">
+      <p className="font-semibold text-sm">Create New Family</p>
+
+      {!result ? (
+        <>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Family name</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Smith Family"
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+              onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
+            />
+          </div>
+
+          {myFamilyId && (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={copyRecipes}
+                onChange={e => setCopyRecipes(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-sm">Copy recipes &amp; recipe books from your family</span>
+            </label>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleCreate}
+              disabled={busy || !name.trim()}
+              className="flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {busy ? 'Creating…' : 'Create'}
+            </button>
+            <button
+              onClick={() => { setOpen(false); reset() }}
+              className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted/40 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-3">
+          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 space-y-2">
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Family created successfully</p>
+            <p className="text-xs text-muted-foreground">Share this admin invite code. It expires in 7 days and makes the first registrant a family admin.</p>
+            <CopyCode code={result.inviteCode} />
+            {result.recipesCopied > 0 && (
+              <p className="text-xs text-muted-foreground">{result.recipesCopied} recipes copied.</p>
+            )}
+          </div>
+          <button
+            onClick={() => { setOpen(false); reset() }}
+            className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted/40 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Family Row ────────────────────────────────────────────────────────────────
+
+function FamilyCard({ family }: { family: FamilyRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const [users, setUsers] = useState<FamilyUser[] | null>(null)
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [generatingInvite, setGeneratingInvite] = useState(false)
+  const [resetTargetId, setResetTargetId] = useState<string | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [resetting, setResetting] = useState(false)
+
+  async function loadUsers() {
+    setLoadingUsers(true)
+    try {
+      const res = await fetch(`/api/admin/families/${family.id}/users`)
+      const data = await res.json()
+      setUsers(data)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  function toggleExpand() {
+    const next = !expanded
+    setExpanded(next)
+    if (next && users === null) loadUsers()
+  }
+
+  async function generateInvite() {
+    setGeneratingInvite(true)
+    try {
+      const res = await fetch(`/api/admin/families/${family.id}/invite`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      setInviteCode(data.inviteCode)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to generate invite')
+    } finally {
+      setGeneratingInvite(false)
+    }
+  }
+
+  async function resetPassword(userId: string) {
+    if (!newPassword || newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+    setResetting(true)
+    try {
+      const res = await fetch(`/api/admin/families/${family.id}/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      toast.success('Password reset successfully')
+      setResetTargetId(null)
+      setNewPassword('')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to reset password')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleExpand}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronRight className={cn('h-4 w-4 transition-transform', expanded && 'rotate-90')} />
+          </button>
+          <div>
+            <p className="font-medium text-sm">{family.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {family.memberCount} member{family.memberCount !== 1 ? 's' : ''}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {inviteCode ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Invite:</span>
+              <CopyCode code={inviteCode} />
+            </div>
+          ) : (
+            <button
+              onClick={generateInvite}
+              disabled={generatingInvite}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 disabled:opacity-50 transition-colors"
+            >
+              {generatingInvite ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              Invite
+            </button>
+          )}
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-border px-4 py-3 space-y-2">
+          {loadingUsers && <p className="text-xs text-muted-foreground">Loading members…</p>}
+          {users && users.length === 0 && <p className="text-xs text-muted-foreground italic">No members yet.</p>}
+          {users && users.map(u => (
+            <div key={u.id} className="space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">{u.name}</p>
+                  <p className="text-xs text-muted-foreground">{u.email} · <span className="capitalize">{u.role}</span></p>
+                </div>
+                <button
+                  onClick={() => {
+                    setResetTargetId(resetTargetId === u.id ? null : u.id)
+                    setNewPassword('')
+                  }}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 transition-colors"
+                >
+                  <KeyRound className="h-3.5 w-3.5" /> Reset password
+                </button>
+              </div>
+              {resetTargetId === u.id && (
+                <div className="flex items-center gap-2 pl-0">
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="New password (min 8 chars)"
+                    className="h-8 flex-1 rounded-md border border-input bg-transparent px-3 text-sm"
+                    onKeyDown={e => { if (e.key === 'Enter') resetPassword(u.id) }}
+                  />
+                  <button
+                    onClick={() => resetPassword(u.id)}
+                    disabled={resetting || newPassword.length < 8}
+                    className="flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {resetting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    Set
+                  </button>
+                  <button
+                    onClick={() => { setResetTargetId(null); setNewPassword('') }}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted/40 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Families Tab ──────────────────────────────────────────────────────────────
+
+function FamiliesTab() {
+  const [families, setFamilies] = useState<FamilyRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [forbidden, setForbidden] = useState(false)
+  const [myFamilyId, setMyFamilyId] = useState<string | null>(null)
+
+  async function loadFamilies() {
+    try {
+      const [familiesRes, sessionRes] = await Promise.all([
+        fetch('/api/admin/families'),
+        fetch('/api/auth/session'),
+      ])
+      if (familiesRes.status === 403) { setForbidden(true); return }
+      const data = await familiesRes.json()
+      setFamilies(data)
+      const session = await sessionRes.json()
+      setMyFamilyId(session?.user?.familyId ?? null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadFamilies() }, [])
+
+  if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>
+
+  if (forbidden) {
+    return (
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+        <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">System admin access required</p>
+        <p className="text-xs text-muted-foreground mt-1">Only the system admin can manage families.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <CreateFamilyDialog myFamilyId={myFamilyId} onCreated={loadFamilies} />
+      {families.length === 0 && (
+        <p className="text-sm text-muted-foreground italic">No families found.</p>
+      )}
+      {families.map(f => <FamilyCard key={f.id} family={f} />)}
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+type Tab = 'operations' | 'families'
+
 export default function AdminPage() {
+  const [tab, setTab] = useState<Tab>('operations')
+
   async function runSpawnNow() {
     const res = await fetch('/api/admin/spawn-now', { method: 'POST' })
     const data = await res.json()
@@ -444,29 +804,64 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Scheduler */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Scheduler</h2>
-        <ActionCard
-          title="Run Spawn Now"
-          description="Immediately runs the draft-spawn worker for all families. Safe to run multiple times — idempotent."
-          buttonLabel="Run Spawn"
-          onRun={runSpawnNow}
-          renderResult={(r) => <SpawnResultView result={r as SpawnResponse} />}
-        />
-      </section>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border">
+        {([
+          { id: 'operations', label: 'Operations', icon: Terminal },
+          { id: 'families',   label: 'Families',   icon: Users },
+        ] as { id: Tab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              tab === id
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {/* In-Memory Logs */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Server Logs (in-memory buffer)</h2>
-        <LogViewer />
-      </section>
+      {/* Operations tab */}
+      {tab === 'operations' && (
+        <>
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Scheduler</h2>
+            <ActionCard
+              title="Run Spawn Now"
+              description="Immediately runs the draft-spawn worker for all families. Safe to run multiple times — idempotent."
+              buttonLabel="Run Spawn"
+              onRun={runSpawnNow}
+              renderResult={(r) => <SpawnResultView result={r as SpawnResponse} />}
+            />
+          </section>
 
-      {/* Docker Container Logs */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Docker Logs (container output)</h2>
-        <DockerLogViewer />
-      </section>
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Server Logs (in-memory buffer)</h2>
+            <LogViewer />
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Docker Logs (container output)</h2>
+            <DockerLogViewer />
+          </section>
+        </>
+      )}
+
+      {/* Families tab */}
+      {tab === 'families' && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Families</h2>
+            <p className="text-xs text-muted-foreground mt-1">Create families and manage their members. Only visible to system admins.</p>
+          </div>
+          <FamiliesTab />
+        </section>
+      )}
     </div>
   )
 }

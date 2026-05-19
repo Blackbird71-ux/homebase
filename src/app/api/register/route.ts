@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     }
     const family = await prisma.family.create({ data: { name: familyName } })
     await prisma.user.create({
-      data: { email, password: hashed, name, role: 'admin', familyId: family.id },
+      data: { email, password: hashed, name, role: 'admin', familyId: family.id, isSystemAdmin: true },
     })
     return NextResponse.json({ success: true })
   }
@@ -43,8 +43,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invite code expired' }, { status: 403 })
   }
 
+  const role = invite.isAdminInvite ? 'admin' : 'member'
+
   const user = await prisma.user.create({
-    data: { email, password: hashed, name, role: 'member', familyId: invite.familyId },
+    data: { email, password: hashed, name, role, familyId: invite.familyId },
   })
   await prisma.inviteCode.update({
     where: { code: inviteCode },

@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, ChevronLeft, ChevronRight, FileText, DollarSign, Plane, ShieldAlert,
+  Plus, ChevronLeft, ChevronRight, FileText, DollarSign, Plane, ShieldAlert, Calculator,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -28,9 +28,10 @@ interface SidebarProps {
   collapsed?: boolean
   onToggle?: () => void
   isAdmin?: boolean
+  hideFinanceModule?: boolean
 }
 
-export function Sidebar({ collapsed = false, onToggle, isAdmin = false }: SidebarProps) {
+export function Sidebar({ collapsed = false, onToggle, isAdmin = false, hideFinanceModule = false }: SidebarProps) {
   const pathname = usePathname()
 
   function openQuickAdd() {
@@ -93,13 +94,35 @@ export function Sidebar({ collapsed = false, onToggle, isAdmin = false }: Sideba
 
       {/* Nav items */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname === href || pathname.startsWith(href + '/')
+        {navItems
+          .filter(({ href }) => !(hideFinanceModule && href === '/finance'))
+          .map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <Link
+                key={href}
+                href={href}
+                title={collapsed ? label : undefined}
+                className={cn(
+                  'flex items-center rounded-md text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && label}
+              </Link>
+            )
+          })}
+
+        {hideFinanceModule && (() => {
+          const isActive = pathname.startsWith('/finance/simple-budget-planner')
           return (
             <Link
-              key={href}
-              href={href}
-              title={collapsed ? label : undefined}
+              href="/finance/simple-budget-planner"
+              title={collapsed ? 'Budget Planner' : undefined}
               className={cn(
                 'flex items-center rounded-md text-sm font-medium transition-colors',
                 collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
@@ -108,12 +131,11 @@ export function Sidebar({ collapsed = false, onToggle, isAdmin = false }: Sideba
                   : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && label}
+              <Calculator className="h-4 w-4 shrink-0" />
+              {!collapsed && 'Budget Planner'}
             </Link>
           )
-        })}
-
+        })()}
       </nav>
 
       {/* Settings + Sign out */}

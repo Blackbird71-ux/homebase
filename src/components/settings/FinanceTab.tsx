@@ -16,6 +16,8 @@ const MONTH_OPTIONS = [
 export function FinanceTab() {
   const [hideDelete, setHideDelete] = useState(false)
   const [showBudgetPlanner, setShowBudgetPlanner] = useState(false)
+  const [hideFinanceModule, setHideFinanceModule] = useState(false)
+  const [savingHideFinanceModule, setSavingHideFinanceModule] = useState(false)
   const [financeNav, setFinanceNav] = useState<Record<string, boolean>>({})
   const [savingFinanceNav, setSavingFinanceNav] = useState(false)
   const [fyStartMonth, setFyStartMonth] = useState(7)
@@ -34,6 +36,7 @@ export function FinanceTab() {
       setHideDelete(!!userSettings.uiPreferences?.hideDeleteBills)
       setShowBudgetPlanner(!!userSettings.uiPreferences?.showBudgetPlanner)
       setFinanceNav(userSettings.uiPreferences?.financeNav ?? {})
+      setHideFinanceModule(!!familySettings.hideFinanceModule)
       setFyStartMonth(familySettings.financeYearStartMonth ?? 7)
       setPeriodLockedUntil(
         familySettings.periodLockedUntil
@@ -70,6 +73,25 @@ export function FinanceTab() {
   function setAllNavKeys(visible: boolean) {
     const updated = Object.fromEntries(FINANCE_NAV_KEYS.map(k => [k.key, visible]))
     saveFinanceNav(updated)
+  }
+
+  async function saveHideFinanceModule(newVal: boolean) {
+    setSavingHideFinanceModule(true)
+    try {
+      const res = await fetch('/api/settings/family', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hideFinanceModule: newVal }),
+      })
+      if (res.ok) {
+        setHideFinanceModule(newVal)
+        toast.success(newVal ? 'Finance module hidden — Budget Planner shown instead' : 'Finance module restored')
+      } else {
+        toast.error('Failed to save — admin access required')
+      }
+    } finally {
+      setSavingHideFinanceModule(false)
+    }
   }
 
   async function saveDelete(newVal: boolean) {
@@ -239,6 +261,29 @@ export function FinanceTab() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Hide Finance Module (admin family setting) */}
+      <div className="rounded-lg border border-border p-4 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <ShieldAlert className="h-4 w-4 text-amber-500" />
+              Hide Finance module
+              <span className="text-xs font-normal px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">Admin · Family</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Hides the Finance section from the sidebar for all family members and shows a
+              standalone Budget Planner link instead. Use for households that don&apos;t need
+              the full accounting system.
+            </p>
+          </div>
+          <Switch
+            checked={hideFinanceModule}
+            onCheckedChange={saveHideFinanceModule}
+            disabled={savingHideFinanceModule}
+          />
+        </div>
       </div>
 
       {/* Finance Menu Visibility */}

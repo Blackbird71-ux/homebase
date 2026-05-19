@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
 import { requireSession } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/prisma'
 import { AppShell } from '@/components/layout/AppShell'
 
 export default async function AppLayout({
@@ -10,5 +10,14 @@ export default async function AppLayout({
   const session = await requireSession()
   const isAdmin = session.role === 'admin'
 
-  return <AppShell isAdmin={isAdmin}>{children}</AppShell>
+  const family = await prisma.family.findUnique({
+    where: { id: session.familyId },
+    select: { hideFinanceModule: true },
+  })
+
+  return (
+    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule}>
+      {children}
+    </AppShell>
+  )
 }

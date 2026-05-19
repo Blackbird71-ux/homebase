@@ -17,6 +17,7 @@ model Family {
   appVersion           String?
   financeYearStartMonth  Int  @default(7)  // 1=Jan … 12=Dec. Default 7 = Australian 1 July FY start.
   periodLockedUntil      DateTime?            // Finance period lock — posting before this date shows a warning
+  hideFinanceModule      Boolean              @default(false)      // Admin: hide Finance nav, show Simple Budget Planner instead
   openingBalancesCategoryId  String?  // FK → FinanceCategory (equity type, system, "Opening Balances")
   users                User[]
   events               Event[]
@@ -62,6 +63,7 @@ model User {
   password            String
   name                String
   role                String                @default("member")
+  isSystemAdmin       Boolean               @default(false)
   familyId            String
   family              Family                @relation(fields: [familyId], references: [id])
   theme               String                @default("dark")
@@ -88,14 +90,15 @@ model User {
 }
 
 model InviteCode {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  used      Boolean  @default(false)
-  usedBy    String?
-  familyId  String
-  family    Family   @relation(fields: [familyId], references: [id])
-  createdAt DateTime @default(now())
-  expiresAt DateTime?
+  id           String   @id @default(cuid())
+  code         String   @unique
+  used         Boolean  @default(false)
+  usedBy       String?
+  familyId     String
+  family       Family   @relation(fields: [familyId], references: [id])
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime?
+  isAdminInvite Boolean @default(false)
 }
 
 model Event {

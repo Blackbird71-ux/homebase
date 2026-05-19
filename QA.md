@@ -658,7 +658,9 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 ```
 [ ] Login with valid credentials → redirected to dashboard
 [ ] Login with invalid credentials → error shown, not redirected
-[ ] Invite code flow → new user created and family linked
+[ ] Invite code flow → new user created and family linked with role=member
+[ ] Admin invite code flow (isAdminInvite=true) → first registrant gets role=admin
+[ ] First-ever registration → user gets isSystemAdmin=true and role=admin
 [ ] Protected routes redirect unauthenticated users to login
 ```
 
@@ -722,6 +724,44 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 [ ] Tags scoped per module — recipe tags don't appear in trip tag picker (and vice versa)
 [ ] Tag manager shows correct usage counts per module
 [ ] Deleting a tag does not break items that used it
+```
+
+### 10.9 Finance Settings — Visibility & Module Toggle
+
+Per-user Finance nav visibility (stored in `uiPreferences.financeNav`):
+
+```
+[ ] Settings → Finance → Finance menu visibility: hiding an item removes it from the Finance sidebar
+[ ] Toggling a hidden item back to visible restores it in the sidebar
+[ ] "Hide all" hides all items except Overview (always visible)
+[ ] "Show all" restores all items
+[ ] Per-user — one user's visibility settings do not affect another user's sidebar
+```
+
+Family-level Hide Finance Module (admin setting, stored on `Family.hideFinanceModule`):
+
+```
+[ ] Settings → Finance → "Hide Finance module" toggle is admin-only (non-admins see 403 if they PATCH directly)
+[ ] When enabled: Finance section disappears from sidebar for ALL family members; Budget Planner link appears instead
+[ ] When disabled: Finance section restored for all members
+[ ] Budget Planner link navigates correctly to /finance/simple-budget-planner
+```
+
+### 10.10 System Admin — Family Management
+
+System admin is the first-ever registered user (`User.isSystemAdmin=true`). Only they can access family management.
+
+```
+[ ] Admin page → Families tab: non-system-admins see "System admin access required" message
+[ ] System admin sees list of all families with member count
+[ ] Create Family: requires name; creates family + admin invite code (isAdminInvite=true, 7-day expiry)
+[ ] Invite code displayed after create; copy button works
+[ ] Copy recipes checkbox: when checked, all recipes and recipe books from the system admin's family are copied to the new family
+[ ] Per-family "Invite" button generates a member invite code (isAdminInvite=false)
+[ ] Expand family row → shows member list with name, email, role
+[ ] Reset password: requires min 8 chars; updates password for the target user; success toast shown
+[ ] Reset password cancel clears the input field
+[ ] All family API routes (/api/admin/families/**) return 403 for non-system-admin users
 ```
 
 ---
@@ -865,5 +905,13 @@ When a bug is found in a shared function (e.g. `handleMarkReceived`), check all 
 **Fix shipped 2026-05-19:** Route now fetches `journalEntry.lines` for each income entry and sums lines where `glAccountId = AR account ID` and `side = 'debit'`. Falls back to `e.amount` only when no such lines exist (simple entries with no custom journal).
 
 **Smoke test:** Create an income entry with a custom journal split (e.g. DR AR + DR Tax / CR Gross). Mark it invoice-received. Open AR Aging → verify the subledger shows the AR line amount (not gross), and reconciliation difference = $0.
+
+### 12.11 Admin Page Has No Server-Side Route Guard (Known Gap)
+
+The `/admin` page is a `'use client'` component with no server-side auth check or `layout.tsx` enforcing `requireAdmin()`. The admin link in the sidebar is only shown to admins, but a non-admin who navigates to `/admin` directly will see the page. The API routes themselves are individually protected, so no data is exposed — but the UI is visible.
+
+**Workaround:** Admin-only API routes return 401/403. The Families tab handles 403 with an in-page message. The pre-existing operations tab (spawn, logs) should also have auth checks added.
+
+**Fix needed:** Add `src/app/(app)/admin/layout.tsx` that calls `requireAdmin()` server-side.
 
 *Last updated: 2026-05-19. Maintained by the development team — update on every significant feature or bug fix.*
