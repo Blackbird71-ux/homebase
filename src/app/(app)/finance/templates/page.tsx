@@ -21,8 +21,13 @@ export default function TemplatesPage() {
     openCreate, openEdit, closeForm, handleSave, handleToggleEnabled, handleDelete,
   } = useTemplatesCrud()
 
-  const bills   = templates.filter(t => t.kind === 'bill')
-  const incomes = templates.filter(t => t.kind === 'income')
+  const byNextDate = (a: typeof templates[0], b: typeof templates[0]) => {
+    const aDate = a.nextOccurrenceDate ? new Date(a.nextOccurrenceDate).getTime() : Infinity
+    const bDate = b.nextOccurrenceDate ? new Date(b.nextOccurrenceDate).getTime() : Infinity
+    return aDate - bDate
+  }
+  const bills   = templates.filter(t => t.kind === 'bill').sort(byNextDate)
+  const incomes = templates.filter(t => t.kind === 'income').sort(byNextDate)
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
