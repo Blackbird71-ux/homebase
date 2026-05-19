@@ -24,6 +24,7 @@ export interface FormState {
   enabled: boolean
   createAutomatically: boolean
   notifyOnCreate: boolean
+  includeInBudget: boolean
   counterpartyId: string
   accountId: string
   categoryId: string
@@ -86,6 +87,7 @@ export const emptyForm: FormState = {
   enabled: true,
   createAutomatically: true,
   notifyOnCreate: false,
+  includeInBudget: true,
   counterpartyId: '',
   accountId: '',
   categoryId: '',
@@ -170,6 +172,7 @@ export function templateToForm(t: TemplateRow): FormState {
     enabled: t.enabled,
     createAutomatically: t.createAutomatically,
     notifyOnCreate: t.notifyOnCreate,
+    includeInBudget: t.includeInBudget ?? true,
     counterpartyId: t.counterpartyId ?? '',
     accountId: t.accountId ?? '',
     categoryId: t.categoryId ?? '',
@@ -231,6 +234,7 @@ export function formToBody(form: FormState) {
     enabled: form.enabled,
     createAutomatically: form.createAutomatically,
     notifyOnCreate: form.notifyOnCreate,
+    includeInBudget: form.includeInBudget,
     counterpartyId: form.counterpartyId || null,
     accountId: form.accountId || null,
     categoryId: form.categoryId || null,

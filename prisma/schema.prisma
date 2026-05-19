@@ -1282,6 +1282,7 @@ model FinanceRecurringTemplate {
   enabled                 Boolean  @default(true)
   createAutomatically     Boolean  @default(true)
   notifyOnCreate          Boolean  @default(false)
+  includeInBudget         Boolean  @default(true)
   createInAdvanceDays     Int      @default(0)
   remindInAdvanceDays     Int?
 

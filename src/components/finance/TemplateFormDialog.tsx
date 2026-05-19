@@ -196,6 +196,10 @@ function OverviewTab({
           <input type="checkbox" checked={form.notifyOnCreate} onChange={e => set('notifyOnCreate', e.target.checked)} className="accent-primary" />
           Notify on create
         </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={form.includeInBudget} onChange={e => set('includeInBudget', e.target.checked)} className="accent-primary" />
+          Include in budget
+        </label>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

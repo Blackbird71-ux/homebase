@@ -42,6 +42,8 @@ import {
   type SnapshotLine,
   type TemplateKind,
 } from '@/lib/finance-recurring-template-service'
+import { toMonthlyAmount } from '@/lib/financeShared'
+import { addYears } from 'date-fns'
 
 // ── Result types ─────────────────────────────────────────────────────────────
 
@@ -154,6 +156,57 @@ export async function approveBillDraft(
       newStatus: 'awaiting_payment',
     },
   )
+
+  // Auto-upsert a budget rule if the spawning template has includeInBudget: true.
+  // Best-effort: a budget failure does not roll back the GL posting.
+  if (draft.templateId) {
+    try {
+      const template = await prisma.financeRecurringTemplate.findFirst({
+        where: { id: draft.templateId, familyId: user.familyId },
+        select: { includeInBudget: true },
+      })
+      if (template?.includeInBudget) {
+        const monthlyAmount = toMonthlyAmount(draft.amount, draft.frequency ?? 'monthly')
+        const startDate = new Date(new Date().getFullYear(), 0, 1)
+        const endDate = addYears(startDate, 10)
+        const existing = await prisma.financeBudget.findFirst({
+          where: { billId, familyId: user.familyId },
+        })
+        if (existing) {
+          await prisma.financeBudget.update({
+            where: { id: existing.id },
+            data: {
+              name: draft.name,
+              amount: monthlyAmount,
+              categoryId: draft.categoryId ?? null,
+              period: 'monthly',
+              isIncludedInPlanner: true,
+              ...(draft.entityId !== undefined && { entityId: draft.entityId ?? null }),
+            },
+          })
+        } else {
+          await prisma.financeBudget.create({
+            data: {
+              name: draft.name,
+              amount: monthlyAmount,
+              categoryId: draft.categoryId ?? null,
+              period: 'monthly',
+              startDate,
+              endDate,
+              rollover: false,
+              alertThreshold: 80,
+              billId,
+              isIncludedInPlanner: true,
+              entityId: draft.entityId ?? null,
+              familyId: user.familyId,
+            },
+          })
+        }
+      }
+    } catch {
+      // Non-fatal: budget rule sync failure should not block approval
+    }
+  }
 
   return {
     id: billId,
