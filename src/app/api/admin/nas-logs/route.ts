@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
 import { Client } from 'ssh2'
+import type { SessionUser } from '@/types'
 
 // POST /api/admin/nas-logs
 // Connects to the NAS host via SSH and runs `docker logs homebase-app --tail N`.
 // Credentials are passed in the request body and never persisted server-side.
-// Admin only.
+// Admin only. Uses auth() directly (not requireSession) to avoid redirect throws in API routes.
 export async function POST(req: Request) {
-  const user = await requireSession()
-  if (user.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const body = await req.json() as {
     host?: string

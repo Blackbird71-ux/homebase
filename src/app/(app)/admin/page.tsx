@@ -469,8 +469,8 @@ function DockerLogViewer() {
 const NAS_LINE_OPTS = [100, 200, 500]
 
 function NasLogViewer() {
-  const [host, setHost] = useState(() => sessionStorage.getItem('nas_ssh_host') ?? '')
-  const [username, setUsername] = useState(() => sessionStorage.getItem('nas_ssh_user') ?? '')
+  const [host, setHost] = useState(() => typeof window !== 'undefined' ? (sessionStorage.getItem('nas_ssh_host') ?? '') : '')
+  const [username, setUsername] = useState(() => typeof window !== 'undefined' ? (sessionStorage.getItem('nas_ssh_user') ?? '') : '')
   const [password, setPassword] = useState('')
   const [port, setPort] = useState('22')
   const [showPassword, setShowPassword] = useState(false)
