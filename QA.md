@@ -414,7 +414,8 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 ```
 [ ] Total Assets = Total Liabilities + Total Equity
 [ ] Bank/cash account balances match actual statement reconciliation
-[ ] AR balance = sum of open (unreceived) income entries
+[ ] AR balance = sum of AR journal line debits for open (unreceived) income entries
+    (NOT entry.amount — these differ when a custom journal splits the gross into AR + tax/other lines)
 [ ] AP balance = sum of unpaid bills
 [ ] PAYG Withheld Receivable = total tax withheld - total tax returned to date
 [ ] Opening balances journal exists and is posted
@@ -855,4 +856,14 @@ When a bug is found in a shared function (e.g. `handleMarkReceived`), check all 
 
 ---
 
-*Last updated: 2026-05-18. Maintained by the development team — update on every significant feature or bug fix.*
+### 12.10 "AR subledger uses entry.amount instead of AR journal line" Bug
+
+**Problem:** The AR aging subledger used `entry.amount` (the income record's gross face value) as the outstanding amount per entry. For simple income entries this matches the AR debit. For entries with a custom journal split (e.g. salary with PAYG withheld: DR AR $971.56 / DR Tax $361 / CR Gross Wages $1,332.56), `entry.amount` = gross $1,332.56 but the actual AR debit is $971.56 — causing a subledger vs GL control reconciliation difference equal to the non-AR splits (here: $361).
+
+**Root cause:** `accounts-receivable/route.ts` read `e.amount` in the subledger map instead of summing the AR GL account's debit lines from the accrual journal entry.
+
+**Fix shipped 2026-05-19:** Route now fetches `journalEntry.lines` for each income entry and sums lines where `glAccountId = AR account ID` and `side = 'debit'`. Falls back to `e.amount` only when no such lines exist (simple entries with no custom journal).
+
+**Smoke test:** Create an income entry with a custom journal split (e.g. DR AR + DR Tax / CR Gross). Mark it invoice-received. Open AR Aging → verify the subledger shows the AR line amount (not gross), and reconciliation difference = $0.
+
+*Last updated: 2026-05-19. Maintained by the development team — update on every significant feature or bug fix.*

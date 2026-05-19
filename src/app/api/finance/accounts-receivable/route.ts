@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
       vendor:    { select: { id: true, name: true } },
       category:  { select: { id: true, name: true, color: true } },
       entity:    { select: { id: true, name: true } },
-      journalEntry: { select: { reference: true } },
+      journalEntry: { select: { reference: true, lines: { select: { amount: true, glAccountId: true, side: true } } } },
     },
     orderBy: { invoiceReceivedDate: 'asc' },
   })
@@ -151,10 +151,19 @@ export async function GET(request: NextRequest) {
   const items: ArItem[] = entries.map(e => {
     const invoiceDate = e.invoiceReceivedDate!
     const days = differenceInDays(asAt, invoiceDate)
+    // Use the actual AR journal line debit rather than entry.amount (gross face value).
+    // They differ when the income has a custom journal split (e.g. salary with PAYG withheld:
+    // DR AR $971.56 / DR Tax $361 / CR Gross Wages $1,332.56 — entry.amount is $1,332.56).
+    const arLines = arCategory
+      ? (e.journalEntry?.lines ?? []).filter(l => l.glAccountId === arCategory.id && l.side === 'debit')
+      : []
+    const outstandingAmount = arLines.length > 0
+      ? arLines.reduce((s, l) => s + l.amount, 0)
+      : e.amount
     return {
       id:               e.id,
       name:             e.name,
-      amount:           Math.round(e.amount * 100) / 100,
+      amount:           Math.round(outstandingAmount * 100) / 100,
       invoiceDate:      invoiceDate.toISOString(),
       daysSinceInvoice: Math.max(0, days),
       bucket:           ageBucket(invoiceDate, asAt),
