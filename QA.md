@@ -912,6 +912,6 @@ The `/admin` page is a `'use client'` component with no server-side auth check o
 
 **Workaround:** Admin-only API routes return 401/403. The Families tab handles 403 with an in-page message. The pre-existing operations tab (spawn, logs) should also have auth checks added.
 
-**Fix needed:** Add `src/app/(app)/admin/layout.tsx` that calls `requireAdmin()` server-side.
+**Fixed 2026-05-19:** `src/app/(app)/admin/layout.tsx` added — calls `requireAdmin()` server-side, redirects non-admins to `/home`.
 
 *Last updated: 2026-05-19. Maintained by the development team — update on every significant feature or bug fix.*
