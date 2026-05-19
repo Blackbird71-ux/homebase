@@ -12,11 +12,11 @@ export default async function AppLayout({
 
   const family = await prisma.family.findUnique({
     where: { id: session.familyId },
-    select: { hideFinanceModule: true },
+    select: { hideFinanceModule: true, name: true },
   })
 
   return (
-    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule}>
+    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule} familyName={family?.name} memberName={session.name} memberRole={session.role}>
       {children}
     </AppShell>
   )

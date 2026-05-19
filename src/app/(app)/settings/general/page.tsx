@@ -2,6 +2,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { FamilySettingsClient } from './FamilySettingsClient'
 import { SUPPORTED_TIMEZONES } from '@/app/api/settings/family/route'
+import { PageHero } from '@/components/shared/PageHero'
 
 export default async function GeneralSettingsPage() {
   const user = await requireSession()
@@ -12,7 +13,7 @@ export default async function GeneralSettingsPage() {
 
   return (
     <div className="max-w-lg p-6 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">General settings</h1>
+      <PageHero title="General Settings" />
       <FamilySettingsClient
         family={{
           name: family?.name ?? '',

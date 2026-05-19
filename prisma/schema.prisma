@@ -228,6 +228,7 @@ model Recipe {
   proteinContent String?
   carbContent  String?
   sodiumContent String?
+  isFavourite  Boolean     @default(false)
   bookId       String?
   book         RecipeBook? @relation(fields: [bookId], references: [id], onDelete: SetNull)
   createdBy    String

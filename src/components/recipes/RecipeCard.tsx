@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { ClockIcon, UsersIcon, Trash2Icon } from 'lucide-react'
+import { ClockIcon, UsersIcon, Trash2Icon, Heart } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 interface RecipeCardProps {
   id: string
@@ -11,9 +12,11 @@ interface RecipeCardProps {
   prepTime: number | null
   cookTime: number | null
   servings: number | null
+  isFavourite?: boolean
   image: string | null
   calories?: string | null
   onDelete?: (id: string) => void
+  onToggleFavourite?: (id: string) => void
 }
 
 export function RecipeCard({
@@ -25,9 +28,11 @@ export function RecipeCard({
   prepTime,
   cookTime,
   servings,
+  isFavourite = false,
   image,
   calories,
   onDelete,
+  onToggleFavourite,
 }: RecipeCardProps) {
   const totalTime = (prepTime ?? 0) + (cookTime ?? 0)
 
@@ -99,6 +104,21 @@ export function RecipeCard({
         </CardContent>
       </Card>
     </Link>
+    {onToggleFavourite && (
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavourite(id) }}
+        className={cn(
+          'absolute top-2 left-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+          isFavourite
+            ? 'bg-white/90 text-rose-500'
+            : 'bg-black/20 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/90 hover:text-rose-500',
+        )}
+        title={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+      >
+        <Heart className={cn('h-3.5 w-3.5', isFavourite && 'fill-current')} />
+      </button>
+    )}
     {onDelete && (
       <button
         onClick={(e) => { e.preventDefault(); onDelete(id) }}

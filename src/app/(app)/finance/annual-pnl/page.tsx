@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import {
   format, startOfMonth, endOfMonth, getMonth, getYear,
 } from 'date-fns'
+import { PageHero } from '@/components/shared/PageHero'
 import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
@@ -457,6 +458,7 @@ export default function AnnualPnLPage() {
 
   return (
     <div className="space-y-4">
+      <PageHero title="Annual P&L" subtitle="Profit and loss statement for the financial year." />
 
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
@@ -536,13 +538,13 @@ export default function AnnualPnLPage() {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <TrendingUp className="h-3.5 w-3.5 text-green-500" /> Total Income
           </div>
-          <p className="text-2xl font-bold text-green-600">{fmtCurrency(totalIncome)}</p>
+          <p className="hb-stat__num hb-stat__num--money text-green-600">{fmtCurrency(totalIncome)}</p>
         </div>
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <TrendingDown className="h-3.5 w-3.5 text-red-500" /> Total Expenses
           </div>
-          <p className="text-2xl font-bold text-red-600">{fmtCurrency(totalExpenses)}</p>
+          <p className="hb-stat__num hb-stat__num--money text-red-600">{fmtCurrency(totalExpenses)}</p>
         </div>
         <div className={cn('rounded-lg border p-3',
           totalNet >= 0 ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5')}>
@@ -550,7 +552,7 @@ export default function AnnualPnLPage() {
             <DollarSign className={cn('h-3.5 w-3.5', totalNet >= 0 ? 'text-green-500' : 'text-red-500')} />
             Net {totalNet >= 0 ? 'Profit' : 'Loss'}
           </div>
-          <p className={cn('text-2xl font-bold', totalNet >= 0 ? 'text-green-600' : 'text-red-600')}>
+          <p className={cn('hb-stat__num hb-stat__num--money', totalNet >= 0 ? 'text-green-600' : 'text-red-600')}>
             {fmtCurrency(totalNet)}
           </p>
         </div>

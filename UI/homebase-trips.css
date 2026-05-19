@@ -1,7 +1,10 @@
 /* ============================================================
  * Homebase — Trips redesign
- * Drop-in stylesheet. Import AFTER your existing globals.css.
- * Inherits --primary, --card, --background, --border, etc.
+ * Drop-in stylesheet. Import AFTER your existing globals.css
+ * AND apple-theme.css. Inherits from both token sets:
+ *   - shadcn/Tailwind tokens (--primary, --card, --background, ...)
+ *   - Apple-theme tokens     (--ink, --bg-elev, --accent, --line, ...)
+ * Falls back gracefully if either set is missing.
  * ============================================================ */
 
 /* ── Local tokens ─────────────────────────────────────────── */
@@ -13,23 +16,40 @@
   --hb-shadow-lg: 0 12px 32px oklch(0 0 0 / 0.10), 0 4px 8px oklch(0 0 0 / 0.04);
   --hb-shadow-drawer: -12px 0 32px oklch(0 0 0 / 0.08);
 
-  /* Category palette — used for activity types AND tag presets */
-  --hb-cat-sightseeing-fg: oklch(0.55 0.16 60);   /* amber */
-  --hb-cat-sightseeing-bg: oklch(0.96 0.04 75);
-  --hb-cat-meal-fg:        oklch(0.55 0.18 35);   /* orange */
-  --hb-cat-meal-bg:        oklch(0.96 0.04 50);
-  --hb-cat-transport-fg:   oklch(0.52 0.16 240);  /* blue */
-  --hb-cat-transport-bg:   oklch(0.96 0.03 240);
-  --hb-cat-stay-fg:        oklch(0.50 0.14 290);  /* purple */
-  --hb-cat-stay-bg:        oklch(0.96 0.03 290);
-  --hb-cat-activity-fg:    oklch(0.50 0.15 150);  /* green */
-  --hb-cat-activity-bg:    oklch(0.96 0.04 150);
-  --hb-cat-default-fg:     oklch(0.50 0 0);
-  --hb-cat-default-bg:     oklch(0.96 0 0);
+  /* Map shadcn token names to apple-theme equivalents where missing.
+     Each `var()` falls back so this works whether the page is using
+     shadcn-style tokens OR apple-theme tokens. */
+  --hb-surface:    var(--card, var(--bg-elev, #fff));
+  --hb-canvas:     var(--background, var(--bg, #f3f4f6));
+  --hb-text:       var(--foreground, var(--ink, #1d1d1f));
+  --hb-text-muted: var(--muted-foreground, var(--ink-3, #545458));
+  --hb-text-faint: var(--muted-foreground, var(--ink-4, #8a8a8e));
+  --hb-line:       var(--border, var(--line, rgba(60,60,67,0.12)));
+  --hb-line-strong: var(--input, var(--line-2, rgba(60,60,67,0.2)));
+  --hb-accent:     var(--primary, var(--accent, #007aff));
+  --hb-accent-fg:  var(--primary-foreground, #fff);
+  --hb-accent-soft: color-mix(in srgb, var(--hb-accent) 12%, transparent);
+  --hb-danger:     var(--destructive, #ff3b30);
+  --hb-popover:    var(--popover, var(--bg-elev, #fff));
 
-  /* Editorial display font (optional — falls back to your --font-sans) */
-  --hb-font-display: "Instrument Serif", "Source Serif Pro", Georgia, serif;
-  --hb-font-ui: var(--font-sans, system-ui, sans-serif);
+  /* Category palette — uses Homebase's iOS-style category colors where present,
+     falls back to our own oklch values otherwise. */
+  --hb-cat-sightseeing-fg: var(--cat-notes,    oklch(0.55 0.16 60));
+  --hb-cat-sightseeing-bg: color-mix(in srgb, var(--hb-cat-sightseeing-fg) 14%, transparent);
+  --hb-cat-meal-fg:        var(--cat-recipes,  oklch(0.55 0.18 35));
+  --hb-cat-meal-bg:        color-mix(in srgb, var(--hb-cat-meal-fg) 14%, transparent);
+  --hb-cat-transport-fg:   var(--cat-mealplan, oklch(0.52 0.16 240));
+  --hb-cat-transport-bg:   color-mix(in srgb, var(--hb-cat-transport-fg) 14%, transparent);
+  --hb-cat-stay-fg:        var(--cat-contacts, oklch(0.50 0.14 290));
+  --hb-cat-stay-bg:        color-mix(in srgb, var(--hb-cat-stay-fg) 14%, transparent);
+  --hb-cat-activity-fg:    var(--cat-lists,    oklch(0.50 0.15 150));
+  --hb-cat-activity-bg:    color-mix(in srgb, var(--hb-cat-activity-fg) 14%, transparent);
+  --hb-cat-default-fg:     var(--cat-documents, oklch(0.50 0 0));
+  --hb-cat-default-bg:     color-mix(in srgb, var(--hb-cat-default-fg) 14%, transparent);
+
+  /* Display font — uses your existing Fraunces serif from apple-theme.css */
+  --hb-font-display: var(--font-serif, "Fraunces", "Instrument Serif", "Source Serif Pro", Georgia, serif);
+  --hb-font-ui: var(--font-sans, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif);
 }
 
 .dark, .midnight, .glass-dark, .apple-graphite, .apple-midnight, .apple-pro {
@@ -147,37 +167,87 @@
 .hb-btn--sm { height: 30px; padding: 0 10px; font-size: 12px; gap: 4px; border-radius: 8px; }
 .hb-btn--lg { height: 42px; padding: 0 18px; font-size: 14px; border-radius: 12px; }
 
-/* ── Segmented control (replaces underline tabs) ──────────── */
+/* ── Pill nav (matches your PillNav.tsx component exactly) ──
+   Use this class set when you can't import the React component.
+   Defaults: filled primary for active, outlined for inactive. */
 .hb-segmented {
   display: inline-flex;
-  gap: 2px;
-  padding: 4px;
-  background: var(--muted);
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 .hb-segmented__item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  height: 32px;
   padding: 0 12px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--muted-foreground);
-  border-radius: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hb-line);
+  background: var(--hb-canvas);
+  color: var(--hb-text-muted);
   cursor: pointer;
-  border: 0;
-  background: transparent;
-  transition: background 0.15s, color 0.15s;
   font-family: inherit;
   white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.hb-segmented__item:hover { color: var(--foreground); }
-.hb-segmented__item[aria-selected="true"] {
-  background: var(--card);
-  color: var(--foreground);
+.hb-segmented__item:hover {
+  color: var(--hb-text);
+  border-color: color-mix(in srgb, var(--hb-text) 30%, var(--hb-line));
+}
+.hb-segmented__item[aria-selected="true"],
+.hb-segmented__item[aria-pressed="true"] {
+  background: var(--hb-accent);
+  color: var(--hb-accent-fg);
+  border-color: var(--hb-accent);
   box-shadow: var(--hb-shadow-sm);
+}
+.hb-segmented__item--sm { height: 26px; padding: 0 10px; font-size: 12px; gap: 4px; }
+
+/* Optional badge inside a pill (mirrors PillNav's badge prop) */
+.hb-segmented__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  padding: 1px 5px;
+  margin-left: 2px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--hb-line);
+  color: var(--hb-text);
+}
+.hb-segmented__item[aria-selected="true"] .hb-segmented__badge,
+.hb-segmented__item[aria-pressed="true"] .hb-segmented__badge {
+  background: color-mix(in srgb, var(--hb-accent-fg) 22%, transparent);
+  color: var(--hb-accent-fg);
+}
+
+/* Boxed segmented variant — kept for places that want a "switch" feel
+   (e.g. a single toggleable view selector). Opt in with .hb-segmented--boxed. */
+.hb-segmented--boxed {
+  gap: 2px;
+  padding: 3px;
+  background: var(--hb-line);
+  border-radius: 10px;
+  border: 1px solid var(--hb-line);
+}
+.hb-segmented--boxed .hb-segmented__item {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 7px;
+  height: 28px;
+  padding: 0 10px;
+}
+.hb-segmented--boxed .hb-segmented__item[aria-selected="true"],
+.hb-segmented--boxed .hb-segmented__item[aria-pressed="true"] {
+  background: var(--hb-surface);
+  color: var(--hb-text);
+  border-color: transparent;
 }
 
 /* ── Status pill ──────────────────────────────────────────── */

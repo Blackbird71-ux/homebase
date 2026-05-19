@@ -107,8 +107,8 @@ export function SettingsClient({ isAdmin, user, coziImports, supportedTimezones 
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
       <div className="px-4 md:px-6 pt-4 md:pt-6 pb-4 border-b border-border shrink-0">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage your account and family preferences.</p>
+        <h1 className="hb-page-head__title">Settings</h1>
+        <p className="hb-page-head__sub">Manage your account and family preferences.</p>
 
         {/* PillNav tab bar — scrollable on mobile */}
         <div className="mt-4 overflow-x-auto pb-1">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { PageHero } from '@/components/shared/PageHero'
 import {
   CheckCircle2, AlertTriangle, ChevronDown, ChevronRight,
   CreditCard, Clock, FileText, Building2, ExternalLink,
@@ -147,14 +148,8 @@ export default function AccountsPayablePage() {
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-5xl">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <PageHero title="Accounts Payable Aging" subtitle="Outstanding invoices by age from invoice date." />
       <div className="flex flex-wrap items-center gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">Accounts Payable Aging</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Outstanding invoices by age from invoice date
-          </p>
-        </div>
         <div className="ml-auto flex items-center gap-2">
           <label className="text-xs text-muted-foreground">As at</label>
           <input
@@ -213,21 +208,21 @@ export default function AccountsPayablePage() {
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
                 <CreditCard className="h-3.5 w-3.5" /> Total AP
               </div>
-              <p className="text-xl font-bold text-red-600">{fmtCurrencyRaw(data.glApBalance)}</p>
+              <p className="hb-stat__num hb-stat__num--money text-red-600">{fmtCurrencyRaw(data.glApBalance)}</p>
               <p className="text-xs text-muted-foreground mt-0.5">GL control account balance</p>
             </div>
             <div className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
                 <FileText className="h-3.5 w-3.5" /> Outstanding invoices
               </div>
-              <p className="text-xl font-bold">{data.itemCount}</p>
+              <p className="hb-stat__num">{data.itemCount}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{data.vendors.length} vendor{data.vendors.length !== 1 ? 's' : ''}</p>
             </div>
             <div className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
                 <Clock className="h-3.5 w-3.5" /> Oldest invoice
               </div>
-              <p className={cn('text-xl font-bold', data.oldestDays > 90 ? 'text-red-600' : data.oldestDays > 60 ? 'text-orange-600' : data.oldestDays > 30 ? 'text-amber-600' : '')}>
+              <p className={cn('hb-stat__num', data.oldestDays > 90 ? 'text-red-600' : data.oldestDays > 60 ? 'text-orange-600' : data.oldestDays > 30 ? 'text-amber-600' : '')}>
                 {data.oldestDays} days
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">from invoice date</p>

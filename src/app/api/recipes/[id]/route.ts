@@ -212,7 +212,7 @@ export async function PUT(
 
     const body = await req.json()
 
-    const { title, description, notes, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId, calories, fatContent, proteinContent, carbContent, sodiumContent } = body
+    const { title, description, notes, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId, calories, fatContent, proteinContent, carbContent, sodiumContent, isFavourite } = body
 
     const existing = await prisma.recipe.findFirst({
       where: { id, familyId: user.familyId },
@@ -254,6 +254,7 @@ export async function PUT(
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
       ...(notes !== undefined && { notes }),
+      ...(isFavourite !== undefined && { isFavourite: Boolean(isFavourite) }),
       ...(ingredients !== undefined && { ingredients: safeStringify(ingredients) }),
       ...(instructions !== undefined && { instructions: safeStringify(instructions) }),
       // Keep legacy tags field for backward compatibility (set to 'legacy-tags' if using new system, null if no tags)

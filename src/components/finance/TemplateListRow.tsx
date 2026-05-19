@@ -4,6 +4,7 @@ import {
   Pencil, Trash2, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { StatusChip } from '@/components/shared/StatusChip'
 import { FREQ_LABELS } from '@/lib/finance-template-helpers'
 import type { TemplateRow } from '@/lib/finance-template-helpers'
 
@@ -27,19 +28,10 @@ export function TemplateListRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium truncate">{template.name}</span>
-          <span className={cn(
-            'inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium',
-            template.enabled
-              ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-              : 'bg-muted text-muted-foreground',
-          )}>
+          <StatusChip variant={template.enabled ? 'ok' : 'neutral'} dot>
             {template.enabled ? 'Active' : 'Disabled'}
-          </span>
-          {template.createAutomatically && (
-            <span className="inline-flex items-center rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 text-xs font-medium">
-              AUTO
-            </span>
-          )}
+          </StatusChip>
+          {template.createAutomatically && <StatusChip variant="info">AUTO</StatusChip>}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           {FREQ_LABELS[template.frequency] ?? template.frequency}

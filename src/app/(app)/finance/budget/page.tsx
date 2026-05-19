@@ -5,6 +5,7 @@ import {
   Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet,
   Check, Briefcase, BarChart3, List, ExternalLink, CalendarDays, Info,
 } from 'lucide-react'
+import { PageHero } from '@/components/shared/PageHero'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -203,14 +204,7 @@ export default function BudgetPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Budget Planner</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Estimated monthly cashflow by entity — income in, expected costs out.
-          </p>
-        </div>
-      </div>
+      <PageHero title="Budget Planner" subtitle="Estimated monthly cashflow by entity — income in, expected costs out." />
 
       {/* ── Entity tabs ────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -289,7 +283,7 @@ export default function BudgetPage() {
               <TrendingUp className="h-3.5 w-3.5 text-green-500" />
               {showYearly ? 'Yearly income' : 'Monthly income'}
             </div>
-            <p className="text-2xl font-bold text-green-600">
+            <p className="hb-stat__num hb-stat__num--money text-green-600">
               {fmtCurrency(showYearly ? monthlyIncome * 12 : monthlyIncome)}
             </p>
             <div className="flex items-center justify-between mt-0.5">
@@ -306,7 +300,7 @@ export default function BudgetPage() {
               <TrendingDown className="h-3.5 w-3.5 text-red-500" />
               {showYearly ? 'Yearly expenses' : 'Monthly expenses'}
             </div>
-            <p className="text-2xl font-bold text-red-600">
+            <p className="hb-stat__num hb-stat__num--money text-red-600">
               {fmtCurrency(showYearly ? monthlyExpenses * 12 : monthlyExpenses)}
             </p>
             <div className="flex items-center justify-between mt-0.5">
@@ -324,7 +318,7 @@ export default function BudgetPage() {
               <Wallet className="h-3.5 w-3.5" style={{ color: surplus >= 0 ? 'var(--primary)' : '#ef4444' }} />
               {showYearly ? 'Yearly surplus' : 'Monthly surplus'}
             </div>
-            <p className={cn('text-2xl font-bold', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
+            <p className={cn('hb-stat__num hb-stat__num--money', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
               {fmtCurrency(showYearly ? surplus * 12 : surplus)}
             </p>
             <div className="flex items-center justify-between mt-0.5">
@@ -627,7 +621,7 @@ export default function BudgetPage() {
               </p>
             </div>
             <div className="text-right">
-              <p className={cn('text-3xl font-bold', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
+              <p className={cn('hb-stat__num hb-stat__num--money', surplus >= 0 ? 'text-primary' : 'text-red-600')}>
                 {fmtCurrency(Math.abs(showYearly ? surplus * 12 : surplus))}
               </p>
               {showYearly && (

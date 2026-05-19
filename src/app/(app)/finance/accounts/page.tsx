@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ColorPicker } from '@/components/ui/color-picker'
 
@@ -131,7 +132,7 @@ export default function AccountsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Accounts</h1>
+      <PageHero title="Accounts" />
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
           <Plus className="h-3.5 w-3.5" /> Add Account
@@ -269,7 +270,7 @@ export default function AccountsPage() {
                 {!a.isActive && <span className="text-xs bg-muted px-1.5 rounded">INACTIVE</span>}
               </div>
               {a.institution && <p className="text-xs text-muted-foreground mb-1">{a.institution}</p>}
-              <p className="text-xl font-bold mb-1">{formatCurrency(a.currentBalance, a.currency)}</p>
+              <p className="hb-stat__num hb-stat__num--money mb-1">{formatCurrency(a.currentBalance, a.currency)}</p>
               {a.pendingCount > 0 && (
                 <div className="text-xs text-muted-foreground mb-2 space-y-0.5">
                   <p className="text-amber-500 font-medium">{a.pendingCount} pending transaction{a.pendingCount !== 1 ? 's' : ''}</p>

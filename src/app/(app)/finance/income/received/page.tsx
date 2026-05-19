@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers, Ban, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 import { format, subMonths } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
@@ -178,7 +179,7 @@ export default function ReceivedIncomePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Received Income</h1>
+      <PageHero title="Received Income" />
 
       <Dialog open={!!voidConfirm} onOpenChange={open => { if (!open) setVoidConfirm(null) }}>
         <DialogContent className="sm:max-w-sm" showCloseButton={true}>

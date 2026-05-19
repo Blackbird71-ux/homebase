@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -977,14 +978,7 @@ export default function AdminPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6 h-full overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <ShieldAlert className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-xl font-bold">Admin</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Administrative tools and debugging — visible to admins only</p>
-        </div>
-      </div>
+      <PageHero title="Admin" subtitle="Administrative tools and debugging — visible to admins only." />
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">

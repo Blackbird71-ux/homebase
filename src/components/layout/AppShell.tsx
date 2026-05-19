@@ -8,7 +8,7 @@ import { OfflineBanner } from './OfflineBanner'
 import { HelpButton } from './HelpButton'
 import { AIAssistant } from '@/components/ai/AIAssistant'
 
-export function AppShell({ children, isAdmin = false, hideFinanceModule = false }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean }) {
+export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sidebar-collapsed') === 'true'
@@ -39,7 +39,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false 
   return (
     <div className="flex h-screen-dvh w-screen overflow-hidden">
       <OfflineBanner />
-      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} familyName={familyName} memberName={memberName} memberRole={memberRole} />
 
       <main className="flex-1 overflow-hidden flex flex-col min-w-0 relative">
         {/* pb-16 gives clearance for the universal FAB on all screen sizes */}

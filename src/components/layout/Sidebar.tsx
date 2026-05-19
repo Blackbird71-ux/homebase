@@ -1,188 +1,221 @@
 'use client'
 
+import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, ChevronLeft, ChevronRight, FileText, DollarSign, Plane, ShieldAlert, Calculator,
+  Plus, ChevronLeft, ChevronRight, FileText, DollarSign,
+  Plane, ShieldAlert, Calculator, MoreHorizontal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const navItems = [
-  { href: '/home',      label: 'Home',      icon: Home },
-  { href: '/calendar',  label: 'Calendar',  icon: Calendar },
-  { href: '/lists',     label: 'Lists',     icon: CheckSquare },
-  { href: '/chores',    label: 'Chores',    icon: ListChecks },
-  { href: '/finance',   label: 'Finance',   icon: DollarSign },
-  { href: '/contacts',  label: 'Contacts',  icon: BookUser },
-  { href: '/documents', label: 'Documents', icon: FileText },
-  { href: '/recipes',   label: 'Recipes',   icon: ChefHat },
-  { href: '/meal-plan', label: 'Meal Plan', icon: CalendarDays },
-  { href: '/trips',     label: 'Trips',     icon: Plane },
-  { href: '/notes',     label: 'Notes',     icon: StickyNote },
+type Group = 'schedule' | 'kitchen' | 'household'
+
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  group?: Group
+  cat?: string
+  count?: number
+}
+
+const navItems: NavItem[] = [
+  { href: '/home',      label: 'Home',      icon: Home,         cat: 'var(--accent)' },
+  // Schedule
+  { href: '/calendar',  label: 'Calendar',  icon: Calendar,     group: 'schedule', cat: 'var(--cat-calendar)' },
+  { href: '/chores',    label: 'Chores',    icon: ListChecks,   group: 'schedule', cat: 'var(--cat-chores)' },
+  { href: '/lists',     label: 'Lists',     icon: CheckSquare,  group: 'schedule', cat: 'var(--cat-lists)' },
+  // Kitchen
+  { href: '/recipes',   label: 'Recipes',   icon: ChefHat,      group: 'kitchen',  cat: 'var(--cat-recipes)' },
+  { href: '/meal-plan', label: 'Meal Plan', icon: CalendarDays, group: 'kitchen',  cat: 'var(--cat-mealplan)' },
+  // Household
+  { href: '/finance',   label: 'Finance',   icon: DollarSign,   group: 'household', cat: 'var(--cat-finance)' },
+  { href: '/contacts',  label: 'Contacts',  icon: BookUser,     group: 'household', cat: 'var(--cat-contacts)' },
+  { href: '/documents', label: 'Documents', icon: FileText,     group: 'household', cat: 'var(--cat-documents)' },
+  { href: '/trips',     label: 'Trips',     icon: Plane,        group: 'household', cat: 'var(--cat-trips)' },
+  { href: '/notes',     label: 'Notes',     icon: StickyNote,   group: 'household', cat: 'var(--cat-notes)' },
 ]
+
+const GROUP_LABEL: Record<Group, string> = {
+  schedule:  'Schedule',
+  kitchen:   'Kitchen',
+  household: 'Household',
+}
 
 interface SidebarProps {
   collapsed?: boolean
   onToggle?: () => void
   isAdmin?: boolean
   hideFinanceModule?: boolean
+  familyName?: string
+  memberName?: string
+  memberRole?: string
+  counts?: Partial<Record<string, number>>
 }
 
-export function Sidebar({ collapsed = false, onToggle, isAdmin = false, hideFinanceModule = false }: SidebarProps) {
+export function Sidebar({
+  collapsed = false,
+  onToggle,
+  isAdmin = false,
+  hideFinanceModule = false,
+  familyName = 'Family',
+  memberName = '',
+  memberRole = 'Member',
+  counts = {},
+}: SidebarProps) {
   const pathname = usePathname()
+
+  const today = new Date()
+  const dateNum  = today.getDate()
+  const dateMeta = today.toLocaleDateString('en-AU', { weekday: 'short', month: 'short' })
+  const week     = `Week ${getISOWeek(today)} · ${today.getFullYear()}`
+
+  const initials = memberName.split(' ').map((p: string) => p[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || 'HB'
 
   function openQuickAdd() {
     window.dispatchEvent(new CustomEvent('homebase:quickadd'))
   }
 
+  const renderItem = ({ href, label, icon: Icon, cat, count: staticCount }: NavItem) => {
+    const isActive = pathname === href || pathname.startsWith(href + '/')
+    const count = counts[href] ?? staticCount
+    return (
+      <Link
+        key={href}
+        href={href}
+        title={collapsed ? label : undefined}
+        className={cn('hb-sidebar__nav-link', isActive && 'is-active')}
+        style={{ '--cat': cat } as React.CSSProperties}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed && <span className="hb-sidebar__label">{label}</span>}
+        {!collapsed && count !== undefined && count > 0 && (
+          <span className="hb-sidebar__count">{count}</span>
+        )}
+        {!collapsed && (count === undefined || count === 0) && (
+          <span className="hb-sidebar__cat-dot" />
+        )}
+      </Link>
+    )
+  }
+
+  const renderGroup = (group: Group) => {
+    const items = navItems.filter(n =>
+      n.group === group &&
+      !(hideFinanceModule && n.href === '/finance')
+    )
+    if (items.length === 0) return null
+    return (
+      <React.Fragment key={group}>
+        {!collapsed && (
+          <div className="hb-sidebar__group-label">{GROUP_LABEL[group]}</div>
+        )}
+        {items.map(item => renderItem(item))}
+      </React.Fragment>
+    )
+  }
+
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col shrink-0 h-full border-r border-border transition-[width] duration-200 ease-in-out overflow-hidden',
-        collapsed ? 'w-12' : 'w-52'
+        'hb-sidebar hidden md:flex',
+        collapsed && 'hb-sidebar--collapsed'
       )}
-      style={{ backgroundColor: 'var(--sidebar)' }}
     >
-      {/* Logo + collapse toggle */}
-      <div
-        className={cn(
-          'flex items-center border-b border-border shrink-0',
-          collapsed ? 'justify-center px-2 py-[18px]' : 'justify-between px-4 py-[18px]'
-        )}
-      >
+      {/* Brand */}
+      <div className="hb-sidebar__brand">
+        <span className="hb-sidebar__logo" aria-hidden>H</span>
         {!collapsed && (
-          <span className="text-sm font-bold tracking-widest text-muted-foreground uppercase truncate mr-2">
-            <span aria-hidden="true">🏠</span> Homebase
+          <span className="hb-sidebar__brand-text">
+            Homebase
+            <small>{familyName}</small>
           </span>
         )}
         <button
           type="button"
           onClick={onToggle}
-          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="hb-sidebar__collapse-btn"
+          title={collapsed ? 'Expand' : 'Collapse'}
         >
-          {collapsed
-            ? <ChevronRight className="h-4 w-4" />
-            : <ChevronLeft className="h-4 w-4" />}
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </div>
+
+      {/* Today's date strip */}
+      {!collapsed && (
+        <div className="hb-sidebar__date">
+          <span className="hb-sidebar__date-num">{dateNum}</span>
+          <span className="hb-sidebar__date-meta">
+            <strong>{dateMeta}</strong>
+            <span>{week}</span>
+          </span>
+        </div>
+      )}
 
       {/* Quick Add */}
-      <div className={cn('px-2 py-2 border-b border-border shrink-0', collapsed && 'flex justify-center')}>
-        <button
-          type="button"
-          onClick={openQuickAdd}
-          title="Quick Add (⌘K)"
-          className={cn(
-            'flex items-center gap-2 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-accent',
-            collapsed ? 'p-2' : 'w-full px-3 py-2'
-          )}
-        >
-          <Plus className="h-4 w-4 shrink-0" />
-          {!collapsed && (
-            <>
-              Quick Add
-              <kbd className="ml-auto px-1 py-0.5 rounded bg-muted text-xs font-mono">⌘K</kbd>
-            </>
-          )}
-        </button>
-      </div>
+      <button type="button" onClick={openQuickAdd} className="hb-sidebar__quickadd">
+        <Plus className="h-4 w-4 shrink-0" />
+        {!collapsed && (
+          <>
+            <span className="hb-sidebar__quickadd-text">Quick Add</span>
+            <kbd className="hb-sidebar__quickadd-kbd">⌘K</kbd>
+          </>
+        )}
+      </button>
 
-      {/* Nav items */}
-      <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {navItems
-          .filter(({ href }) => !(hideFinanceModule && href === '/finance'))
-          .map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href || pathname.startsWith(href + '/')
-            return (
-              <Link
-                key={href}
-                href={href}
-                title={collapsed ? label : undefined}
-                className={cn(
-                  'flex items-center rounded-md text-sm font-medium transition-colors',
-                  collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && label}
-              </Link>
-            )
-          })}
-
-        {hideFinanceModule && (() => {
-          const isActive = pathname.startsWith('/finance/simple-budget-planner')
-          return (
-            <Link
-              href="/finance/simple-budget-planner"
-              title={collapsed ? 'Budget Planner' : undefined}
-              className={cn(
-                'flex items-center rounded-md text-sm font-medium transition-colors',
-                collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
-              )}
-            >
-              <Calculator className="h-4 w-4 shrink-0" />
-              {!collapsed && 'Budget Planner'}
-            </Link>
-          )
-        })()}
+      {/* Nav */}
+      <nav className="hb-sidebar__nav">
+        {renderItem(navItems[0])}
+        {renderGroup('schedule')}
+        {renderGroup('kitchen')}
+        {renderGroup('household')}
+        {hideFinanceModule && renderItem({
+          href:  '/finance/simple-budget-planner',
+          label: 'Budget Planner',
+          icon:  Calculator,
+          cat:   'var(--cat-finance)',
+        })}
       </nav>
 
-      {/* Settings + Sign out */}
-      <div className="px-2 py-4 border-t border-border space-y-1 shrink-0">
-        {isAdmin && (
-          <Link
-            href="/admin"
-            title={collapsed ? 'Admin' : undefined}
-            className={cn(
-              'flex items-center rounded-md text-sm font-medium transition-colors',
-              collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-              pathname.startsWith('/admin')
-                ? 'bg-primary text-primary-foreground'
-                : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
-            )}
-          >
-            <ShieldAlert className="h-4 w-4 shrink-0" />
-            {!collapsed && 'Admin'}
-          </Link>
-        )}
-        <Link
-          href="/settings"
-          title={collapsed ? 'Settings' : undefined}
-              className={cn(
-                'flex items-center rounded-md text-sm font-medium transition-colors',
-                collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                pathname.startsWith('/settings')
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
-              )}
-        >
-          <Settings className="h-4 w-4 shrink-0" />
-          {!collapsed && 'Settings'}
-        </Link>
+      {/* Footer */}
+      <div className="hb-sidebar__foot">
+        {isAdmin && renderItem({ href: '/admin', label: 'Admin', icon: ShieldAlert })}
+        {renderItem({ href: '/settings', label: 'Settings', icon: Settings })}
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: '/login' })}
+          className="hb-sidebar__nav-link"
           title={collapsed ? 'Sign out' : undefined}
-          className={cn(
-            'flex w-full items-center rounded-md text-sm font-medium text-[var(--sidebar-foreground)]/70 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors',
-            collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
-          )}
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && 'Sign out'}
+          {!collapsed && <span className="hb-sidebar__label">Sign out</span>}
         </button>
       </div>
+
+      {/* Profile chip */}
+      {!collapsed && (
+        <div className="hb-profile">
+          <span className="hb-profile__avatar">{initials}</span>
+          <span className="hb-profile__meta">
+            <strong>{memberName || 'Member'}</strong>
+            <span>{memberRole}</span>
+          </span>
+          <button className="hb-profile__menu-btn" title="More" type="button">
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </aside>
   )
+}
+
+function getISOWeek(d: Date) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7))
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
 }

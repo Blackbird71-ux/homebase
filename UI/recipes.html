@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Homebase · Recipes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="homebase-app.css" />
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    .preview-banner {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      background: rgba(15,17,21,0.92); color: #fff;
+      padding: 6px 14px; border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      z-index: 100;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    }
+    .preview-banner a { color: #5AC8FA; margin-left: 8px; }
+
+    .hb-search {
+      display: flex; align-items: center; gap: 8px;
+      height: 36px;
+      padding: 0 12px;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--ink-4);
+      min-width: 240px;
+      box-shadow: var(--shadow-sm);
+    }
+    .hb-search svg { width: 14px; height: 14px; }
+    .hb-search input {
+      flex: 1; border: 0; background: transparent; outline: 0;
+      font-size: 13px; color: var(--ink);
+    }
+    .hb-search input::placeholder { color: var(--ink-4); }
+
+    /* Recipe-specific: stronger photo presence */
+    .hb-recipe__photo { aspect-ratio: 5/4; }
+    .hb-recipe__photo::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, transparent 35%);
+      pointer-events: none;
+    }
+
+    /* Flat-list mode (shown for "All" and any filter pill) */
+    .hb-filter-head {
+      display: none;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 6px 0 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .hb-filter-head__title {
+      font-family: var(--font-serif);
+      font-size: 28px;
+      font-weight: 400;
+      letter-spacing: -0.015em;
+      color: var(--ink);
+    }
+    .hb-filter-head__sub { font-size: 13px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+
+    /* Default mode = "overview": flat grid + filter head hidden, sections shown */
+    #flat-grid                          { display: none; }
+    .hb-main.is-flat .is-overview-only  { display: none; }
+    .hb-main.is-flat #flat-grid         { display: grid; }
+    .hb-main.is-flat .hb-filter-head    { display: flex; }
+
+    /* 4-col grid for the flat view (auto-fit smaller cards keep flowing) */
+    #flat-grid {
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+
+    /* Cards filtered out */
+    .hb-recipe.is-hidden { display: none; }
+
+    /* Empty-state */
+    .hb-filter-empty {
+      display: none;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--ink-4);
+      font-size: 14px;
+    }
+    .hb-main.is-flat .hb-filter-empty.is-shown { display: block; }
+  </style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><rect x="3" y="13" width="6" height="6" rx="1"/><path d="M13 8h8M13 16h8"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="18" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="i-chef" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19h12v2H6z"/><path d="M16 11a4 4 0 1 0-8 0V3a3 3 0 0 1 5 0 3 3 0 0 1 3 3v5z"/></symbol>
+  <symbol id="i-meal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M7 14h4M7 18h4"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5a2.12 2.12 0 0 0-3-3L13 8 4.8 6.2c-.5-.1-.9.2-.9.7v.7c0 .3.2.6.5.7L9.6 11l-2.5 2.5H4.8l-.7.7c-.3.3-.3.7 0 1l1.4 1.4c.3.3.7.3 1 0l.7-.7v-2.3L9.7 11l3.7 5.2c.1.3.4.5.7.5h.7c.5 0 .8-.4.7-.9Z"/></symbol>
+  <symbol id="i-sticky" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3H4v18h12l5-5V3h-5z"/><path d="M16 21v-5h5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></symbol>
+  <symbol id="i-heart-fill" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 8-3 8-8 0-4-3-7-4-9-1 2-3 3-3 5 0-3-2-5-3-7-2 3-6 6-6 11 0 5 4 8 8 8Z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21V12M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></symbol>
+</defs></svg>
+
+<div class="hb-app" id="app" data-sidebar-style="refined">
+
+  <!-- ════════════ SIDEBAR ════════════ -->
+  <aside class="hb-sidebar">
+    <div class="hb-sidebar__brand">
+      <span class="hb-sidebar__logo" aria-hidden="true">H</span>
+      <span class="hb-sidebar__brand-text">
+        Homebase
+        <small>Liddle family</small>
+      </span>
+    </div>
+
+    <div class="hb-sidebar__date">
+      <span class="hb-sidebar__date-num">18</span>
+      <span class="hb-sidebar__date-meta">
+        <strong>Mon, May</strong>
+        <span>Week 21 · 2026</span>
+      </span>
+    </div>
+
+    <button class="hb-sidebar__quickadd" type="button">
+      <svg><use href="#i-plus"/></svg>
+      <span class="hb-sidebar__quickadd-text">Quick Add</span>
+      <span class="hb-sidebar__quickadd-kbd">⌘K</span>
+    </button>
+
+    <nav class="hb-sidebar__nav">
+      <a href="home.html" style="--cat: var(--accent);">
+        <svg><use href="#i-home"/></svg>
+        <span class="hb-sidebar__label">Home</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+
+      <div class="hb-sidebar__group-label">Schedule</div>
+
+      <a href="#" style="--cat: var(--cat-calendar);">
+        <svg><use href="#i-calendar"/></svg>
+        <span class="hb-sidebar__label">Calendar</span>
+        <span class="hb-sidebar__count">3</span>
+      </a>
+      <a href="#" style="--cat: var(--cat-chores);">
+        <svg><use href="#i-clip"/></svg>
+        <span class="hb-sidebar__label">Chores</span>
+        <span class="hb-sidebar__count">7</span>
+      </a>
+      <a href="#" style="--cat: var(--cat-lists);">
+        <svg><use href="#i-list"/></svg>
+        <span class="hb-sidebar__label">Lists</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+
+      <div class="hb-sidebar__group-label">Kitchen</div>
+
+      <a class="is-active" href="recipes.html" style="--cat: var(--cat-recipes);">
+        <svg><use href="#i-chef"/></svg>
+        <span class="hb-sidebar__label">Recipes</span>
+        <span class="hb-sidebar__count">128</span>
+      </a>
+      <a href="#" style="--cat: var(--cat-mealplan);">
+        <svg><use href="#i-meal"/></svg>
+        <span class="hb-sidebar__label">Meal Plan</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+
+      <div class="hb-sidebar__group-label">Household</div>
+
+      <a href="#" style="--cat: var(--cat-finance);">
+        <svg><use href="#i-dollar"/></svg>
+        <span class="hb-sidebar__label">Finance</span>
+        <span class="hb-sidebar__count">5</span>
+      </a>
+      <a href="#" style="--cat: var(--cat-contacts);">
+        <svg><use href="#i-user"/></svg>
+        <span class="hb-sidebar__label">Contacts</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+      <a href="#" style="--cat: var(--cat-documents);">
+        <svg><use href="#i-file"/></svg>
+        <span class="hb-sidebar__label">Documents</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+      <a href="#" style="--cat: var(--cat-trips);">
+        <svg><use href="#i-plane"/></svg>
+        <span class="hb-sidebar__label">Trips</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+      <a href="#" style="--cat: var(--cat-notes);">
+        <svg><use href="#i-sticky"/></svg>
+        <span class="hb-sidebar__label">Notes</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+    </nav>
+
+    <div class="hb-sidebar__foot">
+      <a href="#"><svg><use href="#i-settings"/></svg><span class="hb-sidebar__label">Settings</span></a>
+      <a href="#"><svg><use href="#i-logout"/></svg><span class="hb-sidebar__label">Sign out</span></a>
+    </div>
+
+    <div class="hb-profile">
+      <span class="hb-profile__avatar">JL</span>
+      <span class="hb-profile__meta">
+        <strong>James Liddle</strong>
+        <span>Admin · Hopevale</span>
+      </span>
+      <button class="hb-profile__menu-btn" title="More">
+        <svg><use href="#i-dots"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ════════════ MAIN ════════════ -->
+  <main class="hb-main" data-screen-label="02 Recipes">
+    <div class="hb-page">
+
+      <header class="hb-page-head">
+        <div>
+          <h1 class="hb-page-head__title">Recipes</h1>
+          <p class="hb-page-head__sub">128 saved · 12 favourites · 3 new this month</p>
+        </div>
+        <div class="hb-page-head__actions">
+          <div class="hb-search">
+            <svg><use href="#i-search"/></svg>
+            <input placeholder="Search recipes, ingredients, tags…" />
+          </div>
+          <button class="hb-btn hb-btn--outline">
+            <svg><use href="#i-tune"/></svg> Filters
+          </button>
+          <button class="hb-btn hb-btn--primary">
+            <svg><use href="#i-plus"/></svg> New recipe
+          </button>
+        </div>
+      </header>
+
+            <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-bottom: 24px;">
+        <div class="hb-pillnav" id="filter-pills">
+          <button class="hb-pillnav__item is-active" data-filter="overview"><svg><use href="#i-grid"/></svg> Overview</button>
+          <button class="hb-pillnav__item" data-filter="all">All <span class="hb-pillnav__badge" data-count="all">24</span></button>
+          <button class="hb-pillnav__item" data-filter="favourite"><svg><use href="#i-heart"/></svg> Favourites <span class="hb-pillnav__badge" data-count="favourite">0</span></button>
+          <button class="hb-pillnav__item" data-filter="quick">Quick (&lt; 30 min) <span class="hb-pillnav__badge" data-count="quick">0</span></button>
+          <button class="hb-pillnav__item" data-filter="family">Family-tested <span class="hb-pillnav__badge" data-count="family">0</span></button>
+          <button class="hb-pillnav__item" data-filter="trip">From the trip <span class="hb-pillnav__badge" data-count="trip">0</span></button>
+        </div>
+        <div style="flex:1"></div>
+        <div class="hb-pillnav hb-pillnav--sm">
+          <button class="hb-pillnav__item is-active">Cards</button>
+          <button class="hb-pillnav__item">List</button>
+        </div>
+      </div>
+
+      <!-- Flat-view header (only visible when a filter or "All" is active) -->
+      <div class="hb-filter-head" id="filter-head">
+        <h2 class="hb-filter-head__title"></h2>
+        <span class="hb-filter-head__sub"><span id="filter-count">0</span> recipes</span>
+      </div>
+
+            <!-- ════════════════════════════════════════════════════
+           OVERVIEW MODE — featured hero + curated sections
+           Cards populated by JS by cloning from #flat-grid.
+           ════════════════════════════════════════════════════ -->
+      <section class="hb-feature is-overview-only">
+        <div class="hb-feature__photo" style="background-image: url('https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=1400&amp;q=85&amp;auto=format&amp;fit=crop');"></div>
+        <div class="hb-feature__body">
+          <span class="hb-feature__eyebrow">★ Tonight's plan · Family favourite</span>
+          <h2 class="hb-feature__title">Slow-cooked beef ragù with pappardelle</h2>
+          <p class="hb-feature__sub">Rich red-wine ragù with deeply caramelised onions and a parmesan crust — start the sauce around 3pm so it's ready when the Brownings arrive.</p>
+          <div class="hb-feature__meta">
+            <span><svg><use href="#i-clock"/></svg> 3h 15m total</span>
+            <span><svg><use href="#i-user"/></svg> 6 servings</span>
+            <span><svg><use href="#i-flame"/></svg> Easy</span>
+            <span class="hb-chip hb-chip--info">Italian</span>
+          </div>
+          <div class="hb-feature__actions">
+            <button class="hb-btn hb-btn--primary">Open recipe</button>
+            <button class="hb-btn hb-btn--outline">Add to shopping list</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="hb-section-head is-overview-only">
+        <h2 class="hb-section-head__title">Recently added</h2>
+        <span class="hb-section-head__sub">Last 30 days</span>
+      </div>
+      <div class="hb-recipe-grid is-overview-only" id="overview-recent"></div>
+
+      <div class="hb-section-head is-overview-only">
+        <h2 class="hb-section-head__title">Family favourites</h2>
+        <span class="hb-section-head__sub">Top by cook count</span>
+      </div>
+      <div class="hb-recipe-grid is-overview-only" id="overview-family"></div>
+
+      <!-- ════════════════════════════════════════════════════
+           FLAT MODE — full list of recipes (filtered)
+           Master grid. Shown when filter != "overview".
+           ════════════════════════════════════════════════════ -->
+      <div class="hb-recipe-grid" id="flat-grid">
+        <article class="hb-recipe" data-tags="japanese quick favourite trip" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1623341214825-9f4f963727da?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Japanese</span>
+              <span class="hb-chip">25 min</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Miso ramen with soft-boiled egg</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 25 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="mediterranean vegetarian family" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Mediterranean</span>
+              <span class="hb-chip">vegetarian</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Cauliflower &amp; halloumi grain bowls</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 35 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="mexican spicy favourite family" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Mexican</span>
+              <span class="hb-chip">spicy</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Chipotle pulled-pork tacos</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 4 h</span>
+              <span><svg><use href="#i-user"/></svg> 8</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="indian family" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1631292784640-2b24be784d5d?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Indian</span>
+              <span class="hb-chip">freezer-safe</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Coconut chicken curry</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 50 min</span>
+              <span><svg><use href="#i-user"/></svg> 6</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="dessert favourite" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1488477181946-6428a0291777?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Dessert</span>
+              <span class="hb-chip">make-ahead</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Pistachio &amp; rosewater pavlova</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 1h 40m</span>
+              <span><svg><use href="#i-user"/></svg> 8</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="soup" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1547592180-85f173990554?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Soup</span>
+              <span class="hb-chip">winter</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Tuscan ribollita</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 1 h</span>
+              <span><svg><use href="#i-user"/></svg> 6</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="italian quick favourite family" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Italian</span>
+              <span class="hb-chip">cooked 14×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Lemon spaghetti with prawns</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 20 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="lunch favourite family" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1539252554453-80ab65ce3586?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Lunch</span>
+              <span class="hb-chip">cooked 11×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Roast veg ciabattas</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 40 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="salad vegetarian quick favourite family" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Salad</span>
+              <span class="hb-chip">cooked 9×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Charred broccoli &amp; tahini</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 25 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="vietnamese favourite family trip" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Vietnamese</span>
+              <span class="hb-chip">cooked 7×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Pho bo with anise broth</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 2 h</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="vegetarian family" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Vegetarian</span>
+              <span class="hb-chip">cooked 6×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Roasted carrots, lentils &amp; tahini</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 45 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="breakfast quick favourite" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1604908554007-9329f5252a44?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Breakfast</span>
+              <span class="hb-chip">cooked 5×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Buttermilk pancakes with maple</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 25 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="japanese quick favourite trip" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1606851179583-a30f49d4d394?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Japanese</span>
+              <span class="hb-chip">grill</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Yakitori chicken skewers</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 30 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="japanese family trip" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Japanese</span>
+              <span class="hb-chip">kid-friendly</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Tonkatsu pork katsu</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 45 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="vietnamese quick trip" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1583224964978-2257b960c3d3?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Vietnamese</span>
+              <span class="hb-chip">fresh</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Vietnamese summer rolls</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 25 min</span>
+              <span><svg><use href="#i-user"/></svg> 6</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="japanese family trip favourite" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Japanese</span>
+              <span class="hb-chip">weeknight</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Salmon teriyaki bowls</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 30 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="italian vegetarian family" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Italian</span>
+              <span class="hb-chip">vegetarian</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Wild mushroom risotto</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 40 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="roast family favourite" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1544025162-d76694265947?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Roast</span>
+              <span class="hb-chip">weekend</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Slow-cooked lamb shoulder</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 5 h</span>
+              <span><svg><use href="#i-user"/></svg> 8</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="soup vegetarian family" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1547308283-b941058e4d2c?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Soup</span>
+              <span class="hb-chip">vegetarian</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Roasted tomato bisque</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 45 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="salad quick family" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1551248429-40975aa4de74?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Salad</span>
+              <span class="hb-chip">quick</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Classic Caesar salad</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 15 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="greek family favourite" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Greek</span>
+              <span class="hb-chip">weeknight</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Greek lemon chicken &amp; potatoes</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 1h 10m</span>
+              <span><svg><use href="#i-user"/></svg> 6</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="dessert family favourite" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Dessert</span>
+              <span class="hb-chip">no-bake</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Banoffee pie</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 30 min</span>
+              <span><svg><use href="#i-user"/></svg> 8</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="breakfast quick favourite" data-fav="true">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1525351484163-7529414344d8?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Breakfast</span>
+              <span class="hb-chip">brunch</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Avocado eggs benedict</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 20 min</span>
+              <span><svg><use href="#i-user"/></svg> 2</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="italian quick family" data-fav="false">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1612874742237-6526221588e3?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Italian</span>
+              <span class="hb-chip">weeknight</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Spaghetti carbonara</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 25 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+      </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Lemon spaghetti with prawns</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 20 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="lunch favourite family">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1539252554453-80ab65ce3586?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Lunch</span>
+              <span class="hb-chip">cooked 11×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Roast veg ciabattas</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 40 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="salad quick favourite family">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Salad</span>
+              <span class="hb-chip">cooked 9×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Charred broccoli &amp; tahini</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 25 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="vietnamese favourite family trip">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Vietnamese</span>
+              <span class="hb-chip">cooked 7×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Pho bo with anise broth</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 2 h</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Medium</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="vegetarian family">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav"><svg><use href="#i-heart"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Vegetarian</span>
+              <span class="hb-chip">cooked 6×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Roasted carrots, lentils &amp; tahini</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 45 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="hb-recipe" data-tags="breakfast quick favourite">
+          <div class="hb-recipe__photo" style="background-image: url('https://images.unsplash.com/photo-1604908554007-9329f5252a44?w=700&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <button class="hb-recipe__fav is-fav"><svg><use href="#i-heart-fill"/></svg></button>
+            <div class="hb-recipe__chips">
+              <span class="hb-chip">Breakfast</span>
+              <span class="hb-chip">cooked 5×</span>
+            </div>
+          </div>
+          <div class="hb-recipe__body">
+            <h3 class="hb-recipe__title">Buttermilk pancakes with maple</h3>
+            <div class="hb-recipe__meta">
+              <span><svg><use href="#i-clock"/></svg> 25 min</span>
+              <span><svg><use href="#i-user"/></svg> 4</span>
+              <span><svg><use href="#i-flame"/></svg> Easy</span>
+            </div>
+          </div>
+        </article>
+
+      </div>
+
+      <div class="hb-filter-empty" id="filter-empty">No recipes match this filter.</div>
+
+    </div>
+  </main>
+
+</div>
+
+<div class="preview-banner">
+  Recipes · v2 preview
+  <a href="home.html">← See Home</a>
+</div>
+
+<script>
+  (function () {
+    const main   = document.querySelector('.hb-main');
+    const pills  = document.getElementById('filter-pills');
+    const head   = document.getElementById('filter-head');
+    const title  = head.querySelector('.hb-filter-head__title');
+    const count  = document.getElementById('filter-count');
+    const empty  = document.getElementById('filter-empty');
+    const flat   = document.getElementById('flat-grid');
+    const recent = document.getElementById('overview-recent');
+    const family = document.getElementById('overview-family');
+    const cards  = Array.from(flat.querySelectorAll('.hb-recipe'));
+
+    // ── Populate overview subsections by cloning from the master grid ─────────
+    // Recently added — first 6 cards (newest first by convention)
+    cards.slice(0, 6).forEach(c => recent.appendChild(c.cloneNode(true)));
+    // Family favourites — first 6 cards tagged "family"
+    cards
+      .filter(c => (c.dataset.tags || '').split(/\s+/).includes('family'))
+      .slice(0, 6)
+      .forEach(c => family.appendChild(c.cloneNode(true)));
+
+    // ── Live counts on the pill badges ────────────────────────────────────────
+    ['favourite','quick','family','trip'].forEach(tag => {
+      const n = cards.filter(c => (c.dataset.tags || '').split(/\s+/).includes(tag)).length;
+      const badge = pills.querySelector(`[data-count="${tag}"]`);
+      if (badge) badge.textContent = n;
+    });
+
+    const titles = {
+      all:       'All recipes',
+      favourite: 'Favourites',
+      quick:     'Quick — under 30 minutes',
+      family:    'Family-tested',
+      trip:      'From the Tokyo trip',
+    };
+
+    function apply(filter) {
+      // Active pill
+      pills.querySelectorAll('.hb-pillnav__item[data-filter]').forEach(b => {
+        b.classList.toggle('is-active', b.dataset.filter === filter);
+      });
+
+      if (filter === 'overview') {
+        main.classList.remove('is-flat');
+        empty.classList.remove('is-shown');
+        // Reset main scroll so user lands at top of overview
+        return;
+      }
+
+      main.classList.add('is-flat');
+      title.textContent = titles[filter] || 'Recipes';
+
+      let visible = 0;
+      cards.forEach(c => {
+        if (filter === 'all') {
+          c.classList.remove('is-hidden');
+          visible++;
+          return;
+        }
+        const tags = (c.dataset.tags || '').split(/\s+/);
+        const match = tags.includes(filter);
+        c.classList.toggle('is-hidden', !match);
+        if (match) visible++;
+      });
+      count.textContent = visible;
+      empty.classList.toggle('is-shown', visible === 0);
+
+      // Scroll back to the filter head so user sees the change
+      main.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    pills.addEventListener('click', e => {
+      const btn = e.target.closest('[data-filter]');
+      if (!btn) return;
+      apply(btn.dataset.filter);
+    });
+
+    // Heart toggle on cards (lets the user favourite/unfavourite live)
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.hb-recipe__fav');
+      if (!btn) return;
+      e.preventDefault();
+      btn.classList.toggle('is-fav');
+      const isFav = btn.classList.contains('is-fav');
+      btn.innerHTML = `<svg><use href="#i-heart${isFav ? '-fill' : ''}"/></svg>`;
+    });
+  })();
+</script>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" data-presets="react">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "sidebarStyle": "refined",
+  "showCounts": true,
+  "showDateStrip": true
+}/*EDITMODE-END*/;
+
+function RecipesTweaks() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  React.useEffect(() => {
+    const app = document.getElementById('app');
+    if (app) app.setAttribute('data-sidebar-style', t.sidebarStyle);
+  }, [t.sidebarStyle]);
+
+  React.useEffect(() => {
+    document.querySelectorAll('.hb-sidebar__date').forEach(el => {
+      el.style.display = t.showDateStrip ? '' : 'none';
+    });
+    document.querySelectorAll('.hb-sidebar__count').forEach(el => {
+      el.style.display = t.showCounts ? '' : 'none';
+    });
+  }, [t.showDateStrip, t.showCounts]);
+
+  return (
+    <TweaksPanel title="Tweaks">
+      <TweakSection title="Sidebar">
+        <TweakRadio
+          label="Style"
+          value={t.sidebarStyle}
+          onChange={v => setTweak('sidebarStyle', v)}
+          options={[
+            { label: 'Refined', value: 'refined' },
+            { label: 'Iconic',  value: 'iconic'  },
+            { label: 'Quiet',   value: 'quiet'   },
+          ]}
+        />
+        <TweakToggle label="Date strip"     value={t.showDateStrip} onChange={v => setTweak('showDateStrip', v)} />
+        <TweakToggle label="Counter badges" value={t.showCounts}    onChange={v => setTweak('showCounts',    v)} />
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+const tweakRoot = document.createElement('div');
+document.body.appendChild(tweakRoot);
+ReactDOM.createRoot(tweakRoot).render(<RecipesTweaks />);
+</script>
+
+</body>
+</html>

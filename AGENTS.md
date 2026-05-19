@@ -1,3 +1,23 @@
+# General coding discipline
+
+## 1. Surface assumptions before coding
+State assumptions explicitly before implementing. If multiple interpretations exist, present them — don't pick silently. If something is unclear, stop and ask rather than guessing.
+
+## 2. Simplicity first
+Minimum code that solves the problem. No features beyond what was asked, no abstractions for single-use code, no speculative flexibility. If you write 200 lines and it could be 50, rewrite it. Ask: "Would a senior engineer say this is overcomplicated?"
+
+## 3. Surgical changes
+Touch only what you must. Don't improve adjacent code, comments, or formatting that isn't broken. Match existing style. If you notice unrelated dead code, mention it — don't delete it. Every changed line should trace directly to the user's request.
+
+## 4. Plan before multi-step tasks
+For any task with more than one distinct step, state a brief plan with verifiable outcomes before starting:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+```
+
+---
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 

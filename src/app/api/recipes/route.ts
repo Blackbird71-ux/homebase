@@ -188,6 +188,7 @@ export async function GET(req: Request) {
         // Include both formats during transition
         tags: [...newTags.map((t: any) => t.name).filter((n: string) => n !== 'legacy-tags'), ...legacyTags.filter((t: string) => t !== 'legacy-tags')],
         tagObjects: newTags,
+        isFavourite: r.isFavourite ?? false,
         createdAt: r.createdAt.toISOString(),
       }
     })

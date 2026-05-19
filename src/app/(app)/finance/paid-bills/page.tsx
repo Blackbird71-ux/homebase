@@ -6,6 +6,8 @@ import {
   Trash2, Ban, Undo2, Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PageHero } from '@/components/shared/PageHero'
+import { StatusChip } from '@/components/shared/StatusChip'
 import { formatCurrency } from '@/lib/financeShared'
 import Link from 'next/link'
 import {
@@ -53,7 +55,7 @@ export default function PaidBillsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Paid Bills</h1>
+      <PageHero title="Paid Bills" />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -296,18 +298,10 @@ function PaidBillRow({
               <span className="text-xs bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>
             )}
             {isOneOff
-              ? <span className="text-xs bg-orange-500/10 text-orange-500 px-1.5 rounded flex items-center gap-0.5">
-                  <Layers className="h-2.5 w-2.5" /> One-off
-                </span>
-              : <span className="text-xs bg-blue-500/10 text-blue-400 px-1.5 rounded flex items-center gap-0.5">
-                  <RefreshCw className="h-2.5 w-2.5" /> Recurring
-                </span>
+              ? <StatusChip variant="soon">One-off</StatusChip>
+              : <StatusChip variant="info">Recurring</StatusChip>
             }
-            {installments > 1 && (
-              <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded">
-                {installments} installments
-              </span>
-            )}
+            {installments > 1 && <StatusChip variant="soon">{installments} installments</StatusChip>}
             {bill.entity && (
               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
                 style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>

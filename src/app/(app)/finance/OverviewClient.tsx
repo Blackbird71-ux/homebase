@@ -2,6 +2,7 @@
 
 import { Plus, TrendingUp, TrendingDown, Wallet, PiggyBank, AlertCircle, CalendarDays, EyeOff, MapPin, ExternalLink, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { PageHero } from '@/components/shared/PageHero'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 
@@ -87,6 +88,8 @@ export function OverviewClient({
 
   return (
     <div className="space-y-6">
+      <PageHero title="Finance" subtitle="Household accounts, bills, budgets, and savings." />
+
       {/* Overdue Banner */}
       {overdueCount > 0 && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 flex items-center gap-3">
@@ -155,7 +158,7 @@ export function OverviewClient({
                 <span className="text-sm font-medium truncate">{a.name}</span>
                 <span className="text-xs uppercase text-muted-foreground ml-auto">{a.type}</span>
               </div>
-              <p className="text-lg font-bold">{formatCurrency(a.currentBalance, a.currency)}</p>
+              <p className="hb-stat__num hb-stat__num--money">{formatCurrency(a.currentBalance, a.currency)}</p>
             </div>
           ))}
         </div>
@@ -172,7 +175,7 @@ export function OverviewClient({
                   <EyeOff className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium">Personal Expenses</span>
                 </div>
-                <p className="text-lg font-bold">{formatCurrency(personalTransTotal)}</p>
+                <p className="hb-stat__num hb-stat__num--money">{formatCurrency(personalTransTotal)}</p>
               </div>
             )}
             {locationTransTotal > 0 && (
@@ -181,7 +184,7 @@ export function OverviewClient({
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium">Location-based Expenses</span>
                 </div>
-                <p className="text-lg font-bold">{formatCurrency(locationTransTotal)}</p>
+                <p className="hb-stat__num hb-stat__num--money">{formatCurrency(locationTransTotal)}</p>
               </div>
             )}
             {externalTransTotal > 0 && (
@@ -190,7 +193,7 @@ export function OverviewClient({
                   <ExternalLink className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium">External Expenses</span>
                 </div>
-                <p className="text-lg font-bold">{formatCurrency(externalTransTotal)}</p>
+                <p className="hb-stat__num hb-stat__num--money">{formatCurrency(externalTransTotal)}</p>
               </div>
             )}
           </div>
@@ -399,8 +402,8 @@ function SummaryCard({ icon: Icon, label, value, color, bgColor }: {
           <Icon className={cn('h-5 w-5', color)} />
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-bold">{value}</p>
+          <p className="hb-stat__label">{label}</p>
+          <p className="hb-stat__num hb-stat__num--money">{value}</p>
         </div>
       </div>
     </div>

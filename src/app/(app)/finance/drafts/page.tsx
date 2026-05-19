@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { PageHero } from '@/components/shared/PageHero'
+import { StatusChip } from '@/components/shared/StatusChip'
 import {
   CheckCircle2, XCircle, Pencil, Inbox, AlertTriangle,
   RefreshCw, ChevronDown, ChevronUp,
@@ -501,17 +503,8 @@ function DraftRow({
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-sm">{name}</span>
-          {isChanged && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-              <AlertTriangle className="h-3 w-3" />
-              Changed
-            </span>
-          )}
-          {isPayslip && (
-            <span className="rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
-              Payslip
-            </span>
-          )}
+          {isChanged && <StatusChip variant="soon" dot>Changed</StatusChip>}
+          {isPayslip && <StatusChip variant="info">Payslip</StatusChip>}
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           <span>{fmtDate(date)}</span>
@@ -854,25 +847,19 @@ export default function DraftsPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Inbox className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">Drafts Inbox</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Recurring transaction drafts awaiting review
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={load}
-          className="rounded-md border border-border p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title="Refresh"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
-      </div>
+      <PageHero
+        title="Drafts Inbox"
+        subtitle="Recurring transaction drafts awaiting review."
+        actions={
+          <button
+            onClick={load}
+            className="rounded-md border border-border p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        }
+      />
 
       {/* Empty state */}
       {totalDrafts === 0 && (

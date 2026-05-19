@@ -76,32 +76,24 @@ export default function TrialBalancePage() {
     <div className="space-y-5 pb-8">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
+      <header className="hb-page-head">
+        <div>
           {glAccountId && (
-            <button
-              onClick={backToTrialBalance}
-              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-            >
+            <button onClick={backToTrialBalance} className="inline-flex items-center gap-1 text-sm text-primary hover:underline mb-1">
               <ArrowLeft className="h-3.5 w-3.5" /> Trial Balance
             </button>
           )}
-          <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              {glAccountId
-                ? <><BookOpen className="h-5 w-5 text-primary" /> General Ledger</>
-                : <><Scale className="h-5 w-5 text-primary" /> Trial Balance</>
-              }
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {glAccountId
-                ? 'All movements for a single GL account with running balance'
-                : 'Posted journal lines and cleared transactions by GL account — DR must equal CR'
-              }
-            </p>
-          </div>
+          <h1 className="hb-page-head__title">
+            {glAccountId ? 'General Ledger' : 'Trial Balance'}
+          </h1>
+          <p className="hb-page-head__sub">
+            {glAccountId
+              ? 'All movements for a single GL account with running balance'
+              : 'Posted journal lines and cleared transactions by GL account — DR must equal CR'
+            }
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hb-page-head__actions">
           <PrintButton
             printRef={printRef}
             reportTitle={printTitle}
@@ -114,7 +106,7 @@ export default function TrialBalancePage() {
             disabled={!data || loading}
           />
         </div>
-      </div>
+      </header>
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-end gap-3">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 import { cn, todayAU } from '@/lib/utils'
 import { type GLAccount, type Entity, type JournalEntry, type ReversalState, type AmendmentState } from '@/components/finance/journal-types'
 import { JournalEntryForm }  from '@/components/finance/JournalEntryForm'
@@ -150,10 +151,7 @@ export default function JournalsPage() {
   return (
     <div className="space-y-4">
 
-      <div className="flex items-center gap-2">
-        <BookOpen className="h-5 w-5 text-muted-foreground" />
-        <h1 className="text-2xl font-bold">Journal Entries</h1>
-      </div>
+      <PageHero title="Journal Entries" />
 
       <div className="flex flex-wrap items-center gap-1.5">
         {(['manual', 'draft', 'all-posted'] as const).map(tab => (

@@ -10,6 +10,7 @@ import { AttachmentSection } from '@/components/finance/AttachmentSection'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { useState } from 'react'
 import type { IncomeEntry, StoredPayslip } from '@/hooks/finance/useIncomeCrud'
+import { StatusChip } from '@/components/shared/StatusChip'
 
 function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
   const [open, setOpen] = useState(false)
@@ -116,18 +117,13 @@ export function IncomeRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{entry.name}</span>
-            {!entry.isActive && <span className="text-xs bg-muted px-1.5 rounded">INACTIVE</span>}
-            {entry.autoPay && <span className="text-xs bg-blue-500/10 text-blue-500 px-1.5 rounded">DIRECT</span>}
-            {hasRemittance && (
-              <span className="text-xs bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
-                <Receipt className="h-2.5 w-2.5" /> POSTED
-              </span>
-            )}
+            {!entry.isActive && <StatusChip variant="neutral">INACTIVE</StatusChip>}
+            {entry.autoPay && <StatusChip variant="info">DIRECT</StatusChip>}
+            {hasRemittance && <StatusChip variant="ok" dot>POSTED</StatusChip>}
             {entry.isTaxTracked && (
-              <span className="text-xs bg-orange-500/10 text-orange-600 px-1.5 rounded flex items-center gap-0.5">
-                <ReceiptText className="h-2.5 w-2.5" /> TAX TRACKED
-                {entry.taxRate != null && <span className="font-medium">{entry.taxRate}%</span>}
-              </span>
+              <StatusChip variant="soon">
+                TAX TRACKED{entry.taxRate != null && ` ${entry.taxRate}%`}
+              </StatusChip>
             )}
             {entry.entity && (
               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"

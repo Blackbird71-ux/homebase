@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Homebase · Home</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="homebase-app.css" />
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    .preview-banner {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      background: rgba(15,17,21,0.92); color: #fff;
+      padding: 6px 14px; border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      z-index: 100;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    }
+    .preview-banner a { color: #5AC8FA; margin-left: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- Inline icon symbols -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><rect x="3" y="13" width="6" height="6" rx="1"/><path d="M13 8h8M13 16h8"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="18" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="i-chef" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19h12v2H6z"/><path d="M16 11a4 4 0 1 0-8 0V3a3 3 0 0 1 5 0 3 3 0 0 1 3 3v5z"/></symbol>
+  <symbol id="i-meal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M7 14h4M7 18h4"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5a2.12 2.12 0 0 0-3-3L13 8 4.8 6.2c-.5-.1-.9.2-.9.7v.7c0 .3.2.6.5.7L9.6 11l-2.5 2.5H4.8l-.7.7c-.3.3-.3.7 0 1l1.4 1.4c.3.3.7.3 1 0l.7-.7v-2.3L9.7 11l3.7 5.2c.1.3.4.5.7.5h.7c.5 0 .8-.4.7-.9Z"/></symbol>
+  <symbol id="i-sticky" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3H4v18h12l5-5V3h-5z"/><path d="M16 21v-5h5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/></symbol>
+  <symbol id="i-utensils" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3zm0 0v7"/></symbol>
+  <symbol id="i-pizza" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 16 20 6-6-20A20 20 0 0 0 2 16"/></symbol>
+  <symbol id="i-mappin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 7-8 13-8 13s-8-6-8-13a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.27 6.96 12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2l-2 2-2-2-2 2-2-2-2 2-2-2-2 2-2-2z"/><path d="M8 7h8M8 11h8M8 15h5"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21V12M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 8-3 8-8 0-4-3-7-4-9-1 2-3 3-3 5 0-3-2-5-3-7-2 3-6 6-6 11 0 5 4 8 8 8Z"/></symbol>
+  <symbol id="i-cloud-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M4.93 4.93l1.41 1.41M2 12h2M5.5 16.5a4.5 4.5 0 0 1 1.5-8.7 5.5 5.5 0 0 1 10.4 1.7A4.5 4.5 0 0 1 18 18.5H7"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></symbol>
+</defs></svg>
+
+<div class="hb-app" id="app" data-sidebar-style="refined">
+
+  <!-- ════════════ SIDEBAR ════════════ -->
+  <aside class="hb-sidebar">
+
+    <!-- Brand -->
+    <div class="hb-sidebar__brand">
+      <span class="hb-sidebar__logo" aria-hidden="true">H</span>
+      <span class="hb-sidebar__brand-text">
+        Homebase
+        <small>Liddle family</small>
+      </span>
+    </div>
+
+    <!-- Date strip -->
+    <div class="hb-sidebar__date" data-comment-anchor="sidebar-date">
+      <span class="hb-sidebar__date-num">18</span>
+      <span class="hb-sidebar__date-meta">
+        <strong>Mon, May</strong>
+        <span>Week 21 · 2026</span>
+      </span>
+    </div>
+
+    <!-- Quick add -->
+    <button class="hb-sidebar__quickadd" type="button">
+      <svg><use href="#i-plus"/></svg>
+      <span class="hb-sidebar__quickadd-text">Quick Add</span>
+      <span class="hb-sidebar__quickadd-kbd">⌘K</span>
+    </button>
+
+    <!-- Primary nav -->
+    <nav class="hb-sidebar__nav">
+      <a class="is-active" href="home.html" style="--cat: var(--accent);">
+        <svg><use href="#i-home"/></svg>
+        <span class="hb-sidebar__label">Home</span>
+        <span class="hb-sidebar__cat-dot" style="background: rgba(255,255,255,0.5);"></span>
+      </a>
+
+      <div class="hb-sidebar__group-label">Schedule</div>
+
+      <a href="#" style="--cat: var(--cat-calendar);">
+        <svg><use href="#i-calendar"/></svg>
+        <span class="hb-sidebar__label">Calendar</span>
+        <span class="hb-sidebar__count">3</span>
+      </a>
+      <a href="#" style="--cat: var(--cat-chores);">
+        <svg><use href="#i-clip"/></svg>
+        <span class="hb-sidebar__label">Chores</span>
+        <span class="hb-sidebar__count">7</span>
+      </a>
+      <a href="#" style="--cat: var(--cat-lists);">
+        <svg><use href="#i-list"/></svg>
+        <span class="hb-sidebar__label">Lists</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+
+      <div class="hb-sidebar__group-label">Kitchen</div>
+
+      <a href="recipes.html" style="--cat: var(--cat-recipes);">
+        <svg><use href="#i-chef"/></svg>
+        <span class="hb-sidebar__label">Recipes</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+      <a href="#" style="--cat: var(--cat-mealplan);">
+        <svg><use href="#i-meal"/></svg>
+        <span class="hb-sidebar__label">Meal Plan</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+
+      <div class="hb-sidebar__group-label">Household</div>
+
+      <a href="#" style="--cat: var(--cat-finance);">
+        <svg><use href="#i-dollar"/></svg>
+        <span class="hb-sidebar__label">Finance</span>
+        <span class="hb-sidebar__count">5</span>
+      </a>
+      <a href="#" style="--cat: var(--cat-contacts);">
+        <svg><use href="#i-user"/></svg>
+        <span class="hb-sidebar__label">Contacts</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+      <a href="#" style="--cat: var(--cat-documents);">
+        <svg><use href="#i-file"/></svg>
+        <span class="hb-sidebar__label">Documents</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+      <a href="#" style="--cat: var(--cat-trips);">
+        <svg><use href="#i-plane"/></svg>
+        <span class="hb-sidebar__label">Trips</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+      <a href="#" style="--cat: var(--cat-notes);">
+        <svg><use href="#i-sticky"/></svg>
+        <span class="hb-sidebar__label">Notes</span>
+        <span class="hb-sidebar__cat-dot"></span>
+      </a>
+    </nav>
+
+    <!-- Footer: secondary nav + profile -->
+    <div class="hb-sidebar__foot">
+      <a href="#">
+        <svg><use href="#i-settings"/></svg>
+        <span class="hb-sidebar__label">Settings</span>
+      </a>
+      <a href="#">
+        <svg><use href="#i-logout"/></svg>
+        <span class="hb-sidebar__label">Sign out</span>
+      </a>
+    </div>
+
+    <div class="hb-profile">
+      <span class="hb-profile__avatar">JL</span>
+      <span class="hb-profile__meta">
+        <strong>James Liddle</strong>
+        <span>Admin · Hopevale</span>
+      </span>
+      <button class="hb-profile__menu-btn" title="More">
+        <svg><use href="#i-dots"/></svg>
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- ════════════ MAIN ════════════ -->
+  <main class="hb-main" data-screen-label="01 Home">
+    <div class="hb-page">
+
+      <!-- ─────── Greeting hero ─────── -->
+      <header class="hb-hero">
+        <div>
+          <h1 class="hb-hero__greet">Good morning, <em>James</em>.</h1>
+          <p class="hb-hero__sub">Monday, 18 May · The Liddle family has a busy week ahead — dinner with the Brownings tonight.</p>
+        </div>
+        <div class="hb-hero__weather">
+          <svg width="34" height="34" style="color:#FF9500"><use href="#i-cloud-sun"/></svg>
+          <span class="hb-hero__temp">18°</span>
+          <span class="hb-hero__weather-meta">
+            <strong>Partly sunny</strong>
+            <span>H 22° · L 11°</span>
+          </span>
+        </div>
+      </header>
+
+      <!-- ─────── Scope filter row ─────── -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:12px; flex-wrap:wrap;">
+        <div class="hb-pillnav">
+          <button class="hb-pillnav__item is-active">
+            <svg><use href="#i-calendar"/></svg> Next 7 days
+          </button>
+          <button class="hb-pillnav__item">14 days</button>
+          <button class="hb-pillnav__item">30 days</button>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="hb-btn hb-btn--outline hb-btn--sm">
+            <svg><use href="#i-grid"/></svg> Reset layout
+          </button>
+          <button class="hb-btn hb-btn--outline hb-btn--sm">
+            <svg><use href="#i-tune"/></svg> Customise
+          </button>
+        </div>
+      </div>
+
+      <!-- ─────── Today panel ─────── -->
+      <section class="hb-today">
+        <div class="hb-today__head">
+          <div>
+            <h2 class="hb-today__title">Today</h2>
+            <p class="hb-today__date">Monday, 18 May 2026</p>
+          </div>
+          <div class="hb-pillnav hb-pillnav--sm">
+            <button class="hb-pillnav__item is-active">Timeline</button>
+            <button class="hb-pillnav__item">Just meals</button>
+            <button class="hb-pillnav__item">Just events</button>
+          </div>
+        </div>
+
+        <div class="hb-today__items">
+          <div class="hb-tl-row" style="--row-accent: var(--cat-mealplan);">
+            <span class="hb-tl-row__time">07:30</span>
+            <span class="hb-tl-row__icon"><svg><use href="#i-coffee"/></svg></span>
+            <div class="hb-tl-row__main">
+              <div class="hb-tl-row__title">Greek yogurt &amp; berries</div>
+              <div class="hb-tl-row__sub">Breakfast · 3 of 4 done</div>
+            </div>
+            <span class="hb-chip hb-chip--neutral hb-tl-row__chip">family meal</span>
+          </div>
+
+          <div class="hb-tl-row" style="--row-accent: var(--cat-calendar);">
+            <span class="hb-tl-row__time">09:00</span>
+            <span class="hb-tl-row__icon"><svg><use href="#i-calendar"/></svg></span>
+            <div class="hb-tl-row__main">
+              <div class="hb-tl-row__title">Quarterly review · Engineering team</div>
+              <div class="hb-tl-row__sub">Office · 90 min</div>
+            </div>
+            <span class="hb-chip hb-chip--info hb-tl-row__chip">Work</span>
+          </div>
+
+          <div class="hb-tl-row is-now" style="--row-accent: var(--accent);">
+            <span class="hb-tl-row__time">11:30</span>
+            <span class="hb-tl-row__icon"><svg><use href="#i-mappin"/></svg></span>
+            <div class="hb-tl-row__main">
+              <div class="hb-tl-row__title">Maeve's piano lesson</div>
+              <div class="hb-tl-row__sub">Crows Nest Music · pick up at 12:30</div>
+            </div>
+            <span class="hb-chip hb-chip--accent hb-tl-row__chip"><span class="hb-chip__dot"></span> Now</span>
+          </div>
+
+          <div class="hb-tl-row" style="--row-accent: var(--cat-mealplan);">
+            <span class="hb-tl-row__time">13:00</span>
+            <span class="hb-tl-row__icon"><svg><use href="#i-utensils"/></svg></span>
+            <div class="hb-tl-row__main">
+              <div class="hb-tl-row__title">Cauli &amp; halloumi bowls</div>
+              <div class="hb-tl-row__sub">Lunch · leftovers in fridge</div>
+            </div>
+            <span class="hb-chip hb-chip--neutral hb-tl-row__chip">family meal</span>
+          </div>
+
+          <div class="hb-tl-row" style="--row-accent: var(--cat-chores);">
+            <span class="hb-tl-row__time">16:00</span>
+            <span class="hb-tl-row__icon"><svg><use href="#i-clip"/></svg></span>
+            <div class="hb-tl-row__main">
+              <div class="hb-tl-row__title">Take out recycling · James</div>
+              <div class="hb-tl-row__sub">Every Monday · Yellow bin</div>
+            </div>
+            <span class="hb-chip hb-chip--soon hb-tl-row__chip">due today</span>
+          </div>
+
+          <div class="hb-tl-row" style="--row-accent: var(--cat-mealplan);">
+            <span class="hb-tl-row__time">19:00</span>
+            <span class="hb-tl-row__icon"><svg><use href="#i-pizza"/></svg></span>
+            <div class="hb-tl-row__main">
+              <div class="hb-tl-row__title">Slow-cooked beef ragù with pappardelle</div>
+              <div class="hb-tl-row__sub">Dinner · Browning family joining · 6 servings</div>
+            </div>
+            <span class="hb-chip hb-chip--accent hb-tl-row__chip"><svg width="10" height="10"><use href="#i-flame"/></svg> tonight</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────── Section: This week ─────── -->
+      <div class="hb-section-head">
+        <h2 class="hb-section-head__title">This week</h2>
+        <span class="hb-section-head__sub">18 – 24 May</span>
+      </div>
+
+      <div class="hb-grid">
+
+        <!-- Bills -->
+        <article class="hb-card hb-card--finance span-4">
+          <div class="hb-card__accent"></div>
+          <header class="hb-card__head">
+            <span class="hb-card__title"><svg><use href="#i-receipt"/></svg> Bills due</span>
+            <div class="hb-card__actions">
+              <button class="hb-card__action" title="Add bill"><svg width="14" height="14"><use href="#i-plus"/></svg></button>
+            </div>
+          </header>
+          <div class="hb-card__body">
+            <div class="hb-stat">
+              <span class="hb-stat__num hb-stat__num--money">$1,284</span>
+              <span class="hb-stat__label">across 5 bills</span>
+            </div>
+            <div class="hb-divider"></div>
+            <div class="hb-bill-row">
+              <div>
+                <div class="hb-bill-row__name">Electricity · Origin</div>
+                <div class="hb-bill-row__sub">Due tomorrow · Quarterly</div>
+              </div>
+              <span class="hb-bill-row__amt">$412.50</span>
+            </div>
+            <div class="hb-bill-row">
+              <div>
+                <div class="hb-bill-row__name">Internet · Aussie BB</div>
+                <div class="hb-bill-row__sub" style="color:var(--cat-recipes);font-weight:500;">Overdue · 2 days</div>
+              </div>
+              <span class="hb-bill-row__amt hb-bill-row__amt--late">$89.00</span>
+            </div>
+            <div class="hb-bill-row">
+              <div>
+                <div class="hb-bill-row__name">Council rates</div>
+                <div class="hb-bill-row__sub">Due in 6 days · auto</div>
+              </div>
+              <span class="hb-bill-row__amt">$486.20</span>
+            </div>
+          </div>
+          <footer class="hb-card__foot">
+            <a href="#">View all bills <svg width="12" height="12" style="display:inline-block;vertical-align:-2px;margin-left:2px"><use href="#i-arrow-right"/></svg></a>
+          </footer>
+        </article>
+
+        <!-- Groceries -->
+        <article class="hb-card hb-card--lists span-4">
+          <div class="hb-card__accent"></div>
+          <header class="hb-card__head">
+            <span class="hb-card__title"><svg><use href="#i-list"/></svg> Groceries</span>
+            <div class="hb-card__actions">
+              <button class="hb-card__action" title="Add item"><svg width="14" height="14"><use href="#i-plus"/></svg></button>
+            </div>
+          </header>
+          <div class="hb-card__body">
+            <div class="hb-stat">
+              <span class="hb-stat__num">12</span>
+              <span class="hb-stat__label">items to buy · Coles run Wed</span>
+            </div>
+            <div class="hb-divider"></div>
+            <div class="hb-list">
+              <div class="hb-list__item">
+                <span class="hb-list__check"></span>
+                <span class="hb-list__name">Pappardelle, 500g</span>
+                <span class="hb-list__meta">tonight</span>
+              </div>
+              <div class="hb-list__item">
+                <span class="hb-list__check"></span>
+                <span class="hb-list__name">Beef chuck, 1kg</span>
+                <span class="hb-list__meta">tonight</span>
+              </div>
+              <div class="hb-list__item">
+                <span class="hb-list__check"></span>
+                <span class="hb-list__name">Parmesan wedge</span>
+                <span class="hb-list__meta"></span>
+              </div>
+              <div class="hb-list__item">
+                <span class="hb-list__check hb-list__check--done"><svg><use href="#i-check"/></svg></span>
+                <span class="hb-list__name hb-list__name--done">Tomato paste, 2 tins</span>
+                <span class="hb-list__meta"></span>
+              </div>
+              <div class="hb-list__item">
+                <span class="hb-list__check"></span>
+                <span class="hb-list__name">School snacks (Emma's request)</span>
+                <span class="hb-list__meta">×3</span>
+              </div>
+            </div>
+          </div>
+          <footer class="hb-card__foot">
+            <a href="#">Open shopping list <svg width="12" height="12" style="display:inline-block;vertical-align:-2px;margin-left:2px"><use href="#i-arrow-right"/></svg></a>
+          </footer>
+        </article>
+
+        <!-- Tonight's dinner with real photo -->
+        <article class="hb-card hb-card--recipes span-4">
+          <div class="hb-card__accent"></div>
+          <header class="hb-card__head">
+            <span class="hb-card__title"><svg><use href="#i-utensils"/></svg> Tonight's dinner</span>
+          </header>
+          <div class="hb-card__photo" style="background-image: url('https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=900&amp;q=80&amp;auto=format&amp;fit=crop');">
+            <div class="hb-card__photo-caption">Beef ragù with pappardelle</div>
+          </div>
+          <div class="hb-card__body" style="padding-top: 12px;">
+            <div style="display:flex; gap:14px; flex-wrap:wrap; color:var(--ink-3); font-size:12px; margin-bottom:8px;">
+              <span style="display:inline-flex; gap:4px; align-items:center;"><svg width="13" height="13"><use href="#i-clock"/></svg> 3h slow-cook</span>
+              <span style="display:inline-flex; gap:4px; align-items:center;"><svg width="13" height="13"><use href="#i-user"/></svg> 6 servings</span>
+              <span style="display:inline-flex; gap:4px; align-items:center;"><svg width="13" height="13"><use href="#i-flame"/></svg> easy</span>
+            </div>
+            <p style="font-size:13px; color:var(--ink-3); line-height:1.5; margin:0;">Rich red-wine ragù with deeply caramelised onions — start the sauce at 3pm so it's ready when the Brownings arrive.</p>
+          </div>
+          <footer class="hb-card__foot" style="justify-content:space-between;">
+            <a href="recipes.html">Open recipe <svg width="12" height="12" style="display:inline-block;vertical-align:-2px;margin-left:2px"><use href="#i-arrow-right"/></svg></a>
+            <span class="hb-chip hb-chip--soon">starts in 4h</span>
+          </footer>
+        </article>
+
+        <!-- Chores week strip -->
+        <article class="hb-card hb-card--chores span-7">
+          <div class="hb-card__accent"></div>
+          <header class="hb-card__head">
+            <span class="hb-card__title"><svg><use href="#i-clip"/></svg> Chores this week</span>
+            <div class="hb-pillnav hb-pillnav--sm">
+              <button class="hb-pillnav__item is-active">All</button>
+              <button class="hb-pillnav__item">Mine <span class="hb-pillnav__badge">2</span></button>
+            </div>
+          </header>
+          <div class="hb-card__body">
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+              <div class="hb-chore-day is-today">
+                <div class="hb-chore-day__head">● Mon · Today</div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Recycling out<span class="hb-chore-item__assignee">James</span></div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Feed fish<span class="hb-chore-item__assignee">Maeve</span></div>
+              </div>
+              <div class="hb-chore-day">
+                <div class="hb-chore-day__head">Tue · 19 May</div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Wipe benches<span class="hb-chore-item__assignee">Anna</span></div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Empty dishwasher<span class="hb-chore-item__assignee">Emma</span></div>
+              </div>
+              <div class="hb-chore-day">
+                <div class="hb-chore-day__head">Wed · 20 May</div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Bins out<span class="hb-chore-item__assignee">James</span></div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Walk dog<span class="hb-chore-item__assignee">Maeve</span></div>
+              </div>
+              <div class="hb-chore-day">
+                <div class="hb-chore-day__head">Thu · 21 May</div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Vacuum living areas<span class="hb-chore-item__assignee">Anna</span></div>
+              </div>
+              <div class="hb-chore-day">
+                <div class="hb-chore-day__head">Fri · 22 May</div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Mow front lawn<span class="hb-chore-item__assignee">James</span></div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Wash sports kit<span class="hb-chore-item__assignee">Emma</span></div>
+              </div>
+              <div class="hb-chore-day">
+                <div class="hb-chore-day__head">Sat · 23 May</div>
+                <div class="hb-chore-item"><span class="hb-chore-item__check"></span>Bathrooms<span class="hb-chore-item__assignee">Anna</span></div>
+              </div>
+            </div>
+          </div>
+          <footer class="hb-card__foot">
+            <a href="#">Open chore schedule <svg width="12" height="12" style="display:inline-block;vertical-align:-2px;margin-left:2px"><use href="#i-arrow-right"/></svg></a>
+            <span class="hb-muted">·</span>
+            <span class="hb-chip hb-chip--late"><span class="hb-chip__dot"></span> 1 overdue</span>
+          </footer>
+        </article>
+
+        <!-- Upcoming trip -->
+        <article class="hb-card span-5" style="overflow: hidden; padding: 0;">
+          <div class="hb-trip hb-cover--sunset" style="min-height: 220px; border-radius: 14px; margin: 0;">
+            <span class="hb-trip__chip"><svg width="11" height="11"><use href="#i-clock"/></svg> in 14 days</span>
+            <span class="hb-trip__eyebrow">Next trip · Tokyo, Japan</span>
+            <h3 class="hb-trip__title">Cherry Blossom Run</h3>
+            <div class="hb-trip__meta">
+              <span><svg><use href="#i-calendar"/></svg> 22 Mar – 1 Apr · 11 days</span>
+              <span><svg><use href="#i-package"/></svg> 7 to pack</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- To-do today -->
+        <article class="hb-card hb-card--notes span-4">
+          <div class="hb-card__accent"></div>
+          <header class="hb-card__head">
+            <span class="hb-card__title"><svg><use href="#i-list"/></svg> Today's to-dos</span>
+            <div class="hb-pillnav hb-pillnav--sm">
+              <button class="hb-pillnav__item is-active">Mine <span class="hb-pillnav__badge">3</span></button>
+              <button class="hb-pillnav__item">Family <span class="hb-pillnav__badge">7</span></button>
+            </div>
+          </header>
+          <div class="hb-card__body">
+            <div class="hb-list">
+              <div class="hb-list__item">
+                <span class="hb-list__check hb-list__check--done"><svg><use href="#i-check"/></svg></span>
+                <span class="hb-list__name hb-list__name--done">Confirm dinner reservation</span>
+              </div>
+              <div class="hb-list__item">
+                <span class="hb-list__check"></span>
+                <span class="hb-list__name">Reply to Sarah re: weekend plans</span>
+                <span class="hb-chip hb-chip--soon">2pm</span>
+              </div>
+              <div class="hb-list__item">
+                <span class="hb-list__check"></span>
+                <span class="hb-list__name">Pick up dry cleaning</span>
+              </div>
+              <div class="hb-list__item">
+                <span class="hb-list__check"></span>
+                <span class="hb-list__name">Top-up Maeve's Opal card</span>
+              </div>
+            </div>
+          </div>
+          <footer class="hb-card__foot">
+            <a href="#">Open Family Todos <svg width="12" height="12" style="display:inline-block;vertical-align:-2px;margin-left:2px"><use href="#i-arrow-right"/></svg></a>
+          </footer>
+        </article>
+
+        <!-- Weekly summary stats -->
+        <article class="hb-card span-4">
+          <div class="hb-card__accent" style="background: var(--accent);"></div>
+          <header class="hb-card__head">
+            <span class="hb-card__title" style="color: var(--accent);"><svg><use href="#i-grid"/></svg> Week at a glance</span>
+          </header>
+          <div class="hb-card__body" style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px 18px;">
+            <div>
+              <div class="hb-stat__num" style="font-size:32px;">14</div>
+              <div class="hb-stat__label">events</div>
+            </div>
+            <div>
+              <div class="hb-stat__num" style="font-size:32px;">11</div>
+              <div class="hb-stat__label">meals planned</div>
+            </div>
+            <div>
+              <div class="hb-stat__num" style="font-size:32px;">8</div>
+              <div class="hb-stat__label">chores done <span class="hb-stat__delta hb-stat__delta--good">+3</span></div>
+            </div>
+            <div>
+              <div class="hb-stat__num" style="font-size:32px;">$284</div>
+              <div class="hb-stat__label">spent <span class="hb-stat__delta hb-stat__delta--bad">-12%</span></div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Pinned notes -->
+        <article class="hb-card hb-card--notes span-4">
+          <div class="hb-card__accent"></div>
+          <header class="hb-card__head">
+            <span class="hb-card__title"><svg><use href="#i-sticky"/></svg> Pinned notes</span>
+            <div class="hb-card__actions">
+              <button class="hb-card__action"><svg width="14" height="14"><use href="#i-plus"/></svg></button>
+            </div>
+          </header>
+          <div class="hb-card__body" style="display:flex; flex-direction:column; gap:8px;">
+            <div style="padding: 10px 12px; background: color-mix(in srgb, var(--cat-notes) 14%, transparent); border-radius:10px;">
+              <div style="font-weight:500; font-size:13px; margin-bottom:2px;">Tokyo packing brain-dump</div>
+              <div style="font-size:12px; color:var(--ink-3);">Power adapters · JR passes printed · Anna's medication · …</div>
+            </div>
+            <div style="padding: 10px 12px; background: color-mix(in srgb, var(--cat-notes) 14%, transparent); border-radius:10px;">
+              <div style="font-weight:500; font-size:13px; margin-bottom:2px;">Plumber — Mark Liddle</div>
+              <div style="font-size:12px; color:var(--ink-3);">0411 222 333 · prefers SMS · friend of Pete's</div>
+            </div>
+          </div>
+          <footer class="hb-card__foot">
+            <a href="#">All notes <svg width="12" height="12" style="display:inline-block;vertical-align:-2px;margin-left:2px"><use href="#i-arrow-right"/></svg></a>
+          </footer>
+        </article>
+
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<div class="preview-banner">
+  Home · v2 preview
+  <a href="recipes.html">See Recipes →</a>
+</div>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" data-presets="react">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "sidebarStyle": "refined",
+  "showCounts": true,
+  "showDateStrip": true
+}/*EDITMODE-END*/;
+
+function HomeTweaks() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  React.useEffect(() => {
+    const app = document.getElementById('app');
+    if (app) app.setAttribute('data-sidebar-style', t.sidebarStyle);
+  }, [t.sidebarStyle]);
+
+  React.useEffect(() => {
+    document.querySelectorAll('.hb-sidebar__date').forEach(el => {
+      el.style.display = t.showDateStrip ? '' : 'none';
+    });
+    document.querySelectorAll('.hb-sidebar__count').forEach(el => {
+      el.style.display = t.showCounts ? '' : 'none';
+    });
+  }, [t.showDateStrip, t.showCounts]);
+
+  return (
+    <TweaksPanel title="Tweaks">
+      <TweakSection title="Sidebar">
+        <TweakRadio
+          label="Style"
+          value={t.sidebarStyle}
+          onChange={v => setTweak('sidebarStyle', v)}
+          options={[
+            { label: 'Refined', value: 'refined' },
+            { label: 'Iconic',  value: 'iconic'  },
+            { label: 'Quiet',   value: 'quiet'   },
+          ]}
+        />
+        <TweakToggle label="Date strip"      value={t.showDateStrip} onChange={v => setTweak('showDateStrip', v)} />
+        <TweakToggle label="Counter badges"  value={t.showCounts}    onChange={v => setTweak('showCounts',    v)} />
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+const tweakRoot = document.createElement('div');
+document.body.appendChild(tweakRoot);
+ReactDOM.createRoot(tweakRoot).render(<HomeTweaks />);
+</script>
+
+</body>
+</html>

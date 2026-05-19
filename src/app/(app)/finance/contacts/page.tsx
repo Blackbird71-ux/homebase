@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Building2, Globe, Phone, Hash } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 import { cn } from '@/lib/utils'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -100,10 +101,7 @@ export default function VendorsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Financial Contacts</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Companies and people you pay bills to or receive income from.</p>
-      </div>
+      <PageHero title="Financial Contacts" subtitle="Companies and people you pay bills to or receive income from." />
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={openNew}
           className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { PrintButton } from '@/components/print/PrintButton'
+import { PageHero } from '@/components/shared/PageHero'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -95,20 +96,13 @@ export default function VendorStatementPage() {
 
   return (
     <div className="p-4 md:p-6 flex flex-col gap-6 max-w-4xl">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold">
-            {type === 'ap' ? 'Creditor Statement' : 'Debtor Statement'}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {type === 'ap'
-              ? 'Shows all invoices and payments for a vendor (what you owe).'
-              : 'Shows all invoices issued to and receipts from a payer (what they owe you).'}
-          </p>
-        </div>
-        {data && <PrintButton printRef={printRef} reportTitle={`${data.type === 'ap' ? 'Creditor' : 'Debtor'} Statement — ${data.vendor.name}`} />}
-      </div>
+      <PageHero
+        title={type === 'ap' ? 'Creditor Statement' : 'Debtor Statement'}
+        subtitle={type === 'ap'
+          ? 'Shows all invoices and payments for a vendor (what you owe).'
+          : 'Shows all invoices issued to and receipts from a payer (what they owe you).'}
+        actions={data ? <PrintButton printRef={printRef} reportTitle={`${data.type === 'ap' ? 'Creditor' : 'Debtor'} Statement — ${data.vendor.name}`} /> : undefined}
+      />
 
       {/* ── Filters ── */}
       <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-4">

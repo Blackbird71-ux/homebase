@@ -4,6 +4,7 @@ import {
   RefreshCw, AlertTriangle,
   TrendingDown, TrendingUp,
 } from 'lucide-react'
+import { PageHero } from '@/components/shared/PageHero'
 import {
   Dialog, DialogHeader, DialogTitle, DialogFooter,
   ResizableDialogContent,
@@ -31,34 +32,30 @@ export default function TemplatesPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Recurring Templates</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {templates.length} template{templates.length !== 1 ? 's' : ''} ·{' '}
-            {templates.filter(t => t.enabled).length} active
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => openCreate('bill')}
-            size="sm"
-            variant="outline"
-            className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950"
-          >
-            <TrendingDown className="h-3.5 w-3.5" /> New Bill
-          </Button>
-          <Button
-            onClick={() => openCreate('income')}
-            size="sm"
-            variant="outline"
-            className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50 hover:border-green-300 dark:text-green-400 dark:border-green-900 dark:hover:bg-green-950"
-          >
-            <TrendingUp className="h-3.5 w-3.5" /> New Income
-          </Button>
-        </div>
-      </div>
+      <PageHero
+        title="Recurring Templates"
+        subtitle={`${templates.length} template${templates.length !== 1 ? 's' : ''} · ${templates.filter(t => t.enabled).length} active`}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => openCreate('bill')}
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950"
+            >
+              <TrendingDown className="h-3.5 w-3.5" /> New Bill
+            </Button>
+            <Button
+              onClick={() => openCreate('income')}
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-green-700 border-green-200 hover:bg-green-50 hover:border-green-300 dark:text-green-400 dark:border-green-900 dark:hover:bg-green-950"
+            >
+              <TrendingUp className="h-3.5 w-3.5" /> New Income
+            </Button>
+          </div>
+        }
+      />
 
       {/* Bills section */}
       {bills.length > 0 && (

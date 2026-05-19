@@ -7,6 +7,7 @@ import {
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { type JournalEntry, TYPE_LABELS, fmt } from './journal-types'
+import { StatusChip } from '@/components/shared/StatusChip'
 
 interface Props {
   entry: JournalEntry
@@ -74,24 +75,10 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
                 {entry.entity.name}
               </span>
             )}
-            <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-              {TYPE_LABELS[entry.type] ?? entry.type}
-            </span>
-            {isReversed && !amendedBy && (
-              <span className="text-xs bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded border border-red-500/20">
-                REVERSED
-              </span>
-            )}
-            {amendedBy && (
-              <span className="text-xs bg-orange-500/10 text-orange-600 px-1.5 py-0.5 rounded border border-orange-500/20 font-mono">
-                AMENDED → {amendedBy.reference ?? amendedBy.id}
-              </span>
-            )}
-            {isAmendment && (
-              <span className="text-xs bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded border border-blue-500/20">
-                CORRECTION
-              </span>
-            )}
+            <StatusChip variant="neutral">{TYPE_LABELS[entry.type] ?? entry.type}</StatusChip>
+            {isReversed && !amendedBy && <StatusChip variant="late">REVERSED</StatusChip>}
+            {amendedBy && <StatusChip variant="soon">AMENDED → {amendedBy.reference ?? amendedBy.id}</StatusChip>}
+            {isAmendment && <StatusChip variant="info">CORRECTION</StatusChip>}
           </div>
 
           <p className="text-sm font-medium truncate">{entry.description}</p>
@@ -107,15 +94,10 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
         </div>
 
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {isDraft ? (
-            <span className="text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
-              <Clock className="h-2.5 w-2.5" /> Draft
-            </span>
-          ) : (
-            <span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
-              <CheckCircle2 className="h-2.5 w-2.5" /> Posted
-            </span>
-          )}
+          {isDraft
+            ? <StatusChip variant="soon" dot>Draft</StatusChip>
+            : <StatusChip variant="ok" dot>Posted</StatusChip>
+          }
 
           <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
             {isDraft && (

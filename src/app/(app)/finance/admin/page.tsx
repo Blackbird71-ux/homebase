@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PageHero } from '@/components/shared/PageHero'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -156,14 +157,7 @@ export default function FinanceAdminPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <ShieldAlert className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-xl font-bold">Finance Admin</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Administrative tools — visible to admins only</p>
-        </div>
-      </div>
+      <PageHero title="Finance Admin" subtitle="Administrative tools — visible to admins only." />
 
       {/* Scheduler section */}
       <section className="space-y-3">

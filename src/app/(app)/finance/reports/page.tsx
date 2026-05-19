@@ -5,6 +5,7 @@ import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
   BarChart2, Building2, FileDown, Printer, Send, History, Clock,
 } from 'lucide-react'
+import { PageHero } from '@/components/shared/PageHero'
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
   startOfYear, endOfYear, subMonths, addMonths, subQuarters, addQuarters,
@@ -220,6 +221,7 @@ export default function ReportsPage() {
   return (
     <>
     <div className="space-y-5">
+      <PageHero title="Reports" subtitle="Cashflow and spending breakdowns by category or vendor." />
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Period selector */}

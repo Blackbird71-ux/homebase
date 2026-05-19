@@ -6,6 +6,7 @@ import Link from 'next/link'
 import {
   Plane, Plus, MapPin, Calendar, Package, Trash2, Tag,
 } from 'lucide-react'
+import { PageHero } from '@/components/shared/PageHero'
 import type { TripSummary } from '@/types'
 import { TripTagsManager } from '@/components/trips/TripTagsManager'
 
@@ -86,25 +87,22 @@ export function TripsClient({ initialTrips }: TripsClientProps) {
 
   return (
     <div className="hb-trips flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="hb-page__header">
-        <div>
-          <h1 className="hb-page__title hb-display">Trips</h1>
-          <p className="hb-page__subtitle">
-            {activeTrips.length} active trip{activeTrips.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowTagManager(true)} className="hb-btn hb-btn--outline hb-btn--sm">
-            <Tag size={14} />
-            <span className="hidden sm:inline">Tags</span>
-          </button>
-          <button onClick={() => setShowCreateDialog(true)} className="hb-btn hb-btn--primary">
-            <Plus size={16} />
-            New Trip
-          </button>
-        </div>
-      </div>
+      <PageHero
+        title="Trips"
+        subtitle={`${activeTrips.length} active trip${activeTrips.length !== 1 ? 's' : ''}`}
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowTagManager(true)} className="hb-btn hb-btn--outline hb-btn--sm">
+              <Tag size={14} />
+              <span className="hidden sm:inline">Tags</span>
+            </button>
+            <button onClick={() => setShowCreateDialog(true)} className="hb-btn hb-btn--primary">
+              <Plus size={16} />
+              New Trip
+            </button>
+          </div>
+        }
+      />
 
       {/* Body */}
       <div className="hb-page__body space-y-8">

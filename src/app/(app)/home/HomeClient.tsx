@@ -174,7 +174,7 @@ export function HomeClient({
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">
       <div className="flex items-center justify-between mb-4 shrink-0">
-        <h1 className="text-xl font-semibold">Home</h1>
+        <h1 className="hb-page-head__title">Home</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

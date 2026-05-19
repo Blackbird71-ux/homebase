@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { CategoryManager } from '@/components/categories/CategoryManager'
+import { PageHero } from '@/components/shared/PageHero'
 import { CategoryAssignment } from '@/components/categories/CategoryAssignment'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,12 +33,7 @@ export default function CategoriesSettingsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="p-6 pb-0">
-        <h1 className="text-2xl font-bold">Ingredient Category Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage categories and assign ingredients for better organization in shopping lists.
-        </p>
-      </div>
+      <PageHero title="Ingredient Categories" subtitle="Manage categories and assign ingredients for better organization in shopping lists." />
 
       <div className="flex-1 p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

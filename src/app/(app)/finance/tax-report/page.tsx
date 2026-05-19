@@ -266,32 +266,25 @@ export default function TaxReportPage() {
     <div className="space-y-6 pb-8">
 
       {/* Header */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-orange-500" /> Tax Report
-              </h2>
-              <div className="flex items-center gap-1 rounded-lg border border-border px-2 py-0.5">
-                <button onClick={() => setFyStartYear(y => y - 1)} className="p-0.5 hover:bg-accent rounded text-muted-foreground">
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <span className="text-xs font-semibold px-1 min-w-[70px] text-center">
-                  {fyLabelUtil(fyStartYear, fyStartMonth)}
-                </span>
-                <button onClick={() => setFyStartYear(y => y + 1)} className="p-0.5 hover:bg-accent rounded text-muted-foreground">
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
+      <header className="hb-page-head">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="hb-page-head__title">Tax Report</h1>
+            <div className="flex items-center gap-1 rounded-lg border border-border px-2 py-0.5">
+              <button onClick={() => setFyStartYear(y => y - 1)} className="p-0.5 hover:bg-accent rounded text-muted-foreground">
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <span className="text-xs font-semibold px-1 min-w-[70px] text-center">
+                {fyLabelUtil(fyStartYear, fyStartMonth)}
+              </span>
+              <button onClick={() => setFyStartYear(y => y + 1)} className="p-0.5 hover:bg-accent rounded text-muted-foreground">
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <p className="text-xs text-muted-foreground">{data.from} – {data.to}</p>
           </div>
-          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-1.5 max-w-sm">
-            Estimated only — based on 2025-26 ATO brackets. Consult your accountant for final figures.
-          </p>
+          <p className="hb-page-head__sub">{data.from} – {data.to} · Estimated only — consult your accountant for final figures.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hb-page-head__actions">
           <PrintButton
             printRef={printRef}
             reportTitle="Tax Report"
@@ -308,7 +301,7 @@ export default function TaxReportPage() {
             disabled={loading}
           />
         </div>
-      </div>
+      </header>
 
       {/* Column legend */}
       <div className="flex flex-wrap gap-3 text-xs">

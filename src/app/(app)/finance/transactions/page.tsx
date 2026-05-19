@@ -3,6 +3,7 @@
 import { Plus, Pencil, Trash2, Filter, X, Receipt } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { PageHero } from '@/components/shared/PageHero'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { formatCurrency } from '@/lib/financeShared'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, WideDialogContent } from '@/components/ui/dialog'
@@ -29,7 +30,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Transactions</h1>
+      <PageHero title="Transactions" />
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setShowFilters(!showFilters)}
           className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',

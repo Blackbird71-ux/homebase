@@ -5,15 +5,16 @@
   <title>Homebase · Trips Redesign</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Match Homebase's intended font system -->
+  <!-- Match Homebase's actual font system (Fraunces serif + system UI) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- Local Homebase theme tokens (light theme — drop-in proxy of globals.css apple-aqua) -->
+  <!-- Local Homebase theme tokens (light theme — matches one of your actual themes) -->
   <style>
     :root {
-      --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+      --font-serif: "Fraunces", "New York", Georgia, serif;
 
       /* Apple-aqua-inspired tokens (matches one of Homebase's actual themes) */
       --background: oklch(0.97 0.005 240);

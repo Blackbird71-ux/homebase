@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ColorPicker } from '@/components/ui/color-picker'
 
@@ -63,7 +64,7 @@ export default function LocationsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Locations</h1>
+      <PageHero title="Locations" />
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
           <Plus className="h-3.5 w-3.5" /> Add Location

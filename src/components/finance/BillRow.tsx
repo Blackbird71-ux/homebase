@@ -12,6 +12,7 @@ import { AttachmentSection } from '@/components/finance/AttachmentSection'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import type { Bill, QuickFilter } from '@/hooks/finance/useBillCrud'
 import type { BillPayment, AddPaymentForm } from '@/hooks/finance/usePaymentHistory'
+import { StatusChip } from '@/components/shared/StatusChip'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -116,34 +117,13 @@ export function BillRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{bill.name}</span>
-            {!bill.isActive && <span className="text-xs bg-muted px-1.5 rounded">INACTIVE</span>}
-            {bill.autoPay   && <span className="text-xs bg-blue-500/10 text-blue-500 px-1.5 rounded">AUTO</span>}
-            {hasInvoice && (
-              <span className="text-xs bg-green-500/10 text-green-600 px-1.5 rounded flex items-center gap-0.5">
-                <Receipt className="h-2.5 w-2.5" /> POSTED
-              </span>
-            )}
-            {bill.invoiceReceived && !hasInvoice && (
-              <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded flex items-center gap-0.5"
-                title="invoiceReceived=true but no posted GL journal — data integrity warning">
-                <Receipt className="h-2.5 w-2.5" /> POSTED (no GL)
-              </span>
-            )}
-            {!bill.invoiceReceived && !bill.paid && (
-              <span className="text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 px-1.5 rounded flex items-center gap-0.5">
-                <Clock className="h-2.5 w-2.5" /> DRAFT
-              </span>
-            )}
-            {inBudget && (
-              <span className="text-xs bg-primary/10 text-primary px-1.5 rounded flex items-center gap-0.5">
-                <BookmarkCheck className="h-2.5 w-2.5" /> BUDGET
-              </span>
-            )}
-            {isPartiallyPaid && (
-              <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded">
-                PARTIAL
-              </span>
-            )}
+            {!bill.isActive && <StatusChip variant="neutral">INACTIVE</StatusChip>}
+            {bill.autoPay   && <StatusChip variant="info">AUTO</StatusChip>}
+            {hasInvoice && <StatusChip variant="ok" dot>POSTED</StatusChip>}
+            {bill.invoiceReceived && !hasInvoice && <StatusChip variant="soon" dot>POSTED (no GL)</StatusChip>}
+            {!bill.invoiceReceived && !bill.paid && <StatusChip variant="soon" dot>DRAFT</StatusChip>}
+            {inBudget && <StatusChip variant="accent">BUDGET</StatusChip>}
+            {isPartiallyPaid && <StatusChip variant="soon">PARTIAL</StatusChip>}
             {bill.entity && (
               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
                 style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>
@@ -322,14 +302,9 @@ export function BillRow({
                       </span>
                   }
                   {p.transaction && (
-                    <span className={cn(
-                      'text-xs px-1.5 rounded shrink-0',
-                      p.transaction.isCleared
-                        ? 'bg-green-500/10 text-green-600'
-                        : 'bg-amber-500/10 text-amber-600',
-                    )}>
+                    <StatusChip variant={p.transaction.isCleared ? 'ok' : 'soon'} dot className="shrink-0">
                       {p.transaction.isCleared ? 'Cleared' : 'Uncleared'}
-                    </span>
+                    </StatusChip>
                   )}
                   {/* Undo this payment */}
                   <button

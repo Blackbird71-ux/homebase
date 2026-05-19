@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Briefcase, Star, StarOff, CheckCircle2, Receipt } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
+import { StatusChip } from '@/components/shared/StatusChip'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
@@ -150,13 +152,7 @@ export default function EntitiesPage() {
   return (
     <div className="space-y-4">
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Entities</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Named financial entities — Super funds, trusts, businesses — that bills and budgets can be assigned to.
-        </p>
-      </div>
+      <PageHero title="Entities" subtitle="Named financial entities — Super funds, trusts, businesses — that bills and budgets can be assigned to." />
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
           <Plus className="h-3.5 w-3.5" /> Add Entity
@@ -302,14 +298,8 @@ export default function EntitiesPage() {
                         <Star className="h-2.5 w-2.5 fill-current" /> DEFAULT
                       </span>
                     )}
-                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
-                      {typeLabel(entity.type)}
-                    </span>
-                    {hint && (
-                      <span className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                        <Receipt className="h-2.5 w-2.5" /> {hint}
-                      </span>
-                    )}
+                    <StatusChip variant="neutral">{typeLabel(entity.type)}</StatusChip>
+                    {hint && <StatusChip variant="soon" dot>{hint}</StatusChip>}
                   </div>
                   {entity.description && (
                     <p className="text-xs text-muted-foreground mt-0.5">{entity.description}</p>

@@ -141,7 +141,7 @@ export function MealPlanGrid({
 
           {/* ── Header ── */}
           <div className="flex items-center justify-between gap-1">
-            <h1 className="text-xl font-semibold shrink-0">Meal Plan</h1>
+            <h1 className="hb-page-head__title shrink-0">Meal Plan</h1>
 
             {/* Mobile header buttons */}
             <div className="flex xl:hidden items-center gap-1.5">

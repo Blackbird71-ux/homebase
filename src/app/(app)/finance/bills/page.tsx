@@ -6,6 +6,7 @@ import {
   BookmarkCheck, Briefcase, Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PageHero } from '@/components/shared/PageHero'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
 import Link from 'next/link'
@@ -62,7 +63,7 @@ export default function BillsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Bills &amp; Recurring</h1>
+      <PageHero title="Bills & Recurring" />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { PageHero } from '@/components/shared/PageHero'
 import { NoteCard } from '@/components/notes/NoteCard'
 import { NoteEditor } from '@/components/notes/NoteEditor'
 import { Button } from '@/components/ui/button'
@@ -290,23 +291,16 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
 
   return (
     <div className="flex flex-col h-full overflow-y-auto p-2 md:p-3 gap-2">
-      {/* Header with tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
-        <div>
-          <h1 className="text-xl font-bold">Notes</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            {filteredNotes.length} note{filteredNotes.length !== 1 ? 's' : ''}
-            {hasActiveFilters && ' (filtered)'}
-          </p>
-        </div>
-        <Button onClick={() => {
-          setEditingNote(null)
-          setEditorOpen(true)
-        }}>
-          <PlusIcon className="h-4 w-4 mr-2" />
-          New Note
-        </Button>
-      </div>
+      <PageHero
+        title="Notes"
+        subtitle={`${filteredNotes.length} note${filteredNotes.length !== 1 ? 's' : ''}${hasActiveFilters ? ' (filtered)' : ''}`}
+        actions={
+          <Button onClick={() => { setEditingNote(null); setEditorOpen(true) }}>
+            <PlusIcon className="h-4 w-4 mr-2" />
+            New Note
+          </Button>
+        }
+      />
 
       {/* Tab bar — PillNav standard */}
       <div className="shrink-0 overflow-x-auto pb-1">

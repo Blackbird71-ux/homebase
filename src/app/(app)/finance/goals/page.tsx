@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -79,7 +80,7 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Savings Goals</h1>
+      <PageHero title="Savings Goals" />
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
           <Plus className="h-3.5 w-3.5" /> Add Goal
@@ -173,7 +174,7 @@ export default function GoalsPage() {
                 </div>
 
                 <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-2xl font-bold">{formatCurrency(g.currentAmount)}</span>
+                  <span className="hb-stat__num hb-stat__num--money">{formatCurrency(g.currentAmount)}</span>
                   <span className="text-sm text-muted-foreground">of {formatCurrency(g.targetAmount)}</span>
                 </div>
 

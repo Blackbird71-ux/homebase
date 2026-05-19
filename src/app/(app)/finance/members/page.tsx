@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { PageHero } from '@/components/shared/PageHero'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 interface Member {
@@ -78,12 +79,7 @@ export default function FinanceMembersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Family Members</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage who has access to this family's finances.
-        </p>
-      </div>
+      <PageHero title="Family Members" subtitle="Manage who has access to this family's finances." />
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={openNew}

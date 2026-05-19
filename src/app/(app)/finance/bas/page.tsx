@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { ChevronLeft, ChevronRight, FileText, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { PageHero } from '@/components/shared/PageHero'
 import { cn } from '@/lib/utils'
 import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
 import { PrintButton } from '@/components/print/PrintButton'
@@ -136,16 +137,11 @@ export default function BasPage() {
 
   return (
     <div className="p-4 md:p-6 flex flex-col gap-6 max-w-5xl">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold">BAS Worksheet</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            GST activity statement figures sourced from the posted General Ledger.
-          </p>
-        </div>
-        <PrintButton printRef={printRef} reportTitle="BAS Worksheet" />
-      </div>
+      <PageHero
+        title="BAS Worksheet"
+        subtitle="GST activity statement figures sourced from the posted General Ledger."
+        actions={<PrintButton printRef={printRef} reportTitle="BAS Worksheet" />}
+      />
 
       {/* ── Quarter navigation ── */}
       <div className="flex items-center gap-2">
@@ -314,8 +310,8 @@ function SummaryCard({
       'rounded-lg border border-border bg-card p-3 flex flex-col gap-1',
       highlight && 'border-primary/30 bg-primary/5',
     )}>
-      <p className="text-[11px] text-muted-foreground leading-tight">{label}</p>
-      <p className={cn('text-lg font-bold tabular-nums', valueClass)}>
+      <p className="hb-stat__label">{label}</p>
+      <p className={cn('hb-stat__num hb-stat__num--money', valueClass)}>
         {loading ? <span className="text-muted-foreground">—</span> : fmt(value)}
       </p>
       <p className="text-[10px] text-muted-foreground">{description}</p>

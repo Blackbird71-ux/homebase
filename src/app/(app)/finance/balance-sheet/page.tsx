@@ -17,6 +17,8 @@ import {
   dataStyle, dataLabelStyle, positiveStyle, negativeStyle,
   setCols, freeze, styleRow, sc,
 } from '@/lib/excelStyles'
+import { PageHero } from '@/components/shared/PageHero'
+import { StatusChip } from '@/components/shared/StatusChip'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -403,41 +405,34 @@ export default function BalanceSheetPage() {
   return (
     <div className="space-y-6 pb-8">
 
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" />
-            Balance Sheet
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            What you own minus what you owe = your net worth.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <PrintButton
-            printRef={printRef}
-            reportTitle="Balance Sheet"
-            dateRange={`As at ${asAt}`}
-            disabled={loading && !data}
-          />
-          <ExcelButton
-            buildWorkbook={buildExcelWorkbook}
-            filename={`HomeBase - Balance Sheet - ${asAt}.xlsx`}
-            disabled={loading && !data}
-            className="ml-2"
-          />
-          <div>
-            <label className="text-xs text-muted-foreground mr-1">As at</label>
-            <input
-              type="date"
-              value={asAt}
-              onChange={e => setAsAt(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+      <PageHero
+        title="Balance Sheet"
+        subtitle="What you own minus what you owe — your net worth."
+        actions={
+          <div className="flex items-center gap-3 flex-wrap">
+            <PrintButton
+              printRef={printRef}
+              reportTitle="Balance Sheet"
+              dateRange={`As at ${asAt}`}
+              disabled={loading && !data}
             />
+            <ExcelButton
+              buildWorkbook={buildExcelWorkbook}
+              filename={`HomeBase - Balance Sheet - ${asAt}.xlsx`}
+              disabled={loading && !data}
+            />
+            <div>
+              <label className="text-xs text-muted-foreground mr-1">As at</label>
+              <input
+                type="date"
+                value={asAt}
+                onChange={e => setAsAt(e.target.value)}
+                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              />
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Entity filter */}
       {entities.length > 0 && (
@@ -530,7 +525,7 @@ export default function BalanceSheetPage() {
                   <span className="text-xs text-muted-foreground w-24 shrink-0">{format(new Date(t.date), 'd MMM yyyy')}</span>
                   <span className="flex-1 min-w-0 truncate">{t.description ?? t.payee ?? 'Transaction'}</span>
                   {t.category && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{t.category.name}</span>}
-                  {!t.isCleared && <span className="text-xs bg-amber-500/10 text-amber-600 px-1.5 rounded shrink-0">PENDING</span>}
+                  {!t.isCleared && <StatusChip variant="soon" className="shrink-0">PENDING</StatusChip>}
                   <span className={cn('font-semibold shrink-0 tabular-nums',
                     t.type === 'income' ? 'text-green-600' : 'text-red-600')}>
                     {t.type === 'income' ? '+' : '-'}{fmtCurrency(t.amount)}
@@ -746,7 +741,7 @@ export default function BalanceSheetPage() {
           </p>
         </div>
         <p className={cn(
-          'text-3xl font-bold tabular-nums',
+          'hb-stat__num hb-stat__num--money',
           data.netWorth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400',
         )}>
           {fmt(data.netWorth)}

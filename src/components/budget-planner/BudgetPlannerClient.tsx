@@ -331,10 +331,8 @@ export function BudgetPlannerClient() {
       {/* Header */}
       <div className="px-4 md:px-6 pt-4 md:pt-6 pb-3 border-b border-border shrink-0 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Simple Budget Planner</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Not linked to the Finance accounting system.
-          </p>
+          <h1 className="hb-page-head__title">Simple Budget Planner</h1>
+          <p className="hb-page-head__sub">Not linked to the Finance accounting system.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 pt-1">
           <span className="text-sm text-muted-foreground">View:</span>

@@ -26,6 +26,7 @@ interface RecipeFormProps {
     prepTime: number | null
     cookTime: number | null
     servings: number | null
+    isFavourite: boolean
     bookId: string | null
     createdAt: string
     image: string | null

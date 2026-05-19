@@ -12,6 +12,7 @@ import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
 import { buildProfitLossWorkbook } from '@/lib/excel/profit-loss-excel'
 import { useProfitLoss } from '@/hooks/finance/useProfitLoss'
+import { PageHero } from '@/components/shared/PageHero'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ export default function ProfitLossPage() {
 
   return (
     <div className="space-y-5">
+      <PageHero title="Profit & Loss" subtitle="Income and expenses for the selected period." />
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
