@@ -153,9 +153,9 @@ export function BillRow({
               </button>
             )}
             {bill.billDate && (
-              <span>Invoice {format(new Date(bill.billDate), 'd MMM yyyy')} · Due {format(nextDue, 'd MMM yyyy')}</span>
+              <span>Invoice {format(new Date(bill.billDate), 'd MMM yyyy')} · <span className="font-bold">Due {format(nextDue, 'd MMM yyyy')}</span></span>
             )}
-            {!bill.billDate && <span>Due {format(nextDue, 'd MMM yyyy')}</span>}
+            {!bill.billDate && <span><span className="font-bold">Due {format(nextDue, 'd MMM yyyy')}</span></span>}
             {bill.notes && <span className="italic truncate max-w-[120px]" title={bill.notes}>· {bill.notes}</span>}
           </div>
         </div>
