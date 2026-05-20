@@ -121,7 +121,7 @@ export function ListItemRow({
         disabled={isEditing}
       />
       <button
-        onClick={() => !isCompleted && !isLocked && onEdit?.(id)}
+        onDoubleClick={() => !isCompleted && !isLocked && onEdit?.(id)}
         className={`flex-1 min-w-0 text-left ${!isCompleted && !isLocked && onEdit ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1' : ''}`}
         style={isCompleted ? { color: doneColor } : undefined}
         disabled={isCompleted || isLocked}

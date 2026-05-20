@@ -206,7 +206,7 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
 
   return (
     <>
-      <Card size="sm" className="relative">
+      <Card size="sm" className="relative cursor-pointer" onDoubleClick={() => document.isSecured && !isUnlocked ? setShowUnlockDialog(true) : setEditOpen(true)}>
         {document.isSecured && (
           <div className="absolute top-2 left-2 flex items-center gap-1 text-xs text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/40 px-2 py-0.5 rounded-full z-10">
             <ShieldCheckIcon className="h-3 w-3" />

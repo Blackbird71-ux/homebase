@@ -905,6 +905,9 @@
   transform: translateX(100%);
   animation: hb-slide-in 0.22s cubic-bezier(0.32, 0.72, 0.16, 1) forwards;
 }
+@media (min-width: 1024px) {
+  .hb-drawer { width: 680px; }
+}
 @keyframes hb-slide-in { to { transform: translateX(0); } }
 
 .hb-drawer__head {

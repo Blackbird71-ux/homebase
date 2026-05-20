@@ -274,7 +274,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     const isUnlocked = unlockedIds.has(contact.id)
 
     return (
-      <Card key={contact.id} className={`group ${isSecured && !isUnlocked ? 'relative overflow-hidden' : ''}`}>
+      <Card key={contact.id} className={`group cursor-pointer ${isSecured && !isUnlocked ? 'relative overflow-hidden' : ''}`} onDoubleClick={() => isSecured && !isUnlocked ? setUnlockContact(contact) : openEdit(contact)}>
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between">
             <CardTitle className="text-sm font-semibold flex items-center gap-1.5">

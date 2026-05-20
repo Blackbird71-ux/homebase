@@ -438,8 +438,8 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
                       contentClassName=""
                     >
                       <span
-                        className={`text-sm font-medium cursor-default truncate block ${isCompleted ? 'line-through text-muted-foreground' : ''}`}
-                        onClick={() => openEditChore(chore)}
+                        className={`text-sm font-medium truncate block ${isCompleted ? 'line-through text-muted-foreground cursor-default' : 'cursor-pointer'}`}
+                        onDoubleClick={() => openEditChore(chore)}
                       >
                         {chore.title}
                       </span>
