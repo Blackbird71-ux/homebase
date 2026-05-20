@@ -1,6 +1,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +25,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { toast } from 'sonner'
-import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowUpIcon, ArrowDownIcon } from 'lucide-react'
+import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, GripVertical } from 'lucide-react'
 
 interface Category {
   id: string
@@ -26,6 +43,87 @@ const CATEGORY_COLORS = [
   '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#78716c',
 ]
 
+interface SortableRowProps {
+  category: Category
+  onEdit: (category: Category) => void
+  onDelete: (category: Category) => void
+}
+
+function SortableRow({ category, onEdit, onDelete }: SortableRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: category.id,
+    disabled: category.isSystem,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    position: isDragging ? 'relative' as const : undefined,
+    zIndex: isDragging ? 10 : undefined,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-12 gap-4 px-4 py-3 items-center border rounded-lg hover:bg-muted/50 bg-background"
+    >
+      <div className="col-span-1 flex items-center">
+        <button
+          {...(category.isSystem ? {} : { ...attributes, ...listeners })}
+          className={`${category.isSystem ? 'cursor-not-allowed text-muted-foreground/30' : 'cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground'}`}
+          aria-label="Drag to reorder"
+          tabIndex={category.isSystem ? -1 : 0}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="col-span-4 font-medium">
+        <span className="inline-flex items-center gap-1.5">
+          {category.color && (
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
+          )}
+          {category.name}
+        </span>
+        {category.isSystem && (
+          <span className="ml-2 text-xs text-muted-foreground">(System)</span>
+        )}
+      </div>
+      <div className="col-span-3">
+        <span className={`text-sm px-2 py-1 rounded ${category.isSystem ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'}`}>
+          {category.isSystem ? 'System' : 'Custom'}
+        </span>
+      </div>
+      <div className="col-span-2 text-muted-foreground">
+        {category.ingredientCount} ingredient{category.ingredientCount !== 1 ? 's' : ''}
+      </div>
+      <div className="col-span-2 text-right">
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit(category)}
+            disabled={category.isSystem}
+            title={category.isSystem ? 'System categories cannot be edited' : 'Edit category'}
+          >
+            <EditIcon className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onDelete(category)}
+            disabled={category.isSystem || category.ingredientCount > 0}
+            title={category.isSystem ? 'System categories cannot be deleted' : category.ingredientCount > 0 ? 'Cannot delete category with ingredients' : 'Delete category'}
+          >
+            <TrashIcon className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function CategoryManager() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,6 +139,10 @@ export function CategoryManager() {
   const [editCategoryAisle, setEditCategoryAisle] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   useEffect(() => {
     fetchCategories()
@@ -52,23 +154,48 @@ export function CategoryManager() {
       const res = await fetch('/api/ingredient-categories')
       if (!res.ok) throw new Error('Failed to fetch categories')
       const data = await res.json()
-      // Map API response to component interface
       const mappedData = data.map((cat: any) => ({
         id: cat.id,
-        name: cat.category,  // API returns "category" field
+        name: cat.category,
         color: cat.color ?? null,
-        isSystem: !cat.isCustom,  // API returns "isCustom" field
+        isSystem: !cat.isCustom,
         sortOrder: cat.sortOrder,
-        ingredientCount: 0,  // Default value, not provided by API
+        ingredientCount: 0,
         aisle: cat.aisle ?? null,
       }))
-
       setCategories(mappedData)
     } catch (error) {
       toast.error('Failed to load categories')
       console.error(error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = categories.findIndex(c => c.id === active.id)
+    const newIndex = categories.findIndex(c => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const reordered = arrayMove(categories, oldIndex, newIndex).map((cat, idx) => ({
+      ...cat,
+      sortOrder: idx,
+    }))
+    setCategories(reordered)
+
+    try {
+      const res = await fetch('/api/ingredient-categories/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: reordered.map(c => ({ id: c.id, sortOrder: c.sortOrder })) }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      toast.error('Failed to save order')
+      fetchCategories()
     }
   }
 
@@ -92,14 +219,13 @@ export function CategoryManager() {
         throw new Error(data.error || 'Failed to create category')
       }
       const apiResponse = await res.json()
-      // Map API response to component interface
-      const newCategory = {
+      const newCategory: Category = {
         id: apiResponse.id,
         name: apiResponse.category,
         color: apiResponse.color ?? null,
         isSystem: !apiResponse.isCustom,
         sortOrder: apiResponse.sortOrder,
-        ingredientCount: 0
+        ingredientCount: 0,
       }
       setCategories([...categories, newCategory])
       setNewCategoryName('')
@@ -136,14 +262,13 @@ export function CategoryManager() {
         throw new Error(data.error || 'Failed to update category')
       }
       const apiResponse = await res.json()
-      // Map API response to component interface
-      const updatedCategory = {
+      const updatedCategory: Category = {
         id: apiResponse.id,
         name: apiResponse.category,
         color: apiResponse.color ?? null,
         isSystem: !apiResponse.isCustom,
         sortOrder: apiResponse.sortOrder,
-        ingredientCount: selectedCategory.ingredientCount, // Keep existing count
+        ingredientCount: selectedCategory.ingredientCount,
         aisle: apiResponse.aisle ?? null,
       }
 
@@ -181,41 +306,6 @@ export function CategoryManager() {
     }
   }
 
-  async function handleReorder(categoryId: string, direction: 'up' | 'down') {
-    const category = categories.find(c => c.id === categoryId)
-    if (!category) return
-
-    const currentIndex = categories.findIndex(c => c.id === categoryId)
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-    
-    if (newIndex < 0 || newIndex >= categories.length) return
-
-    const newCategories = [...categories]
-    const [moved] = newCategories.splice(currentIndex, 1)
-    newCategories.splice(newIndex, 0, moved)
-    
-    // Update sort orders
-    const updated = newCategories.map((cat, idx) => ({
-      ...cat,
-      sortOrder: idx
-    }))
-    
-    setCategories(updated)
-    
-    // Send update to server
-    try {
-      await fetch(`/api/ingredient-categories/${categoryId}/reorder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ direction }),
-      })
-    } catch (error) {
-      console.error('Failed to update order:', error)
-      // Revert on error
-      fetchCategories()
-    }
-  }
-
   function handleEditClick(category: Category) {
     setSelectedCategory(category)
     setEditCategoryName(category.name)
@@ -223,7 +313,6 @@ export function CategoryManager() {
     setEditCategoryAisle(category.aisle ?? '')
     setEditOpen(true)
   }
-
 
   function handleDeleteClick(category: Category) {
     setSelectedCategory(category)
@@ -233,6 +322,8 @@ export function CategoryManager() {
   const filteredCategories = categories.filter(cat =>
     cat.name.toLowerCase().includes(search.toLowerCase())
   )
+
+  const isSearching = search.trim().length > 0
 
   return (
     <div className="space-y-6">
@@ -305,7 +396,7 @@ export function CategoryManager() {
         <CardHeader>
           <CardTitle>All Categories</CardTitle>
           <CardDescription>
-            System categories (like "Other") cannot be edited or deleted.
+            System categories (like "Other") cannot be edited or deleted. Drag rows to reorder.
           </CardDescription>
           <div className="relative mt-4">
             <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -329,80 +420,51 @@ export function CategoryManager() {
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-medium text-muted-foreground border-b">
-                <div className="col-span-1">Order</div>
+                <div className="col-span-1"></div>
                 <div className="col-span-4">Name</div>
                 <div className="col-span-3">Type</div>
                 <div className="col-span-2">Ingredients</div>
                 <div className="col-span-2 text-right">Actions</div>
               </div>
-              {filteredCategories.map((category, index) => (
-                <div key={category.id} className="grid grid-cols-12 gap-4 px-4 py-3 items-center border rounded-lg hover:bg-muted/50">
-                  <div className="col-span-1">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => handleReorder(category.id, 'up')}
-                        disabled={index === 0 || category.isSystem}
-                      >
-                        <ArrowUpIcon className="h-3 w-3" />
-                      </Button>
-                      <span className="text-sm font-mono">{category.sortOrder}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => handleReorder(category.id, 'down')}
-                        disabled={index === categories.length - 1 || category.isSystem}
-                      >
-                        <ArrowDownIcon className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="col-span-4 font-medium">
-                    <span className="inline-flex items-center gap-1.5">
-                      {category.color && (
-                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-                      )}
-                      {category.name}
-                    </span>
-                    {category.isSystem && (
-                      <span className="ml-2 text-xs text-muted-foreground">(System)</span>
-                    )}
-                  </div>
-                  <div className="col-span-3">
-                    <span className={`text-sm px-2 py-1 rounded ${category.isSystem ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'}`}>
-                      {category.isSystem ? 'System' : 'Custom'}
-                    </span>
-                  </div>
-                  <div className="col-span-2 text-muted-foreground">
-                    {category.ingredientCount} ingredient{category.ingredientCount !== 1 ? 's' : ''}
-                  </div>
-                  <div className="col-span-2 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditClick(category)}
-                        disabled={category.isSystem}
-                        title={category.isSystem ? 'System categories cannot be edited' : 'Edit category'}
-                      >
-                        <EditIcon className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteClick(category)}
-                        disabled={category.isSystem || category.ingredientCount > 0}
-                        title={category.isSystem ? 'System categories cannot be deleted' : category.ingredientCount > 0 ? 'Cannot delete category with ingredients' : 'Delete category'}
-                      >
-                        <TrashIcon className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+              {isSearching ? (
+                <div className="space-y-2">
+                  {filteredCategories.map((category) => (
+                    <SortableRow
+                      key={category.id}
+                      category={category}
+                      onEdit={handleEditClick}
+                      onDelete={handleDeleteClick}
+                    />
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={categories.map(c => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {categories.map((category) => (
+                        <SortableRow
+                          key={category.id}
+                          category={category}
+                          onEdit={handleEditClick}
+                          onDelete={handleDeleteClick}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+              {isSearching && (
+                <p className="text-xs text-muted-foreground px-4 pt-1">
+                  Clear search to drag and reorder categories.
+                </p>
+              )}
             </div>
           )}
         </CardContent>
@@ -473,17 +535,16 @@ export function CategoryManager() {
         </DialogContent>
       </Dialog>
 
-
       {/* Delete Dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Category</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the category "{selectedCategory?.name}"? 
+              Are you sure you want to delete the category "{selectedCategory?.name}"?
               {selectedCategory && selectedCategory.ingredientCount > 0 && (
                 <span className="text-destructive block mt-1">
-                  This category has {selectedCategory.ingredientCount} ingredient{selectedCategory.ingredientCount !== 1 ? 's' : ''}. 
+                  This category has {selectedCategory.ingredientCount} ingredient{selectedCategory.ingredientCount !== 1 ? 's' : ''}.
                   These ingredients will be moved to the "Other" category.
                 </span>
               )}

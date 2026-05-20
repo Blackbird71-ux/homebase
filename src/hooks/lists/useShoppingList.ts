@@ -105,6 +105,11 @@ export function useShoppingList(
           setAisleMap(aisleMapping)
 
           setCategoryOrder(current => {
+            if (initialCategoryOrder === null) {
+              // No saved per-list order — use the global sort order from the API
+              return categoryNames
+            }
+            // Per-list order exists — append any newly added global categories
             const newCats = categoryNames.filter((c: string) => !current.includes(c))
             return newCats.length > 0 ? [...current, ...newCats] : current
           })

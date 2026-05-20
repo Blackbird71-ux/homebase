@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
-import { SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 
 export async function PATCH(
   req: Request,
@@ -20,18 +19,6 @@ export async function PATCH(
     where: { id, familyId: user.familyId },
   })
   if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  // Shopping lists only accept known grocery categories; other list types allow any strings
-  if (list.type === 'SHOPPING') {
-    const valid = new Set<string>(SHOPPING_CATEGORIES)
-    const invalid = (categoryOrder as string[]).filter((c) => !valid.has(c))
-    if (invalid.length > 0) {
-      return NextResponse.json(
-        { error: `Unknown categories: ${invalid.join(', ')}` },
-        { status: 400 }
-      )
-    }
-  }
 
   const updated = await prisma.list.update({
     where: { id },
