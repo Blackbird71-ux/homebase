@@ -145,7 +145,7 @@ export function JournalLinesEditor({
 
       {/* ── Column headers — desktop only ────────────────────────────────── */}
       <div className="hidden sm:grid gap-2 px-1 mb-1"
-        style={{ gridTemplateColumns: 'minmax(160px, 1fr) 90px 110px 28px' }}>
+        style={{ gridTemplateColumns: 'minmax(130px, 1fr) 82px 100px 28px' }}>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">GL Account</span>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center">Side</span>
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Amount ($)</span>
@@ -164,7 +164,7 @@ export function JournalLinesEditor({
 
               {/* Desktop: single-row 4-column grid (sm+) */}
               <div className="hidden sm:grid gap-2 items-start"
-                style={{ gridTemplateColumns: 'minmax(160px, 1fr) 90px 110px 28px' }}>
+                style={{ gridTemplateColumns: 'minmax(130px, 1fr) 82px 100px 28px' }}>
                 <div>
                   <select value={line.glAccountId} onChange={e => updateLine(i, 'glAccountId', e.target.value)} disabled={disabled}
                     className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm',

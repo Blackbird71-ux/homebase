@@ -469,7 +469,7 @@ export function MealPlanRightPanel({
   const [tab, setTab] = useState<PanelTab>('overview')
 
   return (
-    <div className="flex flex-col h-full border-l border-border bg-background">
+    <div className="flex flex-col h-full border-l border-border bg-popover">
       {/* Tab bar */}
       <div className="flex shrink-0 border-b border-border">
         <button

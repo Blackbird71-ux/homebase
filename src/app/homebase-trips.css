@@ -896,7 +896,7 @@
   bottom: 0;
   width: 480px;
   max-width: 100%;
-  background: var(--card);
+  background: var(--popover);
   border-left: 1px solid var(--border);
   box-shadow: var(--hb-shadow-drawer);
   z-index: 61;
@@ -907,6 +907,9 @@
 }
 @media (min-width: 1024px) {
   .hb-drawer { width: 680px; }
+}
+@media (min-width: 1280px) {
+  .hb-drawer { width: 820px; }
 }
 @keyframes hb-slide-in { to { transform: translateX(0); } }
 

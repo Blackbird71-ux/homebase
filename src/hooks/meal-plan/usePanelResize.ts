@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 const STORAGE_KEY = 'meal-plan-panel-width'
 const DEFAULT_WIDTH = 288  // w-72 = 18rem = 288px
 const MIN_WIDTH = 220
-const MAX_WIDTH = 480
+const MAX_WIDTH = 640
 
 export function usePanelResize() {
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)

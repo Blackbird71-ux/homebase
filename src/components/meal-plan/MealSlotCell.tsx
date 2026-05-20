@@ -257,6 +257,7 @@ export function MealSlotCell({
               onAddToGroceries()
             }}
             aria-label="Add to groceries"
+            title="Add to groceries"
           >
             <ShoppingCartIcon className="h-2.5 w-2.5" />
           </Button>

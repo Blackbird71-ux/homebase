@@ -11,6 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -289,14 +296,13 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Document</DialogTitle>
-            <DialogDescription>Update document details.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
+      {/* Edit Drawer */}
+      <Drawer open={editOpen} onOpenChange={setEditOpen}>
+        <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>Edit Document</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="edit-title">Title</Label>
               <Input id="edit-title" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
@@ -328,63 +334,63 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
                 <Input id="edit-remind" type="number" min={1} max={365} value={editRemindBefore} onChange={e => setEditRemindBefore(e.target.value)} />
               </div>
             </div>
-          </div>
 
-          {/* PIN Protection */}
-          <div className="p-3 border border-input rounded-md bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <LockIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">PIN Protection</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditHasPin(!editHasPin)
-                  if (editHasPin) setEditPinCode('')
-                }}
-                disabled={saving}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
-                  editHasPin ? 'bg-primary' : 'bg-muted-foreground/30'
-                }`}
-                aria-checked={editHasPin}
-                role="switch"
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                  editHasPin ? 'translate-x-6' : 'translate-x-1'
-                }`} />
-              </button>
-            </div>
-            {editHasPin && (
-              <div className="mt-3 space-y-2">
-                <Label htmlFor="edit-doc-pin">
-                  {document.isSecured ? 'Enter new PIN (leave blank to keep current)' : 'Set a 4-6 digit PIN'}
-                </Label>
-                <Input
-                  id="edit-doc-pin"
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  value={editPinCode}
-                  onChange={(e) => setEditPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Enter PIN"
+            {/* PIN Protection */}
+            <div className="p-3 border border-input rounded-md bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LockIcon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">PIN Protection</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditHasPin(!editHasPin)
+                    if (editHasPin) setEditPinCode('')
+                  }}
                   disabled={saving}
-                />
-                <p className="text-xs text-muted-foreground">
-                  A PIN must be entered to view this document's content.
-                </p>
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+                    editHasPin ? 'bg-primary' : 'bg-muted-foreground/30'
+                  }`}
+                  aria-checked={editHasPin}
+                  role="switch"
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    editHasPin ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
               </div>
-            )}
+              {editHasPin && (
+                <div className="mt-3 space-y-2">
+                  <Label htmlFor="edit-doc-pin">
+                    {document.isSecured ? 'Enter new PIN (leave blank to keep current)' : 'Set a 4-6 digit PIN'}
+                  </Label>
+                  <Input
+                    id="edit-doc-pin"
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={editPinCode}
+                    onChange={(e) => setEditPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="Enter PIN"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A PIN must be entered to view this document's content.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-
-          <DialogFooter showCloseButton>
+          <DrawerFooter className="border-t border-border">
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !editTitle}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Unlock Dialog */}
       {document.isSecured && (

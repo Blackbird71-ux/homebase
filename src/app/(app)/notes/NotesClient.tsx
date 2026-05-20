@@ -448,7 +448,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
         }
         setEditorOpen(open)
       }}>
-        <DrawerContent className="sm:max-w-[720px] flex flex-col overflow-hidden p-0 gap-0" showCloseButton={true}>
+        <DrawerContent className="sm:max-w-[720px] lg:max-w-[900px] xl:max-w-[1100px] flex flex-col overflow-hidden p-0 gap-0" showCloseButton={true}>
           {/* Sticky header */}
           <DrawerHeader className="px-4 pt-4 pb-3 shrink-0 border-b border-border">
             <DrawerTitle>
