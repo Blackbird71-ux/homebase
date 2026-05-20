@@ -135,7 +135,9 @@ function OverviewTab({
   const set = (field: keyof FormState, value: unknown) =>
     setForm(p => ({ ...p, [field]: value }))
 
-  const [showMore, setShowMore] = useState(!!(form.locationId || (isEdit && form.categoryId)))
+  const [showMore, setShowMore] = useState(
+    !!(form.locationId || form.memberId || form.notes || form.notifyOnCreate || (isEdit && form.categoryId))
+  )
 
   const categoryOptions = useMemo(
     () => sortedCategoryList(
@@ -205,10 +207,6 @@ function OverviewTab({
           Auto-create drafts
         </label>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={form.notifyOnCreate} onChange={e => set('notifyOnCreate', e.target.checked)} className="accent-primary" />
-          Notify on create
-        </label>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={form.includeInBudget} onChange={e => set('includeInBudget', e.target.checked)} className="accent-primary" />
           Include in budget
         </label>
@@ -256,19 +254,6 @@ function OverviewTab({
           </select>
         </div>
 
-        {/* Member */}
-        <div>
-          <label className="block text-xs font-medium mb-1">Assigned To</label>
-          <select
-            value={form.memberId}
-            onChange={e => set('memberId', e.target.value)}
-            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          >
-            <option value="">None</option>
-            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </div>
-
         {showMore && (
           <>
             <div>
@@ -296,6 +281,32 @@ function OverviewTab({
                 <option value="">None</option>
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Assigned To</label>
+              <select
+                value={form.memberId}
+                onChange={e => set('memberId', e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="">None</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2 flex flex-wrap gap-x-5 gap-y-1">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.notifyOnCreate} onChange={e => set('notifyOnCreate', e.target.checked)} className="accent-primary" />
+                Notify on create
+              </label>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium mb-1">Notes</label>
+              <textarea
+                value={form.notes}
+                onChange={e => set('notes', e.target.value)}
+                rows={1}
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm resize-none"
+              />
             </div>
           </>
         )}
@@ -344,16 +355,6 @@ function OverviewTab({
         {showMore ? 'Fewer options' : 'More options'}
       </button>
 
-      {/* Notes */}
-      <div>
-        <label className="block text-xs font-medium mb-1">Notes</label>
-        <textarea
-          value={form.notes}
-          onChange={e => set('notes', e.target.value)}
-          rows={1}
-          className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm resize-none"
-        />
-      </div>
     </div>
   )
 }
