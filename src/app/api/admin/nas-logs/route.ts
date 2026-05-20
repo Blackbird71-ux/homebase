@@ -13,23 +13,22 @@ export async function POST(req: Request) {
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (user.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const body = await req.json() as {
-    host?: string
-    username?: string
-    password?: string
-    n?: unknown
-    port?: unknown
-  }
-
-  const { host, username, password } = body
-  if (!host || !username || !password) {
-    return NextResponse.json({ error: 'host, username, and password are required' }, { status: 400 })
-  }
-
-  const n = Math.min(Math.max(isNaN(Number(body.n)) ? 100 : Number(body.n), 1), 500)
-  const port = isNaN(Number(body.port)) ? 22 : Number(body.port)
-
   try {
+    const body = await req.json() as {
+      host?: string
+      username?: string
+      password?: string
+      n?: unknown
+      port?: unknown
+    }
+
+    const { host, username, password } = body
+    if (!host || !username || !password) {
+      return NextResponse.json({ error: 'host, username, and password are required' }, { status: 400 })
+    }
+
+    const n = Math.min(Math.max(isNaN(Number(body.n)) ? 100 : Number(body.n), 1), 500)
+    const port = isNaN(Number(body.port)) ? 22 : Number(body.port)
     const output = await new Promise<string>((resolve, reject) => {
       const conn = new Client()
       let out = ''

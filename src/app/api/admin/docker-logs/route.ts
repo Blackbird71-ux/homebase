@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
 import { logBuffer, rawLogBuffer } from '@/lib/logBuffer'
+import type { SessionUser } from '@/types'
 
 // GET /api/admin/docker-logs?n=100&format=raw|structured|both
 //
@@ -15,12 +16,13 @@ import { logBuffer, rawLogBuffer } from '@/lib/logBuffer'
 //            "structured"   — JSON array of {ts, level, msg}
 //            "both"         — { raw, structured }
 //
-// Admin only.
+// Admin only. Uses auth() directly — requireSession uses next/navigation redirect()
+// which throws a special error in API routes, causing HTML responses instead of JSON.
 export async function GET(req: Request) {
-  const user = await requireSession()
-  if (user.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
   const rawN = parseInt(searchParams.get('n') ?? '100', 10)
@@ -54,10 +56,10 @@ export async function GET(req: Request) {
 
 // DELETE /api/admin/docker-logs — clear both buffers
 export async function DELETE() {
-  const user = await requireSession()
-  if (user.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   logBuffer.clear()
   rawLogBuffer.clear()
   return NextResponse.json({ ok: true })
