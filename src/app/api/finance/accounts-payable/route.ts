@@ -73,9 +73,9 @@ export async function GET(request: NextRequest) {
 
   // ── 1. GL control account balance ─────────────────────────────────────────
   // AP is a liability; normal balance = credit.
-  // deriveJournalLineBalances returns positive netBalance when credits exceed debits.
-  // The Balance Sheet negates this (Math.max(0, -netBalance)) — we match that exactly
-  // so the AP aging total always agrees with the Balance Sheet.
+  // deriveJournalLineBalances uses credit-positive convention for liabilities,
+  // so a CR AP posting gives netBalance = +amount. No negation needed — matches
+  // the Balance Sheet exactly.
   const apCandidates = await prisma.financeCategory.findMany({
     where: { familyId, type: 'liability', isSystem: true },
     select: { id: true, name: true },
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
   if (apCategory) {
     const journalBalances = await deriveJournalLineBalances(familyId, null, asAt, entityId)
     const netBalance = journalBalances.get(apCategory.id)?.netBalance ?? 0
-    glApBalance = Math.round(Math.max(0, -netBalance) * 100) / 100
+    glApBalance = Math.round(Math.max(0, netBalance) * 100) / 100
   }
 
   // ── 2. AP subledger: bills outstanding as at the report date ──────────────

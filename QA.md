@@ -993,6 +993,23 @@ Alternatively, read from `sessionStorage` / `localStorage` inside a `useEffect` 
 
 **Rule:** Whenever you add a column with a default, ask: *is `DEFAULT X` the correct value for every row that currently exists?* If not, write the backfill SQL in the same migration (or a subsequent one) before shipping.
 
+### 12.16 AP Aging GL Control Account Balance Always Zero
+
+**Problem:** `GET /api/finance/accounts-payable` computed the GL control account balance as:
+```ts
+glApBalance = Math.round(Math.max(0, -netBalance) * 100) / 100
+```
+`deriveJournalLineBalances` uses the normal-balance convention: for a **liability**, a net credit returns a **positive** `netBalance`. Negating it produced a large negative number; `Math.max(0, ...)` then clamped it to zero. The AP subledger was correct but the GL figure always showed $0.00, triggering a spurious reconciliation difference equal to the full AP balance.
+
+**Fixed:** 2026-05-20. Remove the negation — match the Balance Sheet formula exactly:
+```ts
+glApBalance = Math.round(Math.max(0, netBalance) * 100) / 100
+```
+
+**Rule:** `deriveJournalLineBalances` returns **positive** `netBalance` for liability and equity accounts when credits exceed debits (normal balance convention). Do **not** negate before displaying or comparing. The Balance Sheet (`/api/finance/balance-sheet/route.ts` lines ~125–128) is the canonical reference for reading this function's output.
+
+---
+
 ### 12.15 `DrawerContent` Missing `showCloseButton={true}` Silently Loses Close Button
 
 **Problem:** The X close button inside a Drawer is opt-in — `DrawerContent` requires `showCloseButton={true}` to render it. Without it, the drawer has no visible dismiss control; users can only close it by clicking the backdrop or pressing Escape.
