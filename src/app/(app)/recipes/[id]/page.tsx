@@ -6,11 +6,14 @@ import { RecipeDetail } from './RecipeDetail'
 
 export default async function RecipeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ cooking?: string }>
 }) {
   const user = await requireSession()
   const { id } = await params
+  const { cooking } = await searchParams
 
   const [recipe, bookRows] = await Promise.all([
     prisma.recipe.findFirst({
@@ -68,5 +71,5 @@ export default async function RecipeDetailPage({
     recipeCount: b._count.recipes,
   }))
 
-  return <RecipeDetail recipe={serialized} books={books} currentUserId={user.id} isAdmin={user.role === 'admin'} />
+  return <RecipeDetail recipe={serialized} books={books} currentUserId={user.id} isAdmin={user.role === 'admin'} startCooking={cooking === 'true'} />
 }

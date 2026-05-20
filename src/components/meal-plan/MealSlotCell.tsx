@@ -1,10 +1,11 @@
 'use client'
 
-import { PlusIcon, XIcon, ShoppingCartIcon, GripVerticalIcon, EyeIcon } from 'lucide-react'
+import { PlusIcon, XIcon, ShoppingCartIcon, GripVerticalIcon, EyeIcon, ChefHatIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getMealTypeColor } from '@/lib/meal-types'
 import { useDraggable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 
 interface MealSlotCellProps {
   date: string // ISO date string YYYY-MM-DD
@@ -44,6 +45,7 @@ export function MealSlotCell({
   isDragOverlay = false,
   isNewlyMoved = false,
 }: MealSlotCellProps) {
+  const router = useRouter()
 
   const hasRecipes = recipes && recipes.length > 0
   const hasRecipeName = recipeName && recipeName.trim() !== ''
@@ -230,6 +232,21 @@ export function MealSlotCell({
             <EyeIcon className="h-2.5 w-2.5" />
           </Button>
         )}
+        {hasRecipes && sortedRecipes.length === 1 && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={cn(btnVisibility, 'hover:text-primary')}
+            onClick={(e) => {
+              e.stopPropagation()
+              router.push(`/recipes/${sortedRecipes[0].recipeId}?cooking=true`)
+            }}
+            aria-label="Start cooking"
+            title="Start cooking"
+          >
+            <ChefHatIcon className="h-2.5 w-2.5" />
+          </Button>
+        )}
         {onAddToGroceries && hasRecipes && (
           <Button
             variant="ghost"
@@ -282,6 +299,7 @@ function DraggableRecipeItem({
   isNewlyMoved: boolean
   onViewRecipe?: (recipeId: string) => void
 }) {
+  const router = useRouter()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: recipe.id, // Use the MealPlanRecipe.id as the draggable ID
     data: {
@@ -345,6 +363,18 @@ function DraggableRecipeItem({
           <EyeIcon className="h-2.5 w-2.5" />
         </button>
       )}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          router.push(`/recipes/${recipe.recipeId}?cooking=true`)
+        }}
+        className="shrink-0 text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        title="Start cooking"
+      >
+        <ChefHatIcon className="h-2.5 w-2.5" />
+      </button>
     </div>
   )
 }

@@ -46,9 +46,10 @@ interface RecipeDetailProps {
   books: { id: string; name: string; recipeCount: number }[]
   currentUserId: string
   isAdmin: boolean
+  startCooking?: boolean
 }
 
-export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin }: RecipeDetailProps) {
+export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin, startCooking }: RecipeDetailProps) {
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -104,6 +105,14 @@ export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin 
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [cookingMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (startCooking) {
+      setCookingMode(true)
+      setCompletedSteps(new Array(recipe.instructions.length).fill(false))
+      setCompletedIngredients(new Array(recipe.ingredients.length).fill(false))
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const canEdit = isAdmin || recipe.createdBy === currentUserId
   const totalTime = (recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)
