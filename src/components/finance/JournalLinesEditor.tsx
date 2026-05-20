@@ -167,6 +167,7 @@ export function JournalLinesEditor({
                 style={{ gridTemplateColumns: 'minmax(130px, 1fr) 82px 100px 28px' }}>
                 <div>
                   <select value={line.glAccountId} onChange={e => updateLine(i, 'glAccountId', e.target.value)} disabled={disabled}
+                    title={acct ? `Normal: ${normalSide(acct.type)} balance (${acct.type})` : undefined}
                     className={cn('w-full rounded-md border bg-background px-2 py-1.5 text-sm',
                       hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}>
                     <option value="">Select account…</option>
@@ -180,9 +181,7 @@ export function JournalLinesEditor({
                       )
                     })}
                   </select>
-                  {acct ? (
-                    <p className="text-xs text-muted-foreground/70 mt-0.5 pl-0.5">Normal: {normalSide(acct.type)} balance ({acct.type})</p>
-                  ) : lineHints[i] ? (
+                  {!acct && lineHints[i] ? (
                     <p className="text-xs text-muted-foreground/60 mt-0.5 pl-0.5 italic">{lineHints[i]}</p>
                   ) : null}
                   {hasAccountError && <p className="text-xs text-red-500 mt-0.5">{errors[`line_${i}_account`]}</p>}
@@ -214,6 +213,7 @@ export function JournalLinesEditor({
               <div className="sm:hidden rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
                 {/* Account — full width */}
                 <select value={line.glAccountId} onChange={e => updateLine(i, 'glAccountId', e.target.value)} disabled={disabled}
+                  title={acct ? `Normal: ${normalSide(acct.type)} balance (${acct.type})` : undefined}
                   className={cn('w-full rounded-md border bg-background px-2 py-2 text-sm',
                     hasAccountError ? 'border-red-500 ring-1 ring-red-500' : 'border-input')}>
                   <option value="">Select account…</option>
@@ -227,7 +227,6 @@ export function JournalLinesEditor({
                     )
                   })}
                 </select>
-                {acct && <p className="text-xs text-muted-foreground/70 -mt-1 pl-0.5">Normal: {normalSide(acct.type)} balance ({acct.type})</p>}
                 {hasAccountError && <p className="text-xs text-red-500">{errors[`line_${i}_account`]}</p>}
                 {/* DR/CR + amount + delete on one row */}
                 <div className="flex items-center gap-2">

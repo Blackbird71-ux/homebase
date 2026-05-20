@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  Plus, Trash2, TrendingDown, TrendingUp, CalendarClock,
+  Plus, Trash2, TrendingDown, TrendingUp, CalendarClock, ChevronDown, Info,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import {
@@ -70,6 +70,16 @@ function GLAccountSelect({
   )
 }
 
+// ── Tooltip icon ─────────────────────────────────────────────────────────────
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span title={text} className="inline-flex items-center ml-1 cursor-help align-middle">
+      <Info className="h-3 w-3 text-muted-foreground/50" />
+    </span>
+  )
+}
+
 // ── Schedule preview (collapsed — expands on hover) ───────────────────────────
 
 function SchedulePreview({ preview, endMode }: { preview: Date[]; endMode: string }) {
@@ -124,6 +134,8 @@ function OverviewTab({
 }) {
   const set = (field: keyof FormState, value: unknown) =>
     setForm(p => ({ ...p, [field]: value }))
+
+  const [showMore, setShowMore] = useState(!!(form.locationId || (isEdit && form.categoryId)))
 
   const categoryOptions = useMemo(
     () => sortedCategoryList(
@@ -231,23 +243,6 @@ function OverviewTab({
           </select>
         </div>
 
-        {/* Category */}
-        <div>
-          <label className="block text-xs font-medium mb-1">
-            {form.kind === 'bill' ? 'Expense Category' : 'Income Category'}
-          </label>
-          <select
-            value={form.categoryId}
-            onChange={e => set('categoryId', e.target.value)}
-            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          >
-            <option value="">None</option>
-            {categoryOptions.map(c => (
-              <option key={c.id} value={c.id}>{c.parentId ? '— ' : ''}{c.name}</option>
-            ))}
-          </select>
-        </div>
-
         {/* Entity */}
         <div>
           <label className="block text-xs font-medium mb-1">Entity / Fund</label>
@@ -274,18 +269,36 @@ function OverviewTab({
           </select>
         </div>
 
-        {/* Location */}
-        <div>
-          <label className="block text-xs font-medium mb-1">Location</label>
-          <select
-            value={form.locationId}
-            onChange={e => set('locationId', e.target.value)}
-            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          >
-            <option value="">None</option>
-            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-        </div>
+        {showMore && (
+          <>
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                {form.kind === 'bill' ? 'Expense Category' : 'Income Category'}
+              </label>
+              <select
+                value={form.categoryId}
+                onChange={e => set('categoryId', e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="">None</option>
+                {categoryOptions.map(c => (
+                  <option key={c.id} value={c.id}>{c.parentId ? '— ' : ''}{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Location</label>
+              <select
+                value={form.locationId}
+                onChange={e => set('locationId', e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="">None</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          </>
+        )}
 
         {/* Create in advance */}
         <div>
@@ -321,6 +334,15 @@ function OverviewTab({
           </div>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShowMore(v => !v)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown className={cn('h-3 w-3 transition-transform duration-150', showMore && 'rotate-180')} />
+        {showMore ? 'Fewer options' : 'More options'}
+      </button>
 
       {/* Notes */}
       <div>
@@ -412,8 +434,7 @@ function FrequencyTab({
         {showDayOfMonth && (
           <div>
             <label className="block text-xs font-medium mb-0.5">
-              Day of month{' '}
-              <span className="font-normal text-muted-foreground">(1–31, snaps to month-end)</span>
+              Day of month<InfoTip text="1–31, snaps to month-end" />
             </label>
             <input
               type="number"
@@ -446,9 +467,7 @@ function FrequencyTab({
         <div>
           <label className="block text-xs font-medium mb-0.5">
             {form.kind === 'bill' ? 'First bill date' : 'Start date'} <span className="text-red-500">*</span>
-            {form.kind === 'bill' && (
-              <span className="font-normal text-muted-foreground ml-1">(invoice received — hits P&amp;L)</span>
-            )}
+            {form.kind === 'bill' && <InfoTip text="Invoice date — hits P&L when approved" />}
           </label>
           <input
             type="date"
@@ -481,8 +500,7 @@ function FrequencyTab({
         {form.kind === 'bill' && (
           <div>
             <label className="block text-xs font-medium mb-0.5">
-              First payment due date{' '}
-              <span className="font-normal text-muted-foreground">(sets bill-to-due gap)</span>
+              First payment due date<InfoTip text="Sets the bill-to-due offset for this template" />
             </label>
             <input
               type="date"
@@ -648,7 +666,16 @@ function TransactionTab({
       {/* Journal lines */}
       <JournalLinesEditor
         lines={form.lines}
-        onChange={lines => set('lines', lines)}
+        onChange={lines => {
+          const primary = form.kind === 'bill'
+            ? lines.find(l => l.side === 'debit' && glAccounts.some(a => a.id === l.glAccountId && a.type === 'expense'))
+            : lines.find(l => l.side === 'credit' && glAccounts.some(a => a.id === l.glAccountId && a.type === 'income'))
+          setForm(p => ({
+            ...p,
+            lines,
+            ...(primary?.glAccountId ? { categoryId: primary.glAccountId } : {}),
+          }))
+        }}
         glAccounts={glAccounts}
         errors={errors}
         onErrorsClear={keys => setErrors(p => {
