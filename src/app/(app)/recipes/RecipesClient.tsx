@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { RecipeCard } from '@/components/recipes/RecipeCard'
 import { RecipeForm } from '@/components/recipes/RecipeForm'
@@ -192,7 +192,14 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
   const [favoriteBookId, setFavoriteBookId] = useState<string | null>(initialFavoriteBookId ?? null)
   const [search, setSearch]         = useState('')
   const [activeTag, setActiveTag]   = useState<string | null>(null)
-  const [activeTab, setActiveTab]   = useState<Tab>('overview')
+  const [activeTab, setActiveTab]   = useState<Tab>(() => {
+    if (typeof window === 'undefined') return 'overview'
+    return (localStorage.getItem('recipes-active-tab') as Tab) ?? 'overview'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('recipes-active-tab', activeTab)
+  }, [activeTab])
   const [formOpen, setFormOpen]     = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
