@@ -276,7 +276,7 @@ export function ActivityEditDialog({
                     onClick={() => setCategory(active ? '' : c.value)}
                     disabled={saving}
                   >
-                    <span className="hb-cat-tile__icon"><Icon size={16} aria-hidden /></span>
+                    <span className="hb-cat-tile__icon"><Icon size={14} aria-hidden /></span>
                     <span className="hb-cat-tile__label">{c.label}</span>
                   </button>
                 )
@@ -378,7 +378,7 @@ export function ActivityEditDialog({
                 contentEditable={!saving}
                 suppressContentEditableWarning
                 data-placeholder="Add notes, links, tips, booking references…"
-                className="min-h-[120px] max-h-[240px] overflow-y-auto p-3 text-sm outline-none focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 prose prose-sm max-w-none"
+                className="min-h-[220px] max-h-[400px] overflow-y-auto p-3 text-sm outline-none focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 prose prose-sm max-w-none"
               />
             </div>
           </div>

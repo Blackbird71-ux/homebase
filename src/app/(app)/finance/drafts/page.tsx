@@ -241,7 +241,7 @@ function EditDialog({
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="flex flex-col md:flex-row">
             {/* Left panel */}
-            <div className="md:w-1/2 px-4 pb-4 space-y-2.5 md:border-r md:border-border">
+            <div className="md:w-[38%] px-4 pb-4 space-y-2.5 md:border-r md:border-border">
               <div className="grid grid-cols-2 gap-2">
                 {/* Name — full width */}
                 <div className="col-span-2">
@@ -375,7 +375,7 @@ function EditDialog({
             </div>
 
             {/* Right panel */}
-            <div className="md:w-1/2 px-4 pb-4 space-y-2.5">
+            <div className="md:w-[62%] px-4 pb-4 space-y-2.5">
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <JournalLinesEditor
                   lines={journalLines}
