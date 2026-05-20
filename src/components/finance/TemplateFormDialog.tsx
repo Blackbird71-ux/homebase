@@ -135,9 +135,8 @@ function OverviewTab({
   const set = (field: keyof FormState, value: unknown) =>
     setForm(p => ({ ...p, [field]: value }))
 
-  const [showMore, setShowMore] = useState(
-    !!(form.locationId || form.memberId || form.notes || form.notifyOnCreate || (isEdit && form.categoryId))
-  )
+  const [showMore, setShowMore] = useState(false)
+  const hasMoreData = !!(form.locationId || form.memberId || form.notes || form.notifyOnCreate || form.categoryId)
 
   const categoryOptions = useMemo(
     () => sortedCategoryList(
@@ -349,10 +348,14 @@ function OverviewTab({
       <button
         type="button"
         onClick={() => setShowMore(v => !v)}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        className={cn(
+          'flex items-center gap-1 text-xs hover:text-foreground',
+          hasMoreData && !showMore ? 'text-amber-500 font-medium' : 'text-muted-foreground',
+        )}
       >
         <ChevronDown className={cn('h-3 w-3 transition-transform duration-150', showMore && 'rotate-180')} />
         {showMore ? 'Fewer options' : 'More options'}
+        {hasMoreData && !showMore && <span className="ml-0.5">·</span>}
       </button>
 
     </div>
