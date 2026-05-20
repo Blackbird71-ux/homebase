@@ -148,7 +148,7 @@ function DrawerContent({
         data-side="right"
         className={cn(
           "fixed z-50 flex flex-col gap-0 bg-popover text-sm text-foreground shadow-lg transition duration-200 ease-in-out overflow-hidden p-0",
-          "inset-y-0 right-0 h-full border-l",
+          "inset-y-0 right-0 h-full w-full border-l",
           "data-ending-style:opacity-0 data-starting-style:opacity-0 data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]",
           className
         )}

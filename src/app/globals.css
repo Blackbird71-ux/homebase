@@ -4,6 +4,16 @@
 
 @custom-variant dark (&:is(.dark *, .midnight *, .glass-dark *, .high-contrast-dark *, .high-contrast-midnight *));
 
+/* ── Remove number input spinners ──────────────────────────────── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* ── Mobile viewport height fix ────────────────────────────────── */
 /* Use 100dvh (dynamic viewport height) so content fills the actual  */
 /* visible area on mobile, excluding browser chrome (address bar).    */
