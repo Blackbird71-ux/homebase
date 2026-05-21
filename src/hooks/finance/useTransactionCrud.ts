@@ -176,6 +176,21 @@ export function useTransactionCrud() {
     else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed to delete') }
   }
 
+  async function handleClear(id: string) {
+    setTransactions(prev => prev.map(t => t.id === id ? { ...t, isCleared: true } : t))
+    const res = await fetch('/api/finance/transactions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, isCleared: true }),
+    })
+    if (res.ok) { toast.success('Transaction cleared') }
+    else {
+      setTransactions(prev => prev.map(t => t.id === id ? { ...t, isCleared: false } : t))
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error ?? 'Failed to clear')
+    }
+  }
+
   return {
     // State
     transactions, loading, showForm, editing,
@@ -192,6 +207,6 @@ export function useTransactionCrud() {
     filterEntityId, setFilterEntityId,
     showFilters, setShowFilters,
     // Actions
-    load, openNew, openEdit, closeForm, handleSave, handleDelete,
+    load, openNew, openEdit, closeForm, handleSave, handleDelete, handleClear,
   }
 }

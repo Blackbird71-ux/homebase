@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Pencil, Trash2, Filter, X, Receipt } from 'lucide-react'
+import { Plus, Pencil, Trash2, Filter, X, Receipt, CheckCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { PageHero } from '@/components/shared/PageHero'
@@ -23,7 +23,7 @@ export default function TransactionsPage() {
     filterLocationId, setFilterLocationId,
     filterEntityId, setFilterEntityId,
     showFilters, setShowFilters,
-    load, openNew, openEdit, closeForm, handleSave, handleDelete,
+    load, openNew, openEdit, closeForm, handleSave, handleDelete, handleClear,
   } = useTransactionCrud()
 
   if (loading && transactions.length === 0) return <div className="p-4 text-muted-foreground">Loading transactions…</div>
@@ -306,6 +306,12 @@ export default function TransactionsPage() {
                 {/* Opening balance rows are read-only; other rows allow edit/delete */}
                 {!isOpeningBalance ? (
                   <>
+                    {!t.isCleared && (
+                      <button onClick={() => handleClear(t.id)} title="Clear transaction"
+                        className="p-1 hover:bg-accent rounded text-green-600 dark:text-green-400">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     <button onClick={() => openEdit(t)} className="p-1 hover:bg-accent rounded"><Pencil className="h-3.5 w-3.5" /></button>
                     <button onClick={() => handleDelete(t.id)} className="p-1 hover:bg-accent rounded text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                   </>

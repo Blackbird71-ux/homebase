@@ -111,10 +111,16 @@ function stripParentPrefix(name: string, parentName: string | null): string {
   return name
 }
 
+/** Extract the leading integer from a name for numeric sort (e.g. "3 PROPERTY" → 3). */
+function leadingNum(s: string): number {
+  const m = s.match(/^(\d+)/)
+  return m ? parseInt(m[1], 10) : Infinity
+}
+
 /**
  * Group COA rows by parentName (or use name as group if no parent).
- * Returns an array of { groupName, rows } so we can render a sub-heading
- * then indented rows beneath it.
+ * Groups and rows within each group are sorted by their leading numeric prefix
+ * so user-numbered accounts (0, 1, 2, 3…) appear in the intended order.
  */
 function groupCOAByParent(rows: COARow[]): { groupName: string; groupTotal: number; rows: COARow[] }[] {
   const groups = new Map<string, { groupName: string; groupTotal: number; rows: COARow[] }>()
@@ -129,7 +135,23 @@ function groupCOAByParent(rows: COARow[]): { groupName: string; groupTotal: numb
     g.groupTotal += row.openingBalance
   }
 
-  return Array.from(groups.values())
+  const result = Array.from(groups.values())
+
+  // Sort rows within each group by numeric prefix, then alphabetically
+  for (const g of result) {
+    g.rows.sort((a, b) => {
+      const diff = leadingNum(a.name) - leadingNum(b.name)
+      return diff !== 0 ? diff : a.name.localeCompare(b.name)
+    })
+  }
+
+  // Sort groups by numeric prefix of their heading, then alphabetically
+  result.sort((a, b) => {
+    const diff = leadingNum(a.groupName) - leadingNum(b.groupName)
+    return diff !== 0 ? diff : a.groupName.localeCompare(b.groupName)
+  })
+
+  return result
 }
 
 function SectionRow({ label, amount, indent, bold, glCode, muted, positive, onClick }: {
