@@ -273,7 +273,49 @@ Complete ATO tax compliance support:
 | `20260520000000_add_finance_year_start` | `financeYearStartMonth` on Family |
 | `20260520100000_add_opening_balances` | `openingBalanceTxId` on FinanceAccount, `openingBalancesCategoryId` on Family |
 | `20260520200000_add_opening_balance_columns` | `openingBalance REAL`, `openingBalanceDate DATETIME` on FinanceAccount |
-| `20260523000000_add_coa_opening_balance` | `glCode`, `openingBalance`, `openingBalanceDate` on FinanceCategory *(latest)* |
+| `20260523000000_add_coa_opening_balance` | `glCode`, `openingBalance`, `openingBalanceDate` on FinanceCategory |
+| `20260524000000_add_journal_entries` | `FinanceJournalEntry` + `FinanceJournalLine` tables — double-entry GL core |
+| `20260525000000_add_payment_tx_id` | `paymentTxId` on FinanceRecurringBill — links bill payment leg to its transaction |
+| `20260526000000_add_transaction_gl_account` | `glAccountId` on FinanceTransaction — records which COA account was debited/credited |
+| `20260527000000_add_bill_income_journal_link` | `journalEntryId` on FinanceRecurringBill — links bill to its accrual journal |
+| `20260528000000_add_bill_payments` | `FinanceBillPayment` table — partial payment tracking for bills |
+| `20260529000000_add_gst_fields` | `gstApplicable` on FinanceCategory — auto-splits GST ITC/Collected on category transactions |
+| `20260530000000_fix_journal_posting_and_ar_dedup` | Fix journal posting logic and deduplicate AR categories |
+| `20260531000000_unpost_draft_bill_journals` | Un-post bill journal entries that were incorrectly auto-posted as drafts |
+| `20260532000000_add_journal_source_transaction` | `sourceTransactionId` on FinanceJournalEntry — links auto-journals back to their source |
+| `20260533000000_fix_ap_ar_system_flag_add_gl_trigger` | Fix AP/AR `isSystem` flag; add GL balance integrity trigger |
+| `20260534000000_add_journal_relations` | Formalise Prisma journal relations on FinanceRecurringBill and FinanceIncomeEntry |
+| `20260535000000_wipe_test_financial_data` | Data-only wipe script for test/dev data cleanup |
+| `20260536000000_add_income_receipt_journal` | `receiptJournalEntryId` on FinanceIncomeEntry — links cash-receipt GL journal |
+| `20260537000000_add_journal_amendment` | `amendmentOfId` on FinanceJournalEntry — links corrective journals to originals |
+| `20260538000000_add_performance_indexes` | Performance indexes for P&L, balance sheet, and overview queries |
+| `20260539000000_add_trip_planning` | `Trip`, `TripActivity`, `TripAttachment` tables — trip planning feature |
+| `20260540000000_add_hide_from_reports` | `hideFromReports` on FinanceCategory — hides system GL categories from pickers |
+| `20260541000000_restore_missing_bill_journals` | Data backfill: restore missing accrual journals for specific bills |
+| `20260542000000_dedupe_ar_categories` | Data backfill: deduplicate Accounts Receivable categories |
+| `20260543000000_add_journalentry_to_billpayment` | `journalEntryId` on FinanceBillPayment — enables partial-payment undo reversal |
+| `20260544000000_add_bill_void_fields` | `isVoided`, `voidedAt`, `voidNote` on FinanceRecurringBill and FinanceIncomeEntry |
+| `20260545000000_add_finance_payslip` | `FinancePayslip` table — gross/net/PAYG/SGC detail linked to income entries |
+| `20260546000000_add_trip_planning_v2` | Trip planning v2 enhancements |
+| `20260547000000_add_notes_archive` | `isArchived` on Note — archive/unarchive notes |
+| `20260548000000_add_repeating_transaction_templates` | `FinanceRecurringTemplate` table — recurring bill/income template system |
+| `20260548000000_add_trip_departure_location` | `departureLocation` on Trip |
+| `20260549000000_add_bill_recognition_date` | `billDate` on FinanceRecurringBill — GL recognition date separate from due date |
+| `20260550000000_add_trip_attachments` | Trip attachment support |
+| `20260551000000_add_trip_tags` | Trip tag support |
+| `20260552000000_rename_trip_packing_list_to_entry` | Rename trip packing list relation to entry |
+| `20260553000000_add_tag_scope` | `scope` on Tag — scopes tags to specific modules |
+| `20260554000000_add_trip_day_tag` | Day-level tag on trip activities |
+| `20260555000000_consolidate_trip_tags` | Consolidate trip tag models |
+| `20260556000000_add_activity_location_coords` | `lat`/`lng` on TripActivity — map coordinate support |
+| `20260557000000_add_period_locked_until` | `periodLockedUntil` on Family — finance period locking |
+| `20260558000000_add_budget_planner` | `BudgetPlannerItem` table — Simple Budget Planner feature |
+| `20260559000000_add_family_hide_finance_module` | `hideFinanceModule` on Family — admin toggle for budget-only mode |
+| `20260560000000_add_system_admin_fields` | `isSystemAdmin` on User; `isAdminInvite` on InviteCode |
+| `20260561000000_backfill_system_admin` | Data backfill: promote first-registered admin to `isSystemAdmin=1` |
+| `20260562000000_add_recipe_is_favourite` | `isFavourite` on Recipe |
+| `20260563000000_add_template_include_in_budget` | `includeInBudget` on FinanceRecurringTemplate |
+| `20260564000000_backfill_patch_spawn_draft_status` | Data backfill: set `status='draft'` and copy `templateId` on PATCH-spawned income entries that were missing both fields *(latest)* |
 
 #### API Routes
 | Route | Key behaviours |
@@ -341,7 +383,7 @@ sudo sh deploy-nas.sh     # NAS SSH: load image, restart container
 ```
 
 Migrations run automatically at container start via `docker/entrypoint.sh`. The latest migration is:
-- `20260523000000_add_coa_opening_balance` — adds `glCode`, `openingBalance`, `openingBalanceDate` to FinanceCategory
+- `20260564000000_backfill_patch_spawn_draft_status` — sets `status='draft'` and copies `templateId` on PATCH-spawned income entries missing both fields
 
 > **⏰ Timezone note:** The container must run in `Australia/Sydney` timezone. The Dockerfile installs `tzdata` and sets `/etc/localtime` + `/etc/timezone`. Without `tzdata` on Alpine, the `TZ` env var is silently ignored and all dates fall back to UTC — causing cron backups at wrong hours, incorrect SQLite timestamps, and broken date calculations. See [build/deploy guide](.roo/prompts/build-deploy-guide.md#-timezone-requirement--australiasydney) for details.
 
