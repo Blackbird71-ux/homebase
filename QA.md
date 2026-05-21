@@ -265,6 +265,8 @@ Template
         SIMPLE PATH: calls postIncomeReceiptJournal()
           Creates: DR Bank / CR AR (or CR Income if no prior accrual)
         Status: awaiting_receipt → received
+        Spawns next occurrence with status='draft' + templateId copied from parent
+          (child appears in Drafts inbox, NOT on income page)
 ```
 
 **Key invariants to check after any income-related change:**
@@ -1024,5 +1026,19 @@ grep -rn "DrawerContent" src/ --include="*.tsx" | grep -v "showCloseButton\|impo
 
 ---
 
-*Last updated: 2026-05-20. Maintained by the development team — update on every significant feature or bug fix.*
+### 12.17 Receipt-Spawn Next Occurrences Missing `status` and `templateId` — Fixed 2026-05-21
+
+**Problem:** When an income entry was marked as received, the PATCH handler spawned the next occurrence but did NOT set `status: 'draft'` or copy `templateId`. The spawned child arrived with `status = null` and no template link, causing it to appear on the main income page instead of the Drafts inbox. Additionally the approval repair (§12.9 follow-on) could not locate the template to build the correct journal entry.
+
+**Root cause:** The spawn block in `src/app/api/finance/income/route.ts` (Stage 2 PATCH handler) copied most fields from the parent but omitted `status` and `templateId`. These were added to the cron spawn service in May 2026 but the PATCH spawn was overlooked.
+
+**Fix shipped 2026-05-21:**
+- PATCH handler spawn now sets `status: 'draft'` and `templateId: existing.templateId ?? null` on the child entry.
+- Migration `20260564000000_backfill_patch_spawn_draft_status` repairs any existing entries: sets `status = 'draft'` and copies `templateId` from the parent for all un-received, un-voided, null-status entries whose parent has a `templateId`.
+
+**Smoke test:** Mark an income entry from a recurring template as received → verify the spawned next occurrence appears in the Drafts inbox (not the income page) → open the draft → verify template GL lines load → approve → verify correct journal posted.
+
+---
+
+*Last updated: 2026-05-21. Maintained by the development team — update on every significant feature or bug fix.*
 

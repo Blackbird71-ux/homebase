@@ -3,7 +3,20 @@ import { requireSession } from '@/lib/auth-helpers'
 import {
   updateTemplate,
   deleteTemplate,
+  listTemplates,
 } from '@/lib/finance-recurring-template-service'
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const user = await requireSession()
+  const { id } = await params
+  const templates = await listTemplates(user.familyId, { includeDisabled: true, includeInactive: true })
+  const template = templates.find(t => t.id === id)
+  if (!template) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(template)
+}
 
 function parseDates(body: Record<string, unknown>) {
   const out = { ...body }

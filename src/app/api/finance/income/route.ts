@@ -125,7 +125,13 @@ async function upsertIncomeJournalEntry(
 export async function GET() {
   const session = await requireSession()
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: session.familyId, isVoided: false },
+    where: {
+      familyId: session.familyId,
+      isVoided: false,
+      // Exclude status='draft' entries — they belong in the Drafts inbox only.
+      // Must use OR to preserve legacy rows where status is null (pre-template entries).
+      OR: [{ status: null }, { status: { not: 'draft' } }],
+    },
     include: INCOME_INCLUDE,
     orderBy: { nextExpectedDate: 'asc' },
   })
@@ -1064,6 +1070,8 @@ export async function PATCH(request: NextRequest) {
               isTaxTracked: existing.isTaxTracked,
               taxRate: existing.taxRate,
               parentIncomeId: existing.id,
+              templateId: existing.templateId ?? null,
+              status: 'draft',
               familyId: session.familyId,
             },
           })

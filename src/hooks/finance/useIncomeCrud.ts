@@ -79,6 +79,8 @@ export interface IncomeEntry {
   notes: string | null; memberId: string | null
   journalEntryId: string | null
   actualAmountReceived: number | null
+  templateId: string | null
+  status: string | null
   payslip: StoredPayslip | null
   account: { id: string; name: string } | null
   category: { id: string; name: string; color: string | null } | null
@@ -288,6 +290,25 @@ export function useIncomeCrud() {
     if (e.journalEntryId) {
       const lines = await loadExistingJournalLines(e.journalEntryId)
       setJournalLines(lines)
+    } else if (e.status === 'draft' && e.templateId) {
+      // Legacy draft spawned before the journal-linking fix: load current
+      // template lines so the user sees the correct GL split rather than
+      // a plain 2-line default.
+      try {
+        const tmpl = await fetch(`/api/finance/templates/${e.templateId}`).then(r => r.json())
+        if (Array.isArray(tmpl?.lines) && tmpl.lines.length >= 2) {
+          setJournalLines(tmpl.lines.map((l: { glAccountId: string; side: string; amount: number; description?: string }) => ({
+            glAccountId: l.glAccountId,
+            side: l.side as 'debit' | 'credit',
+            amount: l.amount,
+            description: l.description ?? '',
+          })))
+        } else {
+          setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
+        }
+      } catch {
+        setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
+      }
     } else {
       setJournalLines(defaultIncomeLines(e.amount, e.category?.id))
     }

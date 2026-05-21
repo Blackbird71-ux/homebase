@@ -117,6 +117,49 @@ export async function approveBillDraft(
   // nextDueDate so existing approved bills are unaffected.
   const accrualDate = draft.billDate ?? draft.nextDueDate
 
+  // ── Legacy draft journal repair ─────────────────────────────────────────
+  // Drafts spawned before the journal-linking fix have journalEntryId=null.
+  // Materialise the missing journal from the current template lines so the
+  // correct GL split is posted rather than the 2-line fallback.
+  let resolvedJournalEntryId = draft.journalEntryId ?? null
+  if (!resolvedJournalEntryId && draft.templateId) {
+    const template = await prisma.financeRecurringTemplate.findFirst({
+      where: { id: draft.templateId, familyId: user.familyId },
+      include: { lines: { orderBy: { sortOrder: 'asc' } } },
+    })
+    if (template && template.lines.length >= 2) {
+      const totalDr = template.lines.filter(l => l.side !== 'credit').reduce((s, l) => s + l.amount, 0)
+      const totalCr = template.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+      if (Math.abs(totalDr - totalCr) <= 0.005) {
+        const draftJe = await prisma.financeJournalEntry.create({
+          data: {
+            reference: null,
+            date: accrualDate,
+            description: draft.name,
+            type: 'auto_transaction',
+            isPosted: false,
+            entityId: draft.entityId ?? null,
+            familyId: user.familyId,
+            lines: {
+              create: template.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side: l.side,
+                amount: l.amount,
+                description: l.description ?? null,
+              })),
+            },
+          },
+          select: { id: true },
+        })
+        resolvedJournalEntryId = draftJe.id
+        await prisma.financeRecurringBill.update({
+          where: { id: billId },
+          data: { journalEntryId: resolvedJournalEntryId },
+        })
+      }
+    }
+  }
+
   const post = await prisma.$transaction(async (tx) => {
     const r = await postBillAccrualJournal(tx, {
       familyId: user.familyId,
@@ -125,7 +168,7 @@ export async function approveBillDraft(
       expenseGlAccountId: draft.categoryId!,
       entityId: draft.entityId ?? null,
       date: accrualDate,
-      draftJournalEntryId: draft.journalEntryId ?? null,
+      draftJournalEntryId: resolvedJournalEntryId,
     })
 
     await tx.financeRecurringBill.update({
@@ -296,6 +339,51 @@ export async function approveIncomeDraft(
   // the remittance is advised). Mirrors the existing income route Stage 1.
   const accrualDate = draft.nextExpectedDate
 
+  // ── Legacy draft journal repair ─────────────────────────────────────────
+  // Drafts spawned before the journal-linking fix (cd60069, May 18 2026)
+  // have journalEntryId=null. If the draft came from a template, read the
+  // template's current lines now and materialise the missing draft journal so
+  // postIncomeAccrualJournal can promote it via branch (a) rather than
+  // falling through to the plain 2-line fallback.
+  let resolvedJournalEntryId = draft.journalEntryId ?? null
+  if (!resolvedJournalEntryId && draft.templateId) {
+    const template = await prisma.financeRecurringTemplate.findFirst({
+      where: { id: draft.templateId, familyId: user.familyId },
+      include: { lines: { orderBy: { sortOrder: 'asc' } } },
+    })
+    if (template && template.lines.length >= 2) {
+      const totalDr = template.lines.filter(l => l.side !== 'credit').reduce((s, l) => s + l.amount, 0)
+      const totalCr = template.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+      if (Math.abs(totalDr - totalCr) <= 0.005) {
+        const draftJe = await prisma.financeJournalEntry.create({
+          data: {
+            reference: null,
+            date: accrualDate,
+            description: draft.name,
+            type: 'auto_transaction',
+            isPosted: false,
+            entityId: draft.entityId ?? null,
+            familyId: user.familyId,
+            lines: {
+              create: template.lines.map(l => ({
+                glAccountId: l.glAccountId,
+                side: l.side,
+                amount: l.amount,
+                description: l.description ?? null,
+              })),
+            },
+          },
+          select: { id: true },
+        })
+        resolvedJournalEntryId = draftJe.id
+        await prisma.financeIncomeEntry.update({
+          where: { id: incomeId },
+          data: { journalEntryId: resolvedJournalEntryId },
+        })
+      }
+    }
+  }
+
   const post = await prisma.$transaction(async (tx) => {
     const r = await postIncomeAccrualJournal(tx, {
       familyId: user.familyId,
@@ -304,7 +392,7 @@ export async function approveIncomeDraft(
       incomeGlAccountId: draft.categoryId!,
       entityId: draft.entityId ?? null,
       date: accrualDate,
-      draftJournalEntryId: draft.journalEntryId ?? null,
+      draftJournalEntryId: resolvedJournalEntryId,
     })
 
     await tx.financeIncomeEntry.update({
