@@ -128,9 +128,10 @@ export async function GET() {
     where: {
       familyId: session.familyId,
       isVoided: false,
-      // Exclude status='draft' entries — they belong in the Drafts inbox only.
+      // Exclude draft/cancelled entries — drafts belong in the Drafts inbox;
+      // cancelled drafts are audit-only and must not surface as actionable items.
       // Must use OR to preserve legacy rows where status is null (pre-template entries).
-      OR: [{ status: null }, { status: { not: 'draft' } }],
+      OR: [{ status: null }, { status: { notIn: ['draft', 'cancelled'] } }],
     },
     include: INCOME_INCLUDE,
     orderBy: { nextExpectedDate: 'asc' },
@@ -1075,6 +1076,15 @@ export async function PATCH(request: NextRequest) {
               familyId: session.familyId,
             },
           })
+          // Advance the template cursor so the cron does not re-spawn the same
+          // occurrence (the spawn service would see nextOccurrenceDate still at
+          // the old date and create a duplicate when it next runs).
+          if (existing.templateId) {
+            await prisma.financeRecurringTemplate.update({
+              where: { id: existing.templateId },
+              data: { nextOccurrenceDate: newExpectedDate },
+            })
+          }
         }
       } catch (err) {
         console.error('[income PATCH] Failed to spawn next occurrence — receipt was committed:', err)

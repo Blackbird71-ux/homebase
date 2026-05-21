@@ -1040,5 +1040,29 @@ grep -rn "DrawerContent" src/ --include="*.tsx" | grep -v "showCloseButton\|impo
 
 ---
 
+### 12.18 Cancelled Draft Reappears on Income Page — Fixed 2026-05-21
+
+**Problem:** Cancelling a draft from the Drafts inbox (which sets `status = 'cancelled'`) caused the entry to reappear on the main income page immediately. The user saw this as "a new entry was created" right after deletion.
+
+**Root cause:** The income GET handler excluded `status = 'draft'` entries using `OR: [{ status: null }, { status: { not: 'draft' } }]`. The `{ not: 'draft' }` branch includes `cancelled`, so cancelled entries passed through and appeared as actionable income items.
+
+**Fix shipped 2026-05-21:**
+- GET handler now uses `{ notIn: ['draft', 'cancelled'] }` so cancelled entries are excluded from the income page. They are retained in the DB for audit trail but are not surfaced as actionable items.
+
+---
+
+### 12.19 Double-Spawn: PATCH Handler Did Not Advance Template Cursor — Fixed 2026-05-21
+
+**Problem:** When a receipt was recorded (PATCH handler), the spawned next-occurrence child did not advance `template.nextOccurrenceDate`. The cron spawn service later compared its own `nextOccurrenceDate` against the child's `nextExpectedDate` (which differed by up to 1 day due to `max(date, now)` in `advanceNextExpectedDate`) and spawned a SECOND entry for the same income period.
+
+**Root cause:** `advanceNextExpectedDate` uses `max(existingEntry.nextExpectedDate, now)` as the reference date, so the result carries the current timestamp as a time component (e.g., `2026-05-28T02:20:53Z`). The template's `nextOccurrenceDate` was still the clean midnight date (`2026-05-27T00:00:00Z`). The cron's calendar-day idempotency window for May 27 did not include the May 28 entry → idempotency check missed → duplicate spawned.
+
+**Fix shipped 2026-05-21:**
+- PATCH handler spawn block now also updates `template.nextOccurrenceDate = newExpectedDate` when `existing.templateId` is set. The cron will then see the correct cursor date, and its idempotency check for that day will find the PATCH-spawned child.
+
+**Smoke test:** Mark an income entry from a recurring template as received → check `FinanceRecurringTemplate.nextOccurrenceDate` was advanced → confirm the cron does NOT spawn a duplicate when it next runs.
+
+---
+
 *Last updated: 2026-05-21. Maintained by the development team — update on every significant feature or bug fix.*
 
