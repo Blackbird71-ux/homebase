@@ -136,7 +136,7 @@ function OverviewTab({
     setForm(p => ({ ...p, [field]: value }))
 
   const [showMore, setShowMore] = useState(false)
-  const hasMoreData = !!(form.locationId || form.memberId || form.notes || form.notifyOnCreate || form.categoryId)
+  const hasMoreData = !!(form.locationId || form.memberId || form.notes || form.notifyOnCreate || form.categoryId || form.remindInAdvanceDays)
 
   const categoryOptions = useMemo(
     () => sortedCategoryList(
@@ -298,6 +298,17 @@ function OverviewTab({
                 Notify on create
               </label>
             </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Remind … days in advance</label>
+              <input
+                type="number"
+                min="0"
+                value={form.remindInAdvanceDays}
+                onChange={e => set('remindInAdvanceDays', e.target.value)}
+                placeholder="No reminder"
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              />
+            </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium mb-1">Notes</label>
               <textarea
@@ -318,19 +329,6 @@ function OverviewTab({
             min="0"
             value={form.createInAdvanceDays}
             onChange={e => set('createInAdvanceDays', e.target.value)}
-            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          />
-        </div>
-
-        {/* Remind in advance */}
-        <div>
-          <label className="block text-xs font-medium mb-1">Remind … days in advance</label>
-          <input
-            type="number"
-            min="0"
-            value={form.remindInAdvanceDays}
-            onChange={e => set('remindInAdvanceDays', e.target.value)}
-            placeholder="No reminder"
             className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           />
         </div>

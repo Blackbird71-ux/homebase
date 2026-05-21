@@ -373,7 +373,7 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 
 | Test | Steps | Expected Result |
 |---|---|---|
-| **T1** Create income template | Templates → New → Income type → fill fields → expand "More options" → fill secondary fields → Save | Template saved; all fields (including those in More options) preserved in DB |
+| **T1** Create income template | Templates → New → Income type → fill fields → expand "More options" → fill secondary fields (incl. reminder days) → Save | Template saved; all fields (including those in More options) preserved in DB |
 | **T2** Create bill template | Templates → New → Bill type → pick GL account in journal lines → verify Expense Category auto-populates → Save | Template saved; `categoryId` matches primary DR journal line |
 | **T3** Edit template | Open template → change amount → Save | Updated amount used in next spawn |
 | **T4** Spawn drafts | Trigger spawn (auto or manual) | Drafts created for due templates; snapshot hash recorded |
@@ -461,7 +461,7 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 
 | Component | Purpose | Embeds / Used By |
 |---|---|---|
-| `TemplateFormDialog.tsx` | Create/edit recurring templates (bill or income). Has payslip mode, journal lines editor, schedule fields. Secondary fields (Expense Category, Location, Assigned To, Notify on create, Notes) are hidden behind a "More options" collapse — always opens collapsed; turns amber with indicator dot when hidden fields have data. Selecting a GL account in journal lines auto-syncs `categoryId`. | Templates page |
+| `TemplateFormDialog.tsx` | Create/edit recurring templates (bill or income). Has payslip mode, journal lines editor, schedule fields. Secondary fields (Expense Category, Location, Assigned To, Notify on create, Remind … days in advance, Notes) are hidden behind a "More options" collapse — always opens collapsed; turns amber with indicator dot when hidden fields have data. Selecting a GL account in journal lines auto-syncs `categoryId`. | Templates page |
 | `JournalEntryForm.tsx` | Create/edit manual journal entries. Full DR/CR line editor. | Journals page, inline from bill/income edit |
 | `JournalLinesEditor.tsx` | Shared sub-component for DR/CR line entry. Used inside JournalEntryForm and TemplateFormDialog. | JournalEntryForm, TemplateFormDialog |
 | `AmendmentDialog.tsx` | Create an amendment (correcting) journal entry linked to an original | Journals page |
