@@ -1041,50 +1041,51 @@ export async function PATCH(request: NextRequest) {
       try {
         const newExpectedDate = advanceNextExpectedDate(existing.nextExpectedDate, existing.frequency)
         if (!existing.endDate || newExpectedDate <= existing.endDate) {
-          await prisma.financeIncomeEntry.create({
-            data: {
-              name: existing.name,
-              amount: existing.amount,  // template amount for forecasting
-              accountId: existing.accountId,
-              categoryId: existing.categoryId,
-              vendorId: existing.vendorId,
-              frequency: existing.frequency,
-              incomeType: existing.incomeType,
-              nextExpectedDate: newExpectedDate,
-              endDate: existing.endDate,
-              isActive: existing.isActive,
-              received: false,
-              receivedDate: null,
-              autoPay: existing.autoPay,
-              emailReminder: existing.emailReminder,
-              reminderDays: existing.reminderDays,
-              dayOfMonth: existing.dayOfMonth,
-              monthOfYear: existing.monthOfYear,
-              recurrenceInterval: existing.recurrenceInterval,
-              invoiceReceived: false,
-              invoiceReceivedDate: null,
-              notes: existing.notes,
-              memberId: existing.memberId,
-              locationId: existing.locationId,
-              entityId: existing.entityId,
-              taxClassification: existing.taxClassification,
-              isTaxTracked: existing.isTaxTracked,
-              taxRate: existing.taxRate,
-              parentIncomeId: existing.id,
-              templateId: existing.templateId ?? null,
-              status: 'draft',
-              familyId: session.familyId,
-            },
-          })
-          // Advance the template cursor so the cron does not re-spawn the same
-          // occurrence (the spawn service would see nextOccurrenceDate still at
-          // the old date and create a duplicate when it next runs).
-          if (existing.templateId) {
-            await prisma.financeRecurringTemplate.update({
-              where: { id: existing.templateId },
-              data: { nextOccurrenceDate: newExpectedDate },
+          await prisma.$transaction(async (tx) => {
+            await tx.financeIncomeEntry.create({
+              data: {
+                name: existing.name,
+                amount: existing.amount,  // template amount for forecasting
+                accountId: existing.accountId,
+                categoryId: existing.categoryId,
+                vendorId: existing.vendorId,
+                frequency: existing.frequency,
+                incomeType: existing.incomeType,
+                nextExpectedDate: newExpectedDate,
+                endDate: existing.endDate,
+                isActive: existing.isActive,
+                received: false,
+                receivedDate: null,
+                autoPay: existing.autoPay,
+                emailReminder: existing.emailReminder,
+                reminderDays: existing.reminderDays,
+                dayOfMonth: existing.dayOfMonth,
+                monthOfYear: existing.monthOfYear,
+                recurrenceInterval: existing.recurrenceInterval,
+                invoiceReceived: false,
+                invoiceReceivedDate: null,
+                notes: existing.notes,
+                memberId: existing.memberId,
+                locationId: existing.locationId,
+                entityId: existing.entityId,
+                taxClassification: existing.taxClassification,
+                isTaxTracked: existing.isTaxTracked,
+                taxRate: existing.taxRate,
+                parentIncomeId: existing.id,
+                templateId: existing.templateId ?? null,
+                status: 'draft',
+                familyId: session.familyId,
+              },
             })
-          }
+            // Advance the template cursor atomically with the spawn so the cron
+            // does not re-spawn the same occurrence if this write succeeds.
+            if (existing.templateId) {
+              await tx.financeRecurringTemplate.update({
+                where: { id: existing.templateId },
+                data: { nextOccurrenceDate: newExpectedDate },
+              })
+            }
+          })
         }
       } catch (err) {
         console.error('[income PATCH] Failed to spawn next occurrence — receipt was committed:', err)

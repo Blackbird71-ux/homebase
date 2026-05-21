@@ -265,8 +265,9 @@ Template
         SIMPLE PATH: calls postIncomeReceiptJournal()
           Creates: DR Bank / CR AR (or CR Income if no prior accrual)
         Status: awaiting_receipt → received
-        Spawns next occurrence with status='draft' + templateId copied from parent
-          (child appears in Drafts inbox, NOT on income page)
+        Spawns next occurrence atomically (status='draft', templateId copied from parent)
+          AND advances template.nextOccurrenceDate to match spawned child's nextExpectedDate
+          (child appears in Drafts inbox, NOT on income page; cron will not double-spawn)
 ```
 
 **Key invariants to check after any income-related change:**
@@ -358,6 +359,8 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 | **I6** Income draft approve | Drafts panel → Approve income draft | Status → awaiting_receipt; for payslip: no GL yet (deferred to receipt) |
 | **I7** Template with payslip | Create template with payslipEnabled=true → spawn | Draft created with linked FinancePayslip; payslip fields preserved |
 | **I8** Template with custom journal lines | Create template with ≥2 balanced lines → spawn | Draft created with linked unposted FinanceJournalEntry; approval promotes it |
+| **I9** Cancel draft → not on income page | Drafts panel → Cancel an income draft | Entry does NOT reappear on income page; retained in DB with status='cancelled' |
+| **I10** Mark received → template cursor advances | Mark a template-linked income entry received | `FinanceRecurringTemplate.nextOccurrenceDate` advances to match spawned child's date; cron does not create a duplicate |
 
 ### 5.3 Journal / GL Tests
 

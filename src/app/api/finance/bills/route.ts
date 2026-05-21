@@ -205,9 +205,10 @@ export async function GET() {
     where: {
       familyId: session.familyId,
       isVoided: false,
-      // Exclude template-spawned drafts (status='draft') — they belong in the Drafts inbox only.
+      // Exclude draft/cancelled entries — drafts belong in the Drafts inbox;
+      // cancelled drafts are audit-only and must not surface as actionable items.
       // The OR preserves legacy rows (status=null) which predate the status field.
-      OR: [{ status: null }, { status: { not: 'draft' } }],
+      OR: [{ status: null }, { status: { notIn: ['draft', 'cancelled'] } }],
     },
     include: BILL_INCLUDE,
     orderBy: { nextDueDate: 'asc' },
@@ -1149,6 +1150,8 @@ export async function PATCH(request: NextRequest) {
                 paid: false,
                 paidDate: null,
                 parentBillId: existing.id,
+                templateId: existing.templateId ?? null,
+                status: 'draft',
                 entityId: existing.entityId,
                 taxClassification: existing.taxClassification,
                 familyId: session.familyId,
@@ -1157,6 +1160,14 @@ export async function PATCH(request: NextRequest) {
             })
             spawnedBillId = spawned.id
             spawnedBillDueDate = newDueDate
+            // Advance the template cursor so the cron does not re-spawn the same
+            // occurrence (mirrors the same fix in income/route.ts).
+            if (existing.templateId) {
+              await tx.financeRecurringTemplate.update({
+                where: { id: existing.templateId },
+                data: { nextOccurrenceDate: newDueDate },
+              })
+            }
           }
         }
       })
