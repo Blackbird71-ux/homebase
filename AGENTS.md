@@ -84,6 +84,8 @@ This rule exists because inline copies of accounting logic (journal creation, re
 
 4. **Shared helpers are the source of truth.** If `src/lib/` has a function for an operation (e.g., `ensureAccountsPayableCategory`), every route that needs that operation must call that function. Never re-implement it inline.
 
+5. **Bills and income are parallel modules — any bug in one almost certainly exists in the other.** `src/app/api/finance/bills/route.ts` and `src/app/api/finance/income/route.ts` implement the same lifecycle patterns (draft spawn, receipt/payment recording, GL posting, cancellation, void) with nearly identical code. Whenever you fix or add logic in one, immediately check the other. This applies to: GET status filters, PATCH spawn blocks, template cursor advancement, approval logic, and void handling.
+
 ---
 
 # Drawer pattern standards

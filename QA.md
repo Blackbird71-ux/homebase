@@ -827,6 +827,8 @@ grep -n "financeJournalEntry.create" src/lib/finance-posting.ts
 
 ## 12. Known Bug Patterns & Anti-Patterns
 
+> **Bills ↔ Income parity rule:** The bills and income modules implement the same lifecycle in parallel (`src/app/api/finance/bills/route.ts` and `src/app/api/finance/income/route.ts`). Any bug found in one has almost always been present in the other. Before closing any finance bug fix, check the mirror module. See also AGENTS.md §Finance rule 5.
+
 ### 12.1 "Re-query after create" Anti-Pattern
 
 **Wrong:**
