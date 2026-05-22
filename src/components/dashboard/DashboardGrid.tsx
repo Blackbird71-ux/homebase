@@ -138,10 +138,10 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
         ref={containerRef}
         className={cn(
           'hidden md:relative md:block',
-          'min-h-[600px]', // Ensure minimum height for drag area
         )}
         style={{
           userSelect: isDragging || isResizing ? 'none' : undefined,
+          minHeight: Math.max(600, ...Object.values(layouts).map(l => l.y + (l.height === 'auto' ? 300 : (l.height as number)) + 16)) + 'px',
         }}
       >
         {visibleCards.map((card) => {
