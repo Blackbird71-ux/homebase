@@ -20,7 +20,7 @@ function normalizeToUtcMidnight(dateStr: string): Date {
 }
 
 
-async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0, userId?: string, dashboardTodoListId?: string | null): Promise<DashboardData> {
+async function getDashboardData(familyId: string, timezone: string, cards: DashboardCardConfig[], dashboardShoppingListId?: string | null, weekStartsOn: 0 | 1 = 0, userId?: string, dashboardTodoListId?: string | null, scope: 7 | 14 | 30 = 7): Promise<DashboardData> {
   // Get today's boundaries in the family's timezone
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -47,18 +47,12 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const needsBills  = visibleCardIds.has('bills-to-pay')
   const needsTrips  = visibleCardIds.has('upcoming-trips')
 
-  // Compute rolling 7-day window from today
-  const nowInTz = new Date(new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()))
-  const weekStart = new Date(nowInTz)
-  const weekEndDate = new Date(nowInTz)
-  weekEndDate.setDate(weekEndDate.getDate() + 6)
-  const weekLabel = `${format(weekStart, 'd MMM')} – ${format(weekEndDate, 'd MMM')}`
-
-  // Normalize week boundaries to UTC midnight for DB queries
-  const weekStartStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(weekStart)
-  const weekEndStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(weekEndDate)
-  const weekStartUtc = normalizeToUtcMidnight(weekStartStr)
-  const weekEndUtc = new Date(normalizeToUtcMidnight(weekEndStr).getTime() + 24 * 60 * 60 * 1000)
+  // Compute rolling scope-day window from today (uses todayStart which is already tz-aware)
+  const weekStartUtc = new Date(todayStart)
+  const weekEndUtc = new Date(todayStart.getTime() + scope * 24 * 60 * 60 * 1000)
+  const todayStr2 = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(todayStart)
+  const weekEndStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(weekEndUtc.getTime() - 86_400_000))
+  const weekLabel = `${format(normalizeToUtcMidnight(todayStr2), 'd MMM')} – ${format(normalizeToUtcMidnight(weekEndStr), 'd MMM')}`
 
   const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData] = await Promise.all([
     needsEvents
@@ -436,7 +430,7 @@ export default async function HomePage() {
 
   const cards = mergeDashboardCards(dashboardCards)
   const [data, availableTodoLists, availableShoppingLists] = await Promise.all([
-    getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id, dashboardTodoListId),
+    getDashboardData(user.familyId, timezone, cards, dashboardShoppingListId, (user.weekStartsOn ?? 0) as 0 | 1, user.id, dashboardTodoListId, dashboardScope),
     prisma.list.findMany({
       where: { familyId: user.familyId, type: 'TODO', isActive: true },
       select: { id: true, name: true, sortOrder: true },
