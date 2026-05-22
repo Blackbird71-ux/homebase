@@ -5,20 +5,13 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatDate(d: Date): string {
-  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-}
-
 function daysBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24))
-}
-
-function formatTime(d: Date): string {
-  return d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
 }
 
 // ── queryTrips ─────────────────────────────────────────────────────────────────
@@ -41,6 +34,7 @@ const queryTripsDefinition: FunctionDeclaration = {
 
 async function queryTripsHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { status } = args as { status?: string }
+  const timezone = ctx.timezone ?? 'UTC'
   const now = new Date()
 
   let where: Record<string, unknown> = { familyId: ctx.familyId }
@@ -91,8 +85,8 @@ async function queryTripsHandler(args: Record<string, unknown>, ctx: HandlerCont
   }
 
   const lines = trips.map((t) => {
-    const start = formatDate(t.startDate)
-    const end = formatDate(t.endDate)
+    const start = formatInTz(t.startDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    const end = formatInTz(t.endDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
     const duration = daysBetween(t.startDate, t.endDate)
     const packingStatus = t.packingList
       ? t.packingList.items.length > 0
@@ -129,6 +123,7 @@ const createTripDefinition: FunctionDeclaration = {
 }
 
 async function createTripHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
+  const timezone = ctx.timezone ?? 'UTC'
   const { title, destination, startDate, endDate, accommodation, transport, notes, estimatedBudget, budgetBreakdown } = args as {
     title: string
     destination: string
@@ -162,7 +157,7 @@ async function createTripHandler(args: Record<string, unknown>, ctx: HandlerCont
     : ''
 
   return {
-    message: `\u2705 Trip created!\n\n**${trip.title}** \u2014 ${trip.destination}\n${formatDate(trip.startDate)} \u2192 ${formatDate(trip.endDate)}${budgetLine}`,
+    message: `\u2705 Trip created!\n\n**${trip.title}** \u2014 ${trip.destination}\n${formatInTz(trip.startDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} \u2192 ${formatInTz(trip.endDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}${budgetLine}`,
   }
 }
 
@@ -182,6 +177,7 @@ const queryItineraryDefinition: FunctionDeclaration = {
 
 async function queryItineraryHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { tripId } = args as { tripId: string }
+  const timezone = ctx.timezone ?? 'UTC'
 
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, familyId: ctx.familyId },
@@ -202,17 +198,17 @@ async function queryItineraryHandler(args: Record<string, unknown>, ctx: Handler
 
   if (days.length === 0) {
     return {
-      message: `**${trip.title}** \u2014 ${trip.destination}\n${formatDate(trip.startDate)} \u2192 ${formatDate(trip.endDate)}\n\nNo itinerary days have been added yet.`,
+      message: `**${trip.title}** \u2014 ${trip.destination}\n${formatInTz(trip.startDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} \u2192 ${formatInTz(trip.endDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}\n\nNo itinerary days have been added yet.`,
     }
   }
 
   const dayLines = days.map((day) => {
-    const dateStr = formatDate(day.date)
+    const dateStr = formatInTz(day.date, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
     const labelStr = day.label ? ` \u2014 *${day.label}*` : ''
     const notesStr = day.notes ? `\n  \U0001f4dd ${day.notes}` : ''
     const activityLines = day.activities.map((a) => {
       const timeStr = a.startTime
-        ? ` ${formatTime(new Date(a.startTime))}${a.endTime ? `\u2013${formatTime(new Date(a.endTime))}` : ''}`
+        ? ` ${formatInTz(new Date(a.startTime), timezone, { hour: 'numeric', minute: '2-digit' })}${a.endTime ? `\u2013${formatInTz(new Date(a.endTime), timezone, { hour: 'numeric', minute: '2-digit' })}` : ''}`
         : ''
       const catStr = a.category ? ` [${a.category}]` : ''
       const locStr = a.location ? ` @ ${a.location}` : ''
@@ -223,7 +219,7 @@ async function queryItineraryHandler(args: Record<string, unknown>, ctx: Handler
   })
 
   return {
-    message: `**${trip.title}** \u2014 ${trip.destination}\n${formatDate(trip.startDate)} \u2192 ${formatDate(trip.endDate)}\n\n${dayLines.join('\n\n')}`,
+    message: `**${trip.title}** \u2014 ${trip.destination}\n${formatInTz(trip.startDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} \u2192 ${formatInTz(trip.endDate, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}\n\n${dayLines.join('\n\n')}`,
   }
 }
 

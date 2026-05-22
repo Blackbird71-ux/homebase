@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ async function addTodoHandler(args: Record<string, unknown>, ctx: HandlerContext
   })
 
   const duePart = dueDate
-    ? ` (due ${new Date(dueDate + 'T12:00:00Z').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })})`
+    ? ` (due ${formatInTz(new Date(dueDate + 'T12:00:00Z'), ctx.timezone ?? 'UTC', { weekday: 'long', day: 'numeric', month: 'short' })})`
     : ''
   return {
     message: `Task added to ${list.name}: ${content}${duePart}.`,

@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── generateFinanceReport ──────────────────────────────────────────────────────
@@ -125,7 +126,7 @@ async function generateFinanceReportHandler(args: Record<string, unknown>, ctx: 
   // Detailed transactions if requested
   if (isDetailed && transactions.length <= 50) {
     const txLines = transactions.map(t => {
-      const d = new Date(t.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+      const d = formatInTz(new Date(t.date), ctx.timezone ?? 'UTC', { day: 'numeric', month: 'short' })
       const catLabel = t.category?.name ?? ''
       const acctLabel = t.account?.name ?? ''
       const sign = t.type === 'income' ? '+' : '-'

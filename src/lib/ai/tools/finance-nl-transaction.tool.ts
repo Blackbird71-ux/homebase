@@ -7,6 +7,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -190,7 +191,7 @@ async function quickAddTxHandler(args: Record<string, unknown>, ctx: HandlerCont
 
   const lookupInfo = lookups.length > 0 ? `\nResolved: ${lookups.join(', ')}` : ''
   const direction = txType === 'expense' ? '💰 Spent' : '📥 Received'
-  const formattedDate = tx.date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  const formattedDate = formatInTz(tx.date, ctx.timezone ?? 'UTC', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 
   return {
     message: `${direction} $${tx.amount.toFixed(2)} — ${tx.description} (${formattedDate})${lookupInfo}`,

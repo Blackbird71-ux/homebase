@@ -6,23 +6,19 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { resolveDayToDate } from '@/lib/ai/orchestrator'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
-async function calendarContextProvider(familyId: string, _userId: string): Promise<string> {
-  const timezone = 'UTC'
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-  const { format, addDays, parseISO } = require('date-fns')
-  const weekEndStr = format(addDays(parseISO(nowStr), 6), 'yyyy-MM-dd')
+async function calendarContextProvider(familyId: string, _userId: string, timezone: string): Promise<string> {
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  const weekEnd = nDaysFromTodayInTz(7, timezone)
 
   const weekEvents = await prisma.event.findMany({
     where: {
       familyId,
-      start: {
-        gte: new Date(nowStr + 'T00:00:00Z'),
-        lte: new Date(weekEndStr + 'T23:59:59Z'),
-      },
+      start: { gte: todayStart, lt: weekEnd },
     },
     select: { id: true, title: true, start: true, end: true, isAllDay: true, description: true },
     orderBy: { start: 'asc' },
@@ -33,8 +29,8 @@ async function calendarContextProvider(familyId: string, _userId: string): Promi
   }
 
   const lines = weekEvents.map(e => {
-    const dateLabel = new Date(e.start).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: timezone })
-    const timeLabel = e.isAllDay ? 'all day' : new Date(e.start).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
+    const dateLabel = formatInTz(e.start, timezone, { weekday: 'long', day: 'numeric', month: 'short' })
+    const timeLabel = e.isAllDay ? 'all day' : formatInTz(e.start, timezone, { hour: '2-digit', minute: '2-digit' })
     return `"${e.title}" — ${dateLabel} ${timeLabel}`
   })
 
@@ -61,7 +57,7 @@ const createEventDefinition: FunctionDeclaration = {
 }
 
 async function createEventHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const timezone = 'UTC'
+  const timezone = ctx.timezone ?? 'UTC'
   const { title, day, startTime, durationMinutes, notes, isAllDay } = args as {
     title: string
     day: string
@@ -101,8 +97,8 @@ async function createEventHandler(args: Record<string, unknown>, ctx: HandlerCon
     },
   })
 
-  const dayLabel = start.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
-  const timePart = allDay ? '' : ` at ${start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })}`
+  const dayLabel = formatInTz(start, timezone, { weekday: 'long', day: 'numeric', month: 'short' })
+  const timePart = allDay ? '' : ` at ${formatInTz(start, timezone, { hour: '2-digit', minute: '2-digit' })}`
   return {
     message: `Event "${title}" created for ${dayLabel}${timePart}.`,
     action: 'createCalendarEvent',
@@ -123,18 +119,14 @@ const queryEventsDefinition: FunctionDeclaration = {
 }
 
 async function queryEventsHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const timezone = 'UTC'
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-  const { format, addDays, parseISO } = require('date-fns')
-  const weekEndStr = format(addDays(parseISO(nowStr), 6), 'yyyy-MM-dd')
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  const weekEnd = nDaysFromTodayInTz(7, timezone)
 
   const weekEvents = await prisma.event.findMany({
     where: {
       familyId: ctx.familyId,
-      start: {
-        gte: new Date(nowStr + 'T00:00:00Z'),
-        lte: new Date(weekEndStr + 'T23:59:59Z'),
-      },
+      start: { gte: todayStart, lt: weekEnd },
     },
     select: { id: true, title: true, start: true, end: true, isAllDay: true, description: true },
     orderBy: { start: 'asc' },
@@ -144,15 +136,15 @@ async function queryEventsHandler(args: Record<string, unknown>, ctx: HandlerCon
   if (day) {
     const targetDate = resolveDayToDate(day, timezone)
     const dayEvents = weekEvents.filter(e => {
-      const eventDate = new Date(e.start).toLocaleDateString('en-CA', { timeZone: timezone })
+      const eventDate = e.start.toLocaleDateString('en-CA', { timeZone: timezone })
       return eventDate === targetDate
     })
-    const dayLabel = new Date(targetDate + 'T12:00:00Z').toLocaleDateString('en-AU', { weekday: 'long', timeZone: 'UTC' })
+    const dayLabel = new Date(targetDate + 'T12:00:00Z').toLocaleDateString('en-AU', { weekday: 'long', timeZone: timezone })
     if (dayEvents.length === 0) {
       return { message: `Nothing in the calendar for ${dayLabel}.` }
     }
     const lines = dayEvents.map(e => {
-      const timePart = e.isAllDay ? 'all day' : new Date(e.start).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
+      const timePart = e.isAllDay ? 'all day' : formatInTz(e.start, timezone, { hour: '2-digit', minute: '2-digit' })
       return `• ${e.title} (${timePart})`
     })
     return { message: `${dayLabel}:\n${lines.join('\n')}` }
@@ -163,8 +155,8 @@ async function queryEventsHandler(args: Record<string, unknown>, ctx: HandlerCon
   }
 
   const lines = weekEvents.map(e => {
-    const dateLabel = new Date(e.start).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: timezone })
-    const timePart = e.isAllDay ? 'all day' : new Date(e.start).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
+    const dateLabel = formatInTz(e.start, timezone, { weekday: 'long', day: 'numeric', month: 'short' })
+    const timePart = e.isAllDay ? 'all day' : formatInTz(e.start, timezone, { hour: '2-digit', minute: '2-digit' })
     return `• ${e.title} — ${dateLabel} ${timePart}`
   })
   return { message: `This week's events:\n${lines.join('\n')}` }

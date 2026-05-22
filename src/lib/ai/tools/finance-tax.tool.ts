@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── queryTaxSummary ───────────────────────────────────────────────────────────
@@ -284,7 +285,7 @@ async function queryDeductibleExpensesHandler(args: Record<string, unknown>, ctx
   }
 
   const lines = transactions.map(t => {
-    const d = new Date(t.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+    const d = formatInTz(new Date(t.date), ctx.timezone ?? 'UTC', { day: 'numeric', month: 'short' })
     const catLabel = t.category?.taxDisplayLabel ?? t.category?.name ?? ''
     return `  • $${t.amount.toFixed(2)} — ${t.description ?? catLabel} — ${d}`
   })

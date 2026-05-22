@@ -140,14 +140,26 @@ The server runs in UTC. The database stores all datetimes in UTC. The user lives
 
 ## The correct pattern
 
-Use `todayBoundsInTz(timezone)` from `src/lib/timezone.ts` to get today's start/end as UTC Dates that correctly represent midnight in the user's timezone:
+Use helpers from `src/lib/timezone.ts` — these are the **only** approved ways to compute date boundaries and format dates server-side:
 
 ```ts
+// Today's start/end as UTC Dates representing local midnight:
 const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
 // todayStart for UTC+10 on 2026-05-23 = 2026-05-22T14:00:00Z  ← NOT 2026-05-23T00:00:00Z
+
+// Rolling N-day window end (= todayStart + N * 86_400_000):
+const endDate = nDaysFromTodayInTz(7, timezone)
+
+// Current calendar month start/end:
+const { start: monthStart, end: monthEnd } = monthBoundsInTz(timezone)
+
+// Timezone-aware display (replaces toLocaleDateString / date-fns format):
+const label = formatInTz(date, timezone, { weekday: 'short', day: 'numeric', month: 'short' })
 ```
 
 Use `todayStart` directly as range boundaries in Prisma queries and in-code filters. Never substitute UTC midnight (`new Date('YYYY-MM-DDT00:00:00Z')`) as a stand-in for "start of day".
+
+**Meal plan exception:** Meal plan dates are stored as UTC midnight of the calendar date by convention. Displaying them with `timeZone: 'UTC'` is intentional and correct — do not replace these with `formatInTz`.
 
 ## The failure mode
 
@@ -165,9 +177,10 @@ This was the root cause of the weekly summary missing today's events while the u
 1. **Never use `normalizeToUtcMidnight(dateStr)` as a query boundary for "today".** It returns UTC midnight, not the user's local midnight.
 2. **Never construct a day boundary with `new Date('YYYY-MM-DDT00:00:00Z')`.** Same problem.
 3. **`todayStart` from `todayBoundsInTz` is the single source of truth** for the start of today in all queries and in-code filters.
-4. **Scope/window end boundaries must also be tz-aware.** Compute them as `new Date(todayStart.getTime() + N * 86_400_000)`, not as UTC midnight of the Nth future date.
+4. **Scope/window end boundaries must also be tz-aware.** Use `nDaysFromTodayInTz(N, timezone)` — never compute as UTC midnight of the Nth future date.
 5. **In-code filters must use the same boundaries as the DB query.** If the DB query uses `weekStartUtc`, the subsequent `.filter(e => e.start >= weekStartUtc)` must use the identical value.
-6. **Display: format dates using the user's `timezone` string via `Intl.DateTimeFormat`.** Do not use `date-fns` `format()` for display — it uses the JS runtime's local timezone (UTC on the server, browser-local on the client), which may not match the user's family timezone.
+6. **Display: use `formatInTz(date, timezone, options)` from `src/lib/timezone.ts`.** Do not use `date-fns` `format()` or raw `toLocaleDateString(..., { timeZone: 'UTC' })` for display — they use the JS runtime's local timezone (UTC on the server) rather than the user's family timezone.
+7. **Never use `require('date-fns')` or `import ... from 'date-fns'` in server-side tool/handler files.** `addDays`, `parseISO`, etc. resolve dates using the JS runtime timezone (UTC on the server). Use `todayBoundsInTz`/`nDaysFromTodayInTz`/`monthBoundsInTz` instead.
 
 ---
 

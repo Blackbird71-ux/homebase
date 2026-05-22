@@ -9,29 +9,8 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz, monthBoundsInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function formatDate(d: Date): string {
-  return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
-}
-
-/** Get the start of today and end of today in UTC */
-function getTodayRange(): { start: Date; end: Date } {
-  const now = new Date()
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1)
-  return { start, end }
-}
-
-/** Get the start of this week (Sunday) in UTC */
-function getWeekStart(): Date {
-  const now = new Date()
-  const dayOfWeek = now.getUTCDay()
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dayOfWeek))
-  return start
-}
 
 // ── generateDailyDigest ────────────────────────────────────────────────────────
 
@@ -52,22 +31,24 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
   const showFinance = includeFinance !== false
   const showMeals = includeMeals !== false
 
-  const { start: todayStart, end: todayEnd } = getTodayRange()
-  const weekStart = getWeekStart()
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
+  const weekEnd = nDaysFromTodayInTz(7, timezone)
   const now = new Date()
 
   const sections: string[] = []
 
   // ── Date header ─────────────────────────────────────────────────────────────
 
-  sections.push(`📋 **Daily Briefing — ${formatDate(now)}**`)
+  const headerDate = formatInTz(now, timezone, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })
+  sections.push(`📋 **Daily Briefing — ${headerDate}**`)
 
   // ── Today's events ──────────────────────────────────────────────────────────
 
   const todayEvents = await prisma.event.findMany({
     where: {
       familyId: ctx.familyId,
-      start: { gte: todayStart, lte: todayEnd },
+      start: { gte: todayStart, lt: todayEnd },
     },
     select: { id: true, title: true, start: true, end: true, isAllDay: true, category: true },
     orderBy: { start: 'asc' },
@@ -77,7 +58,7 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
     const lines = todayEvents.map(e => {
       const time = e.isAllDay
         ? '🌅 All day'
-        : `🕐 ${e.start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}`
+        : `🕐 ${formatInTz(e.start, timezone, { hour: '2-digit', minute: '2-digit' })}`
       const cat = e.category ? ` [${e.category}]` : ''
       return `  • ${e.title}${cat} — ${time}`
     })
@@ -106,10 +87,10 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
     if (dueTime < todayStart.getTime()) {
       const daysOverdue = Math.floor((todayStart.getTime() - dueTime) / (1000 * 60 * 60 * 24))
       overdueChores.push(`  • ${chore.title} (${daysOverdue} day(s) overdue${chore.currentAssignee ? `, ${chore.currentAssignee.name}` : ''})`)
-    } else if (dueTime >= todayStart.getTime() && dueTime <= todayEnd.getTime()) {
+    } else if (dueTime >= todayStart.getTime() && dueTime < todayEnd.getTime()) {
       dueTodayChores.push(`  • ${chore.title} (due today${chore.currentAssignee ? `, assigned to ${chore.currentAssignee.name}` : ''})`)
-    } else if (dueTime <= weekStart.getTime() + 7 * 24 * 60 * 60 * 1000) {
-      dueWeekChores.push(`  • ${chore.title} (due ${formatDate(chore.nextDueDate)}${chore.currentAssignee ? `, ${chore.currentAssignee.name}` : ''})`)
+    } else if (dueTime < weekEnd.getTime()) {
+      dueWeekChores.push(`  • ${chore.title} (due ${formatInTz(chore.nextDueDate, timezone, { weekday: 'long', day: 'numeric', month: 'short' })}${chore.currentAssignee ? `, ${chore.currentAssignee.name}` : ''})`)
     }
   }
 
@@ -142,11 +123,11 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
   for (const bill of bills) {
     const dueTime = bill.nextDueDate.getTime()
     if (dueTime < todayStart.getTime()) {
-      overdueBills.push(`  • ${bill.name} — $${bill.amount.toFixed(2)} (overdue since ${formatDate(bill.nextDueDate)})`)
-    } else if (dueTime >= todayStart.getTime() && dueTime <= todayEnd.getTime()) {
+      overdueBills.push(`  • ${bill.name} — $${bill.amount.toFixed(2)} (overdue since ${formatInTz(bill.nextDueDate, timezone, { weekday: 'long', day: 'numeric', month: 'short' })})`)
+    } else if (dueTime >= todayStart.getTime() && dueTime < todayEnd.getTime()) {
       dueTodayBills.push(`  • ${bill.name} — $${bill.amount.toFixed(2)} (due today)`)
-    } else if (dueTime <= todayStart.getTime() + 7 * 24 * 60 * 60 * 1000) {
-      dueSoonBills.push(`  • ${bill.name} — $${bill.amount.toFixed(2)} (due ${formatDate(bill.nextDueDate)})`)
+    } else if (dueTime < weekEnd.getTime()) {
+      dueSoonBills.push(`  • ${bill.name} — $${bill.amount.toFixed(2)} (due ${formatInTz(bill.nextDueDate, timezone, { weekday: 'long', day: 'numeric', month: 'short' })})`)
     }
   }
 
@@ -168,7 +149,9 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
   })
 
   if (family?.birthdays) {
-    const todayMonthDay = `${now.getUTCMonth() + 1}-${now.getUTCDate()}`
+    const localDateStr = now.toLocaleDateString('en-CA', { timeZone: timezone }) // YYYY-MM-DD
+    const [, localMonthStr, localDayStr] = localDateStr.split('-')
+    const todayMonthDay = `${parseInt(localMonthStr)}-${parseInt(localDayStr)}`
     const allBirthdays: Array<{ name: string; type: string; date: string }> = JSON.parse(family.birthdays)
     const todayBirthdays = allBirthdays.filter(b => {
       const parts = b.date.split('-')
@@ -187,7 +170,7 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
     const todayMeals = await prisma.mealPlan.findMany({
       where: {
         familyId: ctx.familyId,
-        date: { gte: todayStart, lte: todayEnd },
+        date: { gte: todayStart, lt: todayEnd },
       },
       select: { id: true, mealType: true, note: true, recipe: { select: { title: true } } },
       orderBy: { mealType: 'asc' },
@@ -246,8 +229,7 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
     })
 
     if (budgets.length > 0) {
-      const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-      const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+      const { start: monthStart, end: monthEnd } = monthBoundsInTz(timezone)
 
       const budgetAlerts: string[] = []
 
@@ -258,7 +240,7 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
               familyId: ctx.familyId,
               categoryId: budget.categoryId,
               type: 'expense',
-              date: { gte: startOfMonth, lte: endOfMonth },
+              date: { gte: monthStart, lt: monthEnd },
             },
             _sum: { amount: true },
           })

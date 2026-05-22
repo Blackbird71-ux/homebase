@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { seedFinanceCategories } from '@/lib/finance-seed'
 import { deriveAllAccountBalances, deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 import { OverviewClient } from './OverviewClient'
-import { startOfMonth, endOfMonth } from 'date-fns'
+import { monthBoundsInTz } from '@/lib/timezone'
 import type {
   FinanceAccount, FinanceTransaction, FinanceBudget,
   FinanceRecurringBill, FinanceSavingsGoal, FinanceCategory, FinanceLocation,
@@ -18,8 +18,7 @@ export default async function FinanceOverviewPage() {
   await seedFinanceCategories(familyId)
 
   const now = new Date()
-  const monthStart = startOfMonth(now)
-  const monthEnd = endOfMonth(now)
+  const { start: monthStart, end: monthEnd } = monthBoundsInTz(timezone)
 
   const [
     accounts,

@@ -5,11 +5,12 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
-async function birthdaysContextProvider(familyId: string, _userId: string): Promise<string> {
+async function birthdaysContextProvider(familyId: string, _userId: string, _timezone: string): Promise<string> {
   const user = await prisma.user.findFirst({
     where: { familyId },
     select: { family: { select: { birthdays: true } } },
@@ -58,9 +59,9 @@ async function queryBirthdaysHandler(args: Record<string, unknown>, ctx: Handler
     return { message: 'No birthdays or anniversaries stored. Add them in Settings → Family.' }
   }
 
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: 'UTC' })
-  const { parseISO } = require('date-fns')
-  const today = parseISO(nowStr)
+  const timezone = ctx.timezone ?? 'UTC'
+  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+  const today = new Date(nowStr)
   const currentYear = today.getFullYear()
 
   // Enrich with next occurrence and days until
@@ -96,7 +97,7 @@ async function queryBirthdaysHandler(args: Record<string, unknown>, ctx: Handler
   }
 
   const lines = filtered.map(b => {
-    const dateStr = b.next.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+    const dateStr = formatInTz(b.next, timezone, { day: 'numeric', month: 'long' })
     const countdown = b.daysUntil === 0 ? ' — TODAY!' : b.daysUntil === 1 ? ' — tomorrow!' : ` — in ${b.daysUntil} days`
     return `• ${b.name} (${b.type}) — ${dateStr}${countdown}`
   })

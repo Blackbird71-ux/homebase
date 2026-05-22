@@ -5,25 +5,8 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function getWeekRange(): { start: Date; end: Date } {
-  const now = new Date()
-  const dayOfWeek = now.getDay() // 0=Sun
-  const start = new Date(now)
-  start.setDate(now.getDate() - dayOfWeek)
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(start)
-  end.setDate(start.getDate() + 6)
-  end.setHours(23, 59, 59, 999)
-  return { start, end }
-}
-
-function formatDate(d: Date): string {
-  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
-}
 
 // ── queryWeekSummary ───────────────────────────────────────────────────────────
 
@@ -43,7 +26,9 @@ interface BirthdayEntry {
 }
 
 async function queryWeekSummaryHandler(_args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const { start, end } = getWeekRange()
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start } = todayBoundsInTz(timezone)
+  const end = nDaysFromTodayInTz(7, timezone)
   const now = new Date()
 
   // ── 1. Events ──────────────────────────────────────────────────────────────
@@ -119,7 +104,7 @@ async function queryWeekSummaryHandler(_args: Record<string, unknown>, ctx: Hand
           const dateObj = new Date(now.getFullYear(), m - 1, day)
           birthdaysThisWeek.push({
             name: entry.name,
-            dateStr: formatDate(dateObj),
+            dateStr: formatInTz(dateObj, timezone, { weekday: 'short', day: 'numeric', month: 'short' }),
             label: entry.type === 'child' ? '🎂' : entry.type === 'partner' ? '💕' : '🎉',
           })
         }
@@ -130,14 +115,14 @@ async function queryWeekSummaryHandler(_args: Record<string, unknown>, ctx: Hand
   }
 
   // ── Build the response ─────────────────────────────────────────────────────
-  const weekLabel = `${formatDate(start)} — ${formatDate(end)}`
+  const weekLabel = `${formatInTz(start, timezone, { weekday: 'short', day: 'numeric', month: 'short' })} — ${formatInTz(end, timezone, { weekday: 'short', day: 'numeric', month: 'short' })}`
   const sections: string[] = [`📅 **Week at a Glance — ${weekLabel}**`]
 
   // Events
   if (events.length > 0) {
     const lines = events.map(e => {
-      const day = formatDate(new Date(e.start))
-      const time = e.isAllDay ? 'all day' : new Date(e.start).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+      const day = formatInTz(new Date(e.start), timezone, { weekday: 'short', day: 'numeric', month: 'short' })
+      const time = e.isAllDay ? 'all day' : formatInTz(new Date(e.start), timezone, { hour: '2-digit', minute: '2-digit' })
       return `  • ${e.title} — ${day} ${time}`
     })
     sections.push(`**📆 Events (${events.length})**\n${lines.join('\n')}`)
@@ -156,7 +141,7 @@ async function queryWeekSummaryHandler(_args: Record<string, unknown>, ctx: Hand
       lines.push(`  ⚠️ ${c.title} — overdue${c.currentAssignee ? ` (→ ${c.currentAssignee.name})` : ''}`)
     }
     for (const c of dueChores) {
-      const day = formatDate(c.nextDueDate!)
+      const day = formatInTz(c.nextDueDate!, timezone, { weekday: 'short', day: 'numeric', month: 'short' })
       lines.push(`  • ${c.title} — ${day}${c.currentAssignee ? ` (→ ${c.currentAssignee.name})` : ''}`)
     }
     for (const c of unscheduledChores) {
@@ -172,7 +157,7 @@ async function queryWeekSummaryHandler(_args: Record<string, unknown>, ctx: Hand
     // Group by date
     const byDate: Record<string, string[]> = {}
     for (const mp of mealPlans) {
-      const key = formatDate(new Date(mp.date))
+      const key = formatInTz(new Date(mp.date), timezone, { weekday: 'short', day: 'numeric', month: 'short' })
       if (!byDate[key]) byDate[key] = []
       const recipeName = mp.recipe?.title ?? mp.note ?? '(no recipe)'
       byDate[key].push(`  ${mp.mealType}: ${recipeName}`)
@@ -189,7 +174,7 @@ async function queryWeekSummaryHandler(_args: Record<string, unknown>, ctx: Hand
   if (bills.length > 0) {
     const total = bills.reduce((s, b) => s + b.amount, 0)
     const lines = bills.map(b => {
-      const day = formatDate(new Date(b.nextDueDate))
+      const day = formatInTz(new Date(b.nextDueDate), timezone, { weekday: 'short', day: 'numeric', month: 'short' })
       return `  • ${b.name} — $${b.amount.toFixed(2)} — due ${day}`
     })
     sections.push(`**💰 Bills Due (${bills.length}) — $${total.toFixed(2)} total**\n${lines.join('\n')}`)

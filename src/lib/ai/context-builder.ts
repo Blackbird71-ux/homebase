@@ -40,7 +40,7 @@ export async function buildSystemPrompt(
 
   for (const { name, provider } of providers) {
     try {
-      const context = await provider(familyId, userId)
+      const context = await provider(familyId, userId, timezone)
       if (context) {
         contextSections.push(context)
       }

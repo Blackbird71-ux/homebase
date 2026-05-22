@@ -6,7 +6,7 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
-import { utcMidnightToLocalMidnight } from '@/lib/timezone'
+import { utcMidnightToLocalMidnight, todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 
 // ── Helper: calculate next due date for a chore ───────────────────────────────
 
@@ -112,7 +112,7 @@ function calculateNextDueDateAI(
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
-async function choresContextProvider(familyId: string, _userId: string): Promise<string> {
+async function choresContextProvider(familyId: string, _userId: string, timezone: string): Promise<string> {
   const chores = await prisma.chore.findMany({
     where: { familyId, isActive: true },
     include: { currentAssignee: { select: { id: true, name: true } } },
@@ -125,7 +125,7 @@ async function choresContextProvider(familyId: string, _userId: string): Promise
 
   const lines = chores.map(c => {
     const due = c.nextDueDate
-      ? new Date(c.nextDueDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+      ? formatInTz(new Date(c.nextDueDate), timezone, { weekday: 'short', day: 'numeric', month: 'short' })
       : 'overdue/now'
     const assignee = c.currentAssignee?.name ?? 'unassigned'
     return `"${c.title}" (id: ${c.id}, due: ${due}, assigned: ${assignee})`
@@ -174,7 +174,7 @@ async function completeChoreHandler(args: Record<string, unknown>, ctx: HandlerC
   }
 
   const nextPart = nextDueDate
-    ? ` Next due: ${nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })}.`
+    ? ` Next due: ${formatInTz(nextDueDate, timezone, { weekday: 'long', day: 'numeric', month: 'short' })}.`
     : ' Chore completed for the last time.'
   return {
     message: `"${chore.title}" marked as done.${nextPart}`,
@@ -204,14 +204,13 @@ async function queryChoresHandler(args: Record<string, unknown>, ctx: HandlerCon
     orderBy: { nextDueDate: 'asc' },
   })
 
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: 'UTC' })
-  const { parseISO, addDays } = require('date-fns')
-  const todayDate = parseISO(nowStr)
-  const nextWeek = addDays(todayDate, 7)
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  const nextWeek = nDaysFromTodayInTz(7, timezone)
 
   let filtered = chores
   if (filter === 'overdue') {
-    filtered = chores.filter(c => c.nextDueDate && new Date(c.nextDueDate) < todayDate)
+    filtered = chores.filter(c => c.nextDueDate && new Date(c.nextDueDate) < todayStart)
   } else if (filter === 'upcoming') {
     filtered = chores.filter(c => c.nextDueDate && new Date(c.nextDueDate) <= nextWeek)
   } else if (filter === 'mine') {
@@ -225,7 +224,7 @@ async function queryChoresHandler(args: Record<string, unknown>, ctx: HandlerCon
 
   const lines = filtered.map(c => {
     const due = c.nextDueDate
-      ? new Date(c.nextDueDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+      ? formatInTz(new Date(c.nextDueDate), timezone, { weekday: 'short', day: 'numeric', month: 'short' })
       : 'overdue'
     const assignee = c.currentAssignee?.name ?? 'unassigned'
     return `• ${c.title} — due ${due}, assigned to ${assignee}`

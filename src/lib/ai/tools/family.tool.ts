@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { nDaysFromTodayInTz, todayBoundsInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -63,8 +64,9 @@ const queryFamilyOverviewDefinition: FunctionDeclaration = {
 }
 
 async function queryFamilyOverviewHandler(_args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const now = new Date()
-  const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: now } = todayBoundsInTz(timezone)
+  const weekEnd = nDaysFromTodayInTz(7, timezone)
 
   // Family members
   const members = await prisma.user.findMany({
@@ -112,7 +114,7 @@ async function queryFamilyOverviewHandler(_args: Record<string, unknown>, ctx: H
       .filter(c => c.currentAssigneeId === m.id)
       .map(c => {
         const dateLabel = c.nextDueDate
-          ? new Date(c.nextDueDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+          ? formatInTz(new Date(c.nextDueDate), timezone, { weekday: 'short', day: 'numeric', month: 'short' })
           : 'due now'
         return `    • ${c.title} — ${dateLabel}`
       })
@@ -130,8 +132,8 @@ async function queryFamilyOverviewHandler(_args: Record<string, unknown>, ctx: H
   let eventsSection = '**📆 This Week\'s Events**\n'
   if (weekEvents.length > 0) {
     const lines = weekEvents.map(e => {
-      const dateLabel = new Date(e.start).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
-      const timeLabel = e.isAllDay ? 'all day' : new Date(e.start).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+      const dateLabel = formatInTz(new Date(e.start), timezone, { weekday: 'short', day: 'numeric', month: 'short' })
+      const timeLabel = e.isAllDay ? 'all day' : formatInTz(new Date(e.start), timezone, { hour: '2-digit', minute: '2-digit' })
       return `  • ${e.title} — ${dateLabel} ${timeLabel}`
     })
     eventsSection += lines.join('\n')

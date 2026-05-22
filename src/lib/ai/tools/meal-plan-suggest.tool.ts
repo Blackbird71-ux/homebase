@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── suggestMeals ──────────────────────────────────────────────────────────────
@@ -36,10 +37,9 @@ async function suggestMealsHandler(args: Record<string, unknown>, ctx: HandlerCo
   const lookAheadDays = typeof days === 'number' ? days : 7
 
   // Determine the date range
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const endDate = new Date(today)
-  endDate.setDate(today.getDate() + lookAheadDays)
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: today } = todayBoundsInTz(timezone)
+  const endDate = nDaysFromTodayInTz(lookAheadDays, timezone)
 
   // 1. Find meal plan gaps — days/mealTypes without a recipe
   const existingPlans = await prisma.mealPlan.findMany({
@@ -62,7 +62,7 @@ async function suggestMealsHandler(args: Record<string, unknown>, ctx: HandlerCo
       if (!filledSlots.has(key)) {
         gapSlots.push({
           date: new Date(d),
-          label: d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }),
+          label: formatInTz(d, timezone, { weekday: 'long', day: 'numeric', month: 'short' }),
           mealType: mt,
         })
       }

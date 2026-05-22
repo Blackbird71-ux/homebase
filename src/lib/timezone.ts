@@ -87,3 +87,29 @@ export function formatInTz(
 export function todayStringInTz(timezone: string): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: timezone })
 }
+
+/**
+ * Returns the start and end of the current calendar month in the given timezone as UTC Dates.
+ * Use for DB queries filtering by this month in the family's local timezone.
+ */
+export function monthBoundsInTz(timezone: string): { start: Date; end: Date } {
+  const localDate = new Date().toLocaleDateString('en-CA', { timeZone: timezone }) // YYYY-MM-DD
+  const [year, month] = localDate.split('-').map(Number)
+  const firstDayStr = `${year}-${String(month).padStart(2, '0')}-01`
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear  = month === 12 ? year + 1 : year
+  const firstOfNextStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+  return {
+    start: localMidnightToUtc(firstDayStr, timezone),
+    end:   localMidnightToUtc(firstOfNextStr, timezone),
+  }
+}
+
+/**
+ * Returns the UTC Date that is n days after local midnight in the given timezone.
+ * Use for query window ends instead of inline new Date(todayStart + N * 86_400_000).
+ */
+export function nDaysFromTodayInTz(n: number, timezone: string): Date {
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  return new Date(todayStart.getTime() + n * 86_400_000)
+}

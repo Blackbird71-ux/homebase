@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -13,10 +14,6 @@ import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 function daysBetween(a: Date, b: Date): number {
   const ms = b.getTime() - a.getTime()
   return Math.floor(ms / (1000 * 60 * 60 * 24))
-}
-
-function formatDate(d: Date): string {
-  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
 // ── queryUpcomingReminders ─────────────────────────────────────────────────────
@@ -35,8 +32,9 @@ const queryRemindersDefinition: FunctionDeclaration = {
 async function queryRemindersHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { daysAhead } = args as { daysAhead?: number }
   const horizon = daysAhead ?? 14
-  const now = new Date()
-  const cutoff = new Date(now.getTime() + horizon * 24 * 60 * 60 * 1000)
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  const cutoff = nDaysFromTodayInTz(horizon, timezone)
 
   const sections: string[] = []
 
@@ -54,14 +52,14 @@ async function queryRemindersHandler(args: Record<string, unknown>, ctx: Handler
   const docReminders: string[] = []
   for (const doc of expiringDocs) {
     if (!doc.expiryDate) continue
-    const daysUntilExpiry = daysBetween(now, doc.expiryDate)
+    const daysUntilExpiry = daysBetween(todayStart, doc.expiryDate)
     if (daysUntilExpiry >= 0 && daysUntilExpiry <= (doc.remindBefore ?? 30)) {
       const status = daysUntilExpiry <= 0
         ? '🔴 EXPIRED'
         : daysUntilExpiry <= 7
           ? `🟡 Expires in ${daysUntilExpiry} day(s)`
           : `🟢 Expires in ${daysUntilExpiry} day(s)`
-      docReminders.push(`• ${doc.title} (${doc.category}) — ${status} on ${formatDate(doc.expiryDate)}`)
+      docReminders.push(`• ${doc.title} (${doc.category}) — ${status} on ${formatInTz(doc.expiryDate, timezone, { weekday: 'short', day: 'numeric', month: 'short' })}`)
     }
   }
   if (docReminders.length > 0) {
@@ -84,11 +82,11 @@ async function queryRemindersHandler(args: Record<string, unknown>, ctx: Handler
 
   const billReminders: string[] = []
   for (const bill of upcomingBills) {
-    const daysUntilDue = daysBetween(now, bill.nextDueDate)
+    const daysUntilDue = daysBetween(todayStart, bill.nextDueDate)
     const remindAt = bill.reminderDays ?? 3
     if (daysUntilDue >= 0 && daysUntilDue <= remindAt) {
       const icon = daysUntilDue <= 0 ? '🔴' : daysUntilDue <= 3 ? '🟡' : '🟢'
-      billReminders.push(`• ${bill.name} — $${bill.amount.toFixed(2)} ${icon} due ${formatDate(bill.nextDueDate)} (${daysUntilDue > 0 ? `${daysUntilDue} day(s)` : 'today!'})`)
+      billReminders.push(`• ${bill.name} — $${bill.amount.toFixed(2)} ${icon} due ${formatInTz(bill.nextDueDate, timezone, { weekday: 'short', day: 'numeric', month: 'short' })} (${daysUntilDue > 0 ? `${daysUntilDue} day(s)` : 'today!'})`)
     }
   }
   if (billReminders.length > 0) {
@@ -100,7 +98,7 @@ async function queryRemindersHandler(args: Record<string, unknown>, ctx: Handler
   const upcomingEvents = await prisma.event.findMany({
     where: {
       familyId: ctx.familyId,
-      start: { gte: now, lte: cutoff },
+      start: { gte: todayStart, lte: cutoff },
       emailReminder: true,
     },
     select: { id: true, title: true, start: true, emailReminderHours: true },
@@ -109,9 +107,9 @@ async function queryRemindersHandler(args: Record<string, unknown>, ctx: Handler
 
   const eventReminders: string[] = []
   for (const event of upcomingEvents) {
-    const hoursUntil = (event.start.getTime() - now.getTime()) / (1000 * 60 * 60)
+    const hoursUntil = (event.start.getTime() - todayStart.getTime()) / (1000 * 60 * 60)
     if (hoursUntil >= 0 && hoursUntil <= (event.emailReminderHours ?? 24)) {
-      eventReminders.push(`• ${event.title} — ${formatDate(event.start)} (in ${Math.round(hoursUntil / 24)} day(s))`)
+      eventReminders.push(`• ${event.title} — ${formatInTz(event.start, timezone, { weekday: 'short', day: 'numeric', month: 'short' })} (in ${Math.round(hoursUntil / 24)} day(s))`)
     }
   }
   if (eventReminders.length > 0) {
@@ -134,11 +132,11 @@ async function queryRemindersHandler(args: Record<string, unknown>, ctx: Handler
 
   const incomeReminders: string[] = []
   for (const inc of upcomingIncome) {
-    const daysUntil = daysBetween(now, inc.nextExpectedDate)
+    const daysUntil = daysBetween(todayStart, inc.nextExpectedDate)
     const remindAt = inc.reminderDays ?? 3
     if (daysUntil >= 0 && daysUntil <= remindAt) {
       const icon = daysUntil <= 0 ? '🔴' : daysUntil <= 3 ? '🟡' : '🟢'
-      incomeReminders.push(`• ${inc.name} — $${inc.amount.toFixed(2)} ${icon} expected ${formatDate(inc.nextExpectedDate)}`)
+      incomeReminders.push(`• ${inc.name} — $${inc.amount.toFixed(2)} ${icon} expected ${formatInTz(inc.nextExpectedDate, timezone, { weekday: 'short', day: 'numeric', month: 'short' })}`)
     }
   }
   if (incomeReminders.length > 0) {
@@ -182,6 +180,7 @@ async function setReminderHandler(args: Record<string, unknown>, ctx: HandlerCon
 
   const isEnabled = enabled !== false
   const lower = searchName.toLowerCase()
+  const timezone = ctx.timezone ?? 'UTC'
 
   switch (entityType) {
     case 'document': {
@@ -208,7 +207,7 @@ async function setReminderHandler(args: Record<string, unknown>, ctx: HandlerCon
 
       const docStatus = isEnabled ? `enabled (${daysBefore ?? match.remindBefore} day(s) before expiry)` : 'disabled'
       return {
-        message: `Document reminder for "${match.title}" ${docStatus}.${match.expiryDate ? ` Expires ${formatDate(match.expiryDate)}.` : ' No expiry date set.'}`,
+        message: `Document reminder for "${match.title}" ${docStatus}.${match.expiryDate ? ` Expires ${formatInTz(match.expiryDate, timezone, { weekday: 'short', day: 'numeric', month: 'short' })}.` : ' No expiry date set.'}`,
         action: 'setReminder',
       }
     }
@@ -237,7 +236,7 @@ async function setReminderHandler(args: Record<string, unknown>, ctx: HandlerCon
 
       const billStatus = isEnabled ? `enabled (reminder ${daysBefore ?? match.reminderDays} day(s) before due)` : 'disabled'
       return {
-        message: `Bill reminder for "${match.name}" ${billStatus}. Next due: ${formatDate(match.nextDueDate)}.`,
+        message: `Bill reminder for "${match.name}" ${billStatus}. Next due: ${formatInTz(match.nextDueDate, timezone, { weekday: 'short', day: 'numeric', month: 'short' })}.`,
         action: 'setReminder',
       }
     }
@@ -270,7 +269,7 @@ async function setReminderHandler(args: Record<string, unknown>, ctx: HandlerCon
         ? `enabled (reminder ${daysBefore ?? Math.round((match.emailReminderHours ?? 24) / 24)} day(s) before)`
         : 'disabled'
       return {
-        message: `Event reminder for "${match.title}" ${eventStatus}. Starts: ${formatDate(match.start)}.`,
+        message: `Event reminder for "${match.title}" ${eventStatus}. Starts: ${formatInTz(match.start, timezone, { weekday: 'short', day: 'numeric', month: 'short' })}.`,
         action: 'setReminder',
       }
     }
@@ -299,7 +298,7 @@ async function setReminderHandler(args: Record<string, unknown>, ctx: HandlerCon
 
       const incStatus = isEnabled ? `enabled (reminder ${daysBefore ?? match.reminderDays} day(s) before)` : 'disabled'
       return {
-        message: `Income reminder for "${match.name}" ${incStatus}. Next expected: ${formatDate(match.nextExpectedDate)}.`,
+        message: `Income reminder for "${match.name}" ${incStatus}. Next expected: ${formatInTz(match.nextExpectedDate, timezone, { weekday: 'short', day: 'numeric', month: 'short' })}.`,
         action: 'setReminder',
       }
     }

@@ -5,13 +5,14 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz, nDaysFromTodayInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
-async function billsContextProvider(familyId: string, _userId: string): Promise<string> {
+async function billsContextProvider(familyId: string, _userId: string, timezone: string): Promise<string> {
   const now = new Date()
-  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const thirtyDaysFromNow = nDaysFromTodayInTz(30, timezone)
 
   const [totalBills, upcomingBills, overdueBills, unpaidCount, monthlyTotal] = await Promise.all([
     prisma.financeRecurringBill.count({ where: { familyId, isActive: true } }),
@@ -50,14 +51,14 @@ async function billsContextProvider(familyId: string, _userId: string): Promise<
 
   if (overdueBills.length > 0) {
     const lines = overdueBills.map(b =>
-      `"${b.name}" — $${b.amount.toFixed(2)} — was due ${new Date(b.nextDueDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+      `"${b.name}" — $${b.amount.toFixed(2)} — was due ${formatInTz(new Date(b.nextDueDate), timezone, { day: 'numeric', month: 'short' })}`
     )
     parts.push(`Overdue bills:\n${lines.join('\n')}`)
   }
 
   if (upcomingBills.length > 0) {
     const lines = upcomingBills.map(b =>
-      `"${b.name}" — $${b.amount.toFixed(2)} — due ${new Date(b.nextDueDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+      `"${b.name}" — $${b.amount.toFixed(2)} — due ${formatInTz(new Date(b.nextDueDate), timezone, { weekday: 'short', day: 'numeric', month: 'short' })}`
     )
     parts.push(`Upcoming bills (next 30 days):\n${lines.join('\n')}`)
   }
@@ -87,6 +88,7 @@ const queryBillsDefinition: FunctionDeclaration = {
 
 async function queryBillsHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { filter } = args as { filter?: string }
+  const timezone = ctx.timezone ?? 'UTC'
   const now = new Date()
 
   let bills
@@ -112,7 +114,7 @@ async function queryBillsHandler(args: Record<string, unknown>, ctx: HandlerCont
       break
     }
     case 'upcoming': {
-      const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+      const thirtyDaysFromNow = nDaysFromTodayInTz(30, timezone)
       bills = await prisma.financeRecurringBill.findMany({
         where: {
           familyId: ctx.familyId,
@@ -173,7 +175,7 @@ async function queryBillsHandler(args: Record<string, unknown>, ctx: HandlerCont
   const unpaidTotal = unpaidOnly.reduce((sum, b) => sum + b.amount, 0)
 
   const lines = bills.map(b => {
-    const status = b.paid ? `✅ Paid${b.paidDate ? ` ${new Date(b.paidDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''}` : `⚠️ Due ${new Date(b.nextDueDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+    const status = b.paid ? `✅ Paid${b.paidDate ? ` ${formatInTz(new Date(b.paidDate), timezone, { day: 'numeric', month: 'short' })}` : ''}` : `⚠️ Due ${formatInTz(new Date(b.nextDueDate), timezone, { weekday: 'short', day: 'numeric', month: 'short' })}`
     const detail = [b.category?.name, b.vendor?.name, b.account?.name].filter(Boolean).join(', ')
     const detailPart = detail ? ` (${detail})` : ''
     return `• ${b.name} — $${b.amount.toFixed(2)} — ${status}${detailPart}`
@@ -252,6 +254,7 @@ const queryBillDetailsDefinition: FunctionDeclaration = {
 
 async function queryBillDetailsHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { billName } = args as { billName: string }
+  const timezone = ctx.timezone ?? 'UTC'
   const lower = billName.toLowerCase()
 
   const bills = await prisma.financeRecurringBill.findMany({
@@ -271,8 +274,8 @@ async function queryBillDetailsHandler(args: Record<string, unknown>, ctx: Handl
     return { message: `No bill found matching "${billName}".` }
   }
 
-  const dueDate = new Date(match.nextDueDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-  const endDate = match.endDate ? new Date(match.endDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'No end date'
+  const dueDate = formatInTz(new Date(match.nextDueDate), timezone, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const endDate = match.endDate ? formatInTz(new Date(match.endDate), timezone, { day: 'numeric', month: 'long', year: 'numeric' }) : 'No end date'
   const freqLabel = match.frequency.charAt(0).toUpperCase() + match.frequency.slice(1)
 
   const details = [

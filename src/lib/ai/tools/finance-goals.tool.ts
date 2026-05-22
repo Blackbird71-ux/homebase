@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -188,7 +189,7 @@ async function querySavingsGoalsHandler(args: Record<string, unknown>, ctx: Hand
     const pct = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0
     const bar = g.isComplete ? '✅' : pct >= 75 ? '🟢' : pct >= 50 ? '🟡' : '🔵'
     const accountLabel = g.account ? ` → ${g.account.name}` : ''
-    const dateLabel = g.targetDate ? ` by ${new Date(g.targetDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ''
+    const dateLabel = g.targetDate ? ` by ${formatInTz(new Date(g.targetDate), ctx.timezone ?? 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''
     return `  ${bar} ${g.name}${accountLabel}: $${g.currentAmount.toFixed(2)} / $${g.targetAmount.toFixed(2)} (${pct.toFixed(0)}%)${dateLabel}`
   })
 

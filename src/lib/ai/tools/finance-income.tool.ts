@@ -5,13 +5,14 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { formatInTz, nDaysFromTodayInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
-async function incomeContextProvider(familyId: string, _userId: string): Promise<string> {
+async function incomeContextProvider(familyId: string, _userId: string, timezone: string): Promise<string> {
   const now = new Date()
-  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const thirtyDaysFromNow = nDaysFromTodayInTz(30, timezone)
 
   const [activeIncome, upcomingIncome, monthTotal] = await Promise.all([
     prisma.financeIncomeEntry.count({ where: { familyId, isActive: true } }),
@@ -34,7 +35,7 @@ async function incomeContextProvider(familyId: string, _userId: string): Promise
   if (activeIncome === 0) return ''
 
   const lines = upcomingIncome.map(i =>
-    `"${i.name}" — $${i.amount.toFixed(2)} expected ${new Date(i.nextExpectedDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+    `"${i.name}" — $${i.amount.toFixed(2)} expected ${formatInTz(new Date(i.nextExpectedDate), timezone, { day: 'numeric', month: 'short' })}`
   )
 
   const parts = [`You have ${activeIncome} active income source(s).`]
@@ -67,6 +68,7 @@ const queryIncomeDefinition: FunctionDeclaration = {
 
 async function queryIncomeHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { filter } = args as { filter?: string }
+  const timezone = ctx.timezone ?? 'UTC'
   const now = new Date()
 
   let whereReceived: boolean | undefined
@@ -107,8 +109,8 @@ async function queryIncomeHandler(args: Record<string, unknown>, ctx: HandlerCon
 
   const lines = entries.map(e => {
     const dateStr = e.received
-      ? `✅ Received${e.receivedDate ? ` ${new Date(e.receivedDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''}`
-      : `📅 Expected ${new Date(e.nextExpectedDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+      ? `✅ Received${e.receivedDate ? ` ${formatInTz(new Date(e.receivedDate), timezone, { day: 'numeric', month: 'short' })}` : ''}`
+      : `📅 Expected ${formatInTz(new Date(e.nextExpectedDate), timezone, { weekday: 'short', day: 'numeric', month: 'short' })}`
     const accountStr = e.account ? ` → ${e.account.name}` : ''
     const freqStr = e.frequency !== 'one-off' ? ` (${e.frequency})` : ''
     return `  • ${e.name} — $${e.amount.toFixed(2)}${freqStr} — ${dateStr}${accountStr}`

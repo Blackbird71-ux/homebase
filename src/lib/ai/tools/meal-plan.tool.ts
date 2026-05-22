@@ -6,6 +6,7 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { resolveDayToDate, safeParseStringArray } from '@/lib/ai/orchestrator'
+import { todayBoundsInTz, nDaysFromTodayInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -13,9 +14,7 @@ import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 // shopping lists (needed so the AI can resolve recipe names to IDs and know
 // what's already planned).
 
-async function mealPlanContextProvider(familyId: string, _userId: string): Promise<string> {
-  const timezone = 'UTC' // Will be overridden in system prompt preamble
-
+async function mealPlanContextProvider(familyId: string, _userId: string, timezone: string): Promise<string> {
   // Recipes
   const recipes = await prisma.recipe.findMany({
     where: { familyId },
@@ -25,14 +24,13 @@ async function mealPlanContextProvider(familyId: string, _userId: string): Promi
   const recipeList = recipes.map(r => `"${r.title}" (id: ${r.id})`).join('\n')
 
   // Current week's meal plan
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-  const { format, addDays, parseISO } = require('date-fns')
-  const weekEndStr = format(addDays(parseISO(nowStr), 6), 'yyyy-MM-dd')
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  const weekEnd = nDaysFromTodayInTz(7, timezone)
 
   const mealPlans = await prisma.mealPlan.findMany({
     where: {
       familyId,
-      date: { gte: new Date(nowStr), lte: new Date(weekEndStr + 'T23:59:59Z') },
+      date: { gte: todayStart, lte: weekEnd },
     },
     include: {
       recipes: { include: { recipe: { select: { title: true } } }, orderBy: { order: 'asc' } },
@@ -158,15 +156,14 @@ const queryDefinition: FunctionDeclaration = {
 }
 
 async function queryHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const timezone = 'UTC'
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-  const { format, addDays, parseISO } = require('date-fns')
-  const weekEndStr = format(addDays(parseISO(nowStr), 6), 'yyyy-MM-dd')
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  const weekEnd = nDaysFromTodayInTz(7, timezone)
 
   const mealPlans = await prisma.mealPlan.findMany({
     where: {
       familyId: ctx.familyId,
-      date: { gte: new Date(nowStr), lte: new Date(weekEndStr + 'T23:59:59Z') },
+      date: { gte: todayStart, lte: weekEnd },
     },
     include: {
       recipes: { include: { recipe: { select: { title: true } } }, orderBy: { order: 'asc' } },
@@ -218,15 +215,14 @@ const generateShoppingDefinition: FunctionDeclaration = {
 }
 
 async function generateShoppingHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const timezone = 'UTC'
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-  const { format, addDays, parseISO } = require('date-fns')
-  const weekEndStr = format(addDays(parseISO(nowStr), 6), 'yyyy-MM-dd')
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: todayStart } = todayBoundsInTz(timezone)
+  const weekEnd = nDaysFromTodayInTz(7, timezone)
 
   const mealPlans = await prisma.mealPlan.findMany({
     where: {
       familyId: ctx.familyId,
-      date: { gte: new Date(nowStr), lte: new Date(weekEndStr + 'T23:59:59Z') },
+      date: { gte: todayStart, lte: weekEnd },
     },
     include: {
       recipes: { include: { recipe: { select: { title: true, ingredients: true } } }, orderBy: { order: 'asc' } },

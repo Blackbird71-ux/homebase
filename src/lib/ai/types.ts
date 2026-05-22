@@ -34,7 +34,7 @@ export interface HandlerResult {
  * A context provider returns a string that is injected into the LLM system prompt.
  * It can use the familyId / userId to fetch relevant data.
  */
-export type ContextProvider = (familyId: string, userId: string) => Promise<string>
+export type ContextProvider = (familyId: string, userId: string, timezone: string) => Promise<string>
 
 /**
  * A tool handler executes the business logic when the LLM calls the tool.

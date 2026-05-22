@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── queryDocuments ────────────────────────────────────────────────────────────
@@ -34,10 +35,9 @@ async function queryDocumentsHandler(args: Record<string, unknown>, ctx: Handler
     return { message: 'No documents stored.' }
   }
 
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: 'UTC' })
-  const { parseISO, addDays } = require('date-fns')
-  const today = parseISO(nowStr)
-  const ninetyDays = addDays(today, 90)
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: today } = todayBoundsInTz(timezone)
+  const ninetyDays = nDaysFromTodayInTz(90, timezone)
 
   let filtered = documents
   if (query) {
@@ -70,7 +70,7 @@ async function queryDocumentsHandler(args: Record<string, unknown>, ctx: Handler
       ? (() => {
           const exp = new Date(d.expiryDate)
           const daysLeft = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          const expStr = exp.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+          const expStr = formatInTz(exp, timezone, { day: 'numeric', month: 'long', year: 'numeric' })
           if (daysLeft < 0) return `expired ${Math.abs(daysLeft)} days ago (${expStr})`
           if (daysLeft === 0) return `expires TODAY (${expStr})`
           return `expires ${expStr} (${daysLeft} days)`
