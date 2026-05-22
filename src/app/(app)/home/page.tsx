@@ -147,10 +147,15 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
 
     visibleCardIds.has('weekly-summary')
       ? prisma.event.findMany({
-          where: { familyId, start: { gte: weekStartUtc, lt: weekEndUtc } },
+          where: {
+            familyId,
+            OR: [
+              { start: { gte: weekStartUtc, lt: weekEndUtc }, isRecurring: false },
+              { isRecurring: true },
+            ],
+          },
           orderBy: { start: 'asc' },
-          take: 3,
-          select: { id: true, title: true, start: true, color: true },
+          select: { id: true, title: true, start: true, end: true, color: true, isRecurring: true, recurrenceRule: true, recurrenceEndDate: true },
         })
       : Promise.resolve([]),
     visibleCardIds.has('weekly-summary')
@@ -267,13 +272,27 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const dinnerMeal = mealByType(todayMealPlans, 'dinner')
 
   // Build weekly summary data
+  const expandedWeekEvents = (() => {
+    const result = weekEvents.flatMap(e => {
+      if (e.isRecurring && e.recurrenceRule) {
+        return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, weekStartUtc, weekEndUtc)
+          .map(inst => ({ ...e, start: inst.start, end: inst.end }))
+      }
+      return [e]
+    })
+    return result
+      .filter(e => e.start >= weekStartUtc && e.start < weekEndUtc)
+      .sort((a, b) => a.start.getTime() - b.start.getTime())
+      .slice(0, 3)
+  })()
+
   const weeklySummary: WeeklySummaryData | null = visibleCardIds.has('weekly-summary')
     ? {
         weekLabel,
-        eventCount: weekEvents.length,
+        eventCount: expandedWeekEvents.length,
         mealCount: weekMealPlans.length,
         pendingTodoCount: weekTodoLists[0]?._count?.items ?? 0,
-        topEvents: weekEvents.map(e => ({
+        topEvents: expandedWeekEvents.map(e => ({
           id: e.id,
           title: e.title,
           start: e.start.toISOString(),

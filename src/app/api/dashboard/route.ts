@@ -120,10 +120,15 @@ export async function GET(request: NextRequest) {
     }).catch(() => 0),
     // Weekly summary: events this week
     prisma.event.findMany({
-      where: { familyId: user.familyId, start: { gte: weekStart, lt: weekEndDate } },
+      where: {
+        familyId: user.familyId,
+        OR: [
+          { start: { gte: weekStart, lt: weekEndDate }, isRecurring: false },
+          { isRecurring: true },
+        ],
+      },
       orderBy: { start: 'asc' },
-      take: 5,
-      select: { id: true, title: true, start: true, color: true },
+      select: { id: true, title: true, start: true, end: true, color: true, isRecurring: true, recurrenceRule: true, recurrenceEndDate: true },
     }),
     // Weekly summary: meals this week (scoped to 7/14/30 days)
     prisma.mealPlan.findMany({
@@ -227,16 +232,30 @@ export async function GET(request: NextRequest) {
   const dinnerMeal = mealByType(todayMealPlans, 'dinner')
 
   // Build weekly summary
+  const expandedWeekEvents = (() => {
+    const result = weekEvents.flatMap(e => {
+      if (e.isRecurring && e.recurrenceRule) {
+        return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, weekStart, weekEndDate)
+          .map(inst => ({ ...e, start: inst.start, end: inst.end }))
+      }
+      return [e]
+    })
+    return result
+      .filter(e => e.start >= weekStart && e.start < weekEndDate)
+      .sort((a, b) => a.start.getTime() - b.start.getTime())
+      .slice(0, 5)
+  })()
+
   const fmtDay   = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' })
   const fmtShort = new Intl.DateTimeFormat('en-AU', { timeZone: timezone, day: 'numeric', month: 'short' })
   const fmtLong  = new Intl.DateTimeFormat('en-AU', { timeZone: timezone, day: 'numeric', month: 'short', year: 'numeric' })
   const weekLabelEnd = new Date(weekEndDate.getTime() - 86_400_000)
   const weeklySummary = {
     weekLabel: `${fmtShort.format(weekStart)} - ${fmtLong.format(weekLabelEnd)}`,
-    eventCount: weekEvents.length,
+    eventCount: expandedWeekEvents.length,
     mealCount: weekMeals.length,
     pendingTodoCount: weekTodos.length,
-    topEvents: weekEvents.map(e => ({
+    topEvents: expandedWeekEvents.map(e => ({
       id: e.id,
       title: e.title,
       start: e.start.toISOString(),
