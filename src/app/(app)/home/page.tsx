@@ -6,6 +6,7 @@ import { mergeDashboardCards, type DashboardCardConfig } from '@/lib/dashboard-c
 import { HomeClient } from './HomeClient'
 import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
+import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { format } from 'date-fns'
 
 /**
@@ -62,9 +63,14 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData] = await Promise.all([
     needsEvents
       ? prisma.event.findMany({
-          where: { familyId, start: { gte: todayStart } },
+          where: {
+            familyId,
+            OR: [
+              { start: { gte: todayStart }, isRecurring: false },
+              { isRecurring: true },
+            ],
+          },
           orderBy: { start: 'asc' },
-          take: 5,
         })
       : Promise.resolve([]),
     needsMeals
@@ -294,11 +300,24 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
 
   return {
     weeklySummary,
-    upcomingEvents: upcomingEvents.map(e => ({
-      id: e.id, title: e.title,
-      start: e.start.toISOString(), end: e.end.toISOString(),
-      isAllDay: e.isAllDay, category: e.category, color: e.color,
-    })),
+    upcomingEvents: (() => {
+      const windowEnd = new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000)
+      const expanded = upcomingEvents.flatMap(e => {
+        if (e.isRecurring && e.recurrenceRule) {
+          return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, todayStart, windowEnd)
+            .map(inst => ({ ...e, start: inst.start, end: inst.end }))
+        }
+        return [e]
+      })
+      return expanded
+        .sort((a, b) => a.start.getTime() - b.start.getTime())
+        .slice(0, 5)
+        .map(e => ({
+          id: e.id, title: e.title,
+          start: e.start.toISOString(), end: e.end.toISOString(),
+          isAllDay: e.isAllDay, category: e.category, color: e.color,
+        }))
+    })(),
     tonightsDinner: dinnerMeal,
     todaysMeals: {
       breakfast: mealByType(todayMealPlans, 'breakfast'),

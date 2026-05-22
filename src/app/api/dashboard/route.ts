@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-helpers'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
+import { generateRecurrenceInstances } from '@/lib/recurrence'
 import type { DashboardData, TodaysMeal } from '@/types'
 
 function normalizeToUtcMidnight(dateStr: string): Date {
@@ -60,9 +61,14 @@ export async function GET(request: NextRequest) {
     tripsData,
   ] = await Promise.all([
     prisma.event.findMany({
-      where: { familyId: user.familyId, start: { gte: now } },
+      where: {
+        familyId: user.familyId,
+        OR: [
+          { start: { gte: todayStart }, isRecurring: false },
+          { isRecurring: true },
+        ],
+      },
       orderBy: { start: 'asc' },
-      take: 5,
     }),
     prisma.mealPlan.findMany({
       where: { familyId: user.familyId, date: { gte: mealPlanTodayStart, lt: mealPlanTodayEnd } },
@@ -256,15 +262,24 @@ export async function GET(request: NextRequest) {
 
   const data: DashboardData = {
     weeklySummary,
-    upcomingEvents: upcomingEvents.map(e => ({
-      id: e.id,
-      title: e.title,
-      start: e.start.toISOString(),
-      end: e.end.toISOString(),
-      isAllDay: e.isAllDay,
-      category: e.category,
-      color: e.color,
-    })),
+    upcomingEvents: (() => {
+      const windowEnd = new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000)
+      const expanded = upcomingEvents.flatMap(e => {
+        if (e.isRecurring && e.recurrenceRule) {
+          return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, todayStart, windowEnd)
+            .map(inst => ({ ...e, start: inst.start, end: inst.end }))
+        }
+        return [e]
+      })
+      return expanded
+        .sort((a, b) => a.start.getTime() - b.start.getTime())
+        .slice(0, 5)
+        .map(e => ({
+          id: e.id, title: e.title,
+          start: e.start.toISOString(), end: e.end.toISOString(),
+          isAllDay: e.isAllDay, category: e.category, color: e.color,
+        }))
+    })(),
     tonightsDinner: dinnerMeal,
     todaysMeals: {
       breakfast: mealByType(todayMealPlans, 'breakfast'),
