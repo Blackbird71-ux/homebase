@@ -132,6 +132,45 @@ All form editors, detail panels, and complex dialogs must use the right-side Dra
 
 ---
 
+# Timezone rules — ALL date logic must work in the user's local time
+
+The server runs in UTC. The database stores all datetimes in UTC. The user lives in a local timezone (e.g. Australia/Sydney = UTC+10). These are not the same and the difference causes bugs.
+
+**The rule: every date boundary, filter, and display must be computed relative to the user's local timezone, not UTC.**
+
+## The correct pattern
+
+Use `todayBoundsInTz(timezone)` from `src/lib/timezone.ts` to get today's start/end as UTC Dates that correctly represent midnight in the user's timezone:
+
+```ts
+const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
+// todayStart for UTC+10 on 2026-05-23 = 2026-05-22T14:00:00Z  ← NOT 2026-05-23T00:00:00Z
+```
+
+Use `todayStart` directly as range boundaries in Prisma queries and in-code filters. Never substitute UTC midnight (`new Date('YYYY-MM-DDT00:00:00Z')`) as a stand-in for "start of day".
+
+## The failure mode
+
+Computing a day boundary as UTC midnight (e.g. `normalizeToUtcMidnight(todayDateStr)`) is **wrong** for users east of UTC. For UTC+10:
+
+- Real local midnight = `2026-05-22T14:00:00Z`
+- UTC midnight = `2026-05-23T00:00:00Z` — that is 10 hours late
+
+Any event stored between `14:00Z` and `00:00Z` UTC on the prior day (i.e. between local midnight and 10 AM local time) will be **excluded** from queries that use UTC midnight as the lower bound, even though those events fall squarely within "today" for the user.
+
+This was the root cause of the weekly summary missing today's events while the upcoming events card (which already used `todayStart`) showed them correctly.
+
+## Rules
+
+1. **Never use `normalizeToUtcMidnight(dateStr)` as a query boundary for "today".** It returns UTC midnight, not the user's local midnight.
+2. **Never construct a day boundary with `new Date('YYYY-MM-DDT00:00:00Z')`.** Same problem.
+3. **`todayStart` from `todayBoundsInTz` is the single source of truth** for the start of today in all queries and in-code filters.
+4. **Scope/window end boundaries must also be tz-aware.** Compute them as `new Date(todayStart.getTime() + N * 86_400_000)`, not as UTC midnight of the Nth future date.
+5. **In-code filters must use the same boundaries as the DB query.** If the DB query uses `weekStartUtc`, the subsequent `.filter(e => e.start >= weekStartUtc)` must use the identical value.
+6. **Display: format dates using the user's `timezone` string via `Intl.DateTimeFormat`.** Do not use `date-fns` `format()` for display — it uses the JS runtime's local timezone (UTC on the server, browser-local on the client), which may not match the user's family timezone.
+
+---
+
 # Regression Prevention
 
 See `QA.md` in the project root for:
