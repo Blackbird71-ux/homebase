@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { QuickAdd } from './QuickAdd'
 import { UniversalFAB } from './UniversalFAB'
@@ -39,7 +40,17 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
   return (
     <div className="flex h-screen-dvh w-screen overflow-hidden">
       <OfflineBanner />
-      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} familyName={familyName} memberName={memberName} memberRole={memberRole} />
+      <div className="relative shrink-0 hidden md:block">
+        <Sidebar collapsed={sidebarCollapsed} isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} familyName={familyName} memberName={memberName} memberRole={memberRole} />
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="hb-sidebar__toggle-float"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
+      </div>
 
       <main className="flex-1 overflow-hidden flex flex-col min-w-0 relative">
         {/* pb-16 gives clearance for the universal FAB on all screen sizes */}

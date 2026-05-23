@@ -1038,20 +1038,24 @@
   text-transform: uppercase;
   color: var(--sidebar-fg-dim);
 }
-.hb-sidebar__collapse-btn {
-  margin-left: auto;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
+.hb-sidebar__toggle-float {
+  position: absolute;
+  top: 20px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--background);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--sidebar-text);
-  background: var(--sidebar-hover);
-  border: 1px solid var(--sidebar-panel-border);
-  flex-shrink: 0;
+  color: var(--foreground);
+  z-index: 20;
+  cursor: pointer;
 }
-.hb-sidebar__collapse-btn:hover { background: var(--accent); color: #fff; border-color: transparent; }
+.hb-sidebar__toggle-float:hover { background: var(--accent); color: #fff; border-color: transparent; }
 
 /* Date strip ────────────────────────────────────────────── */
 .hb-sidebar__date {

@@ -7,7 +7,7 @@ import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, ChevronLeft, ChevronRight, FileText, DollarSign,
+  Plus, FileText, DollarSign,
   Plane, ShieldAlert, Calculator, MoreHorizontal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -48,7 +48,6 @@ const GROUP_LABEL: Record<Group, string> = {
 
 interface SidebarProps {
   collapsed?: boolean
-  onToggle?: () => void
   isAdmin?: boolean
   hideFinanceModule?: boolean
   familyName?: string
@@ -59,7 +58,6 @@ interface SidebarProps {
 
 export function Sidebar({
   collapsed = false,
-  onToggle,
   isAdmin = false,
   hideFinanceModule = false,
   familyName = 'Family',
@@ -122,7 +120,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        'hb-sidebar hidden md:flex',
+        'hb-sidebar flex',
         collapsed && 'hb-sidebar--collapsed'
       )}
     >
@@ -135,14 +133,6 @@ export function Sidebar({
             <small>{familyName}</small>
           </span>
         )}
-        <button
-          type="button"
-          onClick={onToggle}
-          className="hb-sidebar__collapse-btn"
-          title={collapsed ? 'Expand' : 'Collapse'}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
       </div>
 
       {/* Today's date strip */}
