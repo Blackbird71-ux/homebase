@@ -72,3 +72,4 @@ homebase.tar
 
 # standalone build artifacts (stale copies of source files, never used directly)
 /.next/standalone/
+docs/HomeBase_Finance_Review_May2026.docx
