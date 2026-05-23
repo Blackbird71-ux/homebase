@@ -84,7 +84,7 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
           <p className="text-sm font-medium truncate">{entry.description}</p>
 
           {!isExpanded && entry.lines.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
               {entry.lines.slice(0, 3)
                 .map(l => `${l.side === 'debit' ? 'DR' : 'CR'} ${l.glAccount?.name ?? '—'} ${fmt(l.amount)}`)
                 .join(' · ')}
@@ -130,18 +130,18 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
                         title="Correct this posted entry — posts a reversal then a new corrective entry"
                         className="inline-flex items-center gap-1 rounded-md bg-blue-600 text-white text-xs px-2 py-1 hover:bg-blue-700 transition-colors">
                         <FilePenLine className="h-3 w-3" />
-                        Amend
+                        <span className="hidden sm:inline">Amend</span>
                       </button>
                     )}
                     <button onClick={() => onVoid(entry)} title="Void this entry"
                       className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 text-amber-600 text-xs px-2 py-1 hover:bg-amber-500/10 transition-colors">
                       <Ban className="h-3 w-3" />
-                      Void
+                      <span className="hidden sm:inline">Void</span>
                     </button>
                     <button onClick={() => onReverse(entry)} title="Reverse this entry (keeps both entries on ledger)"
                       className="inline-flex items-center gap-1 rounded-md border border-border text-muted-foreground text-xs px-2 py-1 hover:border-red-400 hover:text-red-500 transition-colors">
                       <RotateCcw className="h-3 w-3" />
-                      Reverse
+                      <span className="hidden sm:inline">Reverse</span>
                     </button>
                   </>
                 )}

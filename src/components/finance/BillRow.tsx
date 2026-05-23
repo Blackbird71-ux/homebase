@@ -125,7 +125,7 @@ export function BillRow({
             {inBudget && <StatusChip variant="accent">BUDGET</StatusChip>}
             {isPartiallyPaid && <StatusChip variant="soon">PARTIAL</StatusChip>}
             {bill.entity && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
+              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white whitespace-nowrap"
                 style={{ backgroundColor: bill.entity.color ?? '#6B7280' }}>
                 {bill.entity.name}
               </span>
