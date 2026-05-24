@@ -113,12 +113,12 @@ export default async function CalendarPage() {
     for (const b of bills) {
       if (!b.nextDueDate) continue
       const day = b.nextDueDate.toISOString().slice(0, 10)
-      calendarEvents.push({ id: `bill-${b.id}`, title: `Bill due: ${b.name}`, description: null, start: new Date(day + 'T00:00:00.000Z') as unknown as string, end: new Date(day + 'T23:59:59.000Z') as unknown as string, isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#ef4444', createdBy: user.id, source: 'bill' })
+      calendarEvents.push({ id: `bill-${b.id}`, title: `Bill due: ${b.name}`, description: null, start: day + 'T00:00:00.000Z', end: day + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#ef4444', createdBy: user.id, source: 'bill' })
     }
     for (const inc of income) {
       if (!inc.nextExpectedDate) continue
       const day = inc.nextExpectedDate.toISOString().slice(0, 10)
-      calendarEvents.push({ id: `income-${inc.id}`, title: `Income: ${inc.name}`, description: null, start: new Date(day + 'T00:00:00.000Z') as unknown as string, end: new Date(day + 'T23:59:59.000Z') as unknown as string, isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#22c55e', createdBy: user.id, source: 'income' })
+      calendarEvents.push({ id: `income-${inc.id}`, title: `Income: ${inc.name}`, description: null, start: day + 'T00:00:00.000Z', end: day + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#22c55e', createdBy: user.id, source: 'income' })
     }
   }
 
