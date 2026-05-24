@@ -1191,10 +1191,11 @@ model TripActivity {
   startTime   DateTime?
   endTime   DateTime?
   notes     String?
-  category  String?
-  sortOrder Int               @default(0)
-  tags      ActivityTag[]
-  createdAt DateTime          @default(now())
+  category        String?
+  sortOrder       Int               @default(0)
+  showOnCalendar  Boolean           @default(false)
+  tags            ActivityTag[]
+  createdAt       DateTime          @default(now())
 
   @@index([dayId])
 }

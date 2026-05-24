@@ -21,6 +21,7 @@ function serializeDay(day: {
     notes: string | null
     category: string | null
     sortOrder: number
+    showOnCalendar: boolean
     createdAt: Date
     tags: { tag: { id: string; name: string; emoji: string | null; color: string | null } }[]
   }[]
@@ -49,6 +50,7 @@ function serializeDay(day: {
       notes: a.notes,
       category: a.category,
       sortOrder: a.sortOrder,
+      showOnCalendar: a.showOnCalendar,
       createdAt: a.createdAt.toISOString(),
       tags: a.tags.map((t) => ({
         id: t.tag.id,

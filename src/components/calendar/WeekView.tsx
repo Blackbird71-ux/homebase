@@ -4,7 +4,7 @@ import {
   startOfWeek, endOfWeek, eachDayOfInterval,
   isToday, format, startOfDay,
 } from 'date-fns'
-import { Utensils, ClipboardList } from 'lucide-react'
+import { Utensils, ClipboardList, Plane } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
 
@@ -16,9 +16,10 @@ interface WeekViewProps {
   onEventClick: (event: CalendarEvent) => void
   onMealClick?: (date: Date) => void
   onChoreClick?: (date: Date) => void
+  onTripClick?: (tripId: string) => void
 }
 
-export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick }: WeekViewProps) {
+export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: WeekViewProps) {
   const weekStart = startOfWeek(currentDate, { weekStartsOn })
   const weekEnd = endOfWeek(currentDate, { weekStartsOn })
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
@@ -98,6 +99,13 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
         <div className="grid grid-cols-7 border-b border-border/60 bg-muted/30 shrink-0">
           {days.map((day) => {
             const today = isToday(day)
+            const dayStart = startOfDay(day)
+            const dayTripEvent = events.find(e => {
+              if (e.source !== 'trip') return false
+              const es = startOfDay(new Date(e.start))
+              const ee = startOfDay(new Date(e.end))
+              return dayStart >= es && dayStart <= ee
+            })
             return (
               <div
                 key={day.toISOString()}
@@ -121,24 +129,35 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                 ].join(' ')}>
                   {format(day, 'd')}
                 </p>
-                {onMealClick && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onMealClick(day) }}
-                    title="Add meal to planner"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity mx-auto mt-1 h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                  >
-                    <Utensils className="h-3 w-3" />
-                  </button>
-                )}
-                {onChoreClick && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onChoreClick(day) }}
-                    title="Add chore"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity mx-auto mt-1 h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                  >
-                    <ClipboardList className="h-3 w-3" />
-                  </button>
-                )}
+                <div className="flex items-center justify-center gap-0.5 mt-1">
+                  {onMealClick && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onMealClick(day) }}
+                      title="Add meal to planner"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                    >
+                      <Utensils className="h-3 w-3" />
+                    </button>
+                  )}
+                  {onChoreClick && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onChoreClick(day) }}
+                      title="Add chore"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                    >
+                      <ClipboardList className="h-3 w-3" />
+                    </button>
+                  )}
+                  {onTripClick && dayTripEvent?.tripId && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onTripClick(dayTripEvent.tripId!) }}
+                      title="View trip"
+                      className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-primary/70 hover:text-primary transition-colors"
+                    >
+                      <Plane className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}

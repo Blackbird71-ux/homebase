@@ -160,10 +160,18 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
   }
 
   function openEdit(event: CalendarEvent) {
+    if (event.source === 'trip' && event.tripId) {
+      router.push('/trips/' + event.tripId)
+      return
+    }
     if (event.isBusy) return
     setSelectedEvent(event)
     setDefaultDate(undefined)
     setModalOpen(true)
+  }
+
+  function onTripClick(tripId: string) {
+    router.push('/trips/' + tripId)
   }
 
   const isThisMonth = view === 'month'
@@ -277,6 +285,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
             onEventClick={openEdit}
             onMealClick={openNewMeal}
             onChoreClick={openNewChore}
+            onTripClick={onTripClick}
           />
         ) : (
           <WeekView
@@ -287,6 +296,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
             onEventClick={openEdit}
             onMealClick={openNewMeal}
             onChoreClick={openNewChore}
+            onTripClick={onTripClick}
           />
         )}
       </div>

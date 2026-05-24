@@ -103,6 +103,49 @@ export async function GET(req: Request) {
       })
     }
 
+    const tripActivities = await prisma.tripActivity.findMany({
+      where: {
+        showOnCalendar: true,
+        day: {
+          date: { gte: rangeStart, lte: rangeEnd },
+          trip: { familyId: user.familyId },
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        startTime: true,
+        endTime: true,
+        day: {
+          select: {
+            date: true,
+            trip: { select: { id: true, title: true, color: true } },
+          },
+        },
+      },
+    })
+    for (const act of tripActivities) {
+      const dayDate = act.day.date.toISOString().slice(0, 10)
+      const start = act.startTime ?? new Date(dayDate + 'T00:00:00.000Z')
+      const end = act.endTime ?? new Date(dayDate + 'T23:59:59.000Z')
+      const isAllDay = !act.startTime
+      calendarEvents.push({
+        id: `trip-activity-${act.id}`,
+        title: act.title,
+        description: null,
+        start: start.toISOString(),
+        end: end.toISOString(),
+        isAllDay,
+        isPersonal: false,
+        isBusy: false,
+        category: 'trip',
+        color: act.day.trip.color ?? '#6366f1',
+        createdBy: user.id,
+        source: 'trip',
+        tripId: act.day.trip.id,
+      })
+    }
+
     const income = await prisma.financeIncomeEntry.findMany({
       where: {
         familyId: user.familyId,

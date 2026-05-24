@@ -14,6 +14,7 @@ function serializeActivity(activity: {
   notes: string | null
   category: string | null
   sortOrder: number
+  showOnCalendar: boolean
   createdAt: Date
   tags: { tag: { id: string; name: string; emoji: string | null; color: string | null } }[]
 }) {
@@ -29,6 +30,7 @@ function serializeActivity(activity: {
     notes: activity.notes,
     category: activity.category,
     sortOrder: activity.sortOrder,
+    showOnCalendar: activity.showOnCalendar,
     createdAt: activity.createdAt.toISOString(),
     tags: activity.tags.map((t) => ({
       id: t.tag.id,
@@ -59,7 +61,7 @@ export async function PATCH(
   if (!activity) return NextResponse.json({ error: 'Activity not found' }, { status: 404 })
 
   const body = await req.json()
-  const { title, location, locationLat, locationLng, startTime, endTime, notes, category, sortOrder, targetDayId } = body
+  const { title, location, locationLat, locationLng, startTime, endTime, notes, category, sortOrder, showOnCalendar, targetDayId } = body
 
   if (targetDayId !== undefined) {
     const targetDay = await prisma.tripDay.findFirst({
@@ -82,6 +84,7 @@ export async function PATCH(
       ...(notes !== undefined ? { notes } : {}),
       ...(category !== undefined ? { category } : {}),
       ...(sortOrder !== undefined ? { sortOrder } : {}),
+      ...(showOnCalendar !== undefined ? { showOnCalendar } : {}),
     },
     include: { tags: { include: { tag: true } } },
   })

@@ -5,7 +5,7 @@ import {
   eachDayOfInterval, isSameMonth, isToday, format,
   startOfDay, endOfDay,
 } from 'date-fns'
-import { Utensils, ClipboardList } from 'lucide-react'
+import { Utensils, ClipboardList, Plane } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
 
@@ -17,9 +17,10 @@ interface MonthViewProps {
   onEventClick: (event: CalendarEvent) => void
   onMealClick?: (date: Date) => void
   onChoreClick?: (date: Date) => void
+  onTripClick?: (tripId: string) => void
 }
 
-export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick }: MonthViewProps) {
+export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate)
   const monthEnd = endOfMonth(currentDate)
   const calStart = startOfWeek(monthStart, { weekStartsOn })
@@ -69,6 +70,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
             const eventEnd = startOfDay(new Date(e.end))
             return dayStart >= eventStart && dayStart <= eventEnd
           })
+          const tripEvent = dayEvents.find(e => e.source === 'trip')
 
           const inMonth = isSameMonth(day, currentDate)
           const today = isToday(day)
@@ -114,6 +116,15 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
                       className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
                     >
                       <ClipboardList className="h-3 w-3" />
+                    </button>
+                  )}
+                  {onTripClick && tripEvent?.tripId && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onTripClick(tripEvent.tripId!) }}
+                      title="View trip"
+                      className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-primary/70 hover:text-primary transition-colors"
+                    >
+                      <Plane className="h-3 w-3" />
                     </button>
                   )}
                   {dayEvents.length > 3 && (

@@ -1,0 +1,1 @@
+ALTER TABLE "TripActivity" ADD COLUMN "showOnCalendar" BOOLEAN NOT NULL DEFAULT false;

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   X, Loader2, MapPin, Clock, Tag, FileText, Settings2,
-  Sun, UtensilsCrossed, Car, Hotel, Ticket,
+  Sun, UtensilsCrossed, Car, Hotel, Ticket, CalendarDays,
 } from 'lucide-react'
 import { NoteEditorToolbar } from '@/components/notes/NoteEditorToolbar'
 import { LocationAutocompleteInput } from '@/components/trips/LocationAutocompleteInput'
@@ -61,6 +61,7 @@ interface ActivityEditDialogProps {
     endTime: string | null
     notes: string | null
     category: string | null
+    showOnCalendar: boolean
   }) => Promise<void>
   onTagsChanged: (tags: TripActivityShape['tags']) => void
   onClose: () => void
@@ -83,10 +84,11 @@ export function ActivityEditDialog({
   const [location, setLocation]       = useState(activity.location ?? '')
   const [locationLat, setLocationLat] = useState<number | null>(activity.locationLat ?? null)
   const [locationLng, setLocationLng] = useState<number | null>(activity.locationLng ?? null)
-  const [category, setCategory]   = useState(activity.category ?? '')
-  const [startTime, setStartTime] = useState(timeFromIso(activity.startTime))
-  const [endTime, setEndTime]     = useState(timeFromIso(activity.endTime))
-  const [saving, setSaving]       = useState(false)
+  const [category, setCategory]           = useState(activity.category ?? '')
+  const [startTime, setStartTime]         = useState(timeFromIso(activity.startTime))
+  const [endTime, setEndTime]             = useState(timeFromIso(activity.endTime))
+  const [showOnCalendar, setShowOnCalendar] = useState(activity.showOnCalendar ?? false)
+  const [saving, setSaving]               = useState(false)
   const [error, setError]         = useState('')
 
   // Tags
@@ -186,14 +188,15 @@ export function ActivityEditDialog({
     setError('')
     try {
       await onSave({
-        title:       title.trim(),
-        location:    location.trim() || null,
-        locationLat: location.trim() ? locationLat : null,
-        locationLng: location.trim() ? locationLng : null,
-        startTime:   buildIsoDateTime(dayDate, startTime),
-        endTime:     buildIsoDateTime(dayDate, endTime),
-        notes:       editorRef.current?.innerHTML?.trim() || null,
-        category:    category || null,
+        title:          title.trim(),
+        location:       location.trim() || null,
+        locationLat:    location.trim() ? locationLat : null,
+        locationLng:    location.trim() ? locationLng : null,
+        startTime:      buildIsoDateTime(dayDate, startTime),
+        endTime:        buildIsoDateTime(dayDate, endTime),
+        notes:          editorRef.current?.innerHTML?.trim() || null,
+        category:       category || null,
+        showOnCalendar,
       })
       onClose()
     } catch {
@@ -306,6 +309,53 @@ export function ActivityEditDialog({
                 aria-label="End time"
               />
             </div>
+          </div>
+
+          {/* Show on calendar */}
+          <div className="hb-field">
+            <label className="hb-field__label"><CalendarDays size={12} /> Calendar</label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showOnCalendar}
+              onClick={() => setShowOnCalendar(v => !v)}
+              disabled={saving}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'none',
+                border: 'none',
+                cursor: saving ? 'default' : 'pointer',
+                padding: 0,
+                fontSize: 13,
+                color: 'var(--foreground)',
+              }}
+            >
+              <span style={{
+                display: 'inline-flex',
+                width: 36,
+                height: 20,
+                borderRadius: 10,
+                background: showOnCalendar ? 'var(--primary)' : 'var(--muted)',
+                position: 'relative',
+                transition: 'background 0.15s',
+                flexShrink: 0,
+              }}>
+                <span style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: showOnCalendar ? 18 : 2,
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  background: 'white',
+                  transition: 'left 0.15s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }} />
+              </span>
+              Show on family calendar
+            </button>
           </div>
 
           {/* Tags */}

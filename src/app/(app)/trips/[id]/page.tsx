@@ -102,6 +102,7 @@ export default async function TripDetailPage({
         notes: act.notes,
         category: act.category,
         sortOrder: act.sortOrder,
+        showOnCalendar: act.showOnCalendar,
         createdAt: act.createdAt.toISOString(),
         tags: act.tags.map((t) => ({
           id: t.tag.id,

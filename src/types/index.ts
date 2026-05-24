@@ -170,7 +170,8 @@ export interface CalendarEvent {
   seriesId?: string | null
   isRecurring?: boolean
   isRecurringInstance?: boolean
-  source?: 'bill' | 'income'
+  source?: 'bill' | 'income' | 'trip'
+  tripId?: string
 }
 
 // Custom theme color definitions
@@ -307,6 +308,7 @@ export interface TripActivityShape {
   notes: string | null
   category: string | null
   sortOrder: number
+  showOnCalendar: boolean
   tags: { id: string; name: string; emoji: string | null; color: string | null }[]
 }
 
