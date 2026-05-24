@@ -191,6 +191,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       return
     }
     if (event.isBusy) return
+    if (event.source === 'bill' || event.source === 'income') return
     setSelectedEvent(event)
     setDefaultDate(undefined)
     setModalOpen(true)
