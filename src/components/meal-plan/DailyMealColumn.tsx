@@ -30,6 +30,7 @@ interface DailyMealColumnProps {
   isToday: boolean
   onMealClick: (date: string, mealType: MealType) => void
   onMealClear: (entryId: string) => void
+  onRemoveRecipe?: (mealPlanRecipeId: string, mealPlanId: string) => void
   onMealAddToGroceries: (entryId: string) => void
   onViewRecipe?: (recipeId: string) => void
   selectMode?: boolean
@@ -52,6 +53,7 @@ function DroppableMealSlot({
   onToggleMealSelect,
   onMealClick,
   onMealClear,
+  onRemoveRecipe,
   onMealAddToGroceries,
   onViewRecipe,
   compact,
@@ -66,6 +68,7 @@ function DroppableMealSlot({
   onToggleMealSelect?: (entryId: string) => void
   onMealClick: (date: string, mealType: MealType) => void
   onMealClear: (entryId: string) => void
+  onRemoveRecipe?: (mealPlanRecipeId: string, mealPlanId: string) => void
   onMealAddToGroceries: (entryId: string) => void
   onViewRecipe?: (recipeId: string) => void
   compact: boolean
@@ -152,6 +155,7 @@ function DroppableMealSlot({
           mealType={mealType.id}
           onClick={() => onMealClick(date, mealType.id)}
           onClear={() => entry && onMealClear(entry.id)}
+          onRemoveRecipe={entry ? (mealPlanRecipeId) => onRemoveRecipe?.(mealPlanRecipeId, entry.id) : undefined}
           onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
           onViewRecipe={onViewRecipe}
           naturalHeight={compact}
@@ -170,6 +174,7 @@ export function DailyMealColumn({
   isToday,
   onMealClick,
   onMealClear,
+  onRemoveRecipe,
   onMealAddToGroceries,
   onViewRecipe,
   selectMode = false,
@@ -242,6 +247,7 @@ export function DailyMealColumn({
                   onToggleMealSelect={onToggleMealSelect}
                   onMealClick={onMealClick}
                   onMealClear={onMealClear}
+                  onRemoveRecipe={onRemoveRecipe}
                   onMealAddToGroceries={onMealAddToGroceries}
                   onViewRecipe={onViewRecipe}
                   compact
@@ -325,6 +331,7 @@ export function DailyMealColumn({
                 onToggleMealSelect={onToggleMealSelect}
                 onMealClick={onMealClick}
                 onMealClear={onMealClear}
+                onRemoveRecipe={onRemoveRecipe}
                 onMealAddToGroceries={onMealAddToGroceries}
                 onViewRecipe={onViewRecipe}
                 compact
@@ -399,6 +406,7 @@ export function DailyMealColumn({
               isSelected={false}
               onMealClick={onMealClick}
               onMealClear={onMealClear}
+              onRemoveRecipe={onRemoveRecipe}
               onMealAddToGroceries={onMealAddToGroceries}
               onViewRecipe={onViewRecipe}
               compact={false}

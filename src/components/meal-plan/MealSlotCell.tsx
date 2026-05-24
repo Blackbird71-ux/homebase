@@ -23,6 +23,7 @@ interface MealSlotCellProps {
   mealType?: string
   onClick: () => void
   onClear: () => void
+  onRemoveRecipe?: (mealPlanRecipeId: string) => void
   onAddToGroceries?: () => void
   onViewRecipe?: (recipeId: string) => void
   naturalHeight?: boolean // mobile: remove fixed h-16 and line-clamp
@@ -39,6 +40,7 @@ export function MealSlotCell({
   mealType = 'dinner',
   onClick,
   onClear,
+  onRemoveRecipe,
   onAddToGroceries,
   onViewRecipe,
   naturalHeight = false,
@@ -95,6 +97,7 @@ export function MealSlotCell({
               naturalHeight={naturalHeight}
               isNewlyMoved={isNewlyMoved}
               onViewRecipe={onViewRecipe}
+              onRemove={onRemoveRecipe ? () => onRemoveRecipe(recipe.id) : undefined}
             />
           ) : (
             <div key={recipe.id} className="flex items-start gap-0.5">
@@ -291,6 +294,7 @@ function DraggableRecipeItem({
   naturalHeight,
   isNewlyMoved,
   onViewRecipe,
+  onRemove,
 }: {
   recipe: { id: string; recipeId: string; recipeName: string; imageUrl?: string | null; courseType?: string; order: number }
   date: string
@@ -299,6 +303,7 @@ function DraggableRecipeItem({
   naturalHeight: boolean
   isNewlyMoved: boolean
   onViewRecipe?: (recipeId: string) => void
+  onRemove?: () => void
 }) {
   const router = useRouter()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -376,6 +381,20 @@ function DraggableRecipeItem({
       >
         <ChefHatIcon className="h-2.5 w-2.5" />
       </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            onRemove()
+          }}
+          className="shrink-0 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          title="Remove from meal"
+        >
+          <XIcon className="h-2.5 w-2.5" />
+        </button>
+      )}
     </div>
   )
 }

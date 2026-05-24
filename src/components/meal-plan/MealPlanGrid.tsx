@@ -45,7 +45,7 @@ export function MealPlanGrid({
   mealPlanLayout: initialLayout = 'multi',
 }: MealPlanGridProps) {
   const mealData = useMealPlanData(initialWeekStart, initialEntries, timezone)
-  const { weekStart, entries, setEntries, loading, scope, setScope, navWeek, goToday, refresh, assign, remove, clearPeriod } = mealData
+  const { weekStart, entries, setEntries, loading, scope, setScope, navWeek, goToday, refresh, assign, remove, removeRecipe, clearPeriod } = mealData
   const drag = useMealPlanDragDrop({ entries, setEntries, weekStart, scope })
   const { panelWidth, isResizing, onMouseDown: onResizerMouseDown } = usePanelResize()
 
@@ -294,6 +294,7 @@ export function MealPlanGrid({
                         isToday={ymd === today}
                         onMealClick={openModal}
                         onMealClear={remove}
+                        onRemoveRecipe={removeRecipe}
                         onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
                         onViewRecipe={handleViewRecipe}
                         selectMode={selectMode}

@@ -87,6 +87,19 @@ export function useMealPlanData(
     else toast.error('Failed to clear meal. Please try again.')
   }
 
+  async function removeRecipe(mealPlanRecipeId: string, mealPlanId: string) {
+    const res = await fetch(`/api/meal-plan/recipe/${mealPlanRecipeId}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error('Failed to remove recipe. Please try again.'); return }
+    const data = await res.json()
+    if (data.mealPlanDeleted) {
+      setEntries(prev => prev.filter(e => e.id !== mealPlanId))
+    } else {
+      setEntries(prev => prev.map(e =>
+        e.id !== mealPlanId ? e : { ...e, recipes: e.recipes.filter(r => r.id !== mealPlanRecipeId) }
+      ))
+    }
+  }
+
   async function clearPeriod(): Promise<boolean> {
     const { from, to } = scopeDateRange(weekStart, scope)
     try {
@@ -112,6 +125,6 @@ export function useMealPlanData(
     weekStart, entries, setEntries, loading,
     scope, setScope,
     navWeek, goToday, refresh,
-    assign, remove, clearPeriod,
+    assign, remove, removeRecipe, clearPeriod,
   }
 }
