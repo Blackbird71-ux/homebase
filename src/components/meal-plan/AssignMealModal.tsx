@@ -378,20 +378,24 @@ function DraggableRecipeRow({ recipe, onSelect }: { recipe: Recipe; onSelect: ()
     id: `recipe-${recipe.id}`,
     data: { recipeId: recipe.id, recipeName: recipe.title },
   })
+  const initials = recipe.title.slice(0, 2).toUpperCase()
   return (
     <div
       ref={setNodeRef}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, opacity: isDragging ? 0.35 : 1 } : undefined}
-      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-muted group"
+      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/70 transition-colors group"
     >
       <span
         {...listeners}
         {...attributes}
-        className="cursor-grab text-muted-foreground shrink-0 touch-none"
+        className="cursor-grab text-muted-foreground/40 hover:text-muted-foreground shrink-0 touch-none transition-colors"
       >
         <GripVerticalIcon className="h-4 w-4" />
       </span>
-      <button type="button" className="flex-1 text-left" onClick={onSelect}>
+      <div className="h-7 w-7 rounded bg-muted shrink-0 flex items-center justify-center">
+        <span className="text-[9px] font-semibold text-muted-foreground">{initials}</span>
+      </div>
+      <button type="button" className="flex-1 text-left text-sm font-medium text-foreground truncate" onClick={onSelect}>
         {recipe.title}
       </button>
     </div>
@@ -405,13 +409,20 @@ function MealDropZone() {
     <div
       ref={setNodeRef}
       className={[
-        'flex items-center justify-center rounded-lg border-2 border-dashed h-16 text-sm transition-colors select-none',
+        'flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed h-20 text-sm transition-colors select-none shrink-0',
         isOver
           ? 'border-primary bg-primary/10 text-primary font-medium'
-          : 'border-border text-muted-foreground',
+          : 'border-border/60 bg-muted/30 text-muted-foreground hover:border-border hover:bg-muted/50',
       ].join(' ')}
     >
-      {isOver ? 'Release to add to meal' : 'Drag a recipe here — or click to add instantly'}
+      {isOver ? (
+        <span className="font-medium">Release to add to meal</span>
+      ) : (
+        <>
+          <GripVerticalIcon className="h-4 w-4 opacity-40" />
+          <span className="text-xs">Drag a recipe here — or click one below</span>
+        </>
+      )}
     </div>
   )
 }
@@ -524,14 +535,14 @@ export function AssignMealModal({
             </p>
           )}
         </DrawerHeader>
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          <Tabs defaultValue="recipe">
+        <div className="flex flex-col flex-1 overflow-hidden px-4 py-3">
+          <Tabs defaultValue="recipe" className="flex-1 overflow-hidden">
             <TabsList>
               <TabsTrigger value="recipe">Recipe</TabsTrigger>
               <TabsTrigger value="note">Note</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="recipe" className="mt-3 flex flex-col gap-3">
+            <TabsContent value="recipe" className="flex flex-col overflow-hidden mt-3 gap-3">
               <DndContext
                 sensors={sensors}
                 onDragStart={({ active }) => {
@@ -540,86 +551,92 @@ export function AssignMealModal({
                 onDragEnd={handleDragEnd}
                 onDragCancel={() => setDraggingName(null)}
               >
-                <MealDropZone />
+                <div className="flex flex-col flex-1 overflow-hidden gap-3">
+                  <MealDropZone />
 
-                <div className="relative">
-                  <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setSearch(e.target.value)
-                      if (showQuickAdd || showScrape) {
-                        setShowQuickAdd(false)
-                        setShowScrape(false)
-                      }
-                    }}
-                    placeholder="Search recipes..."
-                    className="pl-8"
-                  />
-                </div>
-
-                {/* ── Recipe list or "no results" actions ── */}
-                {noResults && !showQuickAdd && !showScrape ? (
-                  <div className="flex flex-col gap-3 py-2">
-                    <p className="text-sm text-muted-foreground text-center">
-                      No recipes found for &ldquo;{search}&rdquo;
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        onClick={() => setShowQuickAdd(true)}
-                      >
-                        <PlusIcon className="h-4 w-4 mr-2" />
-                        Add &ldquo;{search}&rdquo; as Single Item
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        onClick={() => setShowScrape(true)}
-                      >
-                        <ExternalLinkIcon className="h-4 w-4 mr-2" />
-                        Search for Recipe Online (Paste URL)
-                      </Button>
-                    </div>
+                  <div className="relative shrink-0">
+                    <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        setSearch(e.target.value)
+                        if (showQuickAdd || showScrape) {
+                          setShowQuickAdd(false)
+                          setShowScrape(false)
+                        }
+                      }}
+                      placeholder="Search recipes..."
+                      className="pl-8"
+                    />
                   </div>
-                ) : showQuickAdd ? (
-                  <QuickAddForm
-                    searchTerm={search}
-                    onAssign={async (data) => {
-                      await onAssign(data)
-                      onOpenChange(false)
-                      setSearch('')
-                      setShowQuickAdd(false)
-                    }}
-                    onCancel={() => setShowQuickAdd(false)}
-                  />
-                ) : showScrape ? (
-                  <ScrapeRecipeForm
-                    onAssign={async (data) => {
-                      await onAssign(data)
-                      onOpenChange(false)
-                      setSearch('')
-                      setShowScrape(false)
-                    }}
-                    onCancel={() => setShowScrape(false)}
-                  />
-                ) : (
-                  <div className="flex flex-col gap-0.5 max-h-72 overflow-y-auto">
-                    {recipes.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        Loading recipes...
+
+                  {/* ── Recipe list or "no results" actions ── */}
+                  {noResults && !showQuickAdd && !showScrape ? (
+                    <div className="flex flex-col gap-3 py-2">
+                      <p className="text-sm text-muted-foreground text-center">
+                        No recipes found for &ldquo;{search}&rdquo;
                       </p>
-                    )}
-                    {filtered.map((r) => (
-                      <DraggableRecipeRow
-                        key={r.id}
-                        recipe={r}
-                        onSelect={() => doAssign(r.id)}
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => setShowQuickAdd(true)}
+                        >
+                          <PlusIcon className="h-4 w-4 mr-2" />
+                          Add &ldquo;{search}&rdquo; as Single Item
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => setShowScrape(true)}
+                        >
+                          <ExternalLinkIcon className="h-4 w-4 mr-2" />
+                          Search for Recipe Online (Paste URL)
+                        </Button>
+                      </div>
+                    </div>
+                  ) : showQuickAdd ? (
+                    <div className="flex-1 overflow-y-auto">
+                      <QuickAddForm
+                        searchTerm={search}
+                        onAssign={async (data) => {
+                          await onAssign(data)
+                          onOpenChange(false)
+                          setSearch('')
+                          setShowQuickAdd(false)
+                        }}
+                        onCancel={() => setShowQuickAdd(false)}
                       />
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  ) : showScrape ? (
+                    <div className="flex-1 overflow-y-auto">
+                      <ScrapeRecipeForm
+                        onAssign={async (data) => {
+                          await onAssign(data)
+                          onOpenChange(false)
+                          setSearch('')
+                          setShowScrape(false)
+                        }}
+                        onCancel={() => setShowScrape(false)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col flex-1 overflow-y-auto min-h-0 -mx-1 px-1">
+                      {recipes.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Loading recipes...
+                        </p>
+                      )}
+                      {filtered.map((r) => (
+                        <DraggableRecipeRow
+                          key={r.id}
+                          recipe={r}
+                          onSelect={() => doAssign(r.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <DragOverlay>
                   {draggingName ? (
