@@ -12,7 +12,7 @@ export default async function CalendarPage() {
     where: { id: user.id },
     select: { uiPreferences: true },
   })
-  let calendarSettings = { calShowMeals: false, calShowTodos: false, calShowChores: false }
+  let calendarSettings = { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true }
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
@@ -20,6 +20,7 @@ export default async function CalendarPage() {
         calShowMeals: !!prefs.calShowMeals,
         calShowTodos: !!prefs.calShowTodos,
         calShowChores: !!prefs.calShowChores,
+        calShowBills: prefs.calShowBills !== false,
       }
     } catch { /* ignore */ }
   }
@@ -97,6 +98,29 @@ export default async function CalendarPage() {
       recurrenceRule: (e as Record<string, unknown>).recurrenceRule as string | null | undefined,
     }
   })
+
+  if (calendarSettings.calShowBills) {
+    const [bills, income] = await Promise.all([
+      prisma.financeRecurringBill.findMany({
+        where: { familyId: user.familyId, showOnCalendar: true, paid: false, isVoided: false, isActive: true, nextDueDate: { gte: from, lte: to } },
+        select: { id: true, name: true, nextDueDate: true },
+      }),
+      prisma.financeIncomeEntry.findMany({
+        where: { familyId: user.familyId, showOnCalendar: true, received: false, isVoided: false, isActive: true, nextExpectedDate: { gte: from, lte: to } },
+        select: { id: true, name: true, nextExpectedDate: true },
+      }),
+    ])
+    for (const b of bills) {
+      if (!b.nextDueDate) continue
+      const day = b.nextDueDate.toISOString().slice(0, 10)
+      calendarEvents.push({ id: `bill-${b.id}`, title: `Bill due: ${b.name}`, description: null, start: new Date(day + 'T00:00:00.000Z') as unknown as string, end: new Date(day + 'T23:59:59.000Z') as unknown as string, isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#ef4444', createdBy: user.id, source: 'bill' })
+    }
+    for (const inc of income) {
+      if (!inc.nextExpectedDate) continue
+      const day = inc.nextExpectedDate.toISOString().slice(0, 10)
+      calendarEvents.push({ id: `income-${inc.id}`, title: `Income: ${inc.name}`, description: null, start: new Date(day + 'T00:00:00.000Z') as unknown as string, end: new Date(day + 'T23:59:59.000Z') as unknown as string, isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#22c55e', createdBy: user.id, source: 'income' })
+    }
+  }
 
   return (
     <CalendarView

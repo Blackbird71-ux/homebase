@@ -15,6 +15,7 @@ export async function GET(req: Request) {
   const showMeals = searchParams.get('meals') === '1'
   const showTodos = searchParams.get('todos') === '1'
   const showChores = searchParams.get('chores') === '1'
+  const showBills = searchParams.get('bills') === '1'
 
   const rangeStart = from ? new Date(from) : null
   const rangeEnd = to ? new Date(to) : null
@@ -73,38 +74,40 @@ export async function GET(req: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const calendarEvents: any[] = expandedEvents.map((e) => maskPersonalEvent(e, user.id, memberNames.get(e.createdBy)))
 
-  // Append synthetic bill/income events
+  // Append synthetic events
   if (rangeStart && rangeEnd) {
-    const bills = await prisma.financeRecurringBill.findMany({
-      where: {
-        familyId: user.familyId,
-        showOnCalendar: true,
-        paid: false,
-        isVoided: false,
-        isActive: true,
-        nextDueDate: { gte: rangeStart, lte: rangeEnd },
-      },
-      select: { id: true, name: true, nextDueDate: true },
-    })
-    for (const b of bills) {
-      if (!b.nextDueDate) continue
-      const day = b.nextDueDate.toISOString().slice(0, 10)
-      const start = new Date(day + 'T00:00:00.000Z')
-      const end = new Date(day + 'T23:59:59.000Z')
-      calendarEvents.push({
-        id: `bill-${b.id}`,
-        title: `Bill due: ${b.name}`,
-        description: null,
-        start: start.toISOString(),
-        end: end.toISOString(),
-        isAllDay: true,
-        isPersonal: false,
-        isBusy: false,
-        category: 'finance',
-        color: '#ef4444',
-        createdBy: user.id,
-        source: 'bill',
+    if (showBills) {
+      const bills = await prisma.financeRecurringBill.findMany({
+        where: {
+          familyId: user.familyId,
+          showOnCalendar: true,
+          paid: false,
+          isVoided: false,
+          isActive: true,
+          nextDueDate: { gte: rangeStart, lte: rangeEnd },
+        },
+        select: { id: true, name: true, nextDueDate: true },
       })
+      for (const b of bills) {
+        if (!b.nextDueDate) continue
+        const day = b.nextDueDate.toISOString().slice(0, 10)
+        const start = new Date(day + 'T00:00:00.000Z')
+        const end = new Date(day + 'T23:59:59.000Z')
+        calendarEvents.push({
+          id: `bill-${b.id}`,
+          title: `Bill due: ${b.name}`,
+          description: null,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          isAllDay: true,
+          isPersonal: false,
+          isBusy: false,
+          category: 'finance',
+          color: '#ef4444',
+          createdBy: user.id,
+          source: 'bill',
+        })
+      }
     }
 
     const tripActivities = await prisma.tripActivity.findMany({
@@ -150,36 +153,38 @@ export async function GET(req: Request) {
       })
     }
 
-    const income = await prisma.financeIncomeEntry.findMany({
-      where: {
-        familyId: user.familyId,
-        showOnCalendar: true,
-        received: false,
-        isVoided: false,
-        isActive: true,
-        nextExpectedDate: { gte: rangeStart, lte: rangeEnd },
-      },
-      select: { id: true, name: true, nextExpectedDate: true },
-    })
-    for (const inc of income) {
-      if (!inc.nextExpectedDate) continue
-      const day = inc.nextExpectedDate.toISOString().slice(0, 10)
-      const start = new Date(day + 'T00:00:00.000Z')
-      const end = new Date(day + 'T23:59:59.000Z')
-      calendarEvents.push({
-        id: `income-${inc.id}`,
-        title: `Income: ${inc.name}`,
-        description: null,
-        start: start.toISOString(),
-        end: end.toISOString(),
-        isAllDay: true,
-        isPersonal: false,
-        isBusy: false,
-        category: 'finance',
-        color: '#22c55e',
-        createdBy: user.id,
-        source: 'income',
+    if (showBills) {
+      const income = await prisma.financeIncomeEntry.findMany({
+        where: {
+          familyId: user.familyId,
+          showOnCalendar: true,
+          received: false,
+          isVoided: false,
+          isActive: true,
+          nextExpectedDate: { gte: rangeStart, lte: rangeEnd },
+        },
+        select: { id: true, name: true, nextExpectedDate: true },
       })
+      for (const inc of income) {
+        if (!inc.nextExpectedDate) continue
+        const day = inc.nextExpectedDate.toISOString().slice(0, 10)
+        const start = new Date(day + 'T00:00:00.000Z')
+        const end = new Date(day + 'T23:59:59.000Z')
+        calendarEvents.push({
+          id: `income-${inc.id}`,
+          title: `Income: ${inc.name}`,
+          description: null,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          isAllDay: true,
+          isPersonal: false,
+          isBusy: false,
+          category: 'finance',
+          color: '#22c55e',
+          createdBy: user.id,
+          source: 'income',
+        })
+      }
     }
 
     if (showMeals) {

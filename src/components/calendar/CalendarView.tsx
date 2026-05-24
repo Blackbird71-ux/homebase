@@ -21,6 +21,7 @@ interface CalendarSettings {
   calShowMeals: boolean
   calShowTodos: boolean
   calShowChores: boolean
+  calShowBills: boolean
 }
 
 interface CalendarViewProps {
@@ -46,7 +47,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [choreTitle, setChoreTitle] = useState('')
   const [choreSaving, setChoreSaving] = useState(false)
   const [calSettings, setCalSettings] = useState<CalendarSettings>(
-    initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false }
+    initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true }
   )
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -89,6 +90,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       ...(s.calShowMeals ? { meals: '1' } : {}),
       ...(s.calShowTodos ? { todos: '1' } : {}),
       ...(s.calShowChores ? { chores: '1' } : {}),
+      ...(s.calShowBills ? { bills: '1' } : {}),
     })
     const res = await fetch(`/api/events?${params}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
@@ -320,6 +322,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
                   { key: 'calShowMeals' as const, label: "Tonight's dinner" },
                   { key: 'calShowTodos' as const, label: 'Todos with due date' },
                   { key: 'calShowChores' as const, label: 'Chores due' },
+                  { key: 'calShowBills' as const, label: 'Bills & income due' },
                 ] as const).map(({ key, label }) => (
                   <label key={key} className="flex items-center gap-2.5 cursor-pointer select-none">
                     <button
