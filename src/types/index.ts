@@ -172,6 +172,7 @@ export interface CalendarEvent {
   isRecurringInstance?: boolean
   source?: 'bill' | 'income' | 'trip' | 'meal' | 'todo' | 'chore'
   tripId?: string
+  createdByName?: string | null
 }
 
 // Custom theme color definitions

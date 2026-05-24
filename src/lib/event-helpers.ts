@@ -44,7 +44,7 @@ export interface EventRow {
   createdAt: Date
 }
 
-export function maskPersonalEvent(event: EventRow, viewerUserId: string) {
+export function maskPersonalEvent(event: EventRow, viewerUserId: string, creatorName?: string | null) {
   if (event.isPersonal && event.createdBy !== viewerUserId) {
     return {
       ...event,
@@ -53,6 +53,7 @@ export function maskPersonalEvent(event: EventRow, viewerUserId: string) {
       category: null,
       color: null,
       isBusy: true,
+      createdByName: creatorName ?? null,
       start: event.start.toISOString(),
       end: event.end.toISOString(),
       createdAt: event.createdAt.toISOString(),

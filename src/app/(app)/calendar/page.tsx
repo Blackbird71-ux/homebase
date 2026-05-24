@@ -31,17 +31,21 @@ export default async function CalendarPage() {
   // Fetch events including recurring ones and multi-month events that span into the range
   // Must check both start AND end so events like "Qld road trip" (Aug 1 – Sep 30)
   // appear in September even though they started before the September range
-  const events = await prisma.event.findMany({
-    where: {
-      familyId: user.familyId,
-      OR: [
-        { start: { gte: from, lte: to } },
-        { start: { lte: from }, end: { gte: from } },
-        { isRecurring: true },
-      ],
-    },
-    orderBy: { start: 'asc' },
-  })
+  const [events, members] = await Promise.all([
+    prisma.event.findMany({
+      where: {
+        familyId: user.familyId,
+        OR: [
+          { start: { gte: from, lte: to } },
+          { start: { lte: from }, end: { gte: from } },
+          { isRecurring: true },
+        ],
+      },
+      orderBy: { start: 'asc' },
+    }),
+    prisma.user.findMany({ where: { familyId: user.familyId }, select: { id: true, name: true } }),
+  ])
+  const memberNames = new Map(members.map(m => [m.id, m.name]))
 
   // Expand recurring events into individual instances
   const expandedEvents = events.flatMap((event) => {
@@ -73,7 +77,7 @@ export default async function CalendarPage() {
   })
 
   const calendarEvents: CalendarEvent[] = expandedEvents.map((e) => {
-    const masked = maskPersonalEvent(e, user.id)
+    const masked = maskPersonalEvent(e, user.id, memberNames.get(e.createdBy))
     return {
       id: masked.id,
       title: masked.title,
@@ -86,6 +90,7 @@ export default async function CalendarPage() {
       category: masked.category,
       color: masked.color,
       createdBy: masked.createdBy,
+      createdByName: (masked as Record<string, unknown>).createdByName as string | null | undefined,
       // Preserve recurring event fields so the UI can edit/delete the series
       seriesId: (e as Record<string, unknown>).seriesId as string | undefined,
       isRecurringInstance: (e as Record<string, unknown>).isRecurringInstance as boolean | undefined,

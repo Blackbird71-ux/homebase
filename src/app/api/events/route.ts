@@ -33,10 +33,11 @@ export async function GET(req: Request) {
     ]
   }
 
-  const events = await prisma.event.findMany({
-    where,
-    orderBy: { start: 'asc' },
-  })
+  const [events, members] = await Promise.all([
+    prisma.event.findMany({ where, orderBy: { start: 'asc' } }),
+    prisma.user.findMany({ where: { familyId: user.familyId }, select: { id: true, name: true } }),
+  ])
+  const memberNames = new Map(members.map(m => [m.id, m.name]))
 
   // Expand recurring events into individual instances
   const expandedEvents = events.flatMap((event) => {
@@ -70,7 +71,7 @@ export async function GET(req: Request) {
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const calendarEvents: any[] = expandedEvents.map((e) => maskPersonalEvent(e, user.id))
+  const calendarEvents: any[] = expandedEvents.map((e) => maskPersonalEvent(e, user.id, memberNames.get(e.createdBy)))
 
   // Append synthetic bill/income events
   if (rangeStart && rangeEnd) {
