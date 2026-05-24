@@ -80,6 +80,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Choose "Replace" to clear the list first, or "Append" to add to existing items.',
           'Use "Copy List" to copy the grouped shopping list to your clipboard — handy for messaging.',
           'Use "Download CSV" to export the list as a CSV file for spreadsheets or other apps.',
+          'Category overrides you make in the preview dialog are automatically saved — the app learns new mappings and updates existing custom overrides.',
         ],
       },
       {
@@ -525,6 +526,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Active budget rules appear as progress bars showing how much has been spent versus the budgeted amount.',
           'Each bar changes colour: green while under budget, amber when nearing the alert threshold, red when over.',
           'A surplus or shortfall callout shows the total remaining or overspent across all budgets.',
+          'An amber alert banner appears at the top of the dashboard when one or more budgets are at or over their alert threshold — click "View budgets" to go to the full budget page.',
         ],
       },
       {
@@ -673,6 +675,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Tick "Auto-pay" to flag bills that are paid automatically from your account — they still appear in the list as a record.',
           'Tick "Show on calendar" to display unpaid bills as calendar events (red, read-only).',
           'Tick "Email reminder" to receive an email before the bill is due. Set how many days in advance under "Remind N days before".',
+          'Bill reminder emails include a one-click "Mark as Paid" button — clicking it marks the bill as paid without logging in.',
           'Email reminders require SMTP to be configured in Settings → Email.',
         ],
       },
@@ -1227,7 +1230,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Configure SMTP settings to enable email reminders and PIN-reset emails.',
           'Supports any SMTP provider — for Gmail use an App Password (not your regular password).',
           'Use "Test Email" to send a verification message to the admin\'s address.',
-          'Reminders for chores, events, and expiring documents are processed automatically at 8:00 AM daily.',
+          'Reminders for chores, events, expiring documents, and bills are processed automatically at 8:00 AM daily.',
           'Use "Send Reminders Now" to trigger processing immediately without waiting for the scheduled run.',
           'Set REMINDER_CRON_SCHEDULE in your environment to change the schedule; set CRON_SECRET to secure the endpoint.',
         ],
