@@ -962,6 +962,101 @@ function FamiliesTab() {
   )
 }
 
+// ── Private Events Diagnostic Panel ──────────────────────────────────────────
+
+interface PrivateEventRow {
+  id: string
+  title: string
+  createdByName: string
+  start: string
+  end: string
+  isAllDay: boolean
+  isRecurring: boolean
+  recurrenceRule: string | null
+  recurrenceEndDate: string | null
+  category: string | null
+}
+
+function PrivateEventsPanel() {
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<{ total: number; events: PrivateEventRow[] } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function fetch_() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/events/private')
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed')
+      setData(json)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">Personal Events (Unmasked)</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Shows all events marked as personal with their real titles and owners.</p>
+        </div>
+        <button
+          onClick={fetch_}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shrink-0"
+        >
+          {loading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+          {loading ? 'Loading…' : 'Fetch'}
+        </button>
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {data && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{data.total} personal event{data.total !== 1 ? 's' : ''} found</p>
+          {data.total === 0 ? (
+            <p className="text-xs text-muted-foreground italic">No personal events.</p>
+          ) : (
+            <div className="overflow-x-auto rounded border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border">
+                    <th className="text-left px-2 py-1.5 font-medium">Title</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Owner</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Start</th>
+                    <th className="text-left px-2 py-1.5 font-medium">End</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Recurring</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Category</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.events.map(e => (
+                    <tr key={e.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-2 py-1.5 font-medium">{e.title}</td>
+                      <td className="px-2 py-1.5 text-muted-foreground">{e.createdByName}</td>
+                      <td className="px-2 py-1.5 text-muted-foreground">{e.start}</td>
+                      <td className="px-2 py-1.5 text-muted-foreground">{e.end}</td>
+                      <td className="px-2 py-1.5 text-muted-foreground">
+                        {e.isRecurring ? (e.recurrenceRule ?? 'yes') : '—'}
+                      </td>
+                      <td className="px-2 py-1.5 text-muted-foreground">{e.category ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 type Tab = 'operations' | 'families'
@@ -1029,6 +1124,11 @@ export default function AdminPage() {
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">NAS Docker Logs — Real Container Output</h2>
             <NasLogViewer />
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Diagnostics</h2>
+            <PrivateEventsPanel />
           </section>
         </>
       )}
