@@ -6,11 +6,13 @@
 !PROJECT_SUMMARY.md
 !AGENTS.md
 !CLAUDE.md
+!CHECKLIST.md
 !DEPLOY.md
 
 # EXCEPT AI tool configuration
 !.roo/prompts/**/*.md
 !.roomodes
+!.zoo/prompts/**/*.md
 
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
