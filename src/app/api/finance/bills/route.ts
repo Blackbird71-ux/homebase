@@ -233,6 +233,7 @@ export async function POST(request: NextRequest) {
     billType, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
     paid, paidDate, entityId, taxClassification,
+    showOnCalendar,
     journalLines,
   } = json
 

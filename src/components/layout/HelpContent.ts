@@ -77,6 +77,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'The preview dialog shows which items are new vs already in your list.',
           'You can toggle individual recipes on/off before exporting.',
           'Choose "Replace" to clear the list first, or "Append" to add to existing items.',
+          'Use "Copy List" to copy the grouped shopping list to your clipboard — handy for messaging.',
+          'Use "Download CSV" to export the list as a CSV file for spreadsheets or other apps.',
         ],
       },
       {
@@ -250,6 +252,23 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click on a date or the "+" button to create a new event.',
           'Set the title, date/time, category, and color.',
           'Mark events as all-day for birthdays or holidays.',
+        ],
+      },
+      {
+        title: 'Quick-Add from Day Cells',
+        items: [
+          'Hover over any day cell in Month or Week view to reveal quick-add icons.',
+          'Click the Utensils icon to open the meal planner with the clicked date and dinner pre-filled.',
+          'Click the ClipboardList icon to open a quick-add chore drawer — enter a title and save.',
+        ],
+      },
+      {
+        title: 'Bills & Income on Calendar',
+        items: [
+          'Unpaid bills and unreceived income entries can appear as synthetic calendar events.',
+          'Bill events show as "Bill due: [name]" in red; income events show as "Income: [name]" in green.',
+          'Toggle visibility per entry using the "Show on calendar" checkbox in bill, income, and recurring template editors.',
+          'These events are read-only (they cannot be edited or deleted from the calendar view).',
         ],
       },
       {
@@ -640,6 +659,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         title: 'Auto-Pay & Reminders',
         items: [
           'Tick "Auto-pay" to flag bills that are paid automatically from your account — they still appear in the list as a record.',
+          'Tick "Show on calendar" to display unpaid bills as calendar events (red, read-only).',
           'Tick "Email reminder" to receive an email before the bill is due. Set how many days in advance under "Remind N days before".',
           'Email reminders require SMTP to be configured in Settings → Email.',
         ],
@@ -1096,6 +1116,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click "Connect Google Calendar" and follow the OAuth flow; then use "Sync Now" to push/pull changes.',
           'Admins can configure a Cloudflare Tunnel URL for secure remote access from outside the home network.',
           'Admins can enter a Umami analytics site ID and URL for website traffic tracking.',
+          'Use the Cozi Recipe Import section to migrate recipes from Cozi: paste recipe HTML, use the bookmarklet to extract JSON from a Cozi page, or manually enter recipe details.',
+          'Cozi-imported recipes are saved into a "Cozi Import" recipe book and can be assigned to a different book during import.',
         ],
       },
       {
@@ -1216,6 +1238,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Enter name, amount, category (must be an Income type category), account, entity, and the expected date.',
           'For recurring income, set the frequency (Weekly, Fortnightly, Monthly, etc.) and the next expected date.',
           'Assign a member and location if the income is specific to one person or property.',
+          'Tick "Show on calendar" to display unreceived income as calendar events (green, read-only).',
         ],
       },
       {
@@ -1704,6 +1727,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Frequency options: Weekly, Fortnightly, Monthly, Quarterly, Yearly, or Custom (set your own interval).',
           'Set the next occurrence date to control when the first auto-spawn happens.',
           'Templates can include GL account mappings, entity assignments, member/location assignments, and tax classifications.',
+          'Toggle "Show on calendar" to display spawned bill/income entries as synthetic calendar events.',
         ],
       },
       {

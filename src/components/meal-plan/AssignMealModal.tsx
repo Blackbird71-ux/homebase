@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import {
+  DndContext, DragOverlay,
+  useDraggable, useDroppable,
+  PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
@@ -14,6 +20,7 @@ import {
   GlobeIcon,
   ShoppingCartIcon,
   CheckIcon,
+  GripVerticalIcon,
 } from 'lucide-react'
 import { isLikelyHeading } from '@/lib/ingredient-helpers'
 
@@ -365,6 +372,50 @@ function ScrapeRecipeForm({
   )
 }
 
+// ── Draggable recipe row ──
+function DraggableRecipeRow({ recipe, onSelect }: { recipe: Recipe; onSelect: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `recipe-${recipe.id}`,
+    data: { recipeId: recipe.id, recipeName: recipe.title },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, opacity: isDragging ? 0.35 : 1 } : undefined}
+      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-muted group"
+    >
+      <span
+        {...listeners}
+        {...attributes}
+        className="cursor-grab text-muted-foreground shrink-0 touch-none"
+      >
+        <GripVerticalIcon className="h-4 w-4" />
+      </span>
+      <button type="button" className="flex-1 text-left" onClick={onSelect}>
+        {recipe.title}
+      </button>
+    </div>
+  )
+}
+
+// ── Meal slot drop zone ──
+function MealDropZone() {
+  const { setNodeRef, isOver } = useDroppable({ id: 'meal-slot-drop' })
+  return (
+    <div
+      ref={setNodeRef}
+      className={[
+        'flex items-center justify-center rounded-lg border-2 border-dashed h-16 text-sm transition-colors select-none',
+        isOver
+          ? 'border-primary bg-primary/10 text-primary font-medium'
+          : 'border-border text-muted-foreground',
+      ].join(' ')}
+    >
+      {isOver ? 'Release to add to meal' : 'Drag a recipe here — or click to add instantly'}
+    </div>
+  )
+}
+
 // ── Main component ──
 export function AssignMealModal({
   open,
@@ -379,26 +430,22 @@ export function AssignMealModal({
   const [search, setSearch] = useState('')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
-  const [selectedRecipeIds, setSelectedRecipeIds] = useState<string[]>([])
+  const [draggingName, setDraggingName] = useState<string | null>(null)
 
   // "No results" action state
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [showScrape, setShowScrape] = useState(false)
 
-  // Initialize selected recipes from existingRecipes
-  useEffect(() => {
-    if (open && existingRecipes.length > 0) {
-      setSelectedRecipeIds(existingRecipes.map(r => r.recipeId))
-    } else if (open) {
-      setSelectedRecipeIds([])
-    }
-  }, [open, existingRecipes])
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
 
-  // Reset action states when modal opens/closes
+  // Reset state when modal opens/closes
   useEffect(() => {
     if (!open) {
       setShowQuickAdd(false)
       setShowScrape(false)
+      setSearch('')
     }
   }, [open])
 
@@ -417,25 +464,17 @@ export function AssignMealModal({
     r.title.toLowerCase().includes(search.toLowerCase())
   )
 
-  function toggleRecipe(recipeId: string) {
-    setSelectedRecipeIds(prev => {
-      if (prev.includes(recipeId)) {
-        return prev.filter(id => id !== recipeId)
-      } else {
-        return [...prev, recipeId]
-      }
-    })
+  async function doAssign(recipeId: string) {
+    await onAssign({ recipeIds: [recipeId] })
+    onOpenChange(false)
   }
 
-  async function saveRecipes() {
-    setSaving(true)
-    try {
-      await onAssign({ recipeIds: selectedRecipeIds })
-      onOpenChange(false)
-      setSearch('')
-      setSelectedRecipeIds([])
-    } finally {
-      setSaving(false)
+  function handleDragEnd(event: DragEndEvent) {
+    setDraggingName(null)
+    const { active, over } = event
+    if (over?.id === 'meal-slot-drop' && active.data.current) {
+      const { recipeId } = active.data.current as { recipeId: string }
+      doAssign(recipeId)
     }
   }
 
@@ -447,7 +486,6 @@ export function AssignMealModal({
       await onAssign({ note: note.trim(), recipeIds: [] })
       onOpenChange(false)
       setNote('')
-      setSelectedRecipeIds([])
     } finally {
       setSaving(false)
     }
@@ -475,7 +513,7 @@ export function AssignMealModal({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="sm:max-w-[800px]" showCloseButton={true}>
+      <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
         <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
           <DrawerTitle>
             {displayDate} — {mealType}
@@ -483,161 +521,130 @@ export function AssignMealModal({
           {hasExisting && (
             <p className="text-sm text-muted-foreground mt-1">
               Currently has {existingRecipes.length} recipe{existingRecipes.length !== 1 ? 's' : ''}.
-              Select more to add, or use the options below.
             </p>
           )}
         </DrawerHeader>
         <div className="flex-1 overflow-y-auto px-4 py-3">
-        <Tabs defaultValue="recipe">
-          <TabsList>
-            <TabsTrigger value="recipe">Recipe</TabsTrigger>
-            <TabsTrigger value="note">Note</TabsTrigger>
-          </TabsList>
+          <Tabs defaultValue="recipe">
+            <TabsList>
+              <TabsTrigger value="recipe">Recipe</TabsTrigger>
+              <TabsTrigger value="note">Note</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="recipe" className="mt-3 flex flex-col gap-3">
-            <div className="relative">
-              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setSearch(e.target.value)
-                  if (showQuickAdd || showScrape) {
-                    setShowQuickAdd(false)
-                    setShowScrape(false)
-                  }
+            <TabsContent value="recipe" className="mt-3 flex flex-col gap-3">
+              <DndContext
+                sensors={sensors}
+                onDragStart={({ active }) => {
+                  setDraggingName((active.data.current as any)?.recipeName ?? null)
                 }}
-                placeholder="Search recipes..."
-                className="pl-8"
-              />
-            </div>
-
-            {/* Selected recipes summary */}
-            {selectedRecipeIds.length > 0 && (
-              <div className="bg-muted/50 rounded-md p-2">
-                <p className="text-xs font-medium mb-1">Selected recipes ({selectedRecipeIds.length}):</p>
-                <div className="flex flex-wrap gap-1">
-                  {selectedRecipeIds.map(recipeId => {
-                    const recipe = recipes.find(r => r.id === recipeId)
-                    return recipe ? (
-                      <span
-                        key={recipeId}
-                        className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-1 rounded"
-                      >
-                        {recipe.title}
-                        <button
-                          type="button"
-                          onClick={() => toggleRecipe(recipeId)}
-                          className="text-primary/70 hover:text-primary"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ) : null
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── Recipe list or "no results" actions ── */}
-            {noResults && !showQuickAdd && !showScrape ? (
-              <div className="flex flex-col gap-3 py-2">
-                <p className="text-sm text-muted-foreground text-center">
-                  No recipes found for &ldquo;{search}&rdquo;
-                </p>
-                <div className="flex flex-col gap-2">
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => setShowQuickAdd(true)}
-                  >
-                    <PlusIcon className="h-4 w-4 mr-2" />
-                    Add &ldquo;{search}&rdquo; as Single Item
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => setShowScrape(true)}
-                  >
-                    <ExternalLinkIcon className="h-4 w-4 mr-2" />
-                    Search for Recipe Online (Paste URL)
-                  </Button>
-                </div>
-              </div>
-            ) : showQuickAdd ? (
-              <QuickAddForm
-                searchTerm={search}
-                onAssign={async (data) => {
-                  await onAssign(data)
-                  onOpenChange(false)
-                  setSearch('')
-                  setSelectedRecipeIds([])
-                  setShowQuickAdd(false)
-                }}
-                onCancel={() => setShowQuickAdd(false)}
-              />
-            ) : showScrape ? (
-              <ScrapeRecipeForm
-                onAssign={async (data) => {
-                  await onAssign(data)
-                  onOpenChange(false)
-                  setSearch('')
-                  setSelectedRecipeIds([])
-                  setShowScrape(false)
-                }}
-                onCancel={() => setShowScrape(false)}
-              />
-            ) : (
-              /* Normal recipe list */
-              <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-                {filtered.length === 0 && search.trim() === '' && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Type to search recipes
-                  </p>
-                )}
-                {filtered.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => toggleRecipe(r.id)}
-                    disabled={saving}
-                    className={`text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                      selectedRecipeIds.includes(r.id)
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    {r.title}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Save button (only show when not in quick-add/scrape mode) */}
-            {!showQuickAdd && !showScrape && (
-              <Button
-                onClick={saveRecipes}
-                disabled={saving}
-                className="mt-2"
+                onDragEnd={handleDragEnd}
+                onDragCancel={() => setDraggingName(null)}
               >
-                {saving ? 'Saving...' : `Save ${selectedRecipeIds.length > 0 ? `(${selectedRecipeIds.length} recipes)` : 'meal'}`}
-              </Button>
-            )}
-          </TabsContent>
+                <MealDropZone />
 
-          <TabsContent value="note" className="mt-3">
-            <form onSubmit={assignNote} className="flex flex-col gap-3">
-              <Input
-                value={note}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNote(e.target.value)}
-                placeholder="e.g. Takeaway, Leftovers, BBQ"
-                autoFocus
-              />
-              <Button type="submit" disabled={saving || !note.trim()}>
-                {saving ? 'Saving...' : 'Save note'}
-              </Button>
-            </form>
-          </TabsContent>
-        </Tabs>
+                <div className="relative">
+                  <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setSearch(e.target.value)
+                      if (showQuickAdd || showScrape) {
+                        setShowQuickAdd(false)
+                        setShowScrape(false)
+                      }
+                    }}
+                    placeholder="Search recipes..."
+                    className="pl-8"
+                  />
+                </div>
+
+                {/* ── Recipe list or "no results" actions ── */}
+                {noResults && !showQuickAdd && !showScrape ? (
+                  <div className="flex flex-col gap-3 py-2">
+                    <p className="text-sm text-muted-foreground text-center">
+                      No recipes found for &ldquo;{search}&rdquo;
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => setShowQuickAdd(true)}
+                      >
+                        <PlusIcon className="h-4 w-4 mr-2" />
+                        Add &ldquo;{search}&rdquo; as Single Item
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => setShowScrape(true)}
+                      >
+                        <ExternalLinkIcon className="h-4 w-4 mr-2" />
+                        Search for Recipe Online (Paste URL)
+                      </Button>
+                    </div>
+                  </div>
+                ) : showQuickAdd ? (
+                  <QuickAddForm
+                    searchTerm={search}
+                    onAssign={async (data) => {
+                      await onAssign(data)
+                      onOpenChange(false)
+                      setSearch('')
+                      setShowQuickAdd(false)
+                    }}
+                    onCancel={() => setShowQuickAdd(false)}
+                  />
+                ) : showScrape ? (
+                  <ScrapeRecipeForm
+                    onAssign={async (data) => {
+                      await onAssign(data)
+                      onOpenChange(false)
+                      setSearch('')
+                      setShowScrape(false)
+                    }}
+                    onCancel={() => setShowScrape(false)}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-0.5 max-h-72 overflow-y-auto">
+                    {recipes.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Loading recipes...
+                      </p>
+                    )}
+                    {filtered.map((r) => (
+                      <DraggableRecipeRow
+                        key={r.id}
+                        recipe={r}
+                        onSelect={() => doAssign(r.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <DragOverlay>
+                  {draggingName ? (
+                    <div className="px-3 py-2 rounded-md text-sm bg-background border border-border shadow-lg">
+                      {draggingName}
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            </TabsContent>
+
+            <TabsContent value="note" className="mt-3">
+              <form onSubmit={assignNote} className="flex flex-col gap-3">
+                <Input
+                  value={note}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNote(e.target.value)}
+                  placeholder="e.g. Takeaway, Leftovers, BBQ"
+                  autoFocus
+                />
+                <Button type="submit" disabled={saving || !note.trim()}>
+                  {saving ? 'Saving...' : 'Save note'}
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
         </div>
       </DrawerContent>
     </Drawer>
