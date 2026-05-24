@@ -1069,5 +1069,68 @@ grep -rn "DrawerContent" src/ --include="*.tsx" | grep -v "showCloseButton\|impo
 
 ---
 
-*Last updated: 2026-05-21. Maintained by the development team — update on every significant feature or bug fix.*
+### 12.20 UTC vs Local Time — The Root Cause of Recurring Calendar Bugs
+
+**The single most common source of bugs in this codebase.** Every time a date-related bug has appeared — events missing before 10am, meals duplicated on consecutive days, weekly summaries skipping today — the root cause has been the same: treating UTC midnight as if it were local midnight.
+
+**The server runs in UTC. The user lives in UTC+10. They are not the same.**
+
+For UTC+10 (Australia/Sydney):
+- Local midnight = `2026-05-26T14:00:00Z` (previous UTC day)
+- UTC midnight = `2026-05-26T00:00:00Z` (10 hours *after* local midnight)
+
+Any filter using UTC midnight as "start of day" silently excludes events between local midnight (14:00Z) and UTC midnight (00:00Z) — a 10-hour gap during which real events exist.
+
+**The two manifestations of this bug:**
+
+**1. Missing events (UTC midnight used as query lower bound)**
+```ts
+// WRONG — excludes events between 14:00Z and 00:00Z for UTC+10 users
+const start = new Date('2026-05-26T00:00:00Z')
+prisma.event.findMany({ where: { start: { gte: start } } })
+
+// CORRECT
+const { start } = todayBoundsInTz(timezone) // = 2026-05-25T14:00:00Z
+prisma.event.findMany({ where: { start: { gte: start } } })
+```
+
+**2. Duplicate events (UTC end-of-day spills into next local day)**
+
+Synthetic events (meals, chores, bills, todos, trips) store dates using UTC midnight convention:
+```ts
+start = new Date(day + 'T00:00:00.000Z')  // UTC midnight = correct calendar date
+end   = new Date(day + 'T23:59:59.000Z')  // UTC end-of-day
+```
+For UTC+10, `T23:59:59.000Z` = `next day 09:59 AEST`. Any bucketing code that parses this end timestamp in local time and checks `dayStart <= eventEnd` will show the event on *two* consecutive calendar days.
+
+**The fix pattern — always use `src/lib/timezone.ts` helpers:**
+
+```ts
+// For query boundaries:
+const { start: todayStart } = todayBoundsInTz(timezone)
+
+// For day-range bucketing on calendar events (both real and synthetic):
+import { eventFallsOnDay } from '@/lib/event-helpers'
+eventFallsOnDay(event, day, timezone)  // uses dateStringInTz internally
+
+// For display:
+import { formatInTz } from '@/lib/timezone'
+formatInTz(date, timezone, { weekday: 'short', day: 'numeric' })
+```
+
+**Never do this:**
+```ts
+new Date('YYYY-MM-DDT00:00:00Z')           // UTC midnight — wrong for UTC+10
+startOfDay(new Date(event.end))            // date-fns uses runtime TZ (UTC on server)
+format(date, 'EEE')                        // date-fns uses runtime TZ on server
+date.toLocaleDateString()                  // no explicit timeZone — uses runtime TZ
+```
+
+**Affected modules to check after any date logic change:** calendar event bucketing, upcoming events card, weekly summary, bill due date filters, chore schedules, meal plan display.
+
+**Smoke test:** As a UTC+10 user, create an event and a meal at 9am local time on today's date. Both must appear on the correct day in the calendar on first load, not the previous day and not duplicated on the following day.
+
+---
+
+*Last updated: 2026-05-24. Maintained by the development team — update on every significant feature or bug fix.*
 

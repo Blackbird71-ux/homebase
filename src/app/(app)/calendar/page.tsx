@@ -103,6 +103,7 @@ export default async function CalendarPage() {
       initialEvents={calendarEvents}
       weekStartsOn={user.weekStartsOn as 0 | 1}
       currentUserId={user.id}
+      timezone={user.timezone}
       calendarSettings={calendarSettings}
     />
   )

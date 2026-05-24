@@ -3,17 +3,19 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, isSameMonth, isToday, format,
-  startOfDay,
+  eachDayOfInterval, isSameMonth, isToday,
 } from 'date-fns'
 import { Utensils, ClipboardList, Plane, X } from 'lucide-react'
 import { EventBadge } from './EventBadge'
+import { eventFallsOnDay } from '@/lib/event-helpers'
+import { formatInTz } from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
 
 interface MonthViewProps {
   currentDate: Date
   events: CalendarEvent[]
   weekStartsOn: 0 | 1
+  timezone: string
   onDayClick: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
   onMealClick?: (date: Date) => void
@@ -27,7 +29,7 @@ interface OverflowPopup {
   left: number
 }
 
-export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: MonthViewProps) {
+export function MonthView({ currentDate, events, weekStartsOn, timezone, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate)
   const monthEnd = endOfMonth(currentDate)
   const calStart = startOfWeek(monthStart, { weekStartsOn })
@@ -62,12 +64,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
   const weeks = Math.ceil(days.length / 7)
 
   const overflowDayEvents = overflow
-    ? events.filter(e => {
-        const eventStart = startOfDay(new Date(e.start))
-        const eventEnd = startOfDay(new Date(e.end))
-        const dayStart = startOfDay(overflow.day)
-        return dayStart >= eventStart && dayStart <= eventEnd
-      })
+    ? events.filter(e => eventFallsOnDay(e, overflow.day, timezone))
     : []
 
   return (
@@ -96,17 +93,12 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
         style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
       >
         {days.map((day, idx) => {
-          const dayStart = startOfDay(day)
           const col = idx % 7
           const isWeekend = weekStartsOn === 0
             ? col === 0 || col === 6
             : col === 5 || col === 6
 
-          const dayEvents = events.filter(e => {
-            const eventStart = startOfDay(new Date(e.start))
-            const eventEnd = startOfDay(new Date(e.end))
-            return dayStart >= eventStart && dayStart <= eventEnd
-          })
+          const dayEvents = events.filter(e => eventFallsOnDay(e, day, timezone))
           const tripEvent = dayEvents.find(e => e.source === 'trip')
 
           const inMonth = isSameMonth(day, currentDate)
@@ -134,7 +126,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
                       : 'text-foreground group-hover:bg-accent group-hover:text-accent-foreground',
                   ].join(' ')}
                 >
-                  {format(day, 'd')}
+                  {formatInTz(day, timezone, { day: 'numeric' })}
                 </span>
                 <div className="flex items-center gap-0.5">
                   {onMealClick && (
@@ -204,7 +196,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
           style={{ top: overflow.top, left: overflow.left }}
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
-            <span className="text-sm font-semibold">{format(overflow.day, 'EEEE d MMMM')}</span>
+            <span className="text-sm font-semibold">{formatInTz(overflow.day, timezone, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             <button
               onClick={() => setOverflow(null)}
               className="text-muted-foreground hover:text-foreground transition-colors"

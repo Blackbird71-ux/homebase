@@ -113,3 +113,11 @@ export function nDaysFromTodayInTz(n: number, timezone: string): Date {
   const { start: todayStart } = todayBoundsInTz(timezone)
   return new Date(todayStart.getTime() + n * 86_400_000)
 }
+
+/**
+ * Returns the YYYY-MM-DD calendar date string for a Date in the given timezone.
+ * Use for day-range comparisons where the calendar date (not UTC date) is what matters.
+ */
+export function dateStringInTz(date: Date, timezone: string): string {
+  return date.toLocaleDateString('en-CA', { timeZone: timezone })
+}

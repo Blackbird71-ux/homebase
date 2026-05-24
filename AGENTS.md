@@ -18,6 +18,57 @@ For any task with more than one distinct step, state a brief plan with verifiabl
 
 ---
 
+# Timezone rules — ALL date logic must work in the user's local time
+
+The server runs in UTC. The database stores all datetimes in UTC. The user lives in a local timezone (e.g. Australia/Sydney = UTC+10). These are not the same and the difference causes bugs.
+
+**The rule: every date boundary, filter, and display must be computed relative to the user's local timezone, not UTC.**
+
+## The correct pattern
+
+Use helpers from `src/lib/timezone.ts` — these are the **only** approved ways to compute date boundaries and format dates server-side:
+
+```ts
+// Today's start/end as UTC Dates representing local midnight:
+const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
+// todayStart for UTC+10 on 2026-05-23 = 2026-05-22T14:00:00Z  ← NOT 2026-05-23T00:00:00Z
+
+// Rolling N-day window end (= todayStart + N * 86_400_000):
+const endDate = nDaysFromTodayInTz(7, timezone)
+
+// Current calendar month start/end:
+const { start: monthStart, end: monthEnd } = monthBoundsInTz(timezone)
+
+// Timezone-aware display (replaces toLocaleDateString / date-fns format):
+const label = formatInTz(date, timezone, { weekday: 'short', day: 'numeric', month: 'short' })
+
+// Calendar day bucketing for events:
+const onDay = eventFallsOnDay(event, day, timezone)  // from src/lib/event-helpers.ts
+```
+
+Use `todayStart` directly as range boundaries in Prisma queries and in-code filters. Never substitute UTC midnight (`new Date('YYYY-MM-DDT00:00:00Z')`) as a stand-in for "start of day".
+
+**Meal plan exception:** Meal plan dates are stored as UTC midnight of the calendar date by convention. Displaying them with `timeZone: 'UTC'` is intentional and correct — do not replace these with `formatInTz`.
+
+## The failure modes
+
+**Missing events:** Computing a day boundary as UTC midnight is **wrong** for users east of UTC. For UTC+10, real local midnight = `2026-05-22T14:00:00Z`, but UTC midnight = `2026-05-23T00:00:00Z` — 10 hours late. Events between 14:00Z and 00:00Z are excluded.
+
+**Duplicate events (spillover):** Synthetic all-day events use `end = T23:59:59.000Z`. For UTC+10 this is 09:59 next-day local time. Using `startOfDay(new Date(event.end))` produces next-day midnight, making the event appear on two consecutive calendar days. Fix: use `eventFallsOnDay(event, day, timezone)`.
+
+## Rules
+
+1. **Never use `normalizeToUtcMidnight(dateStr)` as a query boundary for "today".** It returns UTC midnight, not the user's local midnight.
+2. **Never construct a day boundary with `new Date('YYYY-MM-DDT00:00:00Z')`.** Same problem.
+3. **Never use `startOfDay(new Date(event.end))` to bucket calendar events.** Use `eventFallsOnDay(event, day, timezone)` from `src/lib/event-helpers.ts`.
+4. **`todayStart` from `todayBoundsInTz` is the single source of truth** for the start of today in all queries and in-code filters.
+5. **Scope/window end boundaries must also be tz-aware.** Use `nDaysFromTodayInTz(N, timezone)` — never compute as UTC midnight of the Nth future date.
+6. **In-code filters must use the same boundaries as the DB query.**
+7. **Display: use `formatInTz(date, timezone, options)` from `src/lib/timezone.ts`.** Do not use `date-fns` `format()` for display — it uses the JS runtime timezone (UTC on the server).
+8. **Never `import ... from 'date-fns'` in server-side files.** Use `todayBoundsInTz`/`nDaysFromTodayInTz`/`monthBoundsInTz` instead.
+
+---
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
@@ -132,55 +183,23 @@ All form editors, detail panels, and complex dialogs must use the right-side Dra
 
 ---
 
-# Timezone rules — ALL date logic must work in the user's local time
+# SSR safety — browser APIs crash the server
 
-The server runs in UTC. The database stores all datetimes in UTC. The user lives in a local timezone (e.g. Australia/Sydney = UTC+10). These are not the same and the difference causes bugs.
-
-**The rule: every date boundary, filter, and display must be computed relative to the user's local timezone, not UTC.**
-
-## The correct pattern
-
-Use helpers from `src/lib/timezone.ts` — these are the **only** approved ways to compute date boundaries and format dates server-side:
-
-```ts
-// Today's start/end as UTC Dates representing local midnight:
-const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
-// todayStart for UTC+10 on 2026-05-23 = 2026-05-22T14:00:00Z  ← NOT 2026-05-23T00:00:00Z
-
-// Rolling N-day window end (= todayStart + N * 86_400_000):
-const endDate = nDaysFromTodayInTz(7, timezone)
-
-// Current calendar month start/end:
-const { start: monthStart, end: monthEnd } = monthBoundsInTz(timezone)
-
-// Timezone-aware display (replaces toLocaleDateString / date-fns format):
-const label = formatInTz(date, timezone, { weekday: 'short', day: 'numeric', month: 'short' })
-```
-
-Use `todayStart` directly as range boundaries in Prisma queries and in-code filters. Never substitute UTC midnight (`new Date('YYYY-MM-DDT00:00:00Z')`) as a stand-in for "start of day".
-
-**Meal plan exception:** Meal plan dates are stored as UTC midnight of the calendar date by convention. Displaying them with `timeZone: 'UTC'` is intentional and correct — do not replace these with `formatInTz`.
-
-## The failure mode
-
-Computing a day boundary as UTC midnight (e.g. `normalizeToUtcMidnight(todayDateStr)`) is **wrong** for users east of UTC. For UTC+10:
-
-- Real local midnight = `2026-05-22T14:00:00Z`
-- UTC midnight = `2026-05-23T00:00:00Z` — that is 10 hours late
-
-Any event stored between `14:00Z` and `00:00Z` UTC on the prior day (i.e. between local midnight and 10 AM local time) will be **excluded** from queries that use UTC midnight as the lower bound, even though those events fall squarely within "today" for the user.
-
-This was the root cause of the weekly summary missing today's events while the upcoming events card (which already used `todayStart`) showed them correctly.
+Next.js renders pages on the server first. `sessionStorage`, `localStorage`, `window`, and `document` do not exist in Node.js. Accessing them at module load time or in `useState` initialisers throws a `ReferenceError` that crashes SSR.
 
 ## Rules
 
-1. **Never use `normalizeToUtcMidnight(dateStr)` as a query boundary for "today".** It returns UTC midnight, not the user's local midnight.
-2. **Never construct a day boundary with `new Date('YYYY-MM-DDT00:00:00Z')`.** Same problem.
-3. **`todayStart` from `todayBoundsInTz` is the single source of truth** for the start of today in all queries and in-code filters.
-4. **Scope/window end boundaries must also be tz-aware.** Use `nDaysFromTodayInTz(N, timezone)` — never compute as UTC midnight of the Nth future date.
-5. **In-code filters must use the same boundaries as the DB query.** If the DB query uses `weekStartUtc`, the subsequent `.filter(e => e.start >= weekStartUtc)` must use the identical value.
-6. **Display: use `formatInTz(date, timezone, options)` from `src/lib/timezone.ts`.** Do not use `date-fns` `format()` or raw `toLocaleDateString(..., { timeZone: 'UTC' })` for display — they use the JS runtime's local timezone (UTC on the server) rather than the user's family timezone.
-7. **Never use `require('date-fns')` or `import ... from 'date-fns'` in server-side tool/handler files.** `addDays`, `parseISO`, etc. resolve dates using the JS runtime timezone (UTC on the server). Use `todayBoundsInTz`/`nDaysFromTodayInTz`/`monthBoundsInTz` instead.
+1. **Never access `sessionStorage`, `localStorage`, `window`, or `document` in a `useState` initialiser.** These run at render time on the server.
+   ```tsx
+   // WRONG — crashes SSR:
+   const [val, setVal] = useState(localStorage.getItem('key') ?? '')
+
+   // RIGHT — runs only in the browser:
+   const [val, setVal] = useState('')
+   useEffect(() => { setVal(localStorage.getItem('key') ?? '') }, [])
+   ```
+2. **Guard with `typeof window !== 'undefined'`** if you must read a browser API outside of `useEffect`.
+3. **Never use `requireSession()` or `requireAdmin()` in API route handlers.** Use `auth()` directly and return `NextResponse.json({ error }, { status })`. (See QA.md §12.12.)
 
 ---
 

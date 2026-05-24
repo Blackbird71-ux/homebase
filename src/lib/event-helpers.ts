@@ -1,4 +1,22 @@
+import { dateStringInTz } from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
+
+/**
+ * Returns true if the event falls on the given calendar day, using the family's timezone.
+ * Synthetic events (meals, chores, bills, etc.) store dates in UTC midnight convention
+ * where the UTC date string IS the calendar date — compared directly against the local date string.
+ * Real events use Intl-based timezone conversion so local midnight is always correct.
+ */
+export function eventFallsOnDay(event: CalendarEvent, day: Date, timezone: string): boolean {
+  const dayStr = dateStringInTz(day, timezone)
+  if (event.source) {
+    // Synthetic: UTC date string is the calendar date by convention
+    return dayStr >= event.start.slice(0, 10) && dayStr <= event.end.slice(0, 10)
+  }
+  const eventStartStr = dateStringInTz(new Date(event.start), timezone)
+  const eventEndStr = dateStringInTz(new Date(event.end), timezone)
+  return dayStr >= eventStartStr && dayStr <= eventEndStr
+}
 
 /** Return the canonical event ID to update — recurring instances point to their seriesId. */
 export function getEventId(event: CalendarEvent): string {

@@ -1,17 +1,19 @@
 'use client'
 
 import {
-  startOfWeek, endOfWeek, eachDayOfInterval,
-  isToday, format, startOfDay,
+  startOfWeek, endOfWeek, eachDayOfInterval, isToday,
 } from 'date-fns'
 import { Utensils, ClipboardList, Plane } from 'lucide-react'
 import { EventBadge } from './EventBadge'
+import { eventFallsOnDay } from '@/lib/event-helpers'
+import { formatInTz } from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
 
 interface WeekViewProps {
   currentDate: Date
   events: CalendarEvent[]
   weekStartsOn: 0 | 1
+  timezone: string
   onDayClick: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
   onMealClick?: (date: Date) => void
@@ -19,7 +21,7 @@ interface WeekViewProps {
   onTripClick?: (tripId: string) => void
 }
 
-export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: WeekViewProps) {
+export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: WeekViewProps) {
   const weekStart = startOfWeek(currentDate, { weekStartsOn })
   const weekEnd = endOfWeek(currentDate, { weekStartsOn })
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
@@ -30,20 +32,9 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
       {/* ── Mobile: vertical day list ─────────────────────────────────── */}
       <div className="md:hidden flex-1 overflow-y-auto">
         {days.map((day) => {
-          const dayStart = startOfDay(day)
-          const allDay = events.filter((e) => {
-            if (!e.isAllDay) return false
-            const es = startOfDay(new Date(e.start))
-            const ee = startOfDay(new Date(e.end))
-            return dayStart >= es && dayStart <= ee
-          })
+          const allDay = events.filter((e) => e.isAllDay && eventFallsOnDay(e, day, timezone))
           const timed = events
-            .filter((e) => {
-              if (e.isAllDay) return false
-              const es = startOfDay(new Date(e.start))
-              const ee = startOfDay(new Date(e.end))
-              return dayStart >= es && dayStart <= ee
-            })
+            .filter((e) => !e.isAllDay && eventFallsOnDay(e, day, timezone))
             .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
           const allEvents = [...allDay, ...timed]
           const today = isToday(day)
@@ -63,13 +54,13 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                   'text-xs font-bold uppercase tracking-widest w-8 shrink-0',
                   today ? 'text-primary' : 'text-muted-foreground',
                 ].join(' ')}>
-                  {format(day, 'EEE')}
+                  {formatInTz(day, timezone, { weekday: 'short' })}
                 </span>
                 <span className={[
                   'text-sm font-bold h-7 w-7 flex items-center justify-center rounded-full shrink-0 transition-colors',
                   today ? 'bg-primary text-primary-foreground shadow-sm' : 'text-foreground',
                 ].join(' ')}>
-                  {format(day, 'd')}
+                  {formatInTz(day, timezone, { day: 'numeric' })}
                 </span>
               </div>
               <div className="ml-11 flex flex-col gap-1.5">
@@ -77,7 +68,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                   <div key={e.id} onClick={(ev) => { ev.stopPropagation(); onEventClick(e) }}>
                     {!e.isAllDay && (
                       <span className="text-xs text-muted-foreground font-medium block mb-0.5">
-                        {format(new Date(e.start), 'h:mm a')}
+                        {formatInTz(new Date(e.start), timezone, { hour: 'numeric', minute: '2-digit', hour12: true })}
                       </span>
                     )}
                     <EventBadge event={e} onClick={onEventClick} />
@@ -99,13 +90,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
         <div className="grid grid-cols-7 border-b border-border/60 bg-muted/30 shrink-0">
           {days.map((day) => {
             const today = isToday(day)
-            const dayStart = startOfDay(day)
-            const dayTripEvent = events.find(e => {
-              if (e.source !== 'trip') return false
-              const es = startOfDay(new Date(e.start))
-              const ee = startOfDay(new Date(e.end))
-              return dayStart >= es && dayStart <= ee
-            })
+            const dayTripEvent = events.find(e => e.source === 'trip' && eventFallsOnDay(e, day, timezone))
             return (
               <div
                 key={day.toISOString()}
@@ -119,7 +104,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                   'text-xs font-bold uppercase tracking-widest mb-1',
                   today ? 'text-primary' : 'text-muted-foreground',
                 ].join(' ')}>
-                  {format(day, 'EEE')}
+                  {formatInTz(day, timezone, { weekday: 'short' })}
                 </p>
                 <p className={[
                   'text-xl font-bold mx-auto w-10 h-10 flex items-center justify-center rounded-full transition-all',
@@ -127,7 +112,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                     ? 'bg-primary text-primary-foreground shadow-md'
                     : 'text-foreground hover:bg-accent hover:text-accent-foreground',
                 ].join(' ')}>
-                  {format(day, 'd')}
+                  {formatInTz(day, timezone, { day: 'numeric' })}
                 </p>
                 <div className="flex items-center justify-center gap-0.5 mt-1">
                   {onMealClick && (
@@ -166,13 +151,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
         {/* All-day events row */}
         <div className="grid grid-cols-7 border-b border-border/60 shrink-0 min-h-[2rem]">
           {days.map((day) => {
-            const dayStart = startOfDay(day)
-            const allDay = events.filter((e) => {
-              if (!e.isAllDay) return false
-              const es = startOfDay(new Date(e.start))
-              const ee = startOfDay(new Date(e.end))
-              return dayStart >= es && dayStart <= ee
-            })
+            const allDay = events.filter((e) => e.isAllDay && eventFallsOnDay(e, day, timezone))
             return (
               <div key={day.toISOString()} className="p-1 border-r border-border/40 last:border-r-0 flex flex-col gap-0.5 bg-muted/10">
                 {allDay.map((e) => <EventBadge key={e.id} event={e} onClick={onEventClick} />)}
@@ -185,15 +164,9 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
         <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-7 h-full divide-x divide-border/40">
             {days.map((day) => {
-              const dayStart = startOfDay(day)
               const today = isToday(day)
               const timed = events
-                .filter((e) => {
-                  if (e.isAllDay) return false
-                  const es = startOfDay(new Date(e.start))
-                  const ee = startOfDay(new Date(e.end))
-                  return dayStart >= es && dayStart <= ee
-                })
+                .filter((e) => !e.isAllDay && eventFallsOnDay(e, day, timezone))
                 .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
               return (
                 <div
@@ -207,7 +180,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                   {timed.map((e) => (
                     <div key={e.id} className="flex flex-col gap-0.5" onClick={(ev) => ev.stopPropagation()}>
                       <span className="text-xs text-muted-foreground font-medium px-1">
-                        {format(new Date(e.start), 'h:mm a')}
+                        {formatInTz(new Date(e.start), timezone, { hour: 'numeric', minute: '2-digit', hour12: true })}
                       </span>
                       <EventBadge event={e} onClick={onEventClick} />
                     </div>

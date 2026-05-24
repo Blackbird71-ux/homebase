@@ -27,10 +27,11 @@ interface CalendarViewProps {
   initialEvents: CalendarEvent[]
   weekStartsOn: 0 | 1
   currentUserId: string
+  timezone: string
   calendarSettings?: CalendarSettings
 }
 
-export function CalendarView({ initialEvents, weekStartsOn, currentUserId, calendarSettings: initialSettings }: CalendarViewProps) {
+export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timezone, calendarSettings: initialSettings }: CalendarViewProps) {
   const router = useRouter()
   const [view, setView] = useState<'month' | 'week'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -98,6 +99,12 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, calen
       refresh()
     })
     return cleanup
+  }, [refresh])
+
+  // Fetch full event list on mount — SSR only includes real Event records,
+  // not synthetic events (meals, chores, bills) added by /api/events
+  useEffect(() => {
+    refresh()
   }, [refresh])
 
   function navigate(dir: 'prev' | 'next') {
@@ -360,6 +367,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, calen
             currentDate={currentDate}
             events={events}
             weekStartsOn={weekStartsOn}
+            timezone={timezone}
             onDayClick={date => openNew(date)}
             onEventClick={openEdit}
             onMealClick={openNewMeal}
@@ -371,6 +379,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, calen
             currentDate={currentDate}
             events={events}
             weekStartsOn={weekStartsOn}
+            timezone={timezone}
             onDayClick={date => openNew(date)}
             onEventClick={openEdit}
             onMealClick={openNewMeal}

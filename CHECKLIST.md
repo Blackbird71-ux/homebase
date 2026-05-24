@@ -1,0 +1,59 @@
+# Pre-Code Checklist — Read Before Every Change
+
+This file is auto-loaded every session. Work through the relevant sections before writing code.
+
+---
+
+## Every change
+
+- [ ] `npx tsc --noEmit` passes **before** the change (baseline) and **after** (no regressions)
+- [ ] Touched a shared lib function? Grep all callers — fix the same pattern everywhere, not just the reported file
+- [ ] Every changed line traces directly to the user's request — no bonus cleanup, no speculative abstractions
+
+---
+
+## Date and time — #1 source of bugs in this codebase
+
+The server is UTC. The user is UTC+10. They are not the same. **See AGENTS.md §Timezone and QA.md §12.20.**
+
+- [ ] **Never** use `new Date('YYYY-MM-DDT00:00:00Z')` as a day boundary → use `todayBoundsInTz(timezone)`
+- [ ] **Never** use `date-fns` in a server-side file → use helpers from `src/lib/timezone.ts`
+- [ ] **Never** use `startOfDay(new Date(event.end))` to bucket calendar events → use `eventFallsOnDay(event, day, timezone)`
+- [ ] Display dates with `formatInTz(date, timezone, options)` — not `format()` from date-fns
+- [ ] Meal plan dates are UTC midnight by convention — display with `timeZone: 'UTC'` (this is the one exception)
+
+---
+
+## Forms and dialogs — second most common bug source
+
+Silent field loss during layout refactors has happened repeatedly. **See AGENTS.md §Form rules.**
+
+- [ ] List every `<input>`, `<select>`, `<textarea>`, and checkbox **before** editing
+- [ ] Verify every field is still present **after** editing
+- [ ] `openEdit` / `openNew` explicitly assigns every interface field — no silent fallback to empty defaults
+- [ ] PATCH/PUT body sends every editable field
+- [ ] API handler accepts every field the form sends
+
+---
+
+## Drawers
+
+- [ ] Every `DrawerContent` has `showCloseButton={true}`
+- [ ] After any drawer layout change, run: `grep -rn "DrawerContent" src/ --include="*.tsx" | grep -v "showCloseButton\|import\|sheet.tsx"`
+
+---
+
+## Finance — always consult QA.md first
+
+- [ ] Read **QA.md §1** (blast-radius protocol) before touching any finance file
+- [ ] Read **QA.md §2** (accounting invariants) before any GL or journal change
+- [ ] Read **QA.md §12** (known anti-patterns) — especially 12.1, 12.2, 12.7, 12.9, 12.20
+- [ ] GL posting logic in `src/lib/` helpers only — never inline in a route
+- [ ] Bug found in bills? Check income for the same bug. Bug found in income? Check bills. (AGENTS.md Finance rule 5)
+
+---
+
+## SSR safety
+
+- [ ] No `sessionStorage`, `localStorage`, `window`, or `document` in `useState` initialisers — wrap in `typeof window !== 'undefined'` or move to `useEffect`
+- [ ] No `requireSession()` or `requireAdmin()` in API route handlers — use `auth()` directly and return `NextResponse.json({ error }, { status })` (QA.md §12.12)
