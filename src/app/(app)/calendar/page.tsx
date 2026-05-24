@@ -8,6 +8,22 @@ import type { CalendarEvent } from '@/types'
 export default async function CalendarPage() {
   const user = await requireSession()
 
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { uiPreferences: true },
+  })
+  let calendarSettings = { calShowMeals: false, calShowTodos: false, calShowChores: false }
+  if (fullUser?.uiPreferences) {
+    try {
+      const prefs = JSON.parse(fullUser.uiPreferences)
+      calendarSettings = {
+        calShowMeals: !!prefs.calShowMeals,
+        calShowTodos: !!prefs.calShowTodos,
+        calShowChores: !!prefs.calShowChores,
+      }
+    } catch { /* ignore */ }
+  }
+
   const now = new Date()
   const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const to = new Date(now.getFullYear(), now.getMonth() + 3, 31)
@@ -82,6 +98,7 @@ export default async function CalendarPage() {
       initialEvents={calendarEvents}
       weekStartsOn={user.weekStartsOn as 0 | 1}
       currentUserId={user.id}
+      calendarSettings={calendarSettings}
     />
   )
 }

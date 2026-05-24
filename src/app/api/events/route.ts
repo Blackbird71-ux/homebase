@@ -12,6 +12,9 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
+  const showMeals = searchParams.get('meals') === '1'
+  const showTodos = searchParams.get('todos') === '1'
+  const showChores = searchParams.get('chores') === '1'
 
   const rangeStart = from ? new Date(from) : null
   const rangeEnd = to ? new Date(to) : null
@@ -176,6 +179,113 @@ export async function GET(req: Request) {
         createdBy: user.id,
         source: 'income',
       })
+    }
+
+    if (showMeals) {
+      const meals = await prisma.mealPlan.findMany({
+        where: {
+          familyId: user.familyId,
+          mealType: 'dinner',
+          date: { gte: rangeStart, lte: rangeEnd },
+        },
+        select: {
+          id: true,
+          date: true,
+          note: true,
+          recipe: { select: { title: true } },
+          recipes: { select: { recipe: { select: { title: true } } } },
+        },
+      })
+      for (const meal of meals) {
+        const names: string[] = []
+        if (meal.recipes.length > 0) {
+          names.push(...meal.recipes.map(r => r.recipe.title))
+        } else if (meal.recipe) {
+          names.push(meal.recipe.title)
+        } else if (meal.note) {
+          names.push(meal.note)
+        }
+        const label = names.length > 0 ? `Dinner: ${names.join(', ')}` : 'Dinner planned'
+        const day = meal.date.toISOString().slice(0, 10)
+        const start = new Date(day + 'T00:00:00.000Z')
+        const end = new Date(day + 'T23:59:59.000Z')
+        calendarEvents.push({
+          id: `meal-${meal.id}`,
+          title: label,
+          description: meal.note ?? null,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          isAllDay: true,
+          isPersonal: false,
+          isBusy: false,
+          category: 'meal',
+          color: '#f59e0b',
+          createdBy: user.id,
+          source: 'meal',
+        })
+      }
+    }
+
+    if (showTodos) {
+      const todos = await prisma.listItem.findMany({
+        where: {
+          isCompleted: false,
+          dueDate: { gte: rangeStart, lte: rangeEnd },
+          list: { familyId: user.familyId },
+        },
+        select: { id: true, content: true, dueDate: true },
+      })
+      for (const todo of todos) {
+        if (!todo.dueDate) continue
+        const day = todo.dueDate.toISOString().slice(0, 10)
+        const start = new Date(day + 'T00:00:00.000Z')
+        const end = new Date(day + 'T23:59:59.000Z')
+        calendarEvents.push({
+          id: `todo-${todo.id}`,
+          title: `Todo: ${todo.content}`,
+          description: null,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          isAllDay: true,
+          isPersonal: false,
+          isBusy: false,
+          category: 'todo',
+          color: '#8b5cf6',
+          createdBy: user.id,
+          source: 'todo',
+        })
+      }
+    }
+
+    if (showChores) {
+      const chores = await prisma.chore.findMany({
+        where: {
+          familyId: user.familyId,
+          isActive: true,
+          nextDueDate: { gte: rangeStart, lte: rangeEnd },
+        },
+        select: { id: true, title: true, nextDueDate: true },
+      })
+      for (const chore of chores) {
+        if (!chore.nextDueDate) continue
+        const day = chore.nextDueDate.toISOString().slice(0, 10)
+        const start = new Date(day + 'T00:00:00.000Z')
+        const end = new Date(day + 'T23:59:59.000Z')
+        calendarEvents.push({
+          id: `chore-${chore.id}`,
+          title: `Chore: ${chore.title}`,
+          description: null,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          isAllDay: true,
+          isPersonal: false,
+          isBusy: false,
+          category: 'chore',
+          color: '#06b6d4',
+          createdBy: user.id,
+          source: 'chore',
+        })
+      }
     }
   }
 

@@ -128,6 +128,9 @@ export function AppearanceTab({
   const [secureCardStyle, setSecureCardStyle] = useState(initialSecureCardStyle)
   const [secureCardColor, setSecureCardColor] = useState(initialSecureCardColor)
   const [mealPlanLayout, setMealPlanLayout] = useState<'single' | 'multi'>('multi')
+  const [calShowMeals, setCalShowMeals] = useState(false)
+  const [calShowTodos, setCalShowTodos] = useState(false)
+  const [calShowChores, setCalShowChores] = useState(false)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<Status>(null)
 
@@ -175,6 +178,9 @@ export function AppearanceTab({
           if (prefs?.weatherLocation) {
             setWeatherLocation(prefs.weatherLocation)
           }
+          setCalShowMeals(!!prefs?.calShowMeals)
+          setCalShowTodos(!!prefs?.calShowTodos)
+          setCalShowChores(!!prefs?.calShowChores)
         }
       } catch {
         // ignore
@@ -203,6 +209,9 @@ export function AppearanceTab({
           secureCardColor,
           mealPlanLayout,
           weatherLocation: weatherLocation || null,
+          calShowMeals,
+          calShowTodos,
+          calShowChores,
         },
       }
 
@@ -656,6 +665,47 @@ export function AppearanceTab({
               </Select>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Calendar display */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Calendar Display</CardTitle>
+          <CardDescription>
+            Choose what extra information appears on the family calendar alongside events.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {([
+            { key: 'calShowMeals' as const, setter: setCalShowMeals, state: calShowMeals, label: "Tonight's dinner", description: "Shows the meal plan entry for each day." },
+            { key: 'calShowTodos' as const, setter: setCalShowTodos, state: calShowTodos, label: 'Todos with a due date', description: 'Shows incomplete todo items that have a due date set.' },
+            { key: 'calShowChores' as const, setter: setCalShowChores, state: calShowChores, label: 'Chores due', description: 'Shows chores whose next due date falls on that day.' },
+          ] as const).map(({ setter, state, label, description }) => (
+            <label key={label} className="flex items-start gap-3 cursor-pointer select-none">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={state}
+                onClick={() => setter(v => !v)}
+                style={{
+                  marginTop: 2, display: 'inline-flex', width: 36, height: 20, borderRadius: 10,
+                  background: state ? 'var(--primary)' : 'var(--muted)',
+                  position: 'relative', transition: 'background 0.15s', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0,
+                }}
+              >
+                <span style={{
+                  position: 'absolute', top: 2, left: state ? 18 : 2,
+                  width: 16, height: 16, borderRadius: '50%', background: 'white',
+                  transition: 'left 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }} />
+              </button>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">{label}</span>
+                <span className="text-xs text-muted-foreground">{description}</span>
+              </span>
+            </label>
+          ))}
         </CardContent>
       </Card>
 

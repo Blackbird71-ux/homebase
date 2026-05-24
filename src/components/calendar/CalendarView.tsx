@@ -7,7 +7,7 @@ import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
 } from 'date-fns'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MonthView } from './MonthView'
 import { WeekView } from './WeekView'
@@ -17,13 +17,20 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/u
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import type { CalendarEvent } from '@/types'
 
+interface CalendarSettings {
+  calShowMeals: boolean
+  calShowTodos: boolean
+  calShowChores: boolean
+}
+
 interface CalendarViewProps {
   initialEvents: CalendarEvent[]
   weekStartsOn: 0 | 1
   currentUserId: string
+  calendarSettings?: CalendarSettings
 }
 
-export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: CalendarViewProps) {
+export function CalendarView({ initialEvents, weekStartsOn, currentUserId, calendarSettings: initialSettings }: CalendarViewProps) {
   const router = useRouter()
   const [view, setView] = useState<'month' | 'week'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -37,6 +44,10 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
   const [choreDate, setChoreDate] = useState('')
   const [choreTitle, setChoreTitle] = useState('')
   const [choreSaving, setChoreSaving] = useState(false)
+  const [calSettings, setCalSettings] = useState<CalendarSettings>(
+    initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false }
+  )
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const viewRef = useRef(view)
   const currentDateRef = useRef(currentDate)
@@ -50,9 +61,13 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
     setEvents(initialEvents)
   }, [initialEvents])
 
-  const refresh = useCallback(async (date?: Date, currentView?: string) => {
+  const calSettingsRef = useRef(calSettings)
+  calSettingsRef.current = calSettings
+
+  const refresh = useCallback(async (date?: Date, currentView?: string, settings?: CalendarSettings) => {
     const targetDate = date ?? currentDateRef.current
     const targetView = currentView ?? viewRef.current
+    const s = settings ?? calSettingsRef.current
     let rangeStart: Date
     let rangeEnd: Date
     if (targetView === 'month') {
@@ -70,6 +85,9 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
     const params = new URLSearchParams({
       from: rangeStart.toISOString(),
       to: rangeEnd.toISOString(),
+      ...(s.calShowMeals ? { meals: '1' } : {}),
+      ...(s.calShowTodos ? { todos: '1' } : {}),
+      ...(s.calShowChores ? { chores: '1' } : {}),
     })
     router.refresh()
     const res = await fetch(`/api/events?${params}`, { cache: 'no-store' })
@@ -174,6 +192,17 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
     router.push('/trips/' + tripId)
   }
 
+  async function toggleSetting(key: keyof CalendarSettings) {
+    const next = { ...calSettings, [key]: !calSettings[key] }
+    setCalSettings(next)
+    refresh(undefined, undefined, next)
+    await fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uiPreferences: { [key]: next[key] } }),
+    })
+  }
+
   const isThisMonth = view === 'month'
     ? format(currentDate, 'M-yyyy') === format(new Date(), 'M-yyyy')
     : false
@@ -231,7 +260,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
           </button>
         </div>
 
-        {/* Right: view switcher + add */}
+        {/* Right: view switcher + settings + add */}
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle */}
           <div className="flex items-center rounded-lg border border-border/70 bg-background p-0.5 gap-0.5">
@@ -259,6 +288,57 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
             >
               <CalendarDays className="h-3.5 w-3.5" />
             </button>
+          </div>
+
+          {/* Calendar display settings */}
+          <div className="relative">
+            <button
+              onClick={() => setSettingsOpen(v => !v)}
+              title="Calendar display settings"
+              className={[
+                'h-8 w-8 flex items-center justify-center rounded-lg border border-border/70 bg-background transition-colors',
+                settingsOpen
+                  ? 'bg-accent text-foreground border-border'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+            </button>
+            {settingsOpen && (
+              <div
+                className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-border bg-card shadow-xl p-3 flex flex-col gap-2"
+                onMouseLeave={() => setSettingsOpen(false)}
+              >
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Show on calendar</p>
+                {([
+                  { key: 'calShowMeals' as const, label: "Tonight's dinner" },
+                  { key: 'calShowTodos' as const, label: 'Todos with due date' },
+                  { key: 'calShowChores' as const, label: 'Chores due' },
+                ] as const).map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={calSettings[key]}
+                      onClick={() => toggleSetting(key)}
+                      className="shrink-0"
+                      style={{
+                        display: 'inline-flex', width: 32, height: 18, borderRadius: 9,
+                        background: calSettings[key] ? 'var(--primary)' : 'var(--muted)',
+                        position: 'relative', transition: 'background 0.15s', border: 'none', cursor: 'pointer', padding: 0,
+                      }}
+                    >
+                      <span style={{
+                        position: 'absolute', top: 2, left: calSettings[key] ? 16 : 2,
+                        width: 14, height: 14, borderRadius: '50%', background: 'white',
+                        transition: 'left 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </button>
+                    <span className="text-xs text-foreground">{label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Add event */}
