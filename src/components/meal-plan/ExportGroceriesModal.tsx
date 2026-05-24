@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import type { ShoppingCategory } from '@/lib/list-helpers'
 import { toast } from 'sonner'
-import { ShoppingCartIcon, CheckIcon, PlusIcon, CheckCheckIcon, MinusIcon, TypeIcon } from 'lucide-react'
+import { ShoppingCartIcon, CheckIcon, PlusIcon, CheckCheckIcon, MinusIcon, TypeIcon, ClipboardIcon, DownloadIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isLikelyHeading } from '@/lib/ingredient-helpers'
 
@@ -171,6 +171,49 @@ export function ExportGroceriesModal({
       )
   }
 
+
+  function buildGroupedItems() {
+    const seen = new Map<string, { text: string; category: string }>()
+    for (const item of buildItems()) {
+      if (!seen.has(item.key)) seen.set(item.key, { text: item.text, category: item.category })
+    }
+    const groups = new Map<string, string[]>()
+    for (const { text, category } of seen.values()) {
+      if (!groups.has(category)) groups.set(category, [])
+      groups.get(category)!.push(text)
+    }
+    return groups
+  }
+
+  function handleCopyToClipboard() {
+    const groups = buildGroupedItems()
+    const lines: string[] = []
+    for (const [category, items] of groups) {
+      lines.push(`=== ${category} ===`)
+      for (const item of items) lines.push(`- ${item}`)
+      lines.push('')
+    }
+    navigator.clipboard.writeText(lines.join('\n').trimEnd()).then(() => {
+      toast.success('Shopping list copied to clipboard')
+    })
+  }
+
+  function handleDownloadCSV() {
+    const groups = buildGroupedItems()
+    const rows = ['Category,Item']
+    for (const [category, items] of groups) {
+      for (const item of items) {
+        rows.push(`"${category.replace(/"/g, '""')}","${item.replace(/"/g, '""')}"`)
+      }
+    }
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'shopping-list.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   async function save(mode: 'replace' | 'append') {
     setStatus('saving')
@@ -393,7 +436,23 @@ export function ExportGroceriesModal({
                     Auto-guessed
                   </span>
                 </div>
-                <div className="flex gap-2 self-end sm:self-auto">
+                <div className="flex gap-2 self-end sm:self-auto flex-wrap justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={handleCopyToClipboard}
+                    disabled={checkedCount === 0}
+                  >
+                    <ClipboardIcon className="h-4 w-4 mr-1" />
+                    Copy List
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadCSV}
+                    disabled={checkedCount === 0}
+                  >
+                    <DownloadIcon className="h-4 w-4 mr-1" />
+                    Download CSV
+                  </Button>
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
                     Cancel
                   </Button>
