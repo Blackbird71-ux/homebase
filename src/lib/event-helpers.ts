@@ -48,7 +48,7 @@ export function maskPersonalEvent(event: EventRow, viewerUserId: string) {
   if (event.isPersonal && event.createdBy !== viewerUserId) {
     return {
       ...event,
-      title: 'Busy',
+      title: 'Private event',
       description: null,
       category: null,
       color: null,

@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react'
 import type { CalendarEvent } from '@/types'
 
 function getEventIcon(event: CalendarEvent): { icon: string; title: string } | null {
@@ -18,8 +19,9 @@ export function EventBadge({
 }) {
   if (event.isBusy) {
     return (
-      <div className="w-full text-left truncate text-xs px-2 py-0.5 rounded-md font-medium bg-muted/60 text-muted-foreground cursor-default select-none italic">
-        Busy
+      <div className="w-full text-left text-xs px-2 py-0.5 rounded-md font-medium bg-muted/60 text-muted-foreground cursor-default select-none flex items-center gap-1">
+        <Lock className="h-2.5 w-2.5 shrink-0" />
+        <span className="truncate italic">Private event</span>
       </div>
     )
   }

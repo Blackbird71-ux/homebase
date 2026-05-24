@@ -89,7 +89,6 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, calen
       ...(s.calShowTodos ? { todos: '1' } : {}),
       ...(s.calShowChores ? { chores: '1' } : {}),
     })
-    router.refresh()
     const res = await fetch(`/api/events?${params}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
   }, [weekStartsOn, router])
