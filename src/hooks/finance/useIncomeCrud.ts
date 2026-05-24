@@ -70,6 +70,7 @@ export interface IncomeEntry {
   nextExpectedDate: string; endDate: string | null; isActive: boolean
   received: boolean; receivedDate: string | null
   autoPay: boolean; emailReminder: boolean; reminderDays: number
+  showOnCalendar: boolean
   dayOfMonth: number | null; monthOfYear: number | null
   recurrenceInterval: string | null
   invoiceReceived: boolean; invoiceReceivedDate: string | null
@@ -150,6 +151,7 @@ export function useIncomeCrud() {
     dayOfMonth: '', monthOfYear: '',
     nextExpectedDate: todayAU(),
     endDate: '', autoPay: false, emailReminder: false, reminderDays: 3,
+    showOnCalendar: true,
     notes: '', memberId: '', locationId: '',
     entityId: '',
     invoiceReceived: false, invoiceReceivedDate: '',
@@ -324,6 +326,7 @@ export function useIncomeCrud() {
       autoPay: e.autoPay ?? false,
       emailReminder: e.emailReminder ?? false,
       reminderDays: e.reminderDays ?? 3,
+      showOnCalendar: e.showOnCalendar ?? true,
       notes: e.notes ?? '', memberId: e.memberId ?? '',
       locationId: e.location?.id ?? '',
       entityId: e.entity?.id ?? '',

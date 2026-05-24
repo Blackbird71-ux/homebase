@@ -136,7 +136,7 @@ function OverviewTab({
     setForm(p => ({ ...p, [field]: value }))
 
   const [showMore, setShowMore] = useState(false)
-  const hasMoreData = !!(form.locationId || form.memberId || form.notes || form.notifyOnCreate || form.categoryId || form.remindInAdvanceDays)
+  const hasMoreData = !!(form.locationId || form.memberId || form.notes || form.notifyOnCreate || !form.showOnCalendar || form.categoryId || form.remindInAdvanceDays)
 
   const categoryOptions = useMemo(
     () => sortedCategoryList(
@@ -296,6 +296,10 @@ function OverviewTab({
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={form.notifyOnCreate} onChange={e => set('notifyOnCreate', e.target.checked)} className="accent-primary" />
                 Notify on create
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.showOnCalendar} onChange={e => set('showOnCalendar', e.target.checked)} className="accent-primary" />
+                Show on calendar
               </label>
             </div>
             <div>

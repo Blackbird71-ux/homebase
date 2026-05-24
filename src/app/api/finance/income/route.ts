@@ -151,6 +151,7 @@ export async function POST(request: NextRequest) {
     invoiceReceived, invoiceReceivedDate,
     notes, memberId, locationId, entityId, vendorId,
     isTaxTracked, taxRate, taxClassification,
+    showOnCalendar,
     journalLines,   // optional: JournalLine[] for double-entry accrual
     actualAmountReceived, // optional: actual net received (overrides amount for GL)
   } = json
@@ -188,6 +189,7 @@ export async function POST(request: NextRequest) {
       isTaxTracked: isTaxTracked ?? false,
       taxRate: taxRate != null ? parseFloat(taxRate) : null,
       taxClassification: taxClassification ?? null,
+      showOnCalendar: showOnCalendar ?? true,
       actualAmountReceived: actualAmountReceived != null ? parseFloat(actualAmountReceived) : null,
       familyId: session.familyId,
     },
@@ -229,6 +231,7 @@ export async function PUT(request: NextRequest) {
     invoiceReceived, invoiceReceivedDate,
     notes, memberId, locationId, entityId, vendorId,
     isTaxTracked, taxRate, taxClassification,
+    showOnCalendar,
     journalLines,   // optional: JournalLine[] for double-entry accrual
     actualAmountReceived, // optional: actual net received
   } = json
@@ -268,6 +271,7 @@ export async function PUT(request: NextRequest) {
       ...(isTaxTracked !== undefined && { isTaxTracked }),
       ...(taxRate !== undefined && { taxRate: taxRate != null ? parseFloat(taxRate) : null }),
       ...(taxClassification !== undefined && { taxClassification: taxClassification ?? null }),
+      ...(showOnCalendar !== undefined && { showOnCalendar }),
       ...(actualAmountReceived !== undefined && { actualAmountReceived: actualAmountReceived != null ? parseFloat(actualAmountReceived) : null }),
     },
     include: INCOME_INCLUDE,

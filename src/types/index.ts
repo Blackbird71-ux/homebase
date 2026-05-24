@@ -170,6 +170,7 @@ export interface CalendarEvent {
   seriesId?: string | null
   isRecurring?: boolean
   isRecurringInstance?: boolean
+  source?: 'bill' | 'income'
 }
 
 // Custom theme color definitions

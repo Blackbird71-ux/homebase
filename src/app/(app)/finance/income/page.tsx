@@ -451,6 +451,10 @@ export default function IncomePage() {
                   </label>
                 )}
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.showOnCalendar} onChange={e => setForm(p => ({ ...p, showOnCalendar: e.target.checked }))} className="rounded border-input" />
+                  Show on calendar
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" checked={form.emailReminder} onChange={e => setForm(p => ({ ...p, emailReminder: e.target.checked }))} className="rounded border-input" />
                   Email reminder
                 </label>

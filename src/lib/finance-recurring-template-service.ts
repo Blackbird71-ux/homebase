@@ -388,6 +388,7 @@ export interface CreateTemplateInput {
   enabled?: boolean
   createAutomatically?: boolean
   notifyOnCreate?: boolean
+  showOnCalendar?: boolean
   includeInBudget?: boolean
   createInAdvanceDays?: number
   remindInAdvanceDays?: number | null
@@ -602,6 +603,7 @@ export async function createTemplate(
         enabled: input.enabled ?? true,
         createAutomatically: input.createAutomatically ?? true,
         notifyOnCreate: input.notifyOnCreate ?? false,
+        showOnCalendar: input.showOnCalendar ?? true,
         includeInBudget: input.includeInBudget ?? true,
         createInAdvanceDays: input.createInAdvanceDays ?? 0,
         remindInAdvanceDays: input.remindInAdvanceDays ?? null,
@@ -792,6 +794,7 @@ export async function updateTemplate(
   if (input.enabled != null) data.enabled = input.enabled
   if (input.createAutomatically != null) data.createAutomatically = input.createAutomatically
   if (input.notifyOnCreate != null) data.notifyOnCreate = input.notifyOnCreate
+  if (input.showOnCalendar != null) data.showOnCalendar = input.showOnCalendar
   if (input.includeInBudget != null) data.includeInBudget = input.includeInBudget
   if (input.createInAdvanceDays != null) data.createInAdvanceDays = input.createInAdvanceDays
   if (input.remindInAdvanceDays !== undefined) data.remindInAdvanceDays = input.remindInAdvanceDays ?? null

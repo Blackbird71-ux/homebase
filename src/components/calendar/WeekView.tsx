@@ -4,6 +4,7 @@ import {
   startOfWeek, endOfWeek, eachDayOfInterval,
   isToday, format, startOfDay,
 } from 'date-fns'
+import { Utensils, ClipboardList } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
 
@@ -13,9 +14,11 @@ interface WeekViewProps {
   weekStartsOn: 0 | 1
   onDayClick: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
+  onMealClick?: (date: Date) => void
+  onChoreClick?: (date: Date) => void
 }
 
-export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEventClick }: WeekViewProps) {
+export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick }: WeekViewProps) {
   const weekStart = startOfWeek(currentDate, { weekStartsOn })
   const weekEnd = endOfWeek(currentDate, { weekStartsOn })
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
@@ -100,7 +103,7 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                 key={day.toISOString()}
                 onClick={() => onDayClick(day)}
                 className={[
-                  'py-3 text-center cursor-pointer transition-colors border-r border-border/40 last:border-r-0',
+                  'py-3 text-center cursor-pointer transition-colors border-r border-border/40 last:border-r-0 group',
                   today ? 'bg-primary/5' : 'hover:bg-accent/20',
                 ].join(' ')}
               >
@@ -118,6 +121,24 @@ export function WeekView({ currentDate, events, weekStartsOn, onDayClick, onEven
                 ].join(' ')}>
                   {format(day, 'd')}
                 </p>
+                {onMealClick && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onMealClick(day) }}
+                    title="Add meal to planner"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity mx-auto mt-1 h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                  >
+                    <Utensils className="h-3 w-3" />
+                  </button>
+                )}
+                {onChoreClick && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onChoreClick(day) }}
+                    title="Add chore"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity mx-auto mt-1 h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                  >
+                    <ClipboardList className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             )
           })}

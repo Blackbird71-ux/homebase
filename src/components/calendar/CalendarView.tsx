@@ -8,9 +8,12 @@ import {
 } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid } from 'lucide-react'
+import { toast } from 'sonner'
 import { MonthView } from './MonthView'
 import { WeekView } from './WeekView'
 import { EventModal } from './EventModal'
+import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import type { CalendarEvent } from '@/types'
 
@@ -28,6 +31,12 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [defaultDate, setDefaultDate] = useState<Date | undefined>()
+  const [mealModalOpen, setMealModalOpen] = useState(false)
+  const [mealModalDate, setMealModalDate] = useState('')
+  const [choreDrawerOpen, setChoreDrawerOpen] = useState(false)
+  const [choreDate, setChoreDate] = useState('')
+  const [choreTitle, setChoreTitle] = useState('')
+  const [choreSaving, setChoreSaving] = useState(false)
 
   const viewRef = useRef(view)
   const currentDateRef = useRef(currentDate)
@@ -96,6 +105,58 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
     setSelectedEvent(null)
     setDefaultDate(date)
     setModalOpen(true)
+  }
+
+  function openNewChore(date: Date) {
+    setChoreDate(format(date, 'yyyy-MM-dd'))
+    setChoreTitle('')
+    setChoreDrawerOpen(true)
+  }
+
+  async function handleChoreCreate() {
+    if (!choreTitle.trim()) return
+    setChoreSaving(true)
+    try {
+      const res = await fetch('/api/chores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: choreTitle.trim(), frequency: 'one-off', startDate: choreDate }),
+      })
+      if (!res.ok) throw new Error('Failed to save chore')
+      toast.success('Chore added')
+      setChoreDrawerOpen(false)
+      refresh()
+    } catch {
+      toast.error('Failed to add chore')
+    } finally {
+      setChoreSaving(false)
+    }
+  }
+
+  function openNewMeal(date: Date) {
+    setMealModalDate(format(date, 'yyyy-MM-dd'))
+    setMealModalOpen(true)
+  }
+
+  async function handleMealAssign({ recipeIds, note }: { recipeIds?: string[]; note?: string }) {
+    try {
+      const res = await fetch('/api/meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: new Date(mealModalDate + 'T00:00:00.000Z').toISOString(),
+          mealType: 'dinner',
+          recipeIds: recipeIds ?? [],
+          note,
+          append: false,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save meal')
+      toast.success('Meal added to planner')
+      setMealModalOpen(false)
+    } catch {
+      toast.error('Failed to add meal')
+    }
   }
 
   function openEdit(event: CalendarEvent) {
@@ -214,6 +275,8 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
             weekStartsOn={weekStartsOn}
             onDayClick={date => openNew(date)}
             onEventClick={openEdit}
+            onMealClick={openNewMeal}
+            onChoreClick={openNewChore}
           />
         ) : (
           <WeekView
@@ -222,6 +285,8 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
             weekStartsOn={weekStartsOn}
             onDayClick={date => openNew(date)}
             onEventClick={openEdit}
+            onMealClick={openNewMeal}
+            onChoreClick={openNewChore}
           />
         )}
       </div>
@@ -237,6 +302,48 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId }: Cal
         }}
         onSave={refresh}
       />
+
+      {mealModalDate && (
+        <AssignMealModal
+          open={mealModalOpen}
+          onOpenChange={setMealModalOpen}
+          date={mealModalDate}
+          mealType="dinner"
+          onAssign={handleMealAssign}
+        />
+      )}
+
+      <Drawer open={choreDrawerOpen} onOpenChange={setChoreDrawerOpen}>
+        <DrawerContent className="sm:max-w-[480px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>Add Chore{choreDate ? ` — ${choreDate}` : ''}</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">Title <span className="text-destructive">*</span></label>
+              <input
+                autoFocus
+                type="text"
+                value={choreTitle}
+                onChange={e => setChoreTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleChoreCreate() }}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                placeholder="e.g. Clean bathroom"
+              />
+            </div>
+          </div>
+          <div className="border-t border-border px-4 py-3 flex justify-end gap-2">
+            <button onClick={() => setChoreDrawerOpen(false)} className="px-4 py-2 rounded-md text-sm border border-input hover:bg-accent">Cancel</button>
+            <button
+              onClick={handleChoreCreate}
+              disabled={!choreTitle.trim() || choreSaving}
+              className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {choreSaving ? 'Saving…' : 'Add Chore'}
+            </button>
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   )
 }

@@ -66,7 +66,77 @@ export async function GET(req: Request) {
     return [event]
   })
 
-  return NextResponse.json(expandedEvents.map((e) => maskPersonalEvent(e, user.id)))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const calendarEvents: any[] = expandedEvents.map((e) => maskPersonalEvent(e, user.id))
+
+  // Append synthetic bill/income events
+  if (rangeStart && rangeEnd) {
+    const bills = await prisma.financeRecurringBill.findMany({
+      where: {
+        familyId: user.familyId,
+        showOnCalendar: true,
+        paid: false,
+        isVoided: false,
+        isActive: true,
+        nextDueDate: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { id: true, name: true, nextDueDate: true },
+    })
+    for (const b of bills) {
+      if (!b.nextDueDate) continue
+      const day = b.nextDueDate.toISOString().slice(0, 10)
+      const start = new Date(day + 'T00:00:00.000Z')
+      const end = new Date(day + 'T23:59:59.000Z')
+      calendarEvents.push({
+        id: `bill-${b.id}`,
+        title: `Bill due: ${b.name}`,
+        description: null,
+        start: start.toISOString(),
+        end: end.toISOString(),
+        isAllDay: true,
+        isPersonal: false,
+        isBusy: true,
+        category: 'finance',
+        color: '#ef4444',
+        createdBy: user.id,
+        source: 'bill',
+      })
+    }
+
+    const income = await prisma.financeIncomeEntry.findMany({
+      where: {
+        familyId: user.familyId,
+        showOnCalendar: true,
+        received: false,
+        isVoided: false,
+        isActive: true,
+        nextExpectedDate: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { id: true, name: true, nextExpectedDate: true },
+    })
+    for (const inc of income) {
+      if (!inc.nextExpectedDate) continue
+      const day = inc.nextExpectedDate.toISOString().slice(0, 10)
+      const start = new Date(day + 'T00:00:00.000Z')
+      const end = new Date(day + 'T23:59:59.000Z')
+      calendarEvents.push({
+        id: `income-${inc.id}`,
+        title: `Income: ${inc.name}`,
+        description: null,
+        start: start.toISOString(),
+        end: end.toISOString(),
+        isAllDay: true,
+        isPersonal: false,
+        isBusy: true,
+        category: 'finance',
+        color: '#22c55e',
+        createdBy: user.id,
+        source: 'income',
+      })
+    }
+  }
+
+  return NextResponse.json(calendarEvents)
 }
 
 export async function POST(req: Request) {

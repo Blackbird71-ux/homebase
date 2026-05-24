@@ -701,6 +701,7 @@ model FinanceRecurringBill {
   autoPay         Boolean              @default(false)
   emailReminder   Boolean              @default(false)
   reminderDays    Int                  @default(3)
+  showOnCalendar  Boolean              @default(true)
   billType        String               @default("recurring")  // recurring | one-off
   recurrenceInterval String?
   billDate        DateTime?            // GL recognition date (= occurrence date from template). Drives AP, P&L and GL posting.
@@ -804,6 +805,7 @@ model FinanceIncomeEntry {
   autoPay             Boolean              @default(false)
   emailReminder       Boolean              @default(false)
   reminderDays        Int                  @default(3)
+  showOnCalendar      Boolean              @default(true)
   dayOfMonth          Int?
   monthOfYear         Int?
   recurrenceInterval  String?
@@ -1283,6 +1285,7 @@ model FinanceRecurringTemplate {
   createAutomatically     Boolean  @default(true)
   notifyOnCreate          Boolean  @default(false)
   includeInBudget         Boolean  @default(true)
+  showOnCalendar          Boolean  @default(true)
   createInAdvanceDays     Int      @default(0)
   remindInAdvanceDays     Int?
 

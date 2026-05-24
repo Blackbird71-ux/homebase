@@ -278,6 +278,7 @@ export async function POST(request: NextRequest) {
           paidDate: paidDate ? new Date(paidDate) : null,
           entityId: entityId ?? null,
           taxClassification: taxClassification ?? null,
+          showOnCalendar: showOnCalendar ?? true,
           familyId: session.familyId,
         },
       })
@@ -389,6 +390,7 @@ export async function PUT(request: NextRequest) {
     billType, recurrenceInterval,
     invoiceReceived, invoiceReceivedDate,
     paid, paidDate, entityId, taxClassification,
+    showOnCalendar,
     journalLines,
   } = json
 
@@ -425,6 +427,7 @@ export async function PUT(request: NextRequest) {
       ...(paidDate !== undefined && { paidDate: paidDate ? new Date(paidDate) : null }),
       ...(entityId !== undefined && { entityId: entityId ?? null }),
       ...(taxClassification !== undefined && { taxClassification: taxClassification ?? null }),
+      ...(showOnCalendar !== undefined && { showOnCalendar }),
     },
     include: BILL_INCLUDE,
   })

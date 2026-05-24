@@ -5,6 +5,7 @@ import {
   eachDayOfInterval, isSameMonth, isToday, format,
   startOfDay, endOfDay,
 } from 'date-fns'
+import { Utensils, ClipboardList } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
 
@@ -14,9 +15,11 @@ interface MonthViewProps {
   weekStartsOn: 0 | 1
   onDayClick: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
+  onMealClick?: (date: Date) => void
+  onChoreClick?: (date: Date) => void
 }
 
-export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEventClick }: MonthViewProps) {
+export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate)
   const monthEnd = endOfMonth(currentDate)
   const calStart = startOfWeek(monthStart, { weekStartsOn })
@@ -94,11 +97,31 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
                 >
                   {format(day, 'd')}
                 </span>
-                {dayEvents.length > 3 && (
-                  <span className="text-xs text-muted-foreground font-medium mt-0.5 mr-0.5 hidden md:block">
-                    +{dayEvents.length - 3}
-                  </span>
-                )}
+                <div className="flex items-center gap-0.5">
+                  {onMealClick && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onMealClick(day) }}
+                      title="Add meal to planner"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                    >
+                      <Utensils className="h-3 w-3" />
+                    </button>
+                  )}
+                  {onChoreClick && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onChoreClick(day) }}
+                      title="Add chore"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                    >
+                      <ClipboardList className="h-3 w-3" />
+                    </button>
+                  )}
+                  {dayEvents.length > 3 && (
+                    <span className="text-xs text-muted-foreground font-medium mt-0.5 mr-0.5 hidden md:block">
+                      +{dayEvents.length - 3}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Events */}

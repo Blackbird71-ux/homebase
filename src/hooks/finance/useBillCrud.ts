@@ -25,6 +25,7 @@ export interface Bill {
   dayOfMonth: number | null; monthOfYear: number | null
   nextDueDate: string; endDate: string | null; isActive: boolean
   autoPay: boolean; emailReminder: boolean; reminderDays: number
+  showOnCalendar: boolean
   notes: string | null; memberId: string | null
   journalEntryId: string | null
   isGlPosted: boolean
@@ -99,6 +100,7 @@ export function useBillCrud() {
     billType: 'recurring', recurrenceInterval: '',
     invoiceReceived: false, invoiceReceivedDate: '',
     taxClassification: '',
+    showOnCalendar: true,
     addToBudget: true,
   }
   const [form, setForm] = useState(emptyForm)
@@ -299,6 +301,7 @@ export function useBillCrud() {
       invoiceReceived: b.invoiceReceived ?? false,
       invoiceReceivedDate: b.invoiceReceivedDate ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
       taxClassification: b.taxClassification ?? '',
+      showOnCalendar: b.showOnCalendar ?? true,
       addToBudget: budgetBillIds.has(b.id),
     })
     setShowForm(true)
@@ -318,6 +321,7 @@ export function useBillCrud() {
       invoiceReceived: form.invoiceReceived,
       invoiceReceivedDate: form.invoiceReceivedDate || null,
       taxClassification: form.taxClassification || null,
+      showOnCalendar: form.showOnCalendar,
     }
   }
 
