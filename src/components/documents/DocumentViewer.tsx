@@ -154,8 +154,8 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
         onOpenChange(open)
       }}>
         <DialogContent className={fullscreen
-          ? 'max-w-[98vw] h-[96vh] sm:max-w-[98vw]'
-          : 'max-w-4xl h-[85vh] sm:max-w-4xl'
+          ? 'max-w-[98vw] h-[96vh] sm:max-w-[98vw] !p-2 !gap-1 !max-h-none'
+          : 'max-w-5xl h-[92vh] sm:max-w-5xl !p-2 !gap-1 !max-h-none'
         }>
           <DialogHeader className="flex flex-row items-center justify-between shrink-0">
             <div className="flex items-center gap-2 min-w-0">
