@@ -130,6 +130,40 @@ export function documentExpiryHtml(doc: {
   return baseLayout('Document Expiry Reminder', body)
 }
 
+export function billReminderHtml(bill: {
+  name: string
+  amount: number
+  nextDueDate: Date
+  reminderDays: number
+  frequency: string
+  notes: string | null
+}, recipientName: string, completeUrl: string): string {
+  const dueStr = bill.nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+  const daysText = bill.reminderDays === 1 ? 'tomorrow' : `in ${bill.reminderDays} days`
+  const amount = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(bill.amount)
+
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1e293b;font-size:20px">Bill Due Soon</h2>
+    <p style="margin:0 0 24px;color:#64748b;font-size:14px">Hi ${recipientName}, a bill is due ${daysText}.</p>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:20px;margin-bottom:24px">
+      <p style="margin:0 0 4px;font-size:18px;font-weight:600;color:#1e293b">${bill.name}</p>
+      <p style="margin:8px 0 0;font-size:22px;font-weight:700;color:#1e293b">${amount}</p>
+      <p style="margin:12px 0 0;font-size:13px;color:#64748b">
+        Due: <strong style="color:#1e293b">${dueStr}</strong> &nbsp;·&nbsp; ${bill.frequency}
+      </p>
+      ${bill.notes ? `<p style="margin:10px 0 0;color:#475569;font-size:13px">${bill.notes}</p>` : ''}
+    </div>
+
+    <div style="text-align:center;margin:0 0 24px">
+      <a href="${completeUrl}" style="display:inline-block;padding:14px 28px;background:#16a34a;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">✓ Mark as Paid</a>
+    </div>
+
+    <p style="margin:0;color:#94a3b8;font-size:13px">Or log in to HomeBase to record the full payment details.</p>
+  `
+  return baseLayout('Bill Reminder', body)
+}
+
 export function passwordResetHtml(userName: string, resetUrl: string): string {
   const body = `
     <h2 style="margin:0 0 8px;color:#1e293b;font-size:20px">Password Reset Request</h2>

@@ -189,5 +189,36 @@ export async function GET(req: Request): Promise<Response> {
     )
   }
 
+  if (payload.type === 'bill') {
+    const bill = await prisma.financeRecurringBill.findFirst({
+      where: { id: payload.id },
+      include: { family: { select: { name: true } } },
+    })
+    if (!bill) {
+      return htmlPage('Not found', 'Bill not found', 'This bill no longer exists.', false)
+    }
+    if (bill.paid) {
+      return htmlPage(
+        'Already paid',
+        'Already marked as paid',
+        `"${bill.name}" has already been marked as paid.`,
+        true
+      )
+    }
+
+    await prisma.financeRecurringBill.update({
+      where: { id: payload.id },
+      data: { paid: true, paidDate: new Date() },
+    })
+
+    const amount = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(bill.amount)
+    return htmlPage(
+      'Paid!',
+      'Marked as paid!',
+      `"${bill.name}" (${amount}) has been marked as paid. Log in to HomeBase to record the payment against an account for full transaction tracking.`,
+      true
+    )
+  }
+
   return htmlPage('Unknown', 'Unknown item type', 'This link type is not supported.', false)
 }

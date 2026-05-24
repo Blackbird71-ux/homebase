@@ -39,7 +39,7 @@ export interface ExportGroceriesModalProps {
   mealPlanIds?: string[] // if set, only export these specific meal plan entries
 }
 
-type Status = 'loading' | 'ready' | 'confirming' | 'saving'
+type Status = 'loading' | 'ready' | 'review-overrides' | 'confirming' | 'saving'
 
 interface IngredientCategory {
   id: string
@@ -68,6 +68,8 @@ export function ExportGroceriesModal({
   const [recipes, setRecipes] = useState<PreviewRecipe[]>([])
   const [groceriesList, setGroceriesList] = useState<GroceriesList | null>(null)
   const [overrides, setOverrides] = useState<Map<string, ShoppingCategory>>(new Map())
+  const [originSources, setOriginSources] = useState<Map<string, 'learned' | 'custom' | 'guessed'>>(new Map())
+  const [resolvedConflicts, setResolvedConflicts] = useState<Map<string, 'allow' | 'skip'>>(new Map())
   const [selectedRecipeKeys, setSelectedRecipeKeys] = useState<Set<string>>(new Set())
   const [selectedIngredientKeys, setSelectedIngredientKeys] = useState<Set<string>>(new Set())
   const [allCategories, setAllCategories] = useState<string[]>(DEFAULT_SHOPPING_CATEGORIES)
@@ -77,6 +79,8 @@ export function ExportGroceriesModal({
     const controller = new AbortController()
     setStatus('loading')
     setOverrides(new Map())
+    setOriginSources(new Map())
+    setResolvedConflicts(new Map())
 
     // Load custom categories
     fetch('/api/ingredient-categories', { signal: controller.signal })
@@ -106,6 +110,15 @@ export function ExportGroceriesModal({
         const fetchedRecipes: PreviewRecipe[] = data.recipes
         setRecipes(fetchedRecipes)
         setSelectedRecipeKeys(new Set(fetchedRecipes.map(recipeKey)))
+
+        // Record each ingredient's initial source so we can classify overrides at save time
+        const sources = new Map<string, 'learned' | 'custom' | 'guessed'>()
+        for (const recipe of fetchedRecipes) {
+          for (const ing of recipe.ingredients) {
+            if (!sources.has(ing.key)) sources.set(ing.key, ing.source)
+          }
+        }
+        setOriginSources(sources)
 
         // Pre-select ingredients: everything EXCEPT ALL CAPS headings
         const initialIngredientKeys = new Set<string>()
@@ -225,10 +238,46 @@ export function ExportGroceriesModal({
       })
       if (!res.ok) throw new Error()
       const data = await res.json()
+
+      // Classify overrides: guessed/learned → IngredientCategory (learned table)
+      // custom + allowed → IngredientMapping (custom table)
+      const learnItems: { key: string; category: string }[] = []
+      const approvedCustom: { ingredient: string; category: string }[] = []
+      for (const [key, newCat] of overrides) {
+        const source = originSources.get(key)
+        if (source === 'custom') {
+          if (resolvedConflicts.get(key) === 'allow') {
+            approvedCustom.push({ ingredient: key, category: newCat })
+          }
+        } else {
+          learnItems.push({ key, category: newCat })
+        }
+      }
+
+      // Fire learn writes in the background — don't block or fail the export
+      if (learnItems.length > 0) {
+        fetch('/api/ingredient-categories/learn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: learnItems }),
+        }).catch(() => { /* non-critical */ })
+      }
+      for (const { ingredient, category } of approvedCustom) {
+        fetch('/api/ingredient-mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ingredient, category }),
+        }).catch(() => { /* non-critical */ })
+      }
+
+      const learnCount = learnItems.length + approvedCustom.length
       onOpenChange(false)
-      toast.success(`${data.itemCount} items added to Groceries`, {
-        action: { label: 'View list', onClick: () => router.push('/lists') },
-      })
+      toast.success(
+        learnCount > 0
+          ? `${data.itemCount} items added · ${learnCount} category correction${learnCount !== 1 ? 's' : ''} saved`
+          : `${data.itemCount} items added to Groceries`,
+        { action: { label: 'View list', onClick: () => router.push('/lists') } }
+      )
     } catch {
       setStatus('ready')
       toast.error('Failed to save. Please try again.')
@@ -236,6 +285,24 @@ export function ExportGroceriesModal({
   }
 
   function handleAddToGroceries() {
+    // Check for overrides that would overwrite user's custom (manual) mappings
+    const customConflictKeys = [...overrides.keys()].filter(
+      (key) => originSources.get(key) === 'custom'
+    )
+    if (customConflictKeys.length > 0) {
+      // Default all to 'allow'; user can flip to 'skip'
+      setResolvedConflicts(new Map(customConflictKeys.map((k) => [k, 'allow'])))
+      setStatus('review-overrides')
+      return
+    }
+    if (groceriesList && groceriesList.itemCount > 0) {
+      setStatus('confirming')
+    } else {
+      save('replace')
+    }
+  }
+
+  function handleConflictsResolved() {
     if (groceriesList && groceriesList.itemCount > 0) {
       setStatus('confirming')
     } else {
@@ -393,7 +460,64 @@ export function ExportGroceriesModal({
               })}
             </div>
 
-            {status === 'confirming' ? (
+            {status === 'review-overrides' ? (
+              <div className="px-6 py-4 border-t border-border space-y-3">
+                <p className="text-sm font-medium">Update saved category mappings?</p>
+                <p className="text-xs text-muted-foreground">
+                  These changes differ from your custom mappings in Settings. Choose which to save.
+                </p>
+                <div className="space-y-2">
+                  {[...resolvedConflicts.keys()].map((key) => {
+                    const newCat = overrides.get(key)!
+                    const origCat = recipes.flatMap(r => r.ingredients).find(i => i.key === key)?.category ?? key
+                    const resolution = resolvedConflicts.get(key)!
+                    return (
+                      <div key={key} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex-1 truncate">
+                          <span className="font-medium">{key}</span>
+                          <span className="text-muted-foreground mx-1.5">→</span>
+                          <span className="line-through text-muted-foreground text-xs">{origCat}</span>
+                          <span className="text-muted-foreground mx-1.5">→</span>
+                          <span className="text-foreground text-xs font-medium">{newCat}</span>
+                        </span>
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            onClick={() => setResolvedConflicts(prev => new Map(prev).set(key, 'allow'))}
+                            className={cn(
+                              'px-2 py-1 rounded text-xs font-medium transition-colors',
+                              resolution === 'allow'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:bg-accent'
+                            )}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setResolvedConflicts(prev => new Map(prev).set(key, 'skip'))}
+                            className={cn(
+                              'px-2 py-1 rounded text-xs font-medium transition-colors',
+                              resolution === 'skip'
+                                ? 'bg-secondary text-secondary-foreground'
+                                : 'bg-muted text-muted-foreground hover:bg-accent'
+                            )}
+                          >
+                            Skip
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-2 justify-end pt-1">
+                  <Button variant="outline" size="sm" onClick={() => setStatus('ready')}>
+                    Back
+                  </Button>
+                  <Button size="sm" onClick={handleConflictsResolved}>
+                    Proceed
+                  </Button>
+                </div>
+              </div>
+            ) : status === 'confirming' ? (
               <div className="px-6 py-4 border-t border-border space-y-3">
                 <p className="text-sm text-muted-foreground">
                   Groceries already has {groceriesList?.itemCount ?? 0} item

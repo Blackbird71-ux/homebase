@@ -1,7 +1,7 @@
 import { createHmac } from 'crypto'
 
 interface TokenPayload {
-  type: 'chore'
+  type: 'chore' | 'bill'
   id: string
   assigneeId: string
   exp: number
@@ -13,7 +13,7 @@ function secret(): string {
   return s
 }
 
-export function generateCompleteToken(type: 'chore', id: string, assigneeId: string): string {
+export function generateCompleteToken(type: 'chore' | 'bill', id: string, assigneeId: string): string {
   const payload: TokenPayload = { type, id, assigneeId, exp: Date.now() + 7 * 24 * 3600 * 1000 }
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url')
   const sig = createHmac('sha256', secret()).update(data).digest('base64url')

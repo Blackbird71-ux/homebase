@@ -1,8 +1,8 @@
-// Email reminder processing: chores, events, documents
+// Email reminder processing: chores, events, documents, bills
 
 import { prisma } from '@/lib/prisma'
 import { sendEmail } from '@/lib/email'
-import { choreReminderHtml, eventReminderHtml, documentExpiryHtml } from '@/lib/email-templates'
+import { choreReminderHtml, eventReminderHtml, documentExpiryHtml, billReminderHtml } from '@/lib/email-templates'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { generateCompleteToken } from '@/lib/complete-token'
 
@@ -211,13 +211,81 @@ export async function processDocumentReminders(): Promise<number> {
   return sent
 }
 
-export async function processAllReminders(): Promise<{ chores: number; events: number; documents: number }> {
+export async function processBillReminders(): Promise<number> {
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+
+  const bills = await prisma.financeRecurringBill.findMany({
+    where: { emailReminder: true, isActive: true, paid: false },
+    include: {
+      family: {
+        include: { users: { select: { id: true, name: true, email: true } } },
+      },
+    },
+  })
+
+  let sent = 0
+  for (const bill of bills) {
+    if (!bill.nextDueDate) continue
+
+    const dueDate = new Date(bill.nextDueDate)
+    dueDate.setHours(0, 0, 0, 0)
+
+    const reminderDate = new Date(dueDate)
+    reminderDate.setDate(reminderDate.getDate() - bill.reminderDays)
+
+    if (now.getTime() !== reminderDate.getTime()) continue
+
+    const dueDateKey = bill.nextDueDate.toISOString().split('T')[0]
+
+    const memberUser = bill.memberId
+      ? await prisma.user.findUnique({ where: { id: bill.memberId }, select: { id: true, name: true, email: true } })
+      : null
+
+    // Send to the assigned member if set, otherwise all family members
+    const recipients: { id: string; name: string; email: string }[] = memberUser?.email
+      ? [memberUser as { id: string; name: string; email: string }]
+      : bill.family.users.filter((u: { id: string; name: string; email: string | null }): u is { id: string; name: string; email: string } => !!u.email)
+
+    const appUrl = process.env.NEXTAUTH_URL ?? ''
+
+    for (const recipient of recipients) {
+      const reminderKey = `bill_${bill.id}_${dueDateKey}_${recipient.id}`
+      const token = generateCompleteToken('bill', bill.id, recipient.id)
+      const completeUrl = `${appUrl}/api/complete?token=${token}`
+
+      const ok = await logAndSend({
+        reminderKey,
+        entityType: 'bill',
+        to: recipient.email,
+        subject: `Reminder: "${bill.name}" is due soon`,
+        html: billReminderHtml(
+          {
+            name: bill.name,
+            amount: bill.amount,
+            nextDueDate: bill.nextDueDate,
+            reminderDays: bill.reminderDays,
+            frequency: bill.frequency,
+            notes: bill.notes,
+          },
+          recipient.name,
+          completeUrl
+        ),
+      })
+      if (ok) sent++
+    }
+  }
+  return sent
+}
+
+export async function processAllReminders(): Promise<{ chores: number; events: number; documents: number; bills: number }> {
   console.log('[reminders] Processing reminders...')
-  const [chores, events, documents] = await Promise.all([
+  const [chores, events, documents, bills] = await Promise.all([
     processChoreReminders(),
     processEventReminders(),
     processDocumentReminders(),
+    processBillReminders(),
   ])
-  console.log(`[reminders] Sent: ${chores} chore, ${events} event, ${documents} document reminders`)
-  return { chores, events, documents }
+  console.log(`[reminders] Sent: ${chores} chore, ${events} event, ${documents} document, ${bills} bill reminders`)
+  return { chores, events, documents, bills }
 }

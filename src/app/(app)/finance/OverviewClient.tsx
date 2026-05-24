@@ -85,6 +85,9 @@ export function OverviewClient({
     .slice(0, 5)
   const totalBudgeted = budgets.reduce((s, b) => s + b.amount, 0)
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0)
+  const alertBudgets = budgets.filter((b) =>
+    b.amount > 0 && b.spent / b.amount >= (b.alertThreshold ?? 80) / 100
+  )
 
   return (
     <div className="space-y-6">
@@ -100,6 +103,34 @@ export function OverviewClient({
               Bills
             </button>
           </span>
+        </div>
+      )}
+
+      {/* Budget Alert Banner */}
+      {alertBudgets.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-1">
+              {alertBudgets.length} budget{alertBudgets.length !== 1 ? 's' : ''} at or over threshold
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+              {alertBudgets.map((b) => {
+                const pct = Math.round((b.spent / b.amount) * 100)
+                return (
+                  <span key={b.id} className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                    {pct >= 100 ? '🔴' : '🟡'} {b.name}: {formatCurrency(b.spent)} / {formatCurrency(b.amount)} ({pct}%)
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+          <button
+            onClick={() => router.push('/finance/budget')}
+            className="text-xs text-amber-700 dark:text-amber-400 underline hover:no-underline shrink-0"
+          >
+            View budgets
+          </button>
         </div>
       )}
 

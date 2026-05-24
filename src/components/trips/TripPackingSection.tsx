@@ -264,7 +264,7 @@ function PackingListCard({
         </button>
         <div className="flex items-center gap-1">
           <Link
-            href="/lists"
+            href={`/lists?list=${entry.listId}`}
             className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
             title="Open full list"
           >
