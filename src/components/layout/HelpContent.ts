@@ -60,6 +60,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click the "+" button on any meal slot to search and add a recipe.',
           'You can add multiple recipes to a single meal slot.',
           'Add a note instead of a recipe if you\'re having leftovers or eating out.',
+          'Hover over an individual recipe card and click the X button to remove just that recipe from a multi-recipe slot.',
         ],
       },
       {
@@ -269,6 +270,17 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Bill events show as "Bill due: [name]" in red; income events show as "Income: [name]" in green.',
           'Toggle visibility per entry using the "Show on calendar" checkbox in bill, income, and recurring template editors.',
           'These events are read-only (they cannot be edited or deleted from the calendar view).',
+        ],
+      },
+      {
+        title: 'Calendar Display Settings',
+        items: [
+          'Click the gear icon (Settings2) next to the view toggle to open the display settings popover.',
+          'Toggle "Tonight\'s dinner" to show meal plan entries as amber all-day events on the calendar.',
+          'Toggle "Todos with due date" to show incomplete to-do items as purple all-day events.',
+          'Toggle "Chores due" to show chores with a due date as cyan all-day events.',
+          'These settings can also be configured in Settings → Appearance under the "Calendar Display" section.',
+          'Settings are per-user and persist across sessions.',
         ],
       },
       {
@@ -1107,6 +1119,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Set the color that completed (done) items appear in shopping and to-do lists.',
           'Choose how PIN-protected cards appear: "Blur" (blurred content) or "Redact" (fully hidden).',
           'Advanced theme tab lets you customize individual UI colors — sidebar, cards, calendar, and text.',
+          'Use the "Calendar Display" section to choose what extra information appears on the family calendar — tonight\'s dinner, todos with a due date, and chores due.',
         ],
       },
       {
@@ -1116,7 +1129,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click "Connect Google Calendar" and follow the OAuth flow; then use "Sync Now" to push/pull changes.',
           'Admins can configure a Cloudflare Tunnel URL for secure remote access from outside the home network.',
           'Admins can enter a Umami analytics site ID and URL for website traffic tracking.',
-          'Use the Cozi Recipe Import section to migrate recipes from Cozi: paste recipe HTML, use the bookmarklet to extract JSON from a Cozi page, or manually enter recipe details.',
+          'Use the Cozi Recipe Import section to migrate recipes from Cozi: paste recipe HTML, use the bookmarklet to extract recipes from a Cozi page, or manually enter recipe details.',
+          'Click "Copy Bookmarklet Code" to copy the bookmarklet to your clipboard, then create a new browser bookmark and paste the code as the URL — open a Cozi recipe page and click the bookmark to extract it.',
           'Cozi-imported recipes are saved into a "Cozi Import" recipe book and can be assigned to a different book during import.',
         ],
       },
@@ -1864,6 +1878,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click "Add Activity" to add an activity with a name, time, location, notes, and optional tags.',
           'Reorder activities within a day using the drag handle on each activity card.',
           'Click an activity to edit it, or use the note icon to add private notes.',
+          'Toggle "Show on family calendar" in the activity editor to display trip activities on the family calendar — activities with no start time appear as all-day events.',
         ],
       },
       {
