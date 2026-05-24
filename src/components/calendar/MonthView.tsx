@@ -1,11 +1,12 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isToday, format,
-  startOfDay, endOfDay,
+  startOfDay,
 } from 'date-fns'
-import { Utensils, ClipboardList, Plane } from 'lucide-react'
+import { Utensils, ClipboardList, Plane, X } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import type { CalendarEvent } from '@/types'
 
@@ -20,6 +21,12 @@ interface MonthViewProps {
   onTripClick?: (tripId: string) => void
 }
 
+interface OverflowPopup {
+  day: Date
+  top: number
+  left: number
+}
+
 export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate)
   const monthEnd = endOfMonth(currentDate)
@@ -27,11 +34,41 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
   const calEnd = endOfWeek(monthEnd, { weekStartsOn })
   const days = eachDayOfInterval({ start: calStart, end: calEnd })
 
+  const [overflow, setOverflow] = useState<OverflowPopup | null>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!overflow) return
+    function onMouseDown(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setOverflow(null)
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOverflow(null)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [overflow])
+
   const dayHeaders = weekStartsOn === 0
     ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   const weeks = Math.ceil(days.length / 7)
+
+  const overflowDayEvents = overflow
+    ? events.filter(e => {
+        const eventStart = startOfDay(new Date(e.start))
+        const eventEnd = startOfDay(new Date(e.end))
+        const dayStart = startOfDay(overflow.day)
+        return dayStart >= eventStart && dayStart <= eventEnd
+      })
+    : []
 
   return (
     <div className="flex flex-col h-full">
@@ -87,7 +124,7 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
                 today ? 'bg-primary/5' : 'hover:bg-accent/20',
               ].join(' ')}
             >
-              {/* Date number */}
+              {/* Date number + action buttons */}
               <div className="flex items-start justify-between">
                 <span
                   className={[
@@ -128,14 +165,22 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
                     </button>
                   )}
                   {dayEvents.length > 3 && (
-                    <span className="text-xs text-muted-foreground font-medium mt-0.5 mr-0.5 hidden md:block">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const left = Math.min(rect.left, window.innerWidth - 272)
+                        setOverflow({ day, top: rect.bottom + 4, left })
+                      }}
+                      className="text-xs text-muted-foreground font-medium mt-0.5 mr-0.5 hidden md:block hover:text-foreground transition-colors cursor-pointer"
+                    >
                       +{dayEvents.length - 3}
-                    </span>
+                    </button>
                   )}
                 </div>
               </div>
 
-              {/* Events */}
+              {/* Events (first 3) */}
               <div className="flex flex-col gap-0.5 overflow-hidden flex-1">
                 {dayEvents.slice(0, 3).map(e => (
                   <EventBadge key={e.id} event={e} onClick={onEventClick} />
@@ -150,6 +195,34 @@ export function MonthView({ currentDate, events, weekStartsOn, onDayClick, onEve
           )
         })}
       </div>
+
+      {/* Overflow popup */}
+      {overflow && (
+        <div
+          ref={popupRef}
+          className="fixed z-50 w-64 bg-popover border border-border rounded-lg shadow-xl overflow-hidden"
+          style={{ top: overflow.top, left: overflow.left }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
+            <span className="text-sm font-semibold">{format(overflow.day, 'EEEE d MMMM')}</span>
+            <button
+              onClick={() => setOverflow(null)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-1 p-2 max-h-80 overflow-y-auto">
+            {overflowDayEvents.map(e => (
+              <EventBadge
+                key={e.id}
+                event={e}
+                onClick={(ev) => { setOverflow(null); onEventClick(ev) }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
