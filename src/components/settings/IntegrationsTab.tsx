@@ -257,24 +257,28 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
                 <p className="text-xs text-muted-foreground mb-2">
                   Drag the button below to your browser's bookmarks bar. Then open a recipe on Cozi's web app and click the bookmarklet.
                 </p>
-                <a
-                  href={BOOKMARKLET_HREF_STR}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors no-underline"
-                  onClick={(e) => {
-                    e.preventDefault()
+                <button
+                  type="button"
+                  onClick={() => {
                     navigator.clipboard.writeText(BOOKMARKLET_HREF_STR)
-                      .then(() => toast.success('Bookmarklet code copied! Create a new bookmark and paste this as the URL.'))
-                      .catch(() => {
-                        toast.success('Drag the bookmarklet button to your bookmarks bar.')
-                      })
+                      .then(() => toast.success('Bookmarklet code copied! Create a new browser bookmark and paste this as the URL.'))
+                      .catch(() => toast.error('Could not copy. Select the code below and copy it manually.'))
                   }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  Cozi Recipe Extractor
-                </a>
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  <strong>Or:</strong> Click the button to copy the bookmarklet code, then create a new browser bookmark and paste it as the URL.
-                </p>
+                  Copy Bookmarklet Code
+                </button>
+                <div className="mt-2">
+                  <p className="text-xs text-muted-foreground mb-1 font-medium">How to install:</p>
+                  <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
+                    <li>Click the button above to copy the code</li>
+                    <li>Open your browser's bookmarks manager</li>
+                    <li>Create a new bookmark with any name (e.g. &ldquo;Cozi Extract&rdquo;)</li>
+                    <li>Paste the copied code as the URL field</li>
+                    <li>Open a recipe on Cozi's web app and click the bookmark</li>
+                  </ol>
+                </div>
               </div>
             </div>
           </div>
