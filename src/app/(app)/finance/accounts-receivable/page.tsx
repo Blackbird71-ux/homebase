@@ -192,7 +192,7 @@ export default function AccountsReceivablePage() {
           </div>
 
           {/* ── Aging breakdown cards ──────────────────────────────────────── */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {BUCKETS.map(b => (
               <div key={b.key} className="rounded-lg border border-border p-3">
                 <p className={cn('text-xs font-medium mb-1', b.key !== '0_30' ? agingColor(b.key) : 'text-muted-foreground')}>

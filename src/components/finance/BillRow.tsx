@@ -90,7 +90,7 @@ export function BillRow({
       {/* ── Main row ──────────────────────────────────────────────────────── */}
       <div
         className={cn(
-          'grid gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
+          'flex flex-col gap-2 sm:grid sm:gap-3 rounded-lg border p-3 cursor-default select-none transition-colors',
           isOverdue          ? 'border-red-500/30 bg-red-500/5'
           : isPartiallyPaid  ? 'border-amber-500/30 bg-amber-500/5'
           : hasInvoice       ? 'border-green-500/30 bg-green-500/5'
@@ -166,8 +166,11 @@ export function BillRow({
           return <span key={c.id} className="text-sm text-right text-muted-foreground">{amt > 0 ? formatCurrency(amt) : '—'}</span>
         })}
 
+        {/* Amount + actions: single row on mobile, separate grid cells on desktop */}
+        <div className="flex items-center justify-between sm:contents">
+
         {/* Amount */}
-        <div className="text-right">
+        <div className="sm:text-right">
           <p className="text-sm font-semibold">{formatCurrency(bill.amount)}</p>
           {isPartiallyPaid && (
             <p className="text-xs text-amber-600 font-medium mt-0.5">
@@ -242,6 +245,8 @@ export function BillRow({
             </button>
           )}
         </div>
+
+        </div>{/* end mobile amount+actions wrapper */}
       </div>
 
       {/* ── Payment history + add-payment panel ──────────────────────────── */}

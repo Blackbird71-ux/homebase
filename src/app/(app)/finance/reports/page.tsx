@@ -315,7 +315,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SummaryCard
           icon={<TrendingDown className="h-4 w-4 text-red-500" />}
           label={dataMode === 'cash' ? 'Paid bills' : 'Expected bills'}

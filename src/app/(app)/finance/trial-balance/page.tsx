@@ -205,7 +205,7 @@ export default function TrialBalancePage() {
           </div>
 
           {/* Summary stat cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs text-muted-foreground mb-1">Total Debits</p>
               <p className="text-xl font-bold text-green-600">{fmtCompact(tbData.grandTotalDebit)}</p>

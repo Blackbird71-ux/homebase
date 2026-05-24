@@ -533,7 +533,7 @@ export default function AnnualPnLPage() {
       >
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <TrendingUp className="h-3.5 w-3.5 text-green-500" /> Total Income
