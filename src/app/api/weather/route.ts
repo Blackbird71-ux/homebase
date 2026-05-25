@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 export async function GET(request: NextRequest) {
-  await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const lat = searchParams.get('lat')
   const lon = searchParams.get('lon')

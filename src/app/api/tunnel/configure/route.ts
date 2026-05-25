@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import { writeFileSync } from 'fs'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(req: Request) {
-  const session = await requireSession()
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { tunnelId, hostname } = await req.json()
 

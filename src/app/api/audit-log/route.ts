@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { getAuditLogs } from '@/lib/audit-log'
 
 export async function GET(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(req.url)
   const limit = parseInt(searchParams.get('limit') ?? '50', 10)
   const offset = parseInt(searchParams.get('offset') ?? '0', 10)

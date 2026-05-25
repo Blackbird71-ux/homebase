@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { parseRecipePage } from '@/lib/recipe-scraper'
 
 export async function POST(req: Request) {
-  await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { url } = body
 

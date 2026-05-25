@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 // GET /api/lists/templates — list all templates for the family
 export async function GET() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const templates = await prisma.listTemplate.findMany({
     where: { familyId: user.familyId },
@@ -19,7 +22,9 @@ export async function GET() {
 
 // POST /api/lists/templates — create a new template
 export async function POST(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { name, type, items } = body
 
@@ -63,7 +68,9 @@ export async function POST(req: Request) {
 
 // POST /api/lists/templates?action=clone — clone a template into a new list
 export async function PATCH(req: NextRequest) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(req.url)
   const action = searchParams.get('action')
 

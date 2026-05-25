@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { sendEmail } from '@/lib/email'
 
 export async function POST(req: Request) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Only admins can test email
-  if (session.role !== 'admin') {
+  if (user.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

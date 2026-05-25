@@ -4,7 +4,8 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 // ── Tool Registry: auto-registers all tools at import time ──────────────────
 // Importing registerAllTools triggers registration of every tool module.
@@ -20,12 +21,9 @@ registerAllTools()
 // ── POST handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  let user: Awaited<ReturnType<typeof requireSession>>
-  try {
-    user = await requireSession()
-  } catch {
-    return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
-  }
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { text?: unknown }
   try {
@@ -99,11 +97,9 @@ export async function POST(req: Request) {
 // ── GET handler: diagnostic endpoint to list registered tools ───────────────
 
 export async function GET() {
-  try {
-    await requireSession()
-  } catch {
-    return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
-  }
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const toolNames = getRegisteredToolNames()
   const actionEventMap = getActionEventMap()

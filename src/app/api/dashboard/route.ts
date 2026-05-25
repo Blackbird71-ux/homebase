@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
@@ -13,7 +14,9 @@ function normalizeToUtcMidnight(dateStr: string): Date {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const timezone = user.timezone ?? 'UTC'
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
   const now = new Date()

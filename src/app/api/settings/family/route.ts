@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession, requireAdmin } from '@/lib/auth-helpers'
+import { requireAdmin } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 // Common IANA timezone list for the selector
 export const SUPPORTED_TIMEZONES = [
@@ -25,7 +27,9 @@ export const SUPPORTED_TIMEZONES = [
 export type SupportedTimezone = (typeof SUPPORTED_TIMEZONES)[number]
 
 export async function GET() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const family = await prisma.family.findUnique({
     where: { id: user.familyId },
     select: { id: true, name: true, timezone: true, umamiScriptUrl: true, umamiSiteId: true, loginTagline: true, appVersion: true, financeYearStartMonth: true, periodLockedUntil: true, hideFinanceModule: true },

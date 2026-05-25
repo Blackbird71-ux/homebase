@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 // GET /api/trips/tags — list all trip-scoped tags for the family
 export async function GET() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const tags = await prisma.tag.findMany({
     where: { familyId: user.familyId, scope: 'trip' },
@@ -24,7 +27,9 @@ export async function GET() {
 
 // POST /api/trips/tags — create a new trip-scoped tag
 export async function POST(req: NextRequest) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { name, emoji, color } = body
 

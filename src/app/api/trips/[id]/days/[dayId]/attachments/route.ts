@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
@@ -10,17 +11,19 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id: tripId, dayId } = await params
 
   const day = await prisma.tripDay.findFirst({
-    where: { id: dayId, tripId, trip: { familyId: session.familyId } },
+    where: { id: dayId, tripId, trip: { familyId: user.familyId } },
     select: { id: true },
   })
   if (!day) return NextResponse.json({ error: 'Day not found' }, { status: 404 })
 
   const attachments = await prisma.tripAttachment.findMany({
-    where: { tripId, dayId, familyId: session.familyId },
+    where: { tripId, dayId, familyId: user.familyId },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -32,11 +35,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id: tripId, dayId } = await params
 
   const day = await prisma.tripDay.findFirst({
-    where: { id: dayId, tripId, trip: { familyId: session.familyId } },
+    where: { id: dayId, tripId, trip: { familyId: user.familyId } },
     select: { id: true },
   })
   if (!day) return NextResponse.json({ error: 'Day not found' }, { status: 404 })
@@ -63,12 +68,12 @@ export async function POST(
       data: {
         tripId,
         dayId,
-        familyId: session.familyId,
+        familyId: user.familyId,
         title: title || file.name,
         fileName: safeFilename,
         fileSize: buffer.length,
         mimeType: file.type || 'application/octet-stream',
-        uploadedById: session.id,
+        uploadedById: user.id,
       },
     })
 

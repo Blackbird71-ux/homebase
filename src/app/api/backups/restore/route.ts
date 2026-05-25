@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { execSync } from 'child_process'
@@ -8,7 +9,9 @@ const BACKUP_DIR = process.env.BACKUP_DIR || '/data/backups'
 const RESTORE_SCRIPT = process.env.RESTORE_SCRIPT || '/app/scripts/restore-db.sh'
 
 export async function POST(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Only admins can restore
   if (user.role !== 'admin') {

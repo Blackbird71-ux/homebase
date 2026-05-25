@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 export async function GET() {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.id },
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
     select: {
       id: true,
       email: true,
@@ -31,19 +34,21 @@ export async function GET() {
     },
   })
 
-  if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  
+  if (!dbUser) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   // Parse uiPreferences JSON if it exists
   const parsedUser = {
-    ...user,
-    uiPreferences: user.uiPreferences ? JSON.parse(user.uiPreferences) : null,
+    ...dbUser,
+    uiPreferences: dbUser.uiPreferences ? JSON.parse(dbUser.uiPreferences) : null,
   }
   
   return NextResponse.json(parsedUser)
 }
 
 export async function PATCH(req: Request) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
 
   const { theme, fontSize, lineHeight, fontWeight, weekStartsOn, doneItemColor, name, currentPassword, newPassword, uiPreferences } = body
@@ -118,7 +123,7 @@ export async function PATCH(req: Request) {
   if (uiPreferences !== undefined) {
     // Merge with existing uiPreferences so we don't lose other settings (e.g. customTheme)
     const existingUser = await prisma.user.findUnique({
-      where: { id: session.id },
+      where: { id: user.id },
       select: { uiPreferences: true },
     })
     let merged = {}
@@ -148,10 +153,10 @@ export async function PATCH(req: Request) {
         { status: 400 }
       )
     }
-    const user = await prisma.user.findUnique({ where: { id: session.id } })
-    if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } })
+    if (!dbUser) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const valid = await bcrypt.compare(currentPassword, user.password)
+    const valid = await bcrypt.compare(currentPassword, dbUser.password)
     if (!valid) {
       return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 })
     }
@@ -163,7 +168,7 @@ export async function PATCH(req: Request) {
   }
 
   const updated = await prisma.user.update({
-    where: { id: session.id },
+    where: { id: user.id },
     data: updateData,
     select: {
       id: true,
@@ -190,14 +195,16 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE() {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Safety check: don't allow the last admin to delete themselves
   const adminCount = await prisma.user.count({
-    where: { familyId: session.familyId, role: 'admin' },
+    where: { familyId: user.familyId, role: 'admin' },
   })
 
-  if (adminCount === 1 && session.role === 'admin') {
+  if (adminCount === 1 && user.role === 'admin') {
     return NextResponse.json(
       {
         error:
@@ -207,6 +214,6 @@ export async function DELETE() {
     )
   }
 
-  await prisma.user.delete({ where: { id: session.id } })
+  await prisma.user.delete({ where: { id: user.id } })
   return NextResponse.json({ success: true })
 }

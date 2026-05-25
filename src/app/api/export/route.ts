@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 export async function POST() {
-  const session = await requireSession()
-  const { familyId } = session
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { familyId } = user
 
   const [family, events, lists, recipes, mealPlans, coziImports] = await Promise.all([
     prisma.family.findUnique({
@@ -36,7 +39,7 @@ export async function POST() {
 
   const exportData = {
     exportedAt: new Date().toISOString(),
-    exportedBy: session.email,
+    exportedBy: user.email,
     family,
     events,
     lists,

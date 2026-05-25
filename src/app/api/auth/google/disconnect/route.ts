@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { getAccessToken, deleteGoogleEvent } from '@/lib/google-calendar'
 
 export async function POST(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json() as { deleteFromGoogle?: boolean }
 
   if (typeof body.deleteFromGoogle !== 'boolean') {

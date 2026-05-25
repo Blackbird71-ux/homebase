@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
 
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, itemId } = await params
   const body = await req.json()
   const { content, isCompleted, category, sortOrder, dueDate, isLocked, unitPrice, quantity, assignedToUserId } = body
@@ -72,7 +75,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, itemId } = await params
 
   const list = await prisma.list.findFirst({

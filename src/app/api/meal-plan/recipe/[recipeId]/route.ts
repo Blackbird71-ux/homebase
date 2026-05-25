@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ recipeId: string }> }
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { recipeId } = await params
 
   const mealPlanRecipe = await prisma.mealPlanRecipe.findFirst({

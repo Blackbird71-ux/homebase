@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
 
 interface ExportItem {
@@ -12,7 +13,9 @@ interface ExportItem {
 
 
 export async function POST(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { items, mode } = body as { items: ExportItem[]; mode: 'replace' | 'append' }
 

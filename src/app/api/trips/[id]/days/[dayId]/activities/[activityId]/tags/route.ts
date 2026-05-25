@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 // POST /api/trips/[id]/days/[dayId]/activities/[activityId]/tags
 // Body: { tagId } — toggles the tag on/off the activity
@@ -8,7 +9,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string; activityId: string }> },
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, dayId, activityId } = await params
 
   // Verify trip ownership

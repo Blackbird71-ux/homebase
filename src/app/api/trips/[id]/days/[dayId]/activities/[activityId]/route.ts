@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 function serializeActivity(activity: {
   id: string
@@ -46,7 +47,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string; activityId: string }> },
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, dayId, activityId } = await params
 
   const trip = await prisma.trip.findFirst({
@@ -97,7 +100,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string; activityId: string }> },
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, dayId, activityId } = await params
 
   const trip = await prisma.trip.findFirst({

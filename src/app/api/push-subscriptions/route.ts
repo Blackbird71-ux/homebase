@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 export async function POST(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { endpoint, p256dh, auth } = body
+  const { endpoint, p256dh, auth: authKey } = body
 
-  if (!endpoint || !p256dh || !auth) {
+  if (!endpoint || !p256dh || !authKey) {
     return NextResponse.json({ error: 'endpoint, p256dh, and auth are required' }, { status: 400 })
   }
 
@@ -16,14 +19,14 @@ export async function POST(req: Request) {
     where: { endpoint },
     update: {
       p256dh,
-      auth,
+      auth: authKey,
       enabled: true,
       userId: user.id,
     },
     create: {
       endpoint,
       p256dh,
-      auth,
+      auth: authKey,
       userId: user.id,
     },
   })
@@ -32,7 +35,9 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const subscriptions = await prisma.pushSubscription.findMany({
     where: { userId: user.id },
@@ -44,7 +49,9 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { id, enabled } = body
 
@@ -68,7 +75,9 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { id } = body
 

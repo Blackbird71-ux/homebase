@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 // PATCH /api/trips/tags/[tagId] — update a trip-scoped tag
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ tagId: string }> },
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { tagId } = await params
 
   const tag = await prisma.tag.findFirst({
@@ -43,7 +46,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ tagId: string }> },
 ) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { tagId } = await params
 
   const tag = await prisma.tag.findFirst({

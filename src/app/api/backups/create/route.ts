@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { execSync } from 'child_process'
 
 const BACKUP_DIR = process.env.BACKUP_DIR || '/data/backups'
 const BACKUP_SCRIPT = process.env.BACKUP_SCRIPT || '/app/scripts/backup-db.sh'
 
 export async function POST() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Only admins can trigger manual backups
   if (user.role !== 'admin') {

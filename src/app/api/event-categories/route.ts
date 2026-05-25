@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 const DEFAULT_EVENT_CATEGORIES = [
   { name: 'Medical', color: '#ef4444' },
@@ -11,7 +12,9 @@ const DEFAULT_EVENT_CATEGORIES = [
 ]
 
 export async function GET() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Check if family has any event categories
   const existingCategories = await prisma.eventCategory.findMany({
@@ -42,7 +45,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { name, color } = body
 

@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { spawnDueDrafts } from '@/lib/finance-draft-spawn-service'
-import type { SessionUser } from '@/types'
 
 // POST /api/admin/spawn-now
 // Manually triggers the draft-spawn worker for all families.
 // Requires an admin session. Useful for testing without waiting for the cron.
 export async function POST() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (user.role !== 'admin') {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }

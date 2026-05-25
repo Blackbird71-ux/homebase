@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 // --origincert is a global flag — must come before the subcommand
@@ -16,8 +17,10 @@ function errOutput(e: unknown): string {
 }
 
 export async function POST() {
-  const session = await requireSession()
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     const output = run(`cloudflared tunnel create homebase 2>&1`)

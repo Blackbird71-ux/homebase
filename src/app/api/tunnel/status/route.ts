@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { existsSync, readFileSync, readdirSync } from 'fs'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/i
 
@@ -12,8 +13,10 @@ function findCredentialsFile(): string | null {
 }
 
 export async function GET() {
-  const session = await requireSession()
-  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const credsFile = findCredentialsFile()
   let tunnelId: string | null = null

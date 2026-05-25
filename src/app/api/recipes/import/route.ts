@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import AdmZip from 'adm-zip'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { parseUmamiRecipe, type UmamiJson } from '@/lib/umami-parser'
 import { cacheImage, getLocalImageUrl } from '@/lib/image-cache'
 
 export async function POST(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const formData = await req.formData()
   const files = formData.getAll('files') as File[]

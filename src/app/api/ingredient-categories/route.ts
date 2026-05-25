@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import { KEYWORD_MAP } from '@/lib/ingredient-helpers'
 
 export async function GET() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   
   // Check if family has any ingredient categories
   const existingCategories = await (prisma as any).ingredientCategory.findMany({
@@ -102,7 +105,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     console.log('POST /api/ingredient-categories - Starting request')
-    const user = await requireSession()
+    const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     console.log('POST /api/ingredient-categories - User authenticated:', user.id, 'Family:', user.familyId)
     
     const body = await req.json()

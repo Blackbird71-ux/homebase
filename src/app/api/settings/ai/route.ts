@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 
 const VALID_MODELS: Record<string, string[]> = {
   gemini: ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-2.5-pro'],
@@ -8,7 +9,9 @@ const VALID_MODELS: Record<string, string[]> = {
 }
 
 export async function GET() {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const data = await prisma.user.findUnique({
     where: { id: user.id },
@@ -26,7 +29,9 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const { aiApiKey, aiProvider, aiModel } = body
 
