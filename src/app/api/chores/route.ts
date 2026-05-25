@@ -53,6 +53,8 @@ export async function POST(req: Request) {
     allowEarlyStart,
     emailReminder,
     emailReminderDays,
+    startTime,
+    duration,
   } = body
 
   if (!title) {
@@ -88,6 +90,8 @@ export async function POST(req: Request) {
       allowEarlyStart: allowEarlyStart ?? false,
       emailReminder: emailReminder ?? false,
       emailReminderDays: emailReminderDays ?? 1,
+      startTime: startTime ? new Date(startTime) : null,
+      duration: duration ?? null,
       familyId: user.familyId,
     },
     include: {

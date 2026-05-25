@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
+import { localMidnightToUtc } from '@/lib/timezone'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { createAuditLog } from '@/lib/audit-log'
@@ -270,20 +271,33 @@ export async function GET(req: Request) {
           isActive: true,
           nextDueDate: { gte: rangeStart, lte: rangeEnd },
         },
-        select: { id: true, title: true, nextDueDate: true },
+        select: { id: true, title: true, nextDueDate: true, startTime: true, duration: true },
       })
       for (const chore of chores) {
         if (!chore.nextDueDate) continue
         const day = chore.nextDueDate.toISOString().slice(0, 10)
-        const start = new Date(day + 'T00:00:00.000Z')
-        const end = new Date(day + 'T23:59:59.000Z')
+
+        let start: Date, end: Date, isAllDay: boolean
+        if (chore.startTime && chore.duration) {
+          const timeHour = chore.startTime.getUTCHours()
+          const timeMin  = chore.startTime.getUTCMinutes()
+          const dayStart = localMidnightToUtc(day, user.timezone ?? 'UTC')
+          start   = new Date(dayStart.getTime() + (timeHour * 60 + timeMin) * 60_000)
+          end     = new Date(start.getTime() + chore.duration * 60_000)
+          isAllDay = false
+        } else {
+          start   = new Date(day + 'T00:00:00.000Z')
+          end     = new Date(day + 'T23:59:59.000Z')
+          isAllDay = true
+        }
+
         calendarEvents.push({
           id: `chore-${chore.id}`,
           title: `Chore: ${chore.title}`,
           description: null,
           start: start.toISOString(),
           end: end.toISOString(),
-          isAllDay: true,
+          isAllDay,
           isPersonal: false,
           isBusy: false,
           category: 'chore',

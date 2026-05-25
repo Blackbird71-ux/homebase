@@ -45,6 +45,8 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [choreDrawerOpen, setChoreDrawerOpen] = useState(false)
   const [choreDate, setChoreDate] = useState('')
   const [choreTitle, setChoreTitle] = useState('')
+  const [choreTime, setChoreTime] = useState('')
+  const [choreDuration, setChoreDuration] = useState('60')
   const [choreSaving, setChoreSaving] = useState(false)
   const [calSettings, setCalSettings] = useState<CalendarSettings>(
     initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true }
@@ -136,6 +138,8 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   function openNewChore(date: Date) {
     setChoreDate(format(date, 'yyyy-MM-dd'))
     setChoreTitle('')
+    setChoreTime('')
+    setChoreDuration('60')
     setChoreDrawerOpen(true)
   }
 
@@ -146,7 +150,12 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       const res = await fetch('/api/chores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: choreTitle.trim(), frequency: 'one-off', startDate: choreDate }),
+        body: JSON.stringify({
+          title: choreTitle.trim(),
+          frequency: 'one-off',
+          startDate: choreDate,
+          ...(choreTime ? { startTime: `2000-01-01T${choreTime}:00.000Z`, duration: parseInt(choreDuration) } : {}),
+        }),
       })
       if (!res.ok) throw new Error('Failed to save chore')
       toast.success('Chore added')
@@ -432,6 +441,33 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 placeholder="e.g. Clean bathroom"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Start time <span className="text-muted-foreground">(optional)</span></label>
+                <input
+                  type="time"
+                  value={choreTime}
+                  onChange={e => setChoreTime(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Duration</label>
+                <select
+                  value={choreDuration}
+                  onChange={e => setChoreDuration(e.target.value)}
+                  disabled={!choreTime}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                >
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="45">45 min</option>
+                  <option value="60">1 hour</option>
+                  <option value="90">90 min</option>
+                  <option value="120">2 hours</option>
+                </select>
+              </div>
             </div>
           </div>
           <div className="border-t border-border px-4 py-3 flex justify-end gap-2">
