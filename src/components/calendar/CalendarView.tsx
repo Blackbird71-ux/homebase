@@ -15,6 +15,7 @@ import { EventModal } from './EventModal'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { localTimeToStoredDateTime } from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
 
 interface CalendarSettings {
@@ -154,7 +155,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
           title: choreTitle.trim(),
           frequency: 'one-off',
           startDate: choreDate,
-          ...(choreTime ? { startTime: `2000-01-01T${choreTime}:00.000Z`, duration: parseInt(choreDuration) } : {}),
+          ...(choreTime ? { startTime: localTimeToStoredDateTime(choreTime), duration: parseInt(choreDuration) } : {}),
         }),
       })
       if (!res.ok) throw new Error('Failed to save chore')

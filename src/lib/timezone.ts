@@ -142,3 +142,12 @@ export function getLocalHourMinute(
   const minute = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
   return { hour: hour === 24 ? 0 : hour, minute }
 }
+
+/**
+ * Convert an HH:MM time string (e.g. "09:30") to the ISO string used
+ * to store a chore's start time: 2000-01-01T{HH}:{MM}:00.000Z
+ * The date portion is a fixed sentinel; only UTC hours/minutes are read back.
+ */
+export function localTimeToStoredDateTime(timeStr: string): string {
+  return `2000-01-01T${timeStr}:00.000Z`
+}

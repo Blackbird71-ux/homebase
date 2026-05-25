@@ -4,16 +4,20 @@ import { useState, useEffect, useRef } from 'react'
 import {
   startOfWeek, endOfWeek, eachDayOfInterval, isToday,
 } from 'date-fns'
-import { Utensils, ClipboardList, Plane } from 'lucide-react'
+import { Utensils, ClipboardList, Plane, X } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import { eventFallsOnDay } from '@/lib/event-helpers'
 import { formatInTz, getLocalHourMinute } from '@/lib/timezone'
+import { GRID_START, GRID_END, HOUR_PX, hourLabel, topPx, heightPx, layoutEvents } from '@/lib/calendar-grid'
 import type { CalendarEvent } from '@/types'
 
-const GRID_START = 6   // 6am
-const GRID_END   = 23  // 11pm
-const HOUR_PX    = 64
-const MIN_H      = 20
+const ALLDAY_CAP = 4
+
+interface OverflowPopup {
+  day: Date
+  top: number
+  left: number
+}
 
 interface WeekViewProps {
   currentDate: Date
@@ -27,77 +31,26 @@ interface WeekViewProps {
   onTripClick?: (tripId: string) => void
 }
 
-function hourLabel(hour: number): string {
-  if (hour === 0)  return '12am'
-  if (hour === 12) return '12pm'
-  return hour < 12 ? `${hour}am` : `${hour - 12}pm`
-}
-
-function topPx(hour: number, minute: number): number {
-  const clampedHour = Math.max(GRID_START, Math.min(GRID_END, hour))
-  const mins = (clampedHour - GRID_START) * 60 + (clampedHour === hour ? minute : 0)
-  return Math.round((mins / 60) * HOUR_PX)
-}
-
-function heightPx(startHour: number, startMin: number, endHour: number, endMin: number): number {
-  const startMins = Math.max(0, (startHour - GRID_START) * 60 + startMin)
-  const endMins   = Math.min((GRID_END - GRID_START) * 60, (endHour - GRID_START) * 60 + endMin)
-  return Math.max(MIN_H, Math.round(((endMins - startMins) / 60) * HOUR_PX))
-}
-
-interface PositionedEvent {
-  event: CalendarEvent
-  col: number
-  totalCols: number
-}
-
-function layoutEvents(events: CalendarEvent[]): PositionedEvent[] {
-  const sorted = [...events].sort(
-    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-  )
-  const result: PositionedEvent[] = []
-  const cols: number[] = []
-
-  for (const event of sorted) {
-    const startMs = new Date(event.start).getTime()
-    const endMs   = new Date(event.end).getTime()
-    let placed = false
-    for (let i = 0; i < cols.length; i++) {
-      if (cols[i] <= startMs) {
-        result.push({ event, col: i, totalCols: 0 })
-        cols[i] = endMs
-        placed = true
-        break
-      }
-    }
-    if (!placed) {
-      result.push({ event, col: cols.length, totalCols: 0 })
-      cols.push(endMs)
-    }
-  }
-
-  for (let i = 0; i < result.length; i++) {
-    const startI = new Date(result[i].event.start).getTime()
-    const endI   = new Date(result[i].event.end).getTime()
-    let maxCol = result[i].col
-    for (let j = 0; j < result.length; j++) {
-      const startJ = new Date(result[j].event.start).getTime()
-      const endJ   = new Date(result[j].event.end).getTime()
-      if (startJ < endI && endJ > startI) maxCol = Math.max(maxCol, result[j].col)
-    }
-    result[i].totalCols = maxCol + 1
-  }
-
-  return result
-}
-
 export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: WeekViewProps) {
   const weekStart = startOfWeek(currentDate, { weekStartsOn })
   const weekEnd   = endOfWeek(currentDate, { weekStartsOn })
   const days      = eachDayOfInterval({ start: weekStart, end: weekEnd })
 
   const [nowTop, setNowTop] = useState<number | null>(null)
+  const [overflow, setOverflow] = useState<OverflowPopup | null>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
   const gridScrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!overflow) return
+    function onMouseDown(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) setOverflow(null)
+    }
+    function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') setOverflow(null) }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => { document.removeEventListener('mousedown', onMouseDown); document.removeEventListener('keydown', onKeyDown) }
+  }, [overflow])
 
   useEffect(() => {
     function update() {
@@ -243,13 +196,28 @@ export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayCli
         </div>
 
         {/* All-day events banner */}
-        <div className="grid grid-cols-[3rem_repeat(7,1fr)] border-b border-border/60 shrink-0 max-h-28 overflow-y-auto">
+        <div className="grid grid-cols-[3rem_repeat(7,1fr)] border-b border-border/60 shrink-0">
           <div className="border-r border-border/40 bg-muted/10" />
           {days.map((day) => {
             const allDay = events.filter((e) => e.isAllDay && eventFallsOnDay(e, day, timezone))
+            const visible = allDay.slice(0, ALLDAY_CAP)
+            const extra = allDay.length - ALLDAY_CAP
             return (
               <div key={day.toISOString()} className="p-1 border-r border-border/40 last:border-r-0 flex flex-col gap-0.5 bg-muted/10 min-h-[2rem]">
-                {allDay.map((e) => <EventBadge key={e.id} event={e} onClick={onEventClick} />)}
+                {visible.map((e) => <EventBadge key={e.id} event={e} onClick={onEventClick} />)}
+                {extra > 0 && (
+                  <button
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      const rect = ev.currentTarget.getBoundingClientRect()
+                      const left = Math.min(rect.left, window.innerWidth - 272)
+                      setOverflow({ day, top: rect.bottom + 4, left })
+                    }}
+                    className="text-xs text-muted-foreground font-medium px-1 hover:text-foreground transition-colors text-left"
+                  >
+                    +{extra} more
+                  </button>
+                )}
               </div>
             )
           })}
@@ -351,6 +319,33 @@ export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayCli
           </div>
         </div>
       </div>
+
+      {/* Overflow popup */}
+      {overflow && (
+        <div
+          ref={popupRef}
+          className="fixed z-50 w-64 bg-popover border border-border rounded-lg shadow-xl overflow-hidden"
+          style={{ top: overflow.top, left: overflow.left }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
+            <span className="text-sm font-semibold">
+              {formatInTz(overflow.day, timezone, { weekday: 'long', day: 'numeric', month: 'long' })}
+            </span>
+            <button onClick={() => setOverflow(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-1 p-2 max-h-80 overflow-y-auto">
+            {events.filter(e => eventFallsOnDay(e, overflow.day, timezone)).map(e => (
+              <EventBadge
+                key={e.id}
+                event={e}
+                onClick={(ev) => { setOverflow(null); onEventClick(ev) }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
