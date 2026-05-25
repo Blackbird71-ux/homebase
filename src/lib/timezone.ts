@@ -121,3 +121,24 @@ export function nDaysFromTodayInTz(n: number, timezone: string): Date {
 export function dateStringInTz(date: Date, timezone: string): string {
   return date.toLocaleDateString('en-CA', { timeZone: timezone })
 }
+
+/**
+ * Extract the hour (0–23) and minute (0–59) from a UTC ISO string
+ * as they appear in the given local timezone.
+ * Never use new Date(iso).getHours() — that returns the JS runtime timezone
+ * (UTC on the server, browser-local in the client — both unreliable for UTC+10).
+ */
+export function getLocalHourMinute(
+  isoStr: string,
+  timezone: string,
+): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(new Date(isoStr))
+  const hour   = parseInt(parts.find(p => p.type === 'hour')?.value   ?? '0', 10)
+  const minute = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
+  return { hour: hour === 24 ? 0 : hour, minute }
+}

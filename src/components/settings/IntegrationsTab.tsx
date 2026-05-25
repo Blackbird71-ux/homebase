@@ -30,38 +30,59 @@ interface ImportResult {
 const textareaClass =
   'flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono text-xs'
 
-// ── Cozi Recipe Bookmarklet ──────────────────────────────────────────────────
-// This bookmarklet extracts recipe data from Cozi's web app and copies JSON to clipboard.
-// Built by joining an array to avoid TS template-literal issues with long minified code.
+// ── Cozi Recipe Bookmarklet (v2) ─────────────────────────────────────────────
+// Extracts recipe data from Cozi's web app and copies JSON to clipboard.
+// v2: rewritten for Cozi's actual DOM structure (diagnosed 2026-05-25)
+// Cozi uses MUI (Material-UI) with SPA routing. Recipe pages have:
+//   <h2>Recipe Name</h2>           (in a <div>, separate from content section)
+//   <h3>Ingredients</h3>
+//   <p>ingredient 1</p>            (each ingredient in <p>, not <li>)
+//   <p>ingredient 2</p>
+//   ...
+//   <h3>Directions</h3>
+//   <div>Step 1. Step 2. ...</div> (all steps in one <div>, split by period)
+//   No JSON-LD, no servings info, URL stays at /recipes (SPA).
 const BOOKMARKLET_HREF = [
   'javascript:(function(){',
-  'const d=document;const r={};',
-  'const h1=d.querySelector(\"h1\");',
-  'r.title=h1?h1.innerText.trim():d.title;',
-  'const ings=[];',
-  'd.querySelectorAll(\"ul[class*=\\\"ingredient\\\" i] li,ul.ingredients li,[class*=\\\"ingredients\\\" i] li\")',
-  '.forEach(function(li){var t=li.innerText.trim();if(t){ings.push(t)}});',
-  'if(ings.length===0){',
-  'd.querySelectorAll(\"[class*=\\\"ingredient\\\" i] li\")',
-  '.forEach(function(li){var t=li.innerText.trim();if(t){ings.push(t)}})',
+  'var d=document,r={},ingH3=null,dirH3=null;',
+  // Find the Ingredients/Directions H3 headings
+  'd.querySelectorAll(\"h3\").forEach(function(h3){',
+  'var t=h3.innerText.trim().toLowerCase();',
+  'if(t===\"ingredients\"){ingH3=h3;}',
+  'if(t===\"directions\"){dirH3=h3;}',
+  '});',
+  'if(ingH3&&dirH3){',
+  // Find recipe name: look for an H2 (not "Ingredients"/"Directions") in the document
+  'd.querySelectorAll(\"h2\").forEach(function(h2){',
+  'var t=h2.innerText.trim();',
+  'if(t&&t!==\"Ingredients\"&&t!==\"Directions\"&&!r.title){r.title=t;}',
+  '});',
+  // Collect ingredients from <p> elements between Ingredients H3 and Directions H3
+  'var ings=[],el=ingH3.nextElementSibling;',
+  'while(el&&el!==dirH3){',
+  'var t=el.innerText.trim();',
+  'if(t&&el.tagName===\"P\"){ings.push(t);}',
+  'el=el.nextElementSibling;',
   '}',
   'r.ingredients=ings;',
-  'var dirs=[];',
-  'd.querySelectorAll(\"ol[class*=\\\"instruction\\\" i] li,ol[class*=\\\"direction\\\" i] li,ol[class*=\\\"step\\\" i] li,ol.instructions li,ol.directions li\")',
-  '.forEach(function(li){var t=li.innerText.trim().replace(/^\\\d+[.)]\\s*/,\"\");if(t){dirs.push(t)}});',
-  'if(dirs.length===0){',
-  'd.querySelectorAll(\"[class*=\\\"directions\\\" i] li,[class*=\\\"instructions\\\" i] li\")',
-  '.forEach(function(li){var t=li.innerText.trim();if(t){dirs.push(t)}})',
+  // Collect instructions from the <div> after Directions H3, split by period
+  'var divEl=dirH3.nextElementSibling;',
+  'if(divEl){',
+  'var txt=divEl.innerText.trim();',
+  'r.instructions=txt.split(\".\").map(function(s){return s.trim();}).filter(function(s){return s.length>5;});',
+  '}else{r.instructions=[];}',
+  '}else{',
+  // Fallback: use document title
+  'r.title=d.title;r.ingredients=[];r.instructions=[];',
   '}',
-  'r.instructions=dirs;',
-  'var sv=d.querySelector(\"[class*=\\\"serving\\\" i],[class*=\\\"yield\\\" i]\");',
-  'r.servings=sv?parseInt(sv.innerText.match(/\\\d+/)?.[0]||\"0\")||null:null;',
-  'r.sourceUrl=d.URL;',
+  'r.servings=null;r.sourceUrl=d.URL;',
+  // Copy to clipboard
   'var j=JSON.stringify(r,null,2);',
   'navigator.clipboard.writeText(j).then(function(){',
+  'var ok=r.ingredients&&r.ingredients.length>0&&r.instructions&&r.instructions.length>0;',
   'var e=d.createElement(\"div\");',
-  'e.style.cssText=\"position:fixed;top:20px;right:20px;background:#16a34a;color:#fff;padding:16px 24px;border-radius:8px;z-index:99999;font-family:sans-serif;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.2)\";',
-  'e.innerHTML=\"<strong>Recipe Copied!</strong><br>Paste into HomeBase to import.\";',
+  'e.style.cssText=\"position:fixed;top:20px;right:20px;background:\"+(ok?\"#16a34a\":\"#d97706\")+\";color:#fff;padding:16px 24px;border-radius:8px;z-index:99999;font-family:sans-serif;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.2)\";',
+  'e.innerHTML=ok?\"<strong>Recipe Copied!</strong><br>Paste into HomeBase to import.\":\"<strong>Partial capture</strong><br>\"+r.title.substring(0,40);',
   'd.body.appendChild(e);',
   'setTimeout(function(){e.remove()},6000)',
   '}).catch(function(){',
@@ -127,13 +148,17 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
       return
     }
 
-    let parsed: Record<string, unknown>
+    let parsed: unknown
     try {
       parsed = JSON.parse(recipeJson.trim())
     } catch {
       toast.error('Invalid JSON. Make sure you copied the full recipe data.')
       return
     }
+
+    // Auto-detect batch (array) vs single (object)
+    const isBatch = Array.isArray(parsed)
+    const mode = isBatch ? 'json-array' : 'json'
 
     setRecipeImportLoading(true)
     setRecipeImportResult(null)
@@ -142,7 +167,7 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'json',
+          mode,
           data: parsed,
         }),
       })
