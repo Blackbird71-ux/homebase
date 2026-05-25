@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth-helpers'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
-import { localMidnightToUtc } from '@/lib/timezone'
+import { localMidnightToUtc, dateStringInTz } from '@/lib/timezone'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { createAuditLog } from '@/lib/audit-log'
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
       })
       for (const b of bills) {
         if (!b.nextDueDate) continue
-        const day = b.nextDueDate.toISOString().slice(0, 10)
+        const day = dateStringInTz(b.nextDueDate, user.timezone ?? 'UTC')
         const start = new Date(day + 'T00:00:00.000Z')
         const end = new Date(day + 'T23:59:59.000Z')
         calendarEvents.push({
@@ -133,7 +133,7 @@ export async function GET(req: Request) {
       },
     })
     for (const act of tripActivities) {
-      const dayDate = act.day.date.toISOString().slice(0, 10)
+      const dayDate = dateStringInTz(act.day.date, user.timezone ?? 'UTC')
       const start = act.startTime ?? new Date(dayDate + 'T00:00:00.000Z')
       const end = act.endTime ?? new Date(dayDate + 'T23:59:59.000Z')
       const isAllDay = !act.startTime
@@ -168,7 +168,7 @@ export async function GET(req: Request) {
       })
       for (const inc of income) {
         if (!inc.nextExpectedDate) continue
-        const day = inc.nextExpectedDate.toISOString().slice(0, 10)
+        const day = dateStringInTz(inc.nextExpectedDate, user.timezone ?? 'UTC')
         const start = new Date(day + 'T00:00:00.000Z')
         const end = new Date(day + 'T23:59:59.000Z')
         calendarEvents.push({
@@ -213,7 +213,7 @@ export async function GET(req: Request) {
           names.push(meal.note)
         }
         const label = names.length > 0 ? `Dinner: ${names.join(', ')}` : 'Dinner planned'
-        const day = meal.date.toISOString().slice(0, 10)
+        const day = dateStringInTz(meal.date, user.timezone ?? 'UTC')
         const start = new Date(day + 'T00:00:00.000Z')
         const end = new Date(day + 'T23:59:59.000Z')
         calendarEvents.push({
@@ -244,7 +244,7 @@ export async function GET(req: Request) {
       })
       for (const todo of todos) {
         if (!todo.dueDate) continue
-        const day = todo.dueDate.toISOString().slice(0, 10)
+        const day = dateStringInTz(todo.dueDate, user.timezone ?? 'UTC')
         const start = new Date(day + 'T00:00:00.000Z')
         const end = new Date(day + 'T23:59:59.000Z')
         calendarEvents.push({
@@ -275,7 +275,7 @@ export async function GET(req: Request) {
       })
       for (const chore of chores) {
         if (!chore.nextDueDate) continue
-        const day = chore.nextDueDate.toISOString().slice(0, 10)
+        const day = dateStringInTz(chore.nextDueDate, user.timezone ?? 'UTC')
 
         let start: Date, end: Date, isAllDay: boolean
         if (chore.startTime && chore.duration) {
