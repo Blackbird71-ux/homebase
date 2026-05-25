@@ -7,12 +7,13 @@ import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
 } from 'date-fns'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid, Settings2, Calendar, List } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid, Settings2, Calendar, List, GanttChart } from 'lucide-react'
 import { toast } from 'sonner'
 import { MonthView } from './MonthView'
 import { WeekView } from './WeekView'
 import { DayView } from './DayView'
 import { ScheduleView } from './ScheduleView'
+import { HorizontalWeekView } from './HorizontalWeekView'
 import { EventModal } from './EventModal'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
@@ -38,7 +39,7 @@ interface CalendarViewProps {
 
 export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timezone, calendarSettings: initialSettings }: CalendarViewProps) {
   const router = useRouter()
-  const [view, setView] = useState<'month' | 'week' | 'day' | 'schedule'>('month')
+  const [view, setView] = useState<'month' | 'week' | 'day' | 'schedule' | 'horizontal'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
   const [modalOpen, setModalOpen] = useState(false)
@@ -85,7 +86,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     if (targetView === 'month') {
       rangeStart = new Date(startOfWeek(startOfMonth(targetDate), { weekStartsOn }).getTime() - 7 * 24 * 60 * 60 * 1000)
       rangeEnd   = new Date(endOfWeek(endOfMonth(targetDate),     { weekStartsOn }).getTime() + 7 * 24 * 60 * 60 * 1000)
-    } else if (targetView === 'week') {
+    } else if (targetView === 'week' || targetView === 'horizontal') {
       rangeStart = new Date(startOfWeek(targetDate, { weekStartsOn }).getTime() - 7 * 24 * 60 * 60 * 1000)
       rangeEnd   = new Date(endOfWeek(targetDate,   { weekStartsOn }).getTime() + 7 * 24 * 60 * 60 * 1000)
     } else if (targetView === 'day') {
@@ -127,7 +128,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     let newDate: Date
     if (view === 'month') {
       newDate = dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1)
-    } else if (view === 'week') {
+    } else if (view === 'week' || view === 'horizontal') {
       newDate = dir === 'next' ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1)
     } else if (view === 'day') {
       newDate = dir === 'next' ? addDays(currentDate, 1) : subDays(currentDate, 1)
@@ -265,7 +266,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const today = new Date()
   const isCurrentPeriod = view === 'month'
     ? format(currentDate, 'M-yyyy') === format(today, 'M-yyyy')
-    : view === 'week'
+    : view === 'week' || view === 'horizontal'
     ? currentDate >= startOfWeek(today, { weekStartsOn }) && currentDate <= endOfWeek(today, { weekStartsOn })
     : format(currentDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
 
@@ -305,7 +306,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
                 <span className="text-xl font-bold tracking-tight text-foreground truncate">{monthLabel}</span>
                 <span className="text-sm font-medium text-muted-foreground">{yearLabel}</span>
               </div>
-            ) : view === 'week' ? (
+            ) : view === 'week' || view === 'horizontal' ? (
               <span className="text-base font-semibold text-foreground truncate block">{weekLabel}</span>
             ) : view === 'day' ? (
               <span className="text-base font-semibold text-foreground truncate block">{dayLabel}</span>
@@ -379,6 +380,18 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
               ].join(' ')}
             >
               <List className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { setView('horizontal'); refresh(currentDate, 'horizontal') }}
+              title="Timeline view"
+              className={[
+                'h-7 w-7 flex items-center justify-center rounded-md transition-all text-sm',
+                view === 'horizontal'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              <GanttChart className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -484,6 +497,15 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
             onMealClick={openNewMeal}
             onChoreClick={openNewChore}
             onTripClick={onTripClick}
+          />
+        ) : view === 'horizontal' ? (
+          <HorizontalWeekView
+            currentDate={currentDate}
+            events={events}
+            weekStartsOn={weekStartsOn}
+            timezone={timezone}
+            onDayClick={date => { setCurrentDate(date); setView('day'); refresh(date, 'day') }}
+            onEventClick={openEdit}
           />
         ) : (
           <ScheduleView
