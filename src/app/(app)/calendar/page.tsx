@@ -12,15 +12,16 @@ export default async function CalendarPage() {
     where: { id: user.id },
     select: { uiPreferences: true },
   })
-  let calendarSettings = { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true }
+  let calendarSettings = { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true, calShowDocs: true }
   if (fullUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(fullUser.uiPreferences)
       calendarSettings = {
-        calShowMeals: !!prefs.calShowMeals,
-        calShowTodos: !!prefs.calShowTodos,
+        calShowMeals:  !!prefs.calShowMeals,
+        calShowTodos:  !!prefs.calShowTodos,
         calShowChores: !!prefs.calShowChores,
-        calShowBills: prefs.calShowBills !== false,
+        calShowBills:  prefs.calShowBills  !== false,
+        calShowDocs:   prefs.calShowDocs   !== false,
       }
     } catch { /* ignore */ }
   }
@@ -98,6 +99,32 @@ export default async function CalendarPage() {
       recurrenceRule: (e as Record<string, unknown>).recurrenceRule as string | null | undefined,
     }
   })
+
+  if (calendarSettings.calShowDocs) {
+    const ninetyDays = 90 * 24 * 60 * 60 * 1000
+    const docs = await prisma.document.findMany({
+      where: {
+        familyId: user.familyId,
+        expiryDate: { not: null, gte: from, lte: new Date(to.getTime() + ninetyDays) },
+      },
+      select: { id: true, title: true, expiryDate: true, remindBefore: true },
+    })
+    for (const doc of docs) {
+      if (!doc.expiryDate) continue
+      const remindMs = doc.expiryDate.getTime() - doc.remindBefore * 24 * 60 * 60 * 1000
+      const remindDay = new Date(remindMs).toISOString().slice(0, 10)
+      const expiryDay = doc.expiryDate.toISOString().slice(0, 10)
+      if (remindDay !== expiryDay) {
+        const remindDate = new Date(remindMs)
+        if (remindDate >= from && remindDate <= to) {
+          calendarEvents.push({ id: `doc-remind-${doc.id}`, title: `Expiring: ${doc.title}`, description: null, start: remindDay + 'T00:00:00.000Z', end: remindDay + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'document', color: '#f59e0b', createdBy: user.id, source: 'document' })
+        }
+      }
+      if (doc.expiryDate >= from && doc.expiryDate <= to) {
+        calendarEvents.push({ id: `doc-expiry-${doc.id}`, title: `Expires: ${doc.title}`, description: null, start: expiryDay + 'T00:00:00.000Z', end: expiryDay + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'document', color: '#ef4444', createdBy: user.id, source: 'document' })
+      }
+    }
+  }
 
   if (calendarSettings.calShowBills) {
     const [bills, income] = await Promise.all([

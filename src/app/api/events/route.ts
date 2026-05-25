@@ -17,6 +17,7 @@ export async function GET(req: Request) {
   const showTodos = searchParams.get('todos') === '1'
   const showChores = searchParams.get('chores') === '1'
   const showBills = searchParams.get('bills') === '1'
+  const showDocs = searchParams.get('docs') === '1'
 
   const rangeStart = from ? new Date(from) : null
   const rangeEnd = to ? new Date(to) : null
@@ -261,6 +262,60 @@ export async function GET(req: Request) {
           createdBy: user.id,
           source: 'todo',
         })
+      }
+    }
+
+    if (showDocs) {
+      // Fetch docs whose expiry date (or reminder window) overlaps the fetch range.
+      // remindBefore defaults to 30; add 90-day buffer to catch any custom value.
+      const ninetyDays = 90 * 24 * 60 * 60 * 1000
+      const docs = await prisma.document.findMany({
+        where: {
+          familyId: user.familyId,
+          expiryDate: {
+            not: null,
+            gte: rangeStart,
+            lte: new Date(rangeEnd.getTime() + ninetyDays),
+          },
+        },
+        select: { id: true, title: true, expiryDate: true, remindBefore: true },
+      })
+      for (const doc of docs) {
+        if (!doc.expiryDate) continue
+        const tz = user.timezone ?? 'UTC'
+        const remindMs = doc.expiryDate.getTime() - doc.remindBefore * 24 * 60 * 60 * 1000
+        const remindDay = dateStringInTz(new Date(remindMs), tz)
+        const expiryDay = dateStringInTz(doc.expiryDate, tz)
+
+        if (remindDay !== expiryDay) {
+          const remindStart = new Date(remindDay + 'T00:00:00.000Z')
+          if (remindStart >= rangeStart && remindStart <= rangeEnd) {
+            calendarEvents.push({
+              id: `doc-remind-${doc.id}`,
+              title: `Expiring: ${doc.title}`,
+              description: null,
+              start: remindStart.toISOString(),
+              end: new Date(remindDay + 'T23:59:59.000Z').toISOString(),
+              isAllDay: true, isPersonal: false, isBusy: false,
+              category: 'document', color: '#f59e0b',
+              createdBy: user.id, source: 'document',
+            })
+          }
+        }
+
+        const expiryStart = new Date(expiryDay + 'T00:00:00.000Z')
+        if (expiryStart >= rangeStart && expiryStart <= rangeEnd) {
+          calendarEvents.push({
+            id: `doc-expiry-${doc.id}`,
+            title: `Expires: ${doc.title}`,
+            description: null,
+            start: expiryStart.toISOString(),
+            end: new Date(expiryDay + 'T23:59:59.000Z').toISOString(),
+            isAllDay: true, isPersonal: false, isBusy: false,
+            category: 'document', color: '#ef4444',
+            createdBy: user.id, source: 'document',
+          })
+        }
       }
     }
 

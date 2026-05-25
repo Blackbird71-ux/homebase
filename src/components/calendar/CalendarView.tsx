@@ -25,6 +25,7 @@ interface CalendarSettings {
   calShowTodos: boolean
   calShowChores: boolean
   calShowBills: boolean
+  calShowDocs: boolean
 }
 
 interface CalendarViewProps {
@@ -56,7 +57,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [choreCompleteTitle, setChoreCompleteTitle] = useState('')
   const [choreCompleting, setChoreCompleting] = useState(false)
   const [calSettings, setCalSettings] = useState<CalendarSettings>(
-    initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true }
+    initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true, calShowDocs: true }
   )
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -99,10 +100,11 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     const params = new URLSearchParams({
       from: rangeStart.toISOString(),
       to: rangeEnd.toISOString(),
-      ...(s.calShowMeals ? { meals: '1' } : {}),
-      ...(s.calShowTodos ? { todos: '1' } : {}),
+      ...(s.calShowMeals  ? { meals:  '1' } : {}),
+      ...(s.calShowTodos  ? { todos:  '1' } : {}),
       ...(s.calShowChores ? { chores: '1' } : {}),
-      ...(s.calShowBills ? { bills: '1' } : {}),
+      ...(s.calShowBills  ? { bills:  '1' } : {}),
+      ...(s.calShowDocs   ? { docs:   '1' } : {}),
     })
     const res = await fetch(`/api/events?${params}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
@@ -214,6 +216,10 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     }
     if (event.isBusy) return
     if (event.source === 'bill' || event.source === 'income') return
+    if (event.source === 'document') {
+      router.push('/documents')
+      return
+    }
     if (event.source === 'chore') {
       setChoreCompleteId(event.id.replace('chore-', ''))
       setChoreCompleteTitle(event.title.replace(/^Chore:\s*/, ''))
@@ -397,10 +403,11 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
               >
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Show on calendar</p>
                 {([
-                  { key: 'calShowMeals' as const, label: "Tonight's dinner" },
-                  { key: 'calShowTodos' as const, label: 'Todos with due date' },
+                  { key: 'calShowMeals'  as const, label: "Tonight's dinner" },
+                  { key: 'calShowTodos'  as const, label: 'Todos with due date' },
                   { key: 'calShowChores' as const, label: 'Chores due' },
-                  { key: 'calShowBills' as const, label: 'Bills & income due' },
+                  { key: 'calShowBills'  as const, label: 'Bills & income due' },
+                  { key: 'calShowDocs'   as const, label: 'Document expiry' },
                 ] as const).map(({ key, label }) => (
                   <label key={key} className="flex items-center gap-2.5 cursor-pointer select-none">
                     <button
