@@ -34,6 +34,7 @@ import {
   ClipboardList,
   FileCheck,
   Calculator,
+  LineChart,
 } from 'lucide-react'
 import { isNavKeyVisible } from '@/lib/financeNavKeys'
 
@@ -77,6 +78,7 @@ const groups: NavGroup[] = [
       { href: '/finance/bas',                   label: 'BAS Worksheet',      icon: FileCheck,    exact: false, navKey: 'bas'             },
       { href: '/finance/vendor-statement',      label: 'Statements',         icon: ClipboardList,exact: false, navKey: 'vendorStatement' },
       { href: '/finance/reports',               label: 'Reports',            icon: PieChart,     exact: false, navKey: 'reports'         },
+      { href: '/finance/insights',              label: 'Insights',           icon: LineChart,    exact: false, navKey: 'insights'        },
     ],
   },
   {

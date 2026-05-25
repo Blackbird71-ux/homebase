@@ -25,6 +25,7 @@ export const FINANCE_NAV_KEYS: FinanceNavKeyDef[] = [
   { key: 'bas',             label: 'BAS Worksheet',      group: 'Reporting'  },
   { key: 'vendorStatement', label: 'Statements',         group: 'Reporting'  },
   { key: 'reports',         label: 'Reports',            group: 'Reporting'  },
+  { key: 'insights',        label: 'Insights',           group: 'Reporting'  },
   { key: 'budget',          label: 'Budget',             group: 'Planning'   },
   { key: 'goals',           label: 'Goals',              group: 'Planning'   },
   { key: 'contacts',        label: 'Financial Contacts', group: 'Reference'  },
