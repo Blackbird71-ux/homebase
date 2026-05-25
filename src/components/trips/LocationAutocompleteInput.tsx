@@ -18,104 +18,51 @@ export function LocationAutocompleteInput({
   placeholder = 'e.g. Eiffel Tower',
 }: LocationAutocompleteInputProps) {
   const placesLib = useMapsLibrary('places')
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pacRef = useRef<HTMLElement | null>(null)
-
-  // Use refs for callback and value to avoid stale closures in event handlers
+  const inputRef = useRef<HTMLInputElement>(null)
   const onChangeRef = useRef(onChange)
-  const valueRef = useRef(value)
-
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
 
-  // Sync external value into the PAC element (e.g. after a form reset)
+  // Sync external value into the uncontrolled input (e.g. after form reset)
   useEffect(() => {
-    valueRef.current = value
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (pacRef.current && (pacRef.current as any).value !== value) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(pacRef.current as any).value = value
+    if (inputRef.current && inputRef.current.value !== value) {
+      inputRef.current.value = value
     }
   }, [value])
 
   useEffect(() => {
-    if (!placesLib || !containerRef.current) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const PAE = (google.maps.places as any).PlaceAutocompleteElement
-    if (!PAE) return
+    if (!placesLib || !inputRef.current) return
 
-    const pac: HTMLElement = new PAE()
-    pac.setAttribute('placeholder', placeholder)
+    // Use the classic Autocomplete class — it appends .pac-container to document.body,
+    // which avoids being clipped by the drawer's overflow-y: auto.
+    const ac = new google.maps.places.Autocomplete(inputRef.current, {
+      fields: ['name', 'formatted_address', 'geometry'],
+    })
 
-    // Strip Material Design chrome so our wrapper provides all visual styling
-    pac.style.cssText = [
-      'width:100%',
-      '--gmp-mat-color-surface:transparent',
-      '--gmp-mat-color-outline:transparent',
-      '--gmp-mat-color-on-surface:inherit',
-      '--gmp-mat-color-on-surface-variant:inherit',
-      '--gmp-mat-shape-medium:0',
-      'box-shadow:none',
-      'font-size:0.875rem',
-      'line-height:1.5',
-    ].join(';')
-
-    // Seed with current value
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (valueRef.current) (pac as any).value = valueRef.current
-
-    async function onSelect(event: Event) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const place = (event as any).place
-      if (!place) return
-      await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const name: string = (place as any).displayName ?? (place as any).formattedAddress ?? ''
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const loc: google.maps.LatLng | null = (place as any).location ?? null
-      valueRef.current = name
-      onChangeRef.current(name, loc?.lat(), loc?.lng())
-    }
-
-    function onInput() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const text = ((pac as any).value ?? '') as string
-      valueRef.current = text
-      onChangeRef.current(text)
-    }
-
-    pac.addEventListener('gmp-placeselect', onSelect)
-    pac.addEventListener('input', onInput)
-    pacRef.current = pac
-    containerRef.current.appendChild(pac)
+    const listener = ac.addListener('place_changed', () => {
+      const place = ac.getPlace()
+      const name = place.name ?? place.formatted_address ?? ''
+      const lat = place.geometry?.location?.lat()
+      const lng = place.geometry?.location?.lng()
+      if (inputRef.current) inputRef.current.value = name
+      onChangeRef.current(name, lat, lng)
+    })
 
     return () => {
-      pac.removeEventListener('gmp-placeselect', onSelect)
-      pac.removeEventListener('input', onInput)
-      try { containerRef.current?.removeChild(pac) } catch {}
-      pacRef.current = null
+      google.maps.event.removeListener(listener)
     }
-  }, [placesLib, placeholder])
-
-  // Fallback: plain text input when Places API isn't loaded or saving is in progress
-  if (!placesLib || disabled) {
-    return (
-      <div className="hb-input-with-icon">
-        <MapPin size={14} aria-hidden />
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          placeholder={placeholder}
-          className="hb-input"
-        />
-      </div>
-    )
-  }
+  }, [placesLib])
 
   return (
-    <div className="hb-location-pac-wrapper">
+    <div className="hb-input-with-icon">
       <MapPin size={14} aria-hidden />
-      <div ref={containerRef} className="hb-location-pac-input" />
+      <input
+        ref={inputRef}
+        defaultValue={value}
+        onChange={(e) => onChangeRef.current(e.target.value)}
+        disabled={disabled}
+        placeholder={placeholder}
+        className="hb-input"
+      />
     </div>
   )
 }

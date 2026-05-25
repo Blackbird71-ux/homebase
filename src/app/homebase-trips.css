@@ -1055,6 +1055,9 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
+/* Ensure Google Places suggestions appear above the drawer */
+.pac-container { z-index: 9999 !important; }
+
 .hb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 /* Time range double-input */
