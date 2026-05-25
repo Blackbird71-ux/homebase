@@ -236,7 +236,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     if (!choreCompleteId) return
     setChoreCompleting(true)
     try {
-      const res = await fetch(`/api/chores/${choreCompleteId}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+      const res = await fetch(`/api/chores/${choreCompleteId}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
       if (!res.ok) throw new Error('Failed to complete chore')
       toast.success('Chore marked as done')
       setChoreCompleteOpen(false)
@@ -604,15 +604,23 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
             <DrawerTitle>Mark chore as done?</DrawerTitle>
           </DrawerHeader>
           <div className="px-4 py-4 text-sm text-muted-foreground">{choreCompleteTitle}</div>
-          <div className="border-t border-border px-4 py-3 flex justify-end gap-2">
-            <button onClick={() => setChoreCompleteOpen(false)} className="px-4 py-2 rounded-md text-sm border border-input hover:bg-accent">Cancel</button>
+          <div className="border-t border-border px-4 py-3 flex justify-between gap-2">
             <button
-              onClick={handleChoreComplete}
-              disabled={choreCompleting}
-              className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              onClick={() => { setChoreCompleteOpen(false); router.push('/chores') }}
+              className="px-4 py-2 rounded-md text-sm border border-input hover:bg-accent"
             >
-              {choreCompleting ? 'Saving…' : 'Mark Done'}
+              Edit Chore
             </button>
+            <div className="flex gap-2">
+              <button onClick={() => setChoreCompleteOpen(false)} className="px-4 py-2 rounded-md text-sm border border-input hover:bg-accent">Cancel</button>
+              <button
+                onClick={handleChoreComplete}
+                disabled={choreCompleting}
+                className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {choreCompleting ? 'Saving…' : 'Mark Done'}
+              </button>
+            </div>
           </div>
         </DrawerContent>
       </Drawer>
