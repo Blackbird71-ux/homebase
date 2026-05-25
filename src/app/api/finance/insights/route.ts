@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { monthBoundsInTz, formatInTz } from '@/lib/timezone'
 
 export async function GET(req: Request) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const months = Math.min(24, Math.max(3, parseInt(searchParams.get('months') ?? '12', 10)))
 
@@ -19,13 +23,7 @@ export async function GET(req: Request) {
     const year = d.getFullYear()
     const month = d.getMonth()
 
-    // start: UTC equivalent of local month start
-    const localStart = new Date(d)
-    localStart.setDate(1)
-    localStart.setHours(0, 0, 0, 0)
-
-    // Use the bounds from monthBoundsInTz logic — simpler: just use midnight UTC of the 1st
-    // Since JournalEntry dates are stored in UTC, we want the full calendar month in UTC
+    // Finance journal dates are stored as UTC midnight accounting dates by convention
     const start = new Date(Date.UTC(year, month, 1))
     const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999))
 
@@ -72,10 +70,8 @@ export async function GET(req: Request) {
     for (const l of bucketLines) {
       const type = l.glAccount.type
       if (type === 'income') {
-        // Credit to income = revenue (normal balance is credit)
         income += l.side === 'credit' ? l.amount : -l.amount
       } else if (type === 'expense') {
-        // Debit to expense = cost (normal balance is debit)
         expenses += l.side === 'debit' ? l.amount : -l.amount
       }
     }
