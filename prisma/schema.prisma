@@ -55,6 +55,7 @@ model Family {
   financeBillPayments    FinanceBillPayment[]
   financeRecurringTemplates  FinanceRecurringTemplate[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
+  wishlistItems          WishlistItem[]
 }
 
 model User {
@@ -81,12 +82,14 @@ model User {
   googleRefreshToken  String?
   googleCalendarSyncs GoogleCalendarSync[]
   eventAttendees      EventAttendee[]
-  choreAssignments    Chore[]               @relation("ChoreAssignee")
-  choreCompletions    ChoreCompletion[]
-  pushSubscriptions   PushSubscription[]
-  documents           Document[]
-  listItems           ListItem[]            @relation("ListItemAssignee")
-  createdAt           DateTime              @default(now())
+  choreAssignments       Chore[]               @relation("ChoreAssignee")
+  choreCompletions       ChoreCompletion[]
+  pushSubscriptions      PushSubscription[]
+  documents              Document[]
+  listItems              ListItem[]            @relation("ListItemAssignee")
+  wishlistItemsSuggested WishlistItem[]        @relation("WishlistSuggested")
+  wishlistItemsPurchased WishlistItem[]        @relation("WishlistPurchased")
+  createdAt              DateTime              @default(now())
 }
 
 model InviteCode {
@@ -462,8 +465,9 @@ model HouseholdContact {
   pinHash   String?  // bcrypt hash of PIN for secure contacts (null = not secured)
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  wishlistItems WishlistItem[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([familyId])
   @@index([category])
@@ -1380,4 +1384,28 @@ model BudgetPlannerItem {
 
   @@index([userId, type])
   @@index([userId])
+}
+
+model WishlistItem {
+  id             String            @id @default(cuid())
+  familyId       String
+  family         Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  contactId      String?
+  contact        HouseholdContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  title          String
+  url            String?
+  notes          String?
+  estimatedPrice Float?
+  occasion       String?
+  isPurchased    Boolean           @default(false)
+  purchasedById  String?
+  purchasedBy    User?             @relation("WishlistPurchased", fields: [purchasedById], references: [id], onDelete: SetNull)
+  suggestedById  String?
+  suggestedBy    User?             @relation("WishlistSuggested", fields: [suggestedById], references: [id], onDelete: SetNull)
+  purchasedAt    DateTime?
+  createdAt      DateTime          @default(now())
+
+  @@index([familyId])
+  @@index([contactId])
+  @@index([familyId, isPurchased])
 }
