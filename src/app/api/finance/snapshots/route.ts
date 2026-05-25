@@ -2,20 +2,20 @@
 // GET — list finance snapshots for the current family
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const session = await auth()
+    const user = session?.user as SessionUser | undefined
+    if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const year = searchParams.get('year') // optional filter
 
-    const where: Record<string, unknown> = { familyId: session.familyId }
+    const where: Record<string, unknown> = { familyId: user.familyId }
     if (year) where.financialYear = year
 
     const snapshots = await prisma.financeSnapshot.findMany({

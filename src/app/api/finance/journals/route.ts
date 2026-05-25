@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
@@ -82,7 +83,9 @@ async function createEntryInTxWithRetry(
 //                          auto_transaction, opening_balance, and orphaned entries.
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
 
   const page  = Math.max(1, parseInt(searchParams.get('page')  ?? '1',  10))
@@ -96,7 +99,7 @@ export async function GET(request: NextRequest) {
     familyId: string
     isPosted?: boolean
     type?: { in: string[] }
-  } = { familyId: session.familyId }
+  } = { familyId: user.familyId }
 
   if (isPostedParam === 'true')  where.isPosted = true
   if (isPostedParam === 'false') where.isPosted = false
@@ -125,7 +128,9 @@ export async function GET(request: NextRequest) {
 // Create a new journal entry (draft or post immediately)
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { date, description, type, entityId, postImmediately, lines } = json
 
@@ -148,7 +153,7 @@ export async function POST(request: NextRequest) {
   // Verify all GL accounts belong to this family
   const glIds = [...new Set(lines.map((l: { glAccountId: string }) => l.glAccountId))]
   const validAccounts = await prisma.financeCategory.findMany({
-    where: { id: { in: glIds as string[] }, familyId: session.familyId },
+    where: { id: { in: glIds as string[] }, familyId: user.familyId },
     select: { id: true },
   })
   if (validAccounts.length !== glIds.length) {
@@ -163,7 +168,7 @@ export async function POST(request: NextRequest) {
       type:        type ?? 'manual',
       isPosted:    postImmediately ?? false,
       entityId:    entityId || null,
-      familyId:    session.familyId,
+      familyId:    user.familyId,
       lines: {
         create: lines.map((l: { glAccountId: string; side: string; amount: number; description?: string; memberId?: string }) => ({
           glAccountId: l.glAccountId,
@@ -174,11 +179,11 @@ export async function POST(request: NextRequest) {
         })),
       },
     }),
-    session.familyId,
+    user.familyId,
   )
 
   const periodWarning = postImmediately
-    ? await getPeriodLockWarning(session.familyId, new Date(date))
+    ? await getPeriodLockWarning(user.familyId, new Date(date))
     : null
 
   return NextResponse.json(periodWarning ? { ...entry, periodWarning } : entry, { status: 201 })
@@ -188,7 +193,9 @@ export async function POST(request: NextRequest) {
 // Update a draft entry (posted entries cannot be edited)
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, date, description, type, entityId, postImmediately, lines } = json
 
@@ -197,7 +204,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const existing = await prisma.financeJournalEntry.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 })
@@ -220,7 +227,7 @@ export async function PUT(request: NextRequest) {
 
   const glIds = [...new Set(lines.map((l: { glAccountId: string }) => l.glAccountId))]
   const validAccounts = await prisma.financeCategory.findMany({
-    where: { id: { in: glIds as string[] }, familyId: session.familyId },
+    where: { id: { in: glIds as string[] }, familyId: user.familyId },
     select: { id: true },
   })
   if (validAccounts.length !== glIds.length) {
@@ -259,7 +266,9 @@ export async function PUT(request: NextRequest) {
 // action: 'reverse' — create a reversal of a posted entry
 
 export async function PATCH(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, action } = json
 
@@ -268,7 +277,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const existing = await prisma.financeJournalEntry.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
     include: { lines: true },
   })
   if (!existing) {
@@ -319,7 +328,7 @@ export async function PATCH(request: NextRequest) {
             isPosted:     true,
             reversalOfId: existing.id,
             entityId:     existing.entityId,
-            familyId:     session.familyId,
+            familyId:     user.familyId,
             lines: {
               create: existing.lines.map(l => ({
                 glAccountId: l.glAccountId,
@@ -337,7 +346,7 @@ export async function PATCH(request: NextRequest) {
           data:  { isReversed: true },
         }),
       ],
-      session.familyId,
+      user.familyId,
     )
 
     return NextResponse.json(reversal, { status: 201 })
@@ -369,7 +378,7 @@ export async function PATCH(request: NextRequest) {
             isPosted:     true,
             reversalOfId: existing.id,
             entityId:     existing.entityId,
-            familyId:     session.familyId,
+            familyId:     user.familyId,
             lines: {
               create: existing.lines.map(l => ({
                 glAccountId: l.glAccountId,
@@ -387,7 +396,7 @@ export async function PATCH(request: NextRequest) {
           data:  { isReversed: true },
         }),
       ],
-      session.familyId,
+      user.familyId,
     )
 
     return NextResponse.json(voidEntry, { status: 201 })
@@ -438,7 +447,7 @@ export async function PATCH(request: NextRequest) {
     // Verify all GL accounts in the corrective lines belong to this family
     const corrGlIds = [...new Set(correctionLines.map((l: { glAccountId: string }) => l.glAccountId))]
     const validCorrAccounts = await prisma.financeCategory.findMany({
-      where: { id: { in: corrGlIds as string[] }, familyId: session.familyId },
+      where: { id: { in: corrGlIds as string[] }, familyId: user.familyId },
       select: { id: true },
     })
     if (validCorrAccounts.length !== corrGlIds.length) {
@@ -450,8 +459,8 @@ export async function PATCH(request: NextRequest) {
     // both upfront and build the transaction with both. Retry the whole block on P2002.
     let amendmentEntry: any
     for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
-      const reversalRef   = await nextJournalReference(session.familyId)
-      const correctionRef = await nextJournalReference(session.familyId)
+      const reversalRef   = await nextJournalReference(user.familyId)
+      const correctionRef = await nextJournalReference(user.familyId)
       try {
         const result = await prisma.$transaction([
           // Step 1: Create the reversing entry (zeroes out the GL effect of the original)
@@ -464,7 +473,7 @@ export async function PATCH(request: NextRequest) {
               isPosted:     true,
               reversalOfId: existing.id,
               entityId:     existing.entityId,
-              familyId:     session.familyId,
+              familyId:     user.familyId,
               lines: {
                 create: existing.lines.map(l => ({
                   glAccountId: l.glAccountId,
@@ -492,7 +501,7 @@ export async function PATCH(request: NextRequest) {
               isPosted:      true,
               amendmentOfId: existing.id,
               entityId:      correctionEntityId ?? existing.entityId ?? null,
-              familyId:      session.familyId,
+              familyId:      user.familyId,
               lines: {
                 create: correctionLines.map((l: { glAccountId: string; side: string; amount: number; description?: string; memberId?: string }) => ({
                   glAccountId: l.glAccountId,
@@ -532,7 +541,9 @@ export async function PATCH(request: NextRequest) {
 // Posted entries that are not voided and not reversals cannot be deleted.
 
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
 
@@ -541,7 +552,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const existing = await prisma.financeJournalEntry.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
     include: {
       reversals:  { select: { id: true } },
       amendments: { select: { id: true } },
@@ -565,7 +576,7 @@ export async function DELETE(request: NextRequest) {
     ]
     await prisma.$transaction([
       prisma.financeJournalEntry.deleteMany({
-        where: { id: { in: childIds }, familyId: session.familyId },
+        where: { id: { in: childIds }, familyId: user.familyId },
       }),
       prisma.financeJournalEntry.delete({ where: { id } }),
     ])
@@ -579,7 +590,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.$transaction([
       prisma.financeJournalEntry.delete({ where: { id } }),
       prisma.financeJournalEntry.updateMany({
-        where: { id: parentId, familyId: session.familyId },
+        where: { id: parentId, familyId: user.familyId },
         data: { isReversed: false },
       }),
     ])
@@ -600,7 +611,7 @@ export async function DELETE(request: NextRequest) {
   if (existing.isPosted && existing.amendmentOfId) {
     const originalId = existing.amendmentOfId
     const original = await prisma.financeJournalEntry.findFirst({
-      where: { id: originalId, familyId: session.familyId },
+      where: { id: originalId, familyId: user.familyId },
       include: { reversals: { select: { id: true } } },
     })
     if (!original) {
@@ -612,7 +623,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.$transaction([
       // Delete the reversal entries that zeroed out the original
       prisma.financeJournalEntry.deleteMany({
-        where: { id: { in: reversalIds }, familyId: session.familyId },
+        where: { id: { in: reversalIds }, familyId: user.familyId },
       }),
       // Delete this corrective entry
       prisma.financeJournalEntry.delete({ where: { id } }),

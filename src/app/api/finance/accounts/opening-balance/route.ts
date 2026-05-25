@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { setOpeningBalance } from '@/lib/finance-opening-balance'
 
@@ -7,7 +8,9 @@ import { setOpeningBalance } from '@/lib/finance-opening-balance'
 // Set or update the opening balance for an existing account.
 // amount = null or 0 → clears the opening balance transaction.
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { accountId, amount, date } = json
 
@@ -17,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   // Verify the account belongs to this family
   const account = await prisma.financeAccount.findFirst({
-    where: { id: accountId, familyId: session.familyId },
+    where: { id: accountId, familyId: user.familyId },
     select: { id: true, name: true, openingBalance: true, openingBalanceTxId: true },
   })
   if (!account) {
@@ -29,8 +32,8 @@ export async function POST(request: NextRequest) {
 
   await setOpeningBalance(
     accountId,
-    session.familyId,
-    session.id,
+    user.familyId,
+    user.id,
     parsedAmount,
     parsedDate,
   )

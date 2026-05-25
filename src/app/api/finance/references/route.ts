@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 // ── Finance Reference Data ────────────────────────────────────────────────────
@@ -12,8 +13,10 @@ import { prisma } from '@/lib/prisma'
 // Use the individual endpoints when richer data is needed.
 
 export async function GET() {
-  const session = await requireSession()
-  const { familyId } = session
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { familyId } = user
 
   const [accounts, categories, members, locations, entities] = await Promise.all([
     prisma.financeAccount.findMany({

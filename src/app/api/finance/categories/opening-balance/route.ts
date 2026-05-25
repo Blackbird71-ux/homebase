@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 // POST /api/finance/categories/opening-balance
@@ -10,7 +11,9 @@ import { prisma } from '@/lib/prisma'
 // amount > 0 = normal balance (asset with funds, liability with debt owed, equity in credit)
 // amount < 0 = abnormal balance (rare; e.g. an asset that is overdrawn)
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { categoryId, amount, date } = json
 
@@ -20,7 +23,7 @@ export async function POST(request: NextRequest) {
 
   // Verify the category belongs to this family
   const category = await prisma.financeCategory.findFirst({
-    where: { id: categoryId, familyId: session.familyId },
+    where: { id: categoryId, familyId: user.familyId },
     select: { id: true, name: true, type: true },
   })
   if (!category) {

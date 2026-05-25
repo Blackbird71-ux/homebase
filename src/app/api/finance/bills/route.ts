@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { addMonths, addWeeks, max } from 'date-fns'
 import {
@@ -200,10 +201,12 @@ async function nextNJournalReferences(familyId: string, n: number): Promise<stri
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET() {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const bills = await prisma.financeRecurringBill.findMany({
     where: {
-      familyId: session.familyId,
+      familyId: user.familyId,
       isVoided: false,
       // Exclude draft/cancelled entries — drafts belong in the Drafts inbox;
       // cancelled drafts are audit-only and must not surface as actionable items.
@@ -223,7 +226,9 @@ export async function GET() {
 
 // ── POST ──────────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const {
     name, amount, accountId, categoryId, frequency,
@@ -280,7 +285,7 @@ export async function POST(request: NextRequest) {
           entityId: entityId ?? null,
           taxClassification: taxClassification ?? null,
           showOnCalendar: showOnCalendar ?? true,
-          familyId: session.familyId,
+          familyId: user.familyId,
         },
       })
     })
@@ -307,7 +312,7 @@ export async function POST(request: NextRequest) {
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
       draftJeId = await upsertBillDraftJournal(
-        bill.id, name, null, journalLines, dueDate, session.familyId, entityId ?? null,
+        bill.id, name, null, journalLines, dueDate, user.familyId, entityId ?? null,
       )
       await prisma.financeRecurringBill.update({
         where: { id: bill.id },
@@ -330,7 +335,7 @@ export async function POST(request: NextRequest) {
   if (shouldPostInvoice && categoryId) {
     try {
       const { journalEntryId } = await postBillAccrualJournal(prisma, {
-        familyId: session.familyId,
+        familyId: user.familyId,
         description: name,
         amount: parsedAmount,
         expenseGlAccountId: categoryId,
@@ -363,7 +368,7 @@ export async function POST(request: NextRequest) {
   // lines are provided, regardless of posting state.
 
   const periodWarning = shouldPostInvoice
-    ? await getPeriodLockWarning(session.familyId, invoiceDate)
+    ? await getPeriodLockWarning(user.familyId, invoiceDate)
     : null
 
   try {
@@ -381,7 +386,9 @@ export async function POST(request: NextRequest) {
 
 // ── PUT ───────────────────────────────────────────────────────────────────────
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const {
     id, name, amount, accountId, categoryId, frequency,
@@ -397,7 +404,7 @@ export async function PUT(request: NextRequest) {
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-  const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId } })
+  const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId } })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
   const bill = await prisma.financeRecurringBill.update({
@@ -454,7 +461,7 @@ export async function PUT(request: NextRequest) {
         workingJeId,
         journalLines,
         nextDueDate ? new Date(nextDueDate) : existing.nextDueDate,
-        session.familyId,
+        user.familyId,
         entityId !== undefined ? (entityId ?? null) : existing.entityId,
       )
       if (workingJeId !== (existing.journalEntryId ?? null)) {
@@ -484,7 +491,7 @@ export async function PUT(request: NextRequest) {
       const effectiveCategoryId = categoryId ?? existing.categoryId
       if (effectiveCategoryId) {
         const { journalEntryId } = await postBillAccrualJournal(prisma, {
-          familyId: session.familyId,
+          familyId: user.familyId,
           description: name ?? existing.name,
           amount: amount !== undefined ? parseFloat(amount) : existing.amount,
           expenseGlAccountId: effectiveCategoryId,
@@ -507,11 +514,11 @@ export async function PUT(request: NextRequest) {
   // No separate "else if" for the draft-only update case: handled by Step 1 above.
 
   const putPeriodWarning = invoiceReceivedTransition
-    ? await getPeriodLockWarning(session.familyId, invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
+    ? await getPeriodLockWarning(user.familyId, invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
     : null
 
   const finalBill = await prisma.financeRecurringBill.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
     include: BILL_INCLUDE,
   })
   const putBase = finalBill
@@ -522,12 +529,14 @@ export async function PUT(request: NextRequest) {
 
 // ── DELETE ────────────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-  const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId } })
+  const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId } })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
   // Pre-fetch all journals and transaction IDs OUTSIDE the transaction so
@@ -537,7 +546,7 @@ export async function DELETE(request: NextRequest) {
   const accrualJeId = existing.journalEntryId ?? null
   const accrualJe = accrualJeId
     ? await prisma.financeJournalEntry.findFirst({
-        where: { id: accrualJeId, familyId: session.familyId },
+        where: { id: accrualJeId, familyId: user.familyId },
         include: { lines: true },
       })
     : null
@@ -545,7 +554,7 @@ export async function DELETE(request: NextRequest) {
 
   // 2. Payment journals (DR AP / CR Bank) — one per installment
   const allPayments = await prisma.financeBillPayment.findMany({
-    where: { billId: id, familyId: session.familyId },
+    where: { billId: id, familyId: user.familyId },
     select: { transactionId: true, journalEntryId: true },
   })
   type JournalWithLines = NonNullable<Awaited<ReturnType<typeof prisma.financeJournalEntry.findFirst<{ include: { lines: true } }>>>>
@@ -553,7 +562,7 @@ export async function DELETE(request: NextRequest) {
   for (const p of allPayments) {
     if (!p.journalEntryId) continue
     const je = await prisma.financeJournalEntry.findFirst({
-      where: { id: p.journalEntryId, familyId: session.familyId },
+      where: { id: p.journalEntryId, familyId: user.familyId },
       include: { lines: true },
     })
     if (je?.isPosted && !je.isReversed) paymentJournalsToReverse.push(je)
@@ -561,7 +570,7 @@ export async function DELETE(request: NextRequest) {
 
   // Generate all reversal refs in one call (nextJournalReference reads committed MAX)
   const totalRefs = (needsAccrualReversal ? 1 : 0) + paymentJournalsToReverse.length
-  const allRefs = await nextNJournalReferences(session.familyId, totalRefs)
+  const allRefs = await nextNJournalReferences(user.familyId, totalRefs)
   let refIdx = 0
   const accrualRef  = needsAccrualReversal ? allRefs[refIdx++] : null
   const paymentRefs = paymentJournalsToReverse.map(() => allRefs[refIdx++])
@@ -586,7 +595,7 @@ export async function DELETE(request: NextRequest) {
           isPosted: true,
           reversalOfId: accrualJe.id,
           entityId: accrualJe.entityId,
-          familyId: session.familyId,
+          familyId: user.familyId,
           lines: {
             create: accrualJe.lines.map(l => ({
               glAccountId: l.glAccountId,
@@ -612,7 +621,7 @@ export async function DELETE(request: NextRequest) {
           isPosted: true,
           reversalOfId: je.id,
           entityId: je.entityId,
-          familyId: session.familyId,
+          familyId: user.familyId,
           lines: {
             create: je.lines.map(l => ({
               glAccountId: l.glAccountId,
@@ -628,7 +637,7 @@ export async function DELETE(request: NextRequest) {
 
     // Delete all associated transactions (invoice + payment legs)
     if (txIdsToDelete.length > 0) {
-      await tx.financeTransaction.deleteMany({ where: { id: { in: txIdsToDelete }, familyId: session.familyId } })
+      await tx.financeTransaction.deleteMany({ where: { id: { in: txIdsToDelete }, familyId: user.familyId } })
     }
 
     // Delete the bill — FinanceBillPayment and BillAttachment cascade automatically
@@ -639,7 +648,9 @@ export async function DELETE(request: NextRequest) {
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 export async function PATCH(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const {
     id, paid, paidDate: paidDateRaw,
@@ -651,7 +662,7 @@ export async function PATCH(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   const existing = await prisma.financeRecurringBill.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
     include: { payments: { select: { amount: true } } },
   })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
@@ -670,7 +681,7 @@ export async function PATCH(request: NextRequest) {
     const accrualJeId = existing.journalEntryId ?? null
     const accrualJe = accrualJeId
       ? await prisma.financeJournalEntry.findFirst({
-          where: { id: accrualJeId, familyId: session.familyId },
+          where: { id: accrualJeId, familyId: user.familyId },
           include: { lines: true },
         })
       : null
@@ -682,13 +693,13 @@ export async function PATCH(request: NextRequest) {
     let paymentJournalsToReverse: Awaited<ReturnType<typeof prisma.financeJournalEntry.findFirst<{ include: { lines: true } }>>>[] = []
     if (existing.paid) {
       paymentsInfo = await prisma.financeBillPayment.findMany({
-        where: { billId: id, familyId: session.familyId },
+        where: { billId: id, familyId: user.familyId },
         select: { transactionId: true, journalEntryId: true },
       })
       for (const p of paymentsInfo) {
         if (!p.journalEntryId) continue
         const je = await prisma.financeJournalEntry.findFirst({
-          where: { id: p.journalEntryId, familyId: session.familyId },
+          where: { id: p.journalEntryId, familyId: user.familyId },
           include: { lines: true },
         })
         if (je?.isPosted && !je.isReversed) paymentJournalsToReverse.push(je)
@@ -697,7 +708,7 @@ export async function PATCH(request: NextRequest) {
 
     // Generate sequential refs: first for accrual (if needed), then for each payment
     const totalRefs = (needsAccrualReversal ? 1 : 0) + paymentJournalsToReverse.length
-    const allRefs = await nextNJournalReferences(session.familyId, totalRefs)
+    const allRefs = await nextNJournalReferences(user.familyId, totalRefs)
     let refIdx = 0
     const accrualRef = needsAccrualReversal ? allRefs[refIdx++] : null
     const paymentRefs = paymentJournalsToReverse.map(() => allRefs[refIdx++])
@@ -714,7 +725,7 @@ export async function PATCH(request: NextRequest) {
             isPosted: true,
             reversalOfId: accrualJe.id,
             entityId: accrualJe.entityId,
-            familyId: session.familyId,
+            familyId: user.familyId,
             lines: {
               create: accrualJe.lines.map(l => ({
                 glAccountId: l.glAccountId,
@@ -731,7 +742,7 @@ export async function PATCH(request: NextRequest) {
       // 2. Delete invoice transaction
       const invoiceTxId: string | null = existing.invoiceTxId ?? null
       if (invoiceTxId) {
-        await tx.financeTransaction.deleteMany({ where: { id: invoiceTxId, familyId: session.familyId } })
+        await tx.financeTransaction.deleteMany({ where: { id: invoiceTxId, familyId: user.familyId } })
       }
 
       // 3. If also paid: reverse payment GL journals + delete payment records
@@ -749,7 +760,7 @@ export async function PATCH(request: NextRequest) {
               isPosted: true,
               reversalOfId: je.id,
               entityId: je.entityId,
-              familyId: session.familyId,
+              familyId: user.familyId,
               lines: {
                 create: je.lines.map(l => ({
                   glAccountId: l.glAccountId,
@@ -766,20 +777,20 @@ export async function PATCH(request: NextRequest) {
         // Delete payment transactions
         const payTxIds = paymentsInfo.map(p => p.transactionId).filter(Boolean) as string[]
         if (payTxIds.length > 0) {
-          await tx.financeTransaction.deleteMany({ where: { id: { in: payTxIds }, familyId: session.familyId } })
+          await tx.financeTransaction.deleteMany({ where: { id: { in: payTxIds }, familyId: user.familyId } })
         }
-        await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: session.familyId } })
+        await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: user.familyId } })
 
         // Recursively delete all unpaid descendant bills to prevent orphaned chains
         let currentParents = [id]
         while (currentParents.length > 0) {
           const children = await tx.financeRecurringBill.findMany({
-            where: { parentBillId: { in: currentParents }, familyId: session.familyId, paid: false },
+            where: { parentBillId: { in: currentParents }, familyId: user.familyId, paid: false },
             select: { id: true },
           })
           const childIds = children.map((c: { id: string }) => c.id)
           if (childIds.length === 0) break
-          await tx.financeRecurringBill.deleteMany({ where: { id: { in: childIds }, familyId: session.familyId } })
+          await tx.financeRecurringBill.deleteMany({ where: { id: { in: childIds }, familyId: user.familyId } })
           currentParents = childIds
         }
       }
@@ -798,7 +809,7 @@ export async function PATCH(request: NextRequest) {
       })
     })
 
-    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId }, include: BILL_INCLUDE })
+    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId }, include: BILL_INCLUDE })
     return NextResponse.json(finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : { id })
   }
 
@@ -808,7 +819,7 @@ export async function PATCH(request: NextRequest) {
   if (paid === false && existing.paid === true) {
     // Pre-fetch payment journal entries for reversal (outside $transaction)
     const allPayments = await prisma.financeBillPayment.findMany({
-      where: { billId: id, familyId: session.familyId },
+      where: { billId: id, familyId: user.familyId },
       select: { transactionId: true, journalEntryId: true },
     })
 
@@ -820,12 +831,12 @@ export async function PATCH(request: NextRequest) {
     for (const p of allPayments) {
       if (!p.journalEntryId) continue
       const je = await prisma.financeJournalEntry.findFirst({
-        where: { id: p.journalEntryId, familyId: session.familyId },
+        where: { id: p.journalEntryId, familyId: user.familyId },
         include: { lines: true },
       })
       if (je?.isPosted && !je.isReversed) journalsToReverse.push(je)
     }
-    const reversalRefs = await nextNJournalReferences(session.familyId, journalsToReverse.length)
+    const reversalRefs = await nextNJournalReferences(user.familyId, journalsToReverse.length)
     const reversalOps = journalsToReverse.map((journal, i) => ({ journal, ref: reversalRefs[i] }))
 
     await prisma.$transaction(async (tx) => {
@@ -840,7 +851,7 @@ export async function PATCH(request: NextRequest) {
             isPosted: true,
             reversalOfId: journal.id,
             entityId: journal.entityId,
-            familyId: session.familyId,
+            familyId: user.familyId,
             lines: {
               create: journal.lines.map(l => ({
                 glAccountId: l.glAccountId,
@@ -860,22 +871,22 @@ export async function PATCH(request: NextRequest) {
       // 2. Delete payment transaction records
       const txIds = allPayments.map(p => p.transactionId).filter(Boolean) as string[]
       if (txIds.length > 0) {
-        await tx.financeTransaction.deleteMany({ where: { id: { in: txIds }, familyId: session.familyId } })
+        await tx.financeTransaction.deleteMany({ where: { id: { in: txIds }, familyId: user.familyId } })
       }
 
       // 3. Delete payment records
-      await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: session.familyId } })
+      await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: user.familyId } })
       // Recursively delete all unpaid descendant bills (Bug 6 fix)
       let currentParents = [id]
       while (currentParents.length > 0) {
         const children = await tx.financeRecurringBill.findMany({
-          where: { parentBillId: { in: currentParents }, familyId: session.familyId, paid: false },
+          where: { parentBillId: { in: currentParents }, familyId: user.familyId, paid: false },
           select: { id: true },
         })
         const childIds = children.map((c: { id: string }) => c.id)
         if (childIds.length === 0) break
         await tx.financeRecurringBill.deleteMany({
-          where: { id: { in: childIds }, familyId: session.familyId },
+          where: { id: { in: childIds }, familyId: user.familyId },
         })
         currentParents = childIds
       }
@@ -883,7 +894,7 @@ export async function PATCH(request: NextRequest) {
       const invoiceTxId: string | null = existing.invoiceTxId ?? null
       if (invoiceTxId) {
         await tx.financeTransaction.updateMany({
-          where: { id: invoiceTxId, familyId: session.familyId },
+          where: { id: invoiceTxId, familyId: user.familyId },
           data: { isCleared: false, reconciledDate: null },
         })
       }
@@ -893,7 +904,7 @@ export async function PATCH(request: NextRequest) {
       })
     })
 
-    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId }, include: BILL_INCLUDE })
+    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId }, include: BILL_INCLUDE })
     return NextResponse.json(finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : { id })
   }
 
@@ -914,7 +925,7 @@ export async function PATCH(request: NextRequest) {
         //    Promotes a balanced draft (preserving GST splits) if one exists;
         //    falls back to a fresh DR Expense / CR AP entry otherwise.
         const { journalEntryId } = await postBillAccrualJournal(tx, {
-          familyId: session.familyId,
+          familyId: user.familyId,
           description: existing.name,
           amount: existing.amount,
           expenseGlAccountId: existing.categoryId!,
@@ -940,8 +951,8 @@ export async function PATCH(request: NextRequest) {
             locationId: existing.locationId,
             isCleared: false,
             isTransfer: false,
-            createdBy: session.id,
-            familyId: session.familyId,
+            createdBy: user.id,
+            familyId: user.familyId,
             entityId: existing.entityId,
             taxClassification: existing.taxClassification ?? null,
           },
@@ -967,7 +978,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId }, include: BILL_INCLUDE })
+    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId }, include: BILL_INCLUDE })
     return NextResponse.json(finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : { id })
   }
 
@@ -989,7 +1000,7 @@ export async function PATCH(request: NextRequest) {
 
     try {
       await prisma.$transaction(async (tx) => {
-        const apCategoryId = await ensureAccountsPayableCategory(session.familyId)
+        const apCategoryId = await ensureAccountsPayableCategory(user.familyId)
 
         // ── GL-FIRST payment journal logic ────────────────────────────────────
         //
@@ -1016,7 +1027,7 @@ export async function PATCH(request: NextRequest) {
         // Create payment GL journal — only if we have a bank GL account to credit
         let paymentJournalId: string | null = null
         if (bankGlAccountId) {
-          const reference = await nextJournalReference(session.familyId)
+          const reference = await nextJournalReference(user.familyId)
 
           let journalLines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[]
 
@@ -1052,7 +1063,7 @@ export async function PATCH(request: NextRequest) {
               type: 'auto_transaction',
               isPosted: true,
               entityId: existing.entityId ?? null,
-              familyId: session.familyId,
+              familyId: user.familyId,
               lines: { create: journalLines },
             },
             select: { id: true },
@@ -1079,8 +1090,8 @@ export async function PATCH(request: NextRequest) {
             reconciledDate: actualPaidDate,
             isTransfer: false,
             glAccountId: bankGlAccountId,
-            createdBy: session.id,
-            familyId: session.familyId,
+            createdBy: user.id,
+            familyId: user.familyId,
             entityId: existing.entityId,
             taxClassification: existing.taxClassification ?? null,
           },
@@ -1096,8 +1107,8 @@ export async function PATCH(request: NextRequest) {
             glAccountId: bankGlAccountId,
             transactionId: paymentTx.id,
             journalEntryId: paymentJournalId,
-            createdBy: session.id,
-            familyId: session.familyId,
+            createdBy: user.id,
+            familyId: user.familyId,
           },
         })
 
@@ -1105,7 +1116,7 @@ export async function PATCH(request: NextRequest) {
         const invoiceTxId: string | null = existing.invoiceTxId ?? null
         if (invoiceTxId) {
           await tx.financeTransaction.updateMany({
-            where: { id: invoiceTxId, familyId: session.familyId },
+            where: { id: invoiceTxId, familyId: user.familyId },
             data: {
               isCleared: true,
               reconciledDate: actualPaidDate,
@@ -1158,7 +1169,7 @@ export async function PATCH(request: NextRequest) {
                 status: 'draft',
                 entityId: existing.entityId,
                 taxClassification: existing.taxClassification,
-                familyId: session.familyId,
+                familyId: user.familyId,
               },
               select: { id: true },
             })
@@ -1199,7 +1210,7 @@ export async function PATCH(request: NextRequest) {
             description: l.description ?? undefined,
           }))
           const draftJeId = await upsertBillDraftJournal(
-            spawnedBillId, existing.name, null, lines, spawnedBillDueDate, session.familyId, existing.entityId ?? null,
+            spawnedBillId, existing.name, null, lines, spawnedBillDueDate, user.familyId, existing.entityId ?? null,
           )
           await prisma.financeRecurringBill.update({
             where: { id: spawnedBillId },
@@ -1212,7 +1223,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: session.familyId }, include: BILL_INCLUDE })
+    const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId }, include: BILL_INCLUDE })
     return NextResponse.json(finalBill ? { ...finalBill, isGlPosted: (finalBill as any).journalEntry?.isPosted === true } : { id })
   }
 
@@ -1223,14 +1234,14 @@ export async function PATCH(request: NextRequest) {
     const accrualJeId = existing.journalEntryId ?? null
     const accrualJe = accrualJeId
       ? await prisma.financeJournalEntry.findFirst({
-          where: { id: accrualJeId, familyId: session.familyId },
+          where: { id: accrualJeId, familyId: user.familyId },
           include: { lines: true },
         })
       : null
     const needsAccrualReversal = accrualJe?.isPosted === true && !accrualJe.isReversed
 
     const allPayments = await prisma.financeBillPayment.findMany({
-      where: { billId: id, familyId: session.familyId },
+      where: { billId: id, familyId: user.familyId },
       select: { transactionId: true, journalEntryId: true },
     })
     type JournalWithLines = NonNullable<Awaited<ReturnType<typeof prisma.financeJournalEntry.findFirst<{ include: { lines: true } }>>>>
@@ -1238,14 +1249,14 @@ export async function PATCH(request: NextRequest) {
     for (const p of allPayments) {
       if (!p.journalEntryId) continue
       const je = await prisma.financeJournalEntry.findFirst({
-        where: { id: p.journalEntryId, familyId: session.familyId },
+        where: { id: p.journalEntryId, familyId: user.familyId },
         include: { lines: true },
       })
       if (je?.isPosted && !je.isReversed) paymentJournalsToReverse.push(je)
     }
 
     const totalRefs = (needsAccrualReversal ? 1 : 0) + paymentJournalsToReverse.length
-    const allRefs = await nextNJournalReferences(session.familyId, totalRefs)
+    const allRefs = await nextNJournalReferences(user.familyId, totalRefs)
     let refIdx = 0
     const accrualRef = needsAccrualReversal ? allRefs[refIdx++] : null
     const paymentRefs = paymentJournalsToReverse.map(() => allRefs[refIdx++])
@@ -1261,7 +1272,7 @@ export async function PATCH(request: NextRequest) {
             isPosted: true,
             reversalOfId: accrualJe.id,
             entityId: accrualJe.entityId,
-            familyId: session.familyId,
+            familyId: user.familyId,
             lines: {
               create: accrualJe.lines.map(l => ({
                 glAccountId: l.glAccountId,
@@ -1285,7 +1296,7 @@ export async function PATCH(request: NextRequest) {
             isPosted: true,
             reversalOfId: je.id,
             entityId: je.entityId,
-            familyId: session.familyId,
+            familyId: user.familyId,
             lines: {
               create: je.lines.map(l => ({
                 glAccountId: l.glAccountId,

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 export async function GET() {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const members = await prisma.user.findMany({
-    where: { familyId: session.familyId },
+    where: { familyId: user.familyId },
     select: { id: true, name: true, email: true },
     orderBy: { name: 'asc' },
   })
@@ -13,9 +16,9 @@ export async function GET() {
   // Add usage counts across bills, income, and transactions
   const enriched = await Promise.all(members.map(async (m) => {
     const [bills, income, transactions] = await Promise.all([
-      prisma.financeRecurringBill.count({ where: { memberId: m.id, familyId: session.familyId } }),
-      prisma.financeIncomeEntry.count({ where: { memberId: m.id, familyId: session.familyId } }),
-      prisma.financeTransaction.count({ where: { memberId: m.id, familyId: session.familyId } }),
+      prisma.financeRecurringBill.count({ where: { memberId: m.id, familyId: user.familyId } }),
+      prisma.financeIncomeEntry.count({ where: { memberId: m.id, familyId: user.familyId } }),
+      prisma.financeTransaction.count({ where: { memberId: m.id, familyId: user.familyId } }),
     ])
     return { ...m, _count: { bills, income, transactions } }
   }))
@@ -24,7 +27,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { email, name } = json
 
@@ -34,12 +39,12 @@ export async function POST(request: NextRequest) {
 
   // Find existing user by email — if they already belong to this family, skip
   const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing && existing.familyId === session.familyId) {
+  if (existing && existing.familyId === user.familyId) {
     return NextResponse.json({ error: 'Member already exists in this family' }, { status: 409 })
   }
 
   // If user exists but in another family, disallow
-  if (existing && existing.familyId !== session.familyId) {
+  if (existing && existing.familyId !== user.familyId) {
     return NextResponse.json(
       { error: 'A user with this email already belongs to another family' },
       { status: 409 }
@@ -50,7 +55,7 @@ export async function POST(request: NextRequest) {
   if (existing && !existing.familyId) {
     const member = await prisma.user.update({
       where: { email },
-      data: { familyId: session.familyId, name },
+      data: { familyId: user.familyId, name },
       select: { id: true, name: true, email: true },
     })
     return NextResponse.json(member, { status: 200 })
@@ -64,14 +69,16 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, name } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   const existing = await prisma.user.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Member not found' }, { status: 404 })

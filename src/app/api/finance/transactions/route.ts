@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { createGstJournalEntry } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
@@ -70,7 +71,9 @@ async function createTransactionJournalEntry(
 }
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const accountId = searchParams.get('accountId')
   const categoryId = searchParams.get('categoryId')
@@ -84,7 +87,7 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') ?? '1', 10)
   const limit = parseInt(searchParams.get('limit') ?? '50', 10)
 
-  const where: any = { familyId: session.familyId }
+  const where: any = { familyId: user.familyId }
   if (accountId) where.accountId = accountId
   if (categoryId) where.categoryId = categoryId
   if (memberId) where.memberId = memberId
@@ -116,7 +119,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const {
     accountId, categoryId, type, amount, payee,
@@ -152,8 +157,8 @@ export async function POST(request: NextRequest) {
       taxClassification: taxClassification ?? null,
       isTransfer: isTransfer ?? false,
       glAccountId: glAccountId ?? null,
-      createdBy: session.id,
-      familyId: session.familyId,
+      createdBy: user.id,
+      familyId: user.familyId,
     },
     include: {
       category: true,
@@ -180,7 +185,7 @@ export async function POST(request: NextRequest) {
         description?.trim() || payee?.trim() || type,
         journalLines,
         txDate,
-        session.familyId,
+        user.familyId,
         json.entityId ?? null,
         transaction.id,
       )
@@ -198,7 +203,7 @@ export async function POST(request: NextRequest) {
     // This supports term deposits, properties, vehicles, and any non-FinanceAccount GL item.
     try {
       const cat = await prisma.financeCategory.findFirst({
-        where: { id: transaction.categoryId, familyId: session.familyId },
+        where: { id: transaction.categoryId, familyId: user.familyId },
         select: { gstApplicable: true, gstRate: true },
       })
 
@@ -222,9 +227,9 @@ export async function POST(request: NextRequest) {
             accountId ?? null,
             txDate,
             desc,
-            session.familyId,
+            user.familyId,
             json.entityId ?? null,
-            session.id,
+            user.id,
             transaction.id,
           )
         } else {
@@ -238,7 +243,7 @@ export async function POST(request: NextRequest) {
                 { glAccountId: transaction.categoryId, side: 'credit', amount },
               ]
           await createTransactionJournalEntry(
-            desc, autoLines, txDate, session.familyId, json.entityId ?? null, transaction.id,
+            desc, autoLines, txDate, user.familyId, json.entityId ?? null, transaction.id,
           )
         }
       } else if (transaction.accountId) {
@@ -260,7 +265,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const {
     id, accountId, categoryId, type, amount, payee,
@@ -273,7 +280,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const existing = await prisma.financeTransaction.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
@@ -320,7 +327,7 @@ export async function PUT(request: NextRequest) {
   if (amountChanged || dateChanged || descriptionChanged || payeeChanged) {
     try {
       const linkedJournal = await prisma.financeJournalEntry.findFirst({
-        where: { sourceTransactionId: id, familyId: session.familyId, type: 'auto_transaction' },
+        where: { sourceTransactionId: id, familyId: user.familyId, type: 'auto_transaction' },
         include: { lines: true },
       })
 
@@ -357,7 +364,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
 
@@ -366,7 +375,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const existing = await prisma.financeTransaction.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })

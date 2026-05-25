@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { fyDateRangeInTz, fyStartYear } from '@/lib/finance-fy'
 
@@ -84,12 +85,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session  = await requireSession()
+    const session = await auth()
+    const user = session?.user as SessionUser | undefined
+    if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { id: categoryId } = await params
     const { searchParams } = new URL(req.url)
 
     const family = await prisma.family.findUnique({
-      where: { id: session.familyId },
+      where: { id: user.familyId },
       select: { timezone: true, financeYearStartMonth: true },
     })
     const tz           = family?.timezone              ?? 'Australia/Sydney'
@@ -118,7 +121,7 @@ export async function GET(
 
     // ── Verify category ───────────────────────────────────────────────────
     const category = await prisma.financeCategory.findFirst({
-      where: { id: categoryId, familyId: session.familyId },
+      where: { id: categoryId, familyId: user.familyId },
       select: { id: true, name: true, type: true, glCode: true, openingBalance: true },
     })
     if (!category) {
@@ -135,7 +138,7 @@ export async function GET(
       where: {
         glAccountId: category.id,
         journalEntry: {
-          familyId: session.familyId,
+          familyId: user.familyId,
           isPosted: true,
           date: { lt: periodStart },
         },
@@ -152,7 +155,7 @@ export async function GET(
       where: {
         glAccountId: category.id,
         journalEntry: {
-          familyId: session.familyId,
+          familyId: user.familyId,
           isPosted: true,
           date: { gte: periodStart, lte: periodEnd },
         },

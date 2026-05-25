@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 // Valid Chart of Accounts types — includes balance-sheet types (asset, liability, equity)
@@ -7,7 +8,9 @@ import { prisma } from '@/lib/prisma'
 const VALID_TYPES = ['income', 'expense', 'transfer', 'asset', 'liability', 'equity'] as const
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   // showAll=true: return everything unfiltered (used by Chart of Accounts page)
   const showAll = searchParams.get('showAll') === 'true'
@@ -23,13 +26,13 @@ export async function GET(request: NextRequest) {
   } else if (forPicker) {
     // GL pickers: exclude NOT IN USE archive AND hideFromReports categories
     const notInUse = await prisma.financeCategory.findFirst({
-      where: { familyId: session.familyId, name: 'NOT IN USE', parentId: null },
+      where: { familyId: user.familyId, name: 'NOT IN USE', parentId: null },
       select: { id: true },
     })
     const excludeIds: string[] = []
     if (notInUse) {
       const children = await prisma.financeCategory.findMany({
-        where: { familyId: session.familyId, parentId: notInUse.id },
+        where: { familyId: user.familyId, parentId: notInUse.id },
         select: { id: true },
       })
       excludeIds.push(notInUse.id, ...children.map(c => c.id))
@@ -45,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   const categories = await prisma.financeCategory.findMany({
     where: {
-      familyId: session.familyId,
+      familyId: user.familyId,
       ...whereExtra,
     },
     orderBy: [{ sortOrder: 'asc' }, { level: 'asc' }, { parentId: 'asc' }, { name: 'asc' }],
@@ -63,7 +66,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate, hideFromReports } = json
 
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest) {
   let level = 0
   if (parentId) {
     const parent = await prisma.financeCategory.findFirst({
-      where: { id: parentId, familyId: session.familyId },
+      where: { id: parentId, familyId: user.familyId },
     })
     if (!parent) {
       return NextResponse.json({ error: 'Parent category not found' }, { status: 404 })
@@ -107,7 +112,7 @@ export async function POST(request: NextRequest) {
       gstApplicable: gstApplicable ?? false,
       gstRate: gstRate != null ? parseFloat(gstRate) : 10,
       hideFromReports: hideFromReports ?? false,
-      familyId: session.familyId,
+      familyId: user.familyId,
     },
   })
 
@@ -115,7 +120,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate, hideFromReports } = json
 
@@ -124,7 +131,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const existing = await prisma.financeCategory.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Category not found' }, { status: 404 })
@@ -139,7 +146,7 @@ export async function PUT(request: NextRequest) {
   if (parentId !== undefined && parentId !== existing.parentId) {
     if (parentId) {
       const parent = await prisma.financeCategory.findFirst({
-        where: { id: parentId, familyId: session.familyId },
+        where: { id: parentId, familyId: user.familyId },
       })
       if (!parent) {
         return NextResponse.json({ error: 'Parent category not found' }, { status: 404 })
@@ -179,7 +186,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
 
@@ -188,7 +197,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const existing = await prisma.financeCategory.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Category not found' }, { status: 404 })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -64,7 +65,9 @@ function mapFrequency(freq: string): IncomeStream['frequency'] {
  * appear as a single stream rather than every occurrence.
  */
 export async function GET() {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Fetch all active, non-received entries without a parent (root of each series)
   // A root entry has no parentIncomeId — it's the original recurring entry.
@@ -72,7 +75,7 @@ export async function GET() {
   // in the budget planner, so we show the latest pending child per series.
   const entries = await prisma.financeIncomeEntry.findMany({
     where: {
-      familyId: session.familyId,
+      familyId: user.familyId,
       isActive: true,
       received: false,  // Only pending/upcoming entries for forward-looking budget
     },
@@ -133,9 +136,11 @@ export async function GET() {
  */
 export async function PUT(_request: NextRequest) {
   // Re-read and return the current live list (ignore the request body)
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: session.familyId, isActive: true, received: false },
+    where: { familyId: user.familyId, isActive: true, received: false },
     select: { id: true, name: true, amount: true, frequency: true, incomeType: true, entityId: true, isActive: true, parentIncomeId: true, nextExpectedDate: true, isTaxTracked: true, taxRate: true },
     orderBy: { nextExpectedDate: 'asc' },
   })

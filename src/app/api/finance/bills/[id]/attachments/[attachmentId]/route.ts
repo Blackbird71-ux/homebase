@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { readFile, unlink } from 'fs/promises'
 import { join } from 'path'
@@ -9,11 +10,13 @@ type Ctx = { params: Promise<{ id: string; attachmentId: string }> }
 // ── GET /api/finance/bills/[id]/attachments/[attachmentId] ────────────────────
 // Download / view the attachment file.
 export async function GET(_req: NextRequest, { params }: Ctx) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { attachmentId } = await params
 
   const attachment = await prisma.billAttachment.findFirst({
-    where: { id: attachmentId, familyId: session.familyId },
+    where: { id: attachmentId, familyId: user.familyId },
   })
   if (!attachment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -44,11 +47,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 // ── DELETE /api/finance/bills/[id]/attachments/[attachmentId] ─────────────────
 // Remove an attachment record and its file from disk.
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { attachmentId } = await params
 
   const attachment = await prisma.billAttachment.findFirst({
-    where: { id: attachmentId, familyId: session.familyId },
+    where: { id: attachmentId, familyId: user.familyId },
   })
   if (!attachment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

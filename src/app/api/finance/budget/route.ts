@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { addYears } from 'date-fns'
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const entityId = searchParams.get('entityId') // optional filter
 
-  const where: any = { familyId: session.familyId }
+  const where: any = { familyId: user.familyId }
   if (entityId === 'null' || entityId === '') {
     where.entityId = null
   } else if (entityId) {
@@ -29,7 +32,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { name, amount, categoryId, period, rollover, alertThreshold, billId, isIncludedInPlanner, entityId } = json
 
@@ -53,7 +58,7 @@ export async function POST(request: NextRequest) {
       billId: billId ?? null,
       isIncludedInPlanner: isIncludedInPlanner ?? true,
       entityId: entityId ?? null,
-      familyId: session.familyId,
+      familyId: user.familyId,
     },
     include: {
       category: true,
@@ -66,13 +71,15 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, name, amount, categoryId, period, rollover, alertThreshold, billId, isIncludedInPlanner, entityId } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-  const existing = await prisma.financeBudget.findFirst({ where: { id, familyId: session.familyId } })
+  const existing = await prisma.financeBudget.findFirst({ where: { id, familyId: user.familyId } })
   if (!existing) return NextResponse.json({ error: 'Budget not found' }, { status: 404 })
 
   const budget = await prisma.financeBudget.update({
@@ -99,12 +106,14 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
-  const existing = await prisma.financeBudget.findFirst({ where: { id, familyId: session.familyId } })
+  const existing = await prisma.financeBudget.findFirst({ where: { id, familyId: user.familyId } })
   if (!existing) return NextResponse.json({ error: 'Budget not found' }, { status: 404 })
 
   await prisma.financeBudget.delete({ where: { id } })
@@ -112,14 +121,16 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
 
   if (json.upsertFromBill) {
     const { billId, name, amount, categoryId, period, entityId } = json
     if (!billId) return NextResponse.json({ error: 'billId required' }, { status: 400 })
 
-    const existing = await prisma.financeBudget.findFirst({ where: { billId, familyId: session.familyId } })
+    const existing = await prisma.financeBudget.findFirst({ where: { billId, familyId: user.familyId } })
     const startDate = new Date(new Date().getFullYear(), 0, 1)
     const endDate = addYears(startDate, 10)
 
@@ -150,7 +161,7 @@ export async function PATCH(request: NextRequest) {
         rollover: false, alertThreshold: 80,
         billId, isIncludedInPlanner: true,
         entityId: entityId ?? null,
-        familyId: session.familyId,
+        familyId: user.familyId,
       },
       include: {
         category: true,
@@ -164,7 +175,7 @@ export async function PATCH(request: NextRequest) {
   if (json.removeFromBill) {
     const { billId } = json
     if (!billId) return NextResponse.json({ error: 'billId required' }, { status: 400 })
-    await prisma.financeBudget.deleteMany({ where: { billId, familyId: session.familyId } })
+    await prisma.financeBudget.deleteMany({ where: { billId, familyId: user.familyId } })
     return NextResponse.json({ success: true })
   }
 

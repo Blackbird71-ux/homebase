@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
 
@@ -50,12 +51,14 @@ function currentBasQuarter(fyStartMonth: number, tz: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const fromRaw  = searchParams.get('from')
   const toRaw    = searchParams.get('to')
   const entityId = searchParams.get('entityId') ?? undefined
-  const familyId = session.familyId
+  const familyId = user.familyId
 
   const family = await prisma.family.findUnique({
     where:  { id: familyId },

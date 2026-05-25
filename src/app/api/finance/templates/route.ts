@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import {
   listTemplates,
   createTemplate,
@@ -15,7 +16,9 @@ function parseDates(body: Record<string, unknown>) {
 }
 
 export async function GET(req: NextRequest) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(req.url)
   const includeDisabled = searchParams.get('includeDisabled') === 'true'
   const kindParam = searchParams.get('kind')
@@ -26,7 +29,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   try {
     const template = await createTemplate(user, parseDates(body) as Parameters<typeof createTemplate>[1])

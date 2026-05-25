@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 const ENTRY_INCLUDE = {
@@ -18,10 +19,12 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
   const entry = await prisma.financeJournalEntry.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
     include: ENTRY_INCLUDE,
   })
   if (!entry) {

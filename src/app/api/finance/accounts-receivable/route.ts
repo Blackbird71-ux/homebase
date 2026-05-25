@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 import { differenceInDays } from 'date-fns'
@@ -52,10 +53,12 @@ function asAtEndOfDay(dateStr: string, tz: string): Date {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const asAtParam = searchParams.get('asAt')
-  const familyId  = session.familyId
+  const familyId  = user.familyId
 
   const family = await prisma.family.findUnique({
     where: { id: familyId },

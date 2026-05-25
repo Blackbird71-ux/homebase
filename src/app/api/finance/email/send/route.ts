@@ -2,21 +2,21 @@
 // POST — manually send a report email (with optional snapshot persistence)
 
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { buildYtdReport, getCurrentFY } from '@/lib/financeReport'
 import { sendReportEmail } from '@/lib/emailReportService'
 
 export async function POST(request: Request) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const session = await auth()
+    const user = session?.user as SessionUser | undefined
+    if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     // Load FY start month from family settings
     const family = await prisma.family.findUnique({
-      where: { id: session.familyId },
+      where: { id: user.familyId },
       select: { financeYearStartMonth: true },
     })
     const fyStartMonth = family?.financeYearStartMonth ?? 7
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     // If snapshotId provided, ensure it exists and belongs to this family
     if (snapshotId) {
       const snapshot = await prisma.financeSnapshot.findFirst({
-        where: { id: snapshotId, familyId: session.familyId },
+        where: { id: snapshotId, familyId: user.familyId },
       })
       if (!snapshot) {
         return NextResponse.json({ error: 'Snapshot not found' }, { status: 404 })
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     // Build the report (or could load from snapshot JSON, but we rebuild for freshness)
-    const report = await buildYtdReport(session.familyId, reportYear, fyStartMonth)
+    const report = await buildYtdReport(user.familyId, reportYear, fyStartMonth)
 
     // Save snapshot if not using an existing one
     let actualSnapshotId = snapshotId
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
           periodLabel: report.meta.periodLabel,
           monthsComplete: report.meta.monthsComplete,
           reportJson: JSON.stringify(report),
-          familyId: session.familyId,
+          familyId: user.familyId,
         },
       })
       actualSnapshotId = snapshot.id
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
 
     // Send the email
     const result = await sendReportEmail({
-      familyId: session.familyId,
+      familyId: user.familyId,
       year: reportYear,
       recipients,
       note,

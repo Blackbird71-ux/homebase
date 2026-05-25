@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
 
@@ -24,12 +25,14 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; paymentId: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id: billId, paymentId } = await params
 
   // Verify the payment exists and belongs to this family
   const payment = await prisma.financeBillPayment.findFirst({
-    where: { id: paymentId, billId, familyId: session.familyId },
+    where: { id: paymentId, billId, familyId: user.familyId },
     select: {
       id: true,
       transactionId: true,
@@ -43,7 +46,7 @@ export async function DELETE(
 
   // Verify the bill belongs to this family
   const bill = await prisma.financeRecurringBill.findFirst({
-    where: { id: billId, familyId: session.familyId },
+    where: { id: billId, familyId: user.familyId },
   })
   if (!bill) {
     return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
@@ -53,7 +56,7 @@ export async function DELETE(
   // the $transaction so we can compute the reversal lines.
   const journalToReverse = payment.journalEntryId
     ? await prisma.financeJournalEntry.findFirst({
-        where: { id: payment.journalEntryId, familyId: session.familyId },
+        where: { id: payment.journalEntryId, familyId: user.familyId },
         include: { lines: true },
       })
     : null
@@ -64,7 +67,7 @@ export async function DELETE(
   // the P2002 race.
   const reversalReference =
     journalToReverse?.isPosted && !journalToReverse.isReversed
-      ? await nextJournalReference(session.familyId)
+      ? await nextJournalReference(user.familyId)
       : null
 
   try {
@@ -84,7 +87,7 @@ export async function DELETE(
             isPosted: true,
             reversalOfId: journalToReverse.id,
             entityId: journalToReverse.entityId,
-            familyId: session.familyId,
+            familyId: user.familyId,
             lines: {
               create: journalToReverse.lines.map((l) => ({
                 glAccountId: l.glAccountId,
@@ -104,7 +107,7 @@ export async function DELETE(
       // 2. Delete the linked FinanceTransaction (if exists)
       if (payment.transactionId) {
         await tx.financeTransaction.deleteMany({
-          where: { id: payment.transactionId, familyId: session.familyId },
+          where: { id: payment.transactionId, familyId: user.familyId },
         })
       }
 
@@ -113,7 +116,7 @@ export async function DELETE(
 
       // 4. Recalculate bill's paid/paidDate status
       const remainingPayments = await tx.financeBillPayment.aggregate({
-        where: { billId, familyId: session.familyId },
+        where: { billId, familyId: user.familyId },
         _sum: { amount: true },
       })
       const totalPaid = remainingPayments._sum.amount ?? 0
@@ -122,7 +125,7 @@ export async function DELETE(
       let latestPaymentDate: Date | null = null
       if (totalPaid > 0) {
         const latestPayment = await tx.financeBillPayment.findFirst({
-          where: { billId, familyId: session.familyId },
+          where: { billId, familyId: user.familyId },
           orderBy: { paymentDate: 'desc' },
           select: { paymentDate: true },
         })

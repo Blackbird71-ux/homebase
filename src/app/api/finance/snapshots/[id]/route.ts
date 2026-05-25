@@ -2,7 +2,8 @@
 // GET — retrieve a single finance snapshot with full report data
 
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(
@@ -10,15 +11,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const session = await auth()
+    const user = session?.user as SessionUser | undefined
+    if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id } = await params
 
     const snapshot = await prisma.financeSnapshot.findFirst({
-      where: { id, familyId: session.familyId },
+      where: { id, familyId: user.familyId },
       include: {
         _count: { select: { emails: true } },
       },

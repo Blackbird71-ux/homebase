@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 export async function GET() {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const vendors = await prisma.financeVendor.findMany({
-    where: { familyId: session.familyId },
+    where: { familyId: user.familyId },
     include: {
       defaultCategory: { select: { id: true, name: true, color: true } },
       _count: { select: { recurringBills: true, transactions: true } },
@@ -16,7 +19,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { name, website, phone, accountRef, notes, defaultCategoryId } = json
 
@@ -32,7 +37,7 @@ export async function POST(request: NextRequest) {
       accountRef: accountRef || null,
       notes: notes || null,
       defaultCategoryId: defaultCategoryId || null,
-      familyId: session.familyId,
+      familyId: user.familyId,
     },
     include: {
       defaultCategory: { select: { id: true, name: true, color: true } },
@@ -43,14 +48,16 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, name, website, phone, accountRef, notes, defaultCategoryId } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   const existing = await prisma.financeVendor.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
 
@@ -73,13 +80,15 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   const existing = await prisma.financeVendor.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
 

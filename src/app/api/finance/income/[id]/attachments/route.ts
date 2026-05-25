@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
@@ -11,17 +12,19 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id: incomeId } = await params
 
   const entry = await prisma.financeIncomeEntry.findFirst({
-    where: { id: incomeId, familyId: session.familyId },
+    where: { id: incomeId, familyId: user.familyId },
     select: { id: true },
   })
   if (!entry) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
 
   const attachments = await prisma.incomeAttachment.findMany({
-    where: { incomeId, familyId: session.familyId },
+    where: { incomeId, familyId: user.familyId },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -35,11 +38,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id: incomeId } = await params
 
   const entry = await prisma.financeIncomeEntry.findFirst({
-    where: { id: incomeId, familyId: session.familyId },
+    where: { id: incomeId, familyId: user.familyId },
     select: { id: true },
   })
   if (!entry) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
@@ -66,12 +71,12 @@ export async function POST(
     const attachment = await prisma.incomeAttachment.create({
       data: {
         incomeId,
-        familyId: session.familyId,
+        familyId: user.familyId,
         title: title || file.name,
         fileName: safeFilename,
         fileSize: buffer.length,
         mimeType: file.type || 'application/octet-stream',
-        uploadedById: session.id,
+        uploadedById: user.id,
       },
     })
 

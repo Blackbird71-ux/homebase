@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 const RECEIVED_INCOME_INCLUDE = {
@@ -10,9 +11,11 @@ const RECEIVED_INCOME_INCLUDE = {
 }
 
 export async function GET() {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: session.familyId, received: true, isVoided: false },
+    where: { familyId: user.familyId, received: true, isVoided: false },
     include: RECEIVED_INCOME_INCLUDE,
     orderBy: { receivedDate: 'desc' },
   })

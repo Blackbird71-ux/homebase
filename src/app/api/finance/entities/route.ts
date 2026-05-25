@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const includeInactive = searchParams.get('includeInactive') === 'true'
 
   // ── Bootstrap: ensure every family has a default "Personal / Family" entity ──
   // This runs once per family (idempotent: upsert-style check before creating).
   const hasDefault = await prisma.financeEntity.findFirst({
-    where: { familyId: session.familyId, isDefault: true },
+    where: { familyId: user.familyId, isDefault: true },
     select: { id: true },
   })
   if (!hasDefault) {
@@ -23,7 +26,7 @@ export async function GET(request: NextRequest) {
         isDefault: true,
         sortOrder: 0,
         isActive: true,
-        familyId: session.familyId,
+        familyId: user.familyId,
       },
     })
   }
@@ -31,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   const entities = await prisma.financeEntity.findMany({
     where: {
-      familyId: session.familyId,
+      familyId: user.familyId,
       ...(includeInactive ? {} : { isActive: true }),
     },
     orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
@@ -40,7 +43,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { name, type, description, color, icon, isDefault, sortOrder } = json
 
@@ -49,7 +54,7 @@ export async function POST(request: NextRequest) {
   // If this is marked default, clear any existing default
   if (isDefault) {
     await prisma.financeEntity.updateMany({
-      where: { familyId: session.familyId, isDefault: true },
+      where: { familyId: user.familyId, isDefault: true },
       data: { isDefault: false },
     })
   }
@@ -63,7 +68,7 @@ export async function POST(request: NextRequest) {
       icon: icon ?? null,
       isDefault: isDefault ?? false,
       sortOrder: sortOrder ?? 0,
-      familyId: session.familyId,
+      familyId: user.familyId,
     },
   })
 
@@ -71,21 +76,23 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, name, type, description, color, icon, isDefault, sortOrder, isActive } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   const existing = await prisma.financeEntity.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
 
   // If this is marked default, clear any other defaults
   if (isDefault) {
     await prisma.financeEntity.updateMany({
-      where: { familyId: session.familyId, isDefault: true, id: { not: id } },
+      where: { familyId: user.familyId, isDefault: true, id: { not: id } },
       data: { isDefault: false },
     })
   }
@@ -108,13 +115,15 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   const existing = await prisma.financeEntity.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
   if (existing.isDefault) return NextResponse.json({ error: 'Cannot delete the default entity' }, { status: 400 })

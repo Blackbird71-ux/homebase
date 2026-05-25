@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { deriveAllAccountBalances, setOpeningBalance } from '@/lib/finance-opening-balance'
 
 export async function GET() {
-  const session = await requireSession()
-  const familyId = session.familyId
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const familyId = user.familyId
 
   // Fetch accounts and all cleared/pending transactions in two queries (not N+1).
   const [accounts, allTxs] = await Promise.all([
@@ -68,7 +71,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { name, type, institution, currency, creditLimit, color, icon, openingBalance, openingBalanceDate } = json
 
@@ -81,7 +86,7 @@ export async function POST(request: NextRequest) {
 
   // Get max sort order
   const maxOrder = await prisma.financeAccount.findFirst({
-    where: { familyId: session.familyId },
+    where: { familyId: user.familyId },
     orderBy: { sortOrder: 'desc' },
     select: { sortOrder: true },
   })
@@ -97,7 +102,7 @@ export async function POST(request: NextRequest) {
       color: color ?? null,
       icon: icon ?? null,
       sortOrder: (maxOrder?.sortOrder ?? 0) + 1,
-      familyId: session.familyId,
+      familyId: user.familyId,
     },
   })
 
@@ -105,8 +110,8 @@ export async function POST(request: NextRequest) {
   if (openingBalance != null && openingBalance !== 0) {
     await setOpeningBalance(
       account.id,
-      session.familyId,
-      session.id,
+      user.familyId,
+      user.id,
       openingBalance,
       openingBalanceDate ? new Date(openingBalanceDate) : new Date()
     )
@@ -116,7 +121,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
   const { id, name, type, institution, currency, creditLimit, color, icon, isActive } = json
 
@@ -125,7 +132,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const existing = await prisma.financeAccount.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 })
@@ -149,7 +156,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
 
@@ -158,7 +167,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const existing = await prisma.financeAccount.findFirst({
-    where: { id, familyId: session.familyId },
+    where: { id, familyId: user.familyId },
   })
   if (!existing) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 })

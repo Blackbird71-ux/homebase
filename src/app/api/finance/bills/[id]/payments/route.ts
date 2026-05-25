@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import {
   ensureAccountsPayableCategory,
@@ -58,11 +59,13 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id: billId } = await params
 
   const bill = await prisma.financeRecurringBill.findFirst({
-    where: { id: billId, familyId: session.familyId },
+    where: { id: billId, familyId: user.familyId },
     select: { id: true },
   })
   if (!bill) {
@@ -70,7 +73,7 @@ export async function GET(
   }
 
   const payments = await prisma.financeBillPayment.findMany({
-    where: { billId, familyId: session.familyId },
+    where: { billId, familyId: user.familyId },
     include: PAYMENT_INCLUDE,
     orderBy: { paymentDate: 'desc' },
   })
@@ -97,7 +100,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id: billId } = await params
 
   const body = await request.json()
@@ -113,7 +118,7 @@ export async function POST(
 
   // ── Load bill ───────────────────────────────────────────────────────────────
   const bill = await prisma.financeRecurringBill.findFirst({
-    where: { id: billId, familyId: session.familyId },
+    where: { id: billId, familyId: user.familyId },
   })
   if (!bill) {
     return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
@@ -124,7 +129,7 @@ export async function POST(
 
   // ── Check remaining balance ─────────────────────────────────────────────────
   const existingAggregate = await prisma.financeBillPayment.aggregate({
-    where: { billId, familyId: session.familyId },
+    where: { billId, familyId: user.familyId },
     _sum: { amount: true },
   })
   const totalPaidSoFar = existingAggregate._sum.amount ?? 0
@@ -151,14 +156,14 @@ export async function POST(
   // Suspense account is auto-created on first use — no migration required.
   const creditGlAccountId: string = glAccountId
     ? glAccountId
-    : await ensureUndepositedFundsCategory(session.familyId)
+    : await ensureUndepositedFundsCategory(user.familyId)
 
   const usingSuspense = !glAccountId
 
   // Resolve the debit-side GL account (AP or Expense).
   let debitGlAccountId: string
   if (wasAccrued) {
-    debitGlAccountId = await ensureAccountsPayableCategory(session.familyId)
+    debitGlAccountId = await ensureAccountsPayableCategory(user.familyId)
   } else {
     // PATH C / D: expense category required for correct P&L impact.
     // If the bill has no category, fall back to AP so the journal still balances
@@ -166,7 +171,7 @@ export async function POST(
     if (bill.categoryId) {
       debitGlAccountId = bill.categoryId
     } else {
-      debitGlAccountId = await ensureAccountsPayableCategory(session.familyId)
+      debitGlAccountId = await ensureAccountsPayableCategory(user.familyId)
       console.warn(
         `[payments POST] Bill ${bill.id} has no expense category — ` +
         `using AP as debit fallback. Assign a category for correct P&L reporting.`,
@@ -178,7 +183,7 @@ export async function POST(
   const validCount = await prisma.financeCategory.count({
     where: {
       id: { in: [debitGlAccountId, creditGlAccountId] },
-      familyId: session.familyId,
+      familyId: user.familyId,
     },
   })
   if (validCount < 2) {
@@ -202,9 +207,9 @@ export async function POST(
   const MAX_REF_RETRIES = 10
   let journalReference: string | null = null
   for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
-    const candidate = await nextJournalReference(session.familyId)
+    const candidate = await nextJournalReference(user.familyId)
     const conflict = await prisma.financeJournalEntry.findFirst({
-      where: { familyId: session.familyId, reference: candidate },
+      where: { familyId: user.familyId, reference: candidate },
       select: { id: true },
     })
     if (!conflict) { journalReference = candidate; break }
@@ -240,7 +245,7 @@ export async function POST(
           type: 'auto_transaction',
           isPosted: true,
           entityId: bill.entityId ?? null,
-          familyId: session.familyId,
+          familyId: user.familyId,
           lines: {
             create: [
               {
@@ -284,8 +289,8 @@ export async function POST(
           reconciledDate: usingSuspense ? null : actualDate,
           isTransfer: false,
           glAccountId: glAccountId ?? null, // null when using suspense — cleared later
-          createdBy: session.id,
-          familyId: session.familyId,
+          createdBy: user.id,
+          familyId: user.familyId,
           entityId: bill.entityId,
           taxClassification: bill.taxClassification ?? null,
         },
@@ -304,8 +309,8 @@ export async function POST(
           transactionId: paymentTx.id,
           journalEntryId: journalEntry.id,
           notes: notes ?? null,
-          createdBy: session.id,
-          familyId: session.familyId,
+          createdBy: user.id,
+          familyId: user.familyId,
         },
         select: { id: true },
       })
@@ -356,7 +361,7 @@ export async function POST(
               parentBillId:       bill.id,
               entityId:           bill.entityId,
               taxClassification:  bill.taxClassification ?? null,
-              familyId:           session.familyId,
+              familyId:           user.familyId,
             },
           })
         }
@@ -373,7 +378,7 @@ export async function POST(
 
   // ── Return the saved payment with includes ──────────────────────────────────
   const savedPayment = await prisma.financeBillPayment.findFirst({
-    where: { id: savedPaymentId!, familyId: session.familyId },
+    where: { id: savedPaymentId!, familyId: user.familyId },
     include: PAYMENT_INCLUDE,
   })
 

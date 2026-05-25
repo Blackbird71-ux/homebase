@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
 // GET /api/finance/vendor-statement?vendorId=xxx&type=ap&from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -17,13 +18,15 @@ import { prisma } from '@/lib/prisma'
 //   AR: FinanceIncomeEntry   (invoices) + receivedDate/actualAmountReceived (receipts)
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const vendorId = searchParams.get('vendorId')
   const type     = searchParams.get('type') === 'ar' ? 'ar' : 'ap'
   const fromRaw  = searchParams.get('from')
   const toRaw    = searchParams.get('to')
-  const familyId = session.familyId
+  const familyId = user.familyId
 
   if (!vendorId) {
     return NextResponse.json({ error: 'vendorId is required' }, { status: 400 })

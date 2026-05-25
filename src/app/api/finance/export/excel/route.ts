@@ -2,7 +2,8 @@
 // Excel download — uses SheetJS (xlsx) to build multi-sheet workbook
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { buildYtdReport, getCurrentFY, fyDateRange } from '@/lib/financeReport'
 import * as XLSX from 'xlsx'
@@ -17,12 +18,10 @@ const RED_FONT = 'C00000'
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const familyId = session.familyId
+    const session = await auth()
+    const user = session?.user as SessionUser | undefined
+    if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const familyId = user.familyId
 
     // Load FY start month AND timezone from family settings
     const family = await prisma.family.findUnique({
