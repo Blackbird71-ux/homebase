@@ -56,6 +56,7 @@ model Family {
   financeRecurringTemplates  FinanceRecurringTemplate[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
   wishlistItems          WishlistItem[]
+  homeAssets             HomeAsset[]
 }
 
 model User {
@@ -1408,4 +1409,43 @@ model WishlistItem {
   @@index([familyId])
   @@index([contactId])
   @@index([familyId, isPurchased])
+}
+model HomeAsset {
+  id           String              @id @default(cuid())
+  familyId     String
+  family       Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name         String
+  category     String              @default("other")
+  make         String?
+  model        String?
+  year         Int?
+  serialNumber String?
+  purchaseDate DateTime?
+  notes        String?
+  isActive     Boolean             @default(true)
+  records      MaintenanceRecord[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, isActive])
+}
+
+model MaintenanceRecord {
+  id              String    @id @default(cuid())
+  familyId        String
+  assetId         String
+  asset           HomeAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  date            DateTime
+  description     String
+  cost            Float?
+  odometer        Int?
+  notes           String?
+  nextDueDate     DateTime?
+  nextDueOdometer Int?
+  createdAt       DateTime  @default(now())
+
+  @@index([assetId])
+  @@index([familyId])
+  @@index([familyId, nextDueDate])
 }

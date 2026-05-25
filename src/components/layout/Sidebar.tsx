@@ -8,7 +8,7 @@ import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
   Plus, FileText, DollarSign,
-  Plane, ShieldAlert, Calculator, MoreHorizontal, Gift,
+  Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -38,7 +38,8 @@ const navItems: NavItem[] = [
   { href: '/documents', label: 'Documents', icon: FileText,     group: 'household', cat: 'var(--cat-documents)' },
   { href: '/trips',     label: 'Trips',     icon: Plane,        group: 'household', cat: 'var(--cat-trips)' },
   { href: '/notes',      label: 'Notes',     icon: StickyNote,   group: 'household', cat: 'var(--cat-notes)' },
-  { href: '/wishlists',  label: 'Wishlist',  icon: Gift,         group: 'household', cat: 'var(--cat-contacts)' },
+  { href: '/wishlists',    label: 'Wishlist',     icon: Gift,    group: 'household', cat: 'var(--cat-contacts)' },
+  { href: '/maintenance',  label: 'Maintenance',  icon: Wrench,  group: 'household', cat: 'var(--cat-documents)' },
 ]
 
 const GROUP_LABEL: Record<Group, string> = {
