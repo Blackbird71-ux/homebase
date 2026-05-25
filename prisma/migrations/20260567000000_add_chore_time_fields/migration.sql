@@ -1,0 +1,2 @@
+﻿ALTER TABLE "Chore" ADD COLUMN "startTime" DATETIME;
+ALTER TABLE "Chore" ADD COLUMN "duration" INTEGER;
