@@ -246,6 +246,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'View and manage family events, appointments, and activities.',
           'Events are color-coded by category for easy identification.',
+          'Switch between five views using the view toggle: Month, Week, Day, Schedule (agenda list), and Timeline (horizontal chart).',
         ],
       },
       {
@@ -257,11 +258,30 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         ],
       },
       {
+        title: 'View Options',
+        items: [
+          'Month view — traditional calendar grid showing all days in the month.',
+          'Week view — Outlook-style time grid (6am–11pm) with timed events positioned by hour, all-day events in a banner at top, and a current-time indicator. Auto-scrolls to the current time on load.',
+          'Day view — single-day version of the time grid, showing a full 24-hour layout.',
+          'Schedule view — agenda/list format showing all events across the visible date range as a scrollable list with date headers.',
+          'Timeline view — horizontal bar chart across the visible date range, useful for seeing event durations and overlaps at a glance.',
+          'Navigate between periods using the left/right arrow buttons or jump to today with the "Today" button.',
+        ],
+      },
+      {
         title: 'Quick-Add from Day Cells',
         items: [
           'Hover over any day cell in Month or Week view to reveal quick-add icons.',
           'Click the Utensils icon to open the meal planner with the clicked date and dinner pre-filled.',
           'Click the ClipboardList icon to open a quick-add chore drawer — enter a title and save.',
+        ],
+      },
+      {
+        title: 'Completing Chores from Calendar',
+        items: [
+          'Chores with a due date appear as cyan all-day events on the calendar (toggle via Calendar Display Settings).',
+          'Click a chore event to open a quick-complete dialog — mark it as done without leaving the calendar.',
+          'Completed chores show a confirmation notification with the next scheduled date.',
         ],
       },
       {
@@ -432,6 +452,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Documents show a warning badge when approaching expiry.',
           'Expired documents are clearly marked with an "Expired" badge.',
           'Set how many days before expiry you want to be reminded.',
+          'Expiring documents also appear as synthetic events on the family calendar — toggle via Calendar Display Settings.',
         ],
       },
       {
@@ -1132,9 +1153,11 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click "Connect Google Calendar" and follow the OAuth flow; then use "Sync Now" to push/pull changes.',
           'Admins can configure a Cloudflare Tunnel URL for secure remote access from outside the home network.',
           'Admins can enter a Umami analytics site ID and URL for website traffic tracking.',
-          'Use the Cozi Recipe Import section to migrate recipes from Cozi: paste recipe HTML, use the bookmarklet to extract recipes from a Cozi page, or manually enter recipe details.',
-          'Click "Copy Bookmarklet Code" to copy the bookmarklet to your clipboard, then create a new browser bookmark and paste the code as the URL — open a Cozi recipe page and click the bookmark to extract it.',
-          'Cozi-imported recipes are saved into a "Cozi Import" recipe book and can be assigned to a different book during import.',
+          'Use the Cozi Recipe Import section to migrate recipes from Cozi\'s web app. Open a recipe on my.cozi.com, click the bookmarklet, and paste the extracted data here.',
+          'Click "Copy Bookmarklet Code" to copy the bookmarklet to your clipboard, then create a new browser bookmark and paste the code as the URL.',
+          'The bookmarklet automatically finds the recipe name, ingredients, and instructions from Cozi\'s Material-UI page structure.',
+          'For bulk import: use the batch bookmarklet to extract all recipes at once, then paste the JSON array — the app auto-detects batch mode and imports everything.',
+          'Cozi-imported recipes are saved into a "Cozi Import" recipe book by default.',
         ],
       },
       {
@@ -1767,6 +1790,42 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       },
     ],
   },
+  '/finance/insights': {
+    title: 'Finance — Insights',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'The Insights page shows income and expense trends over time with interactive charts.',
+          'Use this page to spot spending patterns, compare month-to-month changes, and understand your household\'s financial trajectory.',
+          'Data is pulled from posted transactions and bills.',
+        ],
+      },
+      {
+        title: 'Charts',
+        items: [
+          'Income vs Expenses — a line chart comparing total income and expenses across the selected period, showing net position over time.',
+          'Expense Breakdown — a bar chart showing expense totals by category, making it easy to see which categories consume the most money.',
+          'Hover or tap any data point to see the exact value for that month.',
+        ],
+      },
+      {
+        title: 'Period Controls',
+        items: [
+          'Use the period selector to switch between monthly, quarterly, and yearly views.',
+          'Navigate between periods using the left/right arrow buttons.',
+          'All charts update automatically when you change the period.',
+        ],
+      },
+      {
+        title: 'Entity Filtering',
+        items: [
+          'Filter by entity (Personal/Family, Super Fund, Trust, etc.) to see insights per legal structure.',
+          'The "All" tab combines all entities for a household-wide view.',
+        ],
+      },
+    ],
+  },
   '/finance/admin': {
     title: 'Finance — Admin',
     sections: [
@@ -2014,6 +2073,74 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'View the system-wide audit log showing changes made across all families.',
           'Useful for troubleshooting and security monitoring.',
+        ],
+      },
+    ],
+  },
+  '/wishlists': {
+    title: 'Wishlists & Gift Tracker',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Create wishlists for family members to track gift ideas, wishlist items, and special requests.',
+          'Wishlists are grouped by person — each family member can have their own wishlist.',
+          'Use this for birthdays, holidays, Christmas, or any gift-giving occasion.',
+        ],
+      },
+      {
+        title: 'Adding Items',
+        items: [
+          'Click "Add Item" to add a new wishlist entry with a name, description, price, and link.',
+          'Assign the item to a specific family member so their wishlist stays organised.',
+          'Add a URL/link so you can quickly find the product when shopping.',
+        ],
+      },
+      {
+        title: 'Purchasing & Reservations',
+        items: [
+          'Mark an item as purchased to track what has been bought and by whom.',
+          'You can "reserve" an item to let others know you\'re planning to buy it — this prevents duplicate gifts.',
+          'Reserved items show the name of the person who reserved them.',
+          'Purchased items are marked with a green badge and moved to the purchased section.',
+        ],
+      },
+      {
+        title: 'Organising Wishlists',
+        items: [
+          'Filter by family member using the person tabs at the top.',
+          'Items are ordered by priority — use up/down arrows to reorder.',
+          'The "All Items" tab shows everything across all members.',
+        ],
+      },
+    ],
+  },
+  '/maintenance': {
+    title: 'Home Maintenance Log',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Track home maintenance tasks, repairs, and inspections for your property.',
+          'Log completed work with details about what was done, who did it, and when.',
+          'Use this to build a maintenance history for insurance, warranty claims, or when selling your home.',
+        ],
+      },
+      {
+        title: 'Adding a Log Entry',
+        items: [
+          'Click "Add Entry" to record a maintenance task. Enter a title, description, and the date completed.',
+          'Choose a category: Plumbing, Electrical, HVAC, Roofing, Painting, Appliance, Gardening, General, or Custom.',
+          'Add the cost and vendor/contractor name for future reference.',
+          'Attach receipts or photos as supporting documents.',
+        ],
+      },
+      {
+        title: 'Viewing History',
+        items: [
+          'Entries are listed chronologically, newest first.',
+          'Filter by category to focus on specific types of maintenance.',
+          'Each entry shows the date, category badge, cost, and a summary of the work done.',
         ],
       },
     ],
