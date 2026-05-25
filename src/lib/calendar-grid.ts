@@ -1,9 +1,10 @@
 import type { CalendarEvent } from '@/types'
 
-export const GRID_START = 6   // 6am
-export const GRID_END   = 23  // 11pm
-export const HOUR_PX    = 64
-export const MIN_H      = 20
+export const GRID_START  = 6   // 6am
+export const GRID_END    = 23  // 11pm
+export const HOUR_PX     = 64
+export const MIN_H       = 20
+export const ALLDAY_CAP  = 4   // max all-day events shown before "+N more"
 
 export function hourLabel(hour: number): string {
   if (hour === 0)  return '12am'

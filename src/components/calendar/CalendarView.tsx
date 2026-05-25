@@ -3,19 +3,21 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  addMonths, subMonths, addWeeks, subWeeks,
+  addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
 } from 'date-fns'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid, Settings2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid, Settings2, Calendar, List } from 'lucide-react'
 import { toast } from 'sonner'
 import { MonthView } from './MonthView'
 import { WeekView } from './WeekView'
+import { DayView } from './DayView'
+import { ScheduleView } from './ScheduleView'
 import { EventModal } from './EventModal'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
-import { localTimeToStoredDateTime } from '@/lib/timezone'
+import { localTimeToStoredDateTime, formatInTz } from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
 
 interface CalendarSettings {
@@ -35,7 +37,7 @@ interface CalendarViewProps {
 
 export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timezone, calendarSettings: initialSettings }: CalendarViewProps) {
   const router = useRouter()
-  const [view, setView] = useState<'month' | 'week'>('month')
+  const [view, setView] = useState<'month' | 'week' | 'day' | 'schedule'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
   const [modalOpen, setModalOpen] = useState(false)
@@ -49,6 +51,10 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [choreTime, setChoreTime] = useState('')
   const [choreDuration, setChoreDuration] = useState('60')
   const [choreSaving, setChoreSaving] = useState(false)
+  const [choreCompleteOpen, setChoreCompleteOpen] = useState(false)
+  const [choreCompleteId, setChoreCompleteId] = useState('')
+  const [choreCompleteTitle, setChoreCompleteTitle] = useState('')
+  const [choreCompleting, setChoreCompleting] = useState(false)
   const [calSettings, setCalSettings] = useState<CalendarSettings>(
     initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true }
   )
@@ -76,16 +82,19 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     let rangeStart: Date
     let rangeEnd: Date
     if (targetView === 'month') {
-      const monthStart = startOfMonth(targetDate)
-      const monthEnd = endOfMonth(targetDate)
-      rangeStart = startOfWeek(monthStart, { weekStartsOn })
-      rangeEnd = endOfWeek(monthEnd, { weekStartsOn })
+      rangeStart = new Date(startOfWeek(startOfMonth(targetDate), { weekStartsOn }).getTime() - 7 * 24 * 60 * 60 * 1000)
+      rangeEnd   = new Date(endOfWeek(endOfMonth(targetDate),     { weekStartsOn }).getTime() + 7 * 24 * 60 * 60 * 1000)
+    } else if (targetView === 'week') {
+      rangeStart = new Date(startOfWeek(targetDate, { weekStartsOn }).getTime() - 7 * 24 * 60 * 60 * 1000)
+      rangeEnd   = new Date(endOfWeek(targetDate,   { weekStartsOn }).getTime() + 7 * 24 * 60 * 60 * 1000)
+    } else if (targetView === 'day') {
+      rangeStart = addDays(targetDate, -2)
+      rangeEnd   = addDays(targetDate,  2)
     } else {
-      rangeStart = startOfWeek(targetDate, { weekStartsOn })
-      rangeEnd = endOfWeek(targetDate, { weekStartsOn })
+      // schedule — 60 days forward
+      rangeStart = targetDate
+      rangeEnd   = addDays(targetDate, 62)
     }
-    rangeStart = new Date(rangeStart.getTime() - 7 * 24 * 60 * 60 * 1000)
-    rangeEnd = new Date(rangeEnd.getTime() + 7 * 24 * 60 * 60 * 1000)
 
     const params = new URLSearchParams({
       from: rangeStart.toISOString(),
@@ -113,15 +122,18 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   }, [refresh])
 
   function navigate(dir: 'prev' | 'next') {
+    let newDate: Date
     if (view === 'month') {
-      const newDate = dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1)
-      setCurrentDate(newDate)
-      refresh(newDate, 'month')
+      newDate = dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1)
+    } else if (view === 'week') {
+      newDate = dir === 'next' ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1)
+    } else if (view === 'day') {
+      newDate = dir === 'next' ? addDays(currentDate, 1) : subDays(currentDate, 1)
     } else {
-      const newDate = dir === 'next' ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1)
-      setCurrentDate(newDate)
-      refresh(newDate, 'week')
+      newDate = dir === 'next' ? addDays(currentDate, 30) : subDays(currentDate, 30)
     }
+    setCurrentDate(newDate)
+    refresh(newDate, view)
   }
 
   function goToday() {
@@ -202,9 +214,31 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     }
     if (event.isBusy) return
     if (event.source === 'bill' || event.source === 'income') return
+    if (event.source === 'chore') {
+      setChoreCompleteId(event.id.replace('chore-', ''))
+      setChoreCompleteTitle(event.title.replace(/^Chore:\s*/, ''))
+      setChoreCompleteOpen(true)
+      return
+    }
     setSelectedEvent(event)
     setDefaultDate(undefined)
     setModalOpen(true)
+  }
+
+  async function handleChoreComplete() {
+    if (!choreCompleteId) return
+    setChoreCompleting(true)
+    try {
+      const res = await fetch(`/api/chores/${choreCompleteId}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+      if (!res.ok) throw new Error('Failed to complete chore')
+      toast.success('Chore marked as done')
+      setChoreCompleteOpen(false)
+      refresh()
+    } catch {
+      toast.error('Failed to complete chore')
+    } finally {
+      setChoreCompleting(false)
+    }
   }
 
   function onTripClick(tripId: string) {
@@ -222,13 +256,18 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     })
   }
 
-  const isThisMonth = view === 'month'
-    ? format(currentDate, 'M-yyyy') === format(new Date(), 'M-yyyy')
-    : false
+  const today = new Date()
+  const isCurrentPeriod = view === 'month'
+    ? format(currentDate, 'M-yyyy') === format(today, 'M-yyyy')
+    : view === 'week'
+    ? currentDate >= startOfWeek(today, { weekStartsOn }) && currentDate <= endOfWeek(today, { weekStartsOn })
+    : format(currentDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
 
-  const monthLabel = format(currentDate, 'MMMM')
-  const yearLabel = format(currentDate, 'yyyy')
-  const weekLabel = `${format(startOfWeek(currentDate, { weekStartsOn }), 'MMM d')} – ${format(endOfWeek(currentDate, { weekStartsOn }), 'MMM d, yyyy')}`
+  const monthLabel    = format(currentDate, 'MMMM')
+  const yearLabel     = format(currentDate, 'yyyy')
+  const weekLabel     = `${format(startOfWeek(currentDate, { weekStartsOn }), 'MMM d')} – ${format(endOfWeek(currentDate, { weekStartsOn }), 'MMM d, yyyy')}`
+  const dayLabel      = formatInTz(currentDate, timezone, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const scheduleLabel = `${formatInTz(currentDate, timezone, { month: 'short', day: 'numeric' })} – ${formatInTz(addDays(currentDate, 59), timezone, { month: 'short', day: 'numeric', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col h-full gap-0 overflow-hidden">
@@ -260,8 +299,12 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
                 <span className="text-xl font-bold tracking-tight text-foreground truncate">{monthLabel}</span>
                 <span className="text-sm font-medium text-muted-foreground">{yearLabel}</span>
               </div>
-            ) : (
+            ) : view === 'week' ? (
               <span className="text-base font-semibold text-foreground truncate block">{weekLabel}</span>
+            ) : view === 'day' ? (
+              <span className="text-base font-semibold text-foreground truncate block">{dayLabel}</span>
+            ) : (
+              <span className="text-base font-semibold text-foreground truncate block">{scheduleLabel}</span>
             )}
           </div>
 
@@ -270,7 +313,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
             onClick={goToday}
             className={[
               'ml-1 px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors shrink-0',
-              isThisMonth
+              isCurrentPeriod
                 ? 'border-primary/40 text-primary bg-primary/10 cursor-default'
                 : 'border-border/70 text-muted-foreground bg-background hover:bg-accent hover:text-foreground',
             ].join(' ')}
@@ -306,6 +349,30 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
               ].join(' ')}
             >
               <CalendarDays className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { setView('day'); refresh(currentDate, 'day') }}
+              title="Day view"
+              className={[
+                'h-7 w-7 flex items-center justify-center rounded-md transition-all text-sm',
+                view === 'day'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { setView('schedule'); refresh(currentDate, 'schedule') }}
+              title="Schedule view"
+              className={[
+                'h-7 w-7 flex items-center justify-center rounded-md transition-all text-sm',
+                view === 'schedule'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              <List className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -388,17 +455,36 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
             onChoreClick={openNewChore}
             onTripClick={onTripClick}
           />
-        ) : (
+        ) : view === 'week' ? (
           <WeekView
             currentDate={currentDate}
             events={events}
             weekStartsOn={weekStartsOn}
+            timezone={timezone}
+            onDayClick={date => { setCurrentDate(date); setView('day'); refresh(date, 'day') }}
+            onEventClick={openEdit}
+            onMealClick={openNewMeal}
+            onChoreClick={openNewChore}
+            onTripClick={onTripClick}
+          />
+        ) : view === 'day' ? (
+          <DayView
+            currentDate={currentDate}
+            events={events}
             timezone={timezone}
             onDayClick={date => openNew(date)}
             onEventClick={openEdit}
             onMealClick={openNewMeal}
             onChoreClick={openNewChore}
             onTripClick={onTripClick}
+          />
+        ) : (
+          <ScheduleView
+            currentDate={currentDate}
+            events={events}
+            timezone={timezone}
+            onDayClick={date => { setCurrentDate(date); setView('day'); refresh(date, 'day') }}
+            onEventClick={openEdit}
           />
         )}
       </div>
@@ -479,6 +565,24 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
               className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {choreSaving ? 'Saving…' : 'Add Chore'}
+            </button>
+          </div>
+        </DrawerContent>
+      </Drawer>
+      <Drawer open={choreCompleteOpen} onOpenChange={setChoreCompleteOpen}>
+        <DrawerContent className="sm:max-w-[480px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>Mark chore as done?</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4 py-4 text-sm text-muted-foreground">{choreCompleteTitle}</div>
+          <div className="border-t border-border px-4 py-3 flex justify-end gap-2">
+            <button onClick={() => setChoreCompleteOpen(false)} className="px-4 py-2 rounded-md text-sm border border-input hover:bg-accent">Cancel</button>
+            <button
+              onClick={handleChoreComplete}
+              disabled={choreCompleting}
+              className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {choreCompleting ? 'Saving…' : 'Mark Done'}
             </button>
           </div>
         </DrawerContent>
