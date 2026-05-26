@@ -120,11 +120,11 @@ export function ExportGroceriesModal({
         }
         setOriginSources(sources)
 
-        // Pre-select ingredients: everything EXCEPT ALL CAPS headings
+        // Pre-select ingredients: everything EXCEPT ALL CAPS headings and items already in the list
         const initialIngredientKeys = new Set<string>()
         for (const recipe of fetchedRecipes) {
           recipe.ingredients.forEach((ing, idx) => {
-            if (!isLikelyHeading(ing.text)) {
+            if (!isLikelyHeading(ing.text) && !ing.alreadyInList) {
               initialIngredientKeys.add(ingredientKey(recipe, ing, idx))
             }
           })
