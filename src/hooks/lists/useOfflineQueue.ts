@@ -122,5 +122,17 @@ export function useOfflineQueue(
     })
   }, [listId, setItems])
 
+  // Poll for item changes from other devices every 30s when the tab is visible and online
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!navigator.onLine || document.visibilityState !== 'visible') return
+      fetch(`/api/lists/${listId}/items`)
+        .then(res => res.ok ? res.json() : null)
+        .then(raw => { if (raw) setItems(parseServerItems(raw)) })
+        .catch(() => {})
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [listId, setItems])
+
   return { registerBackgroundSync, broadcastQueueCount, enqueueMutation }
 }

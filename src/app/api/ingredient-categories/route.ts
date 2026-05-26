@@ -83,12 +83,24 @@ export async function GET() {
   }
 
   // Filter out keyword mappings (only return categories that start with 'system_' or are custom)
-  const categoriesOnly = existingCategories.filter((cat: any) => 
+  const categoriesOnly = existingCategories.filter((cat: any) =>
     cat.key.startsWith('system_') || cat.isCustom
   )
 
+  // Deduplicate by category name. The learn API can promote keyword mappings to
+  // isCustom=true, which causes the same category name to appear many times.
+  // Prefer system_ records; otherwise keep whichever has the lowest sortOrder.
+  const seen = new Map<string, any>()
+  for (const cat of categoriesOnly) {
+    const existing = seen.get(cat.category)
+    if (!existing || cat.key.startsWith('system_')) {
+      seen.set(cat.category, cat)
+    }
+  }
+  const deduped = [...seen.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.category.localeCompare(b.category))
+
   return NextResponse.json(
-    categoriesOnly.map((cat: any) => ({
+    deduped.map((cat: any) => ({
       id: cat.id,
       key: cat.key,
       category: cat.category,

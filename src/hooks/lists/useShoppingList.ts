@@ -93,7 +93,8 @@ export function useShoppingList(
         const response = await fetch('/api/ingredient-categories')
         if (response.ok) {
           const data = await response.json()
-          const categoryNames = (data as Array<{ category: string }>).map(c => c.category)
+          const rawNames = (data as Array<{ category: string }>).map(c => c.category)
+          const categoryNames = [...new Set(rawNames)]
           if (!categoryNames.includes('Other')) categoryNames.push('Other')
           setCategories(categoryNames)
           setAvailableCategories(data)

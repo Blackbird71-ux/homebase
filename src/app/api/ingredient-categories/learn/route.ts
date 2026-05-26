@@ -57,12 +57,13 @@ export async function POST(req: Request) {
       })
 
       if (existingCategory) {
-        // Update existing category
+        // Update existing category — do NOT change isCustom; promoting keyword
+        // mappings to isCustom=true causes them to appear as duplicate display
+        // categories in the shopping list and settings.
         const updatedCategory = await (prisma as any).ingredientCategory.update({
           where: { id: existingCategory.id },
           data: {
             category: trimmedCategory,
-            isCustom: true,
             updatedAt: new Date(),
           },
         })
