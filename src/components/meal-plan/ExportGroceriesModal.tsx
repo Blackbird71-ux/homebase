@@ -272,6 +272,7 @@ export function ExportGroceriesModal({
 
       const learnCount = learnItems.length + approvedCustom.length
       onOpenChange(false)
+      router.refresh()
       toast.success(
         learnCount > 0
           ? `${data.itemCount} items added · ${learnCount} category correction${learnCount !== 1 ? 's' : ''} saved`
