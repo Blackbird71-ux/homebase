@@ -1,4 +1,4 @@
-import { addDays, addWeeks, addMonths, addYears, isBefore, isAfter, startOfDay, differenceInMilliseconds } from 'date-fns'
+import { addDays, addWeeks, addMonths, addYears, isBefore, isAfter, differenceInMilliseconds } from 'date-fns'
 
 export interface RecurrenceInstance {
   start: Date
@@ -93,9 +93,9 @@ export function generateRecurrenceInstances(
 
     // For WEEKLY with BYDAY, we need to generate each day of the week
     if (freq === 'WEEKLY' && byDay && byDay.length > 0) {
-      // Get the start of the current week
-      const weekStart = startOfDay(currentStart)
-      const dayOfWeek = weekStart.getDay()
+      // Compute UTC midnight of the current position and its day-of-week
+      const weekMidnight = new Date(Date.UTC(currentStart.getUTCFullYear(), currentStart.getUTCMonth(), currentStart.getUTCDate()))
+      const dayOfWeek = currentStart.getUTCDay()
 
       // For each day in the BYDAY list
       for (const dayStr of byDay) {
@@ -106,7 +106,7 @@ export function generateRecurrenceInstances(
         let daysToAdd = targetDay - dayOfWeek
         if (daysToAdd < 0) daysToAdd += 7
 
-        const instanceStart = new Date(weekStart.getTime() + daysToAdd * 86400000)
+        const instanceStart = new Date(weekMidnight.getTime() + daysToAdd * 86400000)
         instanceStart.setHours(eventStart.getHours(), eventStart.getMinutes(), eventStart.getSeconds(), eventStart.getMilliseconds())
 
         const instanceEnd = new Date(instanceStart.getTime() + duration)
@@ -125,7 +125,7 @@ export function generateRecurrenceInstances(
       }
 
       // Move to next week
-      currentStart = addWeeks(weekStart, interval)
+      currentStart = addWeeks(weekMidnight, interval)
       continue
     }
 

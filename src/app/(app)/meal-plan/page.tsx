@@ -20,7 +20,7 @@ export default async function MealPlanPage() {
   })
   if (!user) return null
   const todayStr = todayStringInTz(user.family.timezone)
-  const localToday = new Date(todayStr + 'T00:00:00')
+  const localToday = new Date(todayStr + 'T00:00:00.000Z')
 
   // Use today as the start date — not the start of the week.
   // The MealPlanGrid component will show `scope` number of days starting from today,

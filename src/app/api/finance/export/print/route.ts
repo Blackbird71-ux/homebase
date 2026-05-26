@@ -187,7 +187,7 @@ export async function GET(req: NextRequest) {
 
   <h1>Homebase Finance Report</h1>
   <p>${report.meta.periodLabel} (${report.meta.financialYear})</p>
-  <p>Generated: ${new Date(report.meta.generatedAt).toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+  <p>Generated: ${new Date(report.meta.generatedAt).toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })}</p>
   <p>Months covered: ${report.meta.monthsComplete} of 12</p>
 
   <h2>Income</h2>

@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { generateCode } from '@/lib/invite'
 
 // POST — generate a new invite code (admin only)
 export async function POST() {
-  const user = await requireAdmin()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const code = generateCode()
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
@@ -19,7 +23,10 @@ export async function POST() {
 
 // GET — list all invite codes for the family (admin only)
 export async function GET() {
-  const user = await requireAdmin()
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+  if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const codes = await prisma.inviteCode.findMany({
     where: { familyId: user.familyId },

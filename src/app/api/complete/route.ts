@@ -184,7 +184,7 @@ export async function GET(req: Request): Promise<Response> {
     return htmlPage(
       'Done!',
       'Marked complete!',
-      `"${chore.title}" has been marked as complete. ${nextDueDate ? `Next due: ${nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}.` : 'The chore has been deactivated as it has reached its end date.'}`,
+      `"${chore.title}" has been marked as complete. ${nextDueDate ? `Next due: ${nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}.` : 'The chore has been deactivated as it has reached its end date.'}`,
       true
     )
   }

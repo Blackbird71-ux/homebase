@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   // Calculate the week range
-  const startDate = new Date(weekStart + 'T00:00:00')
+  const startDate = new Date(weekStart + 'T00:00:00.000Z')
   const endDate = new Date(startDate)
   endDate.setDate(endDate.getDate() + 6)
   endDate.setHours(23, 59, 59, 999)

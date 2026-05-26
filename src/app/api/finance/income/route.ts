@@ -15,6 +15,7 @@ const INCOME_INCLUDE = {
   vendor: { select: { id: true, name: true } },
   entity: { select: { id: true, name: true, color: true, type: true, isDefault: true } },
   payslip: true,
+  journalEntry: { select: { id: true, isPosted: true, reference: true } },
   attachments: {
     select: { id: true, incomeId: true, title: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
     orderBy: { createdAt: 'asc' as const },

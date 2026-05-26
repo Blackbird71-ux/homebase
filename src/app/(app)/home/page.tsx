@@ -7,7 +7,6 @@ import { HomeClient } from './HomeClient'
 import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
-import { format } from 'date-fns'
 
 /**
  * Normalize a date string to midnight UTC for meal plan queries.
@@ -52,7 +51,9 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const weekEndUtc = new Date(todayStart.getTime() + scope * 24 * 60 * 60 * 1000)
   const todayStr2 = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(todayStart)
   const weekEndStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(weekEndUtc.getTime() - 86_400_000))
-  const weekLabel = `${format(normalizeToUtcMidnight(todayStr2), 'd MMM')} – ${format(normalizeToUtcMidnight(weekEndStr), 'd MMM')}`
+  const fmtShort = (ymd: string) =>
+    new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(ymd + 'T00:00:00Z'))
+  const weekLabel = `${fmtShort(todayStr2)} – ${fmtShort(weekEndStr)}`
 
   const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData] = await Promise.all([
     needsEvents
