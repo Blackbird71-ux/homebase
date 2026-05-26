@@ -2,11 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import {
-  ensureAccountsPayableCategory,
-  ensureUndepositedFundsCategory,
-} from '@/lib/finance-opening-balance'
-import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
+import { postBillPaymentJournal } from '@/lib/finance-posting'
 import { addMonths, addWeeks, max } from 'date-fns'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,64 +157,24 @@ export async function POST(
 
   const usingSuspense = !glAccountId
 
-  // Resolve the debit-side GL account (AP or Expense).
-  let debitGlAccountId: string
-  if (wasAccrued) {
-    debitGlAccountId = await ensureAccountsPayableCategory(user.familyId)
-  } else {
-    // PATH C / D: expense category required for correct P&L impact.
-    // If the bill has no category, fall back to AP so the journal still balances
-    // (accountant can fix the category later).
-    if (bill.categoryId) {
-      debitGlAccountId = bill.categoryId
-    } else {
-      debitGlAccountId = await ensureAccountsPayableCategory(user.familyId)
-      console.warn(
-        `[payments POST] Bill ${bill.id} has no expense category — ` +
-        `using AP as debit fallback. Assign a category for correct P&L reporting.`,
+  // Validate user-supplied bank GL account belongs to family before writing anything
+  if (glAccountId) {
+    const valid = await prisma.financeCategory.count({
+      where: { id: glAccountId, familyId: user.familyId },
+    })
+    if (!valid) {
+      return NextResponse.json(
+        { error: 'GL account not found. Cannot post payment.' },
+        { status: 422 },
       )
     }
   }
 
-  // Validate both resolved GL accounts belong to this family before writing anything
-  const validCount = await prisma.financeCategory.count({
-    where: {
-      id: { in: [debitGlAccountId, creditGlAccountId] },
-      familyId: user.familyId,
-    },
-  })
-  if (validCount < 2) {
-    return NextResponse.json(
-      { error: 'One or more GL accounts not found. Cannot post payment.' },
-      { status: 422 },
-    )
-  }
-
-  // ── Build journal description ───────────────────────────────────────────────
-  const pathLabel = wasAccrued
-    ? (usingSuspense ? 'PATH B: DR AP / CR Undeposited Funds' : 'PATH A: DR AP / CR Bank')
-    : (usingSuspense ? 'PATH D: DR Expense / CR Undeposited Funds' : 'PATH C: DR Expense / CR Bank')
-  const journalDesc = usingSuspense
-    ? `Payment (undeposited): ${bill.name}`
-    : `Payment: ${bill.name}`
-
-  // Pre-generate journal reference OUTSIDE the $transaction.
-  // nextJournalReference reads committed MAX; inside a transaction uncommitted
-  // creates are invisible so sequential calls return the same value.
-  const MAX_REF_RETRIES = 10
-  let journalReference: string | null = null
-  for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
-    const candidate = await nextJournalReference(user.familyId)
-    const conflict = await prisma.financeJournalEntry.findFirst({
-      where: { familyId: user.familyId, reference: candidate },
-      select: { id: true },
-    })
-    if (!conflict) { journalReference = candidate; break }
-  }
-  if (!journalReference) {
-    return NextResponse.json(
-      { error: 'Could not generate a unique journal reference. Please retry.' },
-      { status: 500 },
+  // PATH C/D: warn when no expense category — postBillPaymentJournal falls back to AP
+  if (!wasAccrued && !bill.categoryId) {
+    console.warn(
+      `[payments POST] Bill ${bill.id} has no expense category — ` +
+      `using AP as debit fallback. Assign a category for correct P&L reporting.`,
     )
   }
 
@@ -228,44 +185,22 @@ export async function POST(
   let savedPaymentId: string
   try {
     await prisma.$transaction(async (tx) => {
-      // 1. Post GL journal entry — the canonical financial record
-      //
-      //   PATH A: DR Accounts Payable    / CR Bank             (accrued, bank known)
-      //   PATH B: DR Accounts Payable    / CR Undeposited Funds (accrued, no bank)
-      //   PATH C: DR Expense Category    / CR Bank             (direct pay, bank known)
-      //   PATH D: DR Expense Category    / CR Undeposited Funds (direct pay, no bank)
-      //
-      // All four paths produce a balanced, posted journal entry. The debit
-      // description includes the path label so auditors can trace the logic.
-      const journalEntry = await tx.financeJournalEntry.create({
-        data: {
-          reference: journalReference!,
-          date: actualDate,
-          description: journalDesc,
-          type: 'auto_transaction',
-          isPosted: true,
-          entityId: bill.entityId ?? null,
-          familyId: user.familyId,
-          lines: {
-            create: [
-              {
-                glAccountId: debitGlAccountId,
-                side: 'debit',
-                amount,
-                description: `${pathLabel} — ${bill.name}`,
-              },
-              {
-                glAccountId: creditGlAccountId,
-                side: 'credit',
-                amount,
-                description: usingSuspense
-                  ? `Undeposited — ${bill.name}`
-                  : `Payment: ${bill.name}`,
-              },
-            ],
-          },
-        },
-        select: { id: true },
+      // 1. Post GL journal entry via shared function — handles all four paths:
+      //   PATH A: DR AP       / CR Bank             (accrued, bank known)
+      //   PATH B: DR AP       / CR Undeposited Funds (accrued, no bank)
+      //   PATH C: DR Expense  / CR Bank             (direct pay, bank known)
+      //   PATH D: DR Expense  / CR Undeposited Funds (direct pay, no bank)
+      const glPath = wasAccrued || !bill.categoryId ? 'clear_ap' : 'direct'
+      const postResult = await postBillPaymentJournal(tx, {
+        familyId: user.familyId,
+        description: bill.name,
+        amount,
+        creditGlAccountId,
+        entityId: bill.entityId ?? null,
+        date: actualDate,
+        usingSuspense,
+        path: glPath,
+        expenseGlAccountId: glPath === 'direct' ? bill.categoryId : undefined,
       })
 
       // 2. Create FinanceTransaction (UI cache / bank register)
@@ -307,7 +242,7 @@ export async function POST(
           accountId: paymentAccountId ?? null,
           glAccountId: glAccountId ?? null,
           transactionId: paymentTx.id,
-          journalEntryId: journalEntry.id,
+          journalEntryId: postResult.journalEntryId,
           notes: notes ?? null,
           createdBy: user.id,
           familyId: user.familyId,

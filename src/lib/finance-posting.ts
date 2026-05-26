@@ -269,30 +269,17 @@ export async function postBillAccrualJournal(
 // ─────────────────────────────────────────────────────────────────────────────
 // postBillPaymentJournal
 //
-// Called by the draft-approval service (or any flow) when a previously
-// approved bill is paid. Posts the cash leg of the bill lifecycle.
+// Posts the cash leg of a bill payment. Supports four paths depending on
+// whether the bill was accrued first (wasAccrued) and whether a bank account
+// was provided or undeposited-funds suspense is used (usingSuspense).
 //
-// Two accounting paths depending on whether the bill was accrued first.
-// The caller chooses via the `path` parameter; defaults to 'clear_ap' which
-// matches the canonical lifecycle (draft → approve → AP → pay).
-//
-//   PATH 'clear_ap' — bill was accrued first (Stage 1 ran, AP balance exists):
-//     DR  Accounts Payable    amount   (clear the liability)
-//     CR  <bank GL>            amount   (cash leaves)
-//     Net combined with Stage 1: DR Expense / CR Bank ✓
-//
-//   PATH 'direct' — direct payment with NO prior accrual (cash basis):
-//     DR  <expense GL>         amount   (expense hits P&L now)
-//     CR  <bank GL>            amount   (cash leaves)
-//     Use when invoiceReceived was never set true; expense must hit P&L
-//     somewhere or it never appears.
-//
-// In the draft-approval flow this is always called AFTER postBillAccrualJournal,
-// so 'clear_ap' is the path you want. 'direct' is provided for completeness and
-// for ad-hoc payment flows that bypass approval (not used by Block 2b today).
+//   PATH A: clear_ap + bank       DR AP            / CR Bank             (accrued, bank known)
+//   PATH B: clear_ap + suspense   DR AP            / CR Undeposited Funds (accrued, no bank)
+//   PATH C: direct  + bank        DR Expense       / CR Bank             (direct pay, bank known)
+//   PATH D: direct  + suspense    DR Expense       / CR Undeposited Funds (direct pay, no bank)
 //
 // Pre-conditions enforced (throws on violation):
-//   - bankGlAccountId belongs to family
+//   - creditGlAccountId belongs to family
 //   - if path='direct', expenseGlAccountId is required and belongs to family
 //   - amount > 0
 //
@@ -307,23 +294,28 @@ export interface PostBillPaymentParams {
   description: string
   /** Amount being paid (positive). May be less than the bill total for partial payments. */
   amount: number
-  /** The bank GL account (FinanceCategory.id of type='asset', e.g. cheque account). */
-  bankGlAccountId: string
+  /** The credit-side GL account — either a bank account or an undeposited-funds suspense account. */
+  creditGlAccountId: string
   /** Optional entity scope. Null = unscoped. */
   entityId: string | null
-  /** Date cash actually left the bank. */
+  /** Date cash actually left the bank (or was recorded as undeposited). */
   date: Date
   /**
    * Posting path:
-   *   - 'clear_ap' (default): DR AP / CR Bank. Use after postBillAccrualJournal.
-   *   - 'direct':              DR Expense / CR Bank. Requires expenseGlAccountId.
+   *   - 'clear_ap' (default): DR AP / CR creditGlAccountId. Use after postBillAccrualJournal.
+   *   - 'direct':              DR Expense / CR creditGlAccountId. Requires expenseGlAccountId.
    */
   path?: 'clear_ap' | 'direct'
   /**
-   * Required when path='direct'. The expense GL account for the cash-basis
-   * single-journal entry. Ignored when path='clear_ap'.
+   * Required when path='direct'. The expense GL account for the cash-basis entry.
+   * Ignored when path='clear_ap'.
    */
   expenseGlAccountId?: string | null
+  /**
+   * True when creditGlAccountId is an undeposited-funds suspense account rather than a real bank.
+   * Affects journal descriptions only — accounting entries are identical.
+   */
+  usingSuspense?: boolean
 }
 
 export async function postBillPaymentJournal(
@@ -334,24 +326,32 @@ export async function postBillPaymentJournal(
     familyId,
     description,
     amount,
-    bankGlAccountId,
+    creditGlAccountId,
     entityId,
     date,
     path = 'clear_ap',
     expenseGlAccountId,
+    usingSuspense = false,
   } = params
 
   if (!(amount > 0)) {
     throw new Error(`postBillPaymentJournal: amount must be positive, got ${amount}`)
   }
 
+  const pathLabel = path === 'clear_ap'
+    ? (usingSuspense ? 'PATH B: DR AP / CR Undeposited Funds' : 'PATH A: DR AP / CR Bank')
+    : (usingSuspense ? 'PATH D: DR Expense / CR Undeposited Funds' : 'PATH C: DR Expense / CR Bank')
+
+  const creditDesc = usingSuspense ? `Undeposited — ${description}` : `Payment: ${description}`
+  const journalDesc = usingSuspense ? `Payment (undeposited): ${description}` : `Payment: ${description}`
+
   let lines: JournalLine[]
 
   if (path === 'clear_ap') {
     const apCategoryId = await ensureAccountsPayableCategory(familyId)
     lines = [
-      { glAccountId: apCategoryId,    side: 'debit',  amount, description: `Clear AP: ${description}` },
-      { glAccountId: bankGlAccountId, side: 'credit', amount, description: `Payment: ${description}` },
+      { glAccountId: apCategoryId,      side: 'debit',  amount, description: `${pathLabel} — ${description}` },
+      { glAccountId: creditGlAccountId, side: 'credit', amount, description: creditDesc },
     ]
   } else {
     // path === 'direct'
@@ -361,8 +361,8 @@ export async function postBillPaymentJournal(
       )
     }
     lines = [
-      { glAccountId: expenseGlAccountId, side: 'debit',  amount, description },
-      { glAccountId: bankGlAccountId,    side: 'credit', amount, description: `Payment: ${description}` },
+      { glAccountId: expenseGlAccountId, side: 'debit',  amount, description: `${pathLabel} — ${description}` },
+      { glAccountId: creditGlAccountId,  side: 'credit', amount, description: creditDesc },
     ]
   }
 
@@ -374,7 +374,7 @@ export async function postBillPaymentJournal(
     data: {
       reference,
       date,
-      description: `Payment: ${description}`,
+      description: journalDesc,
       type: 'auto_transaction',
       isPosted: true,
       entityId: entityId ?? null,
