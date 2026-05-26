@@ -46,17 +46,24 @@ export function normalizeIngredient(text: string): string {
 }
 
 export function autoGuessCategory(key: string): ShoppingCategory {
-  // Normalize the ingredient first to remove quantities and units
   const normalized = normalizeIngredient(key)
   const lower = normalized.toLowerCase()
-  
-  // Fall back to keyword detection
+
+  let bestCat: ShoppingCategory = 'Other'
+  let bestScore = 0
+
   for (const cat of SHOPPING_CATEGORIES) {
     if (cat === 'Other') continue
     const keywords = KEYWORD_MAP[cat as keyof typeof KEYWORD_MAP]
-    if (keywords && keywords.some((kw) => lower.includes(kw))) return cat
+    if (!keywords) continue
+    for (const kw of keywords) {
+      if (lower.includes(kw) && kw.length > bestScore) {
+        bestScore = kw.length
+        bestCat = cat as ShoppingCategory
+      }
+    }
   }
-  return 'Other'
+  return bestCat
 }
 
 export function guessCategoryWithKeywords(
@@ -127,14 +134,22 @@ export function autoGuessCategoryWithFallback(
     }
   }
   
-  // Fallback to hardcoded categories (synchronous version without DB check)
   const normalized = normalizeIngredient(ingredientText)
   const lower = normalized.toLowerCase()
-  
+
+  let bestCat = 'Other'
+  let bestScore = 0
+
   for (const cat of SHOPPING_CATEGORIES) {
     if (cat === 'Other') continue
     const keywords = KEYWORD_MAP[cat as keyof typeof KEYWORD_MAP]
-    if (keywords && keywords.some((kw) => lower.includes(kw))) return cat
+    if (!keywords) continue
+    for (const kw of keywords) {
+      if (lower.includes(kw) && kw.length > bestScore) {
+        bestScore = kw.length
+        bestCat = cat
+      }
+    }
   }
-  return 'Other'
+  return bestCat
 }
