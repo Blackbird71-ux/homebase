@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   PointerSensor,
   KeyboardSensor,
@@ -24,6 +25,7 @@ export function useShoppingList(
   initialItems: ListItemShape[],
   initialCategoryOrder: string[] | null,
 ) {
+  const router = useRouter()
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [viewMode, setViewMode] = useState<'aisle' | 'recipe'>('aisle')
   const [showRecipePills, setShowRecipePills] = useState(false)
@@ -328,6 +330,7 @@ export function useShoppingList(
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
       setItems(prev => prev.filter(i => !(i.isCompleted && !i.isLocked)))
+      router.refresh()
     } else {
       toast.error('Failed to save. Please try again.')
     }
