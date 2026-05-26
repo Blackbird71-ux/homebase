@@ -36,6 +36,7 @@ function parseServerItems(raw: Record<string, unknown>[]): ListItemShape[] {
 export function useOfflineQueue(
   listId: string,
   setItems: React.Dispatch<React.SetStateAction<ListItemShape[]>>,
+  shouldSkipServerUpdate: () => boolean = () => false,
 ) {
   const broadcastQueueCount = useCallback(async () => {
     try {
@@ -117,22 +118,23 @@ export function useOfflineQueue(
     return listenAppEvent(AppEvents.SHOPPING_LIST_UPDATED, () => {
       fetch(`/api/lists/${listId}/items`)
         .then(res => res.ok ? res.json() : null)
-        .then(raw => { if (raw) setItems(parseServerItems(raw)) })
+        .then(raw => { if (raw && !shouldSkipServerUpdate()) setItems(parseServerItems(raw)) })
         .catch(() => {})
     })
-  }, [listId, setItems])
+  }, [listId, setItems, shouldSkipServerUpdate])
 
   // Poll for item changes from other devices every 30s when the tab is visible and online
   useEffect(() => {
     const interval = setInterval(() => {
       if (!navigator.onLine || document.visibilityState !== 'visible') return
+      if (shouldSkipServerUpdate()) return
       fetch(`/api/lists/${listId}/items`)
         .then(res => res.ok ? res.json() : null)
-        .then(raw => { if (raw) setItems(parseServerItems(raw)) })
+        .then(raw => { if (raw && !shouldSkipServerUpdate()) setItems(parseServerItems(raw)) })
         .catch(() => {})
     }, 30000)
     return () => clearInterval(interval)
-  }, [listId, setItems])
+  }, [listId, setItems, shouldSkipServerUpdate])
 
   return { registerBackgroundSync, broadcastQueueCount, enqueueMutation }
 }

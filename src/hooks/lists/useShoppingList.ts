@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback, useEffect } from 'react'
+import { useState, useTransition, useCallback, useEffect, useRef } from 'react'
 import {
   PointerSensor,
   KeyboardSensor,
@@ -24,6 +24,9 @@ export function useShoppingList(
   initialItems: ListItemShape[],
   initialCategoryOrder: string[] | null,
 ) {
+  const lastMutAt = useRef(0)
+  const shouldSkipServerUpdate = useCallback(() => Date.now() - lastMutAt.current < 3000, [])
+
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [viewMode, setViewMode] = useState<'aisle' | 'recipe'>('aisle')
   const [showRecipePills, setShowRecipePills] = useState(false)
@@ -50,7 +53,7 @@ export function useShoppingList(
   // ── Offline sync ────────────────────────────────────────────────────────────
 
   const { registerBackgroundSync, broadcastQueueCount, enqueueMutation } =
-    useOfflineQueue(listId, setItems)
+    useOfflineQueue(listId, setItems, shouldSkipServerUpdate)
 
   // ── Debounced saves ─────────────────────────────────────────────────────────
 
@@ -165,6 +168,7 @@ export function useShoppingList(
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
     if (!newContent.trim()) return
+    lastMutAt.current = Date.now()
 
     const body = { content: newContent.trim(), category: newCategory }
 
@@ -220,6 +224,7 @@ export function useShoppingList(
   }
 
   async function toggleItem(id: string, isCompleted: boolean) {
+    lastMutAt.current = Date.now()
     setItems(prev => prev.map(i => i.id === id ? { ...i, isCompleted } : i))
 
     if (!navigator.onLine || id.startsWith('tmp_')) {
@@ -245,6 +250,7 @@ export function useShoppingList(
   }
 
   async function deleteItem(id: string) {
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setItems(prev => prev.filter(i => i.id !== id))
@@ -254,6 +260,7 @@ export function useShoppingList(
   }
 
   async function toggleLock(id: string, isLocked: boolean) {
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -267,6 +274,7 @@ export function useShoppingList(
   }
 
   async function changeItemCategory(id: string, newCat: string) {
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -325,6 +333,7 @@ export function useShoppingList(
   }
 
   async function clearCompleted() {
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
     if (res.ok) {
       setItems(prev => prev.filter(i => !(i.isCompleted && !i.isLocked)))
