@@ -32,7 +32,7 @@ export function useShoppingList(
   const [showRecipePills, setShowRecipePills] = useState(false)
   const [categories, setCategories] = useState<string[]>(DEFAULT_SHOPPING_CATEGORIES)
   const [categoryOrder, setCategoryOrder] = useState<string[]>(
-    initialCategoryOrder ?? [...DEFAULT_SHOPPING_CATEGORIES]
+    (initialCategoryOrder && initialCategoryOrder.length > 0) ? initialCategoryOrder : [...DEFAULT_SHOPPING_CATEGORIES]
   )
   const [newContent, setNewContent] = useState('')
   const [newCategory, setNewCategory] = useState<ShoppingCategory>('Other')
@@ -347,7 +347,7 @@ export function useShoppingList(
   const completedItems = items.filter(i => i.isCompleted)
   const grouped = groupByCategory(items, categoryOrder)
   const recipeGroups = groupByRecipe(items.filter(i => !i.isCompleted))
-  const activeCategoryOrder = categoryOrder.filter(c => categories.includes(c))
+  const activeCategoryOrder = categoryOrder
 
   return {
     // State
