@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback, useEffect, useRef } from 'react'
+import { useState, useTransition, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   PointerSensor,
   KeyboardSensor,
@@ -23,6 +23,7 @@ export function useShoppingList(
   listId: string,
   initialItems: ListItemShape[],
   initialCategoryOrder: string[] | null,
+  onNonCompletedCountChange?: (count: number) => void,
 ) {
   const lastMutAt = useRef(0)
   const shouldSkipServerUpdate = useCallback(() => Date.now() - lastMutAt.current < 3000, [])
@@ -348,6 +349,9 @@ export function useShoppingList(
   const grouped = groupByCategory(items, categoryOrder)
   const recipeGroups = groupByRecipe(items.filter(i => !i.isCompleted))
   const activeCategoryOrder = categoryOrder
+
+  const nonCompletedCount = useMemo(() => items.filter(i => !i.isCompleted).length, [items])
+  useEffect(() => { onNonCompletedCountChange?.(nonCompletedCount) }, [nonCompletedCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     // State

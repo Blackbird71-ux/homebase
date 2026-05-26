@@ -380,6 +380,9 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
                 if (!activeList.categoryOrder) return null
                 try { return JSON.parse(activeList.categoryOrder) } catch { return null }
               })()}
+              onNonCompletedCountChange={(count) =>
+                setLists(prev => prev.map(l => l.id === activeList.id ? { ...l, _count: { items: count } } : l))
+              }
             />
           </>
         ) : (

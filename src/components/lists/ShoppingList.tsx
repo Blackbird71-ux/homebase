@@ -31,9 +31,10 @@ interface ShoppingListProps {
   listId: string
   initialItems: ListItemShape[]
   initialCategoryOrder: string[] | null
+  onNonCompletedCountChange?: (count: number) => void
 }
 
-export function ShoppingList({ listId, initialItems, initialCategoryOrder }: ShoppingListProps) {
+export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNonCompletedCountChange }: ShoppingListProps) {
   const {
     items,
     viewMode, setViewMode,
@@ -68,7 +69,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder }: Sho
     grouped,
     recipeGroups,
     activeCategoryOrder,
-  } = useShoppingList(listId, initialItems, initialCategoryOrder)
+  } = useShoppingList(listId, initialItems, initialCategoryOrder, onNonCompletedCountChange)
 
   return (
     <div className="flex flex-col gap-2 sm:gap-4">
