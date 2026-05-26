@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -82,5 +83,6 @@ export async function POST(req: Request) {
     { export: { listId: resolvedList.id, listName: resolvedList.name, mode, itemCount: items.length } }
   )
 
+  revalidatePath('/lists')
   return NextResponse.json({ listId: resolvedList.id, itemCount: items.length })
 }
