@@ -1132,5 +1132,21 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
-*Last updated: 2026-05-24. Maintained by the development team — update on every significant feature or bug fix.*
+### 12.21 Passive Poll Overwrites In-Flight Local Mutations — Fixed 2026-05-26
+
+**Problem:** `useOfflineQueue` runs a 30-second polling loop that calls `setItems(parseServerItems(raw))` unconditionally. If the GET response arrives after a local mutation has already updated the React state (e.g. `clearCompleted` filtered out 36 items), the stale server response replaces the correct local state — restoring the just-deleted items on screen without any navigation.
+
+**Root cause:** The GET was initiated N seconds before the DELETE completed. By the time the response arrived, the local state was correct. But the poll replaced it with a pre-delete snapshot.
+
+**Fix shipped 2026-05-26:** Added a `lastMutAt` ref in `useShoppingList`. All mutation functions (`toggleItem`, `addItem`, `deleteItem`, `clearCompleted`, `toggleLock`, `changeItemCategory`) stamp this ref on entry. The poll and `SHOPPING_LIST_UPDATED` listener skip `setItems` if a mutation occurred in the last 3 seconds (checked at both request-initiation time and response-arrival time). `flushQueueAndRefetch` (triggered by reconnect/tab-focus) is intentionally unguarded as it is an explicit full reconciliation after offline mutations are flushed.
+
+**The general pattern to watch for:** Any hook that runs a background polling loop and calls a full state-replacement setter (`setItems(serverData)`) can race with in-flight user mutations. Static analysis cannot detect this — it only appears under timing conditions. When reviewing polling hooks, verify that the poll either:
+1. Guards against recent mutations (timestamp or generation counter), or
+2. Performs a merge rather than a full replacement (add server-only items, remove locally-absent items, preserve local state for items present in both).
+
+**Affected module:** `src/hooks/lists/useOfflineQueue.ts`, `src/hooks/lists/useShoppingList.ts`
+
+---
+
+*Last updated: 2026-05-26. Maintained by the development team — update on every significant feature or bug fix.*
 
