@@ -82,6 +82,29 @@ export async function GET() {
     )
   }
 
+  // If no system_ categories exist yet (legacy families pre-dating the system_ convention),
+  // create them now so the shopping list always has the base categories available.
+  const hasSystemCats = existingCategories.some((cat: any) => cat.key.startsWith('system_'))
+  if (!hasSystemCats) {
+    for (let i = 0; i < DEFAULT_SHOPPING_CATEGORIES.length; i++) {
+      const categoryName = DEFAULT_SHOPPING_CATEGORIES[i]
+      try {
+        const created = await (prisma as any).ingredientCategory.create({
+          data: {
+            key: `system_${categoryName.toLowerCase()}`,
+            category: categoryName,
+            sortOrder: i * 10,
+            isCustom: false,
+            familyId: user.familyId,
+          },
+        })
+        existingCategories.push(created)
+      } catch {
+        // Already exists — skip
+      }
+    }
+  }
+
   // Filter out keyword mappings (only return categories that start with 'system_' or are custom)
   const categoriesOnly = existingCategories.filter((cat: any) =>
     cat.key.startsWith('system_') || cat.isCustom
