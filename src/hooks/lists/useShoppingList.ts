@@ -26,7 +26,8 @@ export function useShoppingList(
   onNonCompletedCountChange?: (count: number) => void,
 ) {
   const lastMutAt = useRef(0)
-  const shouldSkipServerUpdate = useCallback(() => Date.now() - lastMutAt.current < 3000, [])
+  const pendingMutations = useRef(0)
+  const shouldSkipServerUpdate = useCallback(() => pendingMutations.current > 0 || Date.now() - lastMutAt.current < 3000, [])
 
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [viewMode, setViewMode] = useState<'aisle' | 'recipe'>('aisle')
@@ -250,11 +251,17 @@ export function useShoppingList(
 
   async function deleteItem(id: string) {
     lastMutAt.current = Date.now()
-    const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setItems(prev => prev.filter(i => i.id !== id))
-    } else {
-      toast.error('Failed to save. Please try again.')
+    pendingMutations.current++
+    try {
+      const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setItems(prev => prev.filter(i => i.id !== id))
+      } else {
+        toast.error('Failed to save. Please try again.')
+      }
+    } finally {
+      pendingMutations.current--
+      lastMutAt.current = Date.now()
     }
   }
 
@@ -334,11 +341,17 @@ export function useShoppingList(
 
   async function clearCompleted() {
     lastMutAt.current = Date.now()
-    const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
-    if (res.ok) {
-      setItems(prev => prev.filter(i => !(i.isCompleted && !i.isLocked)))
-    } else {
-      toast.error('Failed to save. Please try again.')
+    pendingMutations.current++
+    try {
+      const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
+      if (res.ok) {
+        setItems(prev => prev.filter(i => !(i.isCompleted && !i.isLocked)))
+      } else {
+        toast.error('Failed to save. Please try again.')
+      }
+    } finally {
+      pendingMutations.current--
+      lastMutAt.current = Date.now()
     }
   }
 
