@@ -1148,17 +1148,28 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
-### 12.22 Shopping List Category Order Ignored After Settings Page Change — Fixed 2026-05-27
+### 12.22 Shopping List Category Order / Custom Category sortOrder Bugs — Fixed 2026-05-27, revised 2026-05-28
 
-**Problem:** The global category sort order set on Settings > Categories was not reflected in shopping lists once a list had been previously opened. The list appeared in a stale order, and different family members could see different orders.
+**Problem A:** The global category sort order set on Settings > Categories was not reflected in shopping lists that had no per-list saved order. The list stayed on `DEFAULT_SHOPPING_CATEGORIES` regardless of Settings changes.
 
-**Root cause:** `useShoppingList.fetchCategories` had a branch: if `initialCategoryOrder !== null` (i.e., the list had ever been saved with a custom order), it would preserve the existing React state and only append new categories — completely ignoring the fresh API sort order.
+**Problem B (introduced while fixing A):** The first fix made `setCategoryOrder` always use the global API order, overriding per-list saved orders. This broke lists that had a saved drag order (items that previously fell to "Other" because their category wasn't in the narrow saved order now appeared under potentially-wrong category headings).
 
-**Fix shipped 2026-05-27:** Removed the branch. `setCategoryOrder` now always rebuilds from the global API order, appending only in-session extra categories (those present in local state but not yet in the global set) at the end.
+**Problem C (related):** Custom categories created via `handleAddShoppingCategory` (e.g. from recipe imports) were POSTed without a `sortOrder`, defaulting to `0` — the same as system category "Produce". Alphabetically they appeared before Produce ("Condiments And Oils" < "Produce"), so the global API order put them first.
 
-**Pattern to watch for:** Any hook that fetches a global ordering and conditionally skips applying it when local state exists will silently diverge from the source of truth. The rule: global sort order from the API is always authoritative; local extras append, they don't override.
+**Root causes:**
+- A: `fetchCategories` always preserved existing state when `initialCategoryOrder` was non-null, ignoring the global API order.
+- B: Over-correction — the fix removed all conditional logic, always overriding per-list orders.
+- C: `POST /api/ingredient-categories` used `sortOrder: sortOrder ?? 0`; no caller passed a sortOrder.
 
-**Affected file:** `src/hooks/lists/useShoppingList.ts`
+**Fix shipped 2026-05-28:**
+- `setCategoryOrder` now branches on whether a per-list saved order exists: if yes, preserve it and only append new global categories; if no, use the global API order in full.
+- `POST /api/ingredient-categories` now computes `maxSortOrder + 10` for the family when no `sortOrder` is supplied — new custom categories always land at the end.
+
+**Pattern to watch for:**
+- Never override per-list saved state with global state without checking whether a local customisation exists.
+- `POST` endpoints that create ordered records must default to `maxSortOrder + 1` (or +10), not 0.
+
+**Affected files:** `src/hooks/lists/useShoppingList.ts`, `src/app/api/ingredient-categories/route.ts`
 
 ---
 

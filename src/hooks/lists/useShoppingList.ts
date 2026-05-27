@@ -111,8 +111,12 @@ export function useShoppingList(
           setAisleMap(aisleMapping)
 
           setCategoryOrder(current => {
-            // Always follow the global sort order from the API (reflects settings page changes).
-            // Preserve any in-session extra categories not yet in the global set at the end.
+            if (initialCategoryOrder && initialCategoryOrder.length > 0) {
+              // Per-list saved order exists — preserve it, only append categories new to the global set.
+              const newCats = categoryNames.filter(c => !current.includes(c))
+              return newCats.length > 0 ? [...current, ...newCats] : current
+            }
+            // No per-list saved order — use the global Settings order directly.
             const extraCats = current.filter(c => !categoryNames.includes(c))
             return extraCats.length > 0 ? [...categoryNames, ...extraCats] : categoryNames
           })

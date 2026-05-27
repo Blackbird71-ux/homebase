@@ -188,12 +188,21 @@ export async function POST(req: Request) {
       )
     }
 
+    let resolvedSortOrder = sortOrder
+    if (resolvedSortOrder == null) {
+      const agg = await (prisma as any).ingredientCategory.aggregate({
+        where: { familyId: user.familyId },
+        _max: { sortOrder: true },
+      })
+      resolvedSortOrder = ((agg._max.sortOrder as number | null) ?? 0) + 10
+    }
+
     console.log('POST /api/ingredient-categories - Creating new category')
     const ingredientCategory = await (prisma as any).ingredientCategory.create({
       data: {
         key: trimmedKey,
         category: trimmedCategory,
-        sortOrder: sortOrder ?? 0,
+        sortOrder: resolvedSortOrder,
         isCustom: true,
         familyId: user.familyId,
       },
