@@ -1190,5 +1190,35 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
+### 12.25 Non-Optimistic Mutations Race with the Background Poll — Fixed 2026-05-27
+
+**Problem:** The 30-second background poll (in `useOfflineQueue`) can fire after the 3-second `lastMutAt` guard expires but before a slow server response returns. This causes the poll's `setItems(allItems)` to overwrite optimistic or in-progress local state — the user sees a flash of the "old" server state before the mutation response restores it.
+
+**Specific case:** `clearCompleted` deletes 81 items. User clears them at t=0. At t=3s the guard expires. Poll fires, GET returns all 81 items, `setItems` restores them (flash). At t=~4s the POST response arrives, `setItems(filter)` removes them again.
+
+**Root cause:** `lastMutAt` only guards for 3 seconds from mutation *start*. For server-wait mutations (delete, clear-completed), the guard expires before the response arrives.
+
+**Fix shipped 2026-05-27:** Added `pendingMutations` ref counter in `useShoppingList`. `shouldSkipServerUpdate()` returns `true` when `pendingMutations.current > 0`. Every non-optimistic mutation (`deleteItem`, `clearCompleted`) increments the counter before the fetch and decrements it in a `finally` block (also re-stamps `lastMutAt` on completion to extend the guard window).
+
+**Pattern to watch for:** Any async mutation that waits for a server response before calling `setItems` must use the `pendingMutations` counter. Optimistic mutations (like `toggleItem`) that update state immediately and roll back on failure do NOT need it — the state is already correct before the poll can see stale data.
+
+**Affected file:** `src/hooks/lists/useShoppingList.ts`
+
+---
+
+### 12.26 System Categories Cannot Be Drag-Reordered — Fixed 2026-05-27
+
+**Problem:** The Settings → Ingredient Categories page blocked drag-and-drop for system categories (`isSystem: true`), making the configured sort order useless since most categories are system categories.
+
+**Root cause:** `useSortable({ disabled: category.isSystem })` was set in `SortableRow`, and the drag attributes/listeners were conditionally omitted from the grip button for system categories. The reorder API (`/api/ingredient-categories/reorder`) already accepted system category IDs with no restriction.
+
+**Fix shipped 2026-05-27:** Removed `disabled: category.isSystem` from `useSortable` and unconditionally spread `{...attributes} {...listeners}` on the grip button. Edit and Delete remain disabled for system categories — only drag was unlocked.
+
+**Pattern to watch for:** Never restrict drag on a row just because edit/delete are restricted. Reordering is a separate capability from editing content.
+
+**Affected file:** `src/components/categories/CategoryManager.tsx`
+
+---
+
 *Last updated: 2026-05-27. Maintained by the development team — update on every significant feature or bug fix.*
 

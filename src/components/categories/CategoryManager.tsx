@@ -52,7 +52,6 @@ interface SortableRowProps {
 function SortableRow({ category, onEdit, onDelete }: SortableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: category.id,
-    disabled: category.isSystem,
   })
 
   const style = {
@@ -71,10 +70,10 @@ function SortableRow({ category, onEdit, onDelete }: SortableRowProps) {
     >
       <div className="col-span-1 flex items-center">
         <button
-          {...(category.isSystem ? {} : { ...attributes, ...listeners })}
-          className={`${category.isSystem ? 'cursor-not-allowed text-muted-foreground/30' : 'cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground'}`}
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
           aria-label="Drag to reorder"
-          tabIndex={category.isSystem ? -1 : 0}
         >
           <GripVertical className="h-4 w-4" />
         </button>
@@ -396,7 +395,7 @@ export function CategoryManager() {
         <CardHeader>
           <CardTitle>All Categories</CardTitle>
           <CardDescription>
-            System categories (like "Other") cannot be edited or deleted. Drag rows to reorder.
+            System categories cannot be edited or deleted, but can be dragged to reorder.
           </CardDescription>
           <div className="relative mt-4">
             <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
