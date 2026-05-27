@@ -1138,7 +1138,7 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 **Root cause:** The GET was initiated N seconds before the DELETE completed. By the time the response arrived, the local state was correct. But the poll replaced it with a pre-delete snapshot.
 
-**Fix shipped 2026-05-26:** Added a `lastMutAt` ref in `useShoppingList`. All mutation functions (`toggleItem`, `addItem`, `deleteItem`, `clearCompleted`, `toggleLock`, `changeItemCategory`) stamp this ref on entry. The poll and `SHOPPING_LIST_UPDATED` listener skip `setItems` if a mutation occurred in the last 3 seconds (checked at both request-initiation time and response-arrival time). `flushQueueAndRefetch` (triggered by reconnect/tab-focus) is intentionally unguarded as it is an explicit full reconciliation after offline mutations are flushed.
+**Fix shipped 2026-05-26:** Added a `lastMutAt` ref in `useShoppingList`. All mutation functions (`toggleItem`, `addItem`, `deleteItem`, `clearCompleted`, `toggleLock`, `changeItemCategory`, `handleDragEnd` item case, `handleItemSaved`) stamp this ref on entry. The poll and `SHOPPING_LIST_UPDATED` listener skip `setItems` if a mutation occurred in the last 3 seconds (checked at both request-initiation time and response-arrival time). `flushQueueAndRefetch` (triggered by reconnect/tab-focus) is intentionally unguarded as it is an explicit full reconciliation after offline mutations are flushed.
 
 **The general pattern to watch for:** Any hook that runs a background polling loop and calls a full state-replacement setter (`setItems(serverData)`) can race with in-flight user mutations. Static analysis cannot detect this — it only appears under timing conditions. When reviewing polling hooks, verify that the poll either:
 1. Guards against recent mutations (timestamp or generation counter), or
@@ -1148,5 +1148,47 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
-*Last updated: 2026-05-26. Maintained by the development team — update on every significant feature or bug fix.*
+### 12.22 Shopping List Category Order Ignored After Settings Page Change — Fixed 2026-05-27
+
+**Problem:** The global category sort order set on Settings > Categories was not reflected in shopping lists once a list had been previously opened. The list appeared in a stale order, and different family members could see different orders.
+
+**Root cause:** `useShoppingList.fetchCategories` had a branch: if `initialCategoryOrder !== null` (i.e., the list had ever been saved with a custom order), it would preserve the existing React state and only append new categories — completely ignoring the fresh API sort order.
+
+**Fix shipped 2026-05-27:** Removed the branch. `setCategoryOrder` now always rebuilds from the global API order, appending only in-session extra categories (those present in local state but not yet in the global set) at the end.
+
+**Pattern to watch for:** Any hook that fetches a global ordering and conditionally skips applying it when local state exists will silently diverge from the source of truth. The rule: global sort order from the API is always authoritative; local extras append, they don't override.
+
+**Affected file:** `src/hooks/lists/useShoppingList.ts`
+
+---
+
+### 12.23 EditItemDialog Drops unitPrice/quantity from Local State — Fixed 2026-05-27
+
+**Problem:** After editing an item's price or quantity in `EditItemDialog`, the category header's price subtotals remained stale — showing the old value until a page reload.
+
+**Root cause:** `EditItemDialog.onSaved` callback did not include `unitPrice` or `quantity` parameters. The dialog's `handleSave` called `onSaved` without reading the PATCH response body, so the saved values were never propagated back to local state in `useShoppingList.handleItemSaved`.
+
+**Fix shipped 2026-05-27:** `handleSave` now reads `await res.json()` on success and passes `saved.unitPrice` and `saved.quantity` through `onSaved`. `handleItemSaved` extended to accept and apply these fields.
+
+**Pattern to watch for:** When a dialog PATCHes an item and calls a parent callback on success, that callback must carry back any server-computed or server-normalised field values. Calling `onSaved` with only the fields the user typed (not what the server returned) leaves local state inconsistent with DB state.
+
+**Affected files:** `src/components/lists/EditItemDialog.tsx`, `src/hooks/lists/useShoppingList.ts`
+
+---
+
+### 12.24 ExportGroceriesModal Hardcodes Category Order — Fixed 2026-05-27
+
+**Problem:** The category dropdown in the meal-plan → shopping list export modal always showed categories in the hardcoded `DEFAULT_SHOPPING_CATEGORIES` order, regardless of the sort order configured on the Settings page.
+
+**Root cause:** The fetch callback rebuilt the category list as `[...DEFAULT_SHOPPING_CATEGORIES, ...extras]` instead of using the API response order (which reflects `IngredientCategory.sortOrder`).
+
+**Fix shipped 2026-05-27:** Now uses the API response order directly (`[...new Set(data.map(c => c.category))]`), with 'Other' appended only if absent.
+
+**Pattern to watch for:** Any component that fetches `/api/ingredient-categories` and manually rebuilds an ordered list from `DEFAULT_SHOPPING_CATEGORIES` will diverge from the user's configured order. Always use the API response order as the source of truth.
+
+**Affected file:** `src/components/meal-plan/ExportGroceriesModal.tsx`
+
+---
+
+*Last updated: 2026-05-27. Maintained by the development team — update on every significant feature or bug fix.*
 
