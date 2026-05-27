@@ -28,7 +28,7 @@ interface EditItemDialogProps {
   initialCategory: string | null
   availableCategories: string[]
   listId: string
-  onSaved: (id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null) => void
+  onSaved: (id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null, unitPrice?: number | null, quantity?: number | null) => void
   onCategoryAdded?: (name: string) => Promise<void>
   initialUnitPrice?: number | null
   initialQuantity?: number | null
@@ -123,7 +123,8 @@ export function EditItemDialog({
       })
 
       if (res.ok) {
-        onSaved(itemId, content.trim(), category === 'Other' ? null : category, resolvedDueDate, resolvedAssignee)
+        const saved = await res.json()
+        onSaved(itemId, content.trim(), category === 'Other' ? null : category, resolvedDueDate, resolvedAssignee, saved.unitPrice ?? null, saved.quantity ?? null)
         onOpenChange(false)
         toast.success('Item updated')
       } else {

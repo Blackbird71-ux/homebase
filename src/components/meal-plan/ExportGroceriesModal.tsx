@@ -87,10 +87,9 @@ export function ExportGroceriesModal({
       .then((r) => r.json())
       .then((data: IngredientCategory[]) => {
         if (Array.isArray(data) && data.length > 0) {
-          // Build ordered list: system defaults first, then custom ones not already in defaults
-          const names = data.map((c) => c.category)
-          const extras = names.filter((n) => !DEFAULT_SHOPPING_CATEGORIES.includes(n))
-          setAllCategories([...DEFAULT_SHOPPING_CATEGORIES, ...extras])
+          const names = [...new Set(data.map((c) => c.category))]
+          if (!names.includes('Other')) names.push('Other')
+          setAllCategories(names)
         }
       })
       .catch(() => { /* keep defaults */ })

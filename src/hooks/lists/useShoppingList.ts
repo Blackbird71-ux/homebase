@@ -110,13 +110,10 @@ export function useShoppingList(
           setAisleMap(aisleMapping)
 
           setCategoryOrder(current => {
-            if (initialCategoryOrder === null) {
-              // No saved per-list order — use the global sort order from the API
-              return categoryNames
-            }
-            // Per-list order exists — append any newly added global categories
-            const newCats = categoryNames.filter((c: string) => !current.includes(c))
-            return newCats.length > 0 ? [...current, ...newCats] : current
+            // Always follow the global sort order from the API (reflects settings page changes).
+            // Preserve any in-session extra categories not yet in the global set at the end.
+            const extraCats = current.filter(c => !categoryNames.includes(c))
+            return extraCats.length > 0 ? [...categoryNames, ...extraCats] : categoryNames
           })
         }
       } catch {
@@ -149,6 +146,7 @@ export function useShoppingList(
       setCategoryOrder(newOrder)
       debouncedSaveCategoryOrder(newOrder)
     } else if (activeType === 'item') {
+      lastMutAt.current = Date.now()
       const activeCategory = active.data.current?.category as string | null | undefined
       const catItems = items.filter(i => !i.isCompleted && i.category === activeCategory)
       const oldIndex = catItems.findIndex(i => i.id === active.id)
@@ -295,8 +293,9 @@ export function useShoppingList(
     if (item) { setEditItemId(id); setEditItemContent(item.content); setEditItemCategory(item.category || null) }
   }
 
-  function handleItemSaved(id: string, content: string, category: string | null) {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, content, category } : i))
+  function handleItemSaved(id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null, unitPrice?: number | null, quantity?: number | null) {
+    lastMutAt.current = Date.now()
+    setItems(prev => prev.map(i => i.id === id ? { ...i, content, category, unitPrice: unitPrice ?? i.unitPrice, quantity: quantity ?? i.quantity } : i))
   }
 
   async function handleAddShoppingCategory(name: string) {
