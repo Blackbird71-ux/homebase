@@ -32,7 +32,7 @@ export async function PUT(
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
   const body = await req.json()
-  const { title, description, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails } = body
+  const { title, description, location, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails } = body
 
   const existing = await prisma.event.findFirst({
     where: { id, familyId: user.familyId },
@@ -53,6 +53,7 @@ export async function PUT(
     data: {
       ...(title && { title }),
       ...(description !== undefined && { description }),
+      ...(location !== undefined && { location: location ?? null }),
       ...(start && { start: new Date(start) }),
       ...(end && { end: new Date(end) }),
       ...(isAllDay !== undefined && { isAllDay }),

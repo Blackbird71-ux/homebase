@@ -68,6 +68,7 @@ export function maskPersonalEvent(event: EventRow, viewerUserId: string, creator
       ...event,
       title: 'Private event',
       description: null,
+      location: null,
       category: null,
       color: null,
       isBusy: true,

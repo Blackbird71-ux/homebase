@@ -51,6 +51,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
   const [emailReminder, setEmailReminder] = useState(false)
   const [emailReminderHours, setEmailReminderHours] = useState('24')
   const [emailReminderEmails, setEmailReminderEmails] = useState('')
+  const [location, setLocation] = useState('')
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -83,6 +84,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setEmailReminderHours(String((ev.emailReminderHours as number) ?? 24))
       const extraEmails = ev.emailReminderEmails as string | null
       setEmailReminderEmails(extraEmails ? (JSON.parse(extraEmails) as string[]).join(', ') : '')
+      setLocation(event.location ?? '')
     } else {
       const d = defaultDate ?? new Date()
       setTitle('')
@@ -98,6 +100,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setEmailReminder(false)
       setEmailReminderHours('24')
       setEmailReminderEmails('')
+      setLocation('')
     }
     setError('')
   }, [event, defaultDate, open])
@@ -117,6 +120,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       const body: Record<string, unknown> = {
         title,
         description,
+        location: location || null,
         category,
         color: color || null,
         isPersonal,
@@ -270,6 +274,10 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
               <div className="space-y-1">
                 <Label>Title</Label>
                 <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title" />
+              </div>
+              <div className="space-y-1">
+                <Label>Location <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                <Input value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. 123 Main St or Zoom link" />
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="allday" checked={isAllDay}

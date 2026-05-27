@@ -129,6 +129,8 @@ model Event {
   seriesId             String?                // ID linking events in a series
   isRecurring          Boolean                @default(false)
 
+  location             String?
+
   // Email reminder fields
   emailReminder        Boolean                @default(false)  // Send reminder email before event
   emailReminderHours   Int                    @default(24)     // Hours before start to send reminder

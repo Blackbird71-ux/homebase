@@ -375,7 +375,7 @@ export async function POST(req: Request) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { title, description, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails } = body
+  const { title, description, location, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails } = body
 
   if (!title || !start || !end) {
     return NextResponse.json({ error: 'title, start, and end are required' }, { status: 400 })
@@ -390,6 +390,7 @@ export async function POST(req: Request) {
     data: {
       title,
       description: description ?? null,
+      location: location ?? null,
       start: new Date(start),
       end: new Date(end),
       isAllDay: isAllDay ?? false,
