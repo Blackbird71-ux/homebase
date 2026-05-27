@@ -1148,7 +1148,7 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
-### 12.22 Shopping List Category Order / Custom Category sortOrder Bugs — Fixed 2026-05-27, revised 2026-05-28
+### 12.22 Shopping List Category Order / Custom Category sortOrder Bugs — Fixed 2026-05-27, revised 2026-05-28, revised 2026-05-28
 
 **Problem A:** The global category sort order set on Settings > Categories was not reflected in shopping lists that had no per-list saved order. The list stayed on `DEFAULT_SHOPPING_CATEGORIES` regardless of Settings changes.
 
@@ -1156,20 +1156,32 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 **Problem C (related):** Custom categories created via `handleAddShoppingCategory` (e.g. from recipe imports) were POSTed without a `sortOrder`, defaulting to `0` — the same as system category "Produce". Alphabetically they appeared before Produce ("Condiments And Oils" < "Produce"), so the global API order put them first.
 
+**Problem D (duplicate records causing settings page to reset):** When multiple `IngredientCategory` records share the same `category` name (e.g., a `system_` record and a keyword mapping previously promoted to `isCustom=true` by the old `learn` API), the GET route's dedup picks whichever has the lowest `sortOrder`. After the reorder PATCH updates one record's `sortOrder`, the other duplicate (with its original low `sortOrder`) can become the dedup winner on the next GET, making the settings page appear to revert.
+
+**Problem E (per-list saved order survives global settings reorder):** Because the `useShoppingList` merge logic preserves per-list saved `categoryOrder` when it exists, a global reorder in Settings had no effect on any list that had ever been dragged within the list view.
+
 **Root causes:**
 - A: `fetchCategories` always preserved existing state when `initialCategoryOrder` was non-null, ignoring the global API order.
 - B: Over-correction — the fix removed all conditional logic, always overriding per-list orders.
 - C: `POST /api/ingredient-categories` used `sortOrder: sortOrder ?? 0`; no caller passed a sortOrder.
+- D: The reorder PATCH updated only the specific record by ID, leaving duplicate records with stale `sortOrder` values.
+- E: Per-list `categoryOrder` on `List` records was never cleared when global settings changed.
 
-**Fix shipped 2026-05-28:**
-- `setCategoryOrder` now branches on whether a per-list saved order exists: if yes, preserve it and only append new global categories; if no, use the global API order in full.
+**Fix shipped 2026-05-28 (D + E):**
+- Reorder PATCH now fetches the category names for all IDs being reordered, then uses `updateMany` to sync `sortOrder` across ALL records sharing each category name. Duplicates can no longer diverge.
+- Reorder PATCH also calls `prisma.list.updateMany({ where: { familyId }, data: { categoryOrder: null } })` so all per-list saved orders are cleared. The next load of any shopping list uses the fresh global order; per-list drag still works and saves a new order from that point.
+
+**Earlier fix shipped 2026-05-28 (A–C):**
+- `setCategoryOrder` branches on whether a per-list saved order exists: if yes, preserve it and only append new global categories; if no, use the global API order in full. (Must preserve — removing this branch reintroduces Problem B.)
 - `POST /api/ingredient-categories` now computes `maxSortOrder + 10` for the family when no `sortOrder` is supplied — new custom categories always land at the end.
 
 **Pattern to watch for:**
 - Never override per-list saved state with global state without checking whether a local customisation exists.
 - `POST` endpoints that create ordered records must default to `maxSortOrder + 1` (or +10), not 0.
+- When a reorder PATCH can affect multiple records sharing the same display value, use `updateMany` scoped to the family — don't rely on a single-ID update.
+- When global settings change order, clear per-list overrides so the new order propagates.
 
-**Affected files:** `src/hooks/lists/useShoppingList.ts`, `src/app/api/ingredient-categories/route.ts`
+**Affected files:** `src/hooks/lists/useShoppingList.ts`, `src/app/api/ingredient-categories/route.ts`, `src/app/api/ingredient-categories/reorder/route.ts`
 
 ---
 
