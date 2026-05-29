@@ -1068,7 +1068,7 @@ export async function PATCH(request: NextRequest) {
           // function, normalised to UTC midnight (no wall-clock pollution).
           const occTemplate: OccurrenceTemplate = {
             frequency: existing.frequency,
-            interval: existing.recurrenceInterval ?? 1,
+            interval: parseInt(existing.recurrenceInterval ?? '1') || 1,
             dayOfMonth: existing.dayOfMonth,
             monthOfYear: existing.monthOfYear,
             startDate: existing.nextExpectedDate,

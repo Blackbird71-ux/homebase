@@ -1150,7 +1150,7 @@ export async function PATCH(request: NextRequest) {
             // parent below (outside the tx, gated on spawnedBillId).
             const occTemplate: OccurrenceTemplate = {
               frequency: existing.frequency,
-              interval: existing.recurrenceInterval ?? 1,
+              interval: parseInt(existing.recurrenceInterval ?? '1') || 1,
               dayOfMonth: existing.dayOfMonth,
               monthOfYear: existing.monthOfYear,
               startDate: existing.nextDueDate,
