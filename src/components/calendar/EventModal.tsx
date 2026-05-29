@@ -28,6 +28,16 @@ const REPEAT_OPTIONS = [
   { value: 'FREQ=YEARLY', label: 'Yearly' },
 ]
 
+const DAY_OPTIONS = [
+  { label: 'Mon', value: 'MO' },
+  { label: 'Tue', value: 'TU' },
+  { label: 'Wed', value: 'WE' },
+  { label: 'Thu', value: 'TH' },
+  { label: 'Fri', value: 'FR' },
+  { label: 'Sat', value: 'SA' },
+  { label: 'Sun', value: 'SU' },
+]
+
 interface EventModalProps {
   event?: CalendarEvent | null
   defaultDate?: Date
@@ -52,6 +62,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
   const [emailReminderHours, setEmailReminderHours] = useState('24')
   const [emailReminderEmails, setEmailReminderEmails] = useState('')
   const [location, setLocation] = useState('')
+  const [weeklyRepeatDays, setWeeklyRepeatDays] = useState<string[]>([])
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -79,6 +90,13 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setIsPersonal(event.isPersonal ?? false)
       setRecurrenceRule(event.recurrenceRule ?? '')
       setRecurrenceEndDate(event.recurrenceEndDate ? format(new Date(event.recurrenceEndDate), "yyyy-MM-dd") : '')
+      // Parse existing BYDAY days from recurrence rule
+      if (event.recurrenceRule) {
+        const byDayMatch = event.recurrenceRule.match(/BYDAY=([A-Z,]+)/i)
+        setWeeklyRepeatDays(byDayMatch ? byDayMatch[1].split(',') : [])
+      } else {
+        setWeeklyRepeatDays([])
+      }
       const ev = event as unknown as Record<string, unknown>
       setEmailReminder((ev.emailReminder as boolean) ?? false)
       setEmailReminderHours(String((ev.emailReminderHours as number) ?? 24))
@@ -101,6 +119,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setEmailReminderHours('24')
       setEmailReminderEmails('')
       setLocation('')
+      setWeeklyRepeatDays([])
     }
     setError('')
   }, [event, defaultDate, open])
@@ -142,9 +161,16 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
         body.isAllDay = isAllDay
       }
 
+      // Build the final recurrence rule, appending BYDAY for weekly with day selections
+      let finalRecurrenceRule = recurrenceRule
+      if (recurrenceRule.startsWith('FREQ=WEEKLY') && weeklyRepeatDays.length > 0) {
+        finalRecurrenceRule = recurrenceRule.replace(/;BYDAY=[A-Z,]+/i, '')
+        finalRecurrenceRule += `;BYDAY=${weeklyRepeatDays.join(',')}`
+      }
+
       // Only send recurrence fields if a rule is selected
       if (recurrenceRule) {
-        body.recurrenceRule = recurrenceRule
+        body.recurrenceRule = finalRecurrenceRule
         body.isRecurring = true
         if (recurrenceEndDate) {
           body.recurrenceEndDate = new Date(recurrenceEndDate + 'T23:59:59').toISOString()
@@ -388,6 +414,41 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                   </SelectContent>
                 </Select>
               </div>
+              {recurrenceRule && recurrenceRule.startsWith('FREQ=WEEKLY') && (
+                <div className="space-y-1.5">
+                  <Label>Repeat on days</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DAY_OPTIONS.map(({ label, value }) => {
+                      const isSelected = weeklyRepeatDays.includes(value)
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setWeeklyRepeatDays(prev =>
+                              prev.includes(value)
+                                ? prev.filter(d => d !== value)
+                                : [...prev, value]
+                            )
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-background text-muted-foreground border-border hover:border-muted-foreground'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {weeklyRepeatDays.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No days selected — event repeats every 7 days from the start date
+                    </p>
+                  )}
+                </div>
+              )}
               {recurrenceRule && (
                 <div className="space-y-1">
                   <Label>End repeat (optional)</Label>
