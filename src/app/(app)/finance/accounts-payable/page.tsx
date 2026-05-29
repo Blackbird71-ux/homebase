@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -111,6 +113,7 @@ export default function AccountsPayablePage() {
   const [data, setData]         = useState<ApData | null>(null)
   const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const tz = useFamilyTimezone()
 
   // Load entities once on mount
   useEffect(() => {
@@ -308,9 +311,9 @@ export default function AccountsPayablePage() {
                                 </a>
                               </span>
                               <span className="text-muted-foreground mt-0.5 flex items-center gap-2">
-                                Invoice {format(parseISO(item.invoiceDate), 'd MMM yyyy')}
+                                Invoice {formatInTz(new Date(item.invoiceDate), tz, { day: 'numeric', month: 'short', year: 'numeric' })}
                                 {item.nextDueDate && (
-                                  <span>Due {format(parseISO(item.nextDueDate), 'd MMM yyyy')}</span>
+                                  <span>Due {formatInTz(new Date(item.nextDueDate), tz, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                 )}
                                 {item.reference && <span className="font-mono">{item.reference}</span>}
                                 {item.categoryName && <span>{item.categoryName}</span>}

@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -97,6 +99,7 @@ export default function AccountsReceivablePage() {
   const [data, setData]         = useState<ArData | null>(null)
   const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const tz = useFamilyTimezone()
 
   const load = useCallback(async (date: string) => {
     setLoading(true)
@@ -271,7 +274,7 @@ export default function AccountsReceivablePage() {
                             <div className="px-4 py-2 pl-10 flex flex-col justify-center">
                               <span className="font-medium text-foreground">{item.name}</span>
                               <span className="text-muted-foreground mt-0.5 flex items-center gap-2">
-                                Invoice {format(parseISO(item.invoiceDate), 'd MMM yyyy')}
+                                Invoice {formatInTz(new Date(item.invoiceDate), tz, { day: 'numeric', month: 'short', year: 'numeric' })}
                                 {item.reference && <span className="font-mono">{item.reference}</span>}
                                 {item.categoryName && <span>{item.categoryName}</span>}
                               </span>

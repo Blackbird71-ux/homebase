@@ -7,6 +7,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/financeShared'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { AttachmentSection } from '@/components/finance/AttachmentSection'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
@@ -74,6 +76,7 @@ export function BillRow({
   glAccounts,
 }: BillRowProps) {
 
+  const tz                   = useFamilyTimezone()
   const isOneOff             = bill.billType === 'one-off'
   const hasInvoice           = bill.isGlPosted === true
   const isAttachmentOpen     = att.openEntityId === bill.id
@@ -153,9 +156,9 @@ export function BillRow({
               </button>
             )}
             {bill.billDate && (
-              <span>Invoice {format(new Date(bill.billDate), 'd MMM yyyy')} · <span className="font-bold">Due {format(nextDue, 'd MMM yyyy')}</span></span>
+              <span>Invoice {formatInTz(new Date(bill.billDate), tz, { day: 'numeric', month: 'short', year: 'numeric' })} · <span className="font-bold">Due {formatInTz(nextDue, tz, { day: 'numeric', month: 'short', year: 'numeric' })}</span></span>
             )}
-            {!bill.billDate && <span><span className="font-bold">Due {format(nextDue, 'd MMM yyyy')}</span></span>}
+            {!bill.billDate && <span><span className="font-bold">Due {formatInTz(nextDue, tz, { day: 'numeric', month: 'short', year: 'numeric' })}</span></span>}
             {bill.notes && <span className="italic truncate max-w-[120px]" title={bill.notes}>· {bill.notes}</span>}
           </div>
         </div>

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/financeShared'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { AttachmentSection } from '@/components/finance/AttachmentSection'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { useState } from 'react'
@@ -94,6 +96,7 @@ export function IncomeRow({
   onToggleInvoice: (e: IncomeEntry) => void
   att: ReturnType<typeof useAttachmentManager>
 }) {
+  const tz               = useFamilyTimezone()
   const isOneOff         = entry.incomeType === 'one-off'
   const hasRemittance    = entry.invoiceReceived
   const isAttachmentOpen = att.openEntityId === entry.id
@@ -138,7 +141,7 @@ export function IncomeRow({
             {entry.account  && <span>{entry.account.name}</span>}
             {entry.member   && <span className="text-primary">{entry.member.name}</span>}
             {entry.location && <span>{entry.location.name}</span>}
-            <span>Expected {format(nextExpected, 'd MMM yyyy')}</span>
+            <span>Expected {formatInTz(nextExpected, tz, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
             {entry.notes && <span className="italic truncate max-w-[120px]" title={entry.notes}>· {entry.notes}</span>}
           </div>
           {entry.payslip && <PayslipBadge payslip={entry.payslip} />}

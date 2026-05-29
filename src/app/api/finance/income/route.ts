@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { addMonths, addWeeks, max } from 'date-fns'
+import { getTemplate, computeNextOccurrenceDate, type OccurrenceTemplate } from '@/lib/finance-recurring-template-service'
+import { createOccurrenceDraft } from '@/lib/finance-draft-spawn-service'
+import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
 import { postPayslipReceiptJournal } from '@/lib/finance-posting'
@@ -436,23 +438,6 @@ async function deleteUnreceivedDescendants(parentId: string, familyId: string): 
   await prisma.financeIncomeEntry.deleteMany({
     where: { parentIncomeId: parentId, familyId, received: false },
   })
-}
-
-function advanceNextExpectedDate(date: Date, frequency: string): Date {
-  // Use max(date, today) to prevent spawning an occurrence with a date already in the past.
-  const referenceDate = max([date, new Date()])
-  if (frequency === 'weekly')      return addWeeks(referenceDate, 1)
-  if (frequency === 'fortnightly') return addWeeks(referenceDate, 2)
-  if (frequency === 'monthly')     return addMonths(referenceDate, 1)
-  // bimonthly = every 2 months (6×/year). date-fns addMonths already snaps
-  // end-of-month correctly (e.g. 31 Dec + 2 months → 28 Feb, not 3 Mar).
-  if (frequency === 'bimonthly')   return addMonths(referenceDate, 2)
-  if (frequency === 'quarterly')   return addMonths(referenceDate, 3)
-  if (frequency === 'halfyearly')  return addMonths(referenceDate, 6)
-  if (frequency === 'yearly')      return addMonths(referenceDate, 12)
-  // Unknown frequency — default to monthly rather than silently misbehaving.
-  console.warn(`[advanceNextExpectedDate] Unknown frequency "${frequency}" — defaulting to monthly`)
-  return addMonths(referenceDate, 1)
 }
 
 export async function PATCH(request: NextRequest) {
@@ -1055,10 +1040,47 @@ export async function PATCH(request: NextRequest) {
     // ALWAYS spawns using entry.amount (template) not actualAmount for stable forecasting.
     if (existing.incomeType !== 'one-off') {
       try {
-        const newExpectedDate = advanceNextExpectedDate(existing.nextExpectedDate, existing.frequency)
-        if (!existing.endDate || newExpectedDate <= existing.endDate) {
-          await prisma.$transaction(async (tx) => {
-            await tx.financeIncomeEntry.create({
+        if (existing.templateId) {
+          // ── Templated: spawn the next occurrence through the shared clean
+          // path (the identical draft the cron worker produces — clean
+          // UTC-midnight dates, draft journal, snapshot hash, payslip). Step
+          // cadence from the template schedule, anchored at the current
+          // occurrence date.
+          const template = await getTemplate(user.familyId, existing.templateId)
+          if (template) {
+            const next = computeNextOccurrenceDate(template, utcMidnight(existing.nextExpectedDate))
+            if (next) {
+              const occ = utcMidnight(next)
+              await prisma.$transaction(async (tx) => {
+                await createOccurrenceDraft(tx, template, occ, existing.id)
+                // Advance the template cursor atomically with the spawn so the
+                // cron does not re-spawn the same occurrence.
+                await tx.financeRecurringTemplate.update({
+                  where: { id: template.id },
+                  data: { nextOccurrenceDate: occ },
+                })
+              })
+            }
+          }
+        } else {
+          // ── Template-less recurring entry: no template drives cadence, so
+          // step from the entry's own schedule using the same clean cadence
+          // function, normalised to UTC midnight (no wall-clock pollution).
+          const occTemplate: OccurrenceTemplate = {
+            frequency: existing.frequency,
+            interval: existing.recurrenceInterval ?? 1,
+            dayOfMonth: existing.dayOfMonth,
+            monthOfYear: existing.monthOfYear,
+            startDate: existing.nextExpectedDate,
+            endMode: 'never',
+            endDate: existing.endDate,
+            totalOccurrences: null,
+            occurrencesRemaining: null,
+          }
+          const next = computeNextOccurrenceDate(occTemplate, utcMidnight(existing.nextExpectedDate))
+          const newExpectedDate = next ? utcMidnight(next) : null
+          if (newExpectedDate && (!existing.endDate || newExpectedDate <= existing.endDate)) {
+            await prisma.financeIncomeEntry.create({
               data: {
                 name: existing.name,
                 amount: existing.amount,  // template amount for forecasting
@@ -1088,20 +1110,12 @@ export async function PATCH(request: NextRequest) {
                 isTaxTracked: existing.isTaxTracked,
                 taxRate: existing.taxRate,
                 parentIncomeId: existing.id,
-                templateId: existing.templateId ?? null,
+                templateId: null,
                 status: 'draft',
                 familyId: user.familyId,
               },
             })
-            // Advance the template cursor atomically with the spawn so the cron
-            // does not re-spawn the same occurrence if this write succeeds.
-            if (existing.templateId) {
-              await tx.financeRecurringTemplate.update({
-                where: { id: existing.templateId },
-                data: { nextOccurrenceDate: newExpectedDate },
-              })
-            }
-          })
+          }
         }
       } catch (err) {
         console.error('[income PATCH] Failed to spawn next occurrence — receipt was committed:', err)

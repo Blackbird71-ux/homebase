@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { addMonths, addWeeks, max } from 'date-fns'
+import { subDays } from 'date-fns'
+import { getTemplate, computeNextOccurrenceDate, type OccurrenceTemplate } from '@/lib/finance-recurring-template-service'
+import { createOccurrenceDraft } from '@/lib/finance-draft-spawn-service'
+import { utcMidnight } from '@/lib/timezone'
 import {
   ensureAccountsPayableCategory,
 } from '@/lib/finance-opening-balance'
@@ -165,24 +168,6 @@ async function upsertBillDraftJournal(
     })
   })
   return entry.id
-}
-
-function advanceNextDueDate(date: Date, frequency: string): Date {
-  // Use max(date, today) to avoid spawning a bill that's already overdue
-  const referenceDate = max([date, new Date()])
-  if (frequency === 'weekly')      return addWeeks(referenceDate, 1)
-  if (frequency === 'fortnightly') return addWeeks(referenceDate, 2)
-  if (frequency === 'monthly')     return addMonths(referenceDate, 1)
-  // bimonthly = every 2 months (6×/year). date-fns addMonths already snaps
-  // end-of-month correctly (e.g. 31 Dec + 2 months → 28 Feb, not 3 Mar).
-  if (frequency === 'bimonthly')   return addMonths(referenceDate, 2)
-  if (frequency === 'quarterly')   return addMonths(referenceDate, 3)
-  if (frequency === 'halfyearly')  return addMonths(referenceDate, 6)
-  if (frequency === 'yearly')      return addMonths(referenceDate, 12)
-  // Unknown frequency — default to monthly rather than silently misbehaving.
-  // Log a warning so misconfigured bills are visible in container logs.
-  console.warn(`[advanceNextDueDate] Unknown frequency "${frequency}" — defaulting to monthly`)
-  return addMonths(referenceDate, 1)
 }
 
 // Generate N sequential journal references in one shot.
@@ -1137,51 +1122,82 @@ export async function PATCH(request: NextRequest) {
         // Spawn next occurrence INSIDE the transaction — prevents disappearing bill bug
         // where the payment commits but the spawn fails (Bug 2 fix)
         if (existing.billType !== 'one-off' && isFullyPaid) {
-          const newDueDate = advanceNextDueDate(existing.nextDueDate, existing.frequency)
-          if (!existing.endDate || newDueDate <= existing.endDate) {
-            const spawned = await tx.financeRecurringBill.create({
-              data: {
-                name: existing.name,
-                amount: existing.amount,
-                accountId: existing.accountId,
-                categoryId: existing.categoryId,
-                vendorId: existing.vendorId,
-                frequency: existing.frequency,
-                dayOfMonth: existing.dayOfMonth,
-                monthOfYear: existing.monthOfYear,
-                nextDueDate: newDueDate,
-                endDate: existing.endDate,
-                isActive: existing.isActive,
-                autoPay: existing.autoPay,
-                emailReminder: existing.emailReminder,
-                reminderDays: existing.reminderDays,
-                notes: existing.notes,
-                memberId: existing.memberId,
-                locationId: existing.locationId,
-                billType: existing.billType,
-                recurrenceInterval: existing.recurrenceInterval,
-                invoiceReceived: false,
-                invoiceReceivedDate: null,
-                paid: false,
-                paidDate: null,
-                parentBillId: existing.id,
-                templateId: existing.templateId ?? null,
-                status: 'draft',
-                entityId: existing.entityId,
-                taxClassification: existing.taxClassification,
-                familyId: user.familyId,
-              },
-              select: { id: true },
-            })
-            spawnedBillId = spawned.id
-            spawnedBillDueDate = newDueDate
-            // Advance the template cursor so the cron does not re-spawn the same
-            // occurrence (mirrors the same fix in income/route.ts).
-            if (existing.templateId) {
-              await tx.financeRecurringTemplate.update({
-                where: { id: existing.templateId },
-                data: { nextOccurrenceDate: newDueDate },
+          if (existing.templateId) {
+            // ── Templated: spawn via the shared clean path (the identical draft
+            // the cron worker produces — clean UTC-midnight billDate/nextDueDate,
+            // draft journal, snapshot hash). Step cadence from the
+            // occurrence/billDate, NEVER the due date.
+            const template = await getTemplate(user.familyId, existing.templateId)
+            if (template) {
+              const currentOccurrence = existing.billDate
+                ?? subDays(existing.nextDueDate, template.defaultDueOffsetDays)  // defensive fallback only
+              const next = computeNextOccurrenceDate(template, utcMidnight(currentOccurrence))
+              if (next) {
+                const occ = utcMidnight(next)
+                await createOccurrenceDraft(tx, template, occ, existing.id)
+                // Advance the template cursor atomically so the cron does not
+                // re-spawn the same occurrence.
+                await tx.financeRecurringTemplate.update({
+                  where: { id: template.id },
+                  data: { nextOccurrenceDate: occ },
+                })
+              }
+            }
+          } else {
+            // ── Template-less recurring bill: step from the entry's own due date
+            // using the same clean cadence function, normalised to UTC midnight
+            // (no wall-clock pollution). The draft journal is copied from the
+            // parent below (outside the tx, gated on spawnedBillId).
+            const occTemplate: OccurrenceTemplate = {
+              frequency: existing.frequency,
+              interval: existing.recurrenceInterval ?? 1,
+              dayOfMonth: existing.dayOfMonth,
+              monthOfYear: existing.monthOfYear,
+              startDate: existing.nextDueDate,
+              endMode: 'never',
+              endDate: existing.endDate,
+              totalOccurrences: null,
+              occurrencesRemaining: null,
+            }
+            const next = computeNextOccurrenceDate(occTemplate, utcMidnight(existing.nextDueDate))
+            const newDueDate = next ? utcMidnight(next) : null
+            if (newDueDate && (!existing.endDate || newDueDate <= existing.endDate)) {
+              const spawned = await tx.financeRecurringBill.create({
+                data: {
+                  name: existing.name,
+                  amount: existing.amount,
+                  accountId: existing.accountId,
+                  categoryId: existing.categoryId,
+                  vendorId: existing.vendorId,
+                  frequency: existing.frequency,
+                  dayOfMonth: existing.dayOfMonth,
+                  monthOfYear: existing.monthOfYear,
+                  nextDueDate: newDueDate,
+                  endDate: existing.endDate,
+                  isActive: existing.isActive,
+                  autoPay: existing.autoPay,
+                  emailReminder: existing.emailReminder,
+                  reminderDays: existing.reminderDays,
+                  notes: existing.notes,
+                  memberId: existing.memberId,
+                  locationId: existing.locationId,
+                  billType: existing.billType,
+                  recurrenceInterval: existing.recurrenceInterval,
+                  invoiceReceived: false,
+                  invoiceReceivedDate: null,
+                  paid: false,
+                  paidDate: null,
+                  parentBillId: existing.id,
+                  templateId: null,
+                  status: 'draft',
+                  entityId: existing.entityId,
+                  taxClassification: existing.taxClassification,
+                  familyId: user.familyId,
+                },
+                select: { id: true },
               })
+              spawnedBillId = spawned.id
+              spawnedBillDueDate = newDueDate
             }
           }
         }

@@ -19,6 +19,24 @@ export function todayBoundsInTz(timezone: string): { start: Date; end: Date } {
 }
 
 /**
+ * Truncate any instant to UTC midnight of its UTC calendar date.
+ *
+ * Finance day-precision dates are stored as UTC midnight (YYYY-MM-DDT00:00:00.000Z)
+ * and every downstream extractor reads them via UTC components
+ * (toISOString().slice(0,10), calendar-day slicing, idempotency windows). Use this
+ * to normalise any computed/stepped occurrence date back to that convention so a
+ * wall-clock instant (e.g. 2026-06-01T21:17Z) can never be persisted.
+ *
+ * Uses getUTC* so the result is independent of the runtime timezone — important on
+ * a UTC+10 dev box where date-fns stepping can drift off exact UTC midnight across
+ * a DST boundary. Do NOT normalise to *local* midnight: for a polluted instant like
+ * 2026-06-01T21:17Z that would wrongly yield 2 June in Sydney.
+ */
+export function utcMidnight(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+}
+
+/**
  * Convert a YYYY-MM-DD string (interpreted as midnight in the given timezone) to a UTC Date.
  */
 export function localMidnightToUtc(dateStr: string, timezone: string): Date {

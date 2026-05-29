@@ -13,6 +13,8 @@ import { formatCurrency, toMonthlyAmount } from '@/lib/financeShared'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import Link from 'next/link'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -119,8 +121,10 @@ interface EditFormState {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+// Finance day-precision dates are stored as UTC midnight; render in the family
+// timezone so a value stored at T00:00:00.000Z shows the correct local calendar day.
+function fmtDate(iso: string, tz: string) {
+  return formatInTz(new Date(iso), tz, { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function emptyEditForm(kind: 'bill' | 'income', id: string): EditFormState {
@@ -483,6 +487,7 @@ function DraftRow({
   onEdit: () => void
 }) {
   const [busy, setBusy] = useState<'approve' | 'cancel' | null>(null)
+  const tz = useFamilyTimezone()
 
   async function handle(action: 'approve' | 'cancel', fn: () => void) {
     setBusy(action)
@@ -498,7 +503,7 @@ function DraftRow({
           {isPayslip && <StatusChip variant="info">Payslip</StatusChip>}
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          <span>{fmtDate(date)}</span>
+          <span>{fmtDate(date, tz)}</span>
           <span className="font-medium text-foreground">{formatCurrency(amount)}</span>
           {categoryName && <span>{categoryName}</span>}
           {vendorName && <span>{vendorName}</span>}

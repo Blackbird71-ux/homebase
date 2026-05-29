@@ -35,8 +35,10 @@
 // mid-catch-up cannot leave the cursor ahead of the drafts actually written.
 // =============================================================================
 
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit-log'
+import { utcMidnight } from '@/lib/timezone'
 import type { SessionUser } from '@/types'
 import {
   computeNextOccurrenceDate,
@@ -178,9 +180,220 @@ async function findMissingGlAccounts(
 // is a system pseudo-user constructed by the caller). Used for audit logs.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type FullTemplate = NonNullable<
+export type FullTemplate = NonNullable<
   Awaited<ReturnType<typeof prisma.financeRecurringTemplate.findFirst<{ include: { lines: true } }>>>
 >
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createOccurrenceDraft
+//
+// Materialises ONE draft (bill or income) for `template` at `occurrenceDateRaw`,
+// inside the caller-supplied transaction. This is the single source of truth for
+// what a spawned draft looks like: the nightly cron worker AND the bill/income
+// PATCH spawn-next paths both call it, so a draft spawned on receipt/payment is
+// identical to one spawned by the worker (same headline amount, draft journal,
+// snapshot hash, and payslip).
+//
+// The occurrence date is normalised to UTC midnight (the stored convention) so a
+// wall-clock instant can never leak into billDate / nextExpectedDate / the GL
+// accrual date. The caller is responsible for idempotency, schedule bounds
+// (endDate / occurrencesRemaining) and advancing the template cursor.
+//
+// `parentId` records lineage on the spawned child (parentBillId / parentIncomeId).
+// The cron omits it (children are reconciled via templateId + idempotency); the
+// receipt/payment PATCH paths pass the entry being received/paid so the existing
+// undo-receipt / unpay descendant-cleanup continues to find and remove the child.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function createOccurrenceDraft(
+  tx: Prisma.TransactionClient,
+  template: FullTemplate,
+  occurrenceDateRaw: Date,
+  parentId?: string,
+): Promise<void> {
+  const kind: TemplateKind = template.kind === 'income' ? 'income' : 'bill'
+  const occurrenceDate = utcMidnight(occurrenceDateRaw)
+  const snapshotLines = buildSnapshotLines(template.lines as TemplateLineRow[])
+  const headlineAmount = computeHeadlineAmount(template.lines as TemplateLineRow[], kind)
+  const snapshotHash = computeSpawnedSnapshotHash({
+    kind,
+    defaultDueOffsetDays: template.defaultDueOffsetDays,
+    lines: snapshotLines,
+    occurrenceDate,
+  })
+
+  if (kind === 'bill') {
+    // billDate = occurrence date (GL recognition date: when liability is incurred).
+    // nextDueDate = occurrence + defaultDueOffsetDays (when payment is expected).
+    const dueDate = utcMidnight(addDays(occurrenceDate, template.defaultDueOffsetDays))
+    const draftBill = await tx.financeRecurringBill.create({
+      data: {
+        name: template.name,
+        amount: headlineAmount,
+        accountId: template.accountId,
+        categoryId: template.categoryId,
+        frequency: template.frequency,
+        dayOfMonth: template.dayOfMonth,
+        monthOfYear: template.monthOfYear,
+        billDate: occurrenceDate,
+        nextDueDate: dueDate,
+        endDate: template.endDate,
+        isActive: true,
+        // All template-spawned bills are recurring; one-off bills are
+        // not templated, so this is always 'recurring'.
+        billType: 'recurring',
+        memberId: template.memberId,
+        locationId: template.locationId,
+        vendorId: template.counterpartyId,
+        entityId: template.entityId,
+        taxClassification: template.taxClassification,
+        invoiceReceived: false,
+        paid: false,
+        familyId: template.familyId,
+        // Lifecycle
+        templateId: template.id,
+        parentBillId: parentId ?? null,
+        status: 'draft',
+        spawnedAt: new Date(),
+        spawnedSnapshotHash: snapshotHash,
+      },
+      select: { id: true },
+    })
+
+    // Templates with ≥2 balanced lines (e.g. expense + GST + AP): materialise
+    // the template lines into an unposted draft FinanceJournalEntry so the
+    // draft editor shows the correct split and approval promotes it via branch
+    // (a) of postBillAccrualJournal instead of a plain 2-line DR expense / CR AP.
+    if (snapshotLines.length >= 2) {
+      const totalDr = snapshotLines
+        .filter(l => l.side !== 'credit')
+        .reduce((s, l) => s + l.amount, 0)
+      const totalCr = snapshotLines
+        .filter(l => l.side === 'credit')
+        .reduce((s, l) => s + l.amount, 0)
+      if (Math.abs(totalDr - totalCr) <= 0.005) {
+        const draftJournal = await tx.financeJournalEntry.create({
+          data: {
+            reference: null,
+            date: occurrenceDate,
+            description: template.name,
+            type: 'auto_transaction',
+            isPosted: false,
+            entityId: template.entityId ?? null,
+            familyId: template.familyId,
+            lines: {
+              create: snapshotLines.map(l => ({
+                glAccountId: l.glAccountId,
+                side: l.side,
+                amount: l.amount,
+                description: l.description || null,
+              })),
+            },
+          },
+          select: { id: true },
+        })
+        await tx.financeRecurringBill.update({
+          where: { id: draftBill.id },
+          data: { journalEntryId: draftJournal.id },
+        })
+      }
+    }
+  } else {
+    const draftEntry = await tx.financeIncomeEntry.create({
+      data: {
+        name: template.name,
+        amount: headlineAmount,
+        frequency: template.frequency,
+        incomeType: 'recurring',
+        nextExpectedDate: occurrenceDate,
+        endDate: template.endDate,
+        isActive: true,
+        received: false,
+        invoiceReceived: false,
+        dayOfMonth: template.dayOfMonth,
+        monthOfYear: template.monthOfYear,
+        memberId: template.memberId,
+        accountId: template.accountId,
+        categoryId: template.categoryId,
+        vendorId: template.counterpartyId,
+        entityId: template.entityId,
+        locationId: template.locationId,
+        isTaxTracked: template.isTaxTracked,
+        taxRate: template.taxRate,
+        taxClassification: template.taxClassification,
+        familyId: template.familyId,
+        // Lifecycle
+        templateId: template.id,
+        parentIncomeId: parentId ?? null,
+        status: 'draft',
+        spawnedAt: new Date(),
+        spawnedSnapshotHash: snapshotHash,
+      },
+      select: { id: true },
+    })
+
+    // Non-payslip templates with ≥2 balanced lines: materialise the
+    // template lines into an unposted draft FinanceJournalEntry so the
+    // draft editor shows the correct split and approval promotes it
+    // via branch (a) of postIncomeAccrualJournal instead of generating
+    // a plain 2-line DR AR / CR Income fallback.
+    if (!template.payslipEnabled && snapshotLines.length >= 2) {
+      const totalDr = snapshotLines
+        .filter(l => l.side !== 'credit')
+        .reduce((s, l) => s + l.amount, 0)
+      const totalCr = snapshotLines
+        .filter(l => l.side === 'credit')
+        .reduce((s, l) => s + l.amount, 0)
+      if (Math.abs(totalDr - totalCr) <= 0.005) {
+        const draftJournal = await tx.financeJournalEntry.create({
+          data: {
+            reference: null,
+            date: occurrenceDate,
+            description: template.name,
+            type: 'auto_transaction',
+            isPosted: false,
+            entityId: template.entityId ?? null,
+            familyId: template.familyId,
+            lines: {
+              create: snapshotLines.map(l => ({
+                glAccountId: l.glAccountId,
+                side: l.side,
+                amount: l.amount,
+                description: l.description || null,
+              })),
+            },
+          },
+          select: { id: true },
+        })
+        await tx.financeIncomeEntry.update({
+          where: { id: draftEntry.id },
+          data: { journalEntryId: draftJournal.id },
+        })
+      }
+    }
+
+    // Payslip templates: create the linked FinancePayslip on the draft
+    // so approval can run the payslip-aware posting path and the mark-
+    // received dialog pre-populates from stored gross/PAYG/net figures.
+    if (template.payslipEnabled) {
+      await tx.financePayslip.create({
+        data: {
+          incomeEntryId: draftEntry.id,
+          familyId: template.familyId,
+          grossPay: template.grossPay ?? 0,
+          netPay: template.netPay ?? 0,
+          grossIncomeGlAccountId: template.grossIncomeGlAccountId,
+          bankGlAccountId: template.bankGlAccountId,
+          paygWithheld: template.paygWithheld ?? 0,
+          paygGlAccountId: template.paygGlAccountId,
+          sgcAmount: template.sgcAmount ?? 0,
+          sgcGlAccountId: template.sgcGlAccountId,
+          components: template.payslipComponents ?? '[]',
+          deductions: template.payslipDeductions ?? '[]',
+        },
+      })
+    }
+  }
+}
 
 export async function spawnDraftsForTemplate(
   user: SessionUser,
@@ -256,9 +469,6 @@ export async function spawnDraftsForTemplate(
   // (asOf + createInAdvanceDays).
   const dueThreshold = calendarDayEnd(addDays(asOf, template.createInAdvanceDays))
 
-  const snapshotLines = buildSnapshotLines(template.lines as TemplateLineRow[])
-  const headlineAmount = computeHeadlineAmount(template.lines as TemplateLineRow[], kind)
-
   let iterations = 0
 
   // Catch-up loop: spawn every occurrence on/before the due threshold,
@@ -313,185 +523,13 @@ export async function spawnDraftsForTemplate(
     if (alreadyExists) {
       result.skippedExisting += 1
     } else {
-      // ── Insert the draft + advance cursor atomically ──────────────────
-      const snapshotHash = computeSpawnedSnapshotHash({
-        kind,
-        defaultDueOffsetDays: template.defaultDueOffsetDays,
-        lines: snapshotLines,
-        occurrenceDate,
-      })
-
+      // ── Insert the draft via the shared helper, atomically ────────────
+      // createOccurrenceDraft is the single source of truth for what a
+      // spawned draft looks like; the income/bill PATCH spawn paths call it
+      // too, so a draft spawned on receipt/payment is identical to this one.
+      // It normalises the occurrence date to UTC midnight internally.
       await prisma.$transaction(async (tx) => {
-        if (kind === 'bill') {
-          // billDate = occurrence date (GL recognition date: when liability is incurred).
-          // nextDueDate = occurrence + defaultDueOffsetDays (when payment is expected).
-          const dueDate = addDays(occurrenceDate, template.defaultDueOffsetDays)
-          const draftBill = await tx.financeRecurringBill.create({
-            data: {
-              name: template.name,
-              amount: headlineAmount,
-              accountId: template.accountId,
-              categoryId: template.categoryId,
-              frequency: template.frequency,
-              dayOfMonth: template.dayOfMonth,
-              monthOfYear: template.monthOfYear,
-              billDate: occurrenceDate,
-              nextDueDate: dueDate,
-              endDate: template.endDate,
-              isActive: true,
-              // All template-spawned bills are recurring; one-off bills are
-              // not templated, so this is always 'recurring'.
-              billType: 'recurring',
-              memberId: template.memberId,
-              locationId: template.locationId,
-              vendorId: template.counterpartyId,
-              entityId: template.entityId,
-              taxClassification: template.taxClassification,
-              invoiceReceived: false,
-              paid: false,
-              familyId: template.familyId,
-              // Lifecycle
-              templateId: template.id,
-              status: 'draft',
-              spawnedAt: new Date(),
-              spawnedSnapshotHash: snapshotHash,
-            },
-            select: { id: true },
-          })
-
-          // Templates with ≥2 balanced lines (e.g. expense + GST + AP): materialise
-          // the template lines into an unposted draft FinanceJournalEntry so the
-          // draft editor shows the correct split and approval promotes it via branch
-          // (a) of postBillAccrualJournal instead of a plain 2-line DR expense / CR AP.
-          if (snapshotLines.length >= 2) {
-            const totalDr = snapshotLines
-              .filter(l => l.side !== 'credit')
-              .reduce((s, l) => s + l.amount, 0)
-            const totalCr = snapshotLines
-              .filter(l => l.side === 'credit')
-              .reduce((s, l) => s + l.amount, 0)
-            if (Math.abs(totalDr - totalCr) <= 0.005) {
-              const draftJournal = await tx.financeJournalEntry.create({
-                data: {
-                  reference: null,
-                  date: occurrenceDate,
-                  description: template.name,
-                  type: 'auto_transaction',
-                  isPosted: false,
-                  entityId: template.entityId ?? null,
-                  familyId: template.familyId,
-                  lines: {
-                    create: snapshotLines.map(l => ({
-                      glAccountId: l.glAccountId,
-                      side: l.side,
-                      amount: l.amount,
-                      description: l.description || null,
-                    })),
-                  },
-                },
-                select: { id: true },
-              })
-              await tx.financeRecurringBill.update({
-                where: { id: draftBill.id },
-                data: { journalEntryId: draftJournal.id },
-              })
-            }
-          }
-        } else {
-          const draftEntry = await tx.financeIncomeEntry.create({
-            data: {
-              name: template.name,
-              amount: headlineAmount,
-              frequency: template.frequency,
-              incomeType: 'recurring',
-              nextExpectedDate: occurrenceDate,
-              endDate: template.endDate,
-              isActive: true,
-              received: false,
-              invoiceReceived: false,
-              dayOfMonth: template.dayOfMonth,
-              monthOfYear: template.monthOfYear,
-              memberId: template.memberId,
-              accountId: template.accountId,
-              categoryId: template.categoryId,
-              vendorId: template.counterpartyId,
-              entityId: template.entityId,
-              locationId: template.locationId,
-              isTaxTracked: template.isTaxTracked,
-              taxRate: template.taxRate,
-              taxClassification: template.taxClassification,
-              familyId: template.familyId,
-              // Lifecycle
-              templateId: template.id,
-              status: 'draft',
-              spawnedAt: new Date(),
-              spawnedSnapshotHash: snapshotHash,
-            },
-            select: { id: true },
-          })
-
-          // Non-payslip templates with ≥2 balanced lines: materialise the
-          // template lines into an unposted draft FinanceJournalEntry so the
-          // draft editor shows the correct split and approval promotes it
-          // via branch (a) of postIncomeAccrualJournal instead of generating
-          // a plain 2-line DR AR / CR Income fallback.
-          if (!template.payslipEnabled && snapshotLines.length >= 2) {
-            const totalDr = snapshotLines
-              .filter(l => l.side !== 'credit')
-              .reduce((s, l) => s + l.amount, 0)
-            const totalCr = snapshotLines
-              .filter(l => l.side === 'credit')
-              .reduce((s, l) => s + l.amount, 0)
-            if (Math.abs(totalDr - totalCr) <= 0.005) {
-              const draftJournal = await tx.financeJournalEntry.create({
-                data: {
-                  reference: null,
-                  date: occurrenceDate,
-                  description: template.name,
-                  type: 'auto_transaction',
-                  isPosted: false,
-                  entityId: template.entityId ?? null,
-                  familyId: template.familyId,
-                  lines: {
-                    create: snapshotLines.map(l => ({
-                      glAccountId: l.glAccountId,
-                      side: l.side,
-                      amount: l.amount,
-                      description: l.description || null,
-                    })),
-                  },
-                },
-                select: { id: true },
-              })
-              await tx.financeIncomeEntry.update({
-                where: { id: draftEntry.id },
-                data: { journalEntryId: draftJournal.id },
-              })
-            }
-          }
-
-          // Payslip templates: create the linked FinancePayslip on the draft
-          // so approval can run the payslip-aware posting path and the mark-
-          // received dialog pre-populates from stored gross/PAYG/net figures.
-          if (template.payslipEnabled) {
-            await tx.financePayslip.create({
-              data: {
-                incomeEntryId: draftEntry.id,
-                familyId: template.familyId,
-                grossPay: template.grossPay ?? 0,
-                netPay: template.netPay ?? 0,
-                grossIncomeGlAccountId: template.grossIncomeGlAccountId,
-                bankGlAccountId: template.bankGlAccountId,
-                paygWithheld: template.paygWithheld ?? 0,
-                paygGlAccountId: template.paygGlAccountId,
-                sgcAmount: template.sgcAmount ?? 0,
-                sgcGlAccountId: template.sgcGlAccountId,
-                components: template.payslipComponents ?? '[]',
-                deductions: template.payslipDeductions ?? '[]',
-              },
-            })
-          }
-        }
+        await createOccurrenceDraft(tx, template, occurrenceDate)
       })
 
       result.spawned += 1

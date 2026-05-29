@@ -18,6 +18,7 @@ import { createHash } from 'node:crypto'
 import { addDays, addMonths, addWeeks, getDaysInMonth, setDate } from 'date-fns'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit-log'
+import { todayBoundsInTz, utcMidnight } from '@/lib/timezone'
 import type { SessionUser } from '@/types'
 
 // ── Literal types matching the schema string columns ────────────────────────
@@ -744,32 +745,38 @@ export async function updateTemplate(
   let newOccurrencesRemaining: number | null | undefined
   if (scheduleChanged) {
     const effectiveStartDate = input.startDate ?? existing.startDate
-    if (existing.lastSpawnedDate == null) {
-      // No spawns yet — startDate is still the first occurrence.
-      newNextOccurrenceDate = effectiveStartDate
-    } else {
-      // Spawns have already occurred. Compute the next occurrence after
-      // lastSpawnedDate using the updated schedule.
-      const projected = computeNextOccurrenceDate(
-        {
-          frequency: input.frequency ?? existing.frequency,
-          interval: input.interval ?? existing.interval,
-          dayOfMonth: input.dayOfMonth !== undefined ? input.dayOfMonth : existing.dayOfMonth,
-          monthOfYear: input.monthOfYear !== undefined ? input.monthOfYear : existing.monthOfYear,
-          startDate: effectiveStartDate,
-          endMode: input.endMode ?? existing.endMode,
-          endDate: input.endDate !== undefined ? input.endDate : existing.endDate,
-          totalOccurrences: input.totalOccurrences !== undefined ? input.totalOccurrences : existing.totalOccurrences,
-          occurrencesRemaining: existing.occurrencesRemaining,
-        },
-        existing.lastSpawnedDate,
-      )
-      // If projection returned null (template now ended), use a date far in
-      // the past so the spawn worker skips it. We don't null out the column
-      // because schema requires it. Using the start date is safe — the
-      // worker will see endDate < startDate or occurrencesRemaining<=0 and skip.
-      newNextOccurrenceDate = projected ?? effectiveStartDate
+    // Recompute the cursor deterministically from startDate under the NEW
+    // schedule — project forward to the first occurrence on/after today in the
+    // family's timezone. Do NOT step from lastSpawnedDate: the spawn worker
+    // writes the cron *run timestamp* into lastSpawnedDate, so stepping from it
+    // injects wall-clock time-of-day and drifts cadence (the template
+    // date-corruption bug). All probes are normalised to UTC midnight so the
+    // result matches the stored UTC-midnight convention regardless of the
+    // runtime tz.
+    const newSchedule: OccurrenceTemplate = {
+      frequency: input.frequency ?? existing.frequency,
+      interval: input.interval ?? existing.interval,
+      dayOfMonth: input.dayOfMonth !== undefined ? input.dayOfMonth : existing.dayOfMonth,
+      monthOfYear: input.monthOfYear !== undefined ? input.monthOfYear : existing.monthOfYear,
+      startDate: effectiveStartDate,
+      endMode: input.endMode ?? existing.endMode,
+      endDate: input.endDate !== undefined ? input.endDate : existing.endDate,
+      totalOccurrences: input.totalOccurrences !== undefined ? input.totalOccurrences : existing.totalOccurrences,
+      occurrencesRemaining: existing.occurrencesRemaining,
     }
+    const { start: todayStart } = todayBoundsInTz(user.timezone ?? 'Australia/Sydney')
+    let probe = utcMidnight(effectiveStartDate)
+    let guard = 0
+    while (probe < todayStart && guard < 1000) {
+      const n = computeNextOccurrenceDate(newSchedule, probe)
+      // null = schedule has ended; leave probe at the last valid occurrence so
+      // the spawn worker sees endDate/occurrencesRemaining and skips it. We
+      // don't null the column because the schema requires it.
+      if (!n) break
+      probe = utcMidnight(n)
+      guard++
+    }
+    newNextOccurrenceDate = probe
 
     if (input.endMode === 'for_n_occurrences' && input.totalOccurrences != null) {
       // Reset remaining to the new total, minus what's already been spawned.

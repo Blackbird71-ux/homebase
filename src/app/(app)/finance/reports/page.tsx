@@ -14,6 +14,8 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getCurrentFY } from '@/lib/financeShared'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import EmailReportModal from '@/components/finance/EmailReportModal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -105,6 +107,7 @@ export default function ReportsPage() {
   const [showHistory, setShowHistory]       = useState(false)
   const [snapshots, setSnapshots]           = useState<any[]>([])
   const [snapshotsLoading, setSnapshotsLoading] = useState(false)
+  const tz = useFamilyTimezone()
 
   async function load() {
     setLoading(true)
@@ -365,7 +368,7 @@ export default function ReportsPage() {
                   <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
                     {viewMode === 'category' && bill.vendorName && <span>{bill.vendorName}</span>}
                     {viewMode === 'vendor' && bill.categoryName && <span>{bill.categoryName}</span>}
-                    <span>Due {format(new Date(bill.nextDueDate), 'd MMM yyyy')}</span>
+                    <span>Due {formatInTz(new Date(bill.nextDueDate), tz, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                   </div>
                 </div>
                 <div className="text-right">

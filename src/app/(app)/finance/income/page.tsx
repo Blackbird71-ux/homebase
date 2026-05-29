@@ -1,6 +1,5 @@
 'use client'
 
-import { format } from 'date-fns'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2,
   RefreshCw, Layers, Briefcase,
@@ -25,6 +24,8 @@ import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { useIncomeCrud, type IncomeEntry, type PayslipFormData } from '@/hooks/finance/useIncomeCrud'
 import { IncomeRow } from '@/components/finance/IncomeRow'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 export type { IncomeEntry } from '@/hooks/finance/useIncomeCrud'
 
@@ -57,6 +58,7 @@ export default function IncomePage() {
     getNextExpected, entryAmountForCat,
   } = useIncomeCrud()
   const att = useAttachmentManager('/api/finance/income')
+  const tz = useFamilyTimezone()
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading income?</div>
 
@@ -140,7 +142,7 @@ export default function IncomePage() {
               <div key={e.id} className="flex items-center justify-between gap-2 text-sm">
                 <div className="min-w-0 flex-1">
                   <span>{e.name}</span>
-                  <span className="text-xs text-muted-foreground ml-2">Expected {format(new Date(e.nextExpectedDate), 'd MMM yyyy')}</span>
+                  <span className="text-xs text-muted-foreground ml-2">Expected {formatInTz(new Date(e.nextExpectedDate), tz, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
                 <span className="font-medium shrink-0">{formatCurrency(e.amount)}</span>
                 <div className="flex items-center gap-0.5 shrink-0">

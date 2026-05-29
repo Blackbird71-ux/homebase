@@ -7,17 +7,21 @@ import { cn } from '@/lib/utils'
 import { StatusChip } from '@/components/shared/StatusChip'
 import { FREQ_LABELS } from '@/lib/finance-template-helpers'
 import type { TemplateRow } from '@/lib/finance-template-helpers'
+import { formatInTz } from '@/lib/timezone'
 
 export function TemplateListRow({
-  template, onEdit, onToggle, onDelete,
+  template, timezone, onEdit, onToggle, onDelete,
 }: {
   template: TemplateRow
+  timezone: string
   onEdit: (t: TemplateRow) => void
   onToggle: (t: TemplateRow) => void
   onDelete: (t: TemplateRow) => void
 }) {
+  // Occurrence dates are stored as UTC midnight; render in the family timezone
+  // so a value stored at T00:00:00.000Z shows the correct local calendar day.
   const nextDate = template.nextOccurrenceDate
-    ? new Date(template.nextOccurrenceDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+    ? formatInTz(new Date(template.nextOccurrenceDate), timezone, { day: 'numeric', month: 'short', year: 'numeric' })
     : '—'
 
   return (
