@@ -148,6 +148,15 @@ async function upsertBillDraftJournal(
       })
       return existingJournalEntryId
     }
+    if (existing && existing.isPosted) {
+      // BUG C hardening (parity with income upsertIncomeJournalEntry): never
+      // silently abandon a posted journal. Falling through to create a fresh
+      // entry would orphan the original posted accrual. A correction to a
+      // posted entry must be made via a reversal, not a repoint-and-leave.
+      throw new Error(
+        'Cannot modify a posted journal entry in place — corrections to posted journals must be made via a reversal.',
+      )
+    }
   }
 
   // No existing draft — create a new one atomically
@@ -1111,11 +1120,13 @@ export async function PATCH(request: NextRequest) {
           })
         }
 
-        // Update bill status atomically — only mark paid when fully covered
+        // Update bill status atomically — only mark paid when fully covered.
+        // BUG D: advance the lifecycle status to its terminal 'paid' value so it
+        // no longer sits in 'awaiting_payment' once fully covered.
         await tx.financeRecurringBill.update({
           where: { id },
           data: isFullyPaid
-            ? { paid: true, paidDate: actualPaidDate, paymentTxId: paymentTx.id }
+            ? { paid: true, paidDate: actualPaidDate, paymentTxId: paymentTx.id, status: 'paid' }
             : { paymentTxId: paymentTx.id },
         })
 

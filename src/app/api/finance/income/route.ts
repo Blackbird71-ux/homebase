@@ -104,6 +104,15 @@ async function upsertIncomeJournalEntry(
       })
       return existingJournalEntryId
     }
+    if (existing && existing.isPosted) {
+      // BUG C hardening: never silently abandon a posted journal. Falling through
+      // to create a fresh entry here would orphan the original posted accrual,
+      // double-counting AR/income (the orphan-journal defect). A correction to a
+      // posted entry must be made via a reversal, not a repoint-and-leave.
+      throw new Error(
+        'Cannot modify a posted journal entry in place — corrections to posted journals must be made via a reversal.',
+      )
+    }
   }
 
   // No existing draft — create a new one atomically
@@ -874,13 +883,23 @@ export async function PATCH(request: NextRequest) {
 
     // Pre-generate journal references outside the transaction so sequential
     // increments work correctly (inside $transaction uncommitted writes are invisible).
-    const needsAutoStage1 = !freshEntry?.invoiceReceived
+    //
+    // BUG A: payslip MODE A posts a self-balancing multi-line journal with NO AR
+    // line. Auto-posting a Stage-1 DR AR / CR Income accrual first would strand AR
+    // and double-count income, so payslip receipts must never trigger auto-Stage-1.
+    const needsAutoStage1 = !freshEntry?.invoiceReceived && !payslipData
     const accrualRef  = needsAutoStage1 ? await nextJournalReference(user.familyId) : null
     const receiptRef  = await nextJournalReference(user.familyId)
 
     try {
       await prisma.$transaction(async (tx) => {
         const arCategoryId = await ensureAccountsReceivableCategory(user.familyId)
+
+        // Track the accrual journal that holds the open AR for this income, so
+        // the MODE B receipt can verify it clears AR by exactly the open balance
+        // (BUG B). For a pre-existing Stage 1 this is the entry's journalEntryId;
+        // when we auto-post Stage 1 below it is the freshly-created accrual.
+        let accrualJournalId: string | null = freshEntry?.journalEntryId ?? null
 
         // ── Auto-post Stage 1 accrual if not yet done ──────────────────────
         if (needsAutoStage1) {
@@ -909,6 +928,7 @@ export async function PATCH(request: NextRequest) {
             where: { id },
             data: { invoiceReceived: true, invoiceReceivedDate: actualReceivedDate, journalEntryId: accrualJe.id },
           })
+          accrualJournalId = accrualJe.id
         }
 
         // ── MODE A: Payslip multi-line journal ─────────────────────────────
@@ -962,6 +982,30 @@ export async function PATCH(request: NextRequest) {
           })
         } else {
           // ── MODE B: Simple 2-line DR Bank / CR AR ─────────────────────
+          //
+          // BUG B: a receipt must clear Accounts Receivable by EXACTLY the open
+          // AR balance for this income, never by an arbitrary cash figure. For a
+          // withholding-split accrual (DR AR net + DR tax / CR gross) the AR line
+          // holds only the net; clearing a different actualAmount (e.g. the gross)
+          // over-clears AR and overstates Bank. Compute the open AR from the
+          // accrual journal's AR lines and reject any mismatch so the user
+          // reconciles manually (no silent variance).
+          if (accrualJournalId) {
+            const arLines = await tx.financeJournalLine.findMany({
+              where: { journalEntryId: accrualJournalId, glAccountId: arCategoryId },
+              select: { side: true, amount: true },
+            })
+            const openAr = arLines.reduce(
+              (sum, l) => sum + (l.side === 'debit' ? l.amount : -l.amount),
+              0,
+            )
+            if (Math.abs(openAr - actualAmount) > 0.005) {
+              throw new Error(
+                `Receipt amount $${actualAmount.toFixed(2)} does not match the open Accounts Receivable balance $${openAr.toFixed(2)} for this income. ` +
+                `Adjust the amount received to equal the outstanding balance before recording the receipt.`,
+              )
+            }
+          }
           receiptJe = await tx.financeJournalEntry.create({
             data: {
               reference: receiptRef,
@@ -987,6 +1031,9 @@ export async function PATCH(request: NextRequest) {
           receivedDate: actualReceivedDate,
           receiptJournalEntryId: receiptJe.id,
           actualAmountReceived: actualAmount,
+          // BUG D: advance the lifecycle status to its terminal value so it no
+          // longer sits in 'awaiting_receipt' once cash has been received.
+          status: 'received',
         }
 
         if (invoiceTxId) {
