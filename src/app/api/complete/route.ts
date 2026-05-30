@@ -79,12 +79,12 @@ export async function GET(req: Request): Promise<Response> {
     })
 
     // There is no session on the email link; source the timezone from the
-    // assignee so the shared helper computes local-midnight boundaries correctly.
-    const assignee = await prisma.user.findUnique({
-      where: { id: payload.assigneeId },
+    // chore's family so the shared helper computes local-midnight boundaries correctly.
+    const family = await prisma.family.findUnique({
+      where: { id: chore.familyId },
       select: { timezone: true },
     })
-    const timezone = assignee?.timezone ?? 'UTC'
+    const timezone = family?.timezone ?? 'UTC'
 
     const nextDueDate = calculateNextDueDate(chore, completedAt, timezone)
     const updateData: Record<string, unknown> = nextDueDate === null
