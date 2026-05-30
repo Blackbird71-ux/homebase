@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-30
 **Scope:** Entire `src/` tree — inline code that duplicates an existing `src/lib/` helper, and inline logic repeated across ≥2 files that warrants a new helper.
-**Mode:** PARTIALLY REMEDIATED. Findings 2, 3, 4, 5, 6, 7 executed 2026-05-30 (see **Remediation status** below). Finding 1 + a newly-found hardcoded-display-zone follow-up are **deferred to the next batch**.
+**Mode:** PARTIALLY REMEDIATED. Findings 2, 3, 4, 5, 6, 7 + the hardcoded-display-zone follow-up executed 2026-05-30 (see **Remediation status** below). Only Finding 1 (CRITICAL bill/income GL-upsert twin) remains **deferred to a focused session**.
 
 **Related prior reports (do not re-litigate; this audit is duplication-specific):**
 - [`docs/helper-separation-audit-report.md`](helper-separation-audit-report.md) — page→hook/lib separation (2026-05-15)
@@ -47,15 +47,15 @@ The headline is **#1 + #2**: two pairs of near-identical functions where the cop
 |---|---|---|
 | **1** — `upsertBillDraftJournal` ↔ `upsertIncomeJournalEntry` twin GL upserts (**CRITICAL**) | 2 | Highest-value but highest-risk (real money + GL). Needs `assertBalanced`/`assertGlAccountsBelongToFamily` exported + a new `upsertDraftJournal({…, isPosted})`, then **both** lifecycle smokes (QA.md §2 + §5, the bill↔income parity gate). Kept for a focused session. |
 
-### 🆕 New follow-up found during Step 5 — hardcoded display timezones (next batch)
+### ✅ New follow-up found during Step 5 — hardcoded display timezones (EXECUTED 2026-05-30)
 
-These sites hardcode a display-zone **literal** but do **not** follow the `family?.timezone ?? default` pattern, so they were outside Finding 5's mechanical migration. Per the user's "no hardcoded settings" principle they should be routed through `getFamilyTimezone` (server) / `useFamilyTimezone` (client) so the family's saved setting drives the displayed local time:
+These sites hardcoded a display-zone **literal** but did **not** follow the `family?.timezone ?? default` pattern, so they were outside Finding 5's mechanical migration. Remediated in two ways: **form-default seeds** were centralized to the `DEFAULT_TIMEZONE` constant (per the user's decision — these are date-input defaults, and the constant already equals the family's setting); the two **rendered-document "generated at" stamps** were made genuinely family-aware via `useFamilyTimezone()`.
 
-- [`src/lib/utils.ts:18`](../src/lib/utils.ts#L18)
-- [`src/lib/financeReport.ts:113`](../src/lib/financeReport.ts#L113) and [`:205`](../src/lib/financeReport.ts#L205)
-- [`src/components/finance/GeneratePdfDialog.tsx:147`](../src/components/finance/GeneratePdfDialog.tsx#L147)
-- [`src/app/(app)/finance/balance-sheet/page.tsx:219`](../src/app/(app)/finance/balance-sheet/page.tsx#L219)
-- [`src/app/(app)/finance/profit-loss/page.tsx:163`](../src/app/(app)/finance/profit-loss/page.tsx#L163)
+- ✅ [`src/lib/utils.ts:18`](../src/lib/utils.ts#L18) `todayAU()` — literal → `DEFAULT_TIMEZONE` (imported from `@/lib/timezone`).
+- ✅ [`src/lib/financeReport.ts:113`](../src/lib/financeReport.ts#L113) legacy `fyDateRange` (effectively dead) → `DEFAULT_TIMEZONE`; and [`:205`](../src/lib/financeReport.ts#L205) `buildYtdReport` default param `tz` → `DEFAULT_TIMEZONE`. **Genuine win threaded** at [`email/send/route.ts`](../src/app/api/finance/email/send/route.ts) — the already-loaded `family.timezone` is now passed in (select extended). **Left as-is:** `emailReportService.ts:135` calls `buildYtdReport(familyId, year)` omitting **both** `fyStartMonth` and `tz`; it inherits the centralized default. Threading tz there alone would be inconsistent (it would still default the FY start month) — that path has a **pre-existing FY-start-month gap** that is out of scope for this timezone audit and should be fixed separately.
+- ✅ [`src/components/documents/GeneratePdfDialog.tsx:147`](../src/components/documents/GeneratePdfDialog.tsx#L147) — `useFamilyTimezone()` (path was `components/documents/`, not `components/finance/`).
+- ✅ [`src/app/(app)/finance/balance-sheet/page.tsx`](../src/app/(app)/finance/balance-sheet/page.tsx) — inline AU-today copy deduped to `useState(todayAU)`.
+- ✅ [`src/app/(app)/finance/profit-loss/page.tsx:163`](../src/app/(app)/finance/profit-loss/page.tsx#L163) — `useFamilyTimezone()`.
 
 ---
 

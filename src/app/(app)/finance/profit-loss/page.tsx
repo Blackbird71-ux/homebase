@@ -14,6 +14,7 @@ import { ExcelButton } from '@/components/print/ExcelButton'
 import { Button } from '@/components/ui/button'
 import { buildProfitLossWorkbook } from '@/lib/excel/profit-loss-excel'
 import { useProfitLoss } from '@/hooks/finance/useProfitLoss'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { PageHero } from '@/components/shared/PageHero'
 import { toast } from 'sonner'
 
@@ -27,6 +28,7 @@ function fmtCurrency(n: number) {
 
 export default function ProfitLossPage() {
   const printRef = useRef<HTMLDivElement>(null)
+  const familyTimezone = useFamilyTimezone()
 
   const {
     loading, txLoading,
@@ -160,7 +162,7 @@ export default function ProfitLossPage() {
                       title: 'Profit & Loss',
                       subtitle: 'Income and expenses for the selected period',
                       dateRange: label,
-                      generatedAt: new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }),
+                      generatedAt: new Date().toLocaleString('en-AU', { timeZone: familyTimezone }),
                     },
                     columns,
                     rows: allRows,

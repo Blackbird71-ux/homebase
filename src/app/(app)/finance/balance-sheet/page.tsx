@@ -5,7 +5,7 @@ import {
   Building2, TrendingUp, TrendingDown, Wallet, AlertTriangle, CheckCircle2,
   List, X,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, todayAU } from '@/lib/utils'
 import { format } from 'date-fns'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
@@ -213,13 +213,7 @@ export default function BalanceSheetPage() {
   const [data, setData]         = useState<BalanceSheetResponse | null>(null)
   const [entities, setEntities] = useState<Entity[]>([])
   const [entityId, setEntityId] = useState('')
-  const [asAt, setAsAt]         = useState(() => {
-    // ── FIX: Use AU-timezone today as default ──
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Australia/Sydney',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(new Date())
-  })
+  const [asAt, setAsAt]         = useState(todayAU)
   const [loading, setLoading]   = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 

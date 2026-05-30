@@ -7,6 +7,7 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { buildYtdReport, getCurrentFY } from '@/lib/financeReport'
 import { sendReportEmail } from '@/lib/emailReportService'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 export async function POST(request: Request) {
   try {
@@ -17,9 +18,10 @@ export async function POST(request: Request) {
     // Load FY start month from family settings
     const family = await prisma.family.findUnique({
       where: { id: user.familyId },
-      select: { financeYearStartMonth: true },
+      select: { financeYearStartMonth: true, timezone: true },
     })
     const fyStartMonth = family?.financeYearStartMonth ?? 7
+    const timezone = family?.timezone ?? DEFAULT_TIMEZONE
 
     const body = await request.json()
     const {
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
     }
 
     // Build the report (or could load from snapshot JSON, but we rebuild for freshness)
-    const report = await buildYtdReport(user.familyId, reportYear, fyStartMonth)
+    const report = await buildYtdReport(user.familyId, reportYear, fyStartMonth, timezone)
 
     // Save snapshot if not using an existing one
     let actualSnapshotId = snapshotId

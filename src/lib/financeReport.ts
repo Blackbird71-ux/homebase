@@ -5,6 +5,7 @@
 // FinanceJournalLine entries (GL-first, same source as pnl/route.ts).
 // Tax estimates are computed from FinanceIncomeEntry (planning data).
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import {
   fyDateRangeInTz,
   parseFyLabel,
@@ -110,7 +111,7 @@ export function getCurrentFY(): string {
  */
 export function fyDateRange(fy: string): { start: Date; end: Date } {
   const fyYear = parseFyLabel(fy)
-  return fyDateRangeInTz(fyYear, 7, 'Australia/Sydney')
+  return fyDateRangeInTz(fyYear, 7, DEFAULT_TIMEZONE)
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -196,13 +197,13 @@ function monthIndexInFY(date: Date, fyYear: number, fyStartMonth: number = 7): n
  * pnl/route.ts — export and on-screen figures will always agree.
  *
  * @param fyStartMonth The family's financial year start month (1-12). Default 7 (July).
- * @param tz          The family's IANA timezone. Default 'Australia/Sydney'.
+ * @param tz          The family's IANA timezone. Default DEFAULT_TIMEZONE.
  */
 export async function buildYtdReport(
   familyId: string,
   year: string,
   fyStartMonth: number = 7,
-  tz: string = 'Australia/Sydney',
+  tz: string = DEFAULT_TIMEZONE,
 ): Promise<ReportPayload> {
   const fyYear = parseFyLabel(year)
   const { start, end } = fyDateRangeInTz(fyYear, fyStartMonth, tz)

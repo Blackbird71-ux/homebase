@@ -127,7 +127,6 @@ async function assertGlAccountsBelongToFamily(
 //   (a) draftJournalEntryId is provided AND points to a balanced unposted
 //       FinanceJournalEntry → promote it to isPosted=true. Lines are kept
 //       verbatim, preserving any GST split or custom split the user authored.
-//       (Mirrors postBillToGL's "promote draft as-is" branch.)
 //
 //   (b) draftJournalEntryId is provided but points to an unbalanced or
 //       posted/missing entry → fall back to the simple 2-line DR Expense /
@@ -218,9 +217,8 @@ export async function postBillAccrualJournal(
         }
       }
       // Unbalanced — fall through to create a fresh 2-line auto journal.
-      // We deliberately do NOT throw here to mirror postBillToGL's recovery
-      // behaviour; the draft is left in place (unposted) and a fresh posted
-      // entry is created from the canonical amount.
+      // We deliberately do NOT throw here; the draft is left in place
+      // (unposted) and a fresh posted entry is created from the canonical amount.
     }
     // Posted, missing, or single-line — fall through to create fresh entry.
   }

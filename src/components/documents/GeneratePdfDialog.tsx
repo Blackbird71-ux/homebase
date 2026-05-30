@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import { FileText, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import type { DocumentData } from './DocumentCard'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -69,6 +70,7 @@ interface GeneratePdfDialogProps {
 }
 
 export function GeneratePdfDialog({ open, onOpenChange, onGenerated, prefill }: GeneratePdfDialogProps) {
+  const familyTimezone = useFamilyTimezone()
   const [template, setTemplate] = useState<PdfTemplate>(prefill?.type ?? 'blank')
   const [title, setTitle] = useState(prefill?.meta.title ?? '')
   const [subtitle, setSubtitle] = useState(prefill?.meta.subtitle ?? '')
@@ -144,7 +146,7 @@ export function GeneratePdfDialog({ open, onOpenChange, onGenerated, prefill }: 
                 title: title.trim(),
                 subtitle: prefill.meta.subtitle,
                 dateRange: prefill.meta.dateRange,
-                generatedAt: new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }),
+                generatedAt: new Date().toLocaleString('en-AU', { timeZone: familyTimezone }),
               },
               columns: prefill.columns,
               rows: prefill.rows,
