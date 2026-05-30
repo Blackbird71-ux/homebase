@@ -54,7 +54,8 @@ export async function GET(req: Request) {
         event.recurrenceRule,
         event.recurrenceEndDate,
         rangeStart,
-        rangeEnd
+        rangeEnd,
+        user.timezone ?? 'UTC'
       )
 
       // Map instances to event-like objects
@@ -81,18 +82,111 @@ export async function GET(req: Request) {
 
   // Append synthetic events
   if (rangeStart && rangeEnd) {
-    if (showBills) {
-      const bills = await prisma.financeRecurringBill.findMany({
+    // The synthetic-event sources are independent — fetch the enabled ones together
+    // rather than awaiting each in series. Disabled (flag-gated) sources resolve to [].
+    const ninetyDays = 90 * 24 * 60 * 60 * 1000
+    const [bills, tripActivities, income, meals, todos, docs, chores] = await Promise.all([
+      showBills
+        ? prisma.financeRecurringBill.findMany({
+            where: {
+              familyId: user.familyId,
+              showOnCalendar: true,
+              paid: false,
+              isVoided: false,
+              isActive: true,
+              nextDueDate: { gte: rangeStart, lte: rangeEnd },
+            },
+            select: { id: true, name: true, nextDueDate: true },
+          })
+        : Promise.resolve([]),
+      prisma.tripActivity.findMany({
         where: {
-          familyId: user.familyId,
           showOnCalendar: true,
-          paid: false,
-          isVoided: false,
-          isActive: true,
-          nextDueDate: { gte: rangeStart, lte: rangeEnd },
+          day: {
+            date: { gte: rangeStart, lte: rangeEnd },
+            trip: { familyId: user.familyId },
+          },
         },
-        select: { id: true, name: true, nextDueDate: true },
-      })
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+          day: {
+            select: {
+              date: true,
+              trip: { select: { id: true, title: true, color: true } },
+            },
+          },
+        },
+      }),
+      showBills
+        ? prisma.financeIncomeEntry.findMany({
+            where: {
+              familyId: user.familyId,
+              showOnCalendar: true,
+              received: false,
+              isVoided: false,
+              isActive: true,
+              nextExpectedDate: { gte: rangeStart, lte: rangeEnd },
+            },
+            select: { id: true, name: true, nextExpectedDate: true },
+          })
+        : Promise.resolve([]),
+      showMeals
+        ? prisma.mealPlan.findMany({
+            where: {
+              familyId: user.familyId,
+              mealType: 'dinner',
+              date: { gte: rangeStart, lte: rangeEnd },
+            },
+            select: {
+              id: true,
+              date: true,
+              note: true,
+              recipe: { select: { title: true } },
+              recipes: { select: { recipe: { select: { title: true } } } },
+            },
+          })
+        : Promise.resolve([]),
+      showTodos
+        ? prisma.listItem.findMany({
+            where: {
+              isCompleted: false,
+              dueDate: { gte: rangeStart, lte: rangeEnd },
+              list: { familyId: user.familyId },
+            },
+            select: { id: true, content: true, dueDate: true },
+          })
+        : Promise.resolve([]),
+      showDocs
+        ? prisma.document.findMany({
+            // Fetch docs whose expiry date (or reminder window) overlaps the fetch range.
+            // remindBefore defaults to 30; add 90-day buffer to catch any custom value.
+            where: {
+              familyId: user.familyId,
+              expiryDate: {
+                not: null,
+                gte: rangeStart,
+                lte: new Date(rangeEnd.getTime() + ninetyDays),
+              },
+            },
+            select: { id: true, title: true, expiryDate: true, remindBefore: true },
+          })
+        : Promise.resolve([]),
+      showChores
+        ? prisma.chore.findMany({
+            where: {
+              familyId: user.familyId,
+              isActive: true,
+              nextDueDate: { gte: rangeStart, lte: rangeEnd },
+            },
+            select: { id: true, title: true, nextDueDate: true, startTime: true, duration: true },
+          })
+        : Promise.resolve([]),
+    ])
+
+    if (showBills) {
       for (const b of bills) {
         if (!b.nextDueDate) continue
         const day = dateStringInTz(b.nextDueDate, user.timezone ?? 'UTC')
@@ -115,27 +209,6 @@ export async function GET(req: Request) {
       }
     }
 
-    const tripActivities = await prisma.tripActivity.findMany({
-      where: {
-        showOnCalendar: true,
-        day: {
-          date: { gte: rangeStart, lte: rangeEnd },
-          trip: { familyId: user.familyId },
-        },
-      },
-      select: {
-        id: true,
-        title: true,
-        startTime: true,
-        endTime: true,
-        day: {
-          select: {
-            date: true,
-            trip: { select: { id: true, title: true, color: true } },
-          },
-        },
-      },
-    })
     for (const act of tripActivities) {
       const dayDate = dateStringInTz(act.day.date, user.timezone ?? 'UTC')
       const start = act.startTime ?? new Date(dayDate + 'T00:00:00.000Z')
@@ -159,17 +232,6 @@ export async function GET(req: Request) {
     }
 
     if (showBills) {
-      const income = await prisma.financeIncomeEntry.findMany({
-        where: {
-          familyId: user.familyId,
-          showOnCalendar: true,
-          received: false,
-          isVoided: false,
-          isActive: true,
-          nextExpectedDate: { gte: rangeStart, lte: rangeEnd },
-        },
-        select: { id: true, name: true, nextExpectedDate: true },
-      })
       for (const inc of income) {
         if (!inc.nextExpectedDate) continue
         const day = dateStringInTz(inc.nextExpectedDate, user.timezone ?? 'UTC')
@@ -193,20 +255,6 @@ export async function GET(req: Request) {
     }
 
     if (showMeals) {
-      const meals = await prisma.mealPlan.findMany({
-        where: {
-          familyId: user.familyId,
-          mealType: 'dinner',
-          date: { gte: rangeStart, lte: rangeEnd },
-        },
-        select: {
-          id: true,
-          date: true,
-          note: true,
-          recipe: { select: { title: true } },
-          recipes: { select: { recipe: { select: { title: true } } } },
-        },
-      })
       for (const meal of meals) {
         const names: string[] = []
         if (meal.recipes.length > 0) {
@@ -238,14 +286,6 @@ export async function GET(req: Request) {
     }
 
     if (showTodos) {
-      const todos = await prisma.listItem.findMany({
-        where: {
-          isCompleted: false,
-          dueDate: { gte: rangeStart, lte: rangeEnd },
-          list: { familyId: user.familyId },
-        },
-        select: { id: true, content: true, dueDate: true },
-      })
       for (const todo of todos) {
         if (!todo.dueDate) continue
         const day = dateStringInTz(todo.dueDate, user.timezone ?? 'UTC')
@@ -269,20 +309,6 @@ export async function GET(req: Request) {
     }
 
     if (showDocs) {
-      // Fetch docs whose expiry date (or reminder window) overlaps the fetch range.
-      // remindBefore defaults to 30; add 90-day buffer to catch any custom value.
-      const ninetyDays = 90 * 24 * 60 * 60 * 1000
-      const docs = await prisma.document.findMany({
-        where: {
-          familyId: user.familyId,
-          expiryDate: {
-            not: null,
-            gte: rangeStart,
-            lte: new Date(rangeEnd.getTime() + ninetyDays),
-          },
-        },
-        select: { id: true, title: true, expiryDate: true, remindBefore: true },
-      })
       for (const doc of docs) {
         if (!doc.expiryDate) continue
         const tz = user.timezone ?? 'UTC'
@@ -323,14 +349,6 @@ export async function GET(req: Request) {
     }
 
     if (showChores) {
-      const chores = await prisma.chore.findMany({
-        where: {
-          familyId: user.familyId,
-          isActive: true,
-          nextDueDate: { gte: rangeStart, lte: rangeEnd },
-        },
-        select: { id: true, title: true, nextDueDate: true, startTime: true, duration: true },
-      })
       for (const chore of chores) {
         if (!chore.nextDueDate) continue
         const day = dateStringInTz(chore.nextDueDate, user.timezone ?? 'UTC')

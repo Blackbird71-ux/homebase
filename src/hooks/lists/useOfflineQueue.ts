@@ -77,13 +77,15 @@ export function useOfflineQueue(
 
     try {
       const res = await fetch(`/api/lists/${listId}/items`)
-      if (res.ok) setItems(parseServerItems(await res.json()))
+      // Skip overwriting state if an optimistic mutation landed during the refetch
+      // window (matches the poll/app-event guards below).
+      if (res.ok && !shouldSkipServerUpdate()) setItems(parseServerItems(await res.json()))
     } catch {
       // Network gone again — leave optimistic state as-is
     }
 
     await broadcastQueueCount()
-  }, [listId, broadcastQueueCount, setItems])
+  }, [listId, broadcastQueueCount, setItems, shouldSkipServerUpdate])
 
   // Flush on coming back online (iOS/Safari fallback)
   useEffect(() => {

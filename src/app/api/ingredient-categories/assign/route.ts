@@ -43,80 +43,84 @@ export async function POST(req: Request) {
       }
     }
 
-    const results = []
-    
+    // Batch-fetch the owned list items and categories once, then validate each
+    // update against those maps (avoids the previous 3N per-row queries).
+    const ingredientIds = [...new Set(updates.map(u => u.ingredientId as string))]
+    const categoryIds = [...new Set(
+      updates.map(u => u.categoryId).filter((c: unknown): c is string => typeof c === 'string')
+    )]
+
+    const [items, categories] = await Promise.all([
+      prisma.listItem.findMany({
+        where: { id: { in: ingredientIds }, list: { familyId: user.familyId } },
+        select: { id: true },
+      }),
+      prisma.ingredientCategory.findMany({
+        where: { id: { in: categoryIds }, familyId: user.familyId },
+        select: { id: true, category: true },
+      }),
+    ])
+
+    const ownedItemIds = new Set(items.map(i => i.id))
+    const categoryNameById = new Map(categories.map(c => [c.id, c.category]))
+
+    const results: Array<{
+      ingredientId: string
+      categoryId: string | null
+      success: boolean
+      error?: string
+      categoryName?: string | null
+    }> = []
+    // id -> resolved category name (string) or null; last write wins on duplicate ids.
+    const toUpdate = new Map<string, string | null>()
+
     for (const update of updates) {
-      const { ingredientId, categoryId } = update
-      
-      try {
-        // Verify the ingredient exists and belongs to user's family
-        // Note: We need to check if ingredient exists in the system
-        // For now, we'll assume it's a list item ID
-        const listItem = await (prisma as any).listItem.findFirst({
-          where: {
-            id: ingredientId,
-            list: {
-              familyId: user.familyId
-            }
-          },
-          include: {
-            list: true
-          }
-        })
+      const ingredientId = update.ingredientId as string
+      const categoryId = (update.categoryId ?? null) as string | null
 
-        if (!listItem) {
-          results.push({
-            ingredientId,
-            categoryId,
-            success: false,
-            error: 'Ingredient not found or does not belong to your family'
-          })
-          continue
-        }
-
-        // If categoryId is provided, verify it exists and belongs to user's family
-        let category = null
-        if (categoryId) {
-          category = await (prisma as any).ingredientCategory.findFirst({
-            where: {
-              id: categoryId,
-              familyId: user.familyId
-            }
-          })
-
-          if (!category) {
-            results.push({
-              ingredientId,
-              categoryId,
-              success: false,
-              error: 'Category not found or does not belong to your family'
-            })
-            continue
-          }
-        }
-
-        // Update the list item with the category
-        const updatedItem = await (prisma as any).listItem.update({
-          where: { id: ingredientId },
-          data: {
-            category: category ? category.category : null
-          }
-        })
-
-        results.push({
-          ingredientId,
-          categoryId,
-          categoryName: category ? category.category : null,
-          success: true
-        })
-      } catch (error) {
+      if (!ownedItemIds.has(ingredientId)) {
         results.push({
           ingredientId,
           categoryId,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: 'Ingredient not found or does not belong to your family',
         })
+        continue
       }
+
+      let categoryName: string | null = null
+      if (categoryId) {
+        const found = categoryNameById.get(categoryId)
+        if (found === undefined) {
+          results.push({
+            ingredientId,
+            categoryId,
+            success: false,
+            error: 'Category not found or does not belong to your family',
+          })
+          continue
+        }
+        categoryName = found
+      }
+
+      toUpdate.set(ingredientId, categoryName)
+      results.push({ ingredientId, categoryId, categoryName, success: true })
+    }
+
+    // Group by target category value → one updateMany per distinct value, in a transaction.
+    const idsByCategory = new Map<string | null, string[]>()
+    for (const [id, cat] of toUpdate) {
+      const arr = idsByCategory.get(cat) ?? []
+      arr.push(id)
+      idsByCategory.set(cat, arr)
+    }
+
+    if (idsByCategory.size > 0) {
+      await prisma.$transaction(
+        [...idsByCategory.entries()].map(([category, ids]) =>
+          prisma.listItem.updateMany({ where: { id: { in: ids } }, data: { category } })
+        )
+      )
     }
 
     const successful = results.filter(r => r.success).length

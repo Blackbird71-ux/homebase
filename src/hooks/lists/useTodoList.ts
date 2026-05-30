@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback, useEffect } from 'react'
+import { useState, useTransition, useCallback, useEffect, useRef } from 'react'
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
 import {
   PointerSensor,
@@ -25,6 +25,12 @@ export function useTodoList(
   currentUserId: string,
 ) {
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
+  // Suppress the cross-device poll briefly after a local mutation so it can't
+  // overwrite optimistic state with a stale read. To-do mutations are pessimistic
+  // (state changes only after the server confirms), so a short time-window is
+  // enough — no pendingMutations counter needed like the shopping list has.
+  const lastMutAt = useRef(0)
+  const shouldSkipServerUpdate = useCallback(() => Date.now() - lastMutAt.current < 3000, [])
   const [filter, setFilter] = useState<TodoFilter>('mine')
   const [categories, setCategories] = useState<string[]>(initialCategoryOrder ?? [])
   const [newContent, setNewContent] = useState('')
@@ -55,26 +61,36 @@ export function useTodoList(
     500,
   )
 
-  // Listen for todo list updates from AI assistant or other sources
+  // Pull the latest items from the server, unless a local mutation just landed
+  // (don't clobber optimistic state). Shared by the app-event listener and the poll.
+  const refetchItems = useCallback(() => {
+    fetch(`/api/lists/${listId}/items`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((serverItems) => {
+        if (!serverItems || shouldSkipServerUpdate()) return
+        setItems(
+          serverItems.map((i: Record<string, unknown>) => ({
+            ...i,
+            dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
+            createdAt: new Date(i.createdAt as string),
+          }))
+        )
+      })
+      .catch(() => {})
+  }, [listId, shouldSkipServerUpdate])
+
+  // Refetch when the AI assistant or another source updates the list
+  useEffect(() => listenAppEvent(AppEvents.TODO_LIST_UPDATED, refetchItems), [refetchItems])
+
+  // Poll for item changes from other devices every 30s when the tab is visible and online
   useEffect(() => {
-    const cleanup = listenAppEvent(AppEvents.TODO_LIST_UPDATED, () => {
-      fetch(`/api/lists/${listId}/items`)
-        .then((res) => res.ok ? res.json() : null)
-        .then((serverItems) => {
-          if (serverItems) {
-            setItems(
-              serverItems.map((i: Record<string, unknown>) => ({
-                ...i,
-                dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
-                createdAt: new Date(i.createdAt as string),
-              }))
-            )
-          }
-        })
-        .catch(() => {})
-    })
-    return cleanup
-  }, [listId])
+    const interval = setInterval(() => {
+      if (!navigator.onLine || document.visibilityState !== 'visible') return
+      if (shouldSkipServerUpdate()) return
+      refetchItems()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [refetchItems, shouldSkipServerUpdate])
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -102,6 +118,7 @@ export function useTodoList(
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
     if (!newContent.trim()) return
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -125,6 +142,7 @@ export function useTodoList(
   }
 
   async function toggleItem(id: string, isCompleted: boolean) {
+    lastMutAt.current = Date.now()
     startTransition(async () => {
       const res = await fetch(`/api/lists/${listId}/items/${id}`, {
         method: 'PATCH',
@@ -153,6 +171,7 @@ export function useTodoList(
   }
 
   function handleItemSaved(id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null) {
+    lastMutAt.current = Date.now()
     setItems((prev) =>
       prev.map((i) => (i.id === id ? {
         ...i,
@@ -165,6 +184,7 @@ export function useTodoList(
   }
 
   async function deleteItem(id: string) {
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setItems((prev) => prev.filter((i) => i.id !== id))
@@ -174,6 +194,7 @@ export function useTodoList(
   }
 
   async function toggleLock(id: string, isLocked: boolean) {
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -187,6 +208,7 @@ export function useTodoList(
   }
 
   async function assignItem(id: string, assignedToUserId: string | null) {
+    lastMutAt.current = Date.now()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -202,6 +224,7 @@ export function useTodoList(
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
+    lastMutAt.current = Date.now()
 
     const isGrouped = categories.length > 0
     if (isGrouped) {

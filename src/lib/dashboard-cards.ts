@@ -52,7 +52,6 @@ export function mergeDashboardCards(
     }))
   }
 
-  const savedMap = new Map(saved.map((c) => [c.id, c]))
   const result: DashboardCardConfig[] = []
   const seen = new Set<string>()
 

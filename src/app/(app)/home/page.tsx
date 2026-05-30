@@ -270,7 +270,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const expandedWeekEvents = (() => {
     const result = weekEvents.flatMap(e => {
       if (e.isRecurring && e.recurrenceRule) {
-        return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, weekStartUtc, weekEndUtc)
+        return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, weekStartUtc, weekEndUtc, timezone)
           .map(inst => ({ ...e, start: inst.start, end: inst.end }))
       }
       return [e]
@@ -318,7 +318,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       const windowEnd = new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000)
       const expanded = upcomingEvents.flatMap(e => {
         if (e.isRecurring && e.recurrenceRule) {
-          return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, todayStart, windowEnd)
+          return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, todayStart, windowEnd, timezone)
             .map(inst => ({ ...e, start: inst.start, end: inst.end }))
         }
         return [e]

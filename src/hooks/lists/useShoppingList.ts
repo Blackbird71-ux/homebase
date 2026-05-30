@@ -199,7 +199,9 @@ export function useShoppingList(
       setNewContent('')
       setNewCategory('Other')
       setCategoryManuallySet(false)
-      await enqueueMutation({ id: crypto.randomUUID(), endpoint: `/api/lists/${listId}/items`, method: 'POST', body, tempId, listId, queuedAt: Date.now() })
+      // Carry the tempId as clientMutationId so a replayed POST (committed-but-lost
+      // response on a flaky reconnect) is de-duped server-side instead of re-created.
+      await enqueueMutation({ id: crypto.randomUUID(), endpoint: `/api/lists/${listId}/items`, method: 'POST', body: { ...body, clientMutationId: tempId }, tempId, listId, queuedAt: Date.now() })
       await registerBackgroundSync()
       await broadcastQueueCount()
       return

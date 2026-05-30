@@ -35,9 +35,6 @@ export async function POST(_req: Request) {
   })
   const syncedEventIds = new Set(existingSyncs.map((s) => s.eventId))
 
-  let synced = 0
-  let skipped = 0
-
   let token: string
   try {
     token = await getAccessToken(dbUser.googleRefreshToken)
@@ -45,35 +42,48 @@ export async function POST(_req: Request) {
     return NextResponse.json({ error: 'Failed to authenticate with Google' }, { status: 502 })
   }
 
-  for (const event of events) {
-    // Skip personal events from other users
-    if (event.isPersonal && event.createdBy !== user.id) {
-      skipped++
-      continue
-    }
+  // Pre-filter the events that actually need pushing to Google: drop other users'
+  // personal events and ones already synced. The rest count as skipped.
+  const toCreate = events.filter(
+    (event) =>
+      !(event.isPersonal && event.createdBy !== user.id) &&
+      !syncedEventIds.has(event.id)
+  )
+  let skipped = events.length - toCreate.length
 
-    // Skip already-synced events
-    if (syncedEventIds.has(event.id)) {
-      skipped++
-      continue
-    }
+  // Push to Google in bounded-concurrency batches: fully sequential risks a request
+  // timeout on large initial syncs, fully parallel risks Google API rate limits.
+  const CONCURRENCY = 5
+  const created: { eventId: string; userId: string; googleEventId: string }[] = []
 
-    try {
-      const googleEventId = await createGoogleEvent(token, {
-        title: event.title,
-        description: event.description,
-        start: event.start,
-        end: event.end,
-        isAllDay: event.isAllDay,
+  for (let i = 0; i < toCreate.length; i += CONCURRENCY) {
+    const batch = toCreate.slice(i, i + CONCURRENCY)
+    const results = await Promise.all(
+      batch.map(async (event) => {
+        try {
+          const googleEventId = await createGoogleEvent(token, {
+            title: event.title,
+            description: event.description,
+            start: event.start,
+            end: event.end,
+            isAllDay: event.isAllDay,
+          })
+          return { eventId: event.id, userId: user.id, googleEventId }
+        } catch {
+          return null
+        }
       })
-      await prisma.googleCalendarSync.create({
-        data: { eventId: event.id, userId: user.id, googleEventId },
-      })
-      synced++
-    } catch {
-      skipped++
+    )
+    for (const r of results) {
+      if (r) created.push(r)
+      else skipped++
     }
   }
 
-  return NextResponse.json({ synced, skipped })
+  // One batched insert instead of a DB round-trip per event.
+  if (created.length > 0) {
+    await prisma.googleCalendarSync.createMany({ data: created })
+  }
+
+  return NextResponse.json({ synced: created.length, skipped })
 }

@@ -58,7 +58,8 @@ export default async function CalendarPage() {
         event.recurrenceRule,
         event.recurrenceEndDate,
         from,
-        to
+        to,
+        user.timezone ?? 'UTC'
       )
 
       const expanded = instances.map((instance, index) => ({

@@ -135,6 +135,9 @@ model Event {
   emailReminder        Boolean                @default(false)  // Send reminder email before event
   emailReminderHours   Int                    @default(24)     // Hours before start to send reminder
   emailReminderEmails  String?                // JSON array of extra recipient emails (non-family)
+
+  @@index([familyId, start])
+  @@index([seriesId])
 }
 
 model EventAttendee {
@@ -168,6 +171,8 @@ model List {
   // Trip packing list links
   trip               Trip?              @relation("TripPackingList")
   tripPackingEntries TripPackingEntry[] @relation("TripPackingEntries")
+
+  @@index([familyId])
 }
 
 model ListTemplate {
@@ -214,6 +219,10 @@ model ListItem {
   listId           String
   list             List      @relation(fields: [listId], references: [id])
   createdAt        DateTime  @default(now())
+  // De-dupe key for offline POST replay: a re-sent create with the same id is a no-op.
+  clientMutationId String?   @unique
+
+  @@index([listId])
 }
 
 model Recipe {
@@ -245,6 +254,8 @@ model Recipe {
   mealPlanTemplateSlots MealPlanTemplateSlot[]
   recipeTags   RecipeTag[]
   createdAt    DateTime    @default(now())
+
+  @@index([familyId])
 }
 
 model MealPlan {
@@ -423,6 +434,8 @@ model Note {
   family     Family   @relation(fields: [familyId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([familyId])
 }
 
 model Chore {

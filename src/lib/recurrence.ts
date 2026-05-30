@@ -1,4 +1,5 @@
 import { addDays, addWeeks, addMonths, addYears, isBefore, isAfter, differenceInMilliseconds } from 'date-fns'
+import { dateStringInTz, localMidnightToUtc } from '@/lib/timezone'
 
 export interface RecurrenceInstance {
   start: Date
@@ -69,6 +70,7 @@ export function generateRecurrenceInstances(
   recurrenceEndDate: Date | null,
   rangeStart: Date,
   rangeEnd: Date,
+  timezone: string,
   maxInstances = 365
 ): RecurrenceInstance[] {
   const parsed = parseRRule(recurrenceRule)
@@ -77,6 +79,13 @@ export function generateRecurrenceInstances(
   const { freq, interval, byDay, count } = parsed
   const duration = differenceInMilliseconds(eventEnd, eventStart)
   const instances: RecurrenceInstance[] = []
+
+  // For WEEKLY+BYDAY, anchor each instance at the event's local time-of-day:
+  // ms elapsed from the event's local midnight (in the user's tz) to its start.
+  const localTimeOfDayMs =
+    freq === 'WEEKLY' && byDay && byDay.length > 0
+      ? eventStart.getTime() - localMidnightToUtc(dateStringInTz(eventStart, timezone), timezone).getTime()
+      : 0
 
   // For COUNT-based rules, we need to generate up to COUNT instances
   const maxToGenerate = count || maxInstances
@@ -91,27 +100,37 @@ export function generateRecurrenceInstances(
   while (instanceCount < maxToGenerate && iterations < maxIterations) {
     iterations++
 
-    // For WEEKLY with BYDAY, we need to generate each day of the week
+    // For WEEKLY with BYDAY, generate each selected day — computed in the
+    // user's local timezone so the weekday and wall-clock time are correct
+    // for users east/west of UTC (AGENTS.md §Timezone).
     if (freq === 'WEEKLY' && byDay && byDay.length > 0) {
-      // Compute UTC midnight of the current position and its day-of-week
-      const weekMidnight = new Date(Date.UTC(currentStart.getUTCFullYear(), currentStart.getUTCMonth(), currentStart.getUTCDate()))
-      const dayOfWeek = currentStart.getUTCDay()
+      // Stop once the whole week has moved past the series end date.
+      if (recurrenceEndDate && isAfter(currentStart, recurrenceEndDate)) break
+
+      // The local calendar date of the current week position and its weekday.
+      const weekDateStr = dateStringInTz(currentStart, timezone)
+      const [wy, wm, wd] = weekDateStr.split('-').map(Number)
+      const weekDayOfWeek = new Date(Date.UTC(wy, wm - 1, wd)).getUTCDay()
 
       // For each day in the BYDAY list
       for (const dayStr of byDay) {
         const targetDay = byDayToDayOfWeek(dayStr)
         if (targetDay < 0) continue
 
-        // Calculate days to add to get to the target day
-        let daysToAdd = targetDay - dayOfWeek
+        // Calculate days to add to get to the target local weekday
+        let daysToAdd = targetDay - weekDayOfWeek
         if (daysToAdd < 0) daysToAdd += 7
 
-        const instanceStart = new Date(weekMidnight.getTime() + daysToAdd * 86400000)
-        instanceStart.setHours(eventStart.getHours(), eventStart.getMinutes(), eventStart.getSeconds(), eventStart.getMilliseconds())
-
+        // Local calendar date of this instance → its local midnight in UTC,
+        // then offset by the event's local time-of-day.
+        const instanceDateStr = new Date(Date.UTC(wy, wm - 1, wd + daysToAdd)).toISOString().slice(0, 10)
+        const instanceStart = new Date(localMidnightToUtc(instanceDateStr, timezone).getTime() + localTimeOfDayMs)
         const instanceEnd = new Date(instanceStart.getTime() + duration)
 
-        // Check if this instance is within range
+        // Honour the series end date (the non-BYDAY path checks this below).
+        if (recurrenceEndDate && isAfter(instanceStart, recurrenceEndDate)) continue
+
+        // Check if this instance is within the requested view range
         if (isAfter(instanceEnd, rangeStart) && isBefore(instanceStart, rangeEnd)) {
           instances.push({
             start: instanceStart,
@@ -124,8 +143,8 @@ export function generateRecurrenceInstances(
         if (instanceCount >= maxToGenerate) break
       }
 
-      // Move to next week
-      currentStart = addWeeks(weekMidnight, interval)
+      // Move to next week (advance the anchor by interval weeks)
+      currentStart = addWeeks(currentStart, interval)
       continue
     }
 

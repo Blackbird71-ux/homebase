@@ -32,7 +32,7 @@ export async function POST(
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
   const body = await req.json()
-  const { content, category, dueDate, sortOrder, recipeId, recipeName, unitPrice, quantity, assignedToUserId } = body
+  const { content, category, dueDate, sortOrder, recipeId, recipeName, unitPrice, quantity, assignedToUserId, clientMutationId } = body
 
   if (!content) {
     return NextResponse.json({ error: 'content is required' }, { status: 400 })
@@ -48,6 +48,14 @@ export async function POST(
   })
   if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // Idempotent offline-replay guard: if this create was already committed under the
+  // same clientMutationId (response lost on a flaky reconnect), return the existing
+  // row instead of duplicating it. Skip the audit log on this path.
+  if (clientMutationId) {
+    const existing = await prisma.listItem.findUnique({ where: { clientMutationId } })
+    if (existing) return NextResponse.json(existing, { status: 200 })
+  }
+
   const item = await prisma.listItem.create({
     data: {
       content,
@@ -59,6 +67,7 @@ export async function POST(
       unitPrice: unitPrice ?? null,
       quantity: quantity ?? null,
       assignedToUserId: assignedToUserId ?? null,
+      clientMutationId: clientMutationId ?? null,
       createdBy: user.id,
       listId: id,
     },
