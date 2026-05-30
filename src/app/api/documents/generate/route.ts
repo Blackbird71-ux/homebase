@@ -154,7 +154,7 @@ export async function POST(req: Request) {
     }
 
     // ── Return PDF as download ───────────────────────────────────────────────
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
