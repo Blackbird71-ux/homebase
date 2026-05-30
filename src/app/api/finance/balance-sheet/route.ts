@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { getFamilyTimezone } from '@/lib/family'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 
 // GET /api/finance/balance-sheet?asAt=2026-06-30&entityId=optional
@@ -69,12 +70,7 @@ export async function GET(request: NextRequest) {
 
   const familyId = user.familyId
 
-  // Load family timezone (P2 fix #2) alongside other settings
-  const family = await prisma.family.findUnique({
-    where: { id: familyId },
-    select: { timezone: true },
-  })
-  const tz = family?.timezone ?? 'Australia/Sydney'
+  const tz = await getFamilyTimezone(familyId)
 
   // asAt: interpret the date string as end-of-day in the family's timezone
   const asAt = asAtParam

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 // The family timezone is fetched once per session and cached at module level so
 // that every row/page sharing this hook triggers at most one network request.
@@ -13,13 +14,13 @@ function load(): Promise<string> {
     inflight = fetch('/api/settings/family')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        const tz = (d?.timezone as string) ?? 'Australia/Sydney'
+        const tz = (d?.timezone as string) ?? DEFAULT_TIMEZONE
         cached = tz
         return tz
       })
       .catch(() => {
-        cached = 'Australia/Sydney'
-        return 'Australia/Sydney'
+        cached = DEFAULT_TIMEZONE
+        return DEFAULT_TIMEZONE
       })
       .finally(() => { inflight = null })
   }
@@ -34,7 +35,7 @@ function load(): Promise<string> {
  * device set to a different timezone.
  */
 export function useFamilyTimezone(): string {
-  const [tz, setTz] = useState(cached ?? 'Australia/Sydney')
+  const [tz, setTz] = useState(cached ?? DEFAULT_TIMEZONE)
   useEffect(() => {
     let active = true
     load().then(t => { if (active) setTz(t) })

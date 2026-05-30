@@ -1,5 +1,6 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { FamilySettingsClient } from './FamilySettingsClient'
 import { SUPPORTED_TIMEZONES } from '@/app/api/settings/family/route'
 import { PageHero } from '@/components/shared/PageHero'
@@ -17,7 +18,7 @@ export default async function GeneralSettingsPage() {
       <FamilySettingsClient
         family={{
           name: family?.name ?? '',
-          timezone: family?.timezone ?? 'Australia/Sydney',
+          timezone: family?.timezone ?? DEFAULT_TIMEZONE,
           loginTagline: family?.loginTagline ?? '',
           financeYearStartMonth: family?.financeYearStartMonth ?? 7,
         }}

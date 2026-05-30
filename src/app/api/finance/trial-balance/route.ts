@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { getFamilyTimezone } from '@/lib/family'
 
 // Reuse the same timezone-aware end-of-day helper as balance-sheet/route.ts.
 // setHours(23,59,59,999) uses the server's local timezone (UTC on the NAS),
@@ -84,11 +85,7 @@ export async function GET(request: NextRequest) {
   // Load family timezone so date boundaries are correct for AU users.
   // The NAS runs UTC; setHours(23,59,59) on a UTC server means 2pm AEST,
   // cutting off same-day journal entries posted after that time.
-  const family = await prisma.family.findUnique({
-    where: { id: familyId },
-    select: { timezone: true },
-  })
-  const tz = family?.timezone ?? 'Australia/Sydney'
+  const tz = await getFamilyTimezone(familyId)
 
   // Build date filter for journal entries — use timezone-aware end-of-day
   const dateFilter: any = {}

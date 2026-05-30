@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { fyDateRangeInTz, fyStartYear } from '@/lib/finance-fy'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ export async function GET(
       where: { id: user.familyId },
       select: { timezone: true, financeYearStartMonth: true },
     })
-    const tz           = family?.timezone              ?? 'Australia/Sydney'
+    const tz           = family?.timezone              ?? DEFAULT_TIMEZONE
     const fyStartMonth = family?.financeYearStartMonth ?? 7
 
     // ── Date range ────────────────────────────────────────────────────────

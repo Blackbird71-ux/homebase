@@ -3,24 +3,22 @@
 // client-side preview needs. These do NOT access prisma or node:crypto and are
 // safe to import from 'use client' code.
 //
-// The server-side equivalents in finance-recurring-template-service.ts use a
-// different (object-based) signature and are kept separate to avoid regression.
+// The actual stepping math now lives in finance-recurrence-core (also used by
+// the server's computeNextOccurrenceDate) so the client preview and the spawn
+// worker can never drift apart. This file keeps the flat-parameter signatures
+// the templates UI already depends on.
 
-import { addDays, addWeeks, addMonths, setDate, getDaysInMonth } from 'date-fns'
+import { addMonths } from 'date-fns'
+import { applyDayOfMonth, stepOccurrence } from '@/lib/finance-recurrence-core'
 
-// ── applyDayOfMonth ──────────────────────────────────────────────────────────
-// Snap a date to `targetDay` (1–31), clamping to the month's actual max day.
-// This is a pure function — input date is not mutated.
-
-export function applyDayOfMonth(d: Date, targetDay: number): Date {
-  const max = getDaysInMonth(d)
-  return setDate(d, Math.min(Math.max(1, targetDay), max))
-}
+export { applyDayOfMonth }
 
 // ── nextOccurrence ───────────────────────────────────────────────────────────
 // Compute the next occurrence date from `from` given a frequency config.
 // This is the client-side equivalent of computeNextOccurrenceDate, using
-// flat parameters instead of an OccurrenceTemplate object.
+// flat parameters instead of an OccurrenceTemplate object. Delegates to the
+// shared core; an unknown frequency falls back to a monthly step (preserving
+// this function's long-standing default-case behaviour).
 
 export function nextOccurrence(
   from: Date,
@@ -29,27 +27,7 @@ export function nextOccurrence(
   dayOfMonth: number | null,
   monthOfYear: number | null,
 ): Date {
-  let next: Date
-  switch (freq) {
-    case 'weekly':      next = addWeeks(from, interval); break
-    case 'fortnightly': next = addWeeks(from, 2 * interval); break
-    case 'monthly':     next = addMonths(from, interval); break
-    case 'bimonthly':   next = addMonths(from, 2 * interval); break
-    case 'quarterly':   next = addMonths(from, 3 * interval); break
-    case 'halfyearly':  next = addMonths(from, 6 * interval); break
-    case 'yearly':      next = addMonths(from, 12 * interval); break
-    case 'custom':      next = addDays(from, interval); break
-    default:            next = addMonths(from, interval)
-  }
-  const snapFreqs = ['monthly', 'bimonthly', 'quarterly', 'halfyearly', 'yearly']
-  if (dayOfMonth && snapFreqs.includes(freq)) {
-    next = applyDayOfMonth(next, dayOfMonth)
-  }
-  if (monthOfYear && freq === 'yearly') {
-    next = new Date(next.getFullYear(), monthOfYear - 1, next.getDate())
-    if (dayOfMonth) next = applyDayOfMonth(next, dayOfMonth)
-  }
-  return next
+  return stepOccurrence(from, freq, interval, dayOfMonth, monthOfYear) ?? addMonths(from, interval)
 }
 
 // ── previewOccurrences ───────────────────────────────────────────────────────

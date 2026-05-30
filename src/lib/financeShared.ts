@@ -145,7 +145,10 @@ export function toMonthlyAmount(amount: number, frequency: string): number {
 
 /**
  * Format a number as AUD currency (e.g. $1,234.56).
+ *
+ * Pass `options` to override the defaults — e.g. `{ maximumFractionDigits: 0 }`
+ * for whole-dollar display, or `{ currency: 'USD' }` for a different currency.
  */
-export function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+export function formatCurrency(n: number, options?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', ...options }).format(n)
 }

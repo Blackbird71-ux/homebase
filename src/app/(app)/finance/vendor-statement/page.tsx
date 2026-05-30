@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PageHero } from '@/components/shared/PageHero'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
+import { formatCurrency } from '@/lib/financeShared'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ interface StatementData {
 // ── Format helpers ────────────────────────────────────────────────────────────
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+  return formatCurrency(n)
 }
 
 function fmtDate(s: string): string {

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
+import { formatCurrency } from '@/lib/financeShared'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ function currentQuarterIndex(fyStartMonth: number): { fyYear: number; qIdx: numb
 // ── Format helpers ────────────────────────────────────────────────────────────
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+  return formatCurrency(n)
 }
 
 function fmtDate(s: string): string {

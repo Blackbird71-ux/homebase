@@ -8,6 +8,7 @@ import {
 import { PageHero } from '@/components/shared/PageHero'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { formatCurrency } from '@/lib/financeShared'
 import { cn } from '@/lib/utils'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { CategorySpendView, type BudgetRule } from '@/components/finance/CategorySpendView'
@@ -58,7 +59,7 @@ function toMonthly(amount: number, period: string): number {
 }
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
+  return formatCurrency(n, { maximumFractionDigits: 0 })
 }
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {

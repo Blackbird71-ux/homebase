@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { getFamilyTimezone } from '@/lib/family'
 import { monthRangeInTz } from '@/lib/finance-fy'
 
 // ── Batch P&L ────────────────────────────────────────────────────────────────
@@ -32,11 +33,7 @@ export async function GET(request: NextRequest) {
   const rangeStart = new Date(fromRaw)
   const rangeEnd   = new Date(toRaw)
 
-  const family = await prisma.family.findUnique({
-    where: { id: familyId },
-    select: { timezone: true },
-  })
-  const tz = family?.timezone ?? 'Australia/Sydney'
+  const tz = await getFamilyTimezone(familyId)
 
   // Single DB query for all posted income/expense journal lines in the full range
   const journalLines = await prisma.financeJournalLine.findMany({

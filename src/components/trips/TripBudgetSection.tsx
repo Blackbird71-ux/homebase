@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { DollarSign, Pencil, X, Loader2 } from 'lucide-react'
+import { formatCurrency as formatAUD } from '@/lib/financeShared'
 
 interface TripBudgetSectionProps {
   tripId: string
@@ -85,12 +86,7 @@ export function TripBudgetSection({
   }
 
   function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
+    return formatAUD(amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 
   const budgetAmount = estimatedBudget ?? totalFromBreakdown

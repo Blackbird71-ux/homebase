@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Receipt } from 'lucide-react'
 import type { BillSummaryItem } from '@/types'
 import Link from 'next/link'
+import { formatCurrency as formatAUD } from '@/lib/financeShared'
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(amount)
+  return formatAUD(amount)
 }
 
 function dueDateLabel(bill: BillSummaryItem) {

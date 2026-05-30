@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
 
 // GET /api/finance/bas?from=YYYY-MM-DD&to=YYYY-MM-DD&entityId=xxx
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
     select: { financeYearStartMonth: true, timezone: true },
   })
   const fyStartMonth = family?.financeYearStartMonth ?? 7
-  const tz           = family?.timezone ?? 'Australia/Sydney'
+  const tz           = family?.timezone ?? DEFAULT_TIMEZONE
 
   let from: Date, to: Date, periodLabel: string
   if (fromRaw && toRaw) {

@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { ColorPicker } from '@/components/ui/color-picker'
+import { formatCurrency as formatMoney } from '@/lib/financeShared'
 
 interface Goal {
   id: string; name: string; targetAmount: number; currentAmount: number
@@ -73,7 +74,7 @@ export default function GoalsPage() {
   }
 
   function formatCurrency(amount: number) {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(amount)
+    return formatMoney(amount)
   }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading goals…</div>

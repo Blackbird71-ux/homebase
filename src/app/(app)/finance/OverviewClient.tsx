@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { PageHero } from '@/components/shared/PageHero'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { formatCurrency as formatMoney } from '@/lib/financeShared'
 
 interface SerializedAccount {
   id: string; name: string; type: string; institution: string | null
@@ -69,7 +70,7 @@ interface Props {
 }
 
 function formatCurrency(amount: number, currency = 'AUD'): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency }).format(amount)
+  return formatMoney(amount, { currency })
 }
 
 export function OverviewClient({

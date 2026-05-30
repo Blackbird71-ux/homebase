@@ -10,6 +10,7 @@ import { format } from 'date-fns'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
+import { formatCurrency } from '@/lib/financeShared'
 import * as XLSX from 'xlsx'
 import {
   buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle, subSectionStyle,
@@ -86,14 +87,11 @@ interface LedgerTx {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n: number, currency = 'AUD') {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency,
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n)
+  return formatCurrency(n, { currency, minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+  return formatCurrency(n)
 }
 
 /**

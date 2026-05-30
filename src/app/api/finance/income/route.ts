@@ -7,7 +7,7 @@ import { createOccurrenceDraft } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
-import { postPayslipReceiptJournal } from '@/lib/finance-posting'
+import { postPayslipReceiptJournal, postIncomeReceiptJournal } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -1006,24 +1006,16 @@ export async function PATCH(request: NextRequest) {
               )
             }
           }
-          receiptJe = await tx.financeJournalEntry.create({
-            data: {
-              reference: receiptRef,
-              date: actualReceivedDate,
-              description: `${existing.name} (cash received)`,
-              type: 'auto_transaction',
-              isPosted: true,
-              entityId: existing.entityId ?? null,
-              familyId: user.familyId,
-              lines: {
-                create: [
-                  { glAccountId: receiptGlAccountId!, side: 'debit',  amount: actualAmount, description: `Bank receipt: ${existing.name}` },
-                  { glAccountId: arCategoryId,         side: 'credit', amount: actualAmount, description: `AR clear: ${existing.name}` },
-                ],
-              },
-            },
-            select: { id: true },
+          const receiptResult = await postIncomeReceiptJournal(tx, {
+            familyId: user.familyId,
+            description: existing.name,
+            amount: actualAmount,
+            bankGlAccountId: receiptGlAccountId!,
+            entityId: existing.entityId ?? null,
+            date: actualReceivedDate,
+            reference: receiptRef,
           })
+          receiptJe = { id: receiptResult.journalEntryId }
         }
 
         const receiptStatusData = {

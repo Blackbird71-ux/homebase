@@ -12,14 +12,12 @@ import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
 import { buildTrialBalanceWorkbook } from '@/lib/excel/trial-balance-excel'
 import { useTrialBalance } from '@/hooks/finance/useTrialBalance'
+import { formatCurrency } from '@/lib/financeShared'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function fmtCompact(n: number) {
@@ -28,7 +26,7 @@ function fmtCompact(n: number) {
   if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`
   if (abs >= 10_000)    return `${sign}$${(abs / 1_000).toFixed(1)}K`
   if (abs >= 1_000)     return `${sign}$${(abs / 1_000).toFixed(2)}K`
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 const TYPE_LABEL: Record<string, string> = {

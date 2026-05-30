@@ -1,5 +1,7 @@
 // HTML email templates for reminders and recipe sharing
 
+import { formatCurrency } from '@/lib/financeShared'
+
 function baseLayout(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -140,7 +142,7 @@ export function billReminderHtml(bill: {
 }, recipientName: string, completeUrl: string): string {
   const dueStr = bill.nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
   const daysText = bill.reminderDays === 1 ? 'tomorrow' : `in ${bill.reminderDays} days`
-  const amount = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(bill.amount)
+  const amount = formatCurrency(bill.amount)
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1e293b;font-size:20px">Bill Due Soon</h2>

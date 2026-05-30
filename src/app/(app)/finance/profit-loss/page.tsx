@@ -8,6 +8,7 @@ import {
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { PrintButton } from '@/components/print/PrintButton'
+import { formatCurrency } from '@/lib/financeShared'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
 import { Button } from '@/components/ui/button'
@@ -19,7 +20,7 @@ import { toast } from 'sonner'
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

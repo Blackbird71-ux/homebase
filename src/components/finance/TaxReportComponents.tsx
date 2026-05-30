@@ -3,6 +3,7 @@
 import { AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SUPER_CAP } from '@/lib/tax-calculator'
+import { formatCurrency } from '@/lib/financeShared'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export interface PersonTax {
 // ── Formatting ────────────────────────────────────────────────────────────────
 
 export function fmt(n: number): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // ── Helper sub-components ─────────────────────────────────────────────────────

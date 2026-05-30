@@ -13,7 +13,7 @@ import {
 } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { getCurrentFY } from '@/lib/financeShared'
+import { getCurrentFY, formatCurrency } from '@/lib/financeShared'
 import { formatInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import EmailReportModal from '@/components/finance/EmailReportModal'
@@ -62,7 +62,7 @@ function toPeriodAmount(amount: number, frequency: string, periodMonths: number)
 }
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function getPeriodBounds(mode: PeriodMode, anchor: Date): { start: Date; end: Date; label: string } {

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/financeShared'
 
 export interface BudgetRule {
   id: string
@@ -36,7 +37,7 @@ function toMonthly(amount: number, period: string): number {
 }
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
+  return formatCurrency(n, { maximumFractionDigits: 0 })
 }
 
 export function CategorySpendView({ rules }: { rules: BudgetRule[] }) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyCompleteToken } from '@/lib/complete-token'
 import { calculateNextDueDate } from '@/lib/chore-helpers'
+import { formatCurrency } from '@/lib/financeShared'
 
 function htmlPage(title: string, heading: string, body: string, success: boolean): Response {
   const color = success ? '#16a34a' : '#dc2626'
@@ -135,7 +136,7 @@ export async function GET(req: Request): Promise<Response> {
       data: { paid: true, paidDate: new Date() },
     })
 
-    const amount = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(bill.amount)
+    const amount = formatCurrency(bill.amount)
     return htmlPage(
       'Paid!',
       'Marked as paid!',

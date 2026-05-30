@@ -7,6 +7,7 @@ import { PageHero } from '@/components/shared/PageHero'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { ColorPicker } from '@/components/ui/color-picker'
+import { formatCurrency as formatMoney } from '@/lib/financeShared'
 
 interface Account {
   id: string; name: string; type: string; institution: string | null
@@ -126,7 +127,7 @@ export default function AccountsPage() {
   }
 
   function formatCurrency(amount: number, currency = 'AUD') {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency }).format(amount)
+    return formatMoney(amount, { currency })
   }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading accounts…</div>

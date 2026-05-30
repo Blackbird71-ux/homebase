@@ -5,10 +5,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { buildYtdReport, getCurrentFY } from '@/lib/financeReport'
+import { formatCurrency } from '@/lib/financeShared'
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+  return formatCurrency(n)
 }
 
 export async function GET(req: NextRequest) {
@@ -26,7 +28,7 @@ export async function GET(req: NextRequest) {
       select: { financeYearStartMonth: true, timezone: true },
     })
     const fyStartMonth = family?.financeYearStartMonth ?? 7
-    const tz = family?.timezone ?? 'Australia/Sydney'
+    const tz = family?.timezone ?? DEFAULT_TIMEZONE
 
     const report = await buildYtdReport(familyId, year, fyStartMonth, tz)
 

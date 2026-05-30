@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
 import { RotateCcw, FileDown, Printer, Loader2, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { formatCurrency } from '@/lib/financeShared'
 import {
   Select,
   SelectContent,
@@ -52,12 +53,7 @@ function sectionTotal(items: BudgetItem[], vp: ViewPeriod): number {
 }
 
 function fmt(value: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatCurrency(value, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 const EXPENSE_CATEGORIES: { name: string; color: string }[] = [

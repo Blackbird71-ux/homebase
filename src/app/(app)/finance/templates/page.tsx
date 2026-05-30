@@ -1,5 +1,6 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { TemplatesClient } from './TemplatesClient'
 
 export default async function TemplatesPage() {
@@ -10,7 +11,7 @@ export default async function TemplatesPage() {
   })
   // Occurrence dates are stored as UTC midnight; render in the family timezone
   // so they show the correct local calendar day regardless of the device tz.
-  const timezone = user?.family.timezone ?? 'Australia/Sydney'
+  const timezone = user?.family.timezone ?? DEFAULT_TIMEZONE
 
   return <TemplatesClient timezone={timezone} />
 }

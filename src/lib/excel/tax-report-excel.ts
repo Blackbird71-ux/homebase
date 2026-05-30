@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
 import { SUPER_CAP } from '@/lib/tax-calculator'
+import { formatCurrency } from '@/lib/financeShared'
 import {
   buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle,
   totalStyle, totalLabelStyle, grandTotalStyle, grandTotalLabelStyle,
@@ -95,7 +96,7 @@ export function buildTaxReportWorkbook({
   aoa.push([])
   pushSection('SUPER CAP')
   const cap = SUPER_CAP[financialYear] ?? 30_000
-  const capFmt = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(cap)
+  const capFmt = formatCurrency(cap, { maximumFractionDigits: 0 })
   pushRow(`Super Cap (${capFmt})`,    pCols(() => cap))
   pushRow('SGC (Employer)',           pCols(c => c.sgcAmount))
   pushRow('Voluntary Super',          pCols(c => c.voluntarySuperForCap))

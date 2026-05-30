@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { getFamilyTimezone } from '@/lib/family'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 import { differenceInDays } from 'date-fns'
 
@@ -61,11 +62,7 @@ export async function GET(request: NextRequest) {
   const entityId  = searchParams.get('entityId') ?? undefined
   const familyId  = user.familyId
 
-  const family = await prisma.family.findUnique({
-    where: { id: familyId },
-    select: { timezone: true },
-  })
-  const tz = family?.timezone ?? 'Australia/Sydney'
+  const tz = await getFamilyTimezone(familyId)
 
   const asAt = asAtParam
     ? asAtEndOfDay(asAtParam, tz)

@@ -15,10 +15,10 @@
 // =============================================================================
 
 import { createHash } from 'node:crypto'
-import { addDays, addMonths, addWeeks, getDaysInMonth, setDate } from 'date-fns'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit-log'
-import { todayBoundsInTz, utcMidnight } from '@/lib/timezone'
+import { todayBoundsInTz, utcMidnight, DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { stepOccurrence } from '@/lib/finance-recurrence-core'
 import type { SessionUser } from '@/types'
 
 // ── Literal types matching the schema string columns ────────────────────────
@@ -71,25 +71,6 @@ export interface OccurrenceTemplate {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// applyDayOfMonth
-//
-// Snap a date to a target day-of-month within the SAME month, capping at
-// the last day if the target exceeds days_in_month (Decision A2).
-//
-// Example:
-//   applyDayOfMonth(new Date(2026, 1, 10), 31)  // Feb 10 → Feb 28 (or 29 in leap)
-//   applyDayOfMonth(new Date(2026, 0, 15), 31)  // Jan 15 → Jan 31
-//   applyDayOfMonth(new Date(2026, 0, 15), 5)   // Jan 15 → Jan 5
-//
-// This is a pure function — input date is not mutated.
-// ─────────────────────────────────────────────────────────────────────────────
-function applyDayOfMonth(d: Date, targetDay: number): Date {
-  const maxDay = getDaysInMonth(d)
-  const day = Math.min(Math.max(1, targetDay), maxDay)
-  return setDate(d, day)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // computeNextOccurrenceDate
 //
 // Given a template and a "from" date (typically the most-recently-spawned
@@ -134,53 +115,16 @@ export function computeNextOccurrenceDate(
     return null
   }
 
-  // Step forward based on frequency
-  let next: Date
-  switch (frequency) {
-    case 'weekly':
-      next = addWeeks(fromDate, 1 * interval)
-      break
-    case 'fortnightly':
-      next = addWeeks(fromDate, 2 * interval)
-      break
-    case 'monthly':
-      next = addMonths(fromDate, 1 * interval)
-      if (dayOfMonth != null) next = applyDayOfMonth(next, dayOfMonth)
-      break
-    case 'bimonthly':
-      next = addMonths(fromDate, 2 * interval)
-      if (dayOfMonth != null) next = applyDayOfMonth(next, dayOfMonth)
-      break
-    case 'quarterly':
-      next = addMonths(fromDate, 3 * interval)
-      if (dayOfMonth != null) next = applyDayOfMonth(next, dayOfMonth)
-      break
-    case 'halfyearly':
-      next = addMonths(fromDate, 6 * interval)
-      if (dayOfMonth != null) next = applyDayOfMonth(next, dayOfMonth)
-      break
-    case 'yearly': {
-      next = addMonths(fromDate, 12 * interval)
-      // monthOfYear is 1-12 (calendar). Convert to JS month index (0-11) for setMonth.
-      if (monthOfYear != null) {
-        const jsMonth = Math.max(0, Math.min(11, monthOfYear - 1))
-        next = new Date(next.getFullYear(), jsMonth, 1)
-        // setMonth would normalise out-of-range days; using a fresh Date is safer.
-      }
-      if (dayOfMonth != null) next = applyDayOfMonth(next, dayOfMonth)
-      break
-    }
-    case 'custom':
-      // interval is treated as day count for custom frequencies
-      next = addDays(fromDate, interval)
-      break
-    default:
-      // Unknown frequency — fail loudly. The spawn worker treats null as
-      // "skip this template"; the template service's validator should have
-      // caught this during create/update so reaching here implies a bug
-      // or data corruption.
-      console.warn(`[computeNextOccurrenceDate] Unknown frequency "${frequency}" — returning null`)
-      return null
+  // Step forward based on frequency (shared with the client preview via
+  // finance-recurrence-core). Returns null only for an unknown frequency.
+  const next = stepOccurrence(fromDate, frequency, interval, dayOfMonth, monthOfYear)
+  if (next == null) {
+    // Unknown frequency — fail loudly. The spawn worker treats null as
+    // "skip this template"; the template service's validator should have
+    // caught this during create/update so reaching here implies a bug
+    // or data corruption.
+    console.warn(`[computeNextOccurrenceDate] Unknown frequency "${frequency}" — returning null`)
+    return null
   }
 
   // Cap at endDate if endMode='until'
@@ -764,7 +708,7 @@ export async function updateTemplate(
       totalOccurrences: input.totalOccurrences !== undefined ? input.totalOccurrences : existing.totalOccurrences,
       occurrencesRemaining: existing.occurrencesRemaining,
     }
-    const { start: todayStart } = todayBoundsInTz(user.timezone ?? 'Australia/Sydney')
+    const { start: todayStart } = todayBoundsInTz(user.timezone ?? DEFAULT_TIMEZONE)
     let probe = utcMidnight(effectiveStartDate)
     let guard = 0
     while (probe < todayStart && guard < 1000) {

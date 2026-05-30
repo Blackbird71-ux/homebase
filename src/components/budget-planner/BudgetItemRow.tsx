@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { formatCurrency } from '@/lib/financeShared'
 import {
   Select,
   SelectContent,
@@ -49,10 +50,7 @@ const VIEW_ABBREV: Record<ViewPeriod, string> = {
 }
 
 function fmtShort(v: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  }).format(v)
+  return formatCurrency(v, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 export function BudgetItemRow({

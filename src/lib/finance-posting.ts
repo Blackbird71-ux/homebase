@@ -594,6 +594,8 @@ export interface PostIncomeReceiptParams {
   entityId: string | null
   /** Date cash actually hit the bank. */
   date: Date
+  /** Pre-generated journal reference. If omitted, the next reference is fetched automatically. */
+  reference?: string
 }
 
 export async function postIncomeReceiptJournal(
@@ -624,7 +626,7 @@ export async function postIncomeReceiptJournal(
   await assertGlAccountsBelongToFamily(tx, lines, familyId)
   assertBalanced(lines)
 
-  const reference = await nextJournalReference(familyId)
+  const reference = params.reference ?? await nextJournalReference(familyId)
   const entry = await tx.financeJournalEntry.create({
     data: {
       reference,

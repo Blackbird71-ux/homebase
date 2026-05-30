@@ -4,6 +4,7 @@
 import nodemailer from 'nodemailer'
 import { buildYtdReport, getCurrentFY, type ReportPayload } from '@/lib/financeReport'
 import { generateExcelBuffer } from './reportExcel'
+import { formatCurrency } from '@/lib/financeShared'
 
 export interface EnvSmtpConfig {
   host: string
@@ -39,8 +40,7 @@ export function getEnvSmtpConfig(): EnvSmtpConfig | null {
  * Build HTML email body from a report payload.
  */
 function buildEmailBody(report: ReportPayload): string {
-  const fmt = (n: number) =>
-    new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n)
+  const fmt = (n: number) => formatCurrency(n)
 
   let entityRows = ''
   for (const section of report.sections) {

@@ -7,6 +7,7 @@ import {
   FileText, CreditCard, Loader2, AlertCircle, Download, ChevronDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/financeShared'
 import {
   type LedgerData, type LedgerRow, type DatePreset,
   fmtDate, buildPresets, exportCsv,
@@ -23,8 +24,7 @@ interface AccountLedgerPanelProps {
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
-const AUD = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' })
-const fmt = (n: number) => AUD.format(n)
+const fmt = (n: number) => formatCurrency(n)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -404,7 +404,7 @@ function SummaryCard({
         variant === 'credit' && 'text-green-600 dark:text-green-400',
         !variant             && 'text-foreground',
       )}>
-        {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(value)}
+        {formatCurrency(value)}
       </p>
     </div>
   )

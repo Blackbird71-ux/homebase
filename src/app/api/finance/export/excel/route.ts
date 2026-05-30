@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { buildYtdReport, getCurrentFY, fyDateRange } from '@/lib/financeReport'
 import * as XLSX from 'xlsx'
 
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       select: { financeYearStartMonth: true, timezone: true },
     })
     const fyStartMonth = family?.financeYearStartMonth ?? 7
-    const tz = family?.timezone ?? 'Australia/Sydney'
+    const tz = family?.timezone ?? DEFAULT_TIMEZONE
 
     const { searchParams } = new URL(req.url)
     const mode = searchParams.get('mode') ?? 'budget' // budget | tax

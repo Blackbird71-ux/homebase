@@ -7,6 +7,7 @@
 import cron from 'node-cron'
 import { prisma } from '@/lib/prisma'
 import { spawnDueDrafts } from '@/lib/finance-draft-spawn-service'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import type { SessionUser } from '@/types'
 
 declare global {
@@ -66,7 +67,7 @@ export function startSpawnScheduler(): void {
               email: '',
               role: 'admin',
               familyId: family.id,
-              timezone: family.timezone ?? 'Australia/Brisbane',
+              timezone: family.timezone ?? DEFAULT_TIMEZONE,
               weekStartsOn: 1,
             }
 

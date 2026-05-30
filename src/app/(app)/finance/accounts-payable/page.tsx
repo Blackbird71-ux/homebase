@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
+import { formatCurrency } from '@/lib/financeShared'
 import { formatInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
@@ -77,17 +78,11 @@ interface ApData {
 
 function fmtCurrency(n: number) {
   if (n === 0) return '—'
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function fmtCurrencyRaw(n: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 const BUCKETS: { key: AgingBucket; label: string }[] = [

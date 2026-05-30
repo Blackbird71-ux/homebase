@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { PageHero } from '@/components/shared/PageHero'
+import { formatCurrency } from '@/lib/financeShared'
 import {
   BarChart,
   Bar,
@@ -34,10 +35,7 @@ interface InsightsData {
 }
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 const MONTH_OPTIONS = [

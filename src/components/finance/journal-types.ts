@@ -1,5 +1,7 @@
 // ── Shared interfaces & constants for the journals page ──────────────────────
 
+import { formatCurrency } from '@/lib/financeShared'
+
 export interface GLAccount {
   id: string
   name: string
@@ -84,10 +86,7 @@ export const MANUAL_TYPES = [
 ]
 
 export function fmt(n: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export function normalSide(type: string): 'debit' | 'credit' {

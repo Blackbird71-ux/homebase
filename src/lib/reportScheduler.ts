@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { buildYtdReport } from '@/lib/financeReport'
 import { currentFyYear, fyLabel } from '@/lib/finance-fy'
 import { sendReportEmail } from '@/lib/emailReportService'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -92,7 +93,7 @@ export function startReportScheduler(): void {
             }
 
             // Build report — pass fyStartMonth and timezone so the report uses correct FY bounds (P2 fix #2)
-            const report = await buildYtdReport(family.id, year, fyStartMonth, family.timezone ?? 'Australia/Sydney')
+            const report = await buildYtdReport(family.id, year, fyStartMonth, family.timezone ?? DEFAULT_TIMEZONE)
 
             // Save snapshot
             const snapshot = await prisma.financeSnapshot.create({

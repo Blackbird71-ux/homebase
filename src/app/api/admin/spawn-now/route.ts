@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { spawnDueDrafts } from '@/lib/finance-draft-spawn-service'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 // POST /api/admin/spawn-now
 // Manually triggers the draft-spawn worker for all families.
@@ -33,7 +34,7 @@ export async function POST() {
       email: '',
       role: 'admin',
       familyId: family.id,
-      timezone: family.timezone ?? 'Australia/Brisbane',
+      timezone: family.timezone ?? DEFAULT_TIMEZONE,
       weekStartsOn: 1,
     }
 

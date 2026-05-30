@@ -4,6 +4,14 @@
  */
 
 /**
+ * Fallback IANA timezone used ONLY when a family has no saved timezone.
+ * The family's own `timezone` setting always takes precedence — see
+ * `getFamilyTimezone` in `src/lib/family.ts`. Do not hardcode this literal
+ * at call sites; import this constant so the fallback lives in one place.
+ */
+export const DEFAULT_TIMEZONE = 'Australia/Sydney'
+
+/**
  * Returns the start and end of "today" in the given timezone as UTC Date objects.
  * Use for DB queries filtering by today in the family's local timezone.
  */

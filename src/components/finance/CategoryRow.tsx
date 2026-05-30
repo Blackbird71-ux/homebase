@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, BookOpen, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { type Category } from './CategoryDialog'
+import { formatCurrency } from '@/lib/financeShared'
 
 export type FilterType = 'all' | 'asset' | 'liability' | 'equity' | 'income' | 'expense' | 'transfer'
 
@@ -144,7 +145,7 @@ export function CategoryRow({
                   : 'text-muted-foreground border-border hover:border-primary hover:text-primary'
               )}>
               {cat.openingBalance != null
-                ? `OB: ${new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(cat.openingBalance)}`
+                ? `OB: ${formatCurrency(cat.openingBalance, { maximumFractionDigits: 0 })}`
                 : 'Set OB'}
             </button>
           )}

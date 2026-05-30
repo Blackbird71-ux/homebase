@@ -15,6 +15,7 @@
 
 import { Plus, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/financeShared'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,10 +56,7 @@ function normalSide(type: string): 'debit' | 'credit' {
 }
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n)
+  return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function groupedAccounts(accounts: GLAccount[]) {
