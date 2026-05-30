@@ -33,6 +33,7 @@ import {
   ensureAccountsReceivableCategory,
 } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { prisma } from '@/lib/prisma'
 
 // Prisma transaction client (also accepts a regular PrismaClient).
 // All helpers accept either so they can be called inside or outside a $transaction.
@@ -103,6 +104,117 @@ async function assertGlAccountsBelongToFamily(
       `(referenced ${glIds.length}, found ${valid.length})`,
     )
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// upsertDraftJournal
+//
+// The single shared implementation behind bills/route.ts upsertBillDraftJournal
+// (isPosted=false — bills accrue as an UNPOSTED draft, promoted later by
+// postBillAccrualJournal) and income/route.ts upsertIncomeJournalEntry
+// (isPosted=true — income is recognised immediately). Creates or replaces the
+// `auto_transaction` journal entry linked to a bill or income record.
+//
+// UNLIKE the other helpers in this module, upsertDraftJournal manages its OWN
+// $transaction via the global `prisma` client and MUST run OUTSIDE any caller
+// transaction — the bill payment path documents that this upsert uses its own
+// $transaction and cannot be nested. It therefore does not accept a tx.
+//
+// Safety guarantees (identical to the original inline twins):
+//   1. length / GL-family / balance validation all run BEFORE any DB write —
+//      invalid input throws and no data is touched. Check order is preserved:
+//      length → GL accounts belong to family → balance.
+//   2. The deleteMany + update (or the create) is wrapped in a $transaction so
+//      a partial failure cannot leave an entry with no lines.
+//   3. A posted entry is never modified in place — corrections require a
+//      reversal, not a repoint-and-leave (prevents orphaned posted accruals).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function upsertDraftJournal(params: {
+  description: string
+  existingJournalEntryId: string | null | undefined
+  lines: JournalLine[]
+  date: Date
+  familyId: string
+  entityId: string | null
+  isPosted: boolean
+}): Promise<string> {
+  const { description, existingJournalEntryId, lines, date, familyId, entityId, isPosted } = params
+
+  if (lines.length < 2) {
+    throw new Error('A journal entry requires at least 2 lines')
+  }
+
+  // Validate all GL accounts belong to this family.
+  // (Kept inline with the original terse message — preserved verbatim because it
+  // surfaces to the user via the routes' 422 responses.)
+  const glIds = [...new Set(lines.map(l => l.glAccountId))]
+  const validAccounts = await prisma.financeCategory.findMany({
+    where: { id: { in: glIds }, familyId },
+    select: { id: true },
+  })
+  if (validAccounts.length !== glIds.length) {
+    throw new Error('One or more GL accounts not found')
+  }
+
+  // Balance check BEFORE touching anything in the DB.
+  assertBalanced(lines)
+
+  const lineData = lines.map(l => ({
+    glAccountId: l.glAccountId,
+    side: l.side,
+    amount: l.amount,
+    description: l.description ?? null,
+  }))
+
+  if (existingJournalEntryId) {
+    const existing = await prisma.financeJournalEntry.findFirst({
+      where: { id: existingJournalEntryId, familyId },
+    })
+    if (existing && !existing.isPosted) {
+      // Atomic: delete old lines and write new ones together
+      await prisma.$transaction(async (tx) => {
+        await tx.financeJournalLine.deleteMany({ where: { journalEntryId: existingJournalEntryId } })
+        await tx.financeJournalEntry.update({
+          where: { id: existingJournalEntryId },
+          data: {
+            date,
+            description,
+            entityId: entityId ?? null,
+            isPosted,
+            lines: { create: lineData },
+          },
+        })
+      })
+      return existingJournalEntryId
+    }
+    if (existing && existing.isPosted) {
+      // Never silently abandon a posted journal. Falling through to create a
+      // fresh entry would orphan the original posted accrual, double-counting
+      // the GL. A correction to a posted entry must be made via a reversal.
+      throw new Error(
+        'Cannot modify a posted journal entry in place — corrections to posted journals must be made via a reversal.',
+      )
+    }
+  }
+
+  // No existing draft — create a new one atomically
+  const reference = await nextJournalReference(familyId)
+  const entry = await prisma.$transaction(async (tx) => {
+    return tx.financeJournalEntry.create({
+      data: {
+        reference,
+        date,
+        description,
+        type: 'auto_transaction',
+        isPosted,
+        entityId: entityId ?? null,
+        familyId,
+        lines: { create: lineData },
+      },
+      select: { id: true },
+    })
+  })
+  return entry.id
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

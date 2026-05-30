@@ -10,7 +10,7 @@ import {
   ensureAccountsPayableCategory,
 } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
-import { postBillAccrualJournal } from '@/lib/finance-posting'
+import { postBillAccrualJournal, upsertDraftJournal } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const BILL_INCLUDE = {
@@ -40,11 +40,9 @@ interface JournalLine {
 // split (e.g. DR expense ex-GST / DR GST ITC / CR Accounts Payable).
 // It is promoted to isPosted=true when invoiceReceived transitions to true.
 //
-// Safety guarantees:
-//   1. Balance validation happens BEFORE any delete — unbalanced lines are
-//      rejected with a thrown error; no data is touched.
-//   2. The deleteMany + update/create is wrapped in a $transaction so a
-//      partial failure cannot leave an entry with no lines.
+// Delegates to the shared upsertDraftJournal in finance-posting.ts (single
+// implementation shared with income's upsertIncomeJournalEntry). The balance,
+// GL-family, posted-guard and atomic-write guarantees live there.
 async function upsertBillDraftJournal(
   billId: string,
   billName: string,
@@ -54,86 +52,18 @@ async function upsertBillDraftJournal(
   familyId: string,
   entityId: string | null,
 ): Promise<string> {
-  if (lines.length < 2) {
-    throw new Error('A journal entry requires at least 2 lines')
-  }
-
-  // Validate all GL accounts belong to this family
-  const glIds = [...new Set(lines.map(l => l.glAccountId))]
-  const validAccounts = await prisma.financeCategory.findMany({
-    where: { id: { in: glIds }, familyId },
-    select: { id: true },
+  // Bills accrue as an UNPOSTED draft (isPosted=false), promoted later by
+  // postBillAccrualJournal. billId is retained for call-site stability.
+  void billId
+  return upsertDraftJournal({
+    description: billName,
+    existingJournalEntryId,
+    lines,
+    date,
+    familyId,
+    entityId,
+    isPosted: false,
   })
-  if (validAccounts.length !== glIds.length) {
-    throw new Error('One or more GL accounts not found')
-  }
-
-  // Balance check BEFORE touching anything in the DB
-  const totalDR = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
-  const totalCR = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
-  if (Math.abs(totalDR - totalCR) > 0.005) {
-    throw new Error(
-      `Journal lines are not balanced — debits ${totalDR.toFixed(2)} ≠ credits ${totalCR.toFixed(2)}`,
-    )
-  }
-
-  const lineData = lines.map(l => ({
-    glAccountId: l.glAccountId,
-    side: l.side,
-    amount: l.amount,
-    description: l.description ?? null,
-  }))
-
-  if (existingJournalEntryId) {
-    const existing = await prisma.financeJournalEntry.findFirst({
-      where: { id: existingJournalEntryId, familyId },
-    })
-    if (existing && !existing.isPosted) {
-      // Atomic: delete old lines and write new ones together
-      await prisma.$transaction(async (tx) => {
-        await tx.financeJournalLine.deleteMany({ where: { journalEntryId: existingJournalEntryId } })
-        await tx.financeJournalEntry.update({
-          where: { id: existingJournalEntryId },
-          data: {
-            date,
-            description: billName,
-            entityId: entityId ?? null,
-            isPosted: false,
-            lines: { create: lineData },
-          },
-        })
-      })
-      return existingJournalEntryId
-    }
-    if (existing && existing.isPosted) {
-      // BUG C hardening (parity with income upsertIncomeJournalEntry): never
-      // silently abandon a posted journal. Falling through to create a fresh
-      // entry would orphan the original posted accrual. A correction to a
-      // posted entry must be made via a reversal, not a repoint-and-leave.
-      throw new Error(
-        'Cannot modify a posted journal entry in place — corrections to posted journals must be made via a reversal.',
-      )
-    }
-  }
-
-  // No existing draft — create a new one atomically
-  const reference = await nextJournalReference(familyId)
-  const entry = await prisma.$transaction(async (tx) => {
-    return tx.financeJournalEntry.create({
-      data: {
-        reference,
-        date,
-        description: billName,
-        type: 'auto_transaction',
-        isPosted: false,
-        entityId: entityId ?? null,
-        familyId,
-        lines: { create: lineData },
-      },
-      select: { id: true },
-    })
-  })
-  return entry.id
 }
 
 // Generate N sequential journal references in one shot.

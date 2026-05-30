@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-30
 **Scope:** Entire `src/` tree — inline code that duplicates an existing `src/lib/` helper, and inline logic repeated across ≥2 files that warrants a new helper.
-**Mode:** PARTIALLY REMEDIATED. Findings 2, 3, 4, 5, 6, 7 + the hardcoded-display-zone follow-up executed 2026-05-30 (see **Remediation status** below). Only Finding 1 (CRITICAL bill/income GL-upsert twin) remains **deferred to a focused session**.
+**Mode:** FULLY REMEDIATED. All findings (1–7) + the hardcoded-display-zone follow-up executed 2026-05-30 (see **Remediation status** below). Finding 1 (CRITICAL bill/income GL-upsert twin) was executed last, in a focused session, behind an automated test; the manual QA.md §5 bill+income lifecycle smokes remain the user's parity gate.
 
 **Related prior reports (do not re-litigate; this audit is duplication-specific):**
 - [`docs/helper-separation-audit-report.md`](helper-separation-audit-report.md) — page→hook/lib separation (2026-05-15)
@@ -32,6 +32,7 @@ The headline is **#1 + #2**: two pairs of near-identical functions where the cop
 
 | Finding | Step | What landed | Verification |
 |---|---|---|---|
+| **1** (bill/income GL-upsert twins) **CRITICAL** | 2 | New shared `upsertDraftJournal({ description, existingJournalEntryId, lines, date, familyId, entityId, isPosted })` in [`finance-posting.ts`](../src/lib/finance-posting.ts) — it self-manages its own `$transaction` via the global `prisma` and **must run outside any caller tx** (the bill-payment path documents this), so unlike the other helpers it does not accept a `tx`. The bodies of `upsertBillDraftJournal` (→ `isPosted:false`, the unposted-accrual draft) and `upsertIncomeJournalEntry` (→ `isPosted:true`, recognised immediately) became one-line delegations; **both wrapper signatures and all 5 call sites unchanged** (bills' unused `billId` retained for call-site stability). Reuses the existing private `assertBalanced` (byte-identical threshold + message). **Kept the GL-family check inline with the original terse `'One or more GL accounts not found'` message** — deliberately *not* `assertGlAccountsBelongToFamily`, whose richer message leaks `familyId` to the user via the routes' 422 responses. Original check order preserved: length → GL-family → balance. Net user-facing behaviour change: none. | 7-case Vitest suite [`src/lib/__tests__/finance-draft-journal.test.ts`](../src/lib/__tests__/finance-draft-journal.test.ts) — new create (both `isPosted` paths), atomic update branch, posted-entry reversal guard, unbalanced throw, <2-lines throw, terse invalid-GL message — all pass. `tsc --incremental false` clean. **Manual QA.md §5 bill+income lifecycle smokes remain the user's parity gate** (pure refactor — no behavioural change intended). |
 | **2** (recurrence divergence) | 1 (+ the "extract shared stepping" follow-up) | New client-safe [`src/lib/finance-recurrence-core.ts`](../src/lib/finance-recurrence-core.ts) (`stepOccurrence` + `applyDayOfMonth`); server `computeNextOccurrenceDate` **and** client `nextOccurrence` both delegate to it; `date-fns` removed from the server template-service file (improves the "no date-fns server-side" rule). **Adopted server semantics** (yearly + `monthOfYear` resets day to 1) so the preview now matches the spawner. | 17-case Vitest suite [`src/lib/__tests__/finance-recurrence-core.test.ts`](../src/lib/__tests__/finance-recurrence-core.test.ts) — all pass. `tsc` clean. |
 | **4** (`postIncomeReceiptJournal` unused) | 4 | Income simple-receipt (MODE B) now posts through the shared `postIncomeReceiptJournal` helper instead of inline create. | Helper byte-matches the prior inline block; adds only `assertBalanced`/GL-family safety + `amount>0` guard (parity with MODE A payslip path). `tsc` clean. |
 | **5** (family-tz fetch + diverging default) | 5 | Added `DEFAULT_TIMEZONE = 'Australia/Sydney'` to [`src/lib/timezone.ts`](../src/lib/timezone.ts) + `getFamilyTimezone(familyId)` in new [`src/lib/family.ts`](../src/lib/family.ts); migrated the ~18 fetch/fallback sites; **unified the spawn-path default to Sydney** (Brisbane fallbacks removed). Family's saved tz always wins; the constant is only the null-fallback. | Cron *fire-time* tz (`Australia/Brisbane` in `spawnScheduler`/`reportScheduler`) and the `SUPPORTED_TIMEZONES` allow-list left intact. `tsc` clean. |
@@ -43,9 +44,7 @@ The headline is **#1 + #2**: two pairs of near-identical functions where the cop
 
 ### ⏭️ Deferred to next batch
 
-| Finding | Step | Why deferred |
-|---|---|---|
-| **1** — `upsertBillDraftJournal` ↔ `upsertIncomeJournalEntry` twin GL upserts (**CRITICAL**) | 2 | Highest-value but highest-risk (real money + GL). Needs `assertBalanced`/`assertGlAccountsBelongToFamily` exported + a new `upsertDraftJournal({…, isPosted})`, then **both** lifecycle smokes (QA.md §2 + §5, the bill↔income parity gate). Kept for a focused session. |
+_Nothing deferred — Finding 1 (the last remaining item) was executed 2026-05-30; see the executed table above. Note: the implementation kept `assertGlAccountsBelongToFamily` private and the GL-family check inline (to preserve the original terse user-facing message), rather than exporting it as the original Step 2 plan suggested._
 
 ### ✅ New follow-up found during Step 5 — hardcoded display timezones (EXECUTED 2026-05-30)
 
