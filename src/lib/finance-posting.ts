@@ -662,6 +662,186 @@ export async function postIncomeAccrualJournal(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// reconcilePostedAccrualOnEdit
+//
+// Re-syncs a POSTED accrual after a GL-relevant edit (category / amount / entity)
+// to a bill or income record. Without this, editing those fields updated the
+// record row but left the already-posted journal entry stale — the row and the
+// GL silently diverged and the corrected economics never reached the P&L /
+// balance sheet. (Root cause of the "Apco fuel bill missing from P&L" defect:
+// the accrual debited an asset account, was never re-posted after the category
+// was corrected to an expense account, so no expense line ever existed.)
+//
+// "Reconcile if unpaid, block if paid":
+//   - The CALLER must already have verified the bill/income is unpaid/unreceived.
+//     Reversing an accrual whose AP/AR has been cleared by a payment/receipt
+//     would strand AP/AR, so that case must be rejected by the caller (422), not
+//     reconciled here.
+//
+// What it does (atomically, in its own $transaction):
+//   1. Reverses the existing posted accrual — a flipped-line VOID reversal JE
+//      (type 'reversal', reversalOfId set) + marks the original isReversed. This
+//      mirrors the proven reversal pattern in the bills/income DELETE paths and
+//      preserves posted-entry immutability (QA.md §4.6: never mutate in place).
+//   2. Posts a fresh 2-line accrual with the new economics:
+//        bill:   DR <expense glAccountId> / CR Accounts Payable
+//        income: DR Accounts Receivable   / CR <income glAccountId>
+//   3. Re-points the linked invoice transaction (category / entity / amount) so
+//      account & balance views match the corrected GL.
+//
+// Both the reversal and the fresh accrual are dated to the ORIGINAL accrual's
+// date, so the correction is a period-neutral swap (no cross-period movement).
+//
+// Throws AccrualReconcileBlockedError when the posted accrual is NOT a plain
+// 2-line entry (a custom GST / withholding split). Re-posting a flat 2-line
+// entry would silently drop the user's split, so the caller surfaces a 422
+// telling the user to reverse it manually.
+//
+// Reference generation mirrors the DELETE paths: both refs are pre-computed from
+// committed MAX before the transaction opens, so the reversal and the fresh
+// accrual cannot collide on `reference` (the global nextJournalReference reads
+// committed state and would otherwise return the same value twice within one
+// uncommitted transaction).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class AccrualReconcileBlockedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AccrualReconcileBlockedError'
+  }
+}
+
+export interface ReconcileAccrualParams {
+  /** 'bill' → DR expense / CR AP. 'income' → DR AR / CR income. */
+  kind: 'bill' | 'income'
+  familyId: string
+  /** The currently-linked posted accrual JE id (record.journalEntryId). */
+  journalEntryId: string
+  /** Human-readable description for the fresh accrual (record name). */
+  description: string
+  /** New post-edit amount (positive). */
+  amount: number
+  /** New post-edit GL account: expense category (bill) or income category (income). */
+  glAccountId: string
+  /** New post-edit entity scope. Null = unscoped. */
+  entityId: string | null
+  /** Linked invoice transaction to keep in sync (category/entity/amount). Null = none. */
+  invoiceTxId?: string | null
+}
+
+export async function reconcilePostedAccrualOnEdit(
+  params: ReconcileAccrualParams,
+): Promise<{ newJournalEntryId: string }> {
+  const { kind, familyId, journalEntryId, description, amount, glAccountId, entityId, invoiceTxId } = params
+
+  if (!(amount > 0)) {
+    throw new Error(`reconcilePostedAccrualOnEdit: amount must be positive, got ${amount}`)
+  }
+
+  // ── Prep (read-only, committed state) ──────────────────────────────────────
+  const je = await prisma.financeJournalEntry.findFirst({
+    where: { id: journalEntryId, familyId },
+    include: { lines: true },
+  })
+  // Nothing posted to reconcile — leave the GL untouched and report the id
+  // unchanged. The caller only invokes this when it believes a posted accrual
+  // exists; this guard makes a stale/missing id a no-op rather than a corruption.
+  if (!je || !je.isPosted || je.isReversed) {
+    return { newJournalEntryId: journalEntryId }
+  }
+  if (je.lines.length !== 2) {
+    throw new AccrualReconcileBlockedError(
+      'This entry has a custom journal split. Reverse it manually before changing its category, amount, or entity.',
+    )
+  }
+
+  // Counterpart account for the fresh accrual.
+  const counterpartId = kind === 'bill'
+    ? await ensureAccountsPayableCategory(familyId)
+    : await ensureAccountsReceivableCategory(familyId)
+
+  const freshLines: JournalLine[] = kind === 'bill'
+    ? [
+        { glAccountId,                side: 'debit',  amount, description },
+        { glAccountId: counterpartId, side: 'credit', amount, description: `AP: ${description}` },
+      ]
+    : [
+        { glAccountId: counterpartId, side: 'debit',  amount, description: `AR: ${description}` },
+        { glAccountId,                side: 'credit', amount, description },
+      ]
+
+  await assertGlAccountsBelongToFamily(prisma, freshLines, familyId)
+  assertBalanced(freshLines)
+
+  // Pre-generate BOTH refs from committed MAX before the transaction opens.
+  const firstRef = await nextJournalReference(familyId)
+  const baseNum = parseInt(firstRef.match(/^JE-(\d+)$/)?.[1] ?? '0', 10)
+  const reversalRef = `JE-${String(baseNum).padStart(4, '0')}`
+  const freshRef = `JE-${String(baseNum + 1).padStart(4, '0')}`
+
+  // Keep the correction in the SAME accounting period as the original accrual.
+  const accrualDate = je.date
+
+  // ── Atomic write ───────────────────────────────────────────────────────────
+  return await prisma.$transaction(async (tx) => {
+    // 1. Reverse the stale accrual (flipped lines).
+    await tx.financeJournalEntry.create({
+      data: {
+        reference: reversalRef,
+        date: accrualDate,
+        description: `VOID: ${je.reference ?? je.id} — ${je.description}`,
+        type: 'reversal',
+        isPosted: true,
+        reversalOfId: je.id,
+        entityId: je.entityId,
+        familyId,
+        lines: {
+          create: je.lines.map(l => ({
+            glAccountId: l.glAccountId,
+            side: l.side === 'debit' ? 'credit' : 'debit',
+            amount: l.amount,
+            description: l.description,
+          })),
+        },
+      },
+    })
+    await tx.financeJournalEntry.update({ where: { id: je.id }, data: { isReversed: true } })
+
+    // 2. Post the fresh accrual with the new economics.
+    const fresh = await tx.financeJournalEntry.create({
+      data: {
+        reference: freshRef,
+        date: accrualDate,
+        description,
+        type: 'auto_transaction',
+        isPosted: true,
+        entityId: entityId ?? null,
+        familyId,
+        lines: {
+          create: freshLines.map(l => ({
+            glAccountId: l.glAccountId,
+            side: l.side,
+            amount: l.amount,
+            description: l.description ?? null,
+          })),
+        },
+      },
+      select: { id: true },
+    })
+
+    // 3. Keep the linked invoice transaction in step with the corrected GL.
+    if (invoiceTxId) {
+      await tx.financeTransaction.update({
+        where: { id: invoiceTxId },
+        data: { categoryId: glAccountId, entityId: entityId ?? null, amount },
+      })
+    }
+
+    return { newJournalEntryId: fresh.id }
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // postIncomeReceiptJournal
 //
 // Called by the draft-approval service (or any flow) when a previously-accrued

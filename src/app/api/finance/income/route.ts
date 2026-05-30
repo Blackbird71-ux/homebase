@@ -7,7 +7,7 @@ import { createOccurrenceDraft } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
-import { postPayslipReceiptJournal, postIncomeReceiptJournal, upsertDraftJournal } from '@/lib/finance-posting'
+import { postPayslipReceiptJournal, postIncomeReceiptJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, AccrualReconcileBlockedError } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -186,6 +186,38 @@ export async function PUT(request: NextRequest) {
   const existing = await prisma.financeIncomeEntry.findFirst({ where: { id, familyId: user.familyId } })
   if (!existing) return NextResponse.json({ error: 'Income entry not found' }, { status: 404 })
 
+  // ── Pre-edit GL guard (parity with bills PUT) ───────────────────────────────
+  // Re-sync or reject a GL-relevant edit (category / amount / entity) on an income
+  // entry whose accrual (DR AR / CR Income) is already posted, BEFORE the row update
+  // so a REJECTED edit never leaves the row and GL diverged. "Reconcile if unpaid,
+  // block if paid": once cash is received the AR has been cleared, so the accrual
+  // cannot be safely reversed here.
+  const incomeGlFieldChanged =
+    (categoryId !== undefined && (categoryId ?? null) !== existing.categoryId) ||
+    (entityId !== undefined && (entityId ?? null) !== existing.entityId) ||
+    (amount !== undefined && parseFloat(amount) !== existing.amount)
+  const needsAccrualResync =
+    incomeGlFieldChanged && existing.invoiceReceived === true && !!existing.journalEntryId
+
+  if (needsAccrualResync) {
+    if (existing.received) {
+      return NextResponse.json(
+        { error: 'This income has been received. Reverse the receipt before changing its category, amount, or entity.' },
+        { status: 422 },
+      )
+    }
+    const accrualJe = await prisma.financeJournalEntry.findFirst({
+      where: { id: existing.journalEntryId!, familyId: user.familyId },
+      select: { isPosted: true, isReversed: true, lines: { select: { id: true } } },
+    })
+    if (accrualJe?.isPosted && !accrualJe.isReversed && accrualJe.lines.length !== 2) {
+      return NextResponse.json(
+        { error: 'This income has a custom journal split. Reverse it manually before changing its category, amount, or entity.' },
+        { status: 422 },
+      )
+    }
+  }
+
   const entry = await prisma.financeIncomeEntry.update({
     where: { id },
     data: {
@@ -255,6 +287,44 @@ export async function PUT(request: NextRequest) {
       }
     } catch (err) {
       console.error('[income PUT] Failed to upsert journal entry:', err)
+    }
+  }
+
+  // Reconcile the posted accrual when a GL-relevant field changed on an income
+  // entry whose accrual is already posted. The received / custom-split cases were
+  // rejected by the pre-edit GL guard above, so this only runs on the safe path.
+  // (Residual risk: if the reconcile transaction fails unexpectedly its GL writes
+  // roll back, but the row was already updated — surfaced as a 422 so the user retries.)
+  if (needsAccrualResync) {
+    const effectiveCategoryId = categoryId !== undefined ? (categoryId ?? null) : existing.categoryId
+    if (effectiveCategoryId && existing.journalEntryId) {
+      try {
+        const { newJournalEntryId } = await reconcilePostedAccrualOnEdit({
+          kind: 'income',
+          familyId: user.familyId,
+          journalEntryId: existing.journalEntryId,
+          description: name ?? existing.name,
+          amount: amount !== undefined ? parseFloat(amount) : existing.amount,
+          glAccountId: effectiveCategoryId,
+          entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
+          invoiceTxId: existing.invoiceTxId ?? null,
+        })
+        if (newJournalEntryId !== existing.journalEntryId) {
+          await prisma.financeIncomeEntry.update({
+            where: { id: entry.id },
+            data: { journalEntryId: newJournalEntryId },
+          })
+        }
+      } catch (err) {
+        if (err instanceof AccrualReconcileBlockedError) {
+          return NextResponse.json({ error: err.message }, { status: 422 })
+        }
+        console.error('[income PUT] Failed to reconcile posted accrual on edit:', err)
+        return NextResponse.json(
+          { error: 'Failed to update the General Ledger for this edit. The GL was left unchanged; please retry.' },
+          { status: 422 },
+        )
+      }
     }
   }
 

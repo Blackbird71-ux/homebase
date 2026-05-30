@@ -10,7 +10,7 @@ import {
   ensureAccountsPayableCategory,
 } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
-import { postBillAccrualJournal, upsertDraftJournal } from '@/lib/finance-posting'
+import { postBillAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, AccrualReconcileBlockedError } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const BILL_INCLUDE = {
@@ -288,6 +288,43 @@ export async function PUT(request: NextRequest) {
   const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId } })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
+  // ── Pre-edit GL guard ───────────────────────────────────────────────────────
+  // When a GL-relevant field (category / amount / entity) changes on a bill whose
+  // accrual is ALREADY posted, the posted journal must be re-synced or the row and
+  // the GL diverge (the corrected expense never reaches the P&L). Decide BEFORE the
+  // row update so a REJECTED edit never leaves the row and GL inconsistent.
+  // "Reconcile if unpaid, block if paid": a paid bill's AP has been cleared, so its
+  // accrual cannot be safely reversed here — reject and tell the user to un-pay first.
+  const invoiceReceivedTransition = invoiceReceived === true && !existing.invoiceReceived
+  const billGlFieldChanged =
+    (categoryId !== undefined && (categoryId ?? null) !== existing.categoryId) ||
+    (entityId !== undefined && (entityId ?? null) !== existing.entityId) ||
+    (amount !== undefined && parseFloat(amount) !== existing.amount)
+  const needsAccrualResync =
+    billGlFieldChanged && existing.invoiceReceived === true && !invoiceReceivedTransition && !!existing.journalEntryId
+
+  if (needsAccrualResync) {
+    const [paymentCount, accrualJe] = await Promise.all([
+      prisma.financeBillPayment.count({ where: { billId: id, familyId: user.familyId } }),
+      prisma.financeJournalEntry.findFirst({
+        where: { id: existing.journalEntryId!, familyId: user.familyId },
+        select: { isPosted: true, isReversed: true, lines: { select: { id: true } } },
+      }),
+    ])
+    if (existing.paid || paymentCount > 0) {
+      return NextResponse.json(
+        { error: 'This bill has been paid. Reverse or un-pay it before changing its category, amount, or entity.' },
+        { status: 422 },
+      )
+    }
+    if (accrualJe?.isPosted && !accrualJe.isReversed && accrualJe.lines.length !== 2) {
+      return NextResponse.json(
+        { error: 'This bill has a custom journal split. Reverse it manually before changing its category, amount, or entity.' },
+        { status: 422 },
+      )
+    }
+  }
+
   const bill = await prisma.financeRecurringBill.update({
     where: { id },
     data: {
@@ -322,7 +359,7 @@ export async function PUT(request: NextRequest) {
   })
 
   // If invoiceReceived is transitioning false->true, post the GL accrual journal
-  const invoiceReceivedTransition = invoiceReceived === true && !existing.invoiceReceived
+  // (invoiceReceivedTransition computed in the pre-edit GL guard above).
   const hasCustomLines = Array.isArray(journalLines) && journalLines.length >= 2
 
   // Step 1: refresh the draft journal from custom lines if provided.
@@ -393,6 +430,44 @@ export async function PUT(request: NextRequest) {
   }
 
   // No separate "else if" for the draft-only update case: handled by Step 1 above.
+
+  // Step 3: reconcile the posted accrual when a GL-relevant field changed on an
+  // already-received bill. The paid / custom-split cases were rejected by the
+  // pre-edit GL guard above, so this only runs on the safe reconcile path.
+  // (Residual risk: if the reconcile transaction fails unexpectedly its GL writes
+  // roll back, but the row was already updated — surfaced as a 422 so the user retries.)
+  if (needsAccrualResync) {
+    const effectiveCategoryId = categoryId !== undefined ? (categoryId ?? null) : existing.categoryId
+    if (effectiveCategoryId && existing.journalEntryId) {
+      try {
+        const { newJournalEntryId } = await reconcilePostedAccrualOnEdit({
+          kind: 'bill',
+          familyId: user.familyId,
+          journalEntryId: existing.journalEntryId,
+          description: name ?? existing.name,
+          amount: amount !== undefined ? parseFloat(amount) : existing.amount,
+          glAccountId: effectiveCategoryId,
+          entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
+          invoiceTxId: existing.invoiceTxId ?? null,
+        })
+        if (newJournalEntryId !== existing.journalEntryId) {
+          await prisma.financeRecurringBill.update({
+            where: { id: bill.id },
+            data: { journalEntryId: newJournalEntryId },
+          })
+        }
+      } catch (err) {
+        if (err instanceof AccrualReconcileBlockedError) {
+          return NextResponse.json({ error: err.message }, { status: 422 })
+        }
+        console.error('[bills PUT] Failed to reconcile posted accrual on edit:', err)
+        return NextResponse.json(
+          { error: 'Failed to update the General Ledger for this edit. The GL was left unchanged; please retry.' },
+          { status: 422 },
+        )
+      }
+    }
+  }
 
   const putPeriodWarning = invoiceReceivedTransition
     ? await getPeriodLockWarning(user.familyId, invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
