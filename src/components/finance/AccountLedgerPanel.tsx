@@ -476,7 +476,7 @@ function LedgerRowItem({ row, index }: { row: LedgerRow; index: number }) {
         {hasDebit ? (
           <span className="inline-flex items-center justify-end gap-0.5 text-orange-600 dark:text-orange-400">
             <ArrowUpRight className="h-3 w-3 shrink-0" />
-            {AUD.format(row.debit)}
+            {formatCurrency(row.debit)}
           </span>
         ) : (
           <Minus className="ml-auto h-3 w-3 text-muted-foreground/30" />
@@ -488,7 +488,7 @@ function LedgerRowItem({ row, index }: { row: LedgerRow; index: number }) {
         {hasCredit ? (
           <span className="inline-flex items-center justify-end gap-0.5 text-green-600 dark:text-green-400">
             <ArrowDownLeft className="h-3 w-3 shrink-0" />
-            {AUD.format(row.credit)}
+            {formatCurrency(row.credit)}
           </span>
         ) : (
           <Minus className="ml-auto h-3 w-3 text-muted-foreground/30" />
@@ -500,7 +500,7 @@ function LedgerRowItem({ row, index }: { row: LedgerRow; index: number }) {
         'px-5 py-2.5 text-right font-mono tabular-nums font-semibold',
         row.balance < 0 ? 'text-destructive' : 'text-foreground',
       )}>
-        {AUD.format(row.balance)}
+        {formatCurrency(row.balance)}
       </td>
     </tr>
   )
