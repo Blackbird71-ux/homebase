@@ -11,6 +11,8 @@
  * causes when DOMContentLoaded fires synchronously before the listener can be
  * registered from the parent window.
  *
+ * Also supports saving the report content as a PDF directly to the Document Vault.
+ *
  * Usage:
  *   const printRef = useRef<HTMLDivElement>(null)
  *   <PrintButton printRef={printRef} reportTitle="Trial Balance" dateRange="Jul 2024 – Jun 2025" />
@@ -19,9 +21,10 @@
  *   </PrintWrapper>
  */
 
-import { useCallback, RefObject } from 'react'
-import { Printer } from 'lucide-react'
+import { useCallback, useState, useRef, useEffect, RefObject } from 'react'
+import { Printer, FileOutput, ChevronDown, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { toast } from 'sonner'
 
 interface PrintButtonProps {
   /** Ref pointing at the DOM node that contains the printable report content */
@@ -46,16 +49,35 @@ export function PrintButton({
   className = '',
   disabled = false,
 }: PrintButtonProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClick)
+      return () => document.removeEventListener('mousedown', handleClick)
+    }
+  }, [menuOpen])
+
+  const getDocTitle = useCallback(() => {
+    const generatedAt = format(new Date(), 'd MMM yyyy h:mm a')
+    return dateRange
+      ? `HomeBase - ${reportTitle} - ${dateRange}`
+      : `HomeBase - ${reportTitle} - ${generatedAt}`
+  }, [reportTitle, dateRange])
 
   const handlePrint = useCallback(() => {
     const el = printRef.current
     if (!el) return
 
-    // Compose document title — browser uses this as default PDF filename
-    const generatedAt = format(new Date(), 'd MMM yyyy h:mm a')
-    const docTitle = dateRange
-      ? `HomeBase - ${reportTitle} - ${dateRange}`
-      : `HomeBase - ${reportTitle} - ${generatedAt}`
+    const docTitle = getDocTitle()
 
     // Clone the report content so we don't mutate the live DOM
     const clone = el.cloneNode(true) as HTMLElement
@@ -72,8 +94,6 @@ export function PrintButton({
     }
 
     // Collect all <link rel="stylesheet"> and <style> tags from the main document
-    // so Tailwind utility classes render correctly in the new window.
-    // Also include preload-as-style links that Next.js may use for CSS in dev mode.
     const styleTags = Array.from(
       document.querySelectorAll(
         'link[rel="stylesheet"], link[rel="preload"][as="style"], style'
@@ -82,9 +102,6 @@ export function PrintButton({
       .map(node => node.outerHTML)
       .join('\n')
 
-    // Embed a print-trigger script inside the HTML so it runs from within
-    // the popup's own execution context after `load` fires — far more reliable
-    // than cross-window event coordination on document.write() windows.
     const printScript = `<script>
 (function () {
   var done = false;
@@ -110,7 +127,7 @@ export function PrintButton({
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${docTitle.replace(/</g, '&lt;')}</title>
+  <title>${docTitle.replace(/</g, '<')}</title>
   ${styleTags}
   <style>
     /* ── Page setup ───────────────────────────────────────────────────── */
@@ -198,7 +215,6 @@ export function PrintButton({
     .overflow-x-auto, .overflow-hidden, .overflow-y-auto {
       overflow: visible !important;
     }
-    /* Undo sticky positioning which breaks print layout */
     .sticky {
       position: static !important;
     }
@@ -229,38 +245,115 @@ ${printScript}
 </body>
 </html>`
 
-    // Open the HTML as a blob URL so the browser treats it as a proper page
-    // load (fires `load` event, applies stylesheets) rather than about:blank.
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     const url  = URL.createObjectURL(blob)
 
     const win = window.open(url, '_blank', 'width=900,height=700')
-    // Revoke the blob URL after the window has had time to load it
     setTimeout(() => URL.revokeObjectURL(url), 30_000)
 
     if (!win) {
-      // Popup blocked — the blob URL tab will open without auto-print;
-      // user can print manually via Ctrl+P.
       return
     }
-  }, [printRef, reportTitle, dateRange, landscape])
+  }, [printRef, landscape, getDocTitle])
+
+  const handleSaveToVault = useCallback(async () => {
+    const el = printRef.current
+    if (!el) return
+
+    setSaving(true)
+    try {
+      // Extract text content from the report
+      const text = el.innerText || el.textContent || ''
+      const lines = text.split('\n').filter(l => l.trim())
+
+      const title = getDocTitle()
+
+      const res = await fetch('/api/documents/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'text',
+          title,
+          body: lines,
+          subtitle: dateRange || undefined,
+          saveToVault: {
+            title,
+            category: 'financial',
+            notes: `Generated from ${reportTitle} report${dateRange ? ` for ${dateRange}` : ''}`,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Save failed' }))
+        throw new Error(err.error ?? 'Failed to save PDF to vault')
+      }
+
+      toast.success(`"${reportTitle}" saved to Document Vault`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save PDF to vault')
+    } finally {
+      setSaving(false)
+      setMenuOpen(false)
+    }
+  }, [printRef, reportTitle, dateRange, getDocTitle])
 
   return (
-    <button
-      onClick={handlePrint}
-      disabled={disabled}
-      data-print-hide
-      className={[
-        'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg',
-        'border border-border hover:bg-accent',
-        'disabled:opacity-40 disabled:cursor-not-allowed',
-        'transition-colors print:hidden',
-        className,
-      ].join(' ')}
-      title={`Print / Save as PDF — ${reportTitle}`}
-    >
-      <Printer className="h-3.5 w-3.5" />
-      Print / PDF
-    </button>
+    <div className="relative inline-flex" ref={menuRef}>
+      <button
+        onClick={handlePrint}
+        disabled={disabled}
+        data-print-hide
+        className={[
+          'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-l-lg border-r-0',
+          'border border-border hover:bg-accent',
+          'disabled:opacity-40 disabled:cursor-not-allowed',
+          'transition-colors print:hidden',
+          className,
+        ].join(' ')}
+        title={`Print / Save as PDF — ${reportTitle}`}
+      >
+        <Printer className="h-3.5 w-3.5" />
+        Print / PDF
+      </button>
+      <button
+        onClick={() => setMenuOpen(!menuOpen)}
+        disabled={disabled || saving}
+        data-print-hide
+        className={[
+          'inline-flex items-center px-1.5 py-1.5 text-xs font-medium rounded-r-lg',
+          'border border-border hover:bg-accent',
+          'disabled:opacity-40 disabled:cursor-not-allowed',
+          'transition-colors print:hidden',
+        ].join(' ')}
+        title="More options"
+      >
+        {saving ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <ChevronDown className="h-3 w-3" />
+        )}
+      </button>
+
+      {menuOpen && (
+        <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-popover shadow-lg py-1">
+          <button
+            onClick={() => { handlePrint(); setMenuOpen(false) }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Print / Browser PDF
+          </button>
+          <button
+            onClick={handleSaveToVault}
+            disabled={saving}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors disabled:opacity-40"
+          >
+            <FileOutput className="h-3.5 w-3.5" />
+            {saving ? 'Saving...' : 'Save to Document Vault'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }

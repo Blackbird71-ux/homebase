@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { PageHero } from '@/components/shared/PageHero'
 import { DocumentCard, type DocumentData } from '@/components/documents/DocumentCard'
 import { DocumentUploadDialog } from '@/components/documents/DocumentUploadDialog'
-import { Plus, Search, AlertTriangle, FileText, Bell } from 'lucide-react'
+import { GeneratePdfDialog } from '@/components/documents/GeneratePdfDialog'
+import { Plus, Search, AlertTriangle, FileText, Bell, FileOutput } from 'lucide-react'
 import { PillNav } from '@/components/shared/PillNav'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -30,6 +31,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [generateOpen, setGenerateOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [showExpiringOnly, setShowExpiringOnly] = useState(false)
@@ -82,10 +84,16 @@ export default function DocumentsPage() {
           title="Document Vault"
           subtitle={`Store and manage household documents${expiringCount > 0 ? ` · ${expiringCount} expiring soon` : ''}${expiredCount > 0 ? ` · ${expiredCount} expired` : ''}`}
           actions={
-            <Button onClick={() => setUploadOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Upload
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setGenerateOpen(true)}>
+                <FileOutput className="h-4 w-4 mr-1" />
+                Generate PDF
+              </Button>
+              <Button onClick={() => setUploadOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Upload
+              </Button>
+            </div>
           }
         />
 
@@ -167,6 +175,11 @@ export default function DocumentsPage() {
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         onUploaded={(doc) => setDocuments((prev) => [doc, ...prev])}
+      />
+      <GeneratePdfDialog
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+        onGenerated={(doc) => setDocuments((prev) => [doc, ...prev])}
       />
     </div>
   )

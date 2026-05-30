@@ -10,6 +10,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 import { DocumentTextEditor } from './DocumentTextEditor'
+import { PdfAnnotationViewer } from './PdfAnnotationViewer'
+import { PdfFormFiller } from './PdfFormFiller'
 import {
   X,
   Download,
@@ -18,6 +20,9 @@ import {
   FileText,
   Maximize2,
   Minimize2,
+  Highlighter,
+  Eye,
+  PenSquare,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { DocumentData } from './DocumentCard'
@@ -39,6 +44,9 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
   const [fullscreen, setFullscreen] = useState(false)
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [showUnlockDialog, setShowUnlockDialog] = useState(false)
+  const [annotateMode, setAnnotateMode] = useState(false)
+  const [formMode, setFormMode] = useState(false)
+  const [hasFormFields, setHasFormFields] = useState(false)
 
   const mimeType = document.mimeType || ''
   const ext = document.fileName.split('.').pop()?.toLowerCase() || ''
@@ -47,6 +55,9 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
   const loadContent = useCallback(async () => {
     setMode('loading')
     setError('')
+    setAnnotateMode(false)
+    setFormMode(false)
+    setHasFormFields(false)
 
     // Determine viewer mode from mime type and extension
     const isPdf = mimeType === 'application/pdf' || ext === 'pdf'
@@ -57,6 +68,15 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
 
     if (isPdf) {
       setMode('pdf')
+      // Check for form fields asynchronously
+      fetch(`/api/documents/${document.id}/form-fields`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.fields && data.fields.length > 0) {
+            setHasFormFields(true)
+          }
+        })
+        .catch(() => { /* No form fields — that's fine */ })
       return
     }
 
@@ -107,6 +127,12 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
     }
   }, [open, loadContent])
 
+  // Switch to form mode
+  function handleFormMode() {
+    setAnnotateMode(false)
+    setFormMode(true)
+  }
+
   // Lock the document when viewer closes
   useEffect(() => {
     return () => {
@@ -141,6 +167,9 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
     loadContent()
   }
 
+  const isPdf = mode === 'pdf'
+  const isViewMode = isPdf && !annotateMode && !formMode
+
   return (
     <>
       <Dialog open={open} onOpenChange={(open) => {
@@ -150,6 +179,9 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
           setContent('')
           setTextContent('')
           setError('')
+          setAnnotateMode(false)
+          setFormMode(false)
+          setHasFormFields(false)
         }
         onOpenChange(open)
       }}>
@@ -165,6 +197,57 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
               </span>
             </div>
             <div className="flex items-center gap-1">
+              {/* PDF mode buttons */}
+              {isPdf && (
+                <>
+                  {/* View button (shown when in annotate or form mode) */}
+                  {(annotateMode || formMode) && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => { setAnnotateMode(false); setFormMode(false) }}
+                      title="Switch to read-only view"
+                      className="gap-1"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> View
+                    </Button>
+                  )}
+                  {/* Annotate button (shown in view or form mode) */}
+                  {!annotateMode && (
+                    <Button
+                      variant={annotateMode ? 'default' : 'ghost'}
+                      size="xs"
+                      onClick={() => { setAnnotateMode(true); setFormMode(false) }}
+                      title="Annotate PDF"
+                      className="gap-1"
+                    >
+                      <Highlighter className="h-3.5 w-3.5" /> Annotate
+                    </Button>
+                  )}
+                  {/* Fill Form button (shown in view or annotate mode when form fields exist) */}
+                  {hasFormFields && !formMode && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={handleFormMode}
+                      title="Fill form fields"
+                      className="gap-1"
+                    >
+                      <PenSquare className="h-3.5 w-3.5" /> Fill Form
+                    </Button>
+                  )}
+                  {/* Form mode indicator */}
+                  {formMode && (
+                    <Button
+                      variant="default"
+                      size="xs"
+                      className="gap-1 cursor-default"
+                    >
+                      <PenSquare className="h-3.5 w-3.5" /> Filling Form
+                    </Button>
+                  )}
+                </>
+              )}
               <Button
                 variant="ghost"
                 size="xs"
@@ -204,7 +287,22 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
               </div>
             )}
 
-            {mode === 'pdf' && (
+            {isPdf && annotateMode && (
+              <PdfAnnotationViewer
+                pdfUrl={viewUrl}
+                documentId={document.id}
+              />
+            )}
+
+            {isPdf && formMode && (
+              <PdfFormFiller
+                pdfUrl={viewUrl}
+                documentId={document.id}
+                documentTitle={document.title}
+              />
+            )}
+
+            {isViewMode && (
               <iframe
                 src={viewUrl}
                 className="w-full h-full"

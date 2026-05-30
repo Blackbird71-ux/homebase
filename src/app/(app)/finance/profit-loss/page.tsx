@@ -3,16 +3,18 @@
 import { useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
-  ReceiptText, List, X,
+  ReceiptText, List, X, FileOutput,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
+import { Button } from '@/components/ui/button'
 import { buildProfitLossWorkbook } from '@/lib/excel/profit-loss-excel'
 import { useProfitLoss } from '@/hooks/finance/useProfitLoss'
 import { PageHero } from '@/components/shared/PageHero'
+import { toast } from 'sonner'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -106,7 +108,83 @@ export default function ProfitLossPage() {
         </div>
 
         {txLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading transactions…</span>}
-        <div className="ml-auto" data-print-hide>
+        <div className="ml-auto flex items-center gap-2" data-print-hide>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={async () => {
+              try {
+                // Build structured data for PDF table
+                const columns = [
+                  { header: 'Category', key: 'category', width: 0.5, align: 'left' as const },
+                  { header: '', key: 'count', width: 0.15, align: 'right' as const },
+                  { header: 'Amount', key: 'amount', width: 0.35, align: 'right' as const, format: 'currency' as const },
+                ]
+
+                const allRows: Record<string, string | number>[] = [
+                  // Income section
+                  ...incomeGroups.map(g => ({
+                    category: g.label,
+                    count: g.count,
+                    amount: g.totalPeriod,
+                  })),
+                  { category: 'Total Income', count: '', amount: totalIncome },
+                  // Spacer
+                  { category: '', count: '', amount: '' },
+                  // Expenses section
+                  ...expenseGroups.map(g => ({
+                    category: g.label,
+                    count: g.count,
+                    amount: g.totalPeriod,
+                  })),
+                  { category: 'Total Expenses', count: '', amount: totalExpenses },
+                ]
+
+                if (estimatedTax > 0) {
+                  allRows.push({ category: 'Estimated Tax (ATO)', count: '', amount: estimatedTax })
+                }
+
+                allRows.push(
+                  { category: '', count: '', amount: '' },
+                  { category: 'Net Profit / Loss', count: '', amount: netProfit },
+                )
+
+                const res = await fetch('/api/documents/generate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    type: 'table',
+                    meta: {
+                      title: 'Profit & Loss',
+                      subtitle: 'Income and expenses for the selected period',
+                      dateRange: label,
+                      generatedAt: new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }),
+                    },
+                    columns,
+                    rows: allRows,
+                    saveToVault: {
+                      title: `P&L - ${label}`,
+                      category: 'financial',
+                      notes: `Profit & Loss report for ${label}. Income: $${totalIncome.toFixed(2)} · Expenses: $${totalExpenses.toFixed(2)} · Net: $${netProfit.toFixed(2)}`,
+                    },
+                  }),
+                })
+
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({ error: 'Export failed' }))
+                  throw new Error(err.error ?? 'Export failed')
+                }
+
+                toast.success('P&L report saved to Document Vault')
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to export PDF')
+              }
+            }}
+          >
+            <FileOutput className="h-3.5 w-3.5" />
+            PDF
+          </Button>
           <PrintButton
             printRef={printRef}
             reportTitle="Profit & Loss"
@@ -117,7 +195,6 @@ export default function ProfitLossPage() {
             buildWorkbook={() => buildProfitLossWorkbook({ label, incomeGroups, expenseGroups, totalIncome, totalExpenses, estimatedTax, netProfit })}
             filename={`HomeBase - P&L - ${label}.xlsx`}
             disabled={loading}
-            className="ml-2"
           />
         </div>
       </div>
