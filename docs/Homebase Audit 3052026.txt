@@ -1,0 +1,116 @@
+HomeBase Read-Only Audit — Findings & Remediation Plan
+Context
+A deep read-only senior-engineer audit of the non-finance HomeBase codebase (auth, events/calendar, recipes/meal-plan, lists/shopping, chores, trips, notes/docs, tags, settings, admin, offline/PWA sync, shared infra). The finance module was excluded except for shared utilities consumed by both (src/lib/timezone.ts, src/lib/event-helpers.ts).
+
+Priorities (in order): (1) data-loss / state-corruption, (2) performance, (3) SSR/runtime crashes, (4) timezone correctness, (5) auth/authz gaps, (6) functional bugs vs. QA.md §10 smoke tests.
+
+This document is an audit report, not a change request. No code was modified. The remediation plan at the end is structured so an agent can execute it step by step, but nothing should be implemented without the user's go-ahead.
+
+Key environment fact that calibrates every perf finding
+The database is SQLite (prisma/schema.prisma:6), in-process, single-writer. That means: parallelising independent reads yields a modest wall-clock win (no network round-trips; SQLite serialises at the file level), and missing indexes bite mainly as multi-year history accumulates (events, list items), not on day-one row counts. So the perf items below are "good hygiene / scales with data," not emergencies. The correctness findings (C1–C3) are the high-value ones.
+
+What is healthy (verified, no action needed)
+Recording these so they aren't re-investigated:
+
+Auth / IDOR is disciplined. Every spot-checked [id] mutation route scopes ownership before mutating: findFirst({ where: { id, familyId } }) (meal-plan/[id], recipe-books/[id], ingredient-mappings/[id], lists/templates/[id], the two reorder routes) or a userId check (budget-planner/items/[id]:21,55). No IDOR found in the non-finance surface.
+requireSession()/requireAdmin() are gone from active routes — the only hit is a dead src/app/api/recipes/[id]/route.ts.backup (see L4 below).
+Admin SSR guard is in place (admin/page.tsx:473-474 reads window only under typeof window !== 'undefined').
+Offline poll guards are correct. useShoppingList (lastMutAt ref + pendingMutations counter, lines 28-30) and useOfflineQueue (poll checks shouldSkipServerUpdate() both before the fetch and after it resolves, useOfflineQueue.ts:130,133) properly defend against the §12.21/§12.25 races.
+useShoppingList.handleItemSaved dropping dueDate/assignedToUserId (lines 307-310) is harmless — ShoppingList.tsx:211-223 never passes members to EditItemDialog, so those params are always undefined. (The todo sibling does pass members and does apply them — useTodoList.ts:155.)
+chore-helpers.ts UTC-midnight constructions are false positives — derived from local-calendar-day strings, used only as arithmetic intermediates.
+Reorder routes are safe (lists/reorder, lists/[id]/items/reorder): single findMany({ id: { in } }) ownership check, then a batched $transaction.
+Findings
+Severity: Critical = silent data loss / wrong data shown; High = wrong behaviour users will hit; Medium = degraded/edge-case; Low = hygiene.
+
+C1 — Weekly "repeat on these days" lands on the wrong day for morning events · High · Timezone / correctness
+Where: src/lib/recurrence.ts:95-130 (BYDAY branch); rule built in src/components/calendar/EventModal.tsx:164-169, days picked as local weekday labels (DAY_OPTIONS, EventModal.tsx:31-39).
+Rule violated: AGENTS.md §Timezone — "every date boundary… must be computed relative to the user's local timezone, not UTC." QA.md §12.20.
+Why it's wrong: the UI stores BYDAY=MO from the user's local weekday, but generateRecurrenceInstances derives the reference day with currentStart.getUTCDay() (line 98) and anchors on Date.UTC(...) (line 97). No timezone argument is passed in (events/route.ts:51-58). For a UTC+10 user a Monday 09:00 event is stored as Sun 23:00Z, so getUTCDay() = Sunday → BYDAY=MO resolves one day late.
+User-visible impact: any weekly-with-days event scheduled before ~10:00 Sydney appears on the next weekday (Mon→Tue, and Mon/Wed/Fri→Tue/Thu/Sat). Events at 10:00 local or later are correct. Freshly shipped feature (commit 0feb429), so this is a new regression in the #1 bug class.
+C2 — Weekly+BYDAY rules ignore recurrenceEndDate · High · Correctness
+Where: src/lib/recurrence.ts — BYDAY branch ends at continue (line 129); the end-date break (line 147) lives in the non-BYDAY path and is unreachable for BYDAY rules.
+Why it's wrong: a FREQ=WEEKLY;BYDAY=… rule with a set end date keeps generating up to maxToGenerate (COUNT or the 365 default), filtered only by the calendar's rangeStart/rangeEnd — never by recurrenceEndDate.
+User-visible impact: a "weekly on Mon/Wed/Fri until " event shows instances past its end date whenever the calendar view window extends beyond it. Plain FREQ=WEEKLY (no BYDAY) honours the end date correctly — only the new multi-day path is affected.
+C3 — Offline "add item" can be duplicated on a flaky reconnect · Medium · Data correctness
+Where: queue replay useOfflineQueue.ts:65-76; POST handler src/app/api/lists/[id]/items/route.ts:26-77.
+Why it's wrong: the replay loop removes a queued mutation only on res.ok || 404 (line 72). If the server commits the POST but the response is lost (network drops right after — the exact offline scenario this targets), the mutation stays queued and is re-POSTed next flush. The POST handler does not read or dedupe on the tempId carried in the queue envelope (offline-queue.ts:9); it unconditionally creates.
+User-visible impact: duplicate shopping-list items after offline add + unstable reconnect. Uncommon trigger, but it's the headline use-case for the offline queue. (PATCH/DELETE replays are effectively idempotent, so this is POST-only.)
+P1 — Calendar GET runs 7 synthetic-event queries sequentially · Low-Medium · Perf
+Where: src/app/api/events/route.ts — events+members are parallelised (line 42), but bills (85), tripActivities (118), and the income/meals/todos/ docs/chores queries each await in series.
+Why: the seven are independent (each only pushes into calendarEvents).
+Impact: on SQLite the win is modest (in-process, partially serialised), but it's still 7 dependent waits where one Promise.all would do. Grows with how many synthetic sources are enabled. Low risk to fix; honest payoff is small.
+P2 — ingredient-categories/assign is a true N+1 · Medium · Perf / type-safety
+Where: src/app/api/ingredient-categories/assign/route.ts:48-99 — for (const update of updates) does listItem.findFirst + conditional ingredientCategory.findFirst + listItem.update per row (up to 3N queries, not even in a transaction). Uses (prisma as any) casts at 55, 80, 99.
+Fix shape: one findMany({ id: { in } }) for owned items, one for categories, then grouped updateMany/$transaction. Drop the any casts.
+Impact: bulk-assign of N items = 3N in-process queries (~tens of ms for N≈50). Wasteful, and the casts hide type drift.
+P3 — Missing indexes on the hot non-finance tables · Medium · Perf (scales with history)
+Where (confirmed zero @@index):
+Event (schema.prisma:108-138) — filtered by familyId + start/end range on every calendar and dashboard load; accumulates for years. Suggest @@index([familyId, start]) (and @@index([seriesId]) for series edits).
+ListItem (199-217) — filtered by listId on every list GET and the 30s poll, plus reorder ownership checks. Suggest @@index([listId]).
+List (155-171) — @@index([familyId]). Low cardinality; minor.
+Recipe (219+) — @@index([familyId]). Minor.
+Note (412) and RecipeTag (374, join table) — also unindexed; minor.
+Why it matters / caveat: SQLite full-scans without an index. Today's row counts are small, so impact is low now; Event and ListItem are the two that genuinely grow over years and are queried most. Treat the rest as hygiene.
+Requires a migration — see Option A/B below.
+P4 — Google Calendar push is unbounded sequential external calls · Medium · Perf / reliability
+Where: src/app/api/google-calendar/sync/route.ts:48 — for (const event of events) { await createGoogleEvent(...); await prisma.googleCalendarSync.create(...) }.
+Why: the loop is dominated by serial Google API round-trips with no concurrency cap and no upper bound on event count. The per-event DB create could be a single createMany after the loop.
+Impact: large initial syncs risk request timeouts. (Parallelising the Google calls themselves risks rate limits — bound concurrency rather than going fully parallel.)
+L1 — useTodoList lacks the cross-device poll and offline queue its sibling has · Low · Divergence (§12.7)
+Where: useTodoList.ts has only an in-tab TODO_LIST_UPDATED listener (lines 59-77) — no 30s poll, no navigator.onLine path, no enqueueMutation. useShoppingList/useOfflineQueue have all three.
+Impact: two people editing the same to-do list don't see each other's changes until reload, and to-do edits don't work offline. Likely intentional (shopping is the offline-first surface) — flagged for a product decision, not assumed a bug.
+L2 — flushQueueAndRefetch final setItems isn't guarded by shouldSkipServerUpdate · Low · Race
+Where: useOfflineQueue.ts:80 — after replaying the queue it refetches and replaces state unconditionally, unlike the poll (130/133) and the app-event listener (121). Defensible (post-reconnect the server is authoritative), but an optimistic add made during the refetch window can be dropped until the next sync. Add the same guard for consistency.
+L3 — recurrence.ts counts out-of-range instances toward COUNT · Low · Edge case
+Where: recurrence.ts:123,144 — instanceCount++ fires even when the instance fell outside [rangeStart, rangeEnd]. For COUNT-based rules viewed in a narrow window this can under-generate. Minor; document or fix alongside C1/C2.
+L4 — Dead/stale files · Low · Hygiene
+src/app/api/recipes/[id]/route.ts.backup — stale backup still using requireSession()/requireAdmin(); should be deleted (mention, don't auto-delete).
+dashboard-cards.ts:55 — savedMap is built but never used.
+Areas NOT covered in this pass (honest scope boundary)
+Not yet read; no claim of correctness either way:
+
+Dashboard data route internals (only dashboard-cards.ts config was read) — verify its date boundaries use todayBoundsInTz/nDaysFromTodayInTz.
+Recipe/meal-plan import routes (recipes/import, import/cozi-recipes, admin/families recipe-copy) for N+1.
+events/[id]/route.ts Google syncRows loops (147/205).
+TripDetailClient.tsx:492 — setState inside a useState initialiser (React anti-pattern; confirm it's not causing an extra render/SSR issue).
+Form-field-loss sweep of EventModal, the recipe editor, ChoreDialog, trip activity editor (AGENTS.md §Form rules) — only EditItemDialog was verified.
+Client-component date-fns format() usage (calendar views, cards) for SSR/hydration mismatch (server renders in UTC).
+Remediation plan (prioritised, executable)
+Do C1/C2 together — same function. Everything else is independent.
+
+Step 1 — Fix weekly-BYDAY timezone + end-date (C1, C2) · highest value
+File: src/lib/recurrence.ts; caller src/app/api/events/route.ts:51-58.
+Change:
+Add a timezone: string parameter to generateRecurrenceInstances and pass user.timezone ?? 'UTC' from the events route.
+In the BYDAY branch, compute the reference weekday and the week anchor in the user's local timezone (use Intl.DateTimeFormat/the helpers in src/lib/timezone.ts, e.g. dateStringInTz + localMidnightToUtc), and anchor each instance at the event's local time-of-day — not getUTCDay() / setHours().
+Move the recurrenceEndDate check so it also terminates the BYDAY path (test each generated instanceStart against recurrenceEndDate, or hoist the break above the continue at line 129).
+Invariant restored: day-of-week and day boundaries are local-tz (AGENTS.md §Timezone); end dates are honoured for all weekly rules.
+Verify (QA.md §10 calendar smoke): as a UTC+10 user, create a weekly event at 09:00 with Mon selected → instances must appear on Mondays. Create Mon/Wed/Fri at 08:00 → Mon/Wed/Fri only. Set an end date 2 weeks out, scroll the calendar a month ahead → no instances past the end date. Re-check a 14:00 event still works (regression guard). Run npx tsc --noEmit.
+Step 2 — Make offline POST replay idempotent (C3) · decision needed (see Options)
+Files: src/app/api/lists/[id]/items/route.ts (POST), src/lib/offline-queue.ts, src/hooks/lists/useShoppingList.ts:202, useOfflineQueue.ts:65-76; schema migration if Option A.
+Recommended (Option A): add a nullable clientMutationId String? @unique to ListItem; send the queue envelope's tempId as clientMutationId in the POST body; in the handler upsert/no-op on conflict so a replayed POST returns the existing row instead of creating a duplicate.
+Lighter (Option B, no migration): before re-POSTing on replay, refetch the list and skip mutations whose tempId already resolved — weaker (still races), but avoids a schema change.
+Verify: queue an offline add, simulate a committed-but-lost response (or double-flush), reconnect → exactly one item appears.
+Step 3 — Batch the ingredient-category assign N+1 (P2)
+File: src/app/api/ingredient-categories/assign/route.ts.
+Change: one findMany({ where: { id: { in: ids }, list: { familyId } } }) for owned items, one findMany for categories, then grouped updateMany (or one $transaction). Remove the (prisma as any) casts.
+Verify: assign categories to several items at once → all update; query count drops from ~3N to ~3 total. npx tsc --noEmit.
+Step 4 — Parallelise the calendar synthetic queries (P1)
+File: src/app/api/events/route.ts.
+Change: collect the (flag-gated) bills/tripActivities/income/meals/todos/ docs/chores findManys into one Promise.all, then push results into calendarEvents. Pure read reorder — no behaviour change.
+Verify: calendar renders identically (same events); QA.md §10 calendar smoke.
+Step 5 — Add indexes (P3) · migration; do with Option A if chosen
+File: prisma/schema.prisma. Add @@index([familyId, start]) + @@index([seriesId]) to Event, @@index([listId]) to ListItem, and (optional, low value) @@index([familyId]) to List/Recipe/Note.
+Note: migrations auto-run on container start (per project deployment memory). Batch this with any Step-2 migration to avoid two deploys.
+Verify: npx prisma migrate dev locally; calendar + list load unchanged.
+Step 6 — Bound the Google sync loop (P4) · optional
+File: src/app/api/google-calendar/sync/route.ts. Cap concurrency on createGoogleEvent (small batches) and replace per-event googleCalendarSync.create with one createMany after the loop.
+Verify: sync a calendar with many events → completes without timeout; rows created once each.
+Step 7 — Low-priority cleanup (L1–L4) · as desired
+L1: decide whether to-do lists should poll / work offline (product call).
+L2: add if (shouldSkipServerUpdate()) return before the refetch setItems in flushQueueAndRefetch.
+L4: delete recipes/[id]/route.ts.backup; drop the unused savedMap.
+Global verification after any change
+npx tsc --noEmit clean before and after (CHECKLIST §Every change).
+Re-run the relevant QA.md §10 smoke test for the touched module.
+For shared-helper edits (recurrence.ts, offline-queue.ts), grep all callers and confirm the fix lands everywhere (AGENTS.md Finance rule 5 / §12.7 mindset).
