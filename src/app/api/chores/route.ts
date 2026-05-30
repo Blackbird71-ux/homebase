@@ -48,6 +48,7 @@ export async function POST(req: Request) {
     note,
     frequency,
     dayOfWeek,
+    daysOfWeek,
     dayOfMonth,
     rotationInterval,
     currentAssigneeId,
@@ -68,13 +69,18 @@ export async function POST(req: Request) {
 
   const parsedStartDate = startDate ? new Date(startDate) : null
 
+  // Multi-day weekly: store the selected weekdays as a JSON array string.
+  const daysOfWeekJson =
+    Array.isArray(daysOfWeek) && daysOfWeek.length > 0 ? JSON.stringify(daysOfWeek) : null
+
   // Calculate initial nextDueDate using the canonical helper.
   const nextDueDate = calculateInitialDueDate(
     frequency ?? 'weekly',
     dayOfWeek ?? null,
     dayOfMonth ?? null,
     parsedStartDate,
-    user.timezone ?? 'UTC'
+    user.timezone ?? 'UTC',
+    daysOfWeekJson
   )
 
   const chore = await prisma.chore.create({
@@ -84,6 +90,7 @@ export async function POST(req: Request) {
       note: note ?? null,
       frequency: frequency ?? 'weekly',
       dayOfWeek: dayOfWeek ?? null,
+      daysOfWeek: daysOfWeekJson,
       dayOfMonth: dayOfMonth ?? null,
       rotationInterval: rotationInterval ?? 1,
       currentAssigneeId: currentAssigneeId || null,  // coerce "" → null

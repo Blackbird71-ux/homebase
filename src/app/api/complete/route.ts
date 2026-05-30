@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyCompleteToken } from '@/lib/complete-token'
+import { calculateNextDueDate } from '@/lib/chore-helpers'
 
 function htmlPage(title: string, heading: string, body: string, success: boolean): Response {
   const color = success ? '#16a34a' : '#dc2626'
@@ -36,91 +37,6 @@ function htmlPage(title: string, heading: string, body: string, success: boolean
     status: success ? 200 : 400,
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
-}
-
-function calculateNextDueDate(
-  chore: {
-    frequency: string
-    dayOfWeek: number | null
-    dayOfMonth: number | null
-    triggerOnComplete: boolean
-    allowEarlyStart: boolean
-    endDate: Date | null
-    nextDueDate: Date | null
-  },
-  completedAt: Date
-): Date | null {
-  const now = new Date()
-  // One-off chores have no next occurrence — deactivate after completion
-  if (chore.frequency === 'one-off') return null
-
-  let baseDate: Date
-  if (chore.triggerOnComplete) {
-    baseDate = completedAt
-  } else if (chore.allowEarlyStart && chore.nextDueDate && chore.nextDueDate > now) {
-    baseDate = chore.nextDueDate
-  } else {
-    baseDate = now
-  }
-
-  let next: Date
-
-  switch (chore.frequency) {
-    case 'daily': {
-      next = new Date(baseDate)
-      next.setDate(next.getDate() + 1)
-      next.setHours(0, 0, 0, 0)
-      break
-    }
-    case 'weekly': {
-      next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
-      if (chore.dayOfWeek !== null) {
-        const currentDay = next.getDay()
-        let daysUntil = chore.dayOfWeek - currentDay
-        if (daysUntil <= 0) daysUntil += 7
-        next.setDate(next.getDate() + daysUntil)
-      } else {
-        next.setDate(next.getDate() + 7)
-      }
-      break
-    }
-    case 'biweekly': {
-      next = new Date(baseDate)
-      next.setDate(next.getDate() + 14)
-      next.setHours(0, 0, 0, 0)
-      break
-    }
-    case 'monthly':
-    case 'bimonthly':
-    case 'quarterly':
-    case 'halfyearly':
-    case 'yearly': {
-      next = new Date(baseDate)
-      next.setHours(0, 0, 0, 0)
-      let monthsToAdd = 1
-      if (chore.frequency === 'bimonthly') monthsToAdd = 2
-      else if (chore.frequency === 'quarterly') monthsToAdd = 3
-      else if (chore.frequency === 'halfyearly') monthsToAdd = 6
-      else if (chore.frequency === 'yearly') monthsToAdd = 12
-      if (chore.dayOfMonth !== null) {
-        next.setMonth(next.getMonth() + monthsToAdd)
-        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-        next.setDate(Math.min(chore.dayOfMonth, lastDay))
-      } else {
-        next.setMonth(next.getMonth() + monthsToAdd)
-      }
-      break
-    }
-    default: {
-      next = new Date(baseDate)
-      next.setDate(next.getDate() + 7)
-      next.setHours(0, 0, 0, 0)
-    }
-  }
-
-  if (chore.endDate && next > chore.endDate) return null
-  return next
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -162,7 +78,15 @@ export async function GET(req: Request): Promise<Response> {
       data: { choreId: payload.id, completedById: payload.assigneeId },
     })
 
-    const nextDueDate = calculateNextDueDate(chore, completedAt)
+    // There is no session on the email link; source the timezone from the
+    // assignee so the shared helper computes local-midnight boundaries correctly.
+    const assignee = await prisma.user.findUnique({
+      where: { id: payload.assigneeId },
+      select: { timezone: true },
+    })
+    const timezone = assignee?.timezone ?? 'UTC'
+
+    const nextDueDate = calculateNextDueDate(chore, completedAt, timezone)
     const updateData: Record<string, unknown> = nextDueDate === null
       ? { isActive: false, nextDueDate: null }
       : { nextDueDate }
@@ -184,7 +108,7 @@ export async function GET(req: Request): Promise<Response> {
     return htmlPage(
       'Done!',
       'Marked complete!',
-      `"${chore.title}" has been marked as complete. ${nextDueDate ? `Next due: ${nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}.` : 'The chore has been deactivated as it has reached its end date.'}`,
+      `"${chore.title}" has been marked as complete. ${nextDueDate ? `Next due: ${nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone })}.` : 'The chore has been deactivated as it has reached its end date.'}`,
       true
     )
   }

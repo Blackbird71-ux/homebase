@@ -9,6 +9,8 @@
  * these functions — they contain no inline date logic of their own.
  *
  * EXPORTS:
+ *   parseDaysOfWeek             — parses the daysOfWeek JSON column into a weekday int array
+ *   effectiveWeekdays           — resolves daysOfWeek / dayOfWeek into the active weekday set
  *   frequencyToMonths           — maps a frequency string to the number of months to advance
  *   calculateInitialDueDate     — used when creating a new chore (POST /api/chores)
  *   calculateNextDueDate        — used after completing a chore (POST /api/chores/[id]/complete)
@@ -25,11 +27,76 @@ import type { ChoreScheduleDay, ChoreScheduleItem } from '@/types'
 export type ChoreForSchedule = {
   frequency: string
   dayOfWeek: number | null
+  daysOfWeek: string | null
   dayOfMonth: number | null
   triggerOnComplete: boolean
   allowEarlyStart: boolean
   endDate: Date | null
   nextDueDate: Date | null
+}
+
+// ─── Weekly day-set helpers (multi-day weekly chores) ─────────────────────────
+
+/**
+ * Parse the `daysOfWeek` column (a JSON array string like "[1,3,5]") into a
+ * sorted, de-duplicated array of valid weekday ints (0=Sun … 6=Sat).
+ * Returns [] for null / malformed input. Safe to call from the client.
+ */
+export function parseDaysOfWeek(value: string | null | undefined): number[] {
+  if (!value) return []
+  try {
+    const arr = JSON.parse(value)
+    if (!Array.isArray(arr)) return []
+    return [...new Set(
+      arr
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+    )].sort((a, b) => a - b)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The effective set of weekdays a weekly chore runs on.
+ * Prefers the multi-day `daysOfWeek` array; falls back to the single
+ * `dayOfWeek`; empty array means "any day" (advance by a flat 7 days).
+ */
+export function effectiveWeekdays(dayOfWeek: number | null, daysOfWeek: string | null): number[] {
+  const multi = parseDaysOfWeek(daysOfWeek)
+  if (multi.length > 0) return multi
+  if (dayOfWeek !== null) return [dayOfWeek]
+  return []
+}
+
+/**
+ * Given `base` at UTC midnight and a set of weekdays, return the next date
+ * (still UTC midnight) whose weekday is in the set.
+ *
+ *   • allowSameDay=true  → base itself qualifies if its weekday is in the set
+ *                          (used for initial creation, where the start day counts)
+ *   • allowSameDay=false → strictly after base, wrapping into next week
+ *                          (used when advancing after completion — rolling)
+ *
+ * An empty set means "any day": advances by a flat 7 days (legacy weekly).
+ */
+function nextWeekdayInSet(base: Date, weekdays: number[], allowSameDay: boolean): Date {
+  const next = new Date(base)
+  next.setUTCHours(0, 0, 0, 0)
+  if (weekdays.length === 0) {
+    next.setUTCDate(next.getUTCDate() + 7)
+    return next
+  }
+  const currentDay = next.getUTCDay()
+  for (let offset = allowSameDay ? 0 : 1; offset <= 7; offset++) {
+    if (weekdays.includes((currentDay + offset) % 7)) {
+      next.setUTCDate(next.getUTCDate() + offset)
+      return next
+    }
+  }
+  // Unreachable for a non-empty set, but keep the schedule moving just in case.
+  next.setUTCDate(next.getUTCDate() + 7)
+  return next
 }
 
 // ─── Frequency → months map ───────────────────────────────────────────────────
@@ -61,7 +128,7 @@ export function frequencyToMonths(frequency: string): number {
 function advanceByFrequency(
   base: Date,
   frequency: string,
-  dayOfWeek: number | null,
+  weekdays: number[],
   dayOfMonth: number | null
 ): Date {
   const next = new Date(base)
@@ -73,15 +140,10 @@ function advanceByFrequency(
       break
     }
     case 'weekly': {
-      if (dayOfWeek !== null) {
-        const currentDay = next.getUTCDay()
-        let daysUntil = dayOfWeek - currentDay
-        if (daysUntil <= 0) daysUntil += 7
-        next.setUTCDate(next.getUTCDate() + daysUntil)
-      } else {
-        next.setUTCDate(next.getUTCDate() + 7)
-      }
-      break
+      // Rolling multi-day: advance to the next weekday in the set (strictly
+      // after the base day). For a single-day or "any day" chore this matches
+      // the legacy behaviour exactly.
+      return nextWeekdayInSet(next, weekdays, false)
     }
     case 'biweekly': {
       next.setUTCDate(next.getUTCDate() + 14)
@@ -127,7 +189,8 @@ export function calculateInitialDueDate(
   dayOfWeek: number | null,
   dayOfMonth: number | null,
   startDate: Date | null,
-  timezone: string
+  timezone: string,
+  daysOfWeek: string | null = null
 ): Date {
   // Convert start date (or now) to UTC midnight of the same LOCAL calendar day.
   const rawBase = startDate ? new Date(startDate) : new Date()
@@ -144,14 +207,10 @@ export function calculateInitialDueDate(
       break
     }
     case 'weekly': {
-      if (dayOfWeek !== null) {
-        const currentDay = base.getUTCDay()
-        let daysUntil = dayOfWeek - currentDay
-        // Allow same-day (daysUntil === 0 is fine for initial creation)
-        if (daysUntil < 0) daysUntil += 7
-        const next = new Date(base)
-        next.setUTCDate(base.getUTCDate() + daysUntil)
-        result = next
+      const weekdays = effectiveWeekdays(dayOfWeek, daysOfWeek)
+      if (weekdays.length > 0) {
+        // Start day itself counts as the first occurrence (allowSameDay=true).
+        result = nextWeekdayInSet(base, weekdays, true)
       } else {
         result = base
       }
@@ -225,7 +284,12 @@ export function calculateNextDueDate(
   const baseDateLocalStr = baseDate.toLocaleDateString('en-CA', { timeZone: timezone })
   const baseDateUTCMidnight = new Date(`${baseDateLocalStr}T00:00:00Z`)
 
-  const next = advanceByFrequency(baseDateUTCMidnight, chore.frequency, chore.dayOfWeek, chore.dayOfMonth)
+  const next = advanceByFrequency(
+    baseDateUTCMidnight,
+    chore.frequency,
+    effectiveWeekdays(chore.dayOfWeek, chore.daysOfWeek),
+    chore.dayOfMonth
+  )
 
   if (chore.endDate && next > chore.endDate) {
     return null // signal caller to deactivate
@@ -257,7 +321,12 @@ export function calculateNextDueDateFromNow(
   const todayLocalStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
   const baseDateUTCMidnight = new Date(`${todayLocalStr}T00:00:00Z`)
 
-  const next = advanceByFrequency(baseDateUTCMidnight, chore.frequency, chore.dayOfWeek, chore.dayOfMonth)
+  const next = advanceByFrequency(
+    baseDateUTCMidnight,
+    chore.frequency,
+    effectiveWeekdays(chore.dayOfWeek, chore.daysOfWeek),
+    chore.dayOfMonth
+  )
 
   if (chore.endDate && next > chore.endDate) {
     return null

@@ -23,6 +23,7 @@ interface Chore {
   note: string | null
   frequency: string
   dayOfWeek: number | null
+  daysOfWeek: string | null
   dayOfMonth: number | null
   rotationInterval: number
   currentAssigneeId: string | null

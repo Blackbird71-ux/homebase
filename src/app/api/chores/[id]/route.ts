@@ -32,6 +32,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     let val = body[key]
     // Coerce empty-string assignee to null so Prisma saves null (not "")
     if (key === 'currentAssigneeId' && val === '') val = null
+    // Multi-day weekly: persist the selected weekdays as a JSON array string.
+    if (key === 'daysOfWeek') val = Array.isArray(val) && val.length > 0 ? JSON.stringify(val) : null
     updateData[key] = val
   }
 
@@ -42,6 +44,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const needsRecalc =
     changedFields.includes('frequency') ||
     changedFields.includes('dayOfWeek') ||
+    changedFields.includes('daysOfWeek') ||
     changedFields.includes('dayOfMonth')
 
   if (needsRecalc) {
@@ -88,15 +91,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   dispatchAppEvent(AppEvents.CHORES_UPDATED)
 
   return NextResponse.json({
-    chore: {
-      ...updated,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-      completions: updated.completions.map((c) => ({
-        ...c,
-        completedAt: c.completedAt.toISOString(),
-      })),
-    },
+    ...updated,
+    createdAt: updated.createdAt.toISOString(),
+    updatedAt: updated.updatedAt.toISOString(),
+    completions: updated.completions.map((c) => ({
+      ...c,
+      completedAt: c.completedAt.toISOString(),
+    })),
   })
 }
 

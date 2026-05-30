@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
+import { parseDaysOfWeek } from '@/lib/chore-helpers'
 
 const textareaClass =
   'flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
@@ -43,6 +44,7 @@ interface Chore {
   note: string | null
   frequency: string
   dayOfWeek: number | null
+  daysOfWeek: string | null
   dayOfMonth: number | null
   rotationInterval: number
   currentAssigneeId: string | null
@@ -72,13 +74,13 @@ interface ChoreDialogProps {
 }
 
 const DAY_OPTIONS = [
-  { value: '0', label: 'Sunday' },
-  { value: '1', label: 'Monday' },
-  { value: '2', label: 'Tuesday' },
-  { value: '3', label: 'Wednesday' },
-  { value: '4', label: 'Thursday' },
-  { value: '5', label: 'Friday' },
-  { value: '6', label: 'Saturday' },
+  { value: '0', label: 'Sunday', short: 'Sun' },
+  { value: '1', label: 'Monday', short: 'Mon' },
+  { value: '2', label: 'Tuesday', short: 'Tue' },
+  { value: '3', label: 'Wednesday', short: 'Wed' },
+  { value: '4', label: 'Thursday', short: 'Thu' },
+  { value: '5', label: 'Friday', short: 'Fri' },
+  { value: '6', label: 'Saturday', short: 'Sat' },
 ]
 
 function toDateInputValue(date: string | null): string {
@@ -92,7 +94,13 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [description, setDescription] = useState(chore?.description ?? '')
   const [note, setNote] = useState(chore?.note ?? '')
   const [frequency, setFrequency] = useState(chore?.frequency ?? 'weekly')
-  const [dayOfWeek, setDayOfWeek] = useState(chore?.dayOfWeek?.toString() ?? '')
+  // Multi-day weekly: the set of weekdays the chore runs on (0=Sun … 6=Sat).
+  // Seed from the daysOfWeek JSON column, falling back to the legacy single dayOfWeek.
+  const [selectedDays, setSelectedDays] = useState<number[]>(() => {
+    const multi = parseDaysOfWeek(chore?.daysOfWeek ?? null)
+    if (multi.length > 0) return multi
+    return chore?.dayOfWeek != null ? [chore.dayOfWeek] : []
+  })
   const [dayOfMonth, setDayOfMonth] = useState(chore?.dayOfMonth?.toString() ?? '')
   const [rotationInterval, setRotationInterval] = useState(chore?.rotationInterval?.toString() ?? '1')
   const [currentAssigneeId, setCurrentAssigneeId] = useState(chore?.currentAssigneeId ?? '')
@@ -104,6 +112,14 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [emailReminder, setEmailReminder] = useState(chore?.emailReminder ?? false)
   const [emailReminderDays, setEmailReminderDays] = useState(chore?.emailReminderDays?.toString() ?? '1')
   const [saving, setSaving] = useState(false)
+
+  function toggleDay(day: number) {
+    setSelectedDays((prev) =>
+      prev.includes(day)
+        ? prev.filter((d) => d !== day)
+        : [...prev, day].sort((a, b) => a - b)
+    )
+  }
 
   async function handleSave() {
     if (!title.trim()) {
@@ -118,7 +134,10 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         description: description.trim() || null,
         note: note.trim() || null,
         frequency,
-        dayOfWeek: dayOfWeek ? parseInt(dayOfWeek) : null,
+        // dayOfWeek mirrors the first selected day for backward compatibility;
+        // daysOfWeek carries the full set. Both only apply to weekly chores.
+        dayOfWeek: frequency === 'weekly' && selectedDays.length > 0 ? selectedDays[0] : null,
+        daysOfWeek: frequency === 'weekly' ? selectedDays : [],
         dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : null,
         rotationInterval: parseInt(rotationInterval) || 1,
         currentAssigneeId: currentAssigneeId || null,
@@ -136,9 +155,11 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         body.dayOfMonth = new Date(startDate).getDate()
       }
 
-      // For weekly chores, auto-set dayOfWeek from start date if not explicitly set
-      if (frequency === 'weekly' && !dayOfWeek && startDate) {
-        body.dayOfWeek = new Date(startDate).getDay()
+      // For weekly chores with no day selected, default to the start date's weekday
+      if (frequency === 'weekly' && selectedDays.length === 0 && startDate) {
+        const startDay = new Date(startDate).getDay()
+        body.dayOfWeek = startDay
+        body.daysOfWeek = [startDay]
       }
 
       const url = chore ? `/api/chores/${chore.id}` : '/api/chores'
@@ -234,17 +255,33 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
             </div>
             {frequency === 'weekly' && (
               <div className="space-y-1.5">
-                <Label htmlFor="chore-day">Day of week</Label>
-                <Select value={dayOfWeek} onValueChange={(v) => setDayOfWeek(v ?? '')}>
-                  <SelectTrigger id="chore-day">
-                    <SelectValue placeholder="Any day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DAY_OPTIONS.map((d) => (
-                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Days of week</Label>
+                <div className="flex gap-1">
+                  {DAY_OPTIONS.map((d) => {
+                    const dayNum = parseInt(d.value)
+                    const active = selectedDays.includes(dayNum)
+                    return (
+                      <button
+                        key={d.value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleDay(dayNum)}
+                        className={`flex-1 h-9 rounded-md border text-xs font-medium transition-colors ${
+                          active
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input bg-background text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {d.short}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedDays.length > 1
+                    ? 'Rolls to the next selected day each time it’s completed.'
+                    : 'Pick one or more days. Leave all unselected for any day.'}
+                </p>
               </div>
             )}
             {(frequency === 'monthly' || frequency === 'bimonthly' || frequency === 'quarterly' || frequency === 'halfyearly' || frequency === 'yearly') && (

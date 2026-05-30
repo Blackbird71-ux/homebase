@@ -8,6 +8,7 @@ import { ChoreDialog } from './ChoreDialog'
 import { ChoreCalendarView } from './ChoreCalendarView'
 import { HoverCard } from '@/components/ui/hover-card'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { parseDaysOfWeek } from '@/lib/chore-helpers'
 
 interface Member {
   id: string
@@ -29,6 +30,7 @@ interface Chore {
   note: string | null
   frequency: string
   dayOfWeek: number | null
+  daysOfWeek: string | null
   dayOfMonth: number | null
   rotationInterval: number
   currentAssigneeId: string | null
@@ -201,6 +203,8 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
       }
       return freq
     }
+    const multi = parseDaysOfWeek(chore.daysOfWeek)
+    if (multi.length > 1) return `${freq} on ${multi.map((d) => DAY_LABELS[d]).join(', ')}`
     if (chore.dayOfWeek !== null) return `${freq} on ${DAY_LABELS[chore.dayOfWeek]}`
     if (chore.dayOfMonth !== null) return `${freq} on day ${chore.dayOfMonth}`
     return freq
