@@ -3,6 +3,7 @@
 // the system prompt for the AI. Supports both bulk and selective context loading.
 
 import { getAllContextProviders } from './tool-registry'
+import { todayStringInTz } from '@/lib/timezone'
 import { format, addDays, parseISO } from 'date-fns'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ export async function buildSystemPrompt(
   options: ContextBuilderOptions
 ): Promise<string> {
   const { timezone, userName } = options
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+  const nowStr = todayStringInTz(timezone)
   const weekday = new Date().toLocaleDateString('en-AU', { weekday: 'long', timeZone: timezone })
 
   // Collect context from all registered tools

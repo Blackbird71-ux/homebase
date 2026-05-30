@@ -6,7 +6,7 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { resolveDayToDate } from '@/lib/ai/orchestrator'
-import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz, dateStringInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ async function queryEventsHandler(args: Record<string, unknown>, ctx: HandlerCon
   if (day) {
     const targetDate = resolveDayToDate(day, timezone)
     const dayEvents = weekEvents.filter(e => {
-      const eventDate = e.start.toLocaleDateString('en-CA', { timeZone: timezone })
+      const eventDate = dateStringInTz(e.start, timezone)
       return eventDate === targetDate
     })
     const dayLabel = new Date(targetDate + 'T12:00:00Z').toLocaleDateString('en-AU', { weekday: 'long', timeZone: timezone })

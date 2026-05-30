@@ -6,6 +6,7 @@ import { getAllDefinitions, executeTool, getActionEventMap } from './tool-regist
 import { callAIProvider } from './provider'
 import { buildSystemPrompt, type ContextBuilderOptions } from './context-builder'
 import { dispatchAppEvent } from '@/lib/app-events'
+import { dateStringInTz } from '@/lib/timezone'
 import type { SessionUser } from './types'
 import type { FunctionDeclaration } from '@google/generative-ai'
 
@@ -18,7 +19,7 @@ import type { FunctionDeclaration } from '@google/generative-ai'
 export function resolveDayToDate(dayName: string, userTimezone: string): string {
   const now = new Date()
   const { format, addDays, startOfWeek, parseISO } = require('date-fns')
-  const todayStr = now.toLocaleDateString('en-CA', { timeZone: userTimezone })
+  const todayStr = dateStringInTz(now, userTimezone)
   const today = parseISO(todayStr)
 
   const lower = dayName.toLowerCase().trim()

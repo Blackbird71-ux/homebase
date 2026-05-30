@@ -9,7 +9,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
-import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz, monthBoundsInTz } from '@/lib/timezone'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz, monthBoundsInTz, dateStringInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── generateDailyDigest ────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
   })
 
   if (family?.birthdays) {
-    const localDateStr = now.toLocaleDateString('en-CA', { timeZone: timezone }) // YYYY-MM-DD
+    const localDateStr = dateStringInTz(now, timezone) // YYYY-MM-DD
     const [, localMonthStr, localDayStr] = localDateStr.split('-')
     const todayMonthDay = `${parseInt(localMonthStr)}-${parseInt(localDayStr)}`
     const allBirthdays: Array<{ name: string; type: string; date: string }> = JSON.parse(family.birthdays)

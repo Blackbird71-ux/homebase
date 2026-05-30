@@ -5,7 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
-import { formatInTz } from '@/lib/timezone'
+import { formatInTz, todayStringInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ async function queryBirthdaysHandler(args: Record<string, unknown>, ctx: Handler
   }
 
   const timezone = ctx.timezone ?? 'UTC'
-  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+  const nowStr = todayStringInTz(timezone)
   const today = new Date(nowStr)
   const currentYear = today.getFullYear()
 

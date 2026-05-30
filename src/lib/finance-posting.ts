@@ -9,7 +9,7 @@
 // $transaction and orchestrates the surrounding state changes.
 //
 // These helpers are PARALLEL to the in-route posting code in
-//   src/app/api/finance/bills/route.ts        (postBillToGL, postBillPaymentToGL)
+//   src/app/api/finance/bills/route.ts        (PATCH Stage 1 / Stage 2 blocks)
 //   src/app/api/finance/income/route.ts       (PATCH Stage 1 / Stage 2 blocks)
 //
 // They use the same primitives and produce equivalent journal entries.

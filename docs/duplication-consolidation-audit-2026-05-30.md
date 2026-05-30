@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-30
 **Scope:** Entire `src/` tree — inline code that duplicates an existing `src/lib/` helper, and inline logic repeated across ≥2 files that warrants a new helper.
-**Mode:** PARTIALLY REMEDIATED. Findings 2, 4, 5, 7 executed 2026-05-30 (see **Remediation status** below). Findings 1, 3, 6 + a newly-found hardcoded-display-zone follow-up are **deferred to the next batch**.
+**Mode:** PARTIALLY REMEDIATED. Findings 2, 3, 4, 5, 6, 7 executed 2026-05-30 (see **Remediation status** below). Finding 1 + a newly-found hardcoded-display-zone follow-up are **deferred to the next batch**.
 
 **Related prior reports (do not re-litigate; this audit is duplication-specific):**
 - [`docs/helper-separation-audit-report.md`](helper-separation-audit-report.md) — page→hook/lib separation (2026-05-15)
@@ -36,6 +36,8 @@ The headline is **#1 + #2**: two pairs of near-identical functions where the cop
 | **4** (`postIncomeReceiptJournal` unused) | 4 | Income simple-receipt (MODE B) now posts through the shared `postIncomeReceiptJournal` helper instead of inline create. | Helper byte-matches the prior inline block; adds only `assertBalanced`/GL-family safety + `amount>0` guard (parity with MODE A payslip path). `tsc` clean. |
 | **5** (family-tz fetch + diverging default) | 5 | Added `DEFAULT_TIMEZONE = 'Australia/Sydney'` to [`src/lib/timezone.ts`](../src/lib/timezone.ts) + `getFamilyTimezone(familyId)` in new [`src/lib/family.ts`](../src/lib/family.ts); migrated the ~18 fetch/fallback sites; **unified the spawn-path default to Sydney** (Brisbane fallbacks removed). Family's saved tz always wins; the constant is only the null-fallback. | Cron *fire-time* tz (`Australia/Brisbane` in `spawnScheduler`/`reportScheduler`) and the `SUPPORTED_TIMEZONES` allow-list left intact. `tsc` clean. |
 | **7** (AUD formatting inlined) | 6 (Option B) | Extended `formatCurrency(n, options?)` in [`src/lib/financeShared.ts`](../src/lib/financeShared.ts); migrated the inline `Intl.NumberFormat('en-AU', …)` sites including the whole-dollar (`maximumFractionDigits: 0`) variants. | `tsc` clean; display-only. |
+| **3** (dead `postBillPaymentToGL`) | 3 | Deleted the unused inline `postBillPaymentToGL` (~42 lines, comment + body) from [`bills/route.ts`](../src/app/api/finance/bills/route.ts) — repo-wide grep confirmed **zero callers**; the live payment leg posts via shared `postBillPaymentJournal` in `bills/[id]/payments/route.ts`. Fixed the stale `finance-posting.ts` header reference (also noted `postBillToGL` was already gone). | Grep: 0 callers. `tsc` clean (`--incremental false`). Pure dead-code removal — no behavioural change. |
+| **6** (AI tools inline date-strings) | 7 | Migrated the 5 inline `toLocaleDateString('en-CA', { timeZone })` sites (orchestrator, context-builder, birthdays, digest, calendar) to `dateStringInTz`/`todayStringInTz` from [`src/lib/timezone.ts`](../src/lib/timezone.ts). Sites holding a captured `now`/`e.start` use `dateStringInTz(var, tz)` to preserve the exact timestamp (so digest.tool.ts:152 used `dateStringInTz(now, …)`, not the audit's literal `todayStringInTz` which would re-read the clock); the two bare `new Date()` sites use `todayStringInTz(tz)`. **Left `meal-plan.tool.ts:178` (`timeZone: 'UTC'`) untouched** — the meal-plan UTC-midnight exception. | Helpers byte-match the inline calls. `tsc` clean. |
 
 > **Decision recorded (Finding 5 / Step 5 judgment call):** the spawn paths' `Australia/Brisbane` default was **not** a deliberate DST-stable choice worth preserving — per the user, "we should be using the family tz as it will be correct for each family and easily changed in settings. I am not a fan of hard coded items that should be a setting." Unified to a single `DEFAULT_TIMEZONE` (Sydney); the family's own setting is the source of truth.
 
@@ -44,8 +46,6 @@ The headline is **#1 + #2**: two pairs of near-identical functions where the cop
 | Finding | Step | Why deferred |
 |---|---|---|
 | **1** — `upsertBillDraftJournal` ↔ `upsertIncomeJournalEntry` twin GL upserts (**CRITICAL**) | 2 | Highest-value but highest-risk (real money + GL). Needs `assertBalanced`/`assertGlAccountsBelongToFamily` exported + a new `upsertDraftJournal({…, isPosted})`, then **both** lifecycle smokes (QA.md §2 + §5, the bill↔income parity gate). Kept for a focused session. |
-| **3** — dead `postBillPaymentToGL` removal | 3 | Mechanical, but delete-only — confirm zero callers (`grep -rn postBillPaymentToGL src/`) and fix the stale finance-posting.ts header reference at the same time. |
-| **6** — AI tools re-implement `dateStringInTz`/`todayStringInTz` (5 sites) | 7 | Low priority; bundle with the display-zone follow-up below (all tz-helper adoption). |
 
 ### 🆕 New follow-up found during Step 5 — hardcoded display timezones (next batch)
 

@@ -35,49 +35,6 @@ interface JournalLine {
   description?: string
 }
 
-// ── Stage 2 GL posting: Bill paid → DR AP / CR Bank ──────────────────────────
-// Creates a posted journal entry for the payment leg.
-async function postBillPaymentToGL(
-  billName: string,
-  amount: number,
-  apCategoryId: string,
-  bankGlAccountId: string,
-  entityId: string | null,
-  familyId: string,
-  paymentDate: Date,
-  billId: string,
-): Promise<string> {
-  // Validate
-  const valid = await prisma.financeCategory.findMany({
-    where: { id: { in: [apCategoryId, bankGlAccountId] }, familyId },
-    select: { id: true },
-  })
-  if (valid.length < 2) {
-    throw new Error('GL accounts not found for bill payment posting')
-  }
-
-  const reference = await nextJournalReference(familyId)
-  const entry = await prisma.financeJournalEntry.create({
-    data: {
-      reference,
-      date: paymentDate,
-      description: `Payment: ${billName}`,
-      type: 'auto_transaction',
-      isPosted: true,
-      entityId: entityId ?? null,
-      familyId,
-      lines: {
-        create: [
-          { glAccountId: apCategoryId,     side: 'debit',  amount, description: `Clear AP: ${billName}` },
-          { glAccountId: bankGlAccountId,  side: 'credit', amount, description: `Payment: ${billName}` },
-        ],
-      },
-    },
-    select: { id: true },
-  })
-  return entry.id
-}
-
 // ── Draft journal helper (save lines for review before posting) ──────────────
 // GL-FIRST: the draft journal is the canonical record of the user's intended
 // split (e.g. DR expense ex-GST / DR GST ITC / CR Accounts Payable).
