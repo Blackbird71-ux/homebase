@@ -192,7 +192,10 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
   const [favoriteBookId, setFavoriteBookId] = useState<string | null>(initialFavoriteBookId ?? null)
   const [search, setSearch]         = useState('')
   const [activeTag, setActiveTag]   = useState<string | null>(null)
-  const [sortOrder, setSortOrder]   = useState<'newest' | 'alpha'>('newest')
+  const [sortOrder, setSortOrder]   = useState<'newest' | 'alpha'>(() => {
+    if (typeof window === 'undefined') return 'newest'
+    return (localStorage.getItem('recipes-sort-order') as 'newest' | 'alpha') ?? 'newest'
+  })
   const [activeTab, setActiveTab]   = useState<Tab>(() => {
     if (typeof window === 'undefined') return 'overview'
     return (localStorage.getItem('recipes-active-tab') as Tab) ?? 'overview'
@@ -201,6 +204,9 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
   useEffect(() => {
     localStorage.setItem('recipes-active-tab', activeTab)
   }, [activeTab])
+  useEffect(() => {
+    localStorage.setItem('recipes-sort-order', sortOrder)
+  }, [sortOrder])
   const [formOpen, setFormOpen]     = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
