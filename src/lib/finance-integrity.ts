@@ -1,0 +1,488 @@
+import { prisma } from '@/lib/prisma'
+import { getFamilyTimezone } from '@/lib/family'
+import { todayBoundsInTz } from '@/lib/timezone'
+import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
+
+/**
+ * Finance Integrity Audit — strictly READ-ONLY.
+ *
+ * Detects the "row ↔ GL divergence" class of bug: a finance record's row state
+ * (category, paid flag, amount, voided flag) disagreeing with the posted General
+ * Ledger journal that should back it. Reports read only from posted journal lines,
+ * so such divergence is invisible until reconciled directly — exactly how the Apco
+ * bug (bill.category = Vehicles[expense] but accrual debited Visa Card[asset]) hid
+ * an expense from the P&L.
+ *
+ * This module performs Prisma reads only — no create/update/delete, no $transaction.
+ * Running it can never mutate data. It mirrors the read-only lookups used by the
+ * report routes (e.g. AP/AR control-account discovery); it never calls the
+ * `ensure*` helpers, which create categories when missing.
+ */
+
+const TOL = 0.01
+const r2 = (n: number) => Math.round(n * 100) / 100
+const approxEq = (a: number, b: number) => Math.abs(a - b) <= TOL
+
+export type IntegrityFinding = {
+  severity: 'critical' | 'warning' | 'info'
+  code: string
+  recordType: 'bill' | 'income' | 'transaction' | 'journal' | 'payslip' | 'gl'
+  recordId: string
+  label: string
+  message: string
+  detail?: Record<string, unknown>
+}
+
+export type IntegrityCheck = {
+  code: string
+  label: string
+  status: 'pass' | 'fail'
+  findingCount: number
+}
+
+export type AuditResult = {
+  ranAt: string
+  familyId: string
+  asAt: string
+  checks: IntegrityCheck[]
+  findings: IntegrityFinding[]
+  summary: {
+    critical: number
+    warning: number
+    info: number
+    passed: number
+    failed: number
+  }
+}
+
+// Catalog of every check, in display order. `status` is derived after the run:
+// a check fails if it produced any critical/warning finding; info-only checks
+// (the "split" lists) never fail — they are review aids.
+const CHECK_CATALOG: { code: string; label: string }[] = [
+  { code: 'BILL_ACCRUAL_MISSING',         label: 'Received bills have a posted accrual' },
+  { code: 'BILL_ACCRUAL_STALE',           label: 'Voided/un-invoiced bills have no live accrual' },
+  { code: 'BILL_ACCRUAL_MISMATCH',        label: 'Bill accrual matches row (category / amount / AP / entity)' },
+  { code: 'BILL_ACCRUAL_SPLIT',           label: 'Bill accruals with custom splits (review)' },
+  { code: 'INCOME_ACCRUAL_MISSING',       label: 'Invoiced income has a posted accrual' },
+  { code: 'INCOME_ACCRUAL_STALE',         label: 'Voided/un-invoiced income has no live accrual' },
+  { code: 'INCOME_ACCRUAL_MISMATCH',      label: 'Income accrual matches row (category / amount / AR / entity)' },
+  { code: 'INCOME_ACCRUAL_SPLIT',         label: 'Income accruals with custom splits (review)' },
+  { code: 'BILL_PAID_NO_PAYMENT_GL',      label: 'Paid bills have a payment journal' },
+  { code: 'INCOME_RECEIVED_NO_RECEIPT_GL', label: 'Received income has a receipt journal' },
+  { code: 'TX_JOURNAL_ACCOUNT_DRIFT',     label: 'Transaction journals match the transaction account' },
+  { code: 'ORPHANED_AUTO_JOURNAL',        label: 'Auto-transaction journals point to a live transaction' },
+  { code: 'TRIAL_BALANCE_UNBALANCED',     label: 'Trial balance: total debits = total credits' },
+  { code: 'JOURNAL_ENTRY_UNBALANCED',     label: 'Every posted entry balances (DR = CR)' },
+  { code: 'NONPOSITIVE_LINE_AMOUNT',      label: 'Every journal line amount is positive' },
+  { code: 'REVERSAL_PAIR_BROKEN',         label: 'Reversal pairs are intact' },
+  { code: 'AP_CONTROL_VS_SUBLEDGER',      label: 'AP control account reconciles to the bills subledger' },
+  { code: 'AR_CONTROL_VS_SUBLEDGER',      label: 'AR control account reconciles to the income subledger' },
+  { code: 'PAYSLIP_GROSS_MISMATCH',       label: 'Payslip gross = net + PAYG + super' },
+]
+
+export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditResult> {
+  const findings: IntegrityFinding[] = []
+  const add = (f: IntegrityFinding) => findings.push(f)
+
+  const tz = await getFamilyTimezone(familyId)
+  // "As at" the end of today in the family's timezone — matches the AP/AR reports,
+  // which default their asAt to end-of-today so the reconciliation totals tie out.
+  const asAt = new Date(todayBoundsInTz(tz).end.getTime() - 1)
+
+  // Category id → name/type map for human-readable messages.
+  const categories = await prisma.financeCategory.findMany({
+    where: { familyId },
+    select: { id: true, name: true, type: true, isSystem: true },
+  })
+  const catName = new Map(categories.map(c => [c.id, c.name]))
+  const catType = new Map(categories.map(c => [c.id, c.type]))
+  const acct = (id: string | null | undefined) =>
+    id ? `${catName.get(id) ?? '(unknown)'} (${catType.get(id) ?? '?'})` : '(none)'
+
+  // Read-only AP/AR control-account discovery — mirrors accounts-payable/route.ts
+  // and accounts-receivable/route.ts. Does NOT call ensureAccounts*Category.
+  const apCategory = categories.find(c => c.isSystem && c.type === 'liability' && c.name.toLowerCase().includes('accounts payable'))
+  const arCategory = categories.find(c => c.isSystem && c.type === 'asset' && c.name.toLowerCase().includes('accounts receivable'))
+
+  // ── A + B — Bills: accrual divergence + payment-journal presence ────────────
+  const bills = await prisma.financeRecurringBill.findMany({
+    where: { familyId },
+    select: {
+      id: true, name: true, amount: true, categoryId: true, entityId: true,
+      invoiceReceived: true, isVoided: true, paid: true, paymentTxId: true,
+      journalEntry: {
+        select: {
+          isPosted: true, isReversed: true, entityId: true,
+          lines: { select: { glAccountId: true, side: true, amount: true } },
+        },
+      },
+      payments: { select: { journalEntry: { select: { isPosted: true, isReversed: true } } } },
+    },
+  })
+
+  for (const b of bills) {
+    const liveAccrual = b.journalEntry && b.journalEntry.isPosted && !b.journalEntry.isReversed
+
+    // A — received & active bill must have a live posted accrual that matches the row.
+    if (b.invoiceReceived && !b.isVoided) {
+      if (!liveAccrual) {
+        add({
+          severity: 'critical', code: 'BILL_ACCRUAL_MISSING', recordType: 'bill',
+          recordId: b.id, label: b.name,
+          message: `Bill is marked invoice-received but has no posted accrual journal.`,
+        })
+      } else {
+        const lines = b.journalEntry!.lines
+        if (lines.length === 2) {
+          const debit = lines.find(l => l.side === 'debit')
+          const credit = lines.find(l => l.side === 'credit')
+          if (debit && credit) {
+            const problems: string[] = []
+            if (debit.glAccountId !== b.categoryId)
+              problems.push(`debit posted to ${acct(debit.glAccountId)} but bill category is ${acct(b.categoryId)}`)
+            if (!approxEq(debit.amount, b.amount))
+              problems.push(`debit amount ${r2(debit.amount)} ≠ bill amount ${r2(b.amount)}`)
+            if (apCategory && credit.glAccountId !== apCategory.id)
+              problems.push(`credit posted to ${acct(credit.glAccountId)} but should be Accounts Payable`)
+            if ((b.journalEntry!.entityId ?? null) !== (b.entityId ?? null))
+              problems.push(`accrual entity differs from bill entity`)
+            if (problems.length > 0) {
+              add({
+                severity: 'critical', code: 'BILL_ACCRUAL_MISMATCH', recordType: 'bill',
+                recordId: b.id, label: b.name,
+                message: `Accrual disagrees with the bill row: ${problems.join('; ')}.`,
+                detail: {
+                  billCategory: acct(b.categoryId), debitAccount: acct(debit.glAccountId),
+                  billAmount: r2(b.amount), debitAmount: r2(debit.amount),
+                  creditAccount: acct(credit.glAccountId),
+                },
+              })
+            }
+          }
+        } else {
+          add({
+            severity: 'info', code: 'BILL_ACCRUAL_SPLIT', recordType: 'bill',
+            recordId: b.id, label: b.name,
+            message: `Accrual has ${lines.length} lines (custom/GST split) — verify manually.`,
+          })
+        }
+      }
+    }
+
+    // A — a voided or un-invoiced bill should NOT still carry a live accrual.
+    if ((!b.invoiceReceived || b.isVoided) && liveAccrual) {
+      add({
+        severity: 'critical', code: 'BILL_ACCRUAL_STALE', recordType: 'bill',
+        recordId: b.id, label: b.name,
+        message: b.isVoided
+          ? `Bill is voided but its accrual journal is still posted (should be reversed).`
+          : `Bill is not invoice-received but a posted accrual journal exists (should be reversed).`,
+      })
+    }
+
+    // B — a paid, active bill with no payment artifact at all leaves AP open in the GL.
+    if (b.paid && !b.isVoided) {
+      const hasPaymentJournal = b.payments.some(p => p.journalEntry && p.journalEntry.isPosted && !p.journalEntry.isReversed)
+      if (!hasPaymentJournal && !b.paymentTxId) {
+        add({
+          severity: 'critical', code: 'BILL_PAID_NO_PAYMENT_GL', recordType: 'bill',
+          recordId: b.id, label: b.name,
+          message: `Bill is marked paid but has no payment journal or payment transaction — Accounts Payable is never cleared.`,
+        })
+      }
+    }
+  }
+
+  // ── A + B — Income: accrual divergence + receipt-journal presence ───────────
+  const incomes = await prisma.financeIncomeEntry.findMany({
+    where: { familyId },
+    select: {
+      id: true, name: true, amount: true, categoryId: true, entityId: true,
+      invoiceReceived: true, isVoided: true, received: true, receiptJournalEntryId: true,
+      journalEntry: {
+        select: {
+          isPosted: true, isReversed: true, entityId: true,
+          lines: { select: { glAccountId: true, side: true, amount: true } },
+        },
+      },
+      receiptJournalEntry: { select: { isPosted: true, isReversed: true } },
+    },
+  })
+
+  for (const e of incomes) {
+    const liveAccrual = e.journalEntry && e.journalEntry.isPosted && !e.journalEntry.isReversed
+
+    if (e.invoiceReceived && !e.isVoided) {
+      if (!liveAccrual) {
+        add({
+          severity: 'critical', code: 'INCOME_ACCRUAL_MISSING', recordType: 'income',
+          recordId: e.id, label: e.name,
+          message: `Income is marked invoice-received but has no posted accrual journal.`,
+        })
+      } else {
+        const lines = e.journalEntry!.lines
+        if (lines.length === 2) {
+          const debit = lines.find(l => l.side === 'debit')
+          const credit = lines.find(l => l.side === 'credit')
+          if (debit && credit) {
+            const problems: string[] = []
+            if (credit.glAccountId !== e.categoryId)
+              problems.push(`credit posted to ${acct(credit.glAccountId)} but income category is ${acct(e.categoryId)}`)
+            if (!approxEq(credit.amount, e.amount))
+              problems.push(`credit amount ${r2(credit.amount)} ≠ income amount ${r2(e.amount)}`)
+            if (arCategory && debit.glAccountId !== arCategory.id)
+              problems.push(`debit posted to ${acct(debit.glAccountId)} but should be Accounts Receivable`)
+            if ((e.journalEntry!.entityId ?? null) !== (e.entityId ?? null))
+              problems.push(`accrual entity differs from income entity`)
+            if (problems.length > 0) {
+              add({
+                severity: 'critical', code: 'INCOME_ACCRUAL_MISMATCH', recordType: 'income',
+                recordId: e.id, label: e.name,
+                message: `Accrual disagrees with the income row: ${problems.join('; ')}.`,
+                detail: {
+                  incomeCategory: acct(e.categoryId), creditAccount: acct(credit.glAccountId),
+                  incomeAmount: r2(e.amount), creditAmount: r2(credit.amount),
+                  debitAccount: acct(debit.glAccountId),
+                },
+              })
+            }
+          }
+        } else {
+          add({
+            severity: 'info', code: 'INCOME_ACCRUAL_SPLIT', recordType: 'income',
+            recordId: e.id, label: e.name,
+            message: `Accrual has ${lines.length} lines (payslip/custom split) — verify manually.`,
+          })
+        }
+      }
+    }
+
+    if ((!e.invoiceReceived || e.isVoided) && liveAccrual) {
+      add({
+        severity: 'critical', code: 'INCOME_ACCRUAL_STALE', recordType: 'income',
+        recordId: e.id, label: e.name,
+        message: e.isVoided
+          ? `Income is voided but its accrual journal is still posted (should be reversed).`
+          : `Income is not invoice-received but a posted accrual journal exists (should be reversed).`,
+      })
+    }
+
+    // B — invoiced income marked received must have a posted receipt journal to clear AR.
+    if (e.received && !e.isVoided && e.invoiceReceived) {
+      const liveReceipt = e.receiptJournalEntry && e.receiptJournalEntry.isPosted && !e.receiptJournalEntry.isReversed
+      if (!liveReceipt) {
+        add({
+          severity: 'critical', code: 'INCOME_RECEIVED_NO_RECEIPT_GL', recordType: 'income',
+          recordId: e.id, label: e.name,
+          message: `Income is invoiced and marked received but has no posted receipt journal — Accounts Receivable is never cleared.`,
+        })
+      }
+    }
+  }
+
+  // ── C — Transaction ↔ auto-journal account drift / orphans ──────────────────
+  const autoJournals = await prisma.financeJournalEntry.findMany({
+    where: { familyId, type: 'auto_transaction', isPosted: true, isReversed: false, sourceTransactionId: { not: null } },
+    select: {
+      id: true, reference: true, sourceTransactionId: true,
+      lines: { select: { glAccountId: true, side: true, amount: true } },
+    },
+  })
+  const txIds = Array.from(new Set(autoJournals.map(j => j.sourceTransactionId!).filter(Boolean)))
+  const txs = txIds.length
+    ? await prisma.financeTransaction.findMany({
+        where: { id: { in: txIds }, familyId },
+        select: { id: true, description: true, categoryId: true, glAccountId: true },
+      })
+    : []
+  const txMap = new Map(txs.map(t => [t.id, t]))
+
+  for (const j of autoJournals) {
+    const tx = txMap.get(j.sourceTransactionId!)
+    if (!tx) {
+      add({
+        severity: 'warning', code: 'ORPHANED_AUTO_JOURNAL', recordType: 'journal',
+        recordId: j.id, label: j.reference ?? j.id,
+        message: `Auto-transaction journal references transaction ${j.sourceTransactionId} which no longer exists.`,
+      })
+      continue
+    }
+    // Only the clean 2-line case (bank line + category line) is checked; GST splits
+    // (3 lines) are skipped to avoid false positives.
+    if (j.lines.length === 2 && tx.glAccountId && tx.categoryId) {
+      const categoryLine = j.lines.find(l => l.glAccountId !== tx.glAccountId)
+      if (categoryLine && categoryLine.glAccountId !== tx.categoryId) {
+        add({
+          severity: 'warning', code: 'TX_JOURNAL_ACCOUNT_DRIFT', recordType: 'transaction',
+          recordId: tx.id, label: tx.description || tx.id,
+          message: `Journal posts to ${acct(categoryLine.glAccountId)} but the transaction's category is ${acct(tx.categoryId)}.`,
+          detail: { journalAccount: acct(categoryLine.glAccountId), transactionCategory: acct(tx.categoryId), reference: j.reference },
+        })
+      }
+    }
+  }
+
+  // ── D — GL self-consistency ─────────────────────────────────────────────────
+  const allEntries = await prisma.financeJournalEntry.findMany({
+    where: { familyId },
+    select: {
+      id: true, reference: true, isPosted: true, isReversed: true, reversalOfId: true,
+      lines: { select: { side: true, amount: true } },
+    },
+  })
+
+  let totalDebit = 0
+  let totalCredit = 0
+  for (const e of allEntries) {
+    if (!e.isPosted) continue
+    let entryDebit = 0
+    let entryCredit = 0
+    let hasNonPositive = false
+    for (const l of e.lines) {
+      if (l.side === 'debit') entryDebit += l.amount
+      else if (l.side === 'credit') entryCredit += l.amount
+      if (l.amount <= 0) hasNonPositive = true
+    }
+    totalDebit += entryDebit
+    totalCredit += entryCredit
+    if (!approxEq(entryDebit, entryCredit)) {
+      add({
+        severity: 'critical', code: 'JOURNAL_ENTRY_UNBALANCED', recordType: 'journal',
+        recordId: e.id, label: e.reference ?? e.id,
+        message: `Posted entry is unbalanced: debits ${r2(entryDebit)} ≠ credits ${r2(entryCredit)}.`,
+      })
+    }
+    if (hasNonPositive) {
+      add({
+        severity: 'critical', code: 'NONPOSITIVE_LINE_AMOUNT', recordType: 'journal',
+        recordId: e.id, label: e.reference ?? e.id,
+        message: `Posted entry has a journal line with a zero or negative amount.`,
+      })
+    }
+  }
+  if (!approxEq(totalDebit, totalCredit)) {
+    add({
+      severity: 'critical', code: 'TRIAL_BALANCE_UNBALANCED', recordType: 'gl',
+      recordId: 'trial-balance', label: 'Trial balance',
+      message: `Posted ledger is out of balance: total debits ${r2(totalDebit)} ≠ total credits ${r2(totalCredit)} (difference ${r2(Math.abs(totalDebit - totalCredit))}).`,
+      detail: { totalDebit: r2(totalDebit), totalCredit: r2(totalCredit) },
+    })
+  }
+
+  // Reversal-pair integrity (over all entries, posted or not).
+  const allIds = new Set(allEntries.map(e => e.id))
+  const reversalTargets = new Set(allEntries.map(e => e.reversalOfId).filter((x): x is string => !!x))
+  for (const e of allEntries) {
+    if (e.isReversed && !reversalTargets.has(e.id)) {
+      add({
+        severity: 'warning', code: 'REVERSAL_PAIR_BROKEN', recordType: 'journal',
+        recordId: e.id, label: e.reference ?? e.id,
+        message: `Entry is flagged reversed but no reversing entry points back to it.`,
+      })
+    }
+    if (e.reversalOfId && !allIds.has(e.reversalOfId)) {
+      add({
+        severity: 'warning', code: 'REVERSAL_PAIR_BROKEN', recordType: 'journal',
+        recordId: e.id, label: e.reference ?? e.id,
+        message: `Reversal entry points to a missing original entry (${e.reversalOfId}).`,
+      })
+    }
+  }
+
+  // ── E — Subledger reconciliation (mirrors the AP/AR aging reports) ──────────
+  const balances = await deriveJournalLineBalances(familyId, null, asAt)
+
+  if (apCategory) {
+    const apControl = r2(Math.max(0, balances.get(apCategory.id)?.netBalance ?? 0))
+    const apBills = await prisma.financeRecurringBill.findMany({
+      where: {
+        familyId, invoiceReceived: true, invoiceReceivedDate: { not: null, lte: asAt },
+        OR: [{ paid: false }, { paid: true, paidDate: { gt: asAt } }],
+      },
+      select: { amount: true, payments: { select: { amount: true, paymentDate: true } } },
+    })
+    const apSubledger = r2(apBills.reduce((sum, b) => {
+      const paidToDate = b.payments.reduce((s, p) => (p.paymentDate <= asAt ? s + p.amount : s), 0)
+      const outstanding = r2(b.amount - paidToDate)
+      return outstanding > 0.005 ? sum + outstanding : sum
+    }, 0))
+    if (!approxEq(apControl, apSubledger)) {
+      add({
+        severity: 'critical', code: 'AP_CONTROL_VS_SUBLEDGER', recordType: 'gl',
+        recordId: apCategory.id, label: 'Accounts Payable',
+        message: `AP control account ${r2(apControl)} does not reconcile to the bills subledger ${r2(apSubledger)} (difference ${r2(Math.abs(apControl - apSubledger))}).`,
+        detail: { glControl: apControl, subledger: apSubledger },
+      })
+    }
+  }
+
+  if (arCategory) {
+    const arControl = r2(Math.max(0, balances.get(arCategory.id)?.netBalance ?? 0))
+    const arEntries = await prisma.financeIncomeEntry.findMany({
+      where: {
+        familyId, invoiceReceived: true, invoiceReceivedDate: { not: null, lte: asAt },
+        OR: [{ received: false }, { received: true, receivedDate: { gt: asAt } }],
+      },
+      select: {
+        amount: true,
+        journalEntry: { select: { lines: { select: { amount: true, glAccountId: true, side: true } } } },
+      },
+    })
+    const arSubledger = r2(arEntries.reduce((sum, e) => {
+      const arLines = (e.journalEntry?.lines ?? []).filter(l => l.glAccountId === arCategory.id && l.side === 'debit')
+      const outstanding = arLines.length > 0 ? arLines.reduce((s, l) => s + l.amount, 0) : e.amount
+      return sum + outstanding
+    }, 0))
+    if (!approxEq(arControl, arSubledger)) {
+      add({
+        severity: 'critical', code: 'AR_CONTROL_VS_SUBLEDGER', recordType: 'gl',
+        recordId: arCategory.id, label: 'Accounts Receivable',
+        message: `AR control account ${r2(arControl)} does not reconcile to the income subledger ${r2(arSubledger)} (difference ${r2(Math.abs(arControl - arSubledger))}).`,
+        detail: { glControl: arControl, subledger: arSubledger },
+      })
+    }
+  }
+
+  // ── F — Payslip math: gross = net + PAYG + super ────────────────────────────
+  const payslips = await prisma.financePayslip.findMany({
+    where: { familyId },
+    select: {
+      id: true, grossPay: true, netPay: true, paygWithheld: true, sgcAmount: true,
+      incomeEntry: { select: { name: true } },
+    },
+  })
+  for (const p of payslips) {
+    const expected = r2(p.netPay + p.paygWithheld + p.sgcAmount)
+    if (!approxEq(p.grossPay, expected)) {
+      add({
+        severity: 'critical', code: 'PAYSLIP_GROSS_MISMATCH', recordType: 'payslip',
+        recordId: p.id, label: p.incomeEntry?.name ?? p.id,
+        message: `Gross ${r2(p.grossPay)} ≠ net ${r2(p.netPay)} + PAYG ${r2(p.paygWithheld)} + super ${r2(p.sgcAmount)} (= ${expected}).`,
+      })
+    }
+  }
+
+  // ── Build per-check status + summary ────────────────────────────────────────
+  const checks: IntegrityCheck[] = CHECK_CATALOG.map(({ code, label }) => {
+    const own = findings.filter(f => f.code === code)
+    const failing = own.some(f => f.severity === 'critical' || f.severity === 'warning')
+    return { code, label, status: failing ? 'fail' : 'pass', findingCount: own.length }
+  })
+
+  const summary = {
+    critical: findings.filter(f => f.severity === 'critical').length,
+    warning: findings.filter(f => f.severity === 'warning').length,
+    info: findings.filter(f => f.severity === 'info').length,
+    passed: checks.filter(c => c.status === 'pass').length,
+    failed: checks.filter(c => c.status === 'fail').length,
+  }
+
+  return {
+    ranAt: new Date().toISOString(),
+    familyId,
+    asAt: asAt.toISOString(),
+    checks,
+    findings,
+    summary,
+  }
+}

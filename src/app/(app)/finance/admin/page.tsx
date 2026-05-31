@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHero } from '@/components/shared/PageHero'
 
@@ -19,6 +19,31 @@ interface SpawnResult {
 interface SpawnResponse {
   asOf: string
   results: SpawnResult[]
+}
+
+interface IntegrityFinding {
+  severity: 'critical' | 'warning' | 'info'
+  code: string
+  recordType: string
+  recordId: string
+  label: string
+  message: string
+}
+
+interface IntegrityCheck {
+  code: string
+  label: string
+  status: 'pass' | 'fail'
+  findingCount: number
+}
+
+interface IntegrityResponse {
+  ranAt: string
+  familyId: string
+  asAt: string
+  checks: IntegrityCheck[]
+  findings: IntegrityFinding[]
+  summary: { critical: number; warning: number; info: number; passed: number; failed: number }
 }
 
 // ── Action Card ───────────────────────────────────────────────────────────────
@@ -145,6 +170,96 @@ function SpawnResultView({ result }: { result: SpawnResponse }) {
   )
 }
 
+// ── Integrity result renderer ──────────────────────────────────────────────────
+
+function SeverityBadge({ severity }: { severity: IntegrityFinding['severity'] }) {
+  const map = {
+    critical: { cls: 'bg-destructive/10 text-destructive border-destructive/30', Icon: XCircle },
+    warning:  { cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30', Icon: AlertTriangle },
+    info:     { cls: 'bg-sky-500/10 text-sky-600 border-sky-500/30', Icon: Info },
+  }[severity]
+  const { cls, Icon } = map
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide', cls)}>
+      <Icon className="h-3 w-3" />
+      {severity}
+    </span>
+  )
+}
+
+function IntegrityResultView({ result }: { result: IntegrityResponse }) {
+  const { summary, checks, findings } = result
+  const clean = summary.critical === 0 && summary.failed === 0
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Run at {new Date(result.ranAt).toLocaleString('en-AU')} · as at {new Date(result.asAt).toLocaleDateString('en-AU')}
+      </p>
+
+      {/* Summary line */}
+      <div className="flex flex-wrap gap-2 text-sm">
+        <span className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1">
+          <span className="font-semibold">{summary.critical}</span> <span className="text-muted-foreground">critical</span>
+        </span>
+        <span className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-1">
+          <span className="font-semibold">{summary.warning}</span> <span className="text-muted-foreground">warning</span>
+        </span>
+        <span className="rounded-md border border-sky-500/30 bg-sky-500/5 px-2.5 py-1">
+          <span className="font-semibold">{summary.info}</span> <span className="text-muted-foreground">info</span>
+        </span>
+        <span className="rounded-md border border-border bg-muted/20 px-2.5 py-1">
+          <span className="font-semibold">{summary.passed}</span>/<span className="font-semibold">{summary.passed + summary.failed}</span> <span className="text-muted-foreground">checks passed</span>
+        </span>
+      </div>
+
+      {clean && (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-sm text-emerald-700">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          All integrity checks passed — every row reconciles with the GL.
+        </div>
+      )}
+
+      {/* Checks list */}
+      <div className="rounded-md border border-border divide-y divide-border">
+        {checks.map((c) => (
+          <div key={c.code} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+            <span className="flex items-center gap-2 min-w-0">
+              {c.status === 'pass'
+                ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                : <XCircle className="h-4 w-4 text-destructive shrink-0" />}
+              <span className="truncate">{c.label}</span>
+            </span>
+            {c.findingCount > 0 && (
+              <span className={cn('shrink-0 text-xs', c.status === 'fail' ? 'text-destructive' : 'text-muted-foreground')}>
+                {c.findingCount} {c.findingCount === 1 ? 'finding' : 'findings'}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Findings detail */}
+      {findings.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Findings</p>
+          {findings.map((f, i) => (
+            <div key={`${f.code}-${f.recordId}-${i}`} className="rounded-md border border-border bg-card px-3 py-2.5 text-sm space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <SeverityBadge severity={f.severity} />
+                <span className="text-xs text-muted-foreground">{f.recordType}</span>
+                <span className="font-medium truncate">{f.label}</span>
+              </div>
+              <p className="text-muted-foreground">{f.message}</p>
+              <p className="text-[11px] text-muted-foreground/70 font-mono truncate">{f.code} · {f.recordId}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function FinanceAdminPage() {
@@ -153,6 +268,13 @@ export default function FinanceAdminPage() {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error ?? 'Spawn failed')
     return data as SpawnResponse
+  }
+
+  async function runIntegrityAudit() {
+    const res = await fetch('/api/finance/integrity')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Audit failed')
+    return data as IntegrityResponse
   }
 
   return (
@@ -169,6 +291,19 @@ export default function FinanceAdminPage() {
           buttonLabel="Run Spawn"
           onRun={runSpawnNow}
           renderResult={(r) => <SpawnResultView result={r as SpawnResponse} />}
+        />
+      </section>
+
+      {/* Integrity section */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Integrity</h2>
+
+        <ActionCard
+          title="Run Integrity Audit"
+          description="Read-only check that every bill, income, payslip and transaction reconciles with the posted General Ledger. Catches row↔GL divergence (wrong accrual account, missing payment journal, AP/AR drift). Makes no changes — safe to run any time."
+          buttonLabel="Run Audit"
+          onRun={runIntegrityAudit}
+          renderResult={(r) => <IntegrityResultView result={r as IntegrityResponse} />}
         />
       </section>
     </div>
