@@ -6,6 +6,8 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { formatInTz, nDaysFromTodayInTz } from '@/lib/timezone'
+import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
+import { recordBillPayment } from '@/lib/finance-bill-payment'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -197,19 +199,18 @@ const markBillPaidDefinition: FunctionDeclaration = {
     type: SchemaType.OBJECT,
     properties: {
       billName: { type: SchemaType.STRING, description: 'The name (or partial name) of the bill to mark as paid' },
-      amount: { type: SchemaType.NUMBER, description: 'Optional: the actual amount paid if different from the expected amount' },
     },
     required: ['billName'],
   },
 }
 
 async function markBillPaidHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const { billName, amount } = args as { billName: string; amount?: number }
+  const { billName } = args as { billName: string }
   const lower = billName.toLowerCase()
 
+  // Load full bill records — recordBillPayment needs the whole row.
   const bills = await prisma.financeRecurringBill.findMany({
-    where: { familyId: ctx.familyId, isActive: true, paid: false },
-    select: { id: true, name: true, amount: true, nextDueDate: true, frequency: true },
+    where: { familyId: ctx.familyId, isActive: true, paid: false, isVoided: false },
   })
 
   // Find best match — use let + sequential checks for TypeScript narrowing
@@ -220,20 +221,48 @@ async function markBillPaidHandler(args: Record<string, unknown>, ctx: HandlerCo
   if (!match) {
     return { message: `No unpaid bill found matching "${billName}". Check the name or try "queryBills" to see what's due.` }
   }
+  const bill = match
 
-  const paidAmount = amount ?? match.amount
-
-  await prisma.financeRecurringBill.update({
-    where: { id: match.id },
-    data: {
-      paid: true,
-      paidDate: new Date(),
-      ...(amount ? { amount: amount } : {}),
-    },
+  // Pay the remaining balance — never overpay a partially-paid bill (that would
+  // over-clear AP / double the expense). Mirrors the payments POST route.
+  const agg = await prisma.financeBillPayment.aggregate({
+    where: { billId: bill.id, familyId: ctx.familyId },
+    _sum: { amount: true },
   })
+  const remaining = bill.amount - (agg._sum.amount ?? 0)
+  if (remaining <= 0.005) {
+    return { message: `"${bill.name}" is already fully paid.` }
+  }
+
+  // No bank GL is known from a chat command → credit Undeposited Funds (suspense),
+  // exactly as the payments route does when no account is supplied. AP/AR clears
+  // and the trial balance stays balanced; the user allocates the bank later.
+  const creditGlAccountId = await ensureUndepositedFundsCategory(ctx.familyId)
+  const actualDate = new Date()
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordBillPayment(tx, {
+        bill,
+        amount: remaining,
+        actualDate,
+        creditGlAccountId,
+        usingSuspense: true,
+        glAccountId: null,
+        paymentAccountId: bill.accountId ?? null,
+        notes: null,
+        isFullyPaid: true,
+        userId: ctx.user.id,
+        familyId: ctx.familyId,
+      })
+    })
+  } catch (err) {
+    console.error('[markBillPaid] payment failed:', err)
+    return { message: `Couldn't record the payment for "${bill.name}". No changes were saved.` }
+  }
 
   return {
-    message: `"${match.name}" marked as paid — $${paidAmount.toFixed(2)}.`,
+    message: `"${bill.name}" marked as paid — $${remaining.toFixed(2)} posted to Undeposited Funds.`,
     action: 'markBillPaid',
   }
 }

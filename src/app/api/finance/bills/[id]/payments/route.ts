@@ -3,8 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
-import { postBillPaymentJournal } from '@/lib/finance-posting'
-import { addMonths, addWeeks, max } from 'date-fns'
+import { recordBillPayment } from '@/lib/finance-bill-payment'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GL-FIRST PAYMENT ACCOUNTING
@@ -32,19 +31,6 @@ const PAYMENT_INCLUDE = {
   glAccount:   { select: { id: true, name: true, color: true, type: true } },
   transaction: { select: { id: true, amount: true, date: true, isCleared: true } },
 } as const
-
-function advanceNextDueDate(date: Date, frequency: string): Date {
-  const ref = max([date, new Date()])
-  if (frequency === 'weekly')      return addWeeks(ref, 1)
-  if (frequency === 'fortnightly') return addWeeks(ref, 2)
-  if (frequency === 'monthly')     return addMonths(ref, 1)
-  if (frequency === 'bimonthly')   return addMonths(ref, 2)
-  if (frequency === 'quarterly')   return addMonths(ref, 3)
-  if (frequency === 'halfyearly')  return addMonths(ref, 6)
-  if (frequency === 'yearly')      return addMonths(ref, 12)
-  console.warn(`[payments POST] Unknown frequency "${frequency}" — defaulting to monthly`)
-  return addMonths(ref, 1)
-}
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -185,122 +171,20 @@ export async function POST(
   let savedPaymentId: string
   try {
     await prisma.$transaction(async (tx) => {
-      // 1. Post GL journal entry via shared function — handles all four paths:
-      //   PATH A: DR AP       / CR Bank             (accrued, bank known)
-      //   PATH B: DR AP       / CR Undeposited Funds (accrued, no bank)
-      //   PATH C: DR Expense  / CR Bank             (direct pay, bank known)
-      //   PATH D: DR Expense  / CR Undeposited Funds (direct pay, no bank)
-      const glPath = wasAccrued || !bill.categoryId ? 'clear_ap' : 'direct'
-      const postResult = await postBillPaymentJournal(tx, {
-        familyId: user.familyId,
-        description: bill.name,
+      const { paymentId } = await recordBillPayment(tx, {
+        bill,
         amount,
+        actualDate,
         creditGlAccountId,
-        entityId: bill.entityId ?? null,
-        date: actualDate,
         usingSuspense,
-        path: glPath,
-        expenseGlAccountId: glPath === 'direct' ? bill.categoryId : undefined,
+        glAccountId: glAccountId ?? null,
+        paymentAccountId,
+        notes: notes ?? null,
+        isFullyPaid,
+        userId: user.id,
+        familyId: user.familyId,
       })
-
-      // 2. Create FinanceTransaction (UI cache / bank register)
-      const paymentTx = await tx.financeTransaction.create({
-        data: {
-          type: 'expense',
-          amount,
-          accountId: paymentAccountId,
-          categoryId: bill.categoryId,
-          description: usingSuspense
-            ? `${bill.name} (payment — undeposited)`
-            : `${bill.name} (payment)`,
-          date: actualDate,
-          isRecurring: false,
-          recurringBillId: bill.id,
-          vendorId: bill.vendorId,
-          notes: notes ?? bill.notes,
-          memberId: bill.memberId,
-          locationId: bill.locationId,
-          isCleared: !usingSuspense,        // undeposited = not yet cleared to a bank
-          reconciledDate: usingSuspense ? null : actualDate,
-          isTransfer: false,
-          glAccountId: glAccountId ?? null, // null when using suspense — cleared later
-          createdBy: user.id,
-          familyId: user.familyId,
-          entityId: bill.entityId,
-          taxClassification: bill.taxClassification ?? null,
-        },
-        select: { id: true },
-      })
-
-      // 3. Create FinanceBillPayment subledger record
-      //    journalEntryId links back to the GL entry for reversal on undo
-      const payment = await tx.financeBillPayment.create({
-        data: {
-          billId: bill.id,
-          amount,
-          paymentDate: actualDate,
-          accountId: paymentAccountId ?? null,
-          glAccountId: glAccountId ?? null,
-          transactionId: paymentTx.id,
-          journalEntryId: postResult.journalEntryId,
-          notes: notes ?? null,
-          createdBy: user.id,
-          familyId: user.familyId,
-        },
-        select: { id: true },
-      })
-      savedPaymentId = payment.id
-
-      // 4. Update bill paid status
-      //    paidDate = most recent payment date (set to actualDate when fully paid)
-      await tx.financeRecurringBill.update({
-        where: { id: bill.id },
-        data: {
-          paid: isFullyPaid,
-          paidDate: isFullyPaid ? actualDate : null,
-        },
-      })
-
-      // 5. Spawn next occurrence for recurring bills when fully paid.
-      //    MUST be inside this $transaction (Bug 2 fix): if spawn fails the
-      //    entire payment rolls back. A committed payment with no next
-      //    occurrence causes the bill to silently disappear — unrecoverable.
-      if (isFullyPaid && bill.billType !== 'one-off') {
-        const newDueDate = advanceNextDueDate(bill.nextDueDate, bill.frequency)
-        if (!bill.endDate || newDueDate <= bill.endDate) {
-          await tx.financeRecurringBill.create({
-            data: {
-              name:               bill.name,
-              amount:             bill.amount,
-              accountId:          bill.accountId,
-              categoryId:         bill.categoryId,
-              vendorId:           bill.vendorId,
-              frequency:          bill.frequency,
-              dayOfMonth:         bill.dayOfMonth,
-              monthOfYear:        bill.monthOfYear,
-              nextDueDate:        newDueDate,
-              endDate:            bill.endDate,
-              isActive:           bill.isActive,
-              autoPay:            bill.autoPay,
-              emailReminder:      bill.emailReminder,
-              reminderDays:       bill.reminderDays,
-              notes:              bill.notes,
-              memberId:           bill.memberId,
-              locationId:         bill.locationId,
-              billType:           bill.billType,
-              recurrenceInterval: bill.recurrenceInterval,
-              invoiceReceived:    false,
-              invoiceReceivedDate: null,
-              paid:               false,
-              paidDate:           null,
-              parentBillId:       bill.id,
-              entityId:           bill.entityId,
-              taxClassification:  bill.taxClassification ?? null,
-              familyId:           user.familyId,
-            },
-          })
-        }
-      }
+      savedPaymentId = paymentId
     })
   } catch (err) {
     console.error('[payments POST] ATOMIC write failed:', err)

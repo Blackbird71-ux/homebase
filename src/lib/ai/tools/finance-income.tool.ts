@@ -6,6 +6,8 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { formatInTz, nDaysFromTodayInTz } from '@/lib/timezone'
+import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
+import { postIncomeAccrualJournal, postIncomeReceiptJournal } from '@/lib/finance-posting'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -150,8 +152,8 @@ async function markIncomeReceivedHandler(args: Record<string, unknown>, ctx: Han
   const lower = incomeName.toLowerCase()
 
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: ctx.familyId, isActive: true, received: false },
-    select: { id: true, name: true, amount: true },
+    where: { familyId: ctx.familyId, isActive: true, received: false, isVoided: false },
+    select: { id: true, name: true, amount: true, categoryId: true, entityId: true, invoiceReceived: true },
   })
 
   // Find best match with sequential narrowing
@@ -162,14 +164,90 @@ async function markIncomeReceivedHandler(args: Record<string, unknown>, ctx: Han
   if (!match) {
     return { message: `No pending income entry matching "${incomeName}".` }
   }
+  const entry = match
 
-  await prisma.financeIncomeEntry.update({
-    where: { id: match.id },
-    data: { received: true, receivedDate: new Date() },
-  })
+  // No bank GL is known from a chat command → debit Undeposited Funds (suspense),
+  // mirroring the bills path. The receipt journal (DR Undeposited Funds / CR AR)
+  // clears AR; the user allocates the real bank account later.
+  const undepositedGl = await ensureUndepositedFundsCategory(ctx.familyId)
+  const receivedDate = new Date()
+  const amount = entry.amount
+
+  try {
+    if (entry.invoiceReceived) {
+      // Already accrued (Stage 1 DR AR / CR Income posted) → post the receipt only.
+      await prisma.$transaction(async (tx) => {
+        const receipt = await postIncomeReceiptJournal(tx, {
+          familyId: ctx.familyId,
+          description: entry.name,
+          amount,
+          bankGlAccountId: undepositedGl,
+          entityId: entry.entityId ?? null,
+          date: receivedDate,
+        })
+        await tx.financeIncomeEntry.update({
+          where: { id: entry.id },
+          data: {
+            received: true,
+            receivedDate,
+            receiptJournalEntryId: receipt.journalEntryId,
+            actualAmountReceived: amount,
+            status: 'received',
+          },
+        })
+      })
+    } else {
+      // Not yet accrued → post Stage 1 (DR AR / CR Income) then Stage 2 receipt in
+      // one transaction. Needs an income category for the credit side.
+      const incomeGlAccountId = entry.categoryId
+      if (!incomeGlAccountId) {
+        return { message: `"${entry.name}" has no income category set — open it in Finance → Income and choose a category before marking it received.` }
+      }
+      await prisma.$transaction(async (tx) => {
+        const accrual = await postIncomeAccrualJournal(tx, {
+          familyId: ctx.familyId,
+          description: entry.name,
+          amount,
+          incomeGlAccountId,
+          entityId: entry.entityId ?? null,
+          date: receivedDate,
+        })
+        // Force the receipt reference to accrual+1 — nextJournalReference reads the
+        // committed DB state and cannot see the accrual written earlier in this same
+        // transaction, so letting it self-generate would collide (P2002).
+        const base = parseInt(accrual.reference.match(/^JE-(\d+)$/)?.[1] ?? '0', 10)
+        const receiptRef = `JE-${String(base + 1).padStart(4, '0')}`
+        const receipt = await postIncomeReceiptJournal(tx, {
+          familyId: ctx.familyId,
+          description: entry.name,
+          amount,
+          bankGlAccountId: undepositedGl,
+          entityId: entry.entityId ?? null,
+          date: receivedDate,
+          reference: receiptRef,
+        })
+        await tx.financeIncomeEntry.update({
+          where: { id: entry.id },
+          data: {
+            invoiceReceived: true,
+            invoiceReceivedDate: receivedDate,
+            journalEntryId: accrual.journalEntryId,
+            received: true,
+            receivedDate,
+            receiptJournalEntryId: receipt.journalEntryId,
+            actualAmountReceived: amount,
+            status: 'received',
+          },
+        })
+      })
+    }
+  } catch (err) {
+    console.error('[markIncomeReceived] receipt failed:', err)
+    return { message: `Couldn't record the receipt for "${entry.name}". No changes were saved.` }
+  }
 
   return {
-    message: `"${match.name}" — $${match.amount.toFixed(2)} marked as received.`,
+    message: `"${entry.name}" — $${amount.toFixed(2)} marked as received (posted to Undeposited Funds).`,
     action: 'markIncomeReceived',
   }
 }
