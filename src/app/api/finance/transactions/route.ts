@@ -381,6 +381,59 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
   }
 
-  await prisma.financeTransaction.delete({ where: { id } })
+  // ── Reverse-not-delete: unwind any linked posted journal before removing the row ──
+  // Deleting the transaction must not leave its posted auto_transaction journal in the GL
+  // (the reports read only from posted lines, so a phantom entry would silently survive).
+  // Find every posted, non-reversed auto_transaction journal for this tx — both the 2-line
+  // auto journal AND the 3-line GST companion the PUT sync deliberately skips — and post a
+  // balanced reversal (swapped debit/credit, type 'reversal', reversalOfId) for each, marking
+  // the original isReversed. Generate the reversal refs BEFORE the $transaction so
+  // nextJournalReference sees committed DB state (SQLite uncommitted-read ref-collision rule).
+  const linkedJournals = await prisma.financeJournalEntry.findMany({
+    where: {
+      sourceTransactionId: id,
+      familyId: user.familyId,
+      type: 'auto_transaction',
+      isPosted: true,
+      isReversed: false,
+    },
+    include: { lines: true },
+  })
+
+  let reversalRefs: string[] = []
+  if (linkedJournals.length > 0) {
+    const firstRef = await nextJournalReference(user.familyId)
+    const base = parseInt(firstRef.match(/^JE-(\d+)$/)?.[1] ?? '0', 10)
+    reversalRefs = linkedJournals.map((_, i) => `JE-${String(base + i).padStart(4, '0')}`)
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < linkedJournals.length; i++) {
+      const je = linkedJournals[i]
+      await tx.financeJournalEntry.create({
+        data: {
+          reference: reversalRefs[i],
+          date: new Date(),
+          description: `VOID: ${je.reference} — ${je.description}`,
+          type: 'reversal',
+          isPosted: true,
+          reversalOfId: je.id,
+          entityId: je.entityId,
+          familyId: user.familyId,
+          lines: {
+            create: je.lines.map(l => ({
+              glAccountId: l.glAccountId,
+              side: l.side === 'debit' ? 'credit' : 'debit',
+              amount: l.amount,
+              description: l.description,
+            })),
+          },
+        },
+      })
+      await tx.financeJournalEntry.update({ where: { id: je.id }, data: { isReversed: true } })
+    }
+    await tx.financeTransaction.delete({ where: { id } })
+  })
+
   return NextResponse.json({ success: true })
 }
