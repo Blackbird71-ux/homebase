@@ -141,6 +141,22 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}` }, { status: 400 })
   }
 
+  // Block re-typing an account that already has posted GL postings. Changing the
+  // type (e.g. asset↔expense) would silently reclassify every historical posted
+  // journal line referencing this account between the balance sheet and the P&L —
+  // the reports read only from the GL, so the divergence would be invisible.
+  if (type !== undefined && type !== existing.type) {
+    const postedLineCount = await prisma.financeJournalLine.count({
+      where: { glAccountId: id, journalEntry: { isPosted: true, familyId: user.familyId } },
+    })
+    if (postedLineCount > 0) {
+      return NextResponse.json(
+        { error: 'Cannot change the type of an account that has posted journal entries — it would reclassify historical postings. Create a new account instead.' },
+        { status: 422 },
+      )
+    }
+  }
+
   // Calculate new level if parentId changed
   let level = existing.level
   if (parentId !== undefined && parentId !== existing.parentId) {
