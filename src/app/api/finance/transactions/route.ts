@@ -314,17 +314,21 @@ export async function PUT(request: NextRequest) {
     },
   })
 
-  // ── Sync the linked auto-generated journal entry if amount/date/description changed ──
-  // Only update if the changed fields could affect the journal (amount, date, description/payee).
-  // We only sync non-GST auto journals here (type='auto_transaction'). GST journals have
-  // 3 lines with split amounts and would require a full recalculation — leave those for manual
-  // correction until a dedicated recalc path is added.
+  // ── Sync the linked auto-generated journal entry when journal-affecting fields change ──
+  // Triggers on amount/date/description/payee (entry header + line amounts) AND on
+  // category/glAccount/type (line GL accounts — previously left stale, so the journal kept
+  // debiting/crediting the old buckets after the row was re-categorised). We only sync
+  // non-GST auto journals here (type='auto_transaction', exactly 2 lines). GST journals have
+  // 3 split lines and would require a full recalculation — leave those for manual correction.
   const amountChanged      = amount     !== undefined && amount     !== existing.amount
   const dateChanged        = date       !== undefined && new Date(date).getTime() !== existing.date.getTime()
   const descriptionChanged = description !== undefined && description !== existing.description
   const payeeChanged       = payee      !== undefined && payee      !== existing.payee
+  const categoryChanged    = categoryId !== undefined && categoryId  !== existing.categoryId
+  const glAccountChanged   = glAccountId !== undefined && glAccountId !== existing.glAccountId
+  const typeChanged        = type       !== undefined && type        !== existing.type
 
-  if (amountChanged || dateChanged || descriptionChanged || payeeChanged) {
+  if (amountChanged || dateChanged || descriptionChanged || payeeChanged || categoryChanged || glAccountChanged || typeChanged) {
     try {
       const linkedJournal = await prisma.financeJournalEntry.findFirst({
         where: { sourceTransactionId: id, familyId: user.familyId, type: 'auto_transaction' },
@@ -337,7 +341,30 @@ export async function PUT(request: NextRequest) {
         const newDate        = date        ? new Date(date) : existing.date
         const newDescription = description ?? existing.description ?? payee ?? existing.payee ?? existing.type
 
-        const updatedLines = linkedJournal.lines.map(l => ({ ...l, amount: newAmount }))
+        // Re-point line GL accounts when category/glAccount/type changed, using the same
+        // mapping the POST auto-journal uses: expense → DR category / CR cash; income → DR
+        // cash / CR category. Guarded so we only touch a journal still in its canonical
+        // auto-generated shape (its two lines match the transaction's PREVIOUS accounts) and
+        // only when the new type is expense/income with both accounts present — otherwise a
+        // hand-adjusted or partially-configured entry's accounts are left untouched (amounts
+        // still sync, matching prior behaviour).
+        const oldDebitGl  = existing.type === 'expense' ? existing.categoryId : existing.glAccountId
+        const oldCreditGl = existing.type === 'expense' ? existing.glAccountId : existing.categoryId
+        const debitLine   = linkedJournal.lines.find(l => l.side === 'debit')
+        const creditLine  = linkedJournal.lines.find(l => l.side === 'credit')
+        const canonicalShape =
+          !!debitLine && !!creditLine &&
+          debitLine.glAccountId === oldDebitGl &&
+          creditLine.glAccountId === oldCreditGl
+
+        const repoint =
+          (categoryChanged || glAccountChanged || typeChanged) &&
+          canonicalShape &&
+          (transaction.type === 'expense' || transaction.type === 'income') &&
+          !!transaction.categoryId && !!transaction.glAccountId
+
+        const newDebitGl  = transaction.type === 'expense' ? transaction.categoryId : transaction.glAccountId
+        const newCreditGl = transaction.type === 'expense' ? transaction.glAccountId : transaction.categoryId
 
         await prisma.$transaction([
           prisma.financeJournalEntry.update({
@@ -347,10 +374,13 @@ export async function PUT(request: NextRequest) {
               description: newDescription,
             },
           }),
-          ...updatedLines.map(l =>
+          ...linkedJournal.lines.map(l =>
             prisma.financeJournalLine.update({
               where: { id: l.id },
-              data: { amount: newAmount },
+              data: {
+                amount: newAmount,
+                ...(repoint && { glAccountId: l.side === 'debit' ? newDebitGl! : newCreditGl! }),
+              },
             }),
           ),
         ])
