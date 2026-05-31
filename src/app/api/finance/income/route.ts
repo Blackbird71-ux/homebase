@@ -885,7 +885,14 @@ export async function PATCH(request: NextRequest) {
     // and double-count income, so payslip receipts must never trigger auto-Stage-1.
     const needsAutoStage1 = !freshEntry?.invoiceReceived && !payslipData
     const accrualRef  = needsAutoStage1 ? await nextJournalReference(user.familyId) : null
-    const receiptRef  = await nextJournalReference(user.familyId)
+    // When auto-posting Stage 1 in this same transaction, the accrual is not yet
+    // committed, so nextJournalReference would return the same JE-N for both and
+    // collide on @@unique([familyId, reference]) → P2002 → 422. Force the receipt
+    // ref to accrual+1 (mirrors bills/route.ts nextNJournalReferences and the
+    // markIncomeReceived tool). The non-auto path is unchanged.
+    const receiptRef  = needsAutoStage1
+      ? `JE-${String(parseInt(accrualRef!.match(/^JE-(\d+)$/)?.[1] ?? '0', 10) + 1).padStart(4, '0')}`
+      : await nextJournalReference(user.familyId)
 
     try {
       await prisma.$transaction(async (tx) => {
