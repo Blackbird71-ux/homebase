@@ -201,6 +201,7 @@ function ScrapeRecipeForm({
     ingredients: string[]
     instructions: string[]
     sourceUrl: string
+    image: string | null
   } | null>(null)
   const [saving, setSaving] = useState(false)
   const [addToShoppingList, setAddToShoppingList] = useState(false)
@@ -254,6 +255,7 @@ function ScrapeRecipeForm({
             : [],
           instructions: scrapedData?.instructions || [],
           sourceUrl: scrapedData?.sourceUrl || url.trim(),
+          image: scrapedData?.image || null,
         }),
       })
 

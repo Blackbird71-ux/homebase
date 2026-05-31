@@ -6,10 +6,27 @@ export interface ScrapedRecipe {
   ingredients: string[]
   instructions: string[]
   sourceUrl: string
+  image: string | null
 }
 
 function emptyResult(url: string): ScrapedRecipe {
-  return { title: '', description: '', ingredients: [], instructions: [], sourceUrl: url }
+  return { title: '', description: '', ingredients: [], instructions: [], sourceUrl: url, image: null }
+}
+
+function extractImageFromJsonLd(data: Record<string, unknown>): string | null {
+  const img = data['image']
+  if (!img) return null
+  if (typeof img === 'string') return img
+  if (Array.isArray(img)) {
+    if (typeof img[0] === 'string') return img[0]
+    if (img[0] && typeof img[0] === 'object' && 'url' in (img[0] as Record<string, unknown>)) {
+      return String((img[0] as Record<string, unknown>).url)
+    }
+  }
+  if (typeof img === 'object' && 'url' in (img as Record<string, unknown>)) {
+    return String((img as Record<string, unknown>).url)
+  }
+  return null
 }
 
 /** Extract recipe data from raw HTML. Tries JSON-LD first, then gives up gracefully. */
@@ -81,5 +98,12 @@ function extractFromJsonLd(data: Record<string, unknown>, url: string): ScrapedR
     instructions.push(rawInstructions)
   }
 
-  return { title, description, ingredients, instructions, sourceUrl: url }
+  return {
+    title,
+    description,
+    ingredients,
+    instructions,
+    sourceUrl: url,
+    image: extractImageFromJsonLd(data),
+  }
 }

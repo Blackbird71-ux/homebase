@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { title } = body
+  const { title, image } = body
 
   if (!title || typeof title !== 'string' || title.trim() === '') {
     return NextResponse.json({ error: 'title is required' }, { status: 400 })
@@ -35,13 +35,14 @@ export async function POST(req: Request) {
       description: '',
       ingredients: '[]',
       instructions: '[]',
+      image: image || null,
       prepTime: 0,
       cookTime: 0,
       servings: 1,
       familyId: user.familyId,
       createdBy: user.id,
     },
-    select: { id: true, title: true },
+    select: { id: true, title: true, image: true },
   })
 
   void createAuditLog(

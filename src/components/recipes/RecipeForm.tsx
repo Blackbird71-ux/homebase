@@ -120,6 +120,10 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
       setInstructions((data.instructions ?? []).join('\n'))
       setTags(data.tags ?? [])
       setSourceUrl(scrapeUrl.trim())
+      if (data.image) {
+        setImageUrl(data.image)
+        setImagePreview(data.image)
+      }
     } finally {
       setScraping(false)
     }
