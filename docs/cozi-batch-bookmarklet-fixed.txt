@@ -1,0 +1,114 @@
+// ── Cozi Batch Recipe Extractor (v7) ─────────────────────────────────────
+// Simple, reliable. For React-crash recipes, saves title + image from the
+// list button instead of silently dropping them.
+//
+// TO USE:
+//   1. Open https://my.cozi.com/recipes
+//   2. Open DevTools → Console tab
+//   3. Paste this entire script and press Enter
+//   4. When "Done!" appears, textarea at bottom has JSON
+//   5. Copy JSON, save as docs/Cozie recipes.txt
+//   6. Run: npx tsx scripts/import-cozi-recipes-batch.ts
+
+(function(){
+  var d=document,btns=[],results=[],i=0;
+
+  d.querySelectorAll("ul li button").forEach(function(b){
+    if(b.className.indexOf("RecipeItemButton")>=0){btns.push(b);}
+  });
+  if(btns.length===0){alert("No recipes found");return;}
+
+  var s=d.createElement("div");
+  s.style.cssText="position:fixed;top:0;left:0;right:0;background:#2563eb;color:#fff;padding:8px;z-index:99999;font-family:sans-serif;font-size:13px;text-align:center";
+  d.body.appendChild(s);
+  s.innerHTML="Processing 0/"+btns.length+" recipes...";
+
+  // ── Extract from the LAST recipe detail panel ─────────────────────────
+  function extract(){
+    var ingEl=null,dirEl=null,title="",ings=[],dirs=[],img=null;
+    d.querySelectorAll("h3").forEach(function(h){
+      var t=h.innerText.trim().toLowerCase();
+      if(t==="ingredients"){ingEl=h;}
+      if(t==="directions"){dirEl=h;}
+    });
+    if(!ingEl||!dirEl) return null;
+
+    var el=ingEl.nextElementSibling;
+    while(el&&el!==dirEl){
+      var t=el.innerText.trim();
+      if(t){ings.push(t);}
+      el=el.nextElementSibling;
+    }
+    if(ings.length===0) return null;
+
+    var dv=dirEl.nextElementSibling;
+    if(dv){
+      dirs=dv.innerText.trim().split(".").map(function(s){return s.trim();}).filter(function(s){return s.length>5;});
+    }
+
+    var container=ingEl.parentElement;
+    if(container){
+      container.querySelectorAll("h2").forEach(function(h){
+        var t=h.innerText.trim();
+        if(t&&t!=="Ingredients"&&t!=="Directions"&&!title){title=t;}
+      });
+    }
+
+    var b=btns[i];if(b){var im=b.querySelector("img");if(im){img=im.src;}}
+    return{title:title,ingredients:ings,instructions:dirs,servings:null,sourceUrl:d.URL,image:img};
+  }
+
+  // ── Save fallback data from the list button ────────────────────────────
+  function fallbackFromButton(){
+    var b=btns[i];
+    if(!b) return{title:"",ingredients:[],instructions:[],servings:null,sourceUrl:null,image:null};
+    var title=b.innerText.trim().split("\n")[0].trim();
+    var img=null;
+    var im=b.querySelector("img");if(im){img=im.src;}
+    return{title:title,ingredients:[],instructions:[],servings:null,sourceUrl:null,image:img};
+  }
+
+  // ── Process next recipe ───────────────────────────────────────────────
+  function next(){
+    if(i>=btns.length){
+      s.innerHTML="Done! Copied "+results.length+" recipes. Scroll down to find the text box.";
+      var ta=d.createElement("textarea");
+      ta.style.cssText="position:fixed;bottom:0;left:0;right:0;height:300px;z-index:99999;font-family:monospace;font-size:11px";
+      ta.value=JSON.stringify(results);
+      d.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      return;
+    }
+
+    btns[i].click();
+    s.innerHTML="Recipe "+(i+1)+"/"+btns.length+" ("+results.length+" captured)";
+
+    // Poll for content (up to 15s)
+    var tries=0;
+    var interval=setInterval(function(){
+      var r=extract();
+      if(r){
+        clearInterval(interval);
+        results.push(r);
+        i++;
+        next();
+        return;
+      }
+      tries++;
+      if(tries>=30){
+        clearInterval(interval);
+        // React crash — save what we have from the list button
+        var fb=fallbackFromButton();
+        results.push(fb);
+        i++;
+        next();  // Just continue — don't navigate back
+      }
+    },500);
+  }
+
+  next();
+})();
+
+// Bookmarklet version (save as bookmark URL):
+// javascript:(function(){var d=document,btns=[],results=[],i=0;d.querySelectorAll("ul li button").forEach(function(b){if(b.className.indexOf("RecipeItemButton")>=0){btns.push(b);}});if(btns.length===0){alert("No recipes found");return;}var s=d.createElement("div");s.style.cssText="position:fixed;top:0;left:0;right:0;background:#2563eb;color:#fff;padding:8px;z-index:99999;font-family:sans-serif;font-size:13px;text-align:center";d.body.appendChild(s);s.innerHTML="Processing 0/"+btns.length+" recipes...";function extract(){var ingEl=null,dirEl=null,title="",ings=[],dirs=[],img=null;d.querySelectorAll("h3").forEach(function(h){var t=h.innerText.trim().toLowerCase();if(t==="ingredients"){ingEl=h;}if(t==="directions"){dirEl=h;}});if(!ingEl||!dirEl)return null;var el=ingEl.nextElementSibling;while(el&&el!==dirEl){var t=el.innerText.trim();if(t){ings.push(t);}el=el.nextElementSibling;}if(ings.length===0)return null;var dv=dirEl.nextElementSibling;if(dv){dirs=dv.innerText.trim().split(".").map(function(s){return s.trim();}).filter(function(s){return s.length>5;});}var container=ingEl.parentElement;if(container){container.querySelectorAll("h2").forEach(function(h){var t=h.innerText.trim();if(t&&t!=="Ingredients"&&t!=="Directions"&&!title){title=t;}});}var b=btns[i];if(b){var im=b.querySelector("img");if(im){img=im.src;}}return{title:title,ingredients:ings,instructions:dirs,servings:null,sourceUrl:d.URL,image:img};}function fallbackFromButton(){var b=btns[i];if(!b)return{title:"",ingredients:[],instructions:[],servings:null,sourceUrl:null,image:null};var title=b.innerText.trim().split("\n")[0].trim();var img=null;var im=b.querySelector("img");if(im){img=im.src;}return{title:title,ingredients:[],instructions:[],servings:null,sourceUrl:null,image:img};}function next(){if(i>=btns.length){s.innerHTML="Done! Copied "+results.length+" recipes.";var ta=d.createElement("textarea");ta.style.cssText="position:fixed;bottom:0;left:0;right:0;height:300px;z-index:99999;font-family:monospace;font-size:11px";ta.value=JSON.stringify(results);d.body.appendChild(ta);ta.focus();ta.select();return;}btns[i].click();s.innerHTML="Recipe "+(i+1)+"/"+btns.length+" ("+results.length+" captured)";var tries=0;var interval=setInterval(function(){var r=extract();if(r){clearInterval(interval);results.push(r);i++;next();return;}tries++;if(tries>=30){clearInterval(interval);var fb=fallbackFromButton();results.push(fb);i++;next();}},500);}next();})();

@@ -33,6 +33,7 @@ const textareaClass =
 // ── Cozi Recipe Bookmarklet (v2) ─────────────────────────────────────────────
 // Extracts recipe data from Cozi's web app and copies JSON to clipboard.
 // v2: rewritten for Cozi's actual DOM structure (diagnosed 2026-05-25)
+// v3: scope searches to the recipe detail container, accept any tag for ingredients
 // Cozi uses MUI (Material-UI) with SPA routing. Recipe pages have:
 //   <h2>Recipe Name</h2>           (in a <div>, separate from content section)
 //   <h3>Ingredients</h3>
@@ -45,23 +46,24 @@ const textareaClass =
 const BOOKMARKLET_HREF = [
   'javascript:(function(){',
   'var d=document,r={},ingH3=null,dirH3=null;',
-  // Find the Ingredients/Directions H3 headings
+  // Find the LAST "Ingredients" and "Directions" H3 (most recently rendered panel)
   'd.querySelectorAll(\"h3\").forEach(function(h3){',
   'var t=h3.innerText.trim().toLowerCase();',
   'if(t===\"ingredients\"){ingH3=h3;}',
   'if(t===\"directions\"){dirH3=h3;}',
   '});',
   'if(ingH3&&dirH3){',
-  // Find recipe name: look for an H2 (not "Ingredients"/"Directions") in the document
-  'd.querySelectorAll(\"h2\").forEach(function(h2){',
+  // Find recipe name: scope search to the ingredient H3's parent container
+  'var c=ingH3.parentElement;',
+  'if(c){c.querySelectorAll(\"h2\").forEach(function(h2){',
   'var t=h2.innerText.trim();',
   'if(t&&t!==\"Ingredients\"&&t!==\"Directions\"&&!r.title){r.title=t;}',
-  '});',
-  // Collect ingredients from <p> elements between Ingredients H3 and Directions H3
+  '});}',
+  // Collect ingredient text from ALL elements between Ingredients H3 and Directions H3
   'var ings=[],el=ingH3.nextElementSibling;',
   'while(el&&el!==dirH3){',
   'var t=el.innerText.trim();',
-  'if(t&&el.tagName===\"P\"){ings.push(t);}',
+  'if(t){ings.push(t);}',
   'el=el.nextElementSibling;',
   '}',
   'r.ingredients=ings;',

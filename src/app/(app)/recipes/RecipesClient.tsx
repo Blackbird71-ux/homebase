@@ -10,7 +10,7 @@ import { TagCloud } from '@/components/tags/TagCloud'
 import { PillNav } from '@/components/shared/PillNav'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusIcon, SearchIcon, UploadIcon, ClockIcon, UsersIcon, Trash2Icon, LayoutGrid, Heart, Plane } from 'lucide-react'
+import { PlusIcon, SearchIcon, UploadIcon, ClockIcon, UsersIcon, Trash2Icon, LayoutGrid, Heart, Plane, ArrowUpDown } from 'lucide-react'
 import type { RecipeBook } from '@/components/recipes/RecipeBookSidebar'
 import { cn } from '@/lib/utils'
 
@@ -192,6 +192,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
   const [favoriteBookId, setFavoriteBookId] = useState<string | null>(initialFavoriteBookId ?? null)
   const [search, setSearch]         = useState('')
   const [activeTag, setActiveTag]   = useState<string | null>(null)
+  const [sortOrder, setSortOrder]   = useState<'newest' | 'alpha'>('newest')
   const [activeTab, setActiveTab]   = useState<Tab>(() => {
     if (typeof window === 'undefined') return 'overview'
     return (localStorage.getItem('recipes-active-tab') as Tab) ?? 'overview'
@@ -203,7 +204,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
   const [formOpen, setFormOpen]     = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
-  // Base list: book + search + tag filtered, sorted newest first
+  // Base list: book + search + tag filtered, then sorted by current sortOrder
   const baseRecipes = useMemo(() => {
     let result = activeBookId
       ? recipes.filter(r => r.bookId === activeBookId)
@@ -215,8 +216,14 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
     if (activeTag) {
       result = result.filter(r => r.tags.includes(activeTag))
     }
-    return [...result].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [recipes, activeBookId, search, activeTag])
+    const sorted = [...result]
+    if (sortOrder === 'alpha') {
+      sorted.sort((a, b) => a.title.localeCompare(b.title))
+    } else {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    }
+    return sorted
+  }, [recipes, activeBookId, search, activeTag, sortOrder])
 
   // Tab-filtered list
   const tabRecipes = useMemo(() => {
@@ -399,8 +406,8 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
           size="sm"
         />
 
-        {/* Search + tag filter */}
-        <div className="flex flex-col gap-3">
+        {/* Search + sort toggle */}
+        <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-[180px]">
             <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -410,6 +417,23 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
               className="pl-8"
             />
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSortOrder(sortOrder === 'newest' ? 'alpha' : 'newest')}
+            className="shrink-0 gap-1.5 text-xs h-9"
+            title={sortOrder === 'newest' ? 'Sorted by newest — click for A-Z' : 'Sorted A-Z — click for newest'}
+          >
+            {sortOrder === 'newest' ? (
+              <><ClockIcon className="h-3.5 w-3.5" /> Newest</>
+            ) : (
+              <><ArrowUpDown className="h-3.5 w-3.5" /> A-Z</>
+            )}
+          </Button>
+        </div>
+
+        {/* Tag filter */}
+        <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">Filter by tags</h3>
             {activeTag && (
