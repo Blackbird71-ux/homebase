@@ -6,6 +6,7 @@ import {
   BarChart2, Building2, FileDown, Printer, Send, History, Clock,
 } from 'lucide-react'
 import { PageHero } from '@/components/shared/PageHero'
+import { PnlViewNav } from '@/components/finance/PnlViewNav'
 import {
   format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
   startOfYear, endOfYear, subMonths, addMonths, subQuarters, addQuarters,
@@ -14,6 +15,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getCurrentFY, formatCurrency } from '@/lib/financeShared'
+import { dropSupersededParents } from '@/lib/finance-forecast'
 import { formatInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import EmailReportModal from '@/components/finance/EmailReportModal'
@@ -27,7 +29,7 @@ type DataMode = 'forecast' | 'cash'
 interface Bill {
   id: string; name: string; amount: number; frequency: string
   nextDueDate: string; paid: boolean; paidDate: string | null
-  isActive: boolean; billType: string
+  isActive: boolean; billType: string; parentBillId: string | null
   category: { id: string; name: string; color: string | null; type?: string } | null
   vendor: { id: string; name: string } | null
 }
@@ -112,7 +114,7 @@ export default function ReportsPage() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/api/finance/bills?includeAll=true')
+      const res = await fetch('/api/finance/bills')
       if (res.ok) setBills(await res.json())
     } finally { setLoading(false) }
   }
@@ -149,7 +151,7 @@ export default function ReportsPage() {
   const relevantBills = useMemo(() => {
     const startTs = start.getTime()
     const endTs   = end.getTime()
-    return bills.filter(b => {
+    const inWindow = bills.filter(b => {
       if (!b.isActive) return false
       if (b.category?.type === 'transfer' || b.category?.type === 'income') return false
       if (b.billType === 'transfer') return false
@@ -166,6 +168,12 @@ export default function ReportsPage() {
       if (b.billType === 'one-off') return dueTs >= startTs && dueTs <= endTs
       return dueTs <= endTs
     })
+
+    // Cash mode counts each real paid occurrence once — no dedup.
+    if (dataMode === 'cash') return inWindow
+    // Forecast mode: a parent template and its spawned child can both fall in-window
+    // (e.g. Charity parent + child). Drop the parent so the stream is counted once.
+    return dropSupersededParents(inWindow, b => b.parentBillId)
   }, [bills, start, end, dataMode])
 
   // ── Group by category or vendor ───────────────────────────────────────────
@@ -224,7 +232,8 @@ export default function ReportsPage() {
   return (
     <>
     <div className="space-y-5">
-      <PageHero title="Reports" subtitle="Cashflow and spending breakdowns by category or vendor." />
+      <PageHero title="Reports" subtitle="Spending forecast from your bills, grouped by category or vendor — projected, not GL-based." />
+      <PnlViewNav />
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Period selector */}

@@ -4,7 +4,6 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
-import { differenceInDays } from 'date-fns'
 
 // GET /api/finance/accounts-payable?asAt=YYYY-MM-DD
 //
@@ -20,8 +19,14 @@ import { differenceInDays } from 'date-fns'
 
 type AgingBucket = '0_30' | '31_60' | '61_90' | '91_plus'
 
+// Full days between two instants. The server runs UTC (no DST), so flooring the
+// ms difference matches date-fns differenceInDays for these UTC-stored dates.
+function fullDaysBetween(later: Date, earlier: Date): number {
+  return Math.floor((later.getTime() - earlier.getTime()) / 86_400_000)
+}
+
 function ageBucket(invoiceDate: Date, asAt: Date): AgingBucket {
-  const days = differenceInDays(asAt, invoiceDate)
+  const days = fullDaysBetween(asAt, invoiceDate)
   if (days <= 30)  return '0_30'
   if (days <= 60)  return '31_60'
   if (days <= 90)  return '61_90'
@@ -173,7 +178,7 @@ export async function GET(request: NextRequest) {
 
       const outstandingAmount = Math.round((b.amount - paymentsToDate) * 100) / 100
 
-      const days = differenceInDays(asAt, invoiceDate)
+      const days = fullDaysBetween(asAt, invoiceDate)
       return {
         id:               b.id,
         name:             b.name,

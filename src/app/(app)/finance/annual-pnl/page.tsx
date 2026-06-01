@@ -10,7 +10,9 @@ import {
   format, startOfMonth, endOfMonth, getMonth, getYear,
 } from 'date-fns'
 import { PageHero } from '@/components/shared/PageHero'
+import { PnlViewNav } from '@/components/finance/PnlViewNav'
 import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
+import { dropSupersededParents } from '@/lib/finance-forecast'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
@@ -52,6 +54,7 @@ interface Bill {
   id: string; name: string; amount: number; frequency: string
   nextDueDate: string; paid: boolean; paidDate: string | null
   isActive: boolean; billType: string; entityId: string | null
+  parentBillId: string | null
   category: Category | null
 }
 
@@ -60,7 +63,7 @@ interface IncomeEntry {
   incomeType: string; nextExpectedDate: string; isActive: boolean
   received: boolean; receivedDate: string | null
   isTaxTracked: boolean; taxRate: number | null
-  entityId: string | null; category: Category | null
+  entityId: string | null; parentIncomeId: string | null; category: Category | null
 }
 
 interface Entity { id: string; name: string; type: string; isDefault: boolean }
@@ -349,7 +352,9 @@ export default function AnnualPnLPage() {
       return map.get(key)!
     }
 
-    for (const e of income) {
+    // Forecast double-counts a stream if both a parent and its spawned child are
+    // present (e.g. Michelle's Salary). Keep only the leaf occurrence.
+    for (const e of dropSupersededParents(income, e => e.parentIncomeId)) {
       if (!e.isActive) continue
       if (selectedEntityId && e.entityId !== selectedEntityId) continue
       const key   = e.category?.id ?? '__none__'
@@ -407,7 +412,9 @@ export default function AnnualPnLPage() {
       return map.get(key)!
     }
 
-    for (const b of bills) {
+    // Forecast double-counts a stream if both a parent and its spawned child are
+    // present (e.g. Charity). Keep only the leaf occurrence.
+    for (const b of dropSupersededParents(bills, b => b.parentBillId)) {
       if (!b.isActive) continue
       if (selectedEntityId && b.entityId !== selectedEntityId) continue
       if (b.category?.type === 'transfer' || b.category?.type === 'income') continue
@@ -459,7 +466,8 @@ export default function AnnualPnLPage() {
 
   return (
     <div className="space-y-4">
-      <PageHero title="Annual P&L" subtitle="Profit and loss statement for the financial year." />
+      <PageHero title="Annual P&L" subtitle="The same GL actuals as the P&L, laid out month-by-month across the financial year." />
+      <PnlViewNav />
 
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">

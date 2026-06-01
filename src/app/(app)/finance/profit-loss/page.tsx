@@ -16,6 +16,7 @@ import { buildProfitLossWorkbook } from '@/lib/excel/profit-loss-excel'
 import { useProfitLoss } from '@/hooks/finance/useProfitLoss'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { PageHero } from '@/components/shared/PageHero'
+import { PnlViewNav } from '@/components/finance/PnlViewNav'
 import { toast } from 'sonner'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -55,7 +56,8 @@ export default function ProfitLossPage() {
 
   return (
     <div className="space-y-5">
-      <PageHero title="Profit & Loss" subtitle="Income and expenses for the selected period." />
+      <PageHero title="Profit & Loss" subtitle="Actual P&L from the General Ledger for the selected period (accrual basis)." />
+      <PnlViewNav />
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">

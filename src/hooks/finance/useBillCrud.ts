@@ -218,6 +218,7 @@ export function useBillCrud() {
     if (!showForm) return
     const firstDebit = journalLines.find(l => l.side === 'debit')
     const principalGl = firstDebit?.glAccountId ?? ''
+    if (!principalGl) return // a blank primary line must never wipe an explicitly-set category
     if (principalGl === form.categoryId) return
     setForm(p => ({ ...p, categoryId: principalGl }))
   }, [journalLines, showForm]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -504,9 +505,9 @@ export function useBillCrud() {
 
   function handleVendorChange(vendorId: string) {
     const vendor = vendors.find(v => v.id === vendorId)
-    const update: any = { vendorId }
-    if (vendor?.defaultCategory && !form.categoryId) update.categoryId = vendor.defaultCategory.id
-    setForm(p => ({ ...p, ...update }))
+    setForm(p => ({ ...p, vendorId }))
+    // A vendor pick drives the primary GL account (line + category) unconditionally — last action wins.
+    if (vendor?.defaultCategory) handleCategoryChange(vendor.defaultCategory.id)
   }
 
   // ── Per-bill helpers ─────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { monthBoundsInTz, formatInTz } from '@/lib/timezone'
+import { postedNonReversedWhere } from '@/lib/finance-journal-filters'
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -41,8 +42,7 @@ export async function GET(req: Request) {
     where: {
       journalEntry: {
         familyId: user.familyId,
-        isPosted: true,
-        isReversed: false,
+        ...postedNonReversedWhere,
         date: { gte: rangeStart, lte: rangeEnd },
       },
     },

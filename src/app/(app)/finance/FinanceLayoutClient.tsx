@@ -35,6 +35,7 @@ import {
   FileCheck,
   Calculator,
   LineChart,
+  CalendarClock,
 } from 'lucide-react'
 import { isNavKeyVisible } from '@/lib/financeNavKeys'
 
@@ -65,17 +66,33 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    label: 'Reporting',
+    label: 'Statements',
     items: [
       { href: '/finance/profit-loss',           label: 'P&L',                icon: BarChart2,    exact: false, navKey: 'profitLoss'      },
       { href: '/finance/annual-pnl',            label: 'Annual P&L',         icon: TrendingUp,   exact: false, navKey: 'annualPnl'       },
       { href: '/finance/balance-sheet',         label: 'Balance Sheet',      icon: Scale,        exact: false, navKey: 'balanceSheet'    },
-      { href: '/finance/tax-report',            label: 'Tax Report',         icon: Receipt,      exact: false, navKey: 'taxReport'       },
-      { href: '/finance/journals',              label: 'Journals',           icon: BookOpen,     exact: false, navKey: 'journals'        },
       { href: '/finance/trial-balance',         label: 'Trial Balance / GL', icon: Table2,       exact: false, navKey: 'trialBalance'    },
+    ],
+  },
+  {
+    label: 'Tax',
+    items: [
+      { href: '/finance/tax-report',            label: 'Tax Report',         icon: Receipt,      exact: false, navKey: 'taxReport'       },
+      { href: '/finance/bas',                   label: 'BAS Worksheet',      icon: FileCheck,    exact: false, navKey: 'bas'             },
+    ],
+  },
+  {
+    label: 'Subledgers',
+    items: [
       { href: '/finance/accounts-payable',      label: 'AP Aging',           icon: CreditCard,   exact: false, navKey: 'apAging'         },
       { href: '/finance/accounts-receivable',   label: 'AR Aging',           icon: Banknote,     exact: false, navKey: 'arAging'         },
-      { href: '/finance/bas',                   label: 'BAS Worksheet',      icon: FileCheck,    exact: false, navKey: 'bas'             },
+      { href: '/finance/prepayments',           label: 'Prepayments',        icon: CalendarClock,exact: false, navKey: 'prepayments'     },
+    ],
+  },
+  {
+    label: 'Detail',
+    items: [
+      { href: '/finance/journals',              label: 'Journals',           icon: BookOpen,     exact: false, navKey: 'journals'        },
       { href: '/finance/vendor-statement',      label: 'Statements',         icon: ClipboardList,exact: false, navKey: 'vendorStatement' },
       { href: '/finance/reports',               label: 'Reports',            icon: PieChart,     exact: false, navKey: 'reports'         },
       { href: '/finance/insights',              label: 'Insights',           icon: LineChart,    exact: false, navKey: 'insights'        },

@@ -63,10 +63,12 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'BILL_ACCRUAL_STALE',           label: 'Voided/un-invoiced bills have no live accrual' },
   { code: 'BILL_ACCRUAL_MISMATCH',        label: 'Bill accrual matches row (category / amount / AP / entity)' },
   { code: 'BILL_ACCRUAL_SPLIT',           label: 'Bill accruals with custom splits (review)' },
+  { code: 'BILL_TAXPOINT_DIVERGENT',      label: 'Bill tax point matches its accrual journal date' },
   { code: 'INCOME_ACCRUAL_MISSING',       label: 'Invoiced income has a posted accrual' },
   { code: 'INCOME_ACCRUAL_STALE',         label: 'Voided/un-invoiced income has no live accrual' },
   { code: 'INCOME_ACCRUAL_MISMATCH',      label: 'Income accrual matches row (category / amount / AR / entity)' },
   { code: 'INCOME_ACCRUAL_SPLIT',         label: 'Income accruals with custom splits (review)' },
+  { code: 'INCOME_TAXPOINT_DIVERGENT',    label: 'Income tax point matches its accrual journal date' },
   { code: 'BILL_PAID_NO_PAYMENT_GL',      label: 'Paid bills have a payment journal' },
   { code: 'INCOME_RECEIVED_NO_RECEIPT_GL', label: 'Received income has a receipt journal' },
   { code: 'TX_JOURNAL_ACCOUNT_DRIFT',     label: 'Transaction journals match the transaction account' },
@@ -89,6 +91,13 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
   // which default their asAt to end-of-today so the reconciliation totals tie out.
   const asAt = new Date(todayBoundsInTz(tz).end.getTime() - 1)
 
+  // Local calendar day (YYYY-MM-DD) in the family timezone. Used to compare a record's
+  // tax point (invoiceReceivedDate — the AP/AR *subledger* boundary) against its posted
+  // accrual's journal date (the GL *control* boundary). The reports key the subledger on
+  // `invoiceReceivedDate <= asAt` and the control on `je.date <= asAt`, both at tz-local
+  // end-of-day — so a same-day match means no end-of-day boundary can fall between them.
+  const localDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d)
+
   // Category id → name/type map for human-readable messages.
   const categories = await prisma.financeCategory.findMany({
     where: { familyId },
@@ -109,10 +118,10 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     where: { familyId },
     select: {
       id: true, name: true, amount: true, categoryId: true, entityId: true,
-      invoiceReceived: true, isVoided: true, paid: true, paymentTxId: true,
+      invoiceReceived: true, invoiceReceivedDate: true, isVoided: true, paid: true, paymentTxId: true,
       journalEntry: {
         select: {
-          isPosted: true, isReversed: true, entityId: true,
+          isPosted: true, isReversed: true, entityId: true, date: true,
           lines: { select: { glAccountId: true, side: true, amount: true } },
         },
       },
@@ -166,6 +175,20 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
             message: `Accrual has ${lines.length} lines (custom/GST split) — verify manually.`,
           })
         }
+        // Tax point ↔ accrual date. The AP subledger keys on invoiceReceivedDate while
+        // the GL control keys on the accrual journal date; when they fall on different
+        // local days the control and subledger diverge for as-at dates between them
+        // (the F7 Charity bug). A legitimately pre-recorded future bill has tax point ==
+        // accrual date, so this never false-positives on future-dated scheduling.
+        const billJeDay = localDay(b.journalEntry!.date)
+        if (b.invoiceReceivedDate && localDay(b.invoiceReceivedDate) !== billJeDay) {
+          add({
+            severity: 'warning', code: 'BILL_TAXPOINT_DIVERGENT', recordType: 'bill',
+            recordId: b.id, label: b.name,
+            message: `Tax point ${localDay(b.invoiceReceivedDate)} differs from the accrual journal date ${billJeDay} — AP control and subledger diverge for as-at dates between them.`,
+            detail: { invoiceReceivedDate: localDay(b.invoiceReceivedDate), accrualDate: billJeDay },
+          })
+        }
       }
     }
 
@@ -198,10 +221,10 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     where: { familyId },
     select: {
       id: true, name: true, amount: true, categoryId: true, entityId: true,
-      invoiceReceived: true, isVoided: true, received: true, receiptJournalEntryId: true,
+      invoiceReceived: true, invoiceReceivedDate: true, isVoided: true, received: true, receiptJournalEntryId: true,
       journalEntry: {
         select: {
-          isPosted: true, isReversed: true, entityId: true,
+          isPosted: true, isReversed: true, entityId: true, date: true,
           lines: { select: { glAccountId: true, side: true, amount: true } },
         },
       },
@@ -252,6 +275,19 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
             severity: 'info', code: 'INCOME_ACCRUAL_SPLIT', recordType: 'income',
             recordId: e.id, label: e.name,
             message: `Accrual has ${lines.length} lines (payslip/custom split) — verify manually.`,
+          })
+        }
+        // Tax point ↔ accrual date (income-side mirror of BILL_TAXPOINT_DIVERGENT). The
+        // AR subledger keys on invoiceReceivedDate while the GL control keys on the
+        // accrual journal date; different local days diverge the control and subledger
+        // for as-at dates between them (the Michelle SGC bug).
+        const incomeJeDay = localDay(e.journalEntry!.date)
+        if (e.invoiceReceivedDate && localDay(e.invoiceReceivedDate) !== incomeJeDay) {
+          add({
+            severity: 'warning', code: 'INCOME_TAXPOINT_DIVERGENT', recordType: 'income',
+            recordId: e.id, label: e.name,
+            message: `Tax point ${localDay(e.invoiceReceivedDate)} differs from the accrual journal date ${incomeJeDay} — AR control and subledger diverge for as-at dates between them.`,
+            detail: { invoiceReceivedDate: localDay(e.invoiceReceivedDate), accrualDate: incomeJeDay },
           })
         }
       }

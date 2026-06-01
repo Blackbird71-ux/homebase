@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { addYears } from 'date-fns'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -43,7 +42,7 @@ export async function POST(request: NextRequest) {
   }
 
   const startDate = new Date(new Date().getFullYear(), 0, 1)
-  const endDate = addYears(startDate, 10)
+  const endDate = new Date(startDate.getFullYear() + 10, startDate.getMonth(), startDate.getDate())
 
   const budget = await prisma.financeBudget.create({
     data: {
@@ -132,7 +131,7 @@ export async function PATCH(request: NextRequest) {
 
     const existing = await prisma.financeBudget.findFirst({ where: { billId, familyId: user.familyId } })
     const startDate = new Date(new Date().getFullYear(), 0, 1)
-    const endDate = addYears(startDate, 10)
+    const endDate = new Date(startDate.getFullYear() + 10, startDate.getMonth(), startDate.getDate())
 
     if (existing) {
       const updated = await prisma.financeBudget.update({

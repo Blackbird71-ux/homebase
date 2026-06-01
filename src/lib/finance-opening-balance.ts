@@ -117,6 +117,46 @@ export async function ensureAccountsReceivableCategory(familyId: string): Promis
 }
 
 /**
+ * Ensure the family has a system "Prepaid Expenses" current-asset category.
+ *
+ * This is the capitalisation account for material prepayments: at the tax point
+ * the net (ex-GST) cost is debited here instead of the expense account, then
+ * amortised to the expense account over the coverage period (see
+ * src/lib/finance-prepayment.ts). GST semantics: asset type. Debit = cost paid
+ * in advance and not yet consumed.
+ * Returns the category ID. Deterministic: always picks the oldest matching row.
+ */
+export async function ensurePrepaidExpensesCategory(familyId: string): Promise<string> {
+  const candidates = await prisma.financeCategory.findMany({
+    where: {
+      familyId,
+      type: 'asset',
+      isSystem: true,
+      hideFromReports: false,
+    },
+    select: { id: true, name: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const matches = candidates.filter(c =>
+    c.name.toLowerCase().includes('prepaid expenses'),
+  )
+  if (matches.length > 1) {
+    console.warn(
+      `[finance] Multiple Prepaid Expenses categories found for family ${familyId} ` +
+      `(${matches.map(m => `${m.id}=${m.name}`).join(', ')}). ` +
+      `Using oldest (${matches[0].id}); please consolidate via Categories settings.`,
+    )
+  }
+  if (matches[0]) return matches[0].id
+
+  const created = await prisma.financeCategory.create({
+    data: { name: 'Prepaid Expenses', type: 'asset', isSystem: true, level: 0, familyId },
+    select: { id: true },
+  })
+  return created.id
+}
+
+/**
  * Ensure the family has a system "Undeposited Funds" asset category.
  *
  * This is the suspense/clearing account used when a payment is recorded but no

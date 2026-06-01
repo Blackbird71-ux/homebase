@@ -19,6 +19,7 @@ model Family {
   periodLockedUntil      DateTime?            // Finance period lock — posting before this date shows a warning
   hideFinanceModule      Boolean              @default(false)      // Admin: hide Finance nav, show Simple Budget Planner instead
   openingBalancesCategoryId  String?  // FK → FinanceCategory (equity type, system, "Opening Balances")
+  prepaymentThreshold    Float    @default(300)  // Materiality knob: net ≥ this AND spans >1 period ⇒ capitalise to Prepaid Expenses and amortise
   users                User[]
   events               Event[]
   lists                List[]
@@ -54,6 +55,7 @@ model Family {
   financeJournalEntries  FinanceJournalEntry[]
   financeBillPayments    FinanceBillPayment[]
   financeRecurringTemplates  FinanceRecurringTemplate[]
+  financePrepaymentSchedules FinancePrepaymentSchedule[]
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
   wishlistItems          WishlistItem[]
   homeAssets             HomeAsset[]
@@ -639,6 +641,8 @@ model FinanceCategory {
   vendors         FinanceVendor[]
   journalLines    FinanceJournalLine[]
   recurringTemplateLines FinanceRecurringTemplateLine[] @relation("TemplateLineGlAccount")
+  prepaidForSchedules    FinancePrepaymentSchedule[] @relation("PrepaymentPrepaidAccount")
+  expenseForSchedules    FinancePrepaymentSchedule[] @relation("PrepaymentExpenseAccount")
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -728,6 +732,8 @@ model FinanceRecurringBill {
   billType        String               @default("recurring")  // recurring | one-off
   recurrenceInterval String?
   billDate        DateTime?            // GL recognition date (= occurrence date from template). Drives AP, P&L and GL posting.
+  coverageStart   DateTime?            // Prepayment: start of the period the bill covers. Null ⇒ auto-derive from frequency at receipt.
+  coverageEnd     DateTime?            // Prepayment: end of coverage. Null ⇒ auto-derive. Override either to correct the amortisation span.
   invoiceReceived Boolean              @default(false)
   invoiceReceivedDate DateTime?
   paid            Boolean              @default(false)
@@ -759,6 +765,7 @@ model FinanceRecurringBill {
   payments        FinanceBillPayment[]
   attachments     BillAttachment[]
   budgetRules     FinanceBudget[]
+  prepaymentSchedules FinancePrepaymentSchedule[]
   // ── Recurring template lifecycle (Block 1: repeating transactions) ──
   templateId            String?
   template              FinanceRecurringTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
@@ -1120,6 +1127,7 @@ model FinanceJournalEntry {
   incomeEntries         FinanceIncomeEntry[]   @relation("IncomeJournal")
   incomeReceiptEntries  FinanceIncomeEntry[]   @relation("IncomeReceiptJournal")
   billPayments          FinanceBillPayment[]   @relation("BillPaymentJournal")
+  prepaymentLines       FinancePrepaymentScheduleLine[] @relation("PrepaymentJournal")
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -1150,6 +1158,53 @@ model FinanceJournalLine {
   @@index([journalEntryId])
   @@index([glAccountId])
   @@index([glAccountId, journalEntryId])
+}
+
+// ─── Prepayments (prepaid-and-amortise) ──────────────────────────────────────
+// A material prepayment (net ≥ Family.prepaymentThreshold AND coverage spans >1
+// month) is capitalised to the "Prepaid Expenses" current-asset account at the
+// tax point, then amortised to the expense account over the coverage period.
+// Each scheduled period is an individually postable / reversible journal entry.
+model FinancePrepaymentSchedule {
+  id               String   @id @default(cuid())
+  familyId         String
+  family           Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  billId           String?
+  bill             FinanceRecurringBill? @relation(fields: [billId], references: [id], onDelete: SetNull)
+  prepaidAccountId String
+  prepaidAccount   FinanceCategory @relation("PrepaymentPrepaidAccount", fields: [prepaidAccountId], references: [id], onDelete: Restrict)
+  expenseAccountId String
+  expenseAccount   FinanceCategory @relation("PrepaymentExpenseAccount", fields: [expenseAccountId], references: [id], onDelete: Restrict)
+  description      String
+  totalNet         Float            // Net (ex-GST) amount capitalised and amortised
+  coverageStart    DateTime
+  coverageEnd      DateTime
+  periodCount      Int
+  status           String   @default("active")  // active | completed | cancelled
+  lines            FinancePrepaymentScheduleLine[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([familyId])
+  @@index([familyId, status])
+  @@index([billId])
+}
+
+model FinancePrepaymentScheduleLine {
+  id             String   @id @default(cuid())
+  scheduleId     String
+  schedule       FinancePrepaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  periodIndex    Int                       // 0-based period position
+  periodDate     DateTime                  // Accounting date for this period's amortisation (UTC midnight by convention)
+  amount         Float                     // Net/N; the final period absorbs the cent remainder
+  posted         Boolean  @default(false)
+  journalEntryId String?
+  journalEntry   FinanceJournalEntry? @relation("PrepaymentJournal", fields: [journalEntryId], references: [id], onDelete: SetNull)
+  postedAt       DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([scheduleId])
+  @@index([journalEntryId])
 }
 
 // ─── Trip Planning ─────────────────────────────────────────────────────────────────────────────
