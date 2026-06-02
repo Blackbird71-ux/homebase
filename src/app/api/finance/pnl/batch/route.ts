@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
-import { monthRangeInTz } from '@/lib/finance-fy'
+import { localMidnightToUtc } from '@/lib/timezone'
 
 // ── Batch P&L ────────────────────────────────────────────────────────────────
 //
@@ -30,10 +30,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'from and to are required' }, { status: 400 })
   }
 
-  const rangeStart = new Date(fromRaw)
-  const rangeEnd   = new Date(toRaw)
-
   const tz = await getFamilyTimezone(familyId)
+
+  // Interpret from/to as calendar days in the family timezone. new Date(toRaw) pins
+  // the upper bound to UTC midnight, which for east-of-UTC zones (Sydney = UTC+10)
+  // drops entries timestamped later on the final day. Anchor both bounds to the
+  // family tz and extend the end to cover the whole last calendar day.
+  const rangeStart = localMidnightToUtc(fromRaw, tz)
+  const rangeEnd   = new Date(localMidnightToUtc(toRaw, tz).getTime() + 86_400_000 - 1)
 
   // Single DB query for all posted income/expense journal lines in the full range
   const journalLines = await prisma.financeJournalLine.findMany({

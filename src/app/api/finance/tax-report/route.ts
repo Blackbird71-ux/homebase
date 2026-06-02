@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { currentFyYear, fyDateRange, fyLabel } from '@/lib/finance-fy'
+import { currentFyYear, fyDateRangeInTz, fyLabel } from '@/lib/finance-fy'
+import { localMidnightToUtc, dateStringInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 // ── NOTE: Tax bracket calculations have been intentionally moved to the
 //    page component (tax-report/page.tsx) so they can be updated each
@@ -44,16 +45,22 @@ export async function GET(request: NextRequest) {
   // Load family's financial year start month setting
   const family = await prisma.family.findUnique({
     where: { id: familyId },
-    select: { financeYearStartMonth: true },
+    select: { financeYearStartMonth: true, timezone: true },
   })
   const fyStartMonth = family?.financeYearStartMonth ?? 7
+  const tz = family?.timezone ?? DEFAULT_TIMEZONE
 
   // Default to current financial year based on family's FY start month
   const fyStartYear = currentFyYear(fyStartMonth)
-  const { start: defaultFrom, end: defaultTo } = fyDateRange(fyStartYear, fyStartMonth)
+  const { start: defaultFrom, end: defaultTo } = fyDateRangeInTz(fyStartYear, fyStartMonth, tz)
 
-  const from = fromRaw ? new Date(fromRaw) : defaultFrom
-  const to   = toRaw   ? new Date(toRaw)   : defaultTo
+  // from/to arrive as YYYY-MM-DD calendar dates and must be read in the family
+  // timezone, not UTC. The server runs in UTC, so new Date('2025-07-01') is UTC
+  // midnight = 10:00 the same day in Sydney (UTC+10): an entry within the offset of
+  // the FY boundary would land in the wrong financial year. localMidnightToUtc
+  // anchors the day to the family tz; the end bound covers the whole final day.
+  const from = fromRaw ? localMidnightToUtc(fromRaw, tz) : defaultFrom
+  const to   = toRaw   ? new Date(localMidnightToUtc(toRaw, tz).getTime() + 86_400_000 - 1) : defaultTo
 
   // ── 1. All family members ──────────────────────────────────────────────
   const members = await prisma.user.findMany({
@@ -249,8 +256,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     financialYear: fyLabel(fyStartYear, fyStartMonth),
-    from: from.toISOString().split('T')[0],
-    to:   to.toISOString().split('T')[0],
+    from: dateStringInTz(from, tz),
+    to:   dateStringInTz(to, tz),
     members,
     entities,
     // GL-sourced actuals — use these for all statutory tax figures

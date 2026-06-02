@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { currentFyYear, fyLabel as fyLabelUtil, fyDateRange } from '@/lib/finance-fy'
+import { currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
 import { calcPersonalTax } from '@/lib/tax-calculator'
 import { format } from 'date-fns'
 import { PrintButton } from '@/components/print/PrintButton'
@@ -199,9 +199,15 @@ export default function TaxReportPage() {
       try {
         const params = new URLSearchParams()
         if (entityFilter) params.set('entityId', entityFilter)
-        const { start, end } = fyDateRange(fyStartYear, fyStartMonth)
-        params.set('from', start.toISOString().split('T')[0])
-        params.set('to', end.toISOString().split('T')[0])
+        // Send the FY's true calendar boundaries as YYYY-MM-DD. Deriving these from a
+        // Date via toISOString() shifts the day for east-of-UTC zones (Sydney 1 Jul
+        // midnight serialises to 30 Jun in UTC); the route reads these strings in the
+        // family timezone, so they must be the real calendar dates.
+        const endMonth1 = fyStartMonth === 1 ? 12 : fyStartMonth - 1
+        const endYear   = fyStartMonth === 1 ? fyStartYear : fyStartYear + 1
+        const lastDay   = new Date(endYear, endMonth1, 0).getDate()
+        params.set('from', `${fyStartYear}-${String(fyStartMonth).padStart(2, '0')}-01`)
+        params.set('to',   `${endYear}-${String(endMonth1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
         const res = await fetch(`/api/finance/tax-report?${params}`)
         if (!res.ok) { toast.error('Failed to load tax report'); return }
         const json = await res.json()

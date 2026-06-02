@@ -5,6 +5,7 @@ import {
   monthRangeInTz,
   fyDateRangeInTz,
 } from '@/lib/finance-fy'
+import { localMidnightToUtc } from '@/lib/timezone'
 
 const TZ = 'Australia/Sydney'
 
@@ -57,5 +58,38 @@ describe('Monthly P&L windows partition the FY exactly — no overlap, no gap, n
 
   it('every window is well-formed (start strictly before end)', () => {
     for (const w of windows) expect(w.start.getTime()).toBeLessThan(w.end.getTime())
+  })
+})
+
+describe('FY window is timezone-aware at the boundary (tax-report + Annual P&L batch)', () => {
+  // The Australian FY 2025-26 runs 1 Jul 2025 → 30 Jun 2026 in Sydney local time.
+  // The server runs in UTC, so the window must be anchored to the family tz, not
+  // UTC midnight — otherwise entries within the UTC offset of the boundary (Sydney
+  // is UTC+10) fall into the wrong financial year, or are dropped from the report.
+  const TZ_SYD = 'Australia/Sydney'
+  const { start, end } = fyDateRangeInTz(2025, 7, TZ_SYD)
+
+  it('FY start = Sydney midnight 1 Jul = 2025-06-30T14:00:00Z (NOT 2025-07-01T00:00Z)', () => {
+    expect(start.toISOString()).toBe('2025-06-30T14:00:00.000Z')
+  })
+
+  it('FY end = Sydney 23:59:59.999 on 30 Jun = 2026-06-30T13:59:59.999Z', () => {
+    expect(end.toISOString()).toBe('2026-06-30T13:59:59.999Z')
+  })
+
+  it('REGRESSION (tax-report Bug A): an entry on the last FY day after Sydney 10:00 stays IN the FY', () => {
+    // 2026-06-30T05:00Z = 15:00 Sydney on the final FY day — a real in-FY entry.
+    const lastDayTimed = new Date('2026-06-30T05:00:00.000Z')
+    expect(lastDayTimed.getTime()).toBeLessThanOrEqual(end.getTime())
+    // The old UTC-midnight upper bound (new Date('2026-06-30')) WOULD have dropped it:
+    expect(lastDayTimed.getTime()).toBeGreaterThan(new Date('2026-06-30').getTime())
+  })
+
+  it('REGRESSION (batch Bug B): rangeEnd = localMidnightToUtc + 1 day − 1ms covers the whole last FY day', () => {
+    // This pins the exact expression used in /api/finance/pnl/batch.
+    const rangeEnd = new Date(localMidnightToUtc('2026-06-30', TZ_SYD).getTime() + 86_400_000 - 1)
+    expect(rangeEnd.toISOString()).toBe('2026-06-30T13:59:59.999Z')
+    const lastDayTimed = new Date('2026-06-30T05:00:00.000Z')
+    expect(lastDayTimed.getTime()).toBeLessThanOrEqual(rangeEnd.getTime())
   })
 })
