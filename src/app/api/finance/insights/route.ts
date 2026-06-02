@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
-import { monthBoundsInTz, formatInTz } from '@/lib/timezone'
+import { todayStringInTz, formatInTz } from '@/lib/timezone'
+import { monthRangeInTz } from '@/lib/finance-fy'
 import { postedNonReversedWhere } from '@/lib/finance-journal-filters'
 
 export async function GET(req: Request) {
@@ -15,19 +16,22 @@ export async function GET(req: Request) {
 
   const tz = user.timezone ?? 'UTC'
 
-  // Build month buckets from (months) ago up to current month
-  const { start: currentMonthStart } = monthBoundsInTz(tz)
+  // Current calendar month in the family's timezone — NOT the server's UTC month.
+  // Reading getFullYear()/getMonth() off a UTC instant gave the wrong month for
+  // users east of UTC (e.g. Sydney's June 1 = 2026-05-31T14:00Z reads as May),
+  // dropping the current month and overflowing on short months via setMonth().
+  const [curYear, curMonth1] = todayStringInTz(tz).split('-').map(Number)
+
+  // Build month buckets from (months-1) ago up to and including the current month.
+  // Each bucket is the Sydney-local calendar month expressed as UTC instants.
   const buckets: { label: string; start: Date; end: Date }[] = []
   for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(currentMonthStart)
-    d.setMonth(d.getMonth() - i)
-    const year = d.getFullYear()
-    const month = d.getMonth()
+    // Walk back i whole months from (curYear, curMonth1) without day-overflow.
+    const totalMonths = curYear * 12 + (curMonth1 - 1) - i
+    const year = Math.floor(totalMonths / 12)
+    const month1 = (totalMonths % 12) + 1
 
-    // Finance journal dates are stored as UTC midnight accounting dates by convention
-    const start = new Date(Date.UTC(year, month, 1))
-    const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999))
-
+    const { start, end } = monthRangeInTz(year, month1, tz)
     const label = formatInTz(start, tz, { month: 'short', year: 'numeric' })
     buckets.push({ label, start, end })
   }

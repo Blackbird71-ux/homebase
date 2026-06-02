@@ -4,6 +4,7 @@ import {
   fyColumnMonthKey,
   monthRangeInTz,
   fyDateRangeInTz,
+  fyMonthIndexInTz,
 } from '@/lib/finance-fy'
 import { localMidnightToUtc } from '@/lib/timezone'
 
@@ -91,5 +92,37 @@ describe('FY window is timezone-aware at the boundary (tax-report + Annual P&L b
     expect(rangeEnd.toISOString()).toBe('2026-06-30T13:59:59.999Z')
     const lastDayTimed = new Date('2026-06-30T05:00:00.000Z')
     expect(lastDayTimed.getTime()).toBeLessThanOrEqual(rangeEnd.getTime())
+  })
+})
+
+describe('fyMonthIndexInTz — Annual P&L export buckets each entry by its Sydney month', () => {
+  // The Excel / print / email export builders (financeReport.ts) place each posted
+  // journal line into an FY month column. That bucketing must use the family tz, not
+  // the server's UTC month — otherwise an entry stored late in a UTC day lands one
+  // month early (or in the wrong FY) on the exported report.
+  // FY 2025-26, July start → month indices: Jul=0, Aug=1 … May=10, Jun=11.
+
+  it('buckets clean mid-month entries into their own month', () => {
+    expect(fyMonthIndexInTz(new Date('2025-07-15T00:00:00Z'), 2025, 7, TZ)).toBe(0)  // Jul
+    expect(fyMonthIndexInTz(new Date('2026-05-15T00:00:00Z'), 2025, 7, TZ)).toBe(10) // May
+  })
+
+  it('REGRESSION: 2026-05-31T15:00Z is 1 Jun 01:00 Sydney → June (11), not May (10)', () => {
+    // A UTC-naive month read of this instant says May; in Sydney it is already June.
+    expect(fyMonthIndexInTz(new Date('2026-05-31T15:00:00.000Z'), 2025, 7, TZ)).toBe(11)
+  })
+
+  it('REGRESSION: FY start boundary is decided in Sydney days', () => {
+    // 2025-06-30T15:00Z = 1 Jul 01:00 Sydney → first day of FY 2025-26 → Jul (0).
+    expect(fyMonthIndexInTz(new Date('2025-06-30T15:00:00.000Z'), 2025, 7, TZ)).toBe(0)
+    // 2025-06-30T13:00Z = 30 Jun 23:00 Sydney → still last FY → excluded (-1).
+    expect(fyMonthIndexInTz(new Date('2025-06-30T13:00:00.000Z'), 2025, 7, TZ)).toBe(-1)
+  })
+
+  it('REGRESSION: FY end boundary is decided in Sydney days', () => {
+    // 2026-06-30T05:00Z = 30 Jun 15:00 Sydney → last day of FY → Jun (11).
+    expect(fyMonthIndexInTz(new Date('2026-06-30T05:00:00.000Z'), 2025, 7, TZ)).toBe(11)
+    // 2026-06-30T15:00Z = 1 Jul 01:00 Sydney → next FY → excluded (-1).
+    expect(fyMonthIndexInTz(new Date('2026-06-30T15:00:00.000Z'), 2025, 7, TZ)).toBe(-1)
   })
 })

@@ -10,8 +10,8 @@ import {
   fyDateRangeInTz,
   parseFyLabel,
   fyMonthLabels,
-  fyMonthsComplete,
-  fyMonthIndex as fyMonthIndexUtil,
+  fyMonthsCompleteInTz,
+  fyMonthIndexInTz,
 } from './finance-fy'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -153,9 +153,10 @@ function lumpSumMonthIndices(
   fyYear: number,
   fyStartMonth: number,
   monthsComplete: number,
+  tz: string,
 ): number[] {
   if (frequency === 'one-off') {
-    const idx = fyMonthIndexUtil(baseDate, fyYear, fyStartMonth)
+    const idx = fyMonthIndexInTz(baseDate, fyYear, fyStartMonth, tz)
     if (idx >= 0 && idx < monthsComplete) return [idx]
     return []
   }
@@ -171,7 +172,7 @@ function lumpSumMonthIndices(
   for (let i = -maxIterations; i <= maxIterations; i++) {
     const occurrenceDate = new Date(baseDate)
     occurrenceDate.setMonth(occurrenceDate.getMonth() + i * intervalMonths)
-    const idx = fyMonthIndexUtil(occurrenceDate, fyYear, fyStartMonth)
+    const idx = fyMonthIndexInTz(occurrenceDate, fyYear, fyStartMonth, tz)
     if (idx >= 0 && idx < monthsComplete) {
       indices.push(idx)
     }
@@ -181,10 +182,10 @@ function lumpSumMonthIndices(
 }
 
 /**
- * Determine which FY month index a date falls in.
+ * Determine which FY month index a date falls in, evaluated in the family tz.
  */
-function monthIndexInFY(date: Date, fyYear: number, fyStartMonth: number = 7): number {
-  return fyMonthIndexUtil(date, fyYear, fyStartMonth)
+function monthIndexInFY(date: Date, fyYear: number, fyStartMonth: number, tz: string): number {
+  return fyMonthIndexInTz(date, fyYear, fyStartMonth, tz)
 }
 
 // ─── Main Builder ──────────────────────────────────────────────────────────────
@@ -209,7 +210,7 @@ export async function buildYtdReport(
   const { start, end } = fyDateRangeInTz(fyYear, fyStartMonth, tz)
   const now = new Date()
 
-  const monthsComplete = fyMonthsComplete(now, fyYear, fyStartMonth)
+  const monthsComplete = fyMonthsCompleteInTz(now, fyYear, fyStartMonth, tz)
   const monthLabels = fyMonthLabels(fyStartMonth)
   const months = monthLabels.slice(0, monthsComplete)
 
@@ -278,7 +279,7 @@ export async function buildYtdReport(
       const baseDate = (inc.received && inc.receivedDate)
         ? new Date(inc.receivedDate)
         : new Date(inc.nextExpectedDate)
-      const indices = lumpSumMonthIndices(baseDate, inc.frequency, fyYear, fyStartMonth, monthsComplete)
+      const indices = lumpSumMonthIndices(baseDate, inc.frequency, fyYear, fyStartMonth, monthsComplete, tz)
       return indices.length > 0
     }
     return true
@@ -328,7 +329,7 @@ export async function buildYtdReport(
     for (const line of entityLines.filter(l => l.glAccount.type === 'income')) {
       const netAmount = line.side === 'credit' ? line.amount : -line.amount
       if (netAmount === 0) continue
-      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth)
+      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth, tz)
       if (mi < 0 || mi >= monthsComplete) continue
 
       const key = line.glAccount.name
@@ -357,7 +358,7 @@ export async function buildYtdReport(
     for (const line of entityLines.filter(l => l.glAccount.type === 'expense')) {
       const netAmount = line.side === 'debit' ? line.amount : -line.amount
       if (netAmount === 0) continue
-      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth)
+      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth, tz)
       if (mi < 0 || mi >= monthsComplete) continue
 
       const acctName = line.glAccount.name

@@ -274,10 +274,50 @@ export function fyMonthIndex(date: Date, fyYear: number, fyStartMonth: number): 
 }
 
 /**
+ * Timezone-aware variant of fyMonthIndex. Returns the 0-based FY month index for
+ * `date` evaluated in the family's IANA timezone, or -1 if outside the FY.
+ *
+ * fyMonthIndex() reads date.getMonth()/getFullYear() in the SERVER's timezone
+ * (UTC on the NAS). An entry stored at e.g. 2026-05-31T15:00:00Z is 1 Jun in
+ * Sydney (UTC+10), but getMonth() reports May — so on the FY exports it lands in
+ * the wrong month column and, within the UTC offset of the FY boundary, can be
+ * dropped from the report (and its FY total) entirely. This evaluates both the
+ * FY bounds and the calendar month in `tz`, so the Excel/Print/Email columns
+ * match the on-screen tz-aware Monthly P&L (pnl/batch).
+ */
+export function fyMonthIndexInTz(
+  date: Date,
+  fyYear: number,
+  fyStartMonth: number,
+  tz: string,
+): number {
+  if (!tz) return fyMonthIndex(date, fyYear, fyStartMonth)
+  const { start, end } = fyDateRangeInTz(fyYear, fyStartMonth, tz)
+  if (date < start || date > end) return -1
+  // Calendar month of `date` in the family tz (1-based)
+  const parts = getTzFormatter(tz).formatToParts(date)
+  const month1 = parseInt(parts.find(p => p.type === 'month')!.value, 10)
+  const m0 = month1 - 1
+  const s0 = fyStartMonth - 1
+  if (m0 >= s0) return m0 - s0
+  return 12 - s0 + m0
+}
+
+/**
  * Return how many months of the current FY are complete (including the current month).
  */
 export function fyMonthsComplete(now: Date, fyYear: number, fyStartMonth: number): number {
   const idx = fyMonthIndex(now, fyYear, fyStartMonth)
+  if (idx < 0) return 12 // outside FY = full year complete
+  return Math.min(idx + 1, 12)
+}
+
+/**
+ * Timezone-aware variant of fyMonthsComplete — evaluates "today" in the family
+ * tz so the number of report columns matches the tz-aware month bucketing.
+ */
+export function fyMonthsCompleteInTz(now: Date, fyYear: number, fyStartMonth: number, tz: string): number {
+  const idx = fyMonthIndexInTz(now, fyYear, fyStartMonth, tz)
   if (idx < 0) return 12 // outside FY = full year complete
   return Math.min(idx + 1, 12)
 }

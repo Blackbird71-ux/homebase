@@ -4,6 +4,7 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { createGstJournalEntry } from '@/lib/finance-opening-balance'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { DEFAULT_TIMEZONE, localMidnightToUtc } from '@/lib/timezone'
 
 // ── Journal lines helper ────────────────────────────────────────────────────
 // If journalLines are supplied with a transaction POST, create a posted
@@ -94,8 +95,17 @@ export async function GET(request: NextRequest) {
   if (locationId) where.locationId = locationId
   if (type) where.type = type
   if (searchParams.get('entityId')) where.entityId = searchParams.get('entityId')
-  if (startDate) where.date = { ...(where.date || {}), gte: new Date(startDate) }
-  if (endDate) where.date = { ...(where.date || {}), lte: new Date(endDate) }
+  if (startDate || endDate) {
+    // startDate/endDate are local YYYY-MM-DD calendar days. Interpret them in the
+    // family tz: gte = local midnight of startDate; lte = end of the local day endDate.
+    const family = await prisma.family.findUnique({
+      where: { id: user.familyId },
+      select: { timezone: true },
+    })
+    const tz = family?.timezone ?? DEFAULT_TIMEZONE
+    if (startDate) where.date = { ...(where.date || {}), gte: localMidnightToUtc(startDate, tz) }
+    if (endDate) where.date = { ...(where.date || {}), lte: new Date(localMidnightToUtc(endDate, tz).getTime() + 86_400_000 - 1) }
+  }
   if (isCleared !== null) where.isCleared = isCleared === 'true'
   if (isRecurring !== null) where.isRecurring = isRecurring === 'true'
 

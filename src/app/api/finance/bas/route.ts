@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { DEFAULT_TIMEZONE, localMidnightToUtc } from '@/lib/timezone'
 import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
 
 // GET /api/finance/bas?from=YYYY-MM-DD&to=YYYY-MM-DD&entityId=xxx
@@ -70,8 +70,10 @@ export async function GET(request: NextRequest) {
 
   let from: Date, to: Date, periodLabel: string
   if (fromRaw && toRaw) {
-    from = new Date(fromRaw)
-    to   = new Date(toRaw)
+    // Interpret the supplied YYYY-MM-DD as local calendar days in the family tz:
+    // from = local midnight of `fromRaw`; to = end of the local day `toRaw`.
+    from = localMidnightToUtc(fromRaw, tz)
+    to   = new Date(localMidnightToUtc(toRaw, tz).getTime() + 86_400_000 - 1)
     periodLabel = `${fromRaw} to ${toRaw}`
   } else {
     const q = currentBasQuarter(fyStartMonth, tz)

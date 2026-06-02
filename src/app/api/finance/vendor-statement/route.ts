@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { DEFAULT_TIMEZONE, localMidnightToUtc, monthBoundsInTz } from '@/lib/timezone'
 
 // GET /api/finance/vendor-statement?vendorId=xxx&type=ap&from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -32,8 +33,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'vendorId is required' }, { status: 400 })
   }
 
-  const from = fromRaw ? new Date(fromRaw) : (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d })()
-  const to   = toRaw   ? new Date(toRaw)   : new Date()
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    select: { timezone: true },
+  })
+  const tz = family?.timezone ?? DEFAULT_TIMEZONE
+
+  // Interpret from/to as local calendar days in the family tz:
+  // from = local midnight of `fromRaw` (default: first of the current local month);
+  // to   = end of the local day `toRaw`  (default: now).
+  const from = fromRaw ? localMidnightToUtc(fromRaw, tz) : monthBoundsInTz(tz).start
+  const to   = toRaw   ? new Date(localMidnightToUtc(toRaw, tz).getTime() + 86_400_000 - 1) : new Date()
 
   // Verify the vendor belongs to this family
   const vendor = await prisma.financeVendor.findFirst({
@@ -45,9 +55,9 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === 'ap') {
-    return buildApStatement(familyId, vendor, from, to)
+    return buildApStatement(familyId, vendor, from, to, tz)
   } else {
-    return buildArStatement(familyId, vendor, from, to)
+    return buildArStatement(familyId, vendor, from, to, tz)
   }
 }
 
@@ -58,6 +68,7 @@ async function buildApStatement(
   vendor: { id: string; name: string },
   from: Date,
   to: Date,
+  tz: string,
 ) {
   // All bills for this vendor that affect the period (invoiced or paid on/before `to`)
   const bills = await prisma.financeRecurringBill.findMany({
@@ -182,8 +193,8 @@ async function buildApStatement(
     vendor,
     type: 'ap',
     period: {
-      from: from.toISOString().split('T')[0],
-      to:   to.toISOString().split('T')[0],
+      from: from.toLocaleDateString('en-CA', { timeZone: tz }),
+      to:   to.toLocaleDateString('en-CA', { timeZone: tz }),
     },
     openingBalance,
     lines,
@@ -198,6 +209,7 @@ async function buildArStatement(
   vendor: { id: string; name: string },
   from: Date,
   to: Date,
+  tz: string,
 ) {
   const entries = await prisma.financeIncomeEntry.findMany({
     where: {
@@ -314,8 +326,8 @@ async function buildArStatement(
     vendor,
     type: 'ar',
     period: {
-      from: from.toISOString().split('T')[0],
-      to:   to.toISOString().split('T')[0],
+      from: from.toLocaleDateString('en-CA', { timeZone: tz }),
+      to:   to.toLocaleDateString('en-CA', { timeZone: tz }),
     },
     openingBalance,
     lines,
