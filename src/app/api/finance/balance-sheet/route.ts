@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
+import { todayStringInTz } from '@/lib/timezone'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 
 // GET /api/finance/balance-sheet?asAt=2026-06-30&entityId=optional
@@ -220,7 +221,7 @@ export async function GET(request: NextRequest) {
   const netWorth      = Math.round((totalAssets - totalLiabilities) * 100) / 100
 
   return NextResponse.json({
-    asAt: asAtParam ?? new Date().toISOString().split('T')[0],
+    asAt: asAtParam ?? todayStringInTz(tz),
 
     assets: {
       bankAccounts:       assetBankRows,

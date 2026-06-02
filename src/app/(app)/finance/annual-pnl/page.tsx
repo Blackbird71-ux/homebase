@@ -11,7 +11,7 @@ import {
 } from 'date-fns'
 import { PageHero } from '@/components/shared/PageHero'
 import { PnlViewNav } from '@/components/finance/PnlViewNav'
-import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
+import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil, fyColumnYearMonth, fyColumnMonthKey } from '@/lib/finance-fy'
 import { dropSupersededParents } from '@/lib/finance-forecast'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
@@ -24,12 +24,14 @@ import {
   setCols, freeze, styleRow, sc,
 } from '@/lib/excelStyles'
 
-// Given a FY start year (e.g. 2025 for FY2025-26), FY start month (0-based),
-// and a column index 0–11, return the calendar Date for that month
+// Given a FY start year (e.g. 2025 for FY2025-26), FY start month (1-based, e.g.
+// July = 7), and a column index 0–11, return the calendar Date for that month.
+// NOTE: fyStartMonth is 1-based (matches family.financeYearStartMonth, fyMonthLabels,
+// fyDateRange). new Date()'s month arg is 0-based, so convert before adding the column —
+// otherwise every column lands one month late and reads the wrong month's data.
 function fyColDate(fyStartYear: number, col: number, fyStartMonth: number): Date {
-  const calMonth = (fyStartMonth + col) % 12
-  const calYear  = fyStartMonth + col >= 12 ? fyStartYear + 1 : fyStartYear
-  return new Date(calYear, calMonth, 1)
+  const { year, month1 } = fyColumnYearMonth(fyStartYear, fyStartMonth, col)
+  return new Date(year, month1 - 1, 1)
 }
 
 function fmtCurrency(n: number) {
@@ -301,10 +303,8 @@ export default function AnnualPnLPage() {
         if (!res.ok || cancelled) return
         const data: Record<string, PnlMonthData> = await res.json()
         if (!cancelled) {
-          setGlMonths(fyMonths.map(colDate => {
-            const yr  = colDate.getFullYear()
-            const mo  = String(colDate.getMonth() + 1).padStart(2, '0')
-            const key = `${yr}-${mo}`
+          setGlMonths(fyMonths.map((_, col) => {
+            const key = fyColumnMonthKey(fyStartYear, fyStartMonth, col)
             const m   = data[key]
             if (!m) return { incomeGroups: [], expenseGroups: [], totalIncome: 0, totalExpenses: 0, netProfit: 0 }
             return {

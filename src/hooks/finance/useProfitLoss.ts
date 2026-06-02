@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { type PeriodMode, toPeriodAmount, isLumpSum, getPeriodBounds, navigateAnchor } from '@/lib/finance-period'
+import { type PeriodMode, toPeriodAmount, isLumpSum, getPeriodBounds, navigateAnchor, localYmd } from '@/lib/finance-period'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -118,8 +118,8 @@ export function useProfitLoss() {
     setTxLoading(true)
     try {
       const params = new URLSearchParams({
-        startDate: from.toISOString().split('T')[0],
-        endDate:   to.toISOString().split('T')[0],
+        startDate: localYmd(from),
+        endDate:   localYmd(to),
         isCleared: 'true',
         limit:     '200',
       })
@@ -134,8 +134,8 @@ export function useProfitLoss() {
   async function loadJournalGroups(from: Date, to: Date, entityId?: string) {
     try {
       const params = new URLSearchParams({
-        from: from.toISOString().split('T')[0],
-        to:   to.toISOString().split('T')[0],
+        from: localYmd(from),
+        to:   localYmd(to),
       })
       if (entityId) params.set('entityId', entityId)
       const res = await fetch(`/api/finance/trial-balance?${params}`)
@@ -415,8 +415,8 @@ export function useProfitLoss() {
     setLedgerTxs([])
     try {
       const params = new URLSearchParams({
-        startDate: start.toISOString().split('T')[0],
-        endDate:   end.toISOString().split('T')[0],
+        startDate: localYmd(start),
+        endDate:   localYmd(end),
         isCleared: 'true',
         limit:     '200',
       })

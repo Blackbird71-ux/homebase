@@ -225,6 +225,42 @@ export function fyMonthLabels(fyStartMonth: number): string[] {
 }
 
 /**
+ * Calendar (year, 1-based month) for column `col` (0-based, 0 = first month of the
+ * FY) of the financial year starting in `fyStartYear`. `fyStartMonth` is 1-based
+ * (July = 7), matching family.financeYearStartMonth / fyMonthLabels / fyDateRange.
+ *
+ * Single source of truth for mapping an Annual-P&L column to its calendar month.
+ * It exists so the 1-based→0-based conversion lives in ONE tested place: feeding a
+ * 1-based fyStartMonth straight into 0-based month arithmetic makes every column
+ * land one month late (the Annual P&L "off-by-one" bug — Unitrak interest dated
+ * 2026-05 showed under April). See finance-fy.test.ts.
+ */
+export function fyColumnYearMonth(
+  fyStartYear: number,
+  fyStartMonth: number,
+  col: number,
+): { year: number; month1: number } {
+  const startMonth0 = fyStartMonth - 1
+  const month0 = (startMonth0 + col) % 12
+  const year = startMonth0 + col >= 12 ? fyStartYear + 1 : fyStartYear
+  return { year, month1: month0 + 1 }
+}
+
+/**
+ * "YYYY-MM" key for Annual-P&L column `col`, used to match the per-month buckets
+ * returned by /api/finance/pnl/batch. Derived from fyColumnYearMonth so the
+ * column→month mapping cannot drift between the Date array and the batch key.
+ */
+export function fyColumnMonthKey(
+  fyStartYear: number,
+  fyStartMonth: number,
+  col: number,
+): string {
+  const { year, month1 } = fyColumnYearMonth(fyStartYear, fyStartMonth, col)
+  return `${year}-${String(month1).padStart(2, '0')}`
+}
+
+/**
  * Return the 0-based index (0 = first month of FY) for a given Date within a FY.
  * Returns -1 if the date falls outside the FY.
  */

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
+import { todayStringInTz } from '@/lib/timezone'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 
 // GET /api/finance/accounts-receivable?asAt=YYYY-MM-DD
@@ -235,7 +236,7 @@ export async function GET(request: NextRequest) {
   const oldestDays   = items.length > 0 ? Math.max(...items.map(i => i.daysSinceInvoice)) : 0
 
   return NextResponse.json({
-    asAt:          asAtParam ?? new Date().toISOString().split('T')[0],
+    asAt:          asAtParam ?? todayStringInTz(tz),
     hasArAccount:  !!arCategory,
     glArBalance,
     subledgerTotal,
