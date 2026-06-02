@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
-  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate, hideFromReports } = json
+  const { name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, memberId, isTaxPayment, glCode, gstApplicable, gstRate, hideFromReports } = json
 
   if (!name || !type) {
     return NextResponse.json({ error: 'Name and type are required' }, { status: 400 })
@@ -108,6 +108,8 @@ export async function POST(request: NextRequest) {
       isTaxDeduction: isTaxDeduction ?? false,
       taxIncludeInReporting: taxIncludeInReporting ?? false,
       taxDisplayLabel: taxDisplayLabel ?? null,
+      memberId: memberId ?? null,
+      isTaxPayment: isTaxPayment ?? false,
       glCode: glCode ?? null,
       gstApplicable: gstApplicable ?? false,
       gstRate: gstRate != null ? parseFloat(gstRate) : 10,
@@ -124,7 +126,7 @@ export async function PUT(request: NextRequest) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
-  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, glCode, gstApplicable, gstRate, hideFromReports } = json
+  const { id, name, type, parentId, color, icon, isPersonal, isLocationBased, isExternal, isTaxDeduction, taxIncludeInReporting, taxDisplayLabel, memberId, isTaxPayment, glCode, gstApplicable, gstRate, hideFromReports } = json
 
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 })
@@ -191,6 +193,8 @@ export async function PUT(request: NextRequest) {
       ...(isTaxDeduction !== undefined && { isTaxDeduction }),
       ...(taxIncludeInReporting !== undefined && { taxIncludeInReporting }),
       ...(taxDisplayLabel !== undefined && { taxDisplayLabel }),
+      ...(memberId !== undefined && { memberId: memberId ?? null }),
+      ...(isTaxPayment !== undefined && { isTaxPayment }),
       ...(glCode !== undefined && { glCode: glCode ?? null }),
       ...(gstApplicable !== undefined && { gstApplicable }),
       ...(gstRate !== undefined && { gstRate: parseFloat(gstRate) }),

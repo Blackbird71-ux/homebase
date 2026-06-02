@@ -624,6 +624,8 @@ model FinanceCategory {
   isTaxDeduction     Boolean          @default(false)   // Expense/Transfer category that is tax deductible
   taxIncludeInReporting Boolean        @default(false)   // Include this category's amounts in tax reports
   taxDisplayLabel      String?   // Custom override label shown in Tax Report (e.g. "Work from Home")
+  memberId            String?   // FK -> User. Owner of this account for per-person tax attribution. Null = shared/joint.
+  isTaxPayment        Boolean   @default(false)  // Account holds PAYG/tax payments → tax-report classifies its lines as tax_payment
   glCode              String?   // Optional account code e.g. "1001", "2100" (for Chart of Accounts numbering)
   openingBalance      Float?    // Starting balance as at openingBalanceDate (asset/liability/equity only)
   openingBalanceDate  DateTime? // As-at date for the opening balance

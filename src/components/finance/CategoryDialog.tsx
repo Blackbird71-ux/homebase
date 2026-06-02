@@ -25,6 +25,8 @@ export interface Category {
   isTaxDeduction: boolean
   taxIncludeInReporting: boolean
   taxDisplayLabel: string | null
+  memberId: string | null
+  isTaxPayment: boolean
   glCode: string | null
   openingBalance: number | null
   openingBalanceDate: string | null
@@ -41,6 +43,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   editing: Category | null
   availableParents: Category[]
+  members: { id: string; name: string }[]
   onSaved: () => void
 }
 
@@ -48,10 +51,11 @@ const EMPTY_FORM = {
   name: '', type: 'expense', parentId: '', color: '#6366F1', icon: '',
   isPersonal: false, isLocationBased: false, isExternal: false,
   isTaxDeduction: false, taxIncludeInReporting: false, taxDisplayLabel: '',
+  memberId: '', isTaxPayment: false,
   glCode: '', gstApplicable: false, gstRate: 10, hideFromReports: false,
 }
 
-export function CategoryDialog({ open, onOpenChange, editing, availableParents, onSaved }: Props) {
+export function CategoryDialog({ open, onOpenChange, editing, availableParents, members, onSaved }: Props) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -64,7 +68,9 @@ export function CategoryDialog({ open, onOpenChange, editing, availableParents, 
         isPersonal: editing.isPersonal, isLocationBased: editing.isLocationBased,
         isExternal: editing.isExternal, isTaxDeduction: editing.isTaxDeduction,
         taxIncludeInReporting: editing.taxIncludeInReporting,
-        taxDisplayLabel: editing.taxDisplayLabel ?? '', glCode: editing.glCode ?? '',
+        taxDisplayLabel: editing.taxDisplayLabel ?? '',
+        memberId: editing.memberId ?? '', isTaxPayment: editing.isTaxPayment ?? false,
+        glCode: editing.glCode ?? '',
         gstApplicable: editing.gstApplicable ?? false, gstRate: editing.gstRate ?? 10,
         hideFromReports: editing.hideFromReports ?? false,
       } : { ...EMPTY_FORM })
@@ -77,8 +83,8 @@ export function CategoryDialog({ open, onOpenChange, editing, availableParents, 
     setSaving(true)
     try {
       const payload = editing
-        ? { id: editing.id, ...form, parentId: form.parentId || null, glCode: form.glCode || null }
-        : { ...form, parentId: form.parentId || null, glCode: form.glCode || null }
+        ? { id: editing.id, ...form, parentId: form.parentId || null, glCode: form.glCode || null, memberId: form.memberId || null }
+        : { ...form, parentId: form.parentId || null, glCode: form.glCode || null, memberId: form.memberId || null }
       const res = await fetch('/api/finance/categories', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,6 +172,15 @@ export function CategoryDialog({ open, onOpenChange, editing, availableParents, 
               <label className="text-xs text-muted-foreground mb-1.5 block">Color</label>
               <ColorPicker value={form.color} onChange={newColor => setForm(p => ({ ...p, color: newColor }))} disabled={saving} />
             </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Owner (tax attribution)</label>
+              <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" disabled={saving}>
+                <option value="">None (shared / joint)</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground/60 mt-0.5">Attributes this account&apos;s tax-report lines to one person.</p>
+            </div>
 
             <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
               {(form.type === 'expense' || form.type === 'transfer') && (
@@ -190,6 +205,11 @@ export function CategoryDialog({ open, onOpenChange, editing, availableParents, 
                     disabled={saving} />
                 </div>
               )}
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.isTaxPayment}
+                  onChange={e => setForm(p => ({ ...p, isTaxPayment: e.target.checked }))} disabled={saving} />
+                <span className="text-sky-600 dark:text-sky-400 font-medium">Tax payment account (PAYG)</span>
+              </label>
               <span className="text-muted-foreground/40 mx-1 select-none">|</span>
               <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                 <input type="checkbox" checked={form.isPersonal}

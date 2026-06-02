@@ -4,6 +4,7 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { currentFyYear, fyDateRangeInTz, fyLabel } from '@/lib/finance-fy'
 import { localMidnightToUtc, dateStringInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { deriveGlActualTaxFields } from '@/lib/finance-tax-report'
 
 // ── NOTE: Tax bracket calculations have been intentionally moved to the
 //    page component (tax-report/page.tsx) so they can be updated each
@@ -116,6 +117,7 @@ export async function GET(request: NextRequest) {
         select: {
           id: true, name: true, type: true,
           taxDisplayLabel: true, isTaxDeduction: true, taxIncludeInReporting: true,
+          memberId: true, isTaxPayment: true,
         },
       },
       journalEntry: {
@@ -156,6 +158,8 @@ export async function GET(request: NextRequest) {
     taxDisplayLabel: string | null
     isTaxDeduction: boolean
     taxIncludeInReporting: boolean
+    memberId: string | null          // account owner — drives per-person attribution
+    taxClassification: string | null // 'tax_payment' for PAYG accounts, else null
     entityId: string | null
     entityName: string | null
   }
@@ -169,6 +173,9 @@ export async function GET(request: NextRequest) {
     const netAmount = isNormalDebitSide
       ? (line.side === 'debit'  ? line.amount : -line.amount)
       : (line.side === 'credit' ? line.amount : -line.amount)
+
+    // Per-person attribution: derive owner + PAYG classification from the GL account.
+    const { memberId, taxClassification } = deriveGlActualTaxFields(acct)
 
     return {
       journalEntryId:        entry.id,
@@ -184,6 +191,8 @@ export async function GET(request: NextRequest) {
       taxDisplayLabel:       acct.taxDisplayLabel ?? null,
       isTaxDeduction:        acct.isTaxDeduction,
       taxIncludeInReporting: acct.taxIncludeInReporting,
+      memberId,
+      taxClassification,
       entityId:              entry.entityId ?? null,
       entityName:            entry.entity?.name ?? null,
     }

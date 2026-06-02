@@ -24,6 +24,7 @@ export interface GlActualItem {
   entityId: string | null
   entityName: string | null
   memberId?: string | null
+  taxClassification?: string | null
 }
 
 export interface IncomeRow {

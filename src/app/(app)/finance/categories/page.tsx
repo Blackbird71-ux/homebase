@@ -19,6 +19,7 @@ import { CategoryRow, type FilterType, FILTER_OPTIONS, NOT_IN_USE_NAME } from '@
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([])
+  const [members, setMembers]       = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading]       = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing]       = useState<Category | null>(null)
@@ -39,6 +40,13 @@ export default function CategoriesPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    fetch('/api/members')
+      .then(res => res.ok ? res.json() : [])
+      .then(setMembers)
+      .catch(() => setMembers([]))
+  }, [])
 
   useEffect(() => {
     const notInUse = categories.find(c => !c.parentId && c.name.toLowerCase() === NOT_IN_USE_NAME.toLowerCase())
@@ -218,6 +226,7 @@ export default function CategoriesPage() {
         onOpenChange={handleDialogClose}
         editing={editing}
         availableParents={availableParents}
+        members={members}
         onSaved={load}
       />
 

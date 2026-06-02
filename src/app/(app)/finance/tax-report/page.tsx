@@ -99,7 +99,7 @@ function buildPersonTax(
   const glOtherDed  = glDeductLines.filter(l => !matchGlLabel(l, /super|charity|gift|donation/i)).reduce((s, l) => s + l.amount, 0)
 
   // Tax payments GL: tax_payment classified lines
-  const glTaxLines  = memberGlLines.filter(l => (l as any).taxClassification === 'tax_payment')
+  const glTaxLines  = memberGlLines.filter(l => l.taxClassification === 'tax_payment')
   const glPaygWith  = glTaxLines.filter(l => matchGlLabel(l, /payg|withh/i)).reduce((s, l) => s + l.amount, 0)
   const glPaygInst  = glTaxLines.filter(l => !matchGlLabel(l, /payg|withh/i)).reduce((s, l) => s + l.amount, 0)
 
