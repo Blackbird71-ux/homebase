@@ -4,6 +4,11 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { DEFAULT_TIMEZONE, localMidnightToUtc } from '@/lib/timezone'
 import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
+import {
+  computeBasFigures,
+  gstCollectedContribution,
+  gstItcContribution,
+} from '@/lib/finance-bas'
 
 // GET /api/finance/bas?from=YYYY-MM-DD&to=YYYY-MM-DD&entityId=xxx
 //
@@ -12,10 +17,16 @@ import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
 // All figures are sourced from posted FinanceJournalLine entries only.
 // The same source as P&L, Trial Balance, and Balance Sheet — numbers agree.
 //
+// Every figure nets BOTH debit and credit sides of the relevant accounts, so
+// reversals/contra lines reduce the figure exactly as they do on the P&L. The
+// arithmetic lives in src/lib/finance-bas.ts (computeBasFigures); detail lines
+// below carry a SIGNED amount (negative on the contra side) so the on-screen
+// line totals reconcile to these summary figures.
+//
 // BAS fields:
-//   G1  = Total sales (inc GST) = net income GL credits + 1A
-//   1A  = GST collected on sales  = CR lines on "GST Collected" GL account
-//   1B  = GST input tax credits   = DR lines on "GST Input Tax Credits" GL account
+//   G1  = Total *taxable* sales (inc GST) = net gstApplicable income (CR − DR) + 1A
+//   1A  = GST collected on sales  = "GST Collected" GL: credits − debits
+//   1B  = GST input tax credits   = "GST Input Tax Credits" GL: debits − credits
 //   Net = 1A − 1B (payable to / refundable from ATO)
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -125,10 +136,20 @@ export async function GET(request: NextRequest) {
   })
 
   // ── 3. Income GL lines in period (for G1 calculation) ────────────────────
+  // Fetch BOTH sides: a reversal/contra debits the income account and must net
+  // out of net income (and therefore G1), matching the P&L. Filtering to credits
+  // only would overstate G1 by every reversed income amount.
+  //
+  // G1 = total *taxable* sales (inc GST), so only income categories flagged
+  // gstApplicable feed it. Wages, bank interest, super etc. (gstApplicable=false)
+  // are out-of-scope income and must NOT inflate G1. The income account holds the
+  // ex-GST amount (GST is split to GST Collected), so g1 = netIncome + 1A below
+  // yields GST-inclusive taxable supplies. NOTE: this binary flag has no separate
+  // "GST-free supply" state, so genuinely GST-free sales would be excluded too —
+  // acceptable for household finances, revisit if true GST-free sales appear.
   const incomeLines = await prisma.financeJournalLine.findMany({
     where: {
-      side: 'credit',
-      glAccount: { familyId, type: 'income' },
+      glAccount: { familyId, type: 'income', gstApplicable: true },
       journalEntry: {
         familyId,
         isPosted: true,
@@ -136,7 +157,7 @@ export async function GET(request: NextRequest) {
         ...(entityId ? { entityId } : {}),
       },
     },
-    select: { amount: true },
+    select: { amount: true, side: true },
   })
 
   // ── 4. Compute BAS figures ─────────────────────────────────────────────────
@@ -154,12 +175,22 @@ export async function GET(request: NextRequest) {
     entityName:     string | null
   }
 
-  let oneA = 0
-  let oneB = 0
   const salesLines:    GstLine[] = []
   const purchaseLines: GstLine[] = []
 
+  // Detail lines: each row carries the SIGNED contribution to its BAS figure, so
+  // a reversal/contra line shows as a negative amount and the page's positive sum
+  // of line.amount reconciles to the summary figure below.
   for (const line of gstLines) {
+    let signed: number
+    if (line.glAccountId === gstCollectedAcct.id) {
+      signed = gstCollectedContribution(line.side, line.amount)
+    } else if (line.glAccountId === gstItcAcct.id) {
+      signed = gstItcContribution(line.side, line.amount)
+    } else {
+      continue
+    }
+
     const item: GstLine = {
       journalEntryId: line.journalEntry.id,
       reference:      line.journalEntry.reference ?? null,
@@ -168,28 +199,23 @@ export async function GET(request: NextRequest) {
       entryType:      line.journalEntry.type,
       glAccountId:    line.glAccountId,
       glAccountName:  line.glAccount.name,
-      amount:         Math.round(line.amount * 100) / 100,
+      amount:         Math.round(signed * 100) / 100,
       side:           line.side,
       entityId:       line.journalEntry.entity?.id   ?? null,
       entityName:     line.journalEntry.entity?.name ?? null,
     }
 
-    if (line.glAccountId === gstCollectedAcct.id && line.side === 'credit') {
-      oneA += line.amount
-      salesLines.push(item)
-    } else if (line.glAccountId === gstItcAcct.id && line.side === 'debit') {
-      oneB += line.amount
-      purchaseLines.push(item)
-    }
+    if (line.glAccountId === gstCollectedAcct.id) salesLines.push(item)
+    else                                          purchaseLines.push(item)
   }
 
-  const r = (n: number) => Math.round(n * 100) / 100
-  oneA = r(oneA)
-  oneB = r(oneB)
-
-  const netIncome = incomeLines.reduce((s, l) => s + l.amount, 0)
-  const g1        = r(netIncome + oneA)   // total sales inc GST
-  const netGst    = r(oneA - oneB)        // positive = payable to ATO; negative = refund
+  // Summary figures — netted over both sides (reversals reduce each figure).
+  const { g1, oneA, oneB, netGst } = computeBasFigures(
+    gstLines.map(l => ({ glAccountId: l.glAccountId, side: l.side, amount: l.amount })),
+    incomeLines,
+    gstCollectedAcct.id,
+    gstItcAcct.id,
+  )
 
   return NextResponse.json({
     hasGstAccounts: true,
