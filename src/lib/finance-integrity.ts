@@ -81,6 +81,8 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'AP_CONTROL_VS_SUBLEDGER',      label: 'AP control account reconciles to the bills subledger' },
   { code: 'AR_CONTROL_VS_SUBLEDGER',      label: 'AR control account reconciles to the income subledger' },
   { code: 'PAYSLIP_GROSS_MISMATCH',       label: 'Payslip gross = net + PAYG + super' },
+  { code: 'DATE_REQUIRED_PRESENT',        label: 'Required dates present and within a plausible range' },
+  { code: 'FUTURE_DATED_POSTING',         label: 'Posted journals dated after today (review)' },
 ]
 
 export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditResult> {
@@ -529,6 +531,77 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
         recordId: p.id, label: p.incomeEntry?.name ?? p.id,
         message: `Gross ${r2(p.grossPay)} ≠ net ${r2(p.netPay)} + PAYG ${r2(p.paygWithheld)} + super ${r2(p.sgcAmount)} (= ${expected}).`,
       })
+    }
+  }
+
+  // ── G — Date presence & plausibility ────────────────────────────────────────
+  // Prisma guarantees stored datetimes parse and that non-nullable columns are set,
+  // so this catches the two failure modes it cannot: (1) a record whose *state* implies
+  // a date (invoice-received / paid / received) while the nullable date column is NULL,
+  // leaving the tax point or settlement date undefined; and (2) a stored date that
+  // parses yet is implausible — before 2000 or more than ~10 years out — the signature
+  // of a typo or a 1970-epoch fallback. Both are warnings. Future-dated *posted*
+  // journals are surfaced separately as info, since this app legitimately pre-records
+  // future-dated bills and those must still affect the ledger.
+  const MIN_DATE = Date.UTC(2000, 0, 1)
+  const MAX_DATE = asAt.getTime() + 10 * 365 * 86_400_000 // ~10 years past today
+  const plausible = (d: Date) => d.getTime() >= MIN_DATE && d.getTime() <= MAX_DATE
+
+  const billDates = await prisma.financeRecurringBill.findMany({
+    where: { familyId },
+    select: { id: true, name: true, isVoided: true, invoiceReceived: true, invoiceReceivedDate: true, paid: true, paidDate: true },
+  })
+  for (const b of billDates) {
+    if (b.isVoided) continue
+    if (b.invoiceReceived && !b.invoiceReceivedDate)
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'bill', recordId: b.id, label: b.name,
+        message: `Bill is marked invoice-received but has no invoice date — its tax point is undefined.` })
+    if (b.paid && !b.paidDate)
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'bill', recordId: b.id, label: b.name,
+        message: `Bill is marked paid but has no paid date.` })
+    if (b.invoiceReceivedDate && !plausible(b.invoiceReceivedDate))
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'bill', recordId: b.id, label: b.name,
+        message: `Bill invoice date ${localDay(b.invoiceReceivedDate)} is outside the plausible range (before 2000 or >10 years out) — likely a typo.` })
+    if (b.paidDate && !plausible(b.paidDate))
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'bill', recordId: b.id, label: b.name,
+        message: `Bill paid date ${localDay(b.paidDate)} is outside the plausible range (before 2000 or >10 years out) — likely a typo.` })
+  }
+
+  const incomeDates = await prisma.financeIncomeEntry.findMany({
+    where: { familyId },
+    select: { id: true, name: true, isVoided: true, invoiceReceived: true, invoiceReceivedDate: true, received: true, receivedDate: true },
+  })
+  for (const e of incomeDates) {
+    if (e.isVoided) continue
+    if (e.invoiceReceived && !e.invoiceReceivedDate)
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'income', recordId: e.id, label: e.name,
+        message: `Income is marked invoice-received but has no invoice date — its tax point is undefined.` })
+    if (e.received && !e.receivedDate)
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'income', recordId: e.id, label: e.name,
+        message: `Income is marked received but has no received date.` })
+    if (e.invoiceReceivedDate && !plausible(e.invoiceReceivedDate))
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'income', recordId: e.id, label: e.name,
+        message: `Income invoice date ${localDay(e.invoiceReceivedDate)} is outside the plausible range (before 2000 or >10 years out) — likely a typo.` })
+    if (e.receivedDate && !plausible(e.receivedDate))
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'income', recordId: e.id, label: e.name,
+        message: `Income received date ${localDay(e.receivedDate)} is outside the plausible range (before 2000 or >10 years out) — likely a typo.` })
+  }
+
+  // Posted, non-reversed journals: implausible date is a warning; merely future-dated
+  // (after end-of-today, family-local) is info — it already affects reports, but legitimate
+  // for pre-recorded future bills, so it is surfaced for review rather than flagged.
+  const postedJournalDates = await prisma.financeJournalEntry.findMany({
+    where: { familyId, isPosted: true, isReversed: false },
+    select: { id: true, reference: true, description: true, date: true },
+  })
+  for (const j of postedJournalDates) {
+    const label = j.reference ?? j.description ?? j.id
+    if (!plausible(j.date)) {
+      add({ severity: 'warning', code: 'DATE_REQUIRED_PRESENT', recordType: 'journal', recordId: j.id, label,
+        message: `Posted journal date ${localDay(j.date)} is outside the plausible range (before 2000 or >10 years out) — likely a typo.` })
+    } else if (j.date.getTime() > asAt.getTime()) {
+      add({ severity: 'info', code: 'FUTURE_DATED_POSTING', recordType: 'journal', recordId: j.id, label,
+        message: `Posted journal is dated ${localDay(j.date)}, after today (${localDay(asAt)}) — it already affects the ledger. Expected for a pre-recorded future bill; confirm it is not a typo.` })
     }
   }
 
