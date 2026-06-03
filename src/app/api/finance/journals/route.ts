@@ -526,6 +526,86 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(amendmentEntry, { status: 201 })
   }
 
+  // ── Edit a posted entry in place ─────────────────────────────────────────
+  // Direct, Xero-style edit of an already-posted journal: the user (a qualified
+  // accountant) can correct the date, description, entity, and the DR/CR lines
+  // of any posted entry without spawning a reversal/repost pair.
+  //
+  // Safety rails that are NOT negotiable:
+  //   • Debits must still equal credits (a posted entry must always balance).
+  //   • Every GL account must belong to this family.
+  //   • At least 2 lines.
+  // Preserved (never touched here): type, isPosted, isReversed, reversalOfId,
+  // amendmentOfId, reference. Editing these would corrupt the audit graph
+  // (e.g. a reversal that no longer points at its parent). Use the dedicated
+  // Reverse / Amend / Void actions for structural changes.
+  //
+  // Note: editing an entry that participates in a reversal/amendment pair, or an
+  // auto-generated entry, is allowed but the UI warns the user first — those
+  // changes can unbalance a reversal pair or be overwritten by the originating
+  // module. The period-lock warning is returned (non-blocking) like POST.
+
+  if (action === 'edit-posted') {
+    if (!existing.isPosted) {
+      return NextResponse.json(
+        { error: 'This action is for posted entries. Use the draft editor for drafts.' },
+        { status: 400 },
+      )
+    }
+
+    const { date, description, entityId, lines } = json
+
+    if (!date || !description?.trim()) {
+      return NextResponse.json({ error: 'date and description are required' }, { status: 400 })
+    }
+    if (!Array.isArray(lines) || lines.length < 2) {
+      return NextResponse.json({ error: 'At least 2 journal lines are required' }, { status: 400 })
+    }
+
+    const debit  = lines.filter((l: { side: string }) => l.side === 'debit') .reduce((s: number, l: { amount: number }) => s + (l.amount ?? 0), 0)
+    const credit = lines.filter((l: { side: string }) => l.side === 'credit').reduce((s: number, l: { amount: number }) => s + (l.amount ?? 0), 0)
+    if (Math.abs(debit - credit) > 0.005) {
+      return NextResponse.json({ error: 'Debits must equal credits' }, { status: 400 })
+    }
+
+    const glIds = [...new Set(lines.map((l: { glAccountId: string }) => l.glAccountId))]
+    const validAccounts = await prisma.financeCategory.findMany({
+      where: { id: { in: glIds as string[] }, familyId: user.familyId },
+      select: { id: true },
+    })
+    if (validAccounts.length !== glIds.length) {
+      return NextResponse.json({ error: 'One or more GL accounts not found' }, { status: 400 })
+    }
+
+    // Replace lines and update scalar fields atomically. Audit-graph fields
+    // (type, isPosted, isReversed, reversalOfId, amendmentOfId, reference) are
+    // deliberately omitted from the update so they are preserved as-is.
+    const [, entry] = await prisma.$transaction([
+      prisma.financeJournalLine.deleteMany({ where: { journalEntryId: id } }),
+      prisma.financeJournalEntry.update({
+        where: { id },
+        data: {
+          date:        new Date(date),
+          description: description.trim(),
+          entityId:    entityId || null,
+          lines: {
+            create: lines.map((l: { glAccountId: string; side: string; amount: number; description?: string; memberId?: string }) => ({
+              glAccountId: l.glAccountId,
+              side:        l.side,
+              amount:      l.amount,
+              description: l.description || null,
+              memberId:    l.memberId    || null,
+            })),
+          },
+        },
+        include: ENTRY_INCLUDE,
+      }),
+    ])
+
+    const periodWarning = await getPeriodLockWarning(user.familyId, new Date(date))
+    return NextResponse.json(periodWarning ? { ...entry, periodWarning } : entry)
+  }
+
   return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
 }
 

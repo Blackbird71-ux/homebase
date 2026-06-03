@@ -64,14 +64,8 @@ export default function JournalsPage() {
   function openNew() { setEditing(null); setShowForm(true) }
 
   function openEdit(entry: JournalEntry) {
-    if (entry.isPosted) {
-      if (['manual', 'adjustment'].includes(entry.type) && !entry.isReversed) {
-        openAmend(entry)
-      } else {
-        toast.info('This entry cannot be edited directly. Use Void or Reverse to correct it.')
-      }
-      return
-    }
+    // Drafts and posted entries both open the in-place editor; the form switches
+    // to posted-edit mode when editing.isPosted (single Save, locked type, warnings).
     setEditing(entry)
     setShowForm(true)
   }

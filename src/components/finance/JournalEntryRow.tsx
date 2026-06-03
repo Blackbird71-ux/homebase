@@ -116,6 +116,15 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
               </>
             )}
 
+            {!isDraft && (
+              <button onClick={() => onEdit(entry)}
+                title="Edit this posted entry in place — change date, description, entity, and lines"
+                className="inline-flex items-center gap-1 rounded-md border border-border text-muted-foreground text-xs px-2 py-1 hover:border-primary hover:text-foreground transition-colors">
+                <Pencil className="h-3 w-3" />
+                <span className="hidden sm:inline">Edit</span>
+              </button>
+            )}
+
             {!isDraft && !isReversed && !isReversal && (
               <>
                 {entry.type === 'auto_transaction' ? (
