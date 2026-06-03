@@ -546,6 +546,9 @@ export async function DELETE(request: NextRequest) {
       })
     : null
   const needsAccrualReversal = accrualJe?.isPosted === true && !accrualJe.isReversed
+  // An unposted accrual draft never hit the GL — it can't be reversed, so it must
+  // be hard-deleted with the bill, else it orphans.
+  const draftAccrualJeId = accrualJe && !accrualJe.isPosted ? accrualJe.id : null
 
   // 2. Payment journals (DR AP / CR Bank) — one per installment
   const allPayments = await prisma.financeBillPayment.findMany({
@@ -637,6 +640,11 @@ export async function DELETE(request: NextRequest) {
 
     // Delete the bill — FinanceBillPayment and BillAttachment cascade automatically
     await tx.financeRecurringBill.delete({ where: { id } })
+    // Bill is gone — now safe to remove its stranded unposted accrual draft journal
+    // (lines cascade via FinanceJournalLine.journalEntryId onDelete: Cascade).
+    if (draftAccrualJeId) {
+      await tx.financeJournalEntry.delete({ where: { id: draftAccrualJeId } })
+    }
   })
   return NextResponse.json({ success: true })
 }

@@ -359,6 +359,9 @@ export async function DELETE(request: NextRequest) {
     lines: { glAccountId: string; side: string; amount: number; description: string | null }[]
   }
   const jeReversals: JeReversal[] = []
+  // Unposted draft journals never hit the GL — they can't be reversed (nothing to
+  // reverse), so they must be hard-deleted with the entry, else they orphan.
+  const draftJeIdsToDelete: string[] = []
   for (const jeId of jeIds) {
     const je = await prisma.financeJournalEntry.findFirst({
       where: { id: jeId, familyId: user.familyId },
@@ -373,6 +376,8 @@ export async function DELETE(request: NextRequest) {
         description: je.description,
         lines: je.lines,
       })
+    } else if (je && !je.isPosted) {
+      draftJeIdsToDelete.push(je.id)
     }
   }
 
@@ -424,6 +429,11 @@ export async function DELETE(request: NextRequest) {
       await tx.financeTransaction.deleteMany({ where: { id: { in: txIdsToDelete }, familyId: user.familyId } })
     }
     await tx.financeIncomeEntry.delete({ where: { id } })
+    // Entry is gone — now safe to remove its stranded unposted draft journals
+    // (lines cascade via FinanceJournalLine.journalEntryId onDelete: Cascade).
+    if (draftJeIdsToDelete.length > 0) {
+      await tx.financeJournalEntry.deleteMany({ where: { id: { in: draftJeIdsToDelete }, familyId: user.familyId } })
+    }
   })
   return NextResponse.json({ success: true })
 }
