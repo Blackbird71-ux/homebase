@@ -188,6 +188,117 @@ function monthIndexInFY(date: Date, fyYear: number, fyStartMonth: number, tz: st
   return fyMonthIndexInTz(date, fyYear, fyStartMonth, tz)
 }
 
+// Subset of the Prisma journal-line include that the section aggregator reads.
+interface ReportJournalLine {
+  side: string
+  amount: number
+  glAccount: { name: string; type: string }
+  journalEntry: { date: Date; description: string | null }
+}
+
+/**
+ * Build one entity's report section (income rows + expense categories) from its
+ * posted journal lines, using normal-balance rules (income net = credit − debit,
+ * expense net = debit − credit).
+ *
+ * Rows/categories whose net is exactly zero are dropped; net-NEGATIVE rows are
+ * KEPT. This matches the on-screen P&L (pnl/route.ts filters `totalPeriod !== 0`).
+ * Dropping net-negative rows silently overstated income and NETT — e.g. a posted
+ * reversal that lands on an income account (its net is negative) would vanish from
+ * the export while the on-screen P&L still counted it. See FINANCE_AUDIT.md §4.
+ */
+export function aggregateEntitySection(
+  entityLines: ReportJournalLine[],
+  sectionName: string,
+  entityId: string | null,
+  fyYear: number,
+  fyStartMonth: number,
+  tz: string,
+  monthsComplete: number,
+): ReportSection {
+  // ── Income rows ────────────────────────────────────────────────────
+  // Group by GL account name; normal balance for income = credit.
+  const incomeByAccount = new Map<string, { monthly: number[]; total: number }>()
+
+  for (const line of entityLines.filter(l => l.glAccount.type === 'income')) {
+    const netAmount = line.side === 'credit' ? line.amount : -line.amount
+    if (netAmount === 0) continue
+    const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth, tz)
+    if (mi < 0 || mi >= monthsComplete) continue
+
+    const key = line.glAccount.name
+    if (!incomeByAccount.has(key)) {
+      incomeByAccount.set(key, { monthly: new Array(monthsComplete).fill(0), total: 0 })
+    }
+    const g = incomeByAccount.get(key)!
+    g.monthly[mi] = Math.round((g.monthly[mi] + netAmount) * 100) / 100
+    g.total       = Math.round((g.total + netAmount) * 100) / 100
+  }
+
+  const incomeRows: ReportRow[] = Array.from(incomeByAccount.entries())
+    .filter(([, d]) => d.total !== 0)
+    .map(([label, d]) => ({ label, monthly: d.monthly, total: d.total }))
+    .sort((a, b) => b.total - a.total)
+
+  const incomeSubtotal = Math.round(
+    incomeRows.reduce((s, r) => s + r.total, 0) * 100
+  ) / 100
+
+  // ── Expense categories ─────────────────────────────────────────────
+  // Group by GL account name (= category); rows grouped by journal description.
+  // Normal balance for expense = debit.
+  const expenseByAccount = new Map<string, Map<string, { monthly: number[]; total: number }>>()
+
+  for (const line of entityLines.filter(l => l.glAccount.type === 'expense')) {
+    const netAmount = line.side === 'debit' ? line.amount : -line.amount
+    if (netAmount === 0) continue
+    const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth, tz)
+    if (mi < 0 || mi >= monthsComplete) continue
+
+    const acctName = line.glAccount.name
+    const rowLabel = line.journalEntry.description || 'Transaction'
+
+    if (!expenseByAccount.has(acctName)) expenseByAccount.set(acctName, new Map())
+    const acctRows = expenseByAccount.get(acctName)!
+
+    if (!acctRows.has(rowLabel)) {
+      acctRows.set(rowLabel, { monthly: new Array(monthsComplete).fill(0), total: 0 })
+    }
+    const r = acctRows.get(rowLabel)!
+    r.monthly[mi] = Math.round((r.monthly[mi] + netAmount) * 100) / 100
+    r.total       = Math.round((r.total + netAmount) * 100) / 100
+  }
+
+  const expenseCategories: ReportCategory[] = []
+  let expenseSubtotal = 0
+
+  for (const [catName, rowsMap] of expenseByAccount) {
+    const rows: ReportRow[] = Array.from(rowsMap.entries())
+      .filter(([, d]) => d.total !== 0)
+      .map(([label, d]) => ({ label, monthly: d.monthly, total: d.total }))
+      .sort((a, b) => b.total - a.total)
+
+    const catSubtotal = Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100
+    if (catSubtotal === 0) continue
+
+    expenseCategories.push({ name: catName, rows, subtotal: catSubtotal })
+    expenseSubtotal += catSubtotal
+  }
+
+  expenseCategories.sort((a, b) => b.subtotal - a.subtotal)
+  expenseSubtotal = Math.round(expenseSubtotal * 100) / 100
+
+  const sectionNett = Math.round((incomeSubtotal - expenseSubtotal) * 100) / 100
+
+  return {
+    name: sectionName,
+    entityId,
+    income:   { rows: incomeRows, subtotal: incomeSubtotal },
+    expenses: { categories: expenseCategories, subtotal: expenseSubtotal },
+    nett:     sectionNett,
+  }
+}
+
 // ─── Main Builder ──────────────────────────────────────────────────────────────
 
 /**
@@ -322,90 +433,13 @@ export async function buildYtdReport(
     const entityInfo = entityId ? entityMap.get(entityId) : null
     const sectionName = entityInfo?.name ?? 'Personal'
 
-    // ── Income rows ────────────────────────────────────────────────────
-    // Group by GL account name; normal balance for income = credit.
-    const incomeByAccount = new Map<string, { monthly: number[]; total: number }>()
+    const section = aggregateEntitySection(
+      entityLines, sectionName, entityId, fyYear, fyStartMonth, tz, monthsComplete
+    )
 
-    for (const line of entityLines.filter(l => l.glAccount.type === 'income')) {
-      const netAmount = line.side === 'credit' ? line.amount : -line.amount
-      if (netAmount === 0) continue
-      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth, tz)
-      if (mi < 0 || mi >= monthsComplete) continue
-
-      const key = line.glAccount.name
-      if (!incomeByAccount.has(key)) {
-        incomeByAccount.set(key, { monthly: new Array(monthsComplete).fill(0), total: 0 })
-      }
-      const g = incomeByAccount.get(key)!
-      g.monthly[mi] = Math.round((g.monthly[mi] + netAmount) * 100) / 100
-      g.total       = Math.round((g.total + netAmount) * 100) / 100
-    }
-
-    const incomeRows: ReportRow[] = Array.from(incomeByAccount.entries())
-      .filter(([, d]) => d.total > 0)
-      .map(([label, d]) => ({ label, monthly: d.monthly, total: d.total }))
-      .sort((a, b) => b.total - a.total)
-
-    const incomeSubtotal = Math.round(
-      incomeRows.reduce((s, r) => s + r.total, 0) * 100
-    ) / 100
-
-    // ── Expense categories ─────────────────────────────────────────────
-    // Group by GL account name (= category); rows grouped by journal description.
-    // Normal balance for expense = debit.
-    const expenseByAccount = new Map<string, Map<string, { monthly: number[]; total: number }>>()
-
-    for (const line of entityLines.filter(l => l.glAccount.type === 'expense')) {
-      const netAmount = line.side === 'debit' ? line.amount : -line.amount
-      if (netAmount === 0) continue
-      const mi = monthIndexInFY(line.journalEntry.date, fyYear, fyStartMonth, tz)
-      if (mi < 0 || mi >= monthsComplete) continue
-
-      const acctName = line.glAccount.name
-      const rowLabel = line.journalEntry.description || 'Transaction'
-
-      if (!expenseByAccount.has(acctName)) expenseByAccount.set(acctName, new Map())
-      const acctRows = expenseByAccount.get(acctName)!
-
-      if (!acctRows.has(rowLabel)) {
-        acctRows.set(rowLabel, { monthly: new Array(monthsComplete).fill(0), total: 0 })
-      }
-      const r = acctRows.get(rowLabel)!
-      r.monthly[mi] = Math.round((r.monthly[mi] + netAmount) * 100) / 100
-      r.total       = Math.round((r.total + netAmount) * 100) / 100
-    }
-
-    const expenseCategories: ReportCategory[] = []
-    let expenseSubtotal = 0
-
-    for (const [catName, rowsMap] of expenseByAccount) {
-      const rows: ReportRow[] = Array.from(rowsMap.entries())
-        .filter(([, d]) => d.total > 0)
-        .map(([label, d]) => ({ label, monthly: d.monthly, total: d.total }))
-        .sort((a, b) => b.total - a.total)
-
-      const catSubtotal = Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100
-      if (catSubtotal <= 0) continue
-
-      expenseCategories.push({ name: catName, rows, subtotal: catSubtotal })
-      expenseSubtotal += catSubtotal
-    }
-
-    expenseCategories.sort((a, b) => b.subtotal - a.subtotal)
-    expenseSubtotal = Math.round(expenseSubtotal * 100) / 100
-
-    const sectionNett = Math.round((incomeSubtotal - expenseSubtotal) * 100) / 100
-
-    sections.push({
-      name: sectionName,
-      entityId,
-      income:   { rows: incomeRows, subtotal: incomeSubtotal },
-      expenses: { categories: expenseCategories, subtotal: expenseSubtotal },
-      nett:     sectionNett,
-    })
-
-    totalIncome    += incomeSubtotal
-    totalExpenses  += expenseSubtotal
+    sections.push(section)
+    totalIncome   += section.income.subtotal
+    totalExpenses += section.expenses.subtotal
   }
 
   // ── Tax data (estimated — reads from income entries) ─────────────────────
