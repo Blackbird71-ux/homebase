@@ -17,9 +17,15 @@
 //   - Recipe image pre-caching into shell cache for offline image display
 //   - Periodic background sync for daily cache refresh
 //   - Client-side idle warm-up trigger via postMessage
+// v7 additions:
+//   - Live, user-mutated collections (/api/lists, /api/events) are now NETWORK-FIRST
+//     instead of stale-while-revalidate. SWR served a stale cached copy first, which
+//     overwrote freshly-mutated local state on the next poll/focus — the root cause of
+//     shopping-list and calendar items flickering in/out. See QA.md §12.27.
+//   - Cache names bumped v6→v7 so the stale SWR entries purge on activate.
 
-const SHELL_CACHE = 'homebase-shell-v6';
-const API_CACHE   = 'homebase-api-v6';
+const SHELL_CACHE = 'homebase-shell-v7';
+const API_CACHE   = 'homebase-api-v7';
 const ALL_CACHES  = [SHELL_CACHE, API_CACHE];
 
 const SYNC_TAG = 'homebase-list-sync';
@@ -45,15 +51,22 @@ const WARM_PAGES = [
 const MAX_RECIPE_WARM = 20;
 
 
-// API GET paths cached with stale-while-revalidate
-// Using regex for precise matching — avoids accidentally caching mutation endpoints
+// API GET paths cached with stale-while-revalidate.
+// Using regex for precise matching — avoids accidentally caching mutation endpoints.
+// These are read-mostly reference data where a brief stale flash is acceptable.
 const API_CACHE_PATTERNS = [
   /^\/api\/meal-plan($|\?|\/)/,
   /^\/api\/recipes($|\?|\/)/,
-  /^\/api\/lists($|\?|\/)/,
-  /^\/api\/events($|\?|\/)/,          // CalendarView fetches this client-side when navigating months
   /^\/api\/event-categories($|\?|\/)/, // EventModal fetches this client-side
   /^\/api\/ingredient-categories($|\?|\/)/, // ShoppingList fetches this on mount
+];
+
+// API GET paths served NETWORK-FIRST (fall back to cache only when offline).
+// These collections are mutated locally and from other devices; serving a stale
+// cached copy first overwrites fresh local state on the next poll/focus. See QA.md §12.27.
+const NETWORK_FIRST_PATTERNS = [
+  /^\/api\/lists($|\?|\/)/,
+  /^\/api\/events($|\?|\/)/,          // CalendarView fetches this client-side when navigating months
 ];
 
 // ── Install ────────────────────────────────────────────────────────────────────
@@ -226,7 +239,30 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // ── 1. API cache (stale-while-revalidate) ────────────────────────────────────
+  // ── 1. API: live, user-mutated collections — network-first ───────────────────
+  // Lists and calendar events change from local mutations and other devices.
+  // Always try the network so a poll/focus refetch never serves a pre-mutation
+  // copy; fall back to cache only when the network is unreachable (offline).
+  if (NETWORK_FIRST_PATTERNS.some((p) => p.test(url.pathname))) {
+    event.respondWith(
+      caches.open(API_CACHE).then(async (cache) => {
+        try {
+          const res = await fetch(event.request);
+          if (res.ok) cache.put(event.request, res.clone()).catch(() => {});
+          return res;
+        } catch {
+          const cached = await cache.match(event.request);
+          return cached || new Response(
+            JSON.stringify({ offline: true }),
+            { status: 503, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+      }),
+    );
+    return;
+  }
+
+  // ── 2. API cache (stale-while-revalidate) ────────────────────────────────────
   if (API_CACHE_PATTERNS.some((p) => p.test(url.pathname))) {
     event.respondWith(
       caches.open(API_CACHE).then(async (cache) => {
@@ -251,7 +287,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── 2. Next.js RSC fetches (client-side navigation) ─────────────────────────
+  // ── 3. Next.js RSC fetches (client-side navigation) ─────────────────────────
   // Identified by RSC:1 or Next-Router-State-Tree header.
   // IMPORTANT: prefetch requests (Next-Router-Prefetch:1) are passed through
   // without caching — caching prefetches causes stale payloads on real
@@ -292,7 +328,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── 3. Full page navigation ─────────────────────────────────────────────────
+  // ── 4. Full page navigation ─────────────────────────────────────────────────
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -309,7 +345,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── 4. Static assets — cache-first ──────────────────────────────────────────
+  // ── 5. Static assets — cache-first ──────────────────────────────────────────
   if (url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|css|js)$/)
       || url.pathname.startsWith('/_next/static/')) {
     event.respondWith(

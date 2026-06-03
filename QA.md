@@ -1132,7 +1132,9 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
-### 12.21 Passive Poll Overwrites In-Flight Local Mutations — Fixed 2026-05-26
+### 12.21 Passive Poll Overwrites In-Flight Local Mutations — Fixed 2026-05-26 — SUPERSEDED by §12.27 (2026-06-03)
+
+> **Superseded:** The `lastMutAt` 3-second timestamp guard described below was replaced on 2026-06-03 by the shared `useMutationGuard` hook (generation counter + in-flight counter + settle window). The diagnosis here remains accurate and is preserved for context; the *fix* is now §12.27. Do not re-introduce a standalone `lastMutAt` ref.
 
 **Problem:** `useOfflineQueue` runs a 30-second polling loop that calls `setItems(parseServerItems(raw))` unconditionally. If the GET response arrives after a local mutation has already updated the React state (e.g. `clearCompleted` filtered out 36 items), the stale server response replaces the correct local state — restoring the just-deleted items on screen without any navigation.
 
@@ -1213,7 +1215,9 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
-### 12.25 Non-Optimistic Mutations Race with the Background Poll — Fixed 2026-05-27
+### 12.25 Non-Optimistic Mutations Race with the Background Poll — Fixed 2026-05-27 — SUPERSEDED by §12.27 (2026-06-03)
+
+> **Superseded:** The `pendingMutations` ref counter described below was replaced on 2026-06-03 by `useMutationGuard.runMutation()`, which holds the in-flight counter for the whole duration of a slow await-then-set mutation. The diagnosis here remains accurate; the *fix* is now §12.27. Do not re-introduce a standalone `pendingMutations` ref.
 
 **Problem:** The 30-second background poll (in `useOfflineQueue`) can fire after the 3-second `lastMutAt` guard expires but before a slow server response returns. This causes the poll's `setItems(allItems)` to overwrite optimistic or in-progress local state — the user sees a flash of the "old" server state before the mutation response restores it.
 
@@ -1243,5 +1247,37 @@ date.toLocaleDateString()                  // no explicit timeZone — uses runt
 
 ---
 
-*Last updated: 2026-05-27. Maintained by the development team — update on every significant feature or bug fix.*
+### 12.27 Stale-Read Flicker — Service-Worker SWR + Shared Mutation Guard — Fixed 2026-06-03
+
+**Symptom:** Shopping-list items disappear then reappear (or a checked item un-checks itself) with no user navigation — most visible on the mobile PWA. The same flicker affects calendar events. It often takes 30–60 seconds to appear, longer than the 3-second React guards (§12.21, §12.25) could ever cover.
+
+**This is a *two-mechanism* bug. Both had to be fixed; fixing either alone leaves the flicker.**
+
+**Mechanism A — React timing race (the part §12.21/§12.25 addressed).** A background read (`30s poll`, `SHOPPING_LIST_UPDATED`/`TODO_LIST_UPDATED` app-event refetch, or reconnect/offline-queue flush) is issued *before* a local mutation and its `setItems(serverData)` lands *after* it, clobbering correct local state. The old fix used two ad-hoc refs (`lastMutAt` timestamp, `pendingMutations` counter) inlined separately into `useShoppingList` and `useTodoList`. They were fragile (arbitrary 3000ms window), duplicated, and to-do only had half of them.
+
+**Mechanism B — Service-Worker stale-while-revalidate (the previously-undiagnosed root cause).** `public/sw.js` served `/api/lists` and `/api/events` GETs **stale-while-revalidate**: the SW returned the *cached* (pre-mutation) copy immediately, then revalidated in the background. So even a correctly-guarded client poll received a stale body from the SW cache, not the live server state. This is why the flicker outlived every React-only fix and why `cache: 'no-store'` on the calendar fetch didn't help — `no-store` controls the HTTP cache, not the service worker.
+
+**Fix shipped 2026-06-03 (both mechanisms, "fix one, fix all"):**
+
+1. **SW network-first for live collections (Mechanism B).** Split `API_CACHE_PATTERNS` in `public/sw.js`: `/api/lists` and `/api/events` moved to a new `NETWORK_FIRST_PATTERNS` list (try network → cache on ok → fall back to cache only when offline). Read-mostly reference data (`/api/meal-plan`, `/api/recipes`, `/api/event-categories`, `/api/ingredient-categories`) stays SWR. Cache names bumped `v6→v7` so stale SWR entries purge on activate.
+
+2. **Shared `useMutationGuard` hook (Mechanism A).** New `src/hooks/useMutationGuard.ts` replaces both ad-hoc refs with one primitive: a **generation counter** (`version`), an **in-flight counter** (`inflight`), and a **settle window** (`lastEndedAt`, 3s). Background reads call `snapshot()` when issued and apply the result only if `canApply(snapshot)` is still true on arrival — i.e. no mutation has bumped the generation, nothing is in flight, and the settle window has elapsed. This is strictly stronger than the old timestamp: it catches the before/after race by generation (not a guessed timeout) and holds for the *entire* duration of a slow await-then-set mutation.
+
+   - **Mapping rule:** synchronous/optimistic mutations call `guard.bump()`; await-then-set mutations that only set state after the server responds wrap their body in `guard.runMutation(async () => …)`. In practice only `useShoppingList.deleteItem` and `clearCompleted` need `runMutation`; everything else uses `bump`.
+   - Migrated `useShoppingList`, `useTodoList`, and `useOfflineQueue` (signature changed from `shouldSkipServerUpdate: () => boolean` to `guard: MutationGuard`). §12.21's `lastMutAt` and §12.25's `pendingMutations` are **removed**, not stacked.
+
+**Why calendar gets no guard.** `CalendarView` has no optimistic local state and no background poll — its `refresh()` is always called *after* an awaited mutation and is the intended post-mutation read. A mutation guard's settle window would wrongly suppress that read. Calendar's flicker was purely Mechanism B, fixed by the SW change alone.
+
+**Scope confirmed NOT affected:** Finance (no background refetch, not SW-cached), dashboard cards (no poll). The §12.20 date-variant bug is a separate timezone class, unrelated to this race.
+
+**Pattern to watch for:**
+- Any hook that calls a full-replacement `setItems(serverData)` from a poll/focus/reconnect/app-event read must guard it with `useMutationGuard` (`snapshot()` at issue, `canApply()` at apply). Do not inline a new timestamp or counter ref — use the shared hook.
+- Before blaming a client-side stale-read race, check `public/sw.js`: if the GET path matches an SWR pattern, the SW is serving a stale body and **no client guard can fix it**. A mutated collection must be network-first.
+- When you add a new client-polled, user-mutated API collection, add its path to `NETWORK_FIRST_PATTERNS`, not `API_CACHE_PATTERNS`.
+
+**Affected files:** `public/sw.js`, `src/hooks/useMutationGuard.ts` (new), `src/hooks/lists/useOfflineQueue.ts`, `src/hooks/lists/useShoppingList.ts`, `src/hooks/lists/useTodoList.ts`
+
+---
+
+*Last updated: 2026-06-03. Maintained by the development team — update on every significant feature or bug fix.*
 

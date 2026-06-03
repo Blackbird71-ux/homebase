@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { enqueueMutation, getAllMutations, removeMutation } from '@/lib/offline-queue'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import type { ListItemShape } from '@/lib/list-helpers'
+import type { MutationGuard } from '@/hooks/useMutationGuard'
 
 async function registerBackgroundSync() {
   if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return
@@ -36,7 +37,7 @@ function parseServerItems(raw: Record<string, unknown>[]): ListItemShape[] {
 export function useOfflineQueue(
   listId: string,
   setItems: React.Dispatch<React.SetStateAction<ListItemShape[]>>,
-  shouldSkipServerUpdate: () => boolean = () => false,
+  guard: MutationGuard,
 ) {
   const broadcastQueueCount = useCallback(async () => {
     try {
@@ -76,16 +77,17 @@ export function useOfflineQueue(
     }
 
     try {
-      const res = await fetch(`/api/lists/${listId}/items`)
       // Skip overwriting state if an optimistic mutation landed during the refetch
       // window (matches the poll/app-event guards below).
-      if (res.ok && !shouldSkipServerUpdate()) setItems(parseServerItems(await res.json()))
+      const v = guard.snapshot()
+      const res = await fetch(`/api/lists/${listId}/items`)
+      if (res.ok && guard.canApply(v)) setItems(parseServerItems(await res.json()))
     } catch {
       // Network gone again — leave optimistic state as-is
     }
 
     await broadcastQueueCount()
-  }, [listId, broadcastQueueCount, setItems, shouldSkipServerUpdate])
+  }, [listId, broadcastQueueCount, setItems, guard])
 
   // Flush on coming back online (iOS/Safari fallback)
   useEffect(() => {
@@ -118,25 +120,27 @@ export function useOfflineQueue(
   // Refetch when AI assistant or another source updates the list
   useEffect(() => {
     return listenAppEvent(AppEvents.SHOPPING_LIST_UPDATED, () => {
+      const v = guard.snapshot()
       fetch(`/api/lists/${listId}/items`)
         .then(res => res.ok ? res.json() : null)
-        .then(raw => { if (raw && !shouldSkipServerUpdate()) setItems(parseServerItems(raw)) })
+        .then(raw => { if (raw && guard.canApply(v)) setItems(parseServerItems(raw)) })
         .catch(() => {})
     })
-  }, [listId, setItems, shouldSkipServerUpdate])
+  }, [listId, setItems, guard])
 
   // Poll for item changes from other devices every 30s when the tab is visible and online
   useEffect(() => {
     const interval = setInterval(() => {
       if (!navigator.onLine || document.visibilityState !== 'visible') return
-      if (shouldSkipServerUpdate()) return
+      const v = guard.snapshot()
+      if (!guard.canApply(v)) return
       fetch(`/api/lists/${listId}/items`)
         .then(res => res.ok ? res.json() : null)
-        .then(raw => { if (raw && !shouldSkipServerUpdate()) setItems(parseServerItems(raw)) })
+        .then(raw => { if (raw && guard.canApply(v)) setItems(parseServerItems(raw)) })
         .catch(() => {})
     }, 30000)
     return () => clearInterval(interval)
-  }, [listId, setItems, shouldSkipServerUpdate])
+  }, [listId, setItems, guard])
 
   return { registerBackgroundSync, broadcastQueueCount, enqueueMutation }
 }

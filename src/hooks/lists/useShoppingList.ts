@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback, useEffect, useRef, useMemo } from 'react'
+import { useState, useTransition, useCallback, useEffect, useMemo } from 'react'
 import {
   PointerSensor,
   KeyboardSensor,
@@ -18,6 +18,7 @@ import type { ListItemShape, ShoppingCategory } from '@/lib/list-helpers'
 import { autoGuessCategory } from '@/lib/ingredient-helpers'
 import { useOfflineQueue } from '@/hooks/lists/useOfflineQueue'
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
+import { useMutationGuard } from '@/hooks/useMutationGuard'
 
 export function useShoppingList(
   listId: string,
@@ -25,9 +26,9 @@ export function useShoppingList(
   initialCategoryOrder: string[] | null,
   onNonCompletedCountChange?: (count: number) => void,
 ) {
-  const lastMutAt = useRef(0)
-  const pendingMutations = useRef(0)
-  const shouldSkipServerUpdate = useCallback(() => pendingMutations.current > 0 || Date.now() - lastMutAt.current < 3000, [])
+  // Guards optimistic local state against stale background reads (poll / app-event /
+  // reconnect flush). Supersedes the old lastMutAt + pendingMutations refs. See QA.md §12.27.
+  const guard = useMutationGuard()
 
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [viewMode, setViewMode] = useState<'aisle' | 'recipe'>('aisle')
@@ -55,7 +56,7 @@ export function useShoppingList(
   // ── Offline sync ────────────────────────────────────────────────────────────
 
   const { registerBackgroundSync, broadcastQueueCount, enqueueMutation } =
-    useOfflineQueue(listId, setItems, shouldSkipServerUpdate)
+    useOfflineQueue(listId, setItems, guard)
 
   // ── Debounced saves ─────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ export function useShoppingList(
       setCategoryOrder(newOrder)
       debouncedSaveCategoryOrder(newOrder)
     } else if (activeType === 'item') {
-      lastMutAt.current = Date.now()
+      guard.bump()
       const activeCategory = active.data.current?.category as string | null | undefined
       const catItems = items.filter(i => !i.isCompleted && i.category === activeCategory)
       const oldIndex = catItems.findIndex(i => i.id === active.id)
@@ -172,7 +173,7 @@ export function useShoppingList(
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
     if (!newContent.trim()) return
-    lastMutAt.current = Date.now()
+    guard.bump()
 
     const body = { content: newContent.trim(), category: newCategory }
 
@@ -230,7 +231,7 @@ export function useShoppingList(
   }
 
   async function toggleItem(id: string, isCompleted: boolean) {
-    lastMutAt.current = Date.now()
+    guard.bump()
     setItems(prev => prev.map(i => i.id === id ? { ...i, isCompleted } : i))
 
     if (!navigator.onLine || id.startsWith('tmp_')) {
@@ -256,23 +257,20 @@ export function useShoppingList(
   }
 
   async function deleteItem(id: string) {
-    lastMutAt.current = Date.now()
-    pendingMutations.current++
-    try {
+    // Non-optimistic (state set only after the server confirms) — wrap so background
+    // reads skip for the whole in-flight window, not just a fixed timeout.
+    await guard.runMutation(async () => {
       const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setItems(prev => prev.filter(i => i.id !== id))
       } else {
         toast.error('Failed to save. Please try again.')
       }
-    } finally {
-      pendingMutations.current--
-      lastMutAt.current = Date.now()
-    }
+    })
   }
 
   async function toggleLock(id: string, isLocked: boolean) {
-    lastMutAt.current = Date.now()
+    guard.bump()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -286,7 +284,7 @@ export function useShoppingList(
   }
 
   async function changeItemCategory(id: string, newCat: string) {
-    lastMutAt.current = Date.now()
+    guard.bump()
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -307,7 +305,7 @@ export function useShoppingList(
   }
 
   function handleItemSaved(id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null, unitPrice?: number | null, quantity?: number | null) {
-    lastMutAt.current = Date.now()
+    guard.bump()
     setItems(prev => prev.map(i => i.id === id ? { ...i, content, category, unitPrice: unitPrice ?? i.unitPrice, quantity: quantity ?? i.quantity } : i))
   }
 
@@ -346,19 +344,16 @@ export function useShoppingList(
   }
 
   async function clearCompleted() {
-    lastMutAt.current = Date.now()
-    pendingMutations.current++
-    try {
+    // Non-optimistic bulk delete — wrap so background reads skip for the whole
+    // in-flight window, not just a fixed timeout.
+    await guard.runMutation(async () => {
       const res = await fetch(`/api/lists/${listId}/clear-completed`, { method: 'POST' })
       if (res.ok) {
         setItems(prev => prev.filter(i => !(i.isCompleted && !i.isLocked)))
       } else {
         toast.error('Failed to save. Please try again.')
       }
-    } finally {
-      pendingMutations.current--
-      lastMutAt.current = Date.now()
-    }
+    })
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────
