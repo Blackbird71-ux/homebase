@@ -73,6 +73,7 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'INCOME_RECEIVED_NO_RECEIPT_GL', label: 'Received income has a receipt journal' },
   { code: 'TX_JOURNAL_ACCOUNT_DRIFT',     label: 'Transaction journals match the transaction account' },
   { code: 'ORPHANED_AUTO_JOURNAL',        label: 'Auto-transaction journals point to a live transaction' },
+  { code: 'ORPHANED_DRAFT_JOURNAL',       label: 'Unposted auto-journals link to a live income/bill' },
   { code: 'TRIAL_BALANCE_UNBALANCED',     label: 'Trial balance: total debits = total credits' },
   { code: 'JOURNAL_ENTRY_UNBALANCED',     label: 'Every posted entry balances (DR = CR)' },
   { code: 'NONPOSITIVE_LINE_AMOUNT',      label: 'Every journal line amount is positive' },
@@ -353,6 +354,39 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
           recordId: tx.id, label: tx.description || tx.id,
           message: `Journal posts to ${acct(categoryLine.glAccountId)} but the transaction's category is ${acct(tx.categoryId)}.`,
           detail: { journalAccount: acct(categoryLine.glAccountId), transactionCategory: acct(tx.categoryId), reference: j.reference },
+        })
+      }
+    }
+  }
+
+  // ── C.2 — Orphaned unposted draft journals ──────────────────────────────────
+  // Spawned drafts (type=auto_transaction, isPosted=false) are linked from the
+  // income/bill/payment side. Deleting that parent used to strand the draft as an
+  // orphan: invisible to the Journals UI (which never lists unposted auto_transaction
+  // rows) yet lingering in the ledger. Zero GL impact (unposted) → warning, not critical.
+  const draftAutoJournals = await prisma.financeJournalEntry.findMany({
+    where: { familyId, type: 'auto_transaction', isPosted: false },
+    select: { id: true, reference: true, description: true },
+  })
+  if (draftAutoJournals.length > 0) {
+    const [incAccrual, incReceipt, billAccrual, billPay] = await Promise.all([
+      prisma.financeIncomeEntry.findMany({ where: { familyId, journalEntryId: { not: null } }, select: { journalEntryId: true } }),
+      prisma.financeIncomeEntry.findMany({ where: { familyId, receiptJournalEntryId: { not: null } }, select: { receiptJournalEntryId: true } }),
+      prisma.financeRecurringBill.findMany({ where: { familyId, journalEntryId: { not: null } }, select: { journalEntryId: true } }),
+      prisma.financeBillPayment.findMany({ where: { familyId, journalEntryId: { not: null } }, select: { journalEntryId: true } }),
+    ])
+    const linkedJeIds = new Set<string>([
+      ...incAccrual.map(r => r.journalEntryId!),
+      ...incReceipt.map(r => r.receiptJournalEntryId!),
+      ...billAccrual.map(r => r.journalEntryId!),
+      ...billPay.map(r => r.journalEntryId!),
+    ])
+    for (const j of draftAutoJournals) {
+      if (!linkedJeIds.has(j.id)) {
+        add({
+          severity: 'warning', code: 'ORPHANED_DRAFT_JOURNAL', recordType: 'journal',
+          recordId: j.id, label: j.reference ?? j.description ?? j.id,
+          message: `Unposted auto-transaction journal is not linked to any income, bill, or payment — it was stranded when its source was deleted and should be removed.`,
         })
       }
     }
