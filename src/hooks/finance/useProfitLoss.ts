@@ -34,6 +34,7 @@ export interface PLTx {
   description: string | null; payee: string | null
   isTransfer: boolean; entityId: string | null
   recurringBillId: string | null
+  hasPostedPnlJournal?: boolean
   category: { id: string; name: string; color: string | null; type: string } | null
 }
 
@@ -239,7 +240,7 @@ export function useProfitLoss() {
     }))
 
     const txItems = transactions
-      .filter(t => t.type === 'income' && matchesEntity(t.entityId) && !incomeLinkedTxIds.has(t.id))
+      .filter(t => t.type === 'income' && matchesEntity(t.entityId) && !incomeLinkedTxIds.has(t.id) && !t.hasPostedPnlJournal)
       .map(t => ({
         key:   t.category?.id ?? '__tx_none__',
         label: t.category?.name ?? 'Uncategorised',
@@ -309,7 +310,7 @@ export function useProfitLoss() {
     }))
 
     const txItems = transactions
-      .filter(t => t.type === 'expense' && matchesEntity(t.entityId) && !billLinkedTxIds.has(t.id))
+      .filter(t => t.type === 'expense' && matchesEntity(t.entityId) && !billLinkedTxIds.has(t.id) && !t.hasPostedPnlJournal)
       .map(t => ({
         key:   t.category?.id ?? '__tx_none__',
         label: t.category?.name ?? 'Uncategorised',

@@ -125,7 +125,31 @@ export async function GET(request: NextRequest) {
     prisma.financeTransaction.count({ where }),
   ])
 
-  return NextResponse.json({ transactions, total, page, limit })
+  // Flag transactions whose value is already represented in the GL P&L: those
+  // with a live (posted, non-reversed) auto-journal touching an income/expense
+  // account. The P&L screen reads both raw transactions and the GL trial
+  // balance, so it must exclude these from its raw-transaction bucket to avoid
+  // double-counting (see useProfitLoss txItems).
+  const txIds = transactions.map(t => t.id)
+  const pnlJournalTxIds = new Set<string>()
+  if (txIds.length) {
+    const linked = await prisma.financeJournalEntry.findMany({
+      where: {
+        sourceTransactionId: { in: txIds },
+        isPosted: true,
+        isReversed: false,
+        lines: { some: { glAccount: { type: { in: ['income', 'expense'] } } } },
+      },
+      select: { sourceTransactionId: true },
+    })
+    for (const e of linked) if (e.sourceTransactionId) pnlJournalTxIds.add(e.sourceTransactionId)
+  }
+  const withFlags = transactions.map(t => ({
+    ...t,
+    hasPostedPnlJournal: pnlJournalTxIds.has(t.id),
+  }))
+
+  return NextResponse.json({ transactions: withFlags, total, page, limit })
 }
 
 export async function POST(request: NextRequest) {
