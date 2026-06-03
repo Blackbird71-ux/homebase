@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getTemplate, computeNextOccurrenceDate, type OccurrenceTemplate } from '@/lib/finance-recurring-template-service'
-import { createOccurrenceDraft } from '@/lib/finance-draft-spawn-service'
+import { createOccurrenceDraft, isWithinAdvanceWindow } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import {
   ensureAccountsPayableCategory,
@@ -1198,7 +1198,15 @@ export async function PATCH(request: NextRequest) {
               const next = computeNextOccurrenceDate(template, utcMidnight(currentOccurrence))
               if (next) {
                 const occ = utcMidnight(next)
-                await createOccurrenceDraft(tx, template, occ, existing.id)
+                // Honour createInAdvanceDays: only materialise the next occurrence
+                // now if it falls within the template's advance window. Otherwise
+                // leave it to the nightly cron (same shared gate), so paying a bill
+                // cannot spawn its successor weeks early. The cursor still advances
+                // either way so the cron knows which occurrence to materialise when
+                // it comes due (and idempotently skips if we just created it).
+                if (isWithinAdvanceWindow(occ, template.createInAdvanceDays)) {
+                  await createOccurrenceDraft(tx, template, occ, existing.id)
+                }
                 // Advance the template cursor atomically so the cron does not
                 // re-spawn the same occurrence.
                 await tx.financeRecurringTemplate.update({

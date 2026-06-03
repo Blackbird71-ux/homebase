@@ -95,6 +95,25 @@ function calendarDayEnd(d: Date): Date {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// isWithinAdvanceWindow
+//
+// The single source of truth for "may this occurrence be materialised yet?".
+// Per Q3 an occurrence is due to spawn when its date is on or before
+// (asOf + createInAdvanceDays), at calendar-day granularity. The nightly cron
+// AND the bill/income receipt-and-payment spawn-next paths all gate on this,
+// so a draft can never be materialised earlier than createInAdvanceDays before
+// its occurrence — whichever trigger fires first (a paid bill must not spawn
+// its successor weeks ahead of the configured advance window).
+// ─────────────────────────────────────────────────────────────────────────────
+export function isWithinAdvanceWindow(
+  occurrenceDate: Date,
+  createInAdvanceDays: number,
+  asOf: Date = new Date(),
+): boolean {
+  return occurrenceDate <= calendarDayEnd(addDays(asOf, createInAdvanceDays))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // buildSnapshotLinesFromTemplate
 //
 // Maps FinanceRecurringTemplateLine[] → SnapshotLine[] for hashing AND for
@@ -465,15 +484,13 @@ export async function spawnDraftsForTemplate(
   let cursorDate: Date = template.nextOccurrenceDate
   let occurrencesRemaining = template.occurrencesRemaining
 
-  // "Due" threshold per Q3: spawn occurrences whose date is on or before
-  // (asOf + createInAdvanceDays).
-  const dueThreshold = calendarDayEnd(addDays(asOf, template.createInAdvanceDays))
-
   let iterations = 0
 
-  // Catch-up loop: spawn every occurrence on/before the due threshold,
-  // capped at MAX_CATCHUP_PER_RUN.
-  while (cursorDate <= dueThreshold) {
+  // Catch-up loop: spawn every occurrence within the advance window (Q3),
+  // capped at MAX_CATCHUP_PER_RUN. isWithinAdvanceWindow is the same shared
+  // gate the receipt/payment spawn-next paths use, so no trigger can spawn
+  // earlier than createInAdvanceDays before the occurrence.
+  while (isWithinAdvanceWindow(cursorDate, template.createInAdvanceDays, asOf)) {
     if (iterations >= MAX_CATCHUP_PER_RUN) {
       result.cappedWithMoreRemaining = true
       break
@@ -615,9 +632,8 @@ export async function spawnDueDrafts(
   const results: TemplateSpawnResult[] = []
   for (const template of templates) {
     // Per-template precise due check (Q3). Skip templates not yet within
-    // their own advance window.
-    const dueThreshold = calendarDayEnd(addDays(asOf, template.createInAdvanceDays))
-    if (template.nextOccurrenceDate > dueThreshold) {
+    // their own advance window — the same shared gate the spawn-next paths use.
+    if (!isWithinAdvanceWindow(template.nextOccurrenceDate, template.createInAdvanceDays, asOf)) {
       continue
     }
     try {
