@@ -135,6 +135,25 @@ if [ -f "$DB_PATH" ]; then
     echo "   ✓ Stale records removed"
   fi
 
+  # --- Normalise legacy TEXT datetimes in the migration ledger ---
+  # Older Prisma versions / manual ledger repairs stored _prisma_migrations
+  # started_at/finished_at as TEXT ("2026-06-01 10:45:30.290") instead of the
+  # epoch-millisecond INTEGERs the Prisma 7 schema engine expects. The engine
+  # PANICS reading them ("input contains invalid characters") and the CLI then
+  # exits 0 — so `migrate deploy` silently applies NOTHING and newer migrations
+  # never land (the symptom: "no such column" errors at runtime). Convert any
+  # TEXT datetimes back to epoch-ms; integer rows are left untouched and the
+  # operation is idempotent once normalised.
+  TEXTDT=$(sqlite3 "$DB_PATH" \
+    "SELECT count(*) FROM _prisma_migrations WHERE typeof(finished_at)='text' OR typeof(started_at)='text';" 2>/dev/null || echo "0")
+  if [ "$TEXTDT" -gt 0 ]; then
+    echo "   ! Found $TEXTDT migration record(s) with TEXT datetimes – normalising to epoch-ms so the schema engine can read the ledger..."
+    sqlite3 "$DB_PATH" \
+      "UPDATE _prisma_migrations SET finished_at = CAST((julianday(finished_at) - 2440587.5) * 86400000 AS INTEGER) WHERE typeof(finished_at)='text' AND julianday(finished_at) IS NOT NULL;
+       UPDATE _prisma_migrations SET started_at  = CAST((julianday(started_at)  - 2440587.5) * 86400000 AS INTEGER) WHERE typeof(started_at)='text'  AND julianday(started_at)  IS NOT NULL;"
+    echo "   ✓ Migration datetimes normalised"
+  fi
+
   # --- Verify key columns actually exist; reset migration if they don't ---
   # This catches the "phantom applied" case: migration recorded as finished but
   # the ALTER TABLE never actually ran against the live database.
@@ -158,6 +177,8 @@ if [ -f "$DB_PATH" ]; then
 20260548000000_add_repeating_transaction_templates|FinanceIncomeEntry|status
 20260555000000_consolidate_trip_tags|Tag|emoji
 20260555000000_consolidate_trip_tags|Tag|sortOrder
+20260576000000_add_category_owner_tax_payment|FinanceCategory|memberId
+20260576000000_add_category_owner_tax_payment|FinanceCategory|isTaxPayment
 "
   echo "$COLUMN_CHECKS" | while IFS='|' read -r MIGRATION TABLE COLUMN; do
     # Skip blank lines
