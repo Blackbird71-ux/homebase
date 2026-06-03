@@ -5,9 +5,27 @@ import { sendEmail } from '@/lib/email'
 import { choreReminderHtml, eventReminderHtml, documentExpiryHtml, billReminderHtml } from '@/lib/email-templates'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { generateCompleteToken } from '@/lib/complete-token'
+import { dateStringInTz, todayStringInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 function todayKey(): string {
   return new Date().toISOString().split('T')[0]
+}
+
+/**
+ * The local calendar date (YYYY-MM-DD, in the family's timezone) on which a
+ * reminder should fire: `daysBefore` days before the entity's due/expiry date.
+ *
+ * Robust to both due-date storage conventions present in the DB — local
+ * midnight (…T14:00:00Z for Sydney) and legacy UTC midnight (…T00:00:00Z) —
+ * because dateStringInTz recovers the true local calendar date in both cases.
+ * The previous `new Date(due); due.setHours(0,0,0,0)` logic ran in the server's
+ * UTC timezone and shifted local-midnight values back one day, firing reminders
+ * a calendar day too early. See FINANCE_AUDIT §5.
+ */
+export function reminderFireDate(dueDate: Date, timezone: string, daysBefore: number): string {
+  const dueLocal = dateStringInTz(dueDate, timezone)
+  const [y, m, d] = dueLocal.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d - daysBefore)).toISOString().slice(0, 10)
 }
 
 async function logAndSend({
@@ -37,26 +55,21 @@ async function logAndSend({
 }
 
 export async function processChoreReminders(): Promise<number> {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-
   const chores = await prisma.chore.findMany({
     where: { emailReminder: true, isActive: true, nextDueDate: { not: null } },
-    include: { currentAssignee: { select: { id: true, name: true, email: true } } },
+    include: {
+      currentAssignee: { select: { id: true, name: true, email: true } },
+      family: { select: { timezone: true } },
+    },
   })
 
   let sent = 0
   for (const chore of chores) {
     if (!chore.nextDueDate || !chore.currentAssignee?.email) continue
 
-    const dueDate = new Date(chore.nextDueDate)
-    dueDate.setHours(0, 0, 0, 0)
-
-    const reminderDate = new Date(dueDate)
-    reminderDate.setDate(reminderDate.getDate() - chore.emailReminderDays)
-
-    // Send on the reminder date
-    if (now.getTime() !== reminderDate.getTime()) continue
+    // Send on the reminder date computed in the family's local timezone.
+    const tz = chore.family?.timezone ?? DEFAULT_TIMEZONE
+    if (todayStringInTz(tz) !== reminderFireDate(chore.nextDueDate, tz, chore.emailReminderDays)) continue
 
     const dueDateKey = chore.nextDueDate.toISOString().split('T')[0]
     const reminderKey = `chore_${chore.id}_${dueDateKey}`
@@ -165,9 +178,6 @@ export async function processEventReminders(): Promise<number> {
 }
 
 export async function processDocumentReminders(): Promise<number> {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-
   const documents = await prisma.document.findMany({
     where: { emailReminder: true, expiryDate: { not: null } },
     include: { family: { include: { users: { select: { email: true } } } } },
@@ -177,13 +187,8 @@ export async function processDocumentReminders(): Promise<number> {
   for (const doc of documents) {
     if (!doc.expiryDate) continue
 
-    const expiryDate = new Date(doc.expiryDate)
-    expiryDate.setHours(0, 0, 0, 0)
-
-    const reminderDate = new Date(expiryDate)
-    reminderDate.setDate(reminderDate.getDate() - doc.remindBefore)
-
-    if (now.getTime() !== reminderDate.getTime()) continue
+    const tz = doc.family?.timezone ?? DEFAULT_TIMEZONE
+    if (todayStringInTz(tz) !== reminderFireDate(doc.expiryDate, tz, doc.remindBefore)) continue
 
     const expiryKey = doc.expiryDate.toISOString().split('T')[0]
     const familyEmails = doc.family.users.map(u => u.email)
@@ -213,9 +218,6 @@ export async function processDocumentReminders(): Promise<number> {
 }
 
 export async function processBillReminders(): Promise<number> {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-
   const bills = await prisma.financeRecurringBill.findMany({
     where: { emailReminder: true, isActive: true, paid: false },
     include: {
@@ -229,13 +231,8 @@ export async function processBillReminders(): Promise<number> {
   for (const bill of bills) {
     if (!bill.nextDueDate) continue
 
-    const dueDate = new Date(bill.nextDueDate)
-    dueDate.setHours(0, 0, 0, 0)
-
-    const reminderDate = new Date(dueDate)
-    reminderDate.setDate(reminderDate.getDate() - bill.reminderDays)
-
-    if (now.getTime() !== reminderDate.getTime()) continue
+    const tz = bill.family?.timezone ?? DEFAULT_TIMEZONE
+    if (todayStringInTz(tz) !== reminderFireDate(bill.nextDueDate, tz, bill.reminderDays)) continue
 
     const dueDateKey = bill.nextDueDate.toISOString().split('T')[0]
 
