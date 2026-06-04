@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon, Plus, ClockIcon } from 'lucide-react'
-import type { ChoreScheduleDay } from '@/types'
+import type { ChoreScheduleDay, ChoreScheduleItem } from '@/types'
 import { toast } from 'sonner'
 import { todayStringInTz } from '@/lib/timezone'
 import { ChoreDialog } from '@/app/(app)/chores/ChoreDialog'
@@ -74,12 +74,12 @@ export function ChoreScheduleCard({
     fetchSchedule(scope, showOnlyMine)
   }, [scope, showOnlyMine, fetchSchedule])
 
-  async function handleComplete(choreId: string) {
-    if (completingIds.has(choreId)) return // prevent double-click
+  async function handleComplete(chore: ChoreScheduleItem) {
+    if (completingIds.has(chore.id)) return // prevent double-click
 
-    setCompletingIds((prev) => new Set(prev).add(choreId))
+    setCompletingIds((prev) => new Set(prev).add(chore.id))
     try {
-      const res = await fetch(`/api/chores/${choreId}/complete`, {
+      const res = await fetch(`/api/chores/${chore.id}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -95,8 +95,32 @@ export function ChoreScheduleCard({
         return
       }
 
+      // Success feedback parity with the chores page: confirm completion and surface
+      // the next occurrence / any auto-rotation so the chore doesn't silently vanish.
+      const data = await res.json().catch(() => ({}))
+      const nextDate: string | null = data.chore?.nextDueDate ?? null
+      const rotatedTo =
+        (data.chore?.currentAssigneeId ?? null) !== (chore.currentAssignee?.id ?? null)
+          ? data.chore?.currentAssignee?.name ?? null
+          : null
+      if (nextDate) {
+        const label = new Date(nextDate).toLocaleDateString('en-AU', {
+          weekday: 'short', day: 'numeric', month: 'short',
+          ...(timezone ? { timeZone: timezone } : {}),
+        })
+        toast.success('Chore completed!', {
+          description: `Next scheduled: ${label}${rotatedTo ? ` · now assigned to ${rotatedTo}` : ''}`,
+          duration: 5000,
+        })
+      } else {
+        toast.success('All done!', {
+          description: 'No more occurrences — chore is now complete.',
+          duration: 4000,
+        })
+      }
+
       // Briefly show strikethrough, then re-fetch so the completed item disappears
-      setCompletedIds((prev) => new Set(prev).add(choreId))
+      setCompletedIds((prev) => new Set(prev).add(chore.id))
       setTimeout(() => {
         fetchSchedule(scope, showOnlyMine)
       }, 600)
@@ -106,7 +130,7 @@ export function ChoreScheduleCard({
       setTimeout(() => {
         setCompletingIds((prev) => {
           const next = new Set(prev)
-          next.delete(choreId)
+          next.delete(chore.id)
           return next
         })
       }, 700)
@@ -253,7 +277,7 @@ export function ChoreScheduleCard({
                         {/* Complete checkbox button (only for completable chores) */}
                         {c.isCompletable ? (
                           <button
-                            onClick={() => handleComplete(c.id)}
+                            onClick={() => handleComplete(c)}
                             disabled={completingIds.has(c.id)}
                             className={`shrink-0 flex items-center justify-center h-4 w-4 rounded border transition-all duration-200 ${
                               completingIds.has(c.id)

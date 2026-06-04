@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon, UserIcon, GlobeIcon, CalendarDays, ListIcon } from 'lucide-react'
+import { PlusIcon, RotateCcwIcon, CheckIcon, Trash2Icon, InfoIcon, UserIcon, GlobeIcon, CalendarDays, ListIcon, ClockIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { ChoreDialog } from './ChoreDialog'
 import { ChoreCalendarView } from './ChoreCalendarView'
 import { HoverCard } from '@/components/ui/hover-card'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
-import { parseDaysOfWeek } from '@/lib/chore-helpers'
+import { parseDaysOfWeek, choreIsCompletable } from '@/lib/chore-helpers'
+import { todayBoundsInTz } from '@/lib/timezone'
 
 interface Member {
   id: string
@@ -58,6 +59,7 @@ interface ChoresClientProps {
   members: Member[]
   currentUserId: string
   weekStartsOn: 0 | 1
+  timezone: string
 }
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -81,8 +83,12 @@ function formatDate(dateStr: string): string {
 
 type ScopeDays = 7 | 30 | 90 | 365
 
-export function ChoresClient({ initialChores, members, currentUserId, weekStartsOn }: ChoresClientProps) {
+export function ChoresClient({ initialChores, members, currentUserId, weekStartsOn, timezone }: ChoresClientProps) {
   const [chores, setChores] = useState<Chore[]>(initialChores)
+  // End of today in the user's timezone — the boundary for whether a chore is
+  // completable yet. choreIsCompletable also honours allowEarlyStart, so chores
+  // flagged for early completion stay clickable before their due date.
+  const { end: todayEnd } = todayBoundsInTz(timezone)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
@@ -423,28 +429,44 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
               {filteredChores.map((chore) => {
                 const overdue = chore.isOverdue
                 const isCompleted = completedIds.has(chore.id)
+                const completable = choreIsCompletable(
+                  chore.nextDueDate ? new Date(chore.nextDueDate) : null,
+                  chore.allowEarlyStart,
+                  todayEnd
+                )
 
                 return (
                   <div
                     key={chore.id}
                     className={`group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''} ${isCompleted ? 'opacity-50' : ''}`}
                   >
-                    {/* Complete button (checkbox-style) */}
-                    <button
-                      onClick={() => handleComplete(chore)}
-                      className={`shrink-0 flex items-center justify-center h-5 w-5 rounded border transition-all duration-200
-                        ${completingIds.has(chore.id)
-                          ? 'border-green-500 bg-green-500 scale-110'
-                          : isCompleted
-                            ? 'border-green-500 bg-green-500/20'
-                            : 'border-border hover:border-green-500 hover:bg-green-500/10'
-                        }`}
-                      title="Mark complete"
-                    >
-                      <CheckIcon className={`h-3 w-3 transition-colors duration-200 ${
-                        completingIds.has(chore.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent group-hover:text-green-500'
-                      }`} />
-                    </button>
+                    {/* Complete button (checkbox-style) — chores not yet due (and not
+                        flagged for early completion) show a clock instead, matching the
+                        dashboard, so clicking can't trigger a "not yet due" error. */}
+                    {completable || isCompleted ? (
+                      <button
+                        onClick={() => handleComplete(chore)}
+                        className={`shrink-0 flex items-center justify-center h-5 w-5 rounded border transition-all duration-200
+                          ${completingIds.has(chore.id)
+                            ? 'border-green-500 bg-green-500 scale-110'
+                            : isCompleted
+                              ? 'border-green-500 bg-green-500/20'
+                              : 'border-border hover:border-green-500 hover:bg-green-500/10'
+                          }`}
+                        title="Mark complete"
+                      >
+                        <CheckIcon className={`h-3 w-3 transition-colors duration-200 ${
+                          completingIds.has(chore.id) ? 'text-white' : isCompleted ? 'text-green-600' : 'text-transparent group-hover:text-green-500'
+                        }`} />
+                      </button>
+                    ) : (
+                      <div
+                        className="shrink-0 flex items-center justify-center h-5 w-5 rounded border border-dashed border-muted-foreground/30 text-muted-foreground/40"
+                        title="Scheduled — becomes available on its due date"
+                      >
+                        <ClockIcon className="h-3 w-3" />
+                      </div>
+                    )}
 
                     {/* Title + hover info */}
                     <HoverCard
@@ -528,6 +550,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
           <ChoreCalendarView
             chores={calendarChores}
             weekStartsOn={weekStartsOn}
+            timezone={timezone}
             onEditChore={openEditChore}
             onComplete={handleComplete}
             completedIds={completedIds}

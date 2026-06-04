@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const timezone = user.timezone ?? 'UTC'
-  const { end: todayEnd } = todayBoundsInTz(timezone)
+  const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
 
   // nextDueDate is stored as the UTC equivalent of midnight in the user's timezone,
   // so simple Date comparisons work correctly regardless of UTC offset.
@@ -106,6 +106,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     completion,
     chore: {
       ...updated,
+      // Mirror the GET/PATCH routes so the client refreshes the overdue badge
+      // after completion instead of keeping the stale pre-completion value.
+      isOverdue: updated.nextDueDate ? updated.nextDueDate < todayStart : false,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
       completions: updated.completions.map((c) => ({

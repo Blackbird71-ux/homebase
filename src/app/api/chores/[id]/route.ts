@@ -5,6 +5,7 @@ import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
 import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
 import { calculateNextDueDateFromNow } from '@/lib/chore-helpers'
+import { todayBoundsInTz } from '@/lib/timezone'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -34,6 +35,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (key === 'currentAssigneeId' && val === '') val = null
     // Multi-day weekly: persist the selected weekdays as a JSON array string.
     if (key === 'daysOfWeek') val = Array.isArray(val) && val.length > 0 ? JSON.stringify(val) : null
+    // DateTime columns arrive from the form as strings (date inputs send bare
+    // "YYYY-MM-DD", which Prisma rejects as not ISO-8601). Coerce to Date / null,
+    // matching the POST route.
+    if (key === 'startDate' || key === 'endDate' || key === 'startTime') {
+      val = val ? new Date(val) : null
+    }
     updateData[key] = val
   }
 
@@ -90,8 +97,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   dispatchAppEvent(AppEvents.CHORES_UPDATED)
 
+  // Include the same computed isOverdue flag as the GET route so the client
+  // doesn't lose the overdue badge after an edit (until the next refresh).
+  const { start: todayStart } = todayBoundsInTz(user.timezone ?? 'UTC')
+
   return NextResponse.json({
     ...updated,
+    isOverdue: updated.nextDueDate ? updated.nextDueDate < todayStart : false,
     createdAt: updated.createdAt.toISOString(),
     updatedAt: updated.updatedAt.toISOString(),
     completions: updated.completions.map((c) => ({

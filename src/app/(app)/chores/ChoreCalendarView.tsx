@@ -6,7 +6,9 @@ import {
   eachDayOfInterval, isSameMonth, isToday, format,
   startOfDay, endOfDay, addMonths, subMonths,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, CheckIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckIcon, ClockIcon } from 'lucide-react'
+import { choreIsCompletable } from '@/lib/chore-helpers'
+import { todayBoundsInTz } from '@/lib/timezone'
 
 interface ChoreCompletion {
   id: string
@@ -49,6 +51,7 @@ interface Chore {
 interface ChoreCalendarViewProps {
   chores: Chore[]
   weekStartsOn: 0 | 1
+  timezone: string
   onEditChore: (chore: Chore) => void
   onComplete: (chore: Chore) => void
   completedIds: Set<string>
@@ -63,12 +66,14 @@ function ChoreCalendarBadge({
   onComplete,
   isCompleted,
   isCompleting,
+  isCompletable,
 }: {
   chore: Chore
   onClick: () => void
   onComplete: () => void
   isCompleted: boolean
   isCompleting: boolean
+  isCompletable: boolean
 }) {
   const isOverdue = chore.isOverdue && !isCompleted
 
@@ -94,32 +99,43 @@ function ChoreCalendarBadge({
       >
         <span className="truncate flex-1 min-w-0 text-left">{chore.title}</span>
 
-        {/* Mini check button appears on hover */}
-        <span
-          onClick={(e) => {
-            e.stopPropagation()
-            onComplete()
-          }}
-          className={[
-            'shrink-0 flex items-center justify-center h-3.5 w-3.5 rounded-sm border transition-all',
-            isCompleting
-              ? 'border-green-500 bg-green-500'
-              : isCompleted
-                ? 'border-green-500 bg-green-500/20'
-                : 'border-border opacity-0 group-hover:opacity-100 hover:border-green-500 hover:bg-green-500/10',
-          ].join(' ')}
-        >
-          <CheckIcon
+        {/* Mini check button appears on hover — chores not yet due (and not flagged
+            for early completion) show a clock instead, so they can't be completed early. */}
+        {isCompletable || isCompleted ? (
+          <span
+            onClick={(e) => {
+              e.stopPropagation()
+              onComplete()
+            }}
             className={[
-              'h-2 w-2',
+              'shrink-0 flex items-center justify-center h-3.5 w-3.5 rounded-sm border transition-all',
               isCompleting
-                ? 'text-white'
+                ? 'border-green-500 bg-green-500'
                 : isCompleted
-                  ? 'text-green-600'
-                  : 'text-transparent',
+                  ? 'border-green-500 bg-green-500/20'
+                  : 'border-border opacity-0 group-hover:opacity-100 hover:border-green-500 hover:bg-green-500/10',
             ].join(' ')}
-          />
-        </span>
+          >
+            <CheckIcon
+              className={[
+                'h-2 w-2',
+                isCompleting
+                  ? 'text-white'
+                  : isCompleted
+                    ? 'text-green-600'
+                    : 'text-transparent',
+              ].join(' ')}
+            />
+          </span>
+        ) : (
+          <span
+            onClick={(e) => e.stopPropagation()}
+            className="shrink-0 flex items-center justify-center h-3.5 w-3.5 rounded-sm border border-dashed border-muted-foreground/30 text-muted-foreground/40"
+            title="Scheduled — becomes available on its due date"
+          >
+            <ClockIcon className="h-2 w-2" />
+          </span>
+        )}
       </button>
     </div>
   )
@@ -130,12 +146,17 @@ function ChoreCalendarBadge({
 export function ChoreCalendarView({
   chores,
   weekStartsOn = 0,
+  timezone,
   onEditChore,
   onComplete,
   completedIds,
   completingIds,
 }: ChoreCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
+
+  // End of today in the user's timezone — boundary for completability. Honours
+  // allowEarlyStart so early-completion chores stay clickable before their due date.
+  const { end: todayEnd } = todayBoundsInTz(timezone)
 
   const monthStart = startOfMonth(currentDate)
   const monthEnd = endOfMonth(currentDate)
@@ -289,6 +310,11 @@ export function ChoreCalendarView({
                     onComplete={() => onComplete(chore)}
                     isCompleted={completedIds.has(chore.id)}
                     isCompleting={completingIds.has(chore.id)}
+                    isCompletable={choreIsCompletable(
+                      chore.nextDueDate ? new Date(chore.nextDueDate) : null,
+                      chore.allowEarlyStart,
+                      todayEnd
+                    )}
                   />
                 ))}
                 {dayChores.length > 3 && (
