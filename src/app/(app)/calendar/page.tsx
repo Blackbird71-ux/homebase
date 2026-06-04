@@ -101,54 +101,10 @@ export default async function CalendarPage() {
     }
   })
 
-  if (calendarSettings.calShowDocs) {
-    const ninetyDays = 90 * 24 * 60 * 60 * 1000
-    const docs = await prisma.document.findMany({
-      where: {
-        familyId: user.familyId,
-        expiryDate: { not: null, gte: from, lte: new Date(to.getTime() + ninetyDays) },
-      },
-      select: { id: true, title: true, expiryDate: true, remindBefore: true },
-    })
-    for (const doc of docs) {
-      if (!doc.expiryDate) continue
-      const remindMs = doc.expiryDate.getTime() - doc.remindBefore * 24 * 60 * 60 * 1000
-      const remindDay = new Date(remindMs).toISOString().slice(0, 10)
-      const expiryDay = doc.expiryDate.toISOString().slice(0, 10)
-      if (remindDay !== expiryDay) {
-        const remindDate = new Date(remindMs)
-        if (remindDate >= from && remindDate <= to) {
-          calendarEvents.push({ id: `doc-remind-${doc.id}`, title: `Expiring: ${doc.title}`, description: null, start: remindDay + 'T00:00:00.000Z', end: remindDay + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'document', color: '#f59e0b', createdBy: user.id, source: 'document' })
-        }
-      }
-      if (doc.expiryDate >= from && doc.expiryDate <= to) {
-        calendarEvents.push({ id: `doc-expiry-${doc.id}`, title: `Expires: ${doc.title}`, description: null, start: expiryDay + 'T00:00:00.000Z', end: expiryDay + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'document', color: '#ef4444', createdBy: user.id, source: 'document' })
-      }
-    }
-  }
-
-  if (calendarSettings.calShowBills) {
-    const [bills, income] = await Promise.all([
-      prisma.financeRecurringBill.findMany({
-        where: { familyId: user.familyId, showOnCalendar: true, paid: false, isVoided: false, isActive: true, nextDueDate: { gte: from, lte: to } },
-        select: { id: true, name: true, nextDueDate: true },
-      }),
-      prisma.financeIncomeEntry.findMany({
-        where: { familyId: user.familyId, showOnCalendar: true, received: false, isVoided: false, isActive: true, nextExpectedDate: { gte: from, lte: to } },
-        select: { id: true, name: true, nextExpectedDate: true },
-      }),
-    ])
-    for (const b of bills) {
-      if (!b.nextDueDate) continue
-      const day = b.nextDueDate.toISOString().slice(0, 10)
-      calendarEvents.push({ id: `bill-${b.id}`, title: `Bill due: ${b.name}`, description: null, start: day + 'T00:00:00.000Z', end: day + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#ef4444', createdBy: user.id, source: 'bill' })
-    }
-    for (const inc of income) {
-      if (!inc.nextExpectedDate) continue
-      const day = inc.nextExpectedDate.toISOString().slice(0, 10)
-      calendarEvents.push({ id: `income-${inc.id}`, title: `Income: ${inc.name}`, description: null, start: day + 'T00:00:00.000Z', end: day + 'T23:59:59.000Z', isAllDay: true, isPersonal: false, isBusy: false, category: 'finance', color: '#22c55e', createdBy: user.id, source: 'income' })
-    }
-  }
+  // Synthetic events (bills, income, docs, meals, chores, todos, trips) are added by
+  // /api/events, which CalendarView fetches on mount and replaces the event list with.
+  // Building them here too would duplicate that logic (and drift — the API computes the
+  // calendar day in the user's timezone, this page used UTC). SSR carries real events only.
 
   return (
     <CalendarView

@@ -17,27 +17,32 @@ import type { FunctionDeclaration } from '@google/generative-ai'
  * Uses the user's timezone for correct date calculation.
  */
 export function resolveDayToDate(dayName: string, userTimezone: string): string {
-  const now = new Date()
-  const { format, addDays, startOfWeek, parseISO } = require('date-fns')
-  const todayStr = dateStringInTz(now, userTimezone)
-  const today = parseISO(todayStr)
-
+  const todayStr = dateStringInTz(new Date(), userTimezone)
   const lower = dayName.toLowerCase().trim()
   if (lower === 'today') return todayStr
-  if (lower === 'tomorrow') return format(addDays(today, 1), 'yyyy-MM-dd')
   if (/^\d{4}-\d{2}-\d{2}$/.test(lower)) return lower
+
+  // Pure UTC date arithmetic on the YYYY-MM-DD calendar date — runtime-tz
+  // independent, so it behaves identically on the UTC server and in the browser.
+  const [y, m, d] = todayStr.split('-').map(Number)
+  const todayUtc = Date.UTC(y, m - 1, d)
+  const DAY = 86_400_000
+  const toYmd = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+
+  if (lower === 'tomorrow') return toYmd(todayUtc + DAY)
 
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
   const targetIdx = days.indexOf(lower)
   if (targetIdx === -1) return todayStr
 
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 })
-  const candidate = addDays(weekStart, targetIdx === 0 ? 6 : targetIdx - 1)
-  const candidateStr = format(candidate, 'yyyy-MM-dd')
-  if (candidateStr < todayStr) {
-    return format(addDays(candidate, 7), 'yyyy-MM-dd')
-  }
-  return candidateStr
+  // Monday of the current week, then the named weekday within that Mon–Sun week.
+  const dow = new Date(todayUtc).getUTCDay() // 0=Sun … 6=Sat
+  const mondayOffset = dow === 0 ? -6 : 1 - dow
+  const weekStart = todayUtc + mondayOffset * DAY
+  const candidateOffset = targetIdx === 0 ? 6 : targetIdx - 1
+  let candidate = weekStart + candidateOffset * DAY
+  if (toYmd(candidate) < todayStr) candidate += 7 * DAY
+  return toYmd(candidate)
 }
 
 /**
