@@ -42,9 +42,23 @@ export function choreReminderHtml(chore: {
   frequency: string
   nextDueDate: Date
   emailReminderDays: number
+  startTime?: Date | null
+  emailReminderHours?: number
 }, assigneeName: string, completeUrl?: string): string {
-  const dueStr = chore.nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
-  const daysText = chore.emailReminderDays === 1 ? 'tomorrow' : `in ${chore.emailReminderDays} days`
+  let dueStr = chore.nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+  let leadText = chore.emailReminderDays === 1 ? 'tomorrow' : `in ${chore.emailReminderDays} days`
+
+  // Timed chores: show the due time and use an hours-based lead-in.
+  if (chore.startTime) {
+    const hh = chore.startTime.getUTCHours()       // stored UTC h/m == local h/m by convention
+    const mm = chore.startTime.getUTCMinutes()
+    const period = hh < 12 ? 'am' : 'pm'
+    const hour12 = hh % 12 === 0 ? 12 : hh % 12
+    dueStr += ` at ${hour12}:${String(mm).padStart(2, '0')} ${period}`
+    const hours = chore.emailReminderHours ?? 24
+    leadText = hours === 1 ? 'in 1 hour' : `in ${hours} hours`
+  }
+  const daysText = leadText
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1e293b;font-size:20px">Chore Reminder</h2>

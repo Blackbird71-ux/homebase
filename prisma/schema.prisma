@@ -462,7 +462,8 @@ model Chore {
   autoRotateOnComplete Boolean            @default(false)  // Auto-rotate assignee on completion
   allowEarlyStart      Boolean            @default(false)  // Allow creating a new occurrence even if last occurrence is not yet complete/due
   emailReminder        Boolean            @default(false)   // Send email reminder to assignee
-  emailReminderDays    Int                @default(1)       // Days before nextDueDate to send reminder
+  emailReminderDays    Int                @default(1)       // Days before nextDueDate to send reminder (no-time chores)
+  emailReminderHours   Int                @default(24)      // Hours before due time to send reminder (timed chores only)
   startTime            DateTime?          // Optional time of day (UTC h/m = local h/m, date portion ignored)
   duration             Int?               // Duration in minutes (null = all-day)
   completions          ChoreCompletion[]

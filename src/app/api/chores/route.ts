@@ -59,6 +59,7 @@ export async function POST(req: Request) {
     allowEarlyStart,
     emailReminder,
     emailReminderDays,
+    emailReminderHours,
     startTime,
     duration,
   } = body
@@ -102,6 +103,7 @@ export async function POST(req: Request) {
       allowEarlyStart: allowEarlyStart ?? false,
       emailReminder: emailReminder ?? false,
       emailReminderDays: emailReminderDays ?? 1,
+      emailReminderHours: emailReminderHours ?? 24,
       startTime: startTime ? new Date(startTime) : null,
       duration: duration ?? null,
       familyId: user.familyId,

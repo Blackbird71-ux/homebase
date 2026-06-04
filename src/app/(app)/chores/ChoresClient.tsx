@@ -44,6 +44,8 @@ interface Chore {
   allowEarlyStart: boolean
   emailReminder: boolean
   emailReminderDays: number
+  emailReminderHours: number
+  startTime: string | null
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string
@@ -134,9 +136,15 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
       // Persistently track this chore as completed for strikethrough visual feedback
       setCompletedIds((prev) => new Set(prev).add(chore.id))
       const nextDate = data.chore.nextDueDate
+      // Auto-rotate may have handed the chore to another member — surface that
+      // so it doesn't silently vanish from the completer's "Mine" view.
+      const rotatedTo =
+        data.chore.currentAssigneeId !== chore.currentAssigneeId
+          ? data.chore.currentAssignee?.name ?? null
+          : null
       if (nextDate) {
         toast.success('Chore completed!', {
-          description: `Next scheduled: ${formatDate(nextDate)}`,
+          description: `Next scheduled: ${formatDate(nextDate)}${rotatedTo ? ` · now assigned to ${rotatedTo}` : ''}`,
           action: {
             label: 'Edit',
             onClick: () => { setEditingChore(updatedChore); setDialogOpen(true) },
@@ -272,7 +280,11 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
           {chore.emailReminder && (
             <>
               <span className="text-muted-foreground">Email reminder:</span>
-              <span>{chore.emailReminderDays} day{chore.emailReminderDays > 1 ? 's' : ''} before</span>
+              <span>
+                {chore.startTime
+                  ? `${chore.emailReminderHours} hour${chore.emailReminderHours > 1 ? 's' : ''} before`
+                  : `${chore.emailReminderDays} day${chore.emailReminderDays > 1 ? 's' : ''} before`}
+              </span>
             </>
           )}
         </div>

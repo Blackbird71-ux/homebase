@@ -20,6 +20,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { parseDaysOfWeek } from '@/lib/chore-helpers'
+import { localTimeToStoredDateTime } from '@/lib/timezone'
 
 const textareaClass =
   'flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
@@ -58,6 +59,8 @@ interface Chore {
   allowEarlyStart: boolean
   emailReminder: boolean
   emailReminderDays: number
+  emailReminderHours: number
+  startTime: string | null
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string
@@ -89,6 +92,13 @@ function toDateInputValue(date: string | null): string {
   return d.toISOString().split('T')[0]
 }
 
+// startTime stores the local h/m AS the UTC h/m of a 2000-01-01 sentinel → read via getUTC*.
+function toTimeInputValue(stored: string | null): string {
+  if (!stored) return ''
+  const d = new Date(stored)
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+}
+
 export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: ChoreDialogProps) {
   const [title, setTitle] = useState(chore?.title ?? '')
   const [description, setDescription] = useState(chore?.description ?? '')
@@ -111,6 +121,8 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [allowEarlyStart, setAllowEarlyStart] = useState(chore?.allowEarlyStart ?? false)
   const [emailReminder, setEmailReminder] = useState(chore?.emailReminder ?? false)
   const [emailReminderDays, setEmailReminderDays] = useState(chore?.emailReminderDays?.toString() ?? '1')
+  const [dueTime, setDueTime] = useState(toTimeInputValue(chore?.startTime ?? null))
+  const [emailReminderHours, setEmailReminderHours] = useState(chore?.emailReminderHours?.toString() ?? '24')
   const [saving, setSaving] = useState(false)
 
   function toggleDay(day: number) {
@@ -148,6 +160,8 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         allowEarlyStart,
         emailReminder,
         emailReminderDays: parseInt(emailReminderDays) || 1,
+        emailReminderHours: parseInt(emailReminderHours) || 24,
+        startTime: dueTime ? localTimeToStoredDateTime(dueTime) : null,
       }
 
       // For monthly-based chores, auto-set dayOfMonth from start date if not explicitly set
@@ -399,17 +413,50 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                 />
               </div>
               {emailReminder && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="chore-reminder-days">Remind how many days before due?</Label>
-                  <Input
-                    id="chore-reminder-days"
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={emailReminderDays}
-                    onChange={(e) => setEmailReminderDays(e.target.value)}
-                    className="w-24"
-                  />
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="chore-due-time">Due time (optional)</Label>
+                    <Input
+                      id="chore-due-time"
+                      type="time"
+                      value={dueTime}
+                      onChange={(e) => setDueTime(e.target.value)}
+                      className="w-32"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Set a time to be reminded a number of hours before it&apos;s due.
+                    </p>
+                  </div>
+                  {dueTime ? (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="chore-reminder-hours">Notify how long before?</Label>
+                      <Select value={emailReminderHours} onValueChange={(v) => setEmailReminderHours(v ?? '24')}>
+                        <SelectTrigger id="chore-reminder-hours" className="w-48"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 hour before</SelectItem>
+                          <SelectItem value="2">2 hours before</SelectItem>
+                          <SelectItem value="6">6 hours before</SelectItem>
+                          <SelectItem value="12">12 hours before</SelectItem>
+                          <SelectItem value="24">24 hours before</SelectItem>
+                          <SelectItem value="48">48 hours before</SelectItem>
+                          <SelectItem value="168">1 week before</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="chore-reminder-days">Remind how many days before due?</Label>
+                      <Input
+                        id="chore-reminder-days"
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={emailReminderDays}
+                        onChange={(e) => setEmailReminderDays(e.target.value)}
+                        className="w-24"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>{/* end switches */}

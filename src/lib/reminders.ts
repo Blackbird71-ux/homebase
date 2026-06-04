@@ -5,7 +5,7 @@ import { sendEmail } from '@/lib/email'
 import { choreReminderHtml, eventReminderHtml, documentExpiryHtml, billReminderHtml } from '@/lib/email-templates'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { generateCompleteToken } from '@/lib/complete-token'
-import { dateStringInTz, todayStringInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { dateStringInTz, todayStringInTz, localMidnightToUtc, DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 function todayKey(): string {
   return new Date().toISOString().split('T')[0]
@@ -56,7 +56,9 @@ async function logAndSend({
 
 export async function processChoreReminders(): Promise<number> {
   const chores = await prisma.chore.findMany({
-    where: { emailReminder: true, isActive: true, nextDueDate: { not: null } },
+    // Timed chores (startTime set) are handled by processTimedChoreReminders so
+    // they aren't reminded by both the day-based and hours-based paths.
+    where: { emailReminder: true, isActive: true, nextDueDate: { not: null }, startTime: null },
     include: {
       currentAssignee: { select: { id: true, name: true, email: true } },
       family: { select: { timezone: true } },
@@ -90,6 +92,71 @@ export async function processChoreReminders(): Promise<number> {
           frequency: chore.frequency,
           nextDueDate: chore.nextDueDate,
           emailReminderDays: chore.emailReminderDays,
+        },
+        chore.currentAssignee.name,
+        completeUrl
+      ),
+    })
+    if (ok) sent++
+  }
+  return sent
+}
+
+/**
+ * Hours-based reminders for chores that carry a due time (startTime).
+ * Mirrors processEventReminders: fires within the 1-hour window ending at
+ * `emailReminderHours` before the chore's due instant. Runs on its own hourly
+ * cron (see scheduler.ts) so it can land in that window — the daily 8am job is
+ * left untouched for the day-based path.
+ */
+export async function processTimedChoreReminders(): Promise<number> {
+  const now = new Date()
+
+  const chores = await prisma.chore.findMany({
+    where: { emailReminder: true, isActive: true, nextDueDate: { not: null }, startTime: { not: null } },
+    include: {
+      currentAssignee: { select: { id: true, name: true, email: true } },
+      family: { select: { timezone: true } },
+    },
+  })
+
+  let sent = 0
+  for (const chore of chores) {
+    if (!chore.nextDueDate || !chore.startTime || !chore.currentAssignee?.email) continue
+
+    const tz = chore.family?.timezone ?? DEFAULT_TIMEZONE
+
+    // startTime stores the local h/m AS the UTC h/m of a 2000-01-01 sentinel → read via getUTC*.
+    const hh = chore.startTime.getUTCHours()
+    const mm = chore.startTime.getUTCMinutes()
+    const localMidnightUtc = localMidnightToUtc(dateStringInTz(chore.nextDueDate, tz), tz)
+    const dueAt = new Date(localMidnightUtc.getTime() + hh * 3600000 + mm * 60000)
+
+    const reminderAt = new Date(dueAt.getTime() - chore.emailReminderHours * 3600000)
+    // Send only within this hour's window of the reminder time (matches event semantics).
+    if (now < reminderAt || now.getTime() - reminderAt.getTime() > 3600000) continue
+
+    const dueKey = dueAt.toISOString().substring(0, 13) // YYYY-MM-DDTHH
+    const reminderKey = `chore_timed_${chore.id}_${dueKey}`
+
+    const appUrl = process.env.NEXTAUTH_URL ?? ''
+    const token = generateCompleteToken('chore', chore.id, chore.currentAssignee.id)
+    const completeUrl = `${appUrl}/api/complete?token=${token}`
+
+    const ok = await logAndSend({
+      reminderKey,
+      entityType: 'chore',
+      to: chore.currentAssignee.email,
+      subject: `Reminder: "${chore.title}" is due soon`,
+      html: choreReminderHtml(
+        {
+          title: chore.title,
+          description: chore.description,
+          frequency: chore.frequency,
+          nextDueDate: chore.nextDueDate,
+          emailReminderDays: chore.emailReminderDays,
+          startTime: chore.startTime,
+          emailReminderHours: chore.emailReminderHours,
         },
         chore.currentAssignee.name,
         completeUrl

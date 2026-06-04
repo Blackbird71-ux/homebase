@@ -37,6 +37,8 @@ interface Chore {
   allowEarlyStart: boolean
   emailReminder: boolean
   emailReminderDays: number
+  emailReminderHours: number
+  startTime: string | null
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string
