@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyCompleteToken } from '@/lib/complete-token'
-import { calculateNextDueDate } from '@/lib/chore-helpers'
+import { completeChore } from '@/lib/chore-completion'
 import { formatCurrency } from '@/lib/financeShared'
 
 function htmlPage(title: string, heading: string, body: string, success: boolean): Response {
@@ -74,11 +74,6 @@ export async function GET(req: Request): Promise<Response> {
       )
     }
 
-    const completedAt = new Date()
-    await prisma.choreCompletion.create({
-      data: { choreId: payload.id, completedById: payload.assigneeId },
-    })
-
     // There is no session on the email link; source the timezone from the
     // chore's family so the shared helper computes local-midnight boundaries correctly.
     const family = await prisma.family.findUnique({
@@ -87,24 +82,23 @@ export async function GET(req: Request): Promise<Response> {
     })
     const timezone = family?.timezone ?? 'UTC'
 
-    const nextDueDate = calculateNextDueDate(chore, completedAt, timezone)
-    const updateData: Record<string, unknown> = nextDueDate === null
-      ? { isActive: false, nextDueDate: null }
-      : { nextDueDate }
+    // Run the shared completion lifecycle (gate → record → advance → rotate),
+    // identical to the in-app and AI paths.
+    const result = await completeChore(chore, {
+      completedById: payload.assigneeId,
+      timezone,
+    })
 
-    if (chore.autoRotateOnComplete) {
-      const members = await prisma.user.findMany({
-        where: { familyId: chore.familyId },
-        select: { id: true },
-        orderBy: { name: 'asc' },
-      })
-      if (members.length > 0) {
-        const currentIndex = members.findIndex(m => m.id === chore.currentAssigneeId)
-        updateData.currentAssigneeId = members[(currentIndex + 1) % members.length].id
-      }
+    if (!result.ok) {
+      return htmlPage(
+        'Not due yet',
+        'Not due yet',
+        `"${chore.title}" isn't due yet. Log in to HomeBase to complete it ahead of schedule (enable "Allow early completion" on the chore).`,
+        false
+      )
     }
 
-    await prisma.chore.update({ where: { id: payload.id }, data: updateData })
+    const nextDueDate = result.chore.nextDueDate
 
     return htmlPage(
       'Done!',

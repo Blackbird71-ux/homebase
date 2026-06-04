@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
+import { nextAssigneeId } from '@/lib/chore-completion'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -23,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Get all family members for rotation
   const members = await prisma.user.findMany({
     where: { familyId: user.familyId },
-    select: { id: true, name: true },
+    select: { id: true },
     orderBy: { name: 'asc' },
   })
 
@@ -31,16 +32,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'No family members to rotate to' }, { status: 400 })
   }
 
-  // Find next assignee in rotation
-  let nextIndex = 0
-  if (chore.currentAssigneeId) {
-    const currentIndex = members.findIndex((m) => m.id === chore.currentAssigneeId)
-    nextIndex = (currentIndex + 1) % members.length
-  }
+  // Find next assignee using the shared rotation helper.
+  const next = nextAssigneeId(chore.currentAssigneeId, members)
 
   const updated = await prisma.chore.update({
     where: { id },
-    data: { currentAssigneeId: members[nextIndex].id },
+    data: { currentAssigneeId: next },
     include: {
       currentAssignee: { select: { id: true, name: true } },
     },

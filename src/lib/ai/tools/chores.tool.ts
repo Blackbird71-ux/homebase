@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
-import { calculateNextDueDate } from '@/lib/chore-helpers'
+import { completeChore } from '@/lib/chore-completion'
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
@@ -58,20 +58,23 @@ async function completeChoreHandler(args: Record<string, unknown>, ctx: HandlerC
     return { message: 'Chore not found.' }
   }
 
-  await prisma.choreCompletion.create({
-    data: { choreId, completedById: ctx.user.id, note: note ?? null },
+  const timezone = ctx.timezone ?? 'UTC'
+
+  // Run the shared completion lifecycle (gate → record → advance → rotate),
+  // identical to the in-app and email paths.
+  const result = await completeChore(chore, {
+    completedById: ctx.user.id,
+    note: note ?? null,
+    timezone,
   })
 
-  const completedAt = new Date()
-  const timezone = ctx.timezone ?? 'UTC'
-  const nextDueDate = calculateNextDueDate(chore, completedAt, timezone)
-
-  if (nextDueDate === null) {
-    await prisma.chore.update({ where: { id: choreId }, data: { isActive: false, nextDueDate: null } })
-  } else {
-    await prisma.chore.update({ where: { id: choreId }, data: { nextDueDate } })
+  if (!result.ok) {
+    return {
+      message: `"${chore.title}" isn't due yet. Enable "Allow early completion" on the chore to mark it done ahead of schedule.`,
+    }
   }
 
+  const nextDueDate = result.chore.nextDueDate
   const nextPart = nextDueDate
     ? ` Next due: ${formatInTz(nextDueDate, timezone, { weekday: 'long', day: 'numeric', month: 'short' })}.`
     : ' Chore completed for the last time.'

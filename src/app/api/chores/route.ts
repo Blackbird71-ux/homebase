@@ -128,5 +128,12 @@ export async function POST(req: Request) {
     { chore: { title, frequency, description } }
   )
 
-  return NextResponse.json(chore, { status: 201 })
+  // Attach the computed isOverdue flag for parity with the GET/PATCH/complete
+  // routes, so the client object is shaped consistently right after creation.
+  const { start: todayStart } = todayBoundsInTz(user.timezone ?? 'UTC')
+
+  return NextResponse.json(
+    { ...chore, isOverdue: chore.nextDueDate ? chore.nextDueDate < todayStart : false },
+    { status: 201 }
+  )
 }
