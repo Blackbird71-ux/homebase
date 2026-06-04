@@ -310,7 +310,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       </div>
 
       {/* ── Desktop: sidebar ── */}
-      <aside className="hidden md:flex md:flex-col w-[200px] shrink-0 border-r border-border overflow-y-auto">
+      <aside className="hidden md:flex md:flex-col w-[240px] shrink-0 border-r border-border overflow-y-auto">
         <div className="px-3 py-2 border-b border-border">
           {filterNav}
         </div>

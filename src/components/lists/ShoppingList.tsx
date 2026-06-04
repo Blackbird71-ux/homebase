@@ -71,6 +71,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
     activeCategoryOrder,
   } = useShoppingList(listId, initialItems, initialCategoryOrder, onNonCompletedCountChange)
 
+  const hasRecipeItems = items.some(i => i.recipeName)
+
   return (
     <div className="flex flex-col gap-2 sm:gap-4">
       <div className="flex items-center gap-2 flex-wrap">
@@ -79,12 +81,14 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
             className={`px-3 py-1 rounded-full border text-sm font-medium transition-colors ${viewMode === 'aisle' ? 'bg-primary text-primary-foreground border-primary shadow-sm' : 'hb-pill-inactive'}`}>
             By Aisle
           </button>
-          <button onClick={() => setViewMode('recipe')}
-            className={`px-3 py-1 rounded-full border text-sm font-medium transition-colors ${viewMode === 'recipe' ? 'bg-primary text-primary-foreground border-primary shadow-sm' : 'hb-pill-inactive'}`}>
-            By Recipe
-          </button>
+          {hasRecipeItems && (
+            <button onClick={() => setViewMode('recipe')}
+              className={`px-3 py-1 rounded-full border text-sm font-medium transition-colors ${viewMode === 'recipe' ? 'bg-primary text-primary-foreground border-primary shadow-sm' : 'hb-pill-inactive'}`}>
+              By Recipe
+            </button>
+          )}
         </div>
-        {viewMode === 'aisle' && (
+        {viewMode === 'aisle' && hasRecipeItems && (
           <button onClick={() => setShowRecipePills(v => !v)}
             className={`px-2 py-1 rounded-full border text-xs font-medium transition-colors ${showRecipePills ? 'bg-primary text-primary-foreground border-primary' : 'hb-pill-inactive'}`}>
             {showRecipePills ? 'Hide Recipes' : 'Show Recipes'}
@@ -152,7 +156,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
         </Button>
       )}
 
-      {viewMode === 'aisle' ? (
+      {viewMode === 'aisle' || !hasRecipeItems ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={activeCategoryOrder} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-2 sm:gap-4">

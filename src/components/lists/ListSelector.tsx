@@ -217,7 +217,7 @@ function SortableListRow({
         {onEditList && (
           <button
             onClick={() => onEditList(list.id)}
-            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0 hidden group-hover:inline-flex"
             title="Edit list (change owner)"
           >
             <PencilIcon className="h-3 w-3" />
@@ -226,7 +226,7 @@ function SortableListRow({
         {onConvert && (
           <button
             onClick={() => onConvert(list.id, list.type === 'SHOPPING' ? 'TODO' : 'SHOPPING')}
-            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0 hidden group-hover:inline-flex"
             title={list.type === 'SHOPPING' ? 'Convert to Todo list' : 'Convert to Shopping list'}
           >
             <ArrowLeftRightIcon className="h-3 w-3" />
@@ -238,7 +238,7 @@ function SortableListRow({
             className={`p-1 rounded transition-colors shrink-0 ${
               isDefault
                 ? 'text-yellow-500 hover:text-yellow-600'
-                : 'text-muted-foreground/30 hover:text-muted-foreground/60'
+                : 'text-muted-foreground/30 hover:text-muted-foreground/60 hidden group-hover:inline-flex'
             }`}
             title={isDefault ? 'Remove as default' : 'Set as default list'}
           >
@@ -248,7 +248,7 @@ function SortableListRow({
         {onDeleteList && (
           <button
             onClick={() => onDeleteList(list.id)}
-            className="p-1 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+            className="p-1 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0 hidden group-hover:inline-flex"
             title="Delete list"
           >
             <Trash2Icon className="h-3 w-3" />
