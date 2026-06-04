@@ -119,9 +119,36 @@ These rules exist because layout refactors repeatedly caused silent field loss (
 
 ---
 
+# Shared helpers over inline logic — APP-WIDE rule (not just finance)
+
+**Every piece of domain/business logic lives in a shared `src/lib/` helper and is called from there. Routes and pages stay thin: they authenticate, parse input, call helpers, and shape the response. They contain no reusable logic of their own.**
+
+This is the single most-repeated source of recurring bugs in this codebase. The same operation gets hand-written inline in two, three, four places — completion + rotation across the chore routes, GL posting across the bill/income routes, date math across the chore routes. The copies drift, a fix lands in one and not the others, and the same bug is "found again" months later in a different file. Writing logic inline is how the bug is created; extracting it to one helper is how it is prevented. **Do not inline domain logic, even once.**
+
+## Rules
+
+1. **No domain logic inline in a route handler or page.** If a route does anything beyond auth + parse + call + respond — computes a value, advances a schedule, posts a journal, rotates an assignee, decides a status — that work belongs in a `src/lib/` function the route calls.
+
+2. **Before writing logic in a route, look for an existing helper.** If one exists, call it. If one doesn't, create it in `src/lib/` first, then call it. Never inline "just this once."
+
+3. **Two copies is one too many.** The moment the same logic would exist in a second place, stop and extract it to a shared helper, then point both callers at it. Don't wait for the third copy to appear.
+
+4. **Pages call APIs; pages do not compute.** A `.tsx` page/component never makes domain decisions (balances, due dates, rotation, posting). It renders data and calls endpoints.
+
+5. **Shared helpers are the single source of truth.** If a helper exists for an operation, every caller uses it. Re-implementing it inline — even slightly differently — is a bug.
+
+6. **Mind the client/server split when extracting.** Helpers with DB writes or server-only imports (`prisma`, `auth`) must live in server-only files. Pure helpers imported by client components (e.g. `chore-helpers.ts`) must stay free of `prisma`/server imports. When a concern needs both, split it: pure math in the client-safe file, DB writes in a server-only file (see `chore-helpers.ts` + `chore-completion.ts`).
+
+7. **The only exception is "genuinely not possible":** one-off glue with no second caller and no reusable logic (e.g. a route that only forwards parsed params). If you believe something can't be a helper, state why in one line — don't silently inline it.
+
+## Verify before finishing
+When you touch or add a route, grep `src/` for the operation you just wrote. If it appears in more than one file, it must become a shared helper before you finish. The Finance (below) and Timezone (above) sections are specific instances of this same rule.
+
+---
+
 # Finance module architecture — shared functions over inline logic
 
-**Keep accounting logic in `src/lib/` helpers, not duplicated in routes or pages.**
+**Keep accounting logic in `src/lib/` helpers, not duplicated in routes or pages.** (This is a specific instance of the app-wide rule above.)
 
 This rule exists because inline copies of accounting logic (journal creation, reversal, balance calculation) cause the same bug to exist in multiple places — fixing it in one route leaves the others broken, and inconsistent behavior erodes accounting integrity.
 

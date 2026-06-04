@@ -12,6 +12,18 @@ This file is auto-loaded every session. Work through the relevant sections befor
 
 ---
 
+## Shared helpers — no inline domain logic (recurring #1 architectural defect)
+
+Domain logic keeps getting hand-copied inline across routes; the copies drift and the same bug resurfaces in a new file. **See AGENTS.md §Shared helpers over inline logic.**
+
+- [ ] Any domain/business logic (compute, schedule, post, rotate, decide status) lives in a `src/lib/` helper — **never inline in a route or page**
+- [ ] Before writing logic in a route, grep `src/` for it — if it exists, call the helper; if not, create one **first**, then call it
+- [ ] Same logic about to exist in a 2nd place? Extract to a shared helper now — don't wait for the 3rd copy
+- [ ] Pages/components call APIs; they never compute domain values themselves
+- [ ] DB-writing helpers are server-only; client-imported helpers stay free of `prisma`/server imports (split if needed — e.g. `chore-helpers.ts` + `chore-completion.ts`)
+
+---
+
 ## Date and time — #1 source of bugs in this codebase
 
 The server is UTC. The user is UTC+10. They are not the same. **See AGENTS.md §Timezone and QA.md §12.20.**
