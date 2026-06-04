@@ -31,6 +31,7 @@ export type ChoreForSchedule = {
   dayOfMonth: number | null
   triggerOnComplete: boolean
   allowEarlyStart: boolean
+  startDate: Date | null
   endDate: Date | null
   nextDueDate: Date | null
 }
@@ -302,37 +303,58 @@ export function calculateNextDueDate(
 
 /**
  * Calculate a new next due date when a chore's **schedule fields are edited**
- * (frequency / dayOfWeek / dayOfMonth changed via PATCH).
+ * (frequency / dayOfWeek / dayOfMonth / startDate changed via PATCH).
  *
- * Unlike calculateNextDueDate, this intentionally bases off "now" — the user
- * changed the schedule so the old anchor is no longer meaningful.
+ * This mirrors creation semantics (calculateInitialDueDate) rather than
+ * advancing a whole interval: the next occurrence is computed FROM the chore's
+ * start date, so editing a biweekly chore with a start date of today produces
+ * "today" — not "today + 14 days".
+ *
+ *   • one-off   → the start date IS the due date; honour it verbatim (defaults
+ *                 to today when unset). Editing never deactivates a one-off.
+ *   • recurring → anchor on the LATER of (start date, today): a future start
+ *                 date is honoured, while an old/past start date re-phases to
+ *                 today instead of landing immediately overdue (e.g. when only
+ *                 the frequency is changed on a long-running chore).
  *
  * Returns null → next occurrence exceeds endDate; caller should deactivate.
- * Returns Date → new nextDueDate to store.
+ * Returns Date → new nextDueDate to store (UTC instant of local midnight).
  */
 export function calculateNextDueDateFromNow(
   chore: ChoreForSchedule,
   timezone: string
 ): Date | null {
-  // One-off chores have no next occurrence — deactivate after completion
-  if (chore.frequency === 'one-off') return null
+  const now = new Date()
 
-  // Use UTC midnight of the LOCAL calendar today, not UTC midnight of the UTC date.
-  const todayLocalStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-  const baseDateUTCMidnight = new Date(`${todayLocalStr}T00:00:00Z`)
+  // One-off: the start date is the single due date — honour it as-is.
+  if (chore.frequency === 'one-off') {
+    return calculateInitialDueDate('one-off', null, null, chore.startDate ?? now, timezone)
+  }
 
-  const next = advanceByFrequency(
-    baseDateUTCMidnight,
+  // Recurring: base off the later of (start date, today) by LOCAL calendar day.
+  const todayLocalStr = now.toLocaleDateString('en-CA', { timeZone: timezone })
+  const startLocalStr = chore.startDate
+    ? new Date(chore.startDate).toLocaleDateString('en-CA', { timeZone: timezone })
+    : null
+  const base =
+    startLocalStr && startLocalStr > todayLocalStr ? new Date(chore.startDate as Date) : now
+
+  const next = calculateInitialDueDate(
     chore.frequency,
-    effectiveWeekdays(chore.dayOfWeek, chore.daysOfWeek),
-    chore.dayOfMonth
+    chore.dayOfWeek,
+    chore.dayOfMonth,
+    base,
+    timezone,
+    chore.daysOfWeek
   )
 
-  if (chore.endDate && next > chore.endDate) {
+  // endDate is stored as UTC midnight of its date; compare like-for-like by
+  // converting it to the same local-midnight basis as `next`.
+  if (chore.endDate && next > utcMidnightToLocalMidnight(new Date(chore.endDate), timezone)) {
     return null
   }
 
-  return utcMidnightToLocalMidnight(next, timezone)
+  return next
 }
 
 // ─── choreIsCompletable ───────────────────────────────────────────────────────

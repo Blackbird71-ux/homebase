@@ -44,15 +44,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     updateData[key] = val
   }
 
-  // If frequency or day-related fields changed, recalculate nextDueDate from now.
-  // We use "from now" deliberately here — the user edited the schedule so the old
-  // anchor is no longer meaningful. See chore-helpers.ts for the distinction between
-  // calculateNextDueDateFromNow (edit) and calculateNextDueDate (complete).
+  // Recompute nextDueDate only when a field that actually affects the schedule
+  // changed. The edit form posts the FULL body on every save, so we compare
+  // against the stored record — keying off "was this field present in the body"
+  // would re-anchor the due date on every edit (even a rename), pushing it a
+  // whole interval into the future and ignoring the start date the user set.
+  // See chore-helpers.ts for the distinction between calculateNextDueDateFromNow
+  // (edit) and calculateNextDueDate (complete).
+  const startDateChanged =
+    'startDate' in updateData &&
+    ((updateData.startDate instanceof Date ? updateData.startDate.getTime() : null) !==
+      (existing.startDate ? existing.startDate.getTime() : null))
   const needsRecalc =
-    changedFields.includes('frequency') ||
-    changedFields.includes('dayOfWeek') ||
-    changedFields.includes('daysOfWeek') ||
-    changedFields.includes('dayOfMonth')
+    ('frequency' in updateData && updateData.frequency !== existing.frequency) ||
+    ('dayOfWeek' in updateData && updateData.dayOfWeek !== existing.dayOfWeek) ||
+    ('daysOfWeek' in updateData && updateData.daysOfWeek !== existing.daysOfWeek) ||
+    ('dayOfMonth' in updateData && updateData.dayOfMonth !== existing.dayOfMonth) ||
+    startDateChanged
 
   if (needsRecalc) {
     const timezone = user.timezone ?? 'UTC'
