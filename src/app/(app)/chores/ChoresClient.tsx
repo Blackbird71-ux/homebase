@@ -9,7 +9,7 @@ import { ChoreCalendarView } from './ChoreCalendarView'
 import { HoverCard } from '@/components/ui/hover-card'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import { parseDaysOfWeek, choreIsCompletable } from '@/lib/chore-helpers'
-import { todayBoundsInTz } from '@/lib/timezone'
+import { todayBoundsInTz, formatInTz } from '@/lib/timezone'
 
 interface Member {
   id: string
@@ -72,9 +72,12 @@ const FREQUENCY_LABELS: Record<string, string> = {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-AU', {
+// Chore dates (nextDueDate/startDate/endDate) are stored as the UTC instant of
+// local midnight, and completedAt is a real instant — both must be formatted in
+// the family timezone, not the browser's, so the displayed calendar day matches
+// what the family expects regardless of where the viewer's device is set.
+function formatDate(dateStr: string, timezone: string): string {
+  return formatInTz(new Date(dateStr), timezone, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -150,7 +153,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
           : null
       if (nextDate) {
         toast.success('Chore completed!', {
-          description: `Next scheduled: ${formatDate(nextDate)}${rotatedTo ? ` · now assigned to ${rotatedTo}` : ''}`,
+          description: `Next scheduled: ${formatDate(nextDate, timezone)}${rotatedTo ? ` · now assigned to ${rotatedTo}` : ''}`,
           action: {
             label: 'Edit',
             onClick: () => { setEditingChore(updatedChore); setDialogOpen(true) },
@@ -213,7 +216,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
     const freq = FREQUENCY_LABELS[chore.frequency] ?? chore.frequency
     if (chore.frequency === 'one-off') {
       if (chore.nextDueDate) {
-        return `${freq} — due ${formatDate(chore.nextDueDate)}`
+        return `${freq} — due ${formatDate(chore.nextDueDate, timezone)}`
       }
       return freq
     }
@@ -247,7 +250,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
             <>
               <span className="text-muted-foreground">Next due:</span>
               <span className={overdue ? 'text-amber-500 font-medium' : ''}>
-                {overdue ? '⚠ ' : ''}{formatDate(chore.nextDueDate)}
+                {overdue ? '⚠ ' : ''}{formatDate(chore.nextDueDate, timezone)}
               </span>
             </>
           )}
@@ -265,7 +268,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
           {chore.endDate && (
             <>
               <span className="text-muted-foreground">Ends:</span>
-              <span>{formatDate(chore.endDate)}</span>
+              <span>{formatDate(chore.endDate, timezone)}</span>
             </>
           )}
 
@@ -298,9 +301,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
         {lastCompleted && (
           <p className="text-xs text-muted-foreground/70 pt-1 border-t border-border/40 mt-1">
             Last done by {lastCompleted.completedBy.name} on{' '}
-            {new Date(lastCompleted.completedAt).toLocaleDateString('en-AU', {
-              weekday: 'short', day: 'numeric', month: 'short',
-            })}
+            {formatDate(lastCompleted.completedAt, timezone)}
           </p>
         )}
       </div>
@@ -486,7 +487,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
                     {/* Next occurrence date */}
                     {chore.nextDueDate && (
                       <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
-                        {formatDate(chore.nextDueDate)}
+                        {formatDate(chore.nextDueDate, timezone)}
                       </span>
                     )}
 
