@@ -327,24 +327,36 @@ export function addWeeksInTz(date: Date, n: number, timezone: string): Date {
 // the transition day itself ±1h off; re-resolving the wall-clock avoids even that.)
 
 /**
- * Resolve a local wall-clock datetime (in `timezone`) to its UTC instant.
- * Finds the zone's UTC offset at the target wall-clock time, then applies it.
- * Mirrors `localMidnightToUtc`'s offset strategy, generalised to any time-of-day.
+ * The zone's UTC offset (ms east of UTC) at a given instant: the difference
+ * between the instant's local wall-clock (read in `timezone`) and the instant.
  */
-function resolveLocalWallClock(
-  y: number, mo: number, d: number, h: number, mi: number, s: number, ms: number, timezone: string,
-): Date {
-  const guessSec = Date.UTC(y, mo - 1, d, h, mi, s)
+function zoneOffsetMsAt(instant: Date, timezone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  }).formatToParts(new Date(guessSec))
+  }).formatToParts(instant)
   const get = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? '0', 10)
   let gh = get('hour'); if (gh === 24) gh = 0
   const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), gh, get('minute'), get('second'))
-  const offsetMs = asUtc - guessSec
-  return new Date(Date.UTC(y, mo - 1, d, h, mi, s, ms) - offsetMs)
+  return asUtc - instant.getTime()
+}
+
+/**
+ * Resolve a local wall-clock datetime (in `timezone`) to its UTC instant.
+ * Two-pass offset resolution: sample the offset at the wall-clock-as-if-UTC
+ * guess, apply it, then RE-sample at the candidate instant and apply that. The
+ * single-pass form is wrong for wall-clock times near a DST transition, where
+ * the guess instant can land on the *other* side of the transition and pick up
+ * the wrong offset (e.g. 00:45 on the Oct spring-forward day resolved 1h off).
+ */
+function resolveLocalWallClock(
+  y: number, mo: number, d: number, h: number, mi: number, s: number, ms: number, timezone: string,
+): Date {
+  const wallAsUtc = Date.UTC(y, mo - 1, d, h, mi, s, ms)
+  const off1 = zoneOffsetMsAt(new Date(wallAsUtc), timezone)
+  const off2 = zoneOffsetMsAt(new Date(wallAsUtc - off1), timezone)
+  return new Date(wallAsUtc - off2)
 }
 
 /** Read the local wall-clock components of `instant` in `timezone`. */
@@ -359,6 +371,32 @@ function localPartsInTz(instant: Date, timezone: string): {
   const get = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? '0', 10)
   let h = get('hour'); if (h === 24) h = 0
   return { y: get('year'), mo: get('month'), d: get('day'), h, mi: get('minute'), s: get('second'), ms: instant.getUTCMilliseconds() }
+}
+
+/**
+ * Format a UTC instant as a `<input type="datetime-local">` value
+ * ("YYYY-MM-DDTHH:mm") showing the wall-clock time as it appears in `timezone`.
+ * Inverse of `dateTimeLocalToUtc`. Use to populate a datetime-local field so it
+ * shows the family's local time regardless of the browser's timezone.
+ */
+export function toDateTimeLocalInTz(date: Date, timezone: string): string {
+  const datePart = dateStringInTz(date, timezone) // YYYY-MM-DD in tz
+  const { hour, minute } = getLocalHourMinute(date.toISOString(), timezone)
+  return `${datePart}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+/**
+ * Parse a `<input type="datetime-local">` value ("YYYY-MM-DDTHH:mm", read as a
+ * wall-clock time in `timezone`) to the UTC instant it represents. Inverse of
+ * `toDateTimeLocalInTz`. Use when saving a datetime-local field so the stored
+ * instant matches the family's local time, not the browser's. Resolves the
+ * zone's UTC offset at the target wall-clock time (DST-correct).
+ */
+export function dateTimeLocalToUtc(localStr: string, timezone: string): Date {
+  const [datePart, timePart = '00:00'] = localStr.split('T')
+  const [y, mo, d] = datePart.split('-').map(Number)
+  const [h, mi] = timePart.split(':').map(Number)
+  return resolveLocalWallClock(y, mo, d, h ?? 0, mi ?? 0, 0, 0, timezone)
 }
 
 /** Add `n` calendar days to `instant`, preserving its local time-of-day in `timezone`. */

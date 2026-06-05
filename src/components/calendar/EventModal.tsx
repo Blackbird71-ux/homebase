@@ -6,10 +6,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { format } from 'date-fns'
 import type { CalendarEvent } from '@/types'
 import { getEventId, isRecurringEvent } from '@/lib/event-helpers'
 import { EventAttendeePanel } from './EventAttendeePanel'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
+import {
+  toDateTimeLocalInTz,
+  dateTimeLocalToUtc,
+  dateStringInTz,
+  localMidnightToUtc,
+  endOfLocalDayUtc,
+} from '@/lib/timezone'
 
 interface CategoryOption {
   id: string
@@ -66,6 +73,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const timezone = useFamilyTimezone()
 
 
   // Load event categories when modal opens
@@ -81,15 +89,15 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
   useEffect(() => {
     if (event) {
       setTitle(event.title)
-      setStart(format(new Date(event.start), "yyyy-MM-dd'T'HH:mm"))
-      setEnd(format(new Date(event.end), "yyyy-MM-dd'T'HH:mm"))
+      setStart(toDateTimeLocalInTz(new Date(event.start), timezone))
+      setEnd(toDateTimeLocalInTz(new Date(event.end), timezone))
       setIsAllDay(event.isAllDay)
       setCategory(event.category ?? 'Other')
       setColor(event.color ?? '')
       setDescription(event.description ?? '')
       setIsPersonal(event.isPersonal ?? false)
       setRecurrenceRule(event.recurrenceRule ?? '')
-      setRecurrenceEndDate(event.recurrenceEndDate ? format(new Date(event.recurrenceEndDate), "yyyy-MM-dd") : '')
+      setRecurrenceEndDate(event.recurrenceEndDate ? dateStringInTz(new Date(event.recurrenceEndDate), timezone) : '')
       // Parse existing BYDAY days from recurrence rule
       if (event.recurrenceRule) {
         const byDayMatch = event.recurrenceRule.match(/BYDAY=([A-Z,]+)/i)
@@ -105,9 +113,10 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setLocation(event.location ?? '')
     } else {
       const d = defaultDate ?? new Date()
+      const dateStr = dateStringInTz(d, timezone)
       setTitle('')
-      setStart(format(d, "yyyy-MM-dd'T'09:00"))
-      setEnd(format(d, "yyyy-MM-dd'T'10:00"))
+      setStart(`${dateStr}T09:00`)
+      setEnd(`${dateStr}T10:00`)
       setIsAllDay(false)
       setCategory('Other')
       setColor('')
@@ -122,7 +131,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       setWeeklyRepeatDays([])
     }
     setError('')
-  }, [event, defaultDate, open])
+  }, [event, defaultDate, open, timezone])
 
 
   async function handleSave() {
@@ -154,8 +163,8 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       // (recurring instances are virtual - editing them should update the original event's metadata, not its dates)
       const isRecurringInstance = !!(event && event.seriesId)
       if (!isRecurringInstance) {
-        const startDate = isAllDay ? new Date(start.split('T')[0]).toISOString() : new Date(start).toISOString()
-        const endDate = isAllDay ? new Date(end.split('T')[0]).toISOString() : new Date(end).toISOString()
+        const startDate = isAllDay ? localMidnightToUtc(start.split('T')[0], timezone).toISOString() : dateTimeLocalToUtc(start, timezone).toISOString()
+        const endDate = isAllDay ? localMidnightToUtc(end.split('T')[0], timezone).toISOString() : dateTimeLocalToUtc(end, timezone).toISOString()
         body.start = startDate
         body.end = endDate
         body.isAllDay = isAllDay
@@ -173,7 +182,7 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
         body.recurrenceRule = finalRecurrenceRule
         body.isRecurring = true
         if (recurrenceEndDate) {
-          body.recurrenceEndDate = new Date(recurrenceEndDate + 'T23:59:59').toISOString()
+          body.recurrenceEndDate = endOfLocalDayUtc(recurrenceEndDate, timezone).toISOString()
         }
       } else {
         body.recurrenceRule = null
