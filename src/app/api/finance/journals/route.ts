@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 import { reverseJournalEntry, type ReversibleJournalEntry } from '@/lib/finance-posting'
 
@@ -418,12 +418,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     // We need two new references: one for the reversal, one for the corrective entry.
-    // Both are pre-generated before the $transaction opens (SQLite committed-read
-    // rule); retry the whole block on P2002.
+    // nextJournalReference reads committed MAX, so calling it twice with no commit
+    // between returns the SAME value — which collides on the unique (familyId,
+    // reference) index. Use nextNJournalReferences(…, 2) to get two DISTINCT
+    // sequential refs in one shot. Both are pre-generated before the $transaction
+    // opens (SQLite committed-read rule); a P2002 collision (concurrent request)
+    // rolls back and retries the whole block with fresh refs.
     let amendmentEntry: any
     for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
-      const reversalRef   = await nextJournalReference(user.familyId)
-      const correctionRef = await nextJournalReference(user.familyId)
+      const [reversalRef, correctionRef] = await nextNJournalReferences(user.familyId, 2)
       try {
         amendmentEntry = await prisma.$transaction(async (tx) => {
           // Steps 1+2: reverse the original via the shared helper — creates the
