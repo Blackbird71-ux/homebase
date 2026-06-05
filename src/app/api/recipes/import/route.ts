@@ -151,7 +151,10 @@ export async function POST(req: Request) {
 
       results.push({ name: bookName, imported, updated, skipped, failed: failures.length, failures })
     } catch (err) {
-      results.push({ name: bookName, imported: 0, updated: 0, skipped: 0, failed: 0, failures: [], error: String(err) })
+      // Whole-book failure (corrupt zip, book lookup/create threw). Count it as
+      // one failure so the UI's top-line "failed" indicator fires; the per-book
+      // `error` carries the detail.
+      results.push({ name: bookName, imported: 0, updated: 0, skipped: 0, failed: 1, failures: [], error: String(err) })
     }
   }
 

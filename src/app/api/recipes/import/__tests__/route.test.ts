@@ -140,4 +140,18 @@ describe('POST /api/recipes/import', () => {
     expect(body.books[0].failed).toBe(1)
     expect(body.books[0].failures).toEqual([{ entry: 'Pumpkin Soup.json', error: 'DB down' }])
   })
+
+  it('counts a whole-book failure as failed:1 (not a silent 0) and reports the error', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(prisma.recipeBook.create).mockRejectedValue(new Error('book boom'))
+
+    const req = makeRequest([new File([new Uint8Array(4)], 'Soups.zip')])
+    const res = await POST(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.books[0].imported).toBe(0)
+    expect(body.books[0].failed).toBe(1)
+    expect(body.books[0].error).toContain('book boom')
+  })
 })
