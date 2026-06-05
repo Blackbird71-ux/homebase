@@ -9,10 +9,8 @@ vi.mock('@/lib/prisma', () => ({
     listItem: { deleteMany: vi.fn(), createMany: vi.fn() },
   },
 }))
-
-vi.mock('@/lib/auth-helpers', () => ({
-  requireSession: vi.fn(),
-}))
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
+vi.mock('@/lib/audit-log', () => ({ createAuditLog: vi.fn() }))
 
 const mockSession: SessionUser = {
   id: 'user-1',
@@ -42,9 +40,9 @@ function makeRequest(body: object) {
 describe('POST /api/meal-plan/export-groceries', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.ingredientCategory.upsert).mockResolvedValue({} as never)
     vi.mocked(prisma.list.findFirst).mockResolvedValue(mockList as never)
     vi.mocked(prisma.listItem.deleteMany).mockResolvedValue({ count: 0 } as never)
@@ -66,9 +64,9 @@ describe('POST /api/meal-plan/export-groceries', () => {
     expect(res.status).toBe(400)
   })
 
-  it('returns 400 if an item has an invalid category', async () => {
+  it('accepts any non-empty category (free-form, no hardcoded list)', async () => {
     const res = await POST(makeRequest({ items: [{ text: 'milk', key: 'milk', category: 'Snacks' }], mode: 'replace' }))
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(200)
   })
 
   it('upserts IngredientCategory for each item', async () => {

@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from '../route'
 import type { SessionUser } from '@/types'
 
-vi.mock('@/lib/auth-helpers', () => ({ requireSession: vi.fn() }))
-
 const mockSession: SessionUser = {
   id: 'user-1', email: 'test@example.com', name: 'Test', role: 'member',
   familyId: 'fam-1', weekStartsOn: 1, timezone: 'Australia/Sydney',
@@ -14,8 +12,8 @@ describe('GET /api/auth/google/connect', () => {
     vi.clearAllMocks()
     process.env.GOOGLE_CLIENT_ID = 'test-client-id'
     process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3300/api/auth/google/callback'
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
   })
 
   it('redirects to Google OAuth URL', async () => {

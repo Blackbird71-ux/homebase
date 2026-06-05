@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { POST } from '../route'
 import type { SessionUser } from '@/types'
 
-vi.mock('@/lib/auth-helpers', () => ({ requireSession: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: { update: vi.fn(), findUnique: vi.fn() },
@@ -39,10 +38,10 @@ function makeReq(body: object) {
 describe('POST /api/auth/google/disconnect', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
     const gc = await import('@/lib/google-calendar')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.user.update).mockResolvedValue({} as never)
     vi.mocked(prisma.googleCalendarSync.findMany).mockResolvedValue(mockSyncRows as never)

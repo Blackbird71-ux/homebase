@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from '../route'
 import type { SessionUser } from '@/types'
 
-vi.mock('@/lib/auth-helpers', () => ({ requireSession: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ prisma: { user: { update: vi.fn() } } }))
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockReturnValue({
@@ -24,8 +23,8 @@ describe('GET /api/auth/google/callback', () => {
     process.env.GOOGLE_CLIENT_ID = 'cid'
     process.env.GOOGLE_CLIENT_SECRET = 'csec'
     process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3300/api/auth/google/callback'
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({

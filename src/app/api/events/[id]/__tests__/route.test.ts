@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PUT, DELETE } from '../route'
 import type { SessionUser } from '@/types'
 
-vi.mock('@/lib/auth-helpers', () => ({ requireSession: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     event: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
@@ -35,9 +34,9 @@ const params = Promise.resolve({ id: 'e1' })
 describe('PUT /api/events/[id]', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.event.findFirst).mockResolvedValue(myPersonalEvent as never)
     vi.mocked(prisma.event.update).mockResolvedValue(myPersonalEvent as never)
   })
@@ -76,9 +75,9 @@ describe('PUT /api/events/[id]', () => {
 describe('DELETE /api/events/[id]', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.event.findFirst).mockResolvedValue(myPersonalEvent as never)
     vi.mocked(prisma.event.delete).mockResolvedValue(myPersonalEvent as never)
     vi.mocked(prisma.googleCalendarSync.findMany).mockResolvedValue([])

@@ -13,12 +13,12 @@ vi.mock('adm-zip', () => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     recipeBook: { findFirst: vi.fn(), create: vi.fn() },
-    recipe: { findMany: vi.fn(), create: vi.fn() },
+    recipe: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   },
 }))
-
-vi.mock('@/lib/auth-helpers', () => ({
-  requireSession: vi.fn(),
+vi.mock('@/lib/image-cache', () => ({
+  cacheImage: vi.fn(),
+  getLocalImageUrl: vi.fn(),
 }))
 
 const mockSession: SessionUser = {
@@ -56,14 +56,18 @@ describe('POST /api/recipes/import', () => {
     vi.clearAllMocks()
     mockEntries.length = 0
 
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
 
     const { prisma } = await import('@/lib/prisma')
     vi.mocked(prisma.recipeBook.findFirst).mockResolvedValue(null)
     vi.mocked(prisma.recipeBook.create).mockResolvedValue({ id: 'book-1', name: 'Soups', familyId: 'family-1', createdAt: new Date() } as never)
-    vi.mocked(prisma.recipe.findMany).mockResolvedValue([])
+    vi.mocked(prisma.recipe.findFirst).mockResolvedValue(null)
     vi.mocked(prisma.recipe.create).mockResolvedValue({ id: 'r-1' } as never)
+    vi.mocked(prisma.recipe.update).mockResolvedValue({ id: 'r-1' } as never)
+
+    const { cacheImage } = await import('@/lib/image-cache')
+    vi.mocked(cacheImage).mockResolvedValue(null)
 
     mockEntries.push({
       entryName: 'Pumpkin Soup.json',
@@ -95,16 +99,17 @@ describe('POST /api/recipes/import', () => {
     expect(prisma.recipeBook.create).not.toHaveBeenCalled()
   })
 
-  it('skips duplicate recipe title in same book', async () => {
+  it('merges into existing recipe instead of creating a duplicate title in same book', async () => {
     const { prisma } = await import('@/lib/prisma')
-    vi.mocked(prisma.recipe.findMany).mockResolvedValue([{ title: 'Pumpkin Soup' }] as never)
+    vi.mocked(prisma.recipe.findFirst).mockResolvedValue({ id: 'existing-1', title: 'Pumpkin Soup' } as never)
 
     const req = makeRequest([new File([new Uint8Array(4)], 'Soups.zip')])
     const res = await POST(req)
     const body = await res.json()
 
     expect(prisma.recipe.create).not.toHaveBeenCalled()
-    expect(body.books[0].skipped).toBe(1)
+    expect(prisma.recipe.update).toHaveBeenCalled()
+    expect(body.books[0].updated).toBe(1)
     expect(body.books[0].imported).toBe(0)
   })
 

@@ -11,10 +11,6 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-vi.mock('@/lib/auth-helpers', () => ({
-  requireSession: vi.fn(),
-}))
-
 const mockSession: SessionUser = {
   id: 'user-1',
   email: 'test@example.com',
@@ -28,8 +24,8 @@ const mockSession: SessionUser = {
 describe('GET /api/recipe-books', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
   })
 
   it('returns books with recipeCount', async () => {
@@ -49,8 +45,8 @@ describe('GET /api/recipe-books', () => {
 describe('POST /api/recipe-books', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
   })
 
   it('returns 400 if name is missing', async () => {

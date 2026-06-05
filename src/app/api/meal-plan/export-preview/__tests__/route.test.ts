@@ -6,12 +6,9 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     mealPlan: { findMany: vi.fn() },
     ingredientCategory: { findMany: vi.fn() },
+    ingredientMapping: { findMany: vi.fn() },
     list: { findFirst: vi.fn() },
   },
-}))
-
-vi.mock('@/lib/auth-helpers', () => ({
-  requireSession: vi.fn(),
 }))
 
 const mockSession: SessionUser = {
@@ -41,8 +38,10 @@ const mockMealPlan = {
 describe('GET /api/meal-plan/export-preview', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
+    vi.mocked(prisma.ingredientMapping.findMany).mockResolvedValue([])
   })
 
   it('returns 400 if from or to missing', async () => {

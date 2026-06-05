@@ -14,10 +14,6 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-vi.mock('@/lib/auth-helpers', () => ({
-  requireSession: vi.fn(),
-}))
-
 vi.mock('bcryptjs', () => ({
   default: {
     compare: vi.fn(),
@@ -56,9 +52,9 @@ const mockUser = {
 describe('GET /api/settings', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
   })
 
@@ -82,9 +78,9 @@ describe('GET /api/settings', () => {
 describe('PATCH /api/settings', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.user.update).mockResolvedValue({ ...mockUser, theme: 'light' } as never)
   })

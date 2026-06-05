@@ -2,12 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { POST } from '../route'
 import type { SessionUser } from '@/types'
 
-vi.mock('@/lib/auth-helpers', () => ({ requireSession: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: { findUnique: vi.fn() },
     event: { findMany: vi.fn() },
-    googleCalendarSync: { findMany: vi.fn(), create: vi.fn() },
+    googleCalendarSync: { findMany: vi.fn(), create: vi.fn(), createMany: vi.fn() },
   },
 }))
 vi.mock('@/lib/google-calendar', () => ({
@@ -38,14 +37,15 @@ const otherPersonalEvent = {
 describe('POST /api/google-calendar/sync', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
     const gc = await import('@/lib/google-calendar')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as never)
     vi.mocked(prisma.event.findMany).mockResolvedValue([familyEvent] as never)
     vi.mocked(prisma.googleCalendarSync.findMany).mockResolvedValue([])
     vi.mocked(prisma.googleCalendarSync.create).mockResolvedValue({} as never)
+    vi.mocked(prisma.googleCalendarSync.createMany).mockResolvedValue({ count: 1 } as never)
     vi.mocked(gc.getAccessToken).mockResolvedValue('tok')
     vi.mocked(gc.createGoogleEvent).mockResolvedValue('new-gid')
   })

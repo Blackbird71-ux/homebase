@@ -9,12 +9,10 @@ vi.mock('@/lib/prisma', () => ({
       findFirst: vi.fn(),
       create: vi.fn(),
     },
+    recipe: { findMany: vi.fn() },
   },
 }))
-
-vi.mock('@/lib/auth-helpers', () => ({
-  requireSession: vi.fn(),
-}))
+vi.mock('@/lib/audit-log', () => ({ createAuditLog: vi.fn() }))
 
 const mockSession: SessionUser = {
   id: 'user-1',
@@ -29,8 +27,8 @@ const mockSession: SessionUser = {
 describe('GET /api/tags', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
   })
 
   it('returns tags without counts by default', async () => {
@@ -46,8 +44,8 @@ describe('GET /api/tags', () => {
 
     expect(res.status).toBe(200)
     expect(body).toEqual([
-      { id: 'tag-1', name: 'Vegetarian', createdAt: '2024-01-01T00:00:00.000Z' },
-      { id: 'tag-2', name: 'Quick', createdAt: '2024-01-02T00:00:00.000Z' },
+      { id: 'tag-1', name: 'Vegetarian', emoji: null, sortOrder: 0, scope: 'general', createdAt: '2024-01-01T00:00:00.000Z' },
+      { id: 'tag-2', name: 'Quick', emoji: null, sortOrder: 0, scope: 'general', createdAt: '2024-01-02T00:00:00.000Z' },
     ])
   })
 
@@ -62,6 +60,7 @@ describe('GET /api/tags', () => {
         _count: { recipes: 5 }
       },
     ] as never)
+    vi.mocked(prisma.recipe.findMany).mockResolvedValue([])
 
     const req = new Request('http://localhost/api/tags?includeCounts=true')
     const res = await GET(req)
@@ -69,7 +68,7 @@ describe('GET /api/tags', () => {
 
     expect(res.status).toBe(200)
     expect(body).toEqual([
-      { id: 'tag-1', name: 'Vegetarian', createdAt: '2024-01-01T00:00:00.000Z', recipeCount: 5 },
+      { id: 'tag-1', name: 'Vegetarian', emoji: null, sortOrder: 0, scope: 'general', createdAt: '2024-01-01T00:00:00.000Z', recipeCount: 5 },
     ])
   })
 
@@ -85,7 +84,7 @@ describe('GET /api/tags', () => {
     expect(prisma.tag.findMany).toHaveBeenCalledWith({
       where: {
         familyId: 'family-1',
-        name: { contains: 'vege', mode: 'insensitive' },
+        name: { not: 'legacy-tags', contains: 'vege', mode: 'insensitive' },
       },
       orderBy: { createdAt: 'desc' },
       include: undefined,
@@ -96,8 +95,8 @@ describe('GET /api/tags', () => {
 describe('POST /api/tags', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
   })
 
   it('creates a new tag', async () => {
@@ -122,6 +121,9 @@ describe('POST /api/tags', () => {
     expect(body).toEqual({
       id: 'tag-new',
       name: 'Dinner',
+      emoji: null,
+      sortOrder: 0,
+      scope: 'general',
       createdAt: '2024-01-01T00:00:00.000Z',
     })
   })

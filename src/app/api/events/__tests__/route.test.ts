@@ -2,9 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET, POST } from '../route'
 import type { SessionUser } from '@/types'
 
-vi.mock('@/lib/auth-helpers', () => ({ requireSession: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({
-  prisma: { event: { findMany: vi.fn(), create: vi.fn() } },
+  prisma: { event: { findMany: vi.fn(), create: vi.fn() }, user: { findMany: vi.fn() } },
 }))
 vi.mock('@/lib/google-sync', () => ({ pushEventToGoogle: vi.fn() }))
 
@@ -24,8 +23,10 @@ const makeEvent = (overrides = {}) => ({
 describe('GET /api/events', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    const { auth } = await import('@/lib/auth')
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
+    vi.mocked(prisma.user.findMany).mockResolvedValue([])
   })
 
   it('returns own personal events with full details and isBusy=false', async () => {
@@ -43,7 +44,7 @@ describe('GET /api/events', () => {
     const res = await GET(new Request('http://localhost/api/events'))
     const body = await res.json()
     expect(body[0].isBusy).toBe(true)
-    expect(body[0].title).toBe('Busy')
+    expect(body[0].title).toBe('Private event')
     expect(body[0].description).toBeNull()
     expect(body[0].category).toBeNull()
   })
@@ -61,9 +62,9 @@ describe('GET /api/events', () => {
 describe('POST /api/events', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { requireSession } = await import('@/lib/auth-helpers')
+    const { auth } = await import('@/lib/auth')
     const { prisma } = await import('@/lib/prisma')
-    vi.mocked(requireSession).mockResolvedValue(mockSession)
+    vi.mocked(auth).mockResolvedValue({ user: mockSession } as never)
     vi.mocked(prisma.event.create).mockResolvedValue(makeEvent() as never)
   })
 
