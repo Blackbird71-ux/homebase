@@ -1,8 +1,11 @@
+'use client'
+
 import Link from 'next/link'
 import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, ArchiveRestoreIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 interface NoteCardProps {
   id: string
@@ -37,7 +40,8 @@ export function NoteCard({
   onEdit,
   onArchive,
 }: NoteCardProps) {
-  const formattedDate = format(new Date(updatedAt), 'MMM d, yyyy')
+  const tz = useFamilyTimezone()
+  const formattedDate = formatInTz(new Date(updatedAt), tz, { day: 'numeric', month: 'short', year: 'numeric' })
   const isRecentlyUpdated = !isArchived && new Date(updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
 
 

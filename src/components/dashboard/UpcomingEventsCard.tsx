@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, Plus } from 'lucide-react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import type { UpcomingEvent } from '@/types'
 import Link from 'next/link'
 import { EventModal } from '@/components/calendar/EventModal'
@@ -22,9 +22,9 @@ function formatEventDate(iso: string, timezone: string): string {
   const tomorrowStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(tomorrow)
-  if (eventDateStr === todayStr) return `Today ${format(d, 'h:mm a')}`
-  if (eventDateStr === tomorrowStr) return `Tomorrow ${format(d, 'h:mm a')}`
-  return format(d, 'EEE d MMM h:mm a')
+  if (eventDateStr === todayStr) return `Today ${formatInTz(d, timezone, { hour: 'numeric', minute: '2-digit' })}`
+  if (eventDateStr === tomorrowStr) return `Tomorrow ${formatInTz(d, timezone, { hour: 'numeric', minute: '2-digit' })}`
+  return formatInTz(d, timezone, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 }
 
 export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent[]; timezone?: string }) {

@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NoteEditor } from '@/components/notes/NoteEditor'
 import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon, ShieldCheckIcon, UnlockIcon, ArchiveIcon, ArchiveRestoreIcon } from 'lucide-react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { toast } from 'sonner'
 
 interface NoteDetailProps {
@@ -33,6 +34,7 @@ interface NoteDetailProps {
 
 export function NoteDetail({ note, tagColors }: NoteDetailProps) {
   const router = useRouter()
+  const tz = useFamilyTimezone()
   const [isEditing, setIsEditing] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -184,8 +186,8 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
     }
   }
 
-  const formattedCreatedAt = format(new Date(note.createdAt), 'PPpp')
-  const formattedUpdatedAt = format(new Date(note.updatedAt), 'PPpp')
+  const formattedCreatedAt = formatInTz(new Date(note.createdAt), tz, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const formattedUpdatedAt = formatInTz(new Date(note.updatedAt), tz, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
   const isRecentlyUpdated = new Date(note.updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
 
   // If locked, show unlock screen

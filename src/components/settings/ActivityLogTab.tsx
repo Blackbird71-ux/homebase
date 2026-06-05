@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/dialog'
 import { RotateCcw, History, Loader2, AlertTriangle, Download, Archive } from 'lucide-react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { formatInTz, todayStringInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 interface AuditEntry {
   id: string
@@ -62,6 +63,7 @@ const ACTION_COLORS: Record<string, string> = {
 }
 
 export function ActivityLogTab() {
+  const tz = useFamilyTimezone()
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -141,7 +143,7 @@ export function ActivityLogTab() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `audit-log-backup-${format(new Date(), 'yyyy-MM-dd')}.json`
+      a.download = `audit-log-backup-${todayStringInTz(tz)}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -266,7 +268,7 @@ export function ActivityLogTab() {
                       </div>
                       <p className="text-sm mt-0.5">{entry.summary}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {format(new Date(entry.createdAt), 'd MMM yyyy, h:mm a')}
+                        {formatInTz(new Date(entry.createdAt), tz, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       </p>
                     </div>
                     {entry.action !== 'undo' && (

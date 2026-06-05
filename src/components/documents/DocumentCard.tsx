@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/select'
 import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar, ShieldCheckIcon, LockIcon, UnlockIcon, Eye } from 'lucide-react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 import { DocumentViewer } from './DocumentViewer'
 
@@ -258,7 +258,7 @@ export function DocumentCard({ document, onDeleted, onUpdated }: DocumentCardPro
               isExpired ? 'text-destructive' : isExpiringSoon ? 'text-amber-500' : 'text-muted-foreground'
             }`}>
               <Calendar className="h-3 w-3" />
-              Expires: {format(new Date(document.expiryDate), 'd MMM yyyy')}
+              Expires: {formatInTz(new Date(document.expiryDate), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
               {daysUntilExpiry !== null && !isExpired && ` (${daysUntilExpiry} days)`}
             </p>
           )}
