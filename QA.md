@@ -885,6 +885,10 @@ Layout refactors (adding tabs, columns, scroll regions) are the highest-risk ope
 
 When a bug is found in a shared function (e.g. `handleMarkReceived`), check all callers of that function for the same pattern. When a type error is found in one file, grep the entire `src/` directory for the same pattern.
 
+**At discovery time, classify instance vs. class before touching anything.** If an issue you stumble on mid-task could exist elsewhere, fixing only the instance in front of you is *worse* than leaving it — it creates a fixed-here / silently-broken-there divergence. A class-level discovery becomes a dedicated sweep (grep the whole `src/` tree, or run the duplication/audit prompt), never an inline one-off fix.
+
+**Out-of-scope discoveries follow the "report, don't fix" default in AGENTS.md §5:** surface it, document it thoroughly *while the context is loaded* (location and every affected site, symptom, why the code is shaped this way, failure modes of the naïve fix, blast radius, suggested direction, severity), propose where to log it, and wait for triage rather than expanding the current diff. A deferred find is only safe if a future reader can act on it cold — a one-line "fix later" is a trap. If the discovery is a genuinely new recurring pattern, write it up as a new §12 entry here so the next person inherits the context rather than rediscovering it.
+
 ### 12.8 Deleted Draft Cannot Be Recreated — Fixed 2026-05-18
 
 **Problem:** When the spawn service creates a draft it advances the template's stored `nextDueDate` to the next occurrence. If the draft is subsequently deleted, `nextDueDate` is NOT rolled back. The spawn service reads `nextDueDate` exclusively — it ignores the template's `startDate` field entirely. This means:
