@@ -1,5 +1,10 @@
-import { addDays, addWeeks, addMonths, addYears, isBefore, isAfter, differenceInMilliseconds } from 'date-fns'
-import { dateStringInTz, localMidnightToUtc } from '@/lib/timezone'
+import {
+  dateStringInTz,
+  localMidnightToUtc,
+  addLocalDaysPreservingTime,
+  addLocalMonthsPreservingTime,
+  addLocalYearsPreservingTime,
+} from '@/lib/timezone'
 
 export interface RecurrenceInstance {
   start: Date
@@ -77,7 +82,7 @@ export function generateRecurrenceInstances(
   if (!parsed) return []
 
   const { freq, interval, byDay, count } = parsed
-  const duration = differenceInMilliseconds(eventEnd, eventStart)
+  const duration = eventEnd.getTime() - eventStart.getTime()
   const instances: RecurrenceInstance[] = []
 
   // For WEEKLY+BYDAY, anchor each instance at the event's local time-of-day:
@@ -105,7 +110,7 @@ export function generateRecurrenceInstances(
     // for users east/west of UTC (AGENTS.md §Timezone).
     if (freq === 'WEEKLY' && byDay && byDay.length > 0) {
       // Stop once the whole week has moved past the series end date.
-      if (recurrenceEndDate && isAfter(currentStart, recurrenceEndDate)) break
+      if (recurrenceEndDate && currentStart.getTime() > recurrenceEndDate.getTime()) break
 
       // The local calendar date of the current week position and its weekday.
       const weekDateStr = dateStringInTz(currentStart, timezone)
@@ -128,10 +133,10 @@ export function generateRecurrenceInstances(
         const instanceEnd = new Date(instanceStart.getTime() + duration)
 
         // Honour the series end date (the non-BYDAY path checks this below).
-        if (recurrenceEndDate && isAfter(instanceStart, recurrenceEndDate)) continue
+        if (recurrenceEndDate && instanceStart.getTime() > recurrenceEndDate.getTime()) continue
 
         // Check if this instance is within the requested view range
-        if (isAfter(instanceEnd, rangeStart) && isBefore(instanceStart, rangeEnd)) {
+        if (instanceEnd.getTime() > rangeStart.getTime() && instanceStart.getTime() < rangeEnd.getTime()) {
           instances.push({
             start: instanceStart,
             end: instanceEnd,
@@ -143,8 +148,10 @@ export function generateRecurrenceInstances(
         if (instanceCount >= maxToGenerate) break
       }
 
-      // Move to next week (advance the anchor by interval weeks)
-      currentStart = addWeeks(currentStart, interval)
+      // Move to next week (advance the anchor by interval weeks). Preserve the
+      // local time-of-day so the week's calendar date stays correct across a DST
+      // transition (the anchor is only read via dateStringInTz below).
+      currentStart = addLocalDaysPreservingTime(currentStart, interval * 7, timezone)
       continue
     }
 
@@ -152,7 +159,7 @@ export function generateRecurrenceInstances(
     const instanceEnd = new Date(currentStart.getTime() + duration)
 
     // Check if this instance is within range
-    if (isAfter(instanceEnd, rangeStart) && isBefore(currentStart, rangeEnd)) {
+    if (instanceEnd.getTime() > rangeStart.getTime() && currentStart.getTime() < rangeEnd.getTime()) {
       instances.push({
         start: new Date(currentStart),
         end: instanceEnd,
@@ -163,23 +170,25 @@ export function generateRecurrenceInstances(
     instanceCount++
 
     // Stop if we've passed the end date
-    if (recurrenceEndDate && isAfter(currentStart, recurrenceEndDate)) {
+    if (recurrenceEndDate && currentStart.getTime() > recurrenceEndDate.getTime()) {
       break
     }
 
-    // Advance to next occurrence
+    // Advance to next occurrence — step the local calendar date and re-attach the
+    // event's local time-of-day, so a recurring event keeps its wall-clock time
+    // across an Australian DST transition (flat UTC stepping drifted it ±1h).
     switch (freq) {
       case 'DAILY':
-        currentStart = addDays(currentStart, interval)
+        currentStart = addLocalDaysPreservingTime(currentStart, interval, timezone)
         break
       case 'WEEKLY':
-        currentStart = addWeeks(currentStart, interval)
+        currentStart = addLocalDaysPreservingTime(currentStart, interval * 7, timezone)
         break
       case 'MONTHLY':
-        currentStart = addMonths(currentStart, interval)
+        currentStart = addLocalMonthsPreservingTime(currentStart, interval, timezone)
         break
       case 'YEARLY':
-        currentStart = addYears(currentStart, interval)
+        currentStart = addLocalYearsPreservingTime(currentStart, interval, timezone)
         break
     }
   }

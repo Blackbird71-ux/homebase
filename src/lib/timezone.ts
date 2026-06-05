@@ -314,3 +314,83 @@ export function addMonthsInTz(date: Date, n: number, timezone: string): Date {
 export function addWeeksInTz(date: Date, n: number, timezone: string): Date {
   return addLocalDays(date, n * 7, timezone)
 }
+
+// ── Time-of-day-PRESERVING steppers (timezone-aware) ─────────────────────────
+// Unlike the grid helpers above (which snap to local midnight), these keep the
+// LOCAL wall-clock time-of-day of `instant` as seen in `timezone`. They read the
+// instant's local h:m:s, step its local calendar date, then RE-RESOLVE the UTC
+// instant for that same wall-clock time on the new date — so a 9am recurring
+// event stays exactly 9am every day, including the two Australian DST transition
+// days. Flat UTC stepping (date-fns addDays/addMonths on the instant) instead
+// drifts the wall-clock ±1h permanently after a transition. (A fixed
+// "ms-since-local-midnight" offset would fix the permanent drift but still render
+// the transition day itself ±1h off; re-resolving the wall-clock avoids even that.)
+
+/**
+ * Resolve a local wall-clock datetime (in `timezone`) to its UTC instant.
+ * Finds the zone's UTC offset at the target wall-clock time, then applies it.
+ * Mirrors `localMidnightToUtc`'s offset strategy, generalised to any time-of-day.
+ */
+function resolveLocalWallClock(
+  y: number, mo: number, d: number, h: number, mi: number, s: number, ms: number, timezone: string,
+): Date {
+  const guessSec = Date.UTC(y, mo - 1, d, h, mi, s)
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date(guessSec))
+  const get = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? '0', 10)
+  let gh = get('hour'); if (gh === 24) gh = 0
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), gh, get('minute'), get('second'))
+  const offsetMs = asUtc - guessSec
+  return new Date(Date.UTC(y, mo - 1, d, h, mi, s, ms) - offsetMs)
+}
+
+/** Read the local wall-clock components of `instant` in `timezone`. */
+function localPartsInTz(instant: Date, timezone: string): {
+  y: number; mo: number; d: number; h: number; mi: number; s: number; ms: number
+} {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(instant)
+  const get = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? '0', 10)
+  let h = get('hour'); if (h === 24) h = 0
+  return { y: get('year'), mo: get('month'), d: get('day'), h, mi: get('minute'), s: get('second'), ms: instant.getUTCMilliseconds() }
+}
+
+/** Add `n` calendar days to `instant`, preserving its local time-of-day in `timezone`. */
+export function addLocalDaysPreservingTime(instant: Date, n: number, timezone: string): Date {
+  const { y, mo, d, h, mi, s, ms } = localPartsInTz(instant, timezone)
+  const stepped = new Date(Date.UTC(y, mo - 1, d + n))
+  return resolveLocalWallClock(stepped.getUTCFullYear(), stepped.getUTCMonth() + 1, stepped.getUTCDate(), h, mi, s, ms, timezone)
+}
+
+/**
+ * Add `n` months to `instant`, preserving its local time-of-day, clamping the
+ * day-of-month to the target month's last day (like date-fns addMonths:
+ * 31 Jan + 1 month → 28/29 Feb).
+ */
+export function addLocalMonthsPreservingTime(instant: Date, n: number, timezone: string): Date {
+  const { y, mo, d, h, mi, s, ms } = localPartsInTz(instant, timezone)
+  const target = new Date(Date.UTC(y, mo - 1 + n, 1))
+  const ty = target.getUTCFullYear()
+  const tm = target.getUTCMonth() // 0-based
+  const lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate()
+  const day = Math.min(d, lastDay)
+  return resolveLocalWallClock(ty, tm + 1, day, h, mi, s, ms, timezone)
+}
+
+/**
+ * Add `n` years to `instant`, preserving its local time-of-day, clamping
+ * 29 Feb → 28 Feb in a non-leap target year (like date-fns addYears).
+ */
+export function addLocalYearsPreservingTime(instant: Date, n: number, timezone: string): Date {
+  const { y, mo, d, h, mi, s, ms } = localPartsInTz(instant, timezone)
+  const ty = y + n
+  const lastDay = new Date(Date.UTC(ty, mo, 0)).getUTCDate()
+  const day = Math.min(d, lastDay)
+  return resolveLocalWallClock(ty, mo, day, h, mi, s, ms, timezone)
+}
