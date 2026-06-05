@@ -4,6 +4,7 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
+import { reverseJournalEntry, type ReversibleJournalEntry } from '@/lib/finance-posting'
 
 // ── Include shape used for all queries ───────────────────────────────────────
 
@@ -53,23 +54,28 @@ async function createEntryWithRetry(
 }
 
 /**
- * Same as createEntryWithRetry but within a $transaction. Returns the
- * first element of the transaction result (e.g. [createdEntry, ...]).
+ * Reverse a single posted entry via the shared reverseJournalEntry helper,
+ * retrying on a P2002 reference collision. The reference is generated from
+ * committed MAX *before* each $transaction attempt (SQLite committed-read rule);
+ * a collision rolls back and retries with a fresh reference.
  */
-async function createEntryInTxWithRetry(
-  buildTx: (reference: string) => any,
+async function reverseEntryWithRetry(
+  je: ReversibleJournalEntry,
   familyId: string,
-): Promise<any> {
+  opts: { date: Date; description?: string },
+): Promise<{ reversalId: string }> {
   for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
     const reference = await nextJournalReference(familyId)
     try {
-      const result = await prisma.$transaction(buildTx(reference))
-      return result[0]
+      return await prisma.$transaction((tx) =>
+        reverseJournalEntry(tx, je, { reference, date: opts.date, familyId, description: opts.description }),
+      )
     } catch (err: any) {
       if (err.code === 'P2002' && attempt < MAX_REF_RETRIES - 1) continue
       throw err
     }
   }
+  throw new Error('Failed to generate a unique journal reference after retries')
 }
 
 // ── GET /api/finance/journals ─────────────────────────────────────────────────
@@ -317,37 +323,15 @@ export async function PATCH(request: NextRequest) {
 
     const { reversalDate, reversalDescription } = json
 
-    const reversal = await createEntryInTxWithRetry(
-      (reference) => [
-        prisma.financeJournalEntry.create({
-          data: {
-            reference,
-            date:         new Date(reversalDate ?? new Date()),
-            description:  reversalDescription?.trim() ?? `Reversal of ${existing.reference}: ${existing.description}`,
-            type:         'reversal',
-            isPosted:     true,
-            reversalOfId: existing.id,
-            entityId:     existing.entityId,
-            familyId:     user.familyId,
-            lines: {
-              create: existing.lines.map(l => ({
-                glAccountId: l.glAccountId,
-                side:        l.side === 'debit' ? 'credit' : 'debit',
-                amount:      l.amount,
-                description: l.description,
-                memberId:    l.memberId,
-              })),
-            },
-          },
-          include: ENTRY_INCLUDE,
-        }),
-        prisma.financeJournalEntry.update({
-          where: { id: existing.id },
-          data:  { isReversed: true },
-        }),
-      ],
-      user.familyId,
-    )
+    const { reversalId } = await reverseEntryWithRetry(existing, user.familyId, {
+      date:        new Date(reversalDate ?? new Date()),
+      description: reversalDescription?.trim() ?? `Reversal of ${existing.reference}: ${existing.description}`,
+    })
+
+    const reversal = await prisma.financeJournalEntry.findUnique({
+      where: { id: reversalId },
+      include: ENTRY_INCLUDE,
+    })
 
     return NextResponse.json(reversal, { status: 201 })
   }
@@ -367,37 +351,16 @@ export async function PATCH(request: NextRequest) {
 
     const { voidDate } = json
 
-    const voidEntry = await createEntryInTxWithRetry(
-      (reference) => [
-        prisma.financeJournalEntry.create({
-          data: {
-            reference,
-            date:         new Date(voidDate ?? new Date()),
-            description:  `VOID: ${existing.reference ?? existing.id} — ${existing.description}`,
-            type:         'reversal',
-            isPosted:     true,
-            reversalOfId: existing.id,
-            entityId:     existing.entityId,
-            familyId:     user.familyId,
-            lines: {
-              create: existing.lines.map(l => ({
-                glAccountId: l.glAccountId,
-                side:        l.side === 'debit' ? 'credit' : 'debit',
-                amount:      l.amount,
-                description: l.description,
-                memberId:    l.memberId,
-              })),
-            },
-          },
-          include: ENTRY_INCLUDE,
-        }),
-        prisma.financeJournalEntry.update({
-          where: { id: existing.id },
-          data:  { isReversed: true },
-        }),
-      ],
-      user.familyId,
-    )
+    // Description omitted → helper default `VOID: ${reference ?? id} — ${description}`,
+    // which is exactly the text this handler produced inline.
+    const { reversalId } = await reverseEntryWithRetry(existing, user.familyId, {
+      date: new Date(voidDate ?? new Date()),
+    })
+
+    const voidEntry = await prisma.financeJournalEntry.findUnique({
+      where: { id: reversalId },
+      include: ENTRY_INCLUDE,
+    })
 
     return NextResponse.json(voidEntry, { status: 201 })
   }
@@ -455,43 +418,25 @@ export async function PATCH(request: NextRequest) {
     }
 
     // We need two new references: one for the reversal, one for the corrective entry.
-    // createEntryInTxWithRetry only generates one reference per attempt, so we generate
-    // both upfront and build the transaction with both. Retry the whole block on P2002.
+    // Both are pre-generated before the $transaction opens (SQLite committed-read
+    // rule); retry the whole block on P2002.
     let amendmentEntry: any
     for (let attempt = 0; attempt < MAX_REF_RETRIES; attempt++) {
       const reversalRef   = await nextJournalReference(user.familyId)
       const correctionRef = await nextJournalReference(user.familyId)
       try {
-        const result = await prisma.$transaction([
-          // Step 1: Create the reversing entry (zeroes out the GL effect of the original)
-          prisma.financeJournalEntry.create({
-            data: {
-              reference:    reversalRef,
-              date:         new Date(correctionDate),
-              description:  `Reversal of ${existing.reference ?? existing.id}: ${existing.description}`,
-              type:         'reversal',
-              isPosted:     true,
-              reversalOfId: existing.id,
-              entityId:     existing.entityId,
-              familyId:     user.familyId,
-              lines: {
-                create: existing.lines.map(l => ({
-                  glAccountId: l.glAccountId,
-                  side:        l.side === 'debit' ? 'credit' : 'debit',
-                  amount:      l.amount,
-                  description: l.description,
-                  memberId:    l.memberId,
-                })),
-              },
-            },
-          }),
-          // Step 2: Mark the original as reversed
-          prisma.financeJournalEntry.update({
-            where: { id: existing.id },
-            data:  { isReversed: true },
-          }),
+        amendmentEntry = await prisma.$transaction(async (tx) => {
+          // Steps 1+2: reverse the original via the shared helper — creates the
+          // flipped-line reversal entry (zeroes out the GL effect) and marks the
+          // original isReversed. The non-VOID "Reversal of …" description is preserved.
+          await reverseJournalEntry(tx, existing, {
+            reference:   reversalRef,
+            date:        new Date(correctionDate),
+            familyId:    user.familyId,
+            description: `Reversal of ${existing.reference ?? existing.id}: ${existing.description}`,
+          })
           // Step 3: Create the new corrective entry
-          prisma.financeJournalEntry.create({
+          return tx.financeJournalEntry.create({
             data: {
               reference:     correctionRef,
               date:          new Date(correctionDate),
@@ -513,9 +458,8 @@ export async function PATCH(request: NextRequest) {
               },
             },
             include: ENTRY_INCLUDE,
-          }),
-        ])
-        amendmentEntry = result[2] // the corrective entry with full include
+          })
+        })
         break
       } catch (err: any) {
         if (err.code === 'P2002' && attempt < MAX_REF_RETRIES - 1) continue
