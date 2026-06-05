@@ -2,24 +2,21 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 import { DocumentTextEditor } from './DocumentTextEditor'
 import { PdfAnnotationViewer } from './PdfAnnotationViewer'
 import { PdfFormFiller } from './PdfFormFiller'
 import {
-  X,
   Download,
   Loader2,
   AlertCircle,
   FileText,
-  Maximize2,
-  Minimize2,
   Highlighter,
   Eye,
   PenSquare,
@@ -41,7 +38,6 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
   const [textContent, setTextContent] = useState<string>('')
   const [textExt, setTextExt] = useState<string>('')
   const [error, setError] = useState<string>('')
-  const [fullscreen, setFullscreen] = useState(false)
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [showUnlockDialog, setShowUnlockDialog] = useState(false)
   const [annotateMode, setAnnotateMode] = useState(false)
@@ -172,9 +168,8 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(open) => {
+      <Drawer open={open} onOpenChange={(open) => {
         if (!open) {
-          setFullscreen(false)
           setMode('loading')
           setContent('')
           setTextContent('')
@@ -185,18 +180,15 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
         }
         onOpenChange(open)
       }}>
-        <DialogContent className={fullscreen
-          ? 'max-w-[98vw] h-[96vh] sm:max-w-[98vw] !p-2 !gap-1 !max-h-none'
-          : 'max-w-5xl h-[92vh] sm:max-w-5xl !p-2 !gap-1 !max-h-none'
-        }>
-          <DialogHeader className="flex flex-row items-center justify-between shrink-0">
+        <DrawerContent className="sm:max-w-[900px]" showCloseButton={true}>
+          <DrawerHeader className="flex flex-row items-center justify-between shrink-0 border-b border-border px-4 py-2 gap-2 min-h-0">
             <div className="flex items-center gap-2 min-w-0">
-              <DialogTitle className="text-base truncate">{document.title}</DialogTitle>
-              <span className="text-xs text-muted-foreground shrink-0">
+              <DrawerTitle className="text-sm truncate">{document.title}</DrawerTitle>
+              <span className="text-[10px] text-muted-foreground shrink-0">
                 .{ext}
               </span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 shrink-0">
               {/* PDF mode buttons */}
               {isPdf && (
                 <>
@@ -207,21 +199,21 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
                       size="xs"
                       onClick={() => { setAnnotateMode(false); setFormMode(false) }}
                       title="Switch to read-only view"
-                      className="gap-1"
+                      className="gap-0.5 h-7 text-[11px]"
                     >
-                      <Eye className="h-3.5 w-3.5" /> View
+                      <Eye className="h-3 w-3" /> View
                     </Button>
                   )}
                   {/* Annotate button (shown in view or form mode) */}
                   {!annotateMode && (
                     <Button
-                      variant={annotateMode ? 'default' : 'ghost'}
+                      variant="ghost"
                       size="xs"
                       onClick={() => { setAnnotateMode(true); setFormMode(false) }}
                       title="Annotate PDF"
-                      className="gap-1"
+                      className="gap-0.5 h-7 text-[11px]"
                     >
-                      <Highlighter className="h-3.5 w-3.5" /> Annotate
+                      <Highlighter className="h-3 w-3" /> Annotate
                     </Button>
                   )}
                   {/* Fill Form button (shown in view or annotate mode when form fields exist) */}
@@ -231,9 +223,9 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
                       size="xs"
                       onClick={handleFormMode}
                       title="Fill form fields"
-                      className="gap-1"
+                      className="gap-0.5 h-7 text-[11px]"
                     >
-                      <PenSquare className="h-3.5 w-3.5" /> Fill Form
+                      <PenSquare className="h-3 w-3" /> Fill Form
                     </Button>
                   )}
                   {/* Form mode indicator */}
@@ -241,45 +233,27 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
                     <Button
                       variant="default"
                       size="xs"
-                      className="gap-1 cursor-default"
+                      className="gap-0.5 h-7 text-[11px] cursor-default"
                     >
-                      <PenSquare className="h-3.5 w-3.5" /> Filling Form
+                      <PenSquare className="h-3 w-3" /> Filling Form
                     </Button>
                   )}
                 </>
               )}
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setFullscreen(!fullscreen)}
-                title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-              >
-                {fullscreen ? (
-                  <Minimize2 className="h-3.5 w-3.5" />
-                ) : (
-                  <Maximize2 className="h-3.5 w-3.5" />
-                )}
-              </Button>
+              <div className="w-px h-4 bg-border mx-0.5" />
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={handleDownload}
                 title="Download"
+                className="h-7"
               >
-                <Download className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => onOpenChange(false)}
-                title="Close"
-              >
-                <X className="h-3.5 w-3.5" />
+                <Download className="h-3 w-3" />
               </Button>
             </div>
-          </DialogHeader>
+          </DrawerHeader>
 
-          <div className="flex-1 overflow-hidden rounded-md border border-border bg-background">
+          <div className="flex-1 overflow-hidden bg-background">
             {mode === 'loading' && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin mb-3" />
@@ -291,6 +265,7 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
               <PdfAnnotationViewer
                 pdfUrl={viewUrl}
                 documentId={document.id}
+                documentTitle={document.title}
               />
             )}
 
@@ -396,8 +371,8 @@ export function DocumentViewer({ open, onOpenChange, document }: DocumentViewerP
               </div>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        </DrawerContent>
+      </Drawer>
 
       {/* Unlock Dialog */}
       {document.isSecured && (

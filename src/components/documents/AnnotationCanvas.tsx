@@ -15,6 +15,8 @@ interface AnnotationCanvasProps {
   onAnnotate: (annotation: Omit<PdfAnnotation, 'id' | 'createdAt' | 'createdBy'>) => void
   /** The current page index being rendered */
   pageIndex: number
+  /** Called when user clicks to place a text box — gives normalised coordinates */
+  onTextClick?: (pos: { x: number; y: number }) => void
 }
 
 export function AnnotationCanvas({
@@ -27,6 +29,7 @@ export function AnnotationCanvas({
   selectedId,
   onSelect,
   onAnnotate,
+  onTextClick,
   pageIndex,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -159,6 +162,13 @@ export function AnnotationCanvas({
       return
     }
 
+    if (tool === 'text') {
+      // Text tool — notify parent to show text input at click position
+      const pos = normalise(e)
+      onTextClick?.(pos)
+      return
+    }
+
     isDrawing.current = true
     const pos = normalise(e)
     startPoint.current = pos
@@ -167,7 +177,7 @@ export function AnnotationCanvas({
     if (tool === 'draw') {
       // For freeform draw, start immediately
     }
-  }, [tool, normalise, annotations, pageIndex, onSelect])
+  }, [tool, normalise, annotations, pageIndex, onSelect, onTextClick])
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing.current) return

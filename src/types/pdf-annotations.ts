@@ -9,6 +9,7 @@ export type AnnotationType =
   | 'draw'
   | 'rectangle'
   | 'ellipse'
+  | 'text'
 
 export interface AnnotationRect {
   x: number       // Normalised (0-1) left position relative to page width
@@ -26,8 +27,12 @@ export interface PdfAnnotation {
   rect: AnnotationRect // Bounding box (normalised 0-1 coordinates)
   /** Optional freeform drawing points (normalised 0-1) */
   points?: { x: number; y: number }[]
-  /** Optional text content (sticky notes, comments) */
+  /** Optional text content (sticky notes, text boxes, comments) */
   text?: string
+  /** Font size for text annotations (default: 12) */
+  fontSize?: number
+  /** Font family for text annotations (default: Helvetica) */
+  fontFamily?: string
   createdAt: string    // ISO 8601
   createdBy: string    // User display name
 }
@@ -40,7 +45,7 @@ export interface PdfAnnotationSet {
 }
 
 /** Tools available in the annotation toolbar */
-export type AnnotationTool = 'pan' | 'highlight' | 'underline' | 'strikethrough' | 'note' | 'draw' | 'rectangle' | 'ellipse'
+export type AnnotationTool = 'pan' | 'highlight' | 'underline' | 'strikethrough' | 'note' | 'draw' | 'rectangle' | 'ellipse' | 'text'
 
 export interface AnnotationViewerState {
   tool: AnnotationTool

@@ -5,16 +5,20 @@ import { PdfRenderer } from './PdfRenderer'
 import { AnnotationCanvas } from './AnnotationCanvas'
 import { AnnotationToolbar } from './AnnotationToolbar'
 import type { PdfAnnotation, PdfAnnotationSet, AnnotationTool } from '@/types/pdf-annotations'
+import { Download, FileOutput, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 
 interface PdfAnnotationViewerProps {
   /** URL to fetch the PDF from */
   pdfUrl: string
   /** Document ID for loading/saving annotations */
   documentId: string
+  /** Document title for naming exported files */
+  documentTitle?: string
 }
 
-export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerProps) {
+export function PdfAnnotationViewer({ pdfUrl, documentId, documentTitle }: PdfAnnotationViewerProps) {
   // PDF state
   const [zoom, setZoom] = useState(1)
   const [page, setPage] = useState(1)
@@ -30,6 +34,14 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
   const [savedAnnotations, setSavedAnnotations] = useState<PdfAnnotation[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  // Text input state for the 'text' annotation tool
+  const [textInput, setTextInput] = useState<{
+    pos: { x: number; y: number }
+    value: string
+  } | null>(null)
+  const textInputRef = useRef<HTMLTextAreaElement>(null)
 
   // Undo history
   const [history, setHistory] = useState<PdfAnnotation[][]>([])
@@ -89,6 +101,48 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
     setHistoryIndex(newHistory.length - 1)
   }, [annotations, history, historyIndex])
 
+  // Handle text tool click — show text input at the clicked position
+  const handleTextClick = useCallback((pos: { x: number; y: number }) => {
+    setTextInput({ pos, value: '' })
+    // Focus the textarea after render
+    setTimeout(() => {
+      textInputRef.current?.focus()
+    }, 0)
+  }, [])
+
+  // Commit the current text input as an annotation
+  const handleCommitText = useCallback(() => {
+    if (!textInput || !textInput.value.trim()) {
+      setTextInput(null)
+      return
+    }
+
+    // Estimate text box size based on content
+    const lines = textInput.value.split('\n')
+    const maxLineLen = Math.max(...lines.map(l => l.length))
+    const charWidth = 0.006 // rough normalised width per character
+    const lineHeight = 0.025 // rough normalised height per line
+    const textWidth = Math.min(maxLineLen * charWidth, 0.5)
+    const textHeight = Math.min(lines.length * lineHeight, 0.5)
+
+    handleAnnotate({
+      type: 'text',
+      pageIndex: page - 1,
+      color,
+      opacity,
+      rect: {
+        x: textInput.pos.x,
+        y: textInput.pos.y,
+        width: textWidth,
+        height: textHeight,
+      },
+      text: textInput.value,
+      fontSize: 12,
+    })
+
+    setTextInput(null)
+  }, [textInput, handleAnnotate, page, color, opacity])
+
   // Undo
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
@@ -131,6 +185,55 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
     }
   }, [documentId, annotations])
 
+  // Auto-save annotations before export, then call export endpoint
+  const handleExport = useCallback(async (saveAsNew: boolean) => {
+    setExporting(true)
+    try {
+      // Ensure annotations are saved first
+      if (hasChanges) {
+        const saveRes = await fetch(`/api/documents/${documentId}/annotations`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ annotations }),
+        })
+        if (!saveRes.ok) throw new Error('Failed to save annotations before export')
+        setSavedAnnotations([...annotations])
+      }
+
+      const res = await fetch(`/api/documents/${documentId}/export-annotated`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saveAsNew }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Export failed' }))
+        throw new Error(err.error ?? 'Failed to export annotated PDF')
+      }
+
+      if (saveAsNew) {
+        toast.success(`Annotated PDF saved to Vault"`)
+      } else {
+        // Download the annotated PDF
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const safeName = (documentTitle || 'document').replace(/[^a-zA-Z0-9 _-]/g, '')
+        const a = window.document.createElement('a')
+        a.href = url
+        a.download = `${safeName}-annotated.pdf`
+        window.document.body.appendChild(a)
+        a.click()
+        window.document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        toast.success('Annotated PDF downloaded')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export annotated PDF')
+    } finally {
+      setExporting(false)
+    }
+  }, [documentId, documentTitle, annotations, hasChanges])
+
   // Keyboard shortcuts
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -149,8 +252,12 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
         e.preventDefault()
         if (hasChanges) handleSave()
       }
-      // Escape deselect
+      // Escape deselect / cancel text input
       if (e.key === 'Escape') {
+        if (textInput) {
+          setTextInput(null)
+          return
+        }
         setSelectedId(null)
         setTool('pan')
       }
@@ -161,6 +268,7 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
       if (e.key === '4') setTool('strikethrough')
       if (e.key === '5') setTool('note')
       if (e.key === '6') setTool('draw')
+      if (e.key === '7') setTool('text')
     }
 
     window.addEventListener('keydown', handleKey)
@@ -168,8 +276,8 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
   }, [handleUndo, handleRedo, handleSave, hasChanges])
 
   return (
-    <div className="flex flex-col gap-2 h-full">
-      {/* Toolbar */}
+    <div className="flex flex-col gap-1 h-full">
+      {/* Toolbar (includes tools, colors, opacity, zoom, undo/redo, save) */}
       <div className="shrink-0">
         <AnnotationToolbar
           tool={tool}
@@ -185,41 +293,47 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
           onRedo={handleRedo}
           canUndo={historyIndex > 0}
           canRedo={historyIndex < history.length - 1}
+          zoom={zoom}
+          onZoomChange={setZoom}
         />
       </div>
 
-      {/* Zoom controls */}
-      <div className="shrink-0 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setZoom(z => Math.max(0.25, z - 0.25))}
-            className="p-1 hover:bg-accent rounded text-xs text-muted-foreground"
-          >
-            -
-          </button>
-          <span className="text-xs text-muted-foreground tabular-nums w-10 text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={() => setZoom(z => Math.min(3, z + 0.25))}
-            className="p-1 hover:bg-accent rounded text-xs text-muted-foreground"
-          >
-            +
-          </button>
-        </div>
-        <p className="text-[10px] text-muted-foreground">
-          Click & drag to annotate · {selectedId ? 'Annotation selected' : `${annotations.length} annotation${annotations.length !== 1 ? 's' : ''}`}
-        </p>
+      {/* Export bar — Download or Save annotated copy */}
+      <div className="shrink-0 flex items-center justify-end gap-2">
+        {exporting ? (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Exporting...
+          </div>
+        ) : annotations.length > 0 && (
+          <>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => handleExport(false)}
+              title="Download PDF with annotations burned in"
+              className="gap-1 h-6 text-[10px]"
+              disabled={exporting}
+            >
+              <Download className="h-3 w-3" />
+              Download with annotations
+            </Button>
+            <Button
+              size="xs"
+              onClick={() => handleExport(true)}
+              title="Save annotated copy to Document Vault"
+              className="gap-1 h-6 text-[10px]"
+              disabled={exporting}
+            >
+              <FileOutput className="h-3 w-3" />
+              Save annotated copy
+            </Button>
+          </>
+        )}
       </div>
 
       {/* PDF viewer + annotation canvas */}
       <div className="flex-1 relative overflow-hidden rounded-md border border-border bg-muted/20">
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-            Loading document...
-          </div>
-        )}
-
         <PdfRenderer
           url={pdfUrl}
           zoom={zoom}
@@ -260,7 +374,37 @@ export function PdfAnnotationViewer({ pdfUrl, documentId }: PdfAnnotationViewerP
                 onSelect={setSelectedId}
                 onAnnotate={handleAnnotate}
                 pageIndex={page - 1}
+                onTextClick={handleTextClick}
               />
+
+              {/* Text input overlay for the 'text' tool */}
+              {textInput && (
+                <textarea
+                  ref={textInputRef}
+                  value={textInput.value}
+                  onChange={(e) => setTextInput(prev => prev ? { ...prev, value: e.target.value } : null)}
+                  onBlur={handleCommitText}
+                  onKeyDown={(e) => {
+                    // Enter without Shift commits
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleCommitText()
+                    }
+                    // Escape cancels
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setTextInput(null)
+                    }
+                  }}
+                  className="absolute z-20 min-w-[120px] min-h-[32px] p-1 text-xs rounded border border-primary/50 bg-background shadow-md resize focus:outline-none focus:ring-1 focus:ring-primary"
+                  style={{
+                    left: `${textInput.pos.x * 100}%`,
+                    top: `${textInput.pos.y * 100}%`,
+                  }}
+                  placeholder="Type text..."
+                  rows={1}
+                />
+              )}
             </div>
           </div>
         )}
