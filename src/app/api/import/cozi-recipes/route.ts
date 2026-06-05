@@ -104,99 +104,113 @@ export async function POST(req: Request) {
     imported: boolean
     updated: boolean
     skipped: boolean
+    failed?: boolean
     reason?: string
     summary?: string
     recipeId?: string
   }> = []
 
   for (const recipe of recipes) {
-    if (!recipe.title.trim()) {
-      results.push({
-        title: '(untitled)',
-        imported: false,
-        updated: false,
-        skipped: true,
-        reason: 'No title provided',
-      })
-      continue
-    }
-
-    // Check for existing recipe with same title in same book
-    const existing = await prisma.recipe.findFirst({
-      where: {
-        familyId: user.familyId,
-        title: recipe.title.trim(),
-        bookId: book.id,
-      },
-      select: { id: true, title: true },
-    })
-
-    if (existing) {
-      // Update existing recipe with any new data
-      const updateData: Record<string, unknown> = {}
-      if (recipe.ingredients.length > 0) updateData.ingredients = JSON.stringify(recipe.ingredients)
-      if (recipe.instructions.length > 0) updateData.instructions = JSON.stringify(recipe.instructions)
-      if (recipe.description) updateData.description = recipe.description
-      if (recipe.prepTime !== null) updateData.prepTime = recipe.prepTime
-      if (recipe.cookTime !== null) updateData.cookTime = recipe.cookTime
-      if (recipe.servings !== null) updateData.servings = recipe.servings
-      if (recipe.sourceUrl) updateData.sourceUrl = recipe.sourceUrl
-
-      if (Object.keys(updateData).length > 0) {
-        await prisma.recipe.update({
-          where: { id: existing.id },
-          data: updateData,
+    try {
+      if (!recipe.title.trim()) {
+        results.push({
+          title: '(untitled)',
+          imported: false,
+          updated: false,
+          skipped: true,
+          reason: 'No title provided',
         })
+        continue
       }
+
+      // Check for existing recipe with same title in same book
+      const existing = await prisma.recipe.findFirst({
+        where: {
+          familyId: user.familyId,
+          title: recipe.title.trim(),
+          bookId: book.id,
+        },
+        select: { id: true, title: true },
+      })
+
+      if (existing) {
+        // Update existing recipe with any new data
+        const updateData: Record<string, unknown> = {}
+        if (recipe.ingredients.length > 0) updateData.ingredients = JSON.stringify(recipe.ingredients)
+        if (recipe.instructions.length > 0) updateData.instructions = JSON.stringify(recipe.instructions)
+        if (recipe.description) updateData.description = recipe.description
+        if (recipe.prepTime !== null) updateData.prepTime = recipe.prepTime
+        if (recipe.cookTime !== null) updateData.cookTime = recipe.cookTime
+        if (recipe.servings !== null) updateData.servings = recipe.servings
+        if (recipe.sourceUrl) updateData.sourceUrl = recipe.sourceUrl
+
+        if (Object.keys(updateData).length > 0) {
+          await prisma.recipe.update({
+            where: { id: existing.id },
+            data: updateData,
+          })
+        }
+
+        results.push({
+          title: recipe.title,
+          imported: false,
+          updated: Object.keys(updateData).length > 0,
+          skipped: Object.keys(updateData).length === 0,
+          reason: Object.keys(updateData).length === 0 ? 'Already up to date' : undefined,
+          recipeId: existing.id,
+        })
+        continue
+      }
+
+      // Create new recipe
+      const created = await prisma.recipe.create({
+        data: {
+          title: recipe.title.trim(),
+          description: recipe.description || '',
+          ingredients: JSON.stringify(recipe.ingredients),
+          instructions: JSON.stringify(recipe.instructions),
+          prepTime: recipe.prepTime ?? null,
+          cookTime: recipe.cookTime ?? null,
+          servings: recipe.servings ?? null,
+          sourceUrl: recipe.sourceUrl ?? null,
+          image: recipe.image ?? null,
+          tags: recipe.tags.length > 0 ? JSON.stringify(recipe.tags) : null,
+          bookId: book.id,
+          familyId: user.familyId,
+          createdBy: user.id,
+        },
+        select: { id: true, title: true },
+      })
+
+      void createAuditLog(
+        user,
+        'create',
+        'recipe',
+        created.id,
+        `Imported recipe "${recipe.title}" from Cozi`,
+        { importSource: 'cozi', title: recipe.title, bookName: targetBookName }
+      )
 
       results.push({
         title: recipe.title,
-        imported: false,
-        updated: Object.keys(updateData).length > 0,
-        skipped: Object.keys(updateData).length === 0,
-        reason: Object.keys(updateData).length === 0 ? 'Already up to date' : undefined,
-        recipeId: existing.id,
+        imported: true,
+        updated: false,
+        skipped: false,
+        summary: formatRecipeSummary(recipe),
+        recipeId: created.id,
       })
-      continue
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn(`[cozi-recipes] Failed to import "${recipe.title}":`, message)
+      results.push({
+        title: recipe.title || '(untitled)',
+        imported: false,
+        updated: false,
+        skipped: false,
+        failed: true,
+        reason: message,
+      })
     }
-
-    // Create new recipe
-    const created = await prisma.recipe.create({
-      data: {
-        title: recipe.title.trim(),
-        description: recipe.description || '',
-        ingredients: JSON.stringify(recipe.ingredients),
-        instructions: JSON.stringify(recipe.instructions),
-        prepTime: recipe.prepTime ?? null,
-        cookTime: recipe.cookTime ?? null,
-        servings: recipe.servings ?? null,
-        sourceUrl: recipe.sourceUrl ?? null,
-        image: recipe.image ?? null,
-        tags: recipe.tags.length > 0 ? JSON.stringify(recipe.tags) : null,
-        bookId: book.id,
-        familyId: user.familyId,
-        createdBy: user.id,
-      },
-      select: { id: true, title: true },
-    })
-
-    void createAuditLog(
-      user,
-      'create',
-      'recipe',
-      created.id,
-      `Imported recipe "${recipe.title}" from Cozi`,
-      { importSource: 'cozi', title: recipe.title, bookName: targetBookName }
-    )
-
-    results.push({
-      title: recipe.title,
-      imported: true,
-      updated: false,
-      skipped: false,
-      summary: formatRecipeSummary(recipe),
-      recipeId: created.id,
-    })
   }
 
   // ── Log the import ────────────────────────────────────────────────────────
@@ -220,6 +234,7 @@ export async function POST(req: Request) {
     imported: importedCount,
     updated: updatedCount,
     skipped: results.filter((r) => r.skipped).length,
+    failed: results.filter((r) => r.failed).length,
     results,
     bookName: targetBookName,
     bookId: book.id,

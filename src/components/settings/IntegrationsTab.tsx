@@ -109,7 +109,8 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
     imported?: number
     updated?: number
     skipped?: number
-    results?: Array<{ title: string; imported: boolean; summary?: string; reason?: string }>
+    failed?: number
+    results?: Array<{ title: string; imported: boolean; failed?: boolean; summary?: string; reason?: string }>
     error?: string
   } | null>(null)
 
@@ -349,6 +350,11 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
                       {(recipeImportResult.updated ?? 0) > 0 && ((recipeImportResult.updated ?? 0) + ' updated')}
                       {(recipeImportResult.skipped ?? 0) > 0 && (' \u00B7 ' + (recipeImportResult.skipped ?? 0) + ' skipped')}
                     </p>
+                    {(recipeImportResult.failed ?? 0) > 0 && (
+                      <p className="text-xs mt-0.5 text-destructive">
+                        {(recipeImportResult.failed ?? 0) + ' failed'}
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -363,7 +369,9 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
                 <div className="border rounded-md divide-y text-sm max-h-48 overflow-y-auto">
                   {recipeImportResult.results.map((r, i) => (
                     <div key={i} className="flex items-center gap-2 px-3 py-2">
-                      {r.imported ? (
+                      {r.failed ? (
+                        <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                      ) : r.imported ? (
                         <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
                       ) : r.reason ? (
                         <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
@@ -375,7 +383,7 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
                         <span className="text-xs text-muted-foreground truncate">{r.summary}</span>
                       )}
                       {r.reason && (
-                        <span className="text-xs text-muted-foreground">{r.reason}</span>
+                        <span className={'text-xs ' + (r.failed ? 'text-destructive' : 'text-muted-foreground')}>{r.reason}</span>
                       )}
                     </div>
                   ))}

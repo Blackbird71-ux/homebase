@@ -18,13 +18,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No files provided' }, { status: 400 })
   }
 
-  const results: Array<{ name: string; imported: number; updated: number; skipped: number; error?: string }> = []
+  const results: Array<{ name: string; imported: number; updated: number; skipped: number; failed: number; failures: { entry: string; error: string }[]; error?: string }> = []
 
   for (const file of files) {
     const bookName = file.name.replace(/\.zip$/i, '')
     let imported = 0
     let updated = 0
     let skipped = 0
+    const failures: { entry: string; error: string }[] = []
 
     try {
       const buffer = Buffer.from(await file.arrayBuffer())
@@ -141,14 +142,16 @@ export async function POST(req: Request) {
             })
             imported++
           }
-        } catch {
-          skipped++
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          failures.push({ entry: entry.entryName, error: message })
+          console.warn(`[recipes/import] Failed to import "${entry.entryName}":`, message)
         }
       }
 
-      results.push({ name: bookName, imported, updated, skipped })
+      results.push({ name: bookName, imported, updated, skipped, failed: failures.length, failures })
     } catch (err) {
-      results.push({ name: bookName, imported: 0, updated: 0, skipped: 0, error: String(err) })
+      results.push({ name: bookName, imported: 0, updated: 0, skipped: 0, failed: 0, failures: [], error: String(err) })
     }
   }
 

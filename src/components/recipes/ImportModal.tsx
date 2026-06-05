@@ -15,7 +15,10 @@ import { useRouter } from 'next/navigation'
 interface BookResult {
   name: string
   imported: number
+  updated: number
   skipped: number
+  failed?: number
+  failures?: { entry: string; error: string }[]
   error?: string
 }
 
@@ -76,7 +79,9 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
   }
 
   const totalImported = results.reduce((s, r) => s + r.imported, 0)
+  const totalUpdated = results.reduce((s, r) => s + r.updated, 0)
   const totalSkipped = results.reduce((s, r) => s + r.skipped, 0)
+  const totalFailed = results.reduce((s, r) => s + (r.failed ?? 0), 0)
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -134,18 +139,38 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 font-medium">
                 <CheckCircleIcon className="h-4 w-4" />
                 {totalImported} recipe{totalImported !== 1 ? 's' : ''} imported
+                {totalUpdated > 0 && `, ${totalUpdated} updated`}
                 {totalSkipped > 0 && `, ${totalSkipped} skipped`}
               </div>
+              {totalFailed > 0 && (
+                <div className="flex items-center gap-2 text-sm text-destructive font-medium">
+                  <AlertCircleIcon className="h-4 w-4" />
+                  {totalFailed} failed
+                </div>
+              )}
               <div className="divide-y divide-border rounded-lg border border-border overflow-hidden text-sm">
                 {results.map((r) => (
-                  <div key={r.name} className="flex items-center justify-between px-3 py-2">
-                    <span className="font-medium">{r.name}</span>
-                    {r.error ? (
-                      <span className="text-destructive text-xs">{r.error}</span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">
-                        {r.imported} in · {r.skipped} skipped
-                      </span>
+                  <div key={r.name} className="px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{r.name}</span>
+                      {r.error ? (
+                        <span className="text-destructive text-xs">{r.error}</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">
+                          {r.imported} in · {r.updated} updated · {r.skipped} skipped
+                          {(r.failed ?? 0) > 0 && <span className="text-destructive"> · {r.failed} failed</span>}
+                        </span>
+                      )}
+                    </div>
+                    {r.failures && r.failures.length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {r.failures.map((f) => (
+                          <li key={f.entry} className="text-destructive text-xs flex items-start gap-1">
+                            <AlertCircleIcon className="h-3 w-3 mt-0.5 shrink-0" />
+                            <span><span className="font-medium">{f.entry}</span>: {f.error}</span>
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </div>
                 ))}
