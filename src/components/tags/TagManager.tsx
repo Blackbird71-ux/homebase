@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ColorPicker } from '@/components/ui/color-picker'
 import { toast } from 'sonner'
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, Loader2, ArrowRightLeftIcon, Smile, X } from 'lucide-react'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
+import { formatInTz } from '@/lib/timezone'
 
 type TagScope = 'general' | 'recipe' | 'note' | 'trip'
 
@@ -86,6 +88,7 @@ function EmojiPresetPicker({ value, onChange }: { value: string; onChange: (v: s
 }
 
 export function TagManager() {
+  const timezone = useFamilyTimezone()
   const [tags, setTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -485,7 +488,7 @@ export function TagManager() {
                       {tag.recipeCount}
                     </div>
                     <div className="col-span-2 text-sm text-muted-foreground">
-                      {new Date(tag.createdAt).toLocaleDateString()}
+                      {formatInTz(new Date(tag.createdAt), timezone)}
                     </div>
                     <div className="col-span-2 text-right">
                       <div className="flex justify-end gap-2">

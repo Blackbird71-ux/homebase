@@ -40,6 +40,7 @@ export function UpcomingTripsCard({ trips }: { trips: TripSummaryShape[] }) {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
+      timeZone: 'UTC',
     })
   }
 

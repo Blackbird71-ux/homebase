@@ -47,7 +47,7 @@ async function generateFinanceReportHandler(args: Record<string, unknown>, ctx: 
       const m = userDate.getMonth() - 1
       start = new Date(y, m, 1)
       end = new Date(y, m + 1, 1)
-      label = start.toLocaleString('en-AU', { month: 'long', year: 'numeric' })
+      label = start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
       break
     }
     case 'thisYear': {
@@ -66,7 +66,7 @@ async function generateFinanceReportHandler(args: Record<string, unknown>, ctx: 
     default: {
       start = new Date(userDate.getFullYear(), userDate.getMonth(), 1)
       end = new Date(userDate.getFullYear(), userDate.getMonth() + 1, 1)
-      label = start.toLocaleString('en-AU', { month: 'long', year: 'numeric' })
+      label = start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
       break
     }
   }

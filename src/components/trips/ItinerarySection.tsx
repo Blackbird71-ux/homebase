@@ -91,7 +91,9 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
   const selectedDay = days.find((d) => d.id === selectedDayId) ?? null
 
   function formatDate(dateStr: string, opts?: Intl.DateTimeFormatOptions): string {
-    return new Date(dateStr).toLocaleDateString('en-AU', opts ?? { weekday: 'short', day: 'numeric', month: 'short' })
+    // Trip/day dates are stored as UTC midnight of the calendar date; display in UTC
+    // so the same calendar day renders regardless of the viewer's timezone.
+    return new Date(dateStr).toLocaleDateString('en-AU', { ...(opts ?? { weekday: 'short', day: 'numeric', month: 'short' }), timeZone: 'UTC' })
   }
 
   // ── Day tag toggling ───────────────────────────────────────────────────────
@@ -383,8 +385,10 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
         {days.map((day) => {
           const d = new Date(day.date)
-          const dayNum = d.getDate()
-          const monthStr = d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()
+          // day.date is UTC midnight of the calendar date — read it in UTC so the day
+          // number and month label match regardless of the viewer's timezone.
+          const dayNum = d.getUTCDate()
+          const monthStr = d.toLocaleDateString('en-AU', { month: 'short', timeZone: 'UTC' }).toUpperCase()
           const actCount = day.activities.length
           const tags = day.tags ?? []
           const isCurrentDay = selectedDayId === day.id
@@ -737,6 +741,7 @@ function ActivityCard({
   onDelete: () => void
 }) {
   function formatTime(iso: string): string {
+    // eslint-disable-next-line no-restricted-syntax -- activity time is browser-local wall-clock (write/read/display all browser-local in ActivityEditDialog); full tz migration deferred — see DATE-DISPLAY-AUDIT.md "larger issue"
     return new Date(iso).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false })
   }
 

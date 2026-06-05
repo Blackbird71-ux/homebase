@@ -153,6 +153,7 @@ async function createTripHandler(args: Record<string, unknown>, ctx: HandlerCont
   })
 
   const budgetLine = estimatedBudget
+    // eslint-disable-next-line no-restricted-syntax -- estimatedBudget is a number, not a date
     ? `\n\U0001f4b0 Estimated budget: $${estimatedBudget.toLocaleString('en-AU')}`
     : ''
 

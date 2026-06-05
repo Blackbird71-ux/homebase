@@ -66,11 +66,11 @@ async function queryBudgetStatusHandler(args: Record<string, unknown>, ctx: Hand
   if (period === 'thisMonth' || !period) {
     periodStart = new Date(userDate.getFullYear(), userDate.getMonth(), 1)
     periodEnd = new Date(userDate.getFullYear(), userDate.getMonth() + 1, 1)
-    periodLabel = userDate.toLocaleString('en-AU', { month: 'long', year: 'numeric' })
+    periodLabel = userDate.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
   } else {
     periodStart = new Date(userDate.getFullYear(), userDate.getMonth(), 1)
     periodEnd = new Date(userDate.getFullYear(), userDate.getMonth() + 1, 1)
-    periodLabel = userDate.toLocaleString('en-AU', { month: 'long', year: 'numeric' })
+    periodLabel = userDate.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
   }
 
   // Get budget rules active in this period

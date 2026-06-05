@@ -1,6 +1,7 @@
 // HTML email templates for reminders and recipe sharing
 
 import { formatCurrency } from '@/lib/financeShared'
+import { formatInTz } from '@/lib/timezone'
 
 function baseLayout(title: string, body: string): string {
   return `<!DOCTYPE html>
@@ -44,8 +45,8 @@ export function choreReminderHtml(chore: {
   emailReminderDays: number
   startTime?: Date | null
   emailReminderHours?: number
-}, assigneeName: string, completeUrl?: string): string {
-  let dueStr = chore.nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+}, timezone: string, assigneeName: string, completeUrl?: string): string {
+  let dueStr = formatInTz(chore.nextDueDate, timezone, { weekday: 'long', day: 'numeric', month: 'long' })
   let leadText = chore.emailReminderDays === 1 ? 'tomorrow' : `in ${chore.emailReminderDays} days`
 
   // Timed chores: show the due time and use an hours-based lead-in.
@@ -90,11 +91,11 @@ export function eventReminderHtml(event: {
   end: Date
   isAllDay: boolean
   category: string | null
-}, familyName: string): string {
-  const dateStr = event.start.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}, timezone: string, familyName: string): string {
+  const dateStr = formatInTz(event.start, timezone, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const timeStr = event.isAllDay
     ? 'All day'
-    : `${event.start.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })} – ${event.end.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}`
+    : `${formatInTz(event.start, timezone, { hour: 'numeric', minute: '2-digit' })} – ${formatInTz(event.end, timezone, { hour: 'numeric', minute: '2-digit' })}`
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1e293b;font-size:20px">Event Reminder</h2>
@@ -119,8 +120,8 @@ export function documentExpiryHtml(doc: {
   category: string
   expiryDate: Date
   remindBefore: number
-}, familyName: string): string {
-  const expiryStr = doc.expiryDate.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+}, timezone: string, familyName: string): string {
+  const expiryStr = formatInTz(doc.expiryDate, timezone, { day: 'numeric', month: 'long', year: 'numeric' })
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const expiry = new Date(doc.expiryDate)
@@ -153,8 +154,8 @@ export function billReminderHtml(bill: {
   reminderDays: number
   frequency: string
   notes: string | null
-}, recipientName: string, completeUrl: string): string {
-  const dueStr = bill.nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+}, timezone: string, recipientName: string, completeUrl: string): string {
+  const dueStr = formatInTz(bill.nextDueDate, timezone, { weekday: 'long', day: 'numeric', month: 'long' })
   const daysText = bill.reminderDays === 1 ? 'tomorrow' : `in ${bill.reminderDays} days`
   const amount = formatCurrency(bill.amount)
 

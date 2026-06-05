@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dialog'
 import { AlertTriangle, Download, Database, RotateCcw, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
+import { formatInTz } from '@/lib/timezone'
 
 interface CoziImport {
   id: string
@@ -30,6 +32,7 @@ interface DataTabProps {
 }
 
 function DatabaseBackupsSection() {
+  const timezone = useFamilyTimezone()
   const [backups, setBackups] = useState<{ filename: string; size: number; createdAt: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -130,7 +133,7 @@ function DatabaseBackupsSection() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm truncate">{backup.filename}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(backup.createdAt).toLocaleDateString('en-AU', {
+                    {formatInTz(new Date(backup.createdAt), timezone, {
                       year: 'numeric', month: 'short', day: 'numeric',
                       hour: '2-digit', minute: '2-digit',
                     })} &middot; {formatSize(backup.size)}
@@ -157,6 +160,7 @@ function DatabaseBackupsSection() {
 
 export function DataTab({ coziImports, userEmail }: DataTabProps) {
   const router = useRouter()
+  const timezone = useFamilyTimezone()
   const [exporting, setExporting] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -237,7 +241,7 @@ export function DataTab({ coziImports, userEmail }: DataTabProps) {
                 <div key={imp.id} className="px-3 py-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">
-                      {new Date(imp.importedAt).toLocaleDateString('en-AU', {
+                      {formatInTz(new Date(imp.importedAt), timezone, {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',

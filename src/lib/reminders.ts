@@ -93,6 +93,7 @@ export async function processChoreReminders(): Promise<number> {
           nextDueDate: chore.nextDueDate,
           emailReminderDays: chore.emailReminderDays,
         },
+        tz,
         chore.currentAssignee.name,
         completeUrl
       ),
@@ -158,6 +159,7 @@ export async function processTimedChoreReminders(): Promise<number> {
           startTime: chore.startTime,
           emailReminderHours: chore.emailReminderHours,
         },
+        tz,
         chore.currentAssignee.name,
         completeUrl
       ),
@@ -178,6 +180,7 @@ export async function processEventReminders(): Promise<number> {
   let sent = 0
   for (const event of events) {
     const familyName = event.family.name
+    const tz = event.family.timezone ?? DEFAULT_TIMEZONE
     const familyEmails = event.family.users.map(u => u.email)
     const extraEmails: string[] = event.emailReminderEmails
       ? (JSON.parse(event.emailReminderEmails) as string[])
@@ -234,6 +237,7 @@ export async function processEventReminders(): Promise<number> {
               isAllDay: instanceEvent.isAllDay,
               category: instanceEvent.category,
             },
+            tz,
             familyName
           ),
         })
@@ -275,6 +279,7 @@ export async function processDocumentReminders(): Promise<number> {
             expiryDate: doc.expiryDate,
             remindBefore: doc.remindBefore,
           },
+          tz,
           familyName
         ),
       })
@@ -333,6 +338,7 @@ export async function processBillReminders(): Promise<number> {
             frequency: bill.frequency,
             notes: bill.notes,
           },
+          tz,
           recipient.name,
           completeUrl
         ),

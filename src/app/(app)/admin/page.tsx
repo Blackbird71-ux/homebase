@@ -10,6 +10,8 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
+import { formatInTz } from '@/lib/timezone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -126,10 +128,11 @@ function ActionCard({
 // ── Spawn result renderer ─────────────────────────────────────────────────────
 
 function SpawnResultView({ result }: { result: SpawnResponse }) {
+  const timezone = useFamilyTimezone()
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Run at {new Date(result.asOf).toLocaleString('en-AU')}
+        Run at {formatInTz(new Date(result.asOf), timezone, { dateStyle: 'medium', timeStyle: 'medium' })}
       </p>
       {result.results.map((r) => (
         <div
@@ -185,6 +188,7 @@ const LEVEL_STYLES: Record<LogLine['level'], string> = {
 type LevelFilter = 'errors' | 'all'
 
 function LogViewer() {
+  const timezone = useFamilyTimezone()
   const [lines, setLines] = useState<LogLine[]>([])
   const [polling, setPolling] = useState(false)
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('errors')
@@ -315,7 +319,7 @@ function LogViewer() {
           {visible.map((l, i) => (
             <div key={i} className="flex gap-2 leading-5">
               <span className="text-slate-500 shrink-0 tabular-nums">
-                {new Date(l.ts).toLocaleTimeString('en-AU')}
+                {formatInTz(new Date(l.ts), timezone, { timeStyle: 'medium' })}
               </span>
               <span className={cn('shrink-0 uppercase w-8', LEVEL_STYLES[l.level])}>
                 {l.level.slice(0, 4)}

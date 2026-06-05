@@ -177,8 +177,10 @@ export function TripWeatherSection({
 
   // ── Helpers ──────────────────────────────────────────────────────
   function formatDate(dateStr: string): string {
+    // Trip dates are stored as UTC midnight of the calendar date; display in UTC to
+    // render the exact day regardless of the viewer's timezone.
     return new Date(dateStr).toLocaleDateString('en-AU', {
-      weekday: 'short', day: 'numeric', month: 'short',
+      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
     })
   }
 

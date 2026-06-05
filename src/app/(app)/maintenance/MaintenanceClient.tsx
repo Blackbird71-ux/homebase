@@ -97,7 +97,9 @@ function isOverdue(nextDueDate: string | null | undefined): boolean {
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return ''
-  return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+  // Maintenance dates are stored as UTC midnight of the calendar date (via <input type="date">),
+  // so display them in UTC to render the exact day, immune to the viewer's timezone.
+  return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
 export function MaintenanceClient({ initialAssets }: Props) {
@@ -478,12 +480,14 @@ export function MaintenanceClient({ initialAssets }: Props) {
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                               <span>{fmtDate(r.date)}</span>
                               {r.cost != null && <span>${r.cost.toFixed(2)}</span>}
+                              {/* eslint-disable-next-line no-restricted-syntax -- odometer is a number, not a date */}
                               {r.odometer != null && <span>{r.odometer.toLocaleString()} km</span>}
                             </div>
                             {r.notes && <p className="text-xs text-muted-foreground mt-1">{r.notes}</p>}
                             {r.nextDueDate && (
                               <p className={`text-xs mt-1 ${isOverdue(r.nextDueDate) ? 'text-red-600' : isDueSoon(r.nextDueDate) ? 'text-amber-600' : 'text-muted-foreground'}`}>
                                 Next due: {fmtDate(r.nextDueDate)}
+                                {/* eslint-disable-next-line no-restricted-syntax -- odometer is a number, not a date */}
                                 {r.nextDueOdometer != null && ` / ${r.nextDueOdometer.toLocaleString()} km`}
                               </p>
                             )}

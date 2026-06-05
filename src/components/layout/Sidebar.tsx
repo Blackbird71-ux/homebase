@@ -11,6 +11,8 @@ import {
   Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
+import { formatInTz } from '@/lib/timezone'
 
 type Group = 'schedule' | 'kitchen' | 'household'
 
@@ -68,10 +70,11 @@ export function Sidebar({
   counts = {},
 }: SidebarProps) {
   const pathname = usePathname()
+  const timezone = useFamilyTimezone()
 
   const today = new Date()
   const dateNum  = today.getDate()
-  const dateMeta = today.toLocaleDateString('en-AU', { weekday: 'short', month: 'short' })
+  const dateMeta = formatInTz(today, timezone, { weekday: 'short', month: 'short' })
   const week     = `Week ${getISOWeek(today)} · ${today.getFullYear()}`
 
   const initials = memberName.split(' ').map((p: string) => p[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || 'HB'

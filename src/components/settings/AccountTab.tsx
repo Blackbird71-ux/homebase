@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CheckCircle, AlertCircle, Copy, RefreshCw, Check } from 'lucide-react'
+import { formatInTz } from '@/lib/timezone'
 
 interface InviteCode {
   id: string
@@ -444,7 +445,7 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
                     <div className="flex items-center gap-2">
                       {code.expiresAt && (
                         <span className="text-xs text-muted-foreground">
-                          Expires {new Date(code.expiresAt).toLocaleDateString()}
+                          Expires {formatInTz(new Date(code.expiresAt), timezone)}
                         </span>
                       )}
                       {!code.used && (

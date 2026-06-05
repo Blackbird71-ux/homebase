@@ -238,7 +238,7 @@ export function ChoreScheduleCard({
             if (!isOverdueSection && dateStr) {
               const [y, m, d] = dateStr.split('-').map(Number)
               dayNum = d
-              month = new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short' })
+              month = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-AU', { month: 'short', timeZone: 'UTC' })
             }
 
             if (day.chores.length === 0) return null

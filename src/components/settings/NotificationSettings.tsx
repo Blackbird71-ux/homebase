@@ -5,6 +5,8 @@ import { BellIcon, BellOffIcon, Trash2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
+import { formatInTz } from '@/lib/timezone'
 
 interface Subscription {
   id: string
@@ -24,6 +26,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export function NotificationSettings() {
+  const timezone = useFamilyTimezone()
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
   const [subscribeLoading, setSubscribeLoading] = useState(false)
@@ -204,7 +207,7 @@ export function NotificationSettings() {
                           {sub.enabled ? 'Active' : 'Paused'}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Subscribed {new Date(sub.createdAt).toLocaleDateString('en-AU')}
+                          Subscribed {formatInTz(new Date(sub.createdAt), timezone)}
                         </p>
                       </div>
                     </div>

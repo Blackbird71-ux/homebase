@@ -133,7 +133,7 @@ function parsePeriod(period: string | undefined): { start: Date; end: Date; labe
       const m = today.getMonth() - 1
       const start = new Date(y, m, 1)
       const end = new Date(y, m + 1, 1)
-      return { start, end, label: `Last month (${start.toLocaleString('en-AU', { month: 'long', year: 'numeric' })})` }
+      return { start, end, label: `Last month (${start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })})` }
     }
     case 'thisYear': {
       const start = new Date(today.getFullYear(), 0, 1)
@@ -149,7 +149,7 @@ function parsePeriod(period: string | undefined): { start: Date; end: Date; labe
     default: {
       const start = new Date(today.getFullYear(), today.getMonth(), 1)
       const end = new Date(today.getFullYear(), today.getMonth() + 1, 1)
-      return { start, end, label: `This month (${start.toLocaleString('en-AU', { month: 'long', year: 'numeric' })})` }
+      return { start, end, label: `This month (${start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })})` }
     }
   }
 }

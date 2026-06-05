@@ -38,9 +38,13 @@ function getTripStatusLabel(kind: StatusKind): string {
 function formatDateRange(start: string, end: string): string {
   const s = new Date(start)
   const e = new Date(end)
-  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
-  if (s.toDateString() === e.toDateString()) return s.toLocaleDateString('en-AU', opts)
-  return `${s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${e.toLocaleDateString('en-AU', opts)}`
+  // Trip dates are stored as UTC midnight of the calendar date; display in UTC.
+  // (Options inlined rather than hoisted to a var so the no-restricted-syntax guard can
+  // statically see `timeZone` — it can't follow an options variable.)
+  if (s.toDateString() === e.toDateString()) {
+    return s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  }
+  return `${s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })} – ${e.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`
 }
 
 function countDays(start: string, end: string): number {

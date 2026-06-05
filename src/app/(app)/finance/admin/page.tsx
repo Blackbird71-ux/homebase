@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHero } from '@/components/shared/PageHero'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
+import { formatInTz } from '@/lib/timezone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,10 +127,11 @@ function ActionCard({
 // ── Spawn result renderer ─────────────────────────────────────────────────────
 
 function SpawnResultView({ result }: { result: SpawnResponse }) {
+  const timezone = useFamilyTimezone()
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Run at {new Date(result.asOf).toLocaleString('en-AU')}
+        Run at {formatInTz(new Date(result.asOf), timezone, { dateStyle: 'medium', timeStyle: 'medium' })}
       </p>
       {result.results.map((r) => (
         <div
@@ -188,13 +191,14 @@ function SeverityBadge({ severity }: { severity: IntegrityFinding['severity'] })
 }
 
 function IntegrityResultView({ result }: { result: IntegrityResponse }) {
+  const timezone = useFamilyTimezone()
   const { summary, checks, findings } = result
   const clean = summary.critical === 0 && summary.failed === 0
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Run at {new Date(result.ranAt).toLocaleString('en-AU')} · as at {new Date(result.asAt).toLocaleDateString('en-AU')}
+        Run at {formatInTz(new Date(result.ranAt), timezone, { dateStyle: 'medium', timeStyle: 'medium' })} · as at {formatInTz(new Date(result.asAt), timezone, { dateStyle: 'medium' })}
       </p>
 
       {/* Summary line */}

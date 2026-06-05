@@ -231,7 +231,7 @@ async function queryDeductibleExpensesHandler(args: Record<string, unknown>, ctx
     const now = new Date()
     start = new Date(now.getFullYear(), now.getMonth(), 1)
     end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    label = now.toLocaleString('en-AU', { month: 'long', year: 'numeric' })
+    label = now.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
   }
 
   // Get deductible category IDs

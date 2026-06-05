@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable no-restricted-syntax -- Meal-plan is an internally-consistent browser-local-time stack: the useMealPlanData hook + meal-plan/types.ts utils build and read local-midnight Dates, and every display rebuilds local midnight. A display-only UTC switch would shift dates a day for off-tz viewers; the whole stack must migrate together. Deferred — see DATE-DISPLAY-AUDIT.md "TripActivity time / meal-plan deferred stacks". */
+
 import { useState } from 'react'
 import { DailyMealColumn } from './DailyMealColumn'
 import { AssignMealModal } from './AssignMealModal'

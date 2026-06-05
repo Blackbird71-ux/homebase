@@ -87,8 +87,9 @@ export function TripDetailClient({ trip: initialTrip, currentUserId }: TripDetai
   const StatusIcon = statusInfo.icon
 
   function formatDate(dateStr: string): string {
+    // Trip dates are stored as UTC midnight of the calendar date; display in UTC.
     return new Date(dateStr).toLocaleDateString('en-AU', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
     })
   }
 
