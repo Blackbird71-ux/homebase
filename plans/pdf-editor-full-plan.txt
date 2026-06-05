@@ -1,0 +1,191 @@
+# Full PDF Editor — Implementation Plan
+
+## Current State Assessment
+
+### Library Stack
+| Library | Version | What it does | What it CANNOT do |
+|---|---|---|---|
+| pdf-lib (package.json:42) | 1.17.1 | Create PDFs, draw shapes/text, fill/flatten forms | Cannot modify existing PDF content (no text replacement, no content stream editing) |
+| pdfjs-dist (package.json:43) | 5.7.284 | Render PDF pages to canvas, extract text layers | Cannot modify or save PDFs (read-only viewer) |
+
+### Critical Bug Found
+In PdfRenderer.tsx:108, the page render catch block logs the error but **never calls setLoading(false)**, causing the spinner to stay forever when a render fails. This is the spinning wheel bug.
+
+### Layout Issue
+DocumentViewer.tsx:188 uses a centred Dialog modal at max-w-5xl h-[92vh]. The header bar consumes ~48px with title + 5 action buttons. The annotation mode has additional toolbar (~40px) + zoom controls (~28px). This leaves ~70-75% of the 92vh for the actual PDF, which is reasonable -- but the whitespace complaint is likely about the dialog header padding and the extra zoom controls row.
+
+---
+
+## Scope Assessment: "Full PDF Editor"
+
+**Honest answer:** True inline text editing (click on a word in a rendered PDF and change it, then save the modified PDF) is **not achievable** with the current library stack (pdf-lib + pdfjs-dist). pdf-lib is a PDF *creation* library, not a PDF *editing* library -- it cannot modify existing content streams, remove text, or replace text in-place while preserving layout.
+
+To do true inline editing you'd need a commercial engine like PSPDFKit or Apryse (PDFTron) -- both are expensive (thousands/yr) and heavy (multi-MB WebAssembly payloads).
+
+### What IS achievable
+
+| Capability | Feasibility | Approach |
+|---|---|---|
+| Fix spinning wheel | Trivial | Add setLoading(false) in catch block |
+| Improve layout (less whitespace) | Easy | Convert Dialog to Drawer, tighten spacing |
+| Add text box annotations (type new text anywhere) | Medium | New annotation type + pdf-lib drawText() |
+| Burn existing annotations into PDF (download with highlights/shapes) | Medium | Server-side function using pdf-lib drawing APIs |
+| Text layer overlay (select/copy visible text) | Medium | pdfjs-dist TextLayerBuilder on top of canvas |
+| Print button in viewer | Easy | window.print() targeting the annotation container |
+| True inline text editing (modify existing PDF words) | Not possible | Requires commercial library |
+
+---
+
+## Implementation Plan
+
+### Phase 1: Fix Bugs + Improve Layout
+
+#### 1.1 Fix spinning wheel in PdfRenderer.tsx:108
+- Add setLoading(false) in the page render catch block
+- Also add an error state fallback UI
+
+#### 1.2 DocumentViewer: Dialog to Drawer for more space
+- Convert DocumentViewer.tsx:175 from centred Dialog to right-side Drawer (width 900px, per your standards for complex editors)
+- This eliminates the vertical centering whitespace and gives more horizontal room
+- Move title into the Drawer header, keep action buttons (View/Annotate/Download/Close)
+
+#### 1.3 Tighter annotation toolbar
+- Merge the zoom controls row into the toolbar (compact layout)
+- Remove the annotation count text or move it to a tooltip
+
+---
+
+### Phase 2: Burn Annotations into PDF
+
+#### 2.1 Create src/lib/pdf/burn-annotations.ts
+New server-side function that takes a PDF buffer + annotation array and produces a new PDF with annotations drawn directly onto the page:
+
+```
+burnAnnotationsIntoPdf(pdfBytes, annotations): Uint8Array
+```
+
+Mapping annotation types to pdf-lib drawing operations:
+
+| Annotation Type | pdf-lib API |
+|---|---|
+| highlight | page.drawRectangle() with 0.3 opacity fill |
+| underline | page.drawLine() |
+| strikethrough | page.drawLine() at mid-height |
+| rectangle | page.drawRectangle() with stroke |
+| ellipse | approximated via bezier curves (drawSvgPath) |
+| draw (freehand) | page.drawSvgPath() with polyline approximation |
+| note | page.drawRectangle() (note icon) + page.drawText() |
+| text (new type) | page.drawText() with selected font/size/color |
+
+#### 2.2 New API endpoint: POST /api/documents/[id]/export-annotated
+Similar structure to form-data/route.ts:
+- Reads original PDF from disk
+- Reads annotations JSON sidecar
+- Calls burnAnnotationsIntoPdf()
+- Returns the new PDF for download (or saves to vault)
+
+#### 2.3 Add "Export with Annotations" button in PdfAnnotationViewer toolbar
+- "Download with annotations" button
+- "Save annotated copy to Vault" button
+
+---
+
+### Phase 3: Text Box Annotations (New Feature)
+
+#### 3.1 Add text annotation type in src/types/pdf-annotations.ts
+- Add 'text' to AnnotationType union
+- Add optional fontSize, fontFamily fields to PdfAnnotation interface
+
+#### 3.2 Add text tool to AnnotationToolbar.tsx
+- New "Text" tool button (keyboard shortcut 7)
+
+#### 3.3 Add text input overlay in AnnotationCanvas.tsx
+When tool is 'text' and user clicks:
+- Show a contenteditable div or textarea at the click position
+- User types text
+- On blur/enter, creates a PdfAnnotation with type 'text'
+
+#### 3.4 Add text rendering in burn function (Phase 2.1)
+- Text annotations render as page.drawText()
+
+---
+
+### Phase 4: Text Layer Overlay (Read-Only Select/Copy)
+
+#### 4.1 Enable pdfjs-dist text layer in PdfRenderer.tsx
+pdfjs-dist supports TextLayerBuilder which produces positioned span elements over the canvas. This gives users:
+- Ability to select text with the mouse
+- Ability to copy text to clipboard
+- Search within the PDF
+
+This does NOT enable editing -- it's a read-only overlay -- but it significantly improves the "editor feel."
+
+#### 4.2 Add search feature
+Search input in the annotation toolbar that highlights matching text in the text layer.
+
+---
+
+## Architecture
+
+Client side:
+- Document Page -> DocumentViewer
+  - View Mode (iframe)
+  - Annotate Mode (PdfAnnotationViewer)
+    - PdfRenderer (pdfjs-dist) - renders PDF pages to canvas
+    - AnnotationCanvas (Canvas 2D) - draws annotation overlays
+    - AnnotationToolbar - tool selection, colors, export
+  - Form Fill Mode (PdfFormFiller)
+
+Server side:
+- GET/PUT /api/documents/[id]/annotations - reads/writes annotation sidecar JSON
+- POST /api/documents/[id]/export-annotated - burns annotations into PDF using pdf-lib
+- POST /api/documents/[id]/form-data - fills form fields using pdf-lib
+
+---
+
+## Files to Touch
+
+### Phase 1 (Bug Fix + Layout)
+| File | Change |
+|---|---|
+| src/components/documents/PdfRenderer.tsx | Add setLoading(false) in catch block (line 108) |
+| src/components/documents/DocumentViewer.tsx | Convert Dialog to Drawer, reduce header whitespace |
+| src/components/documents/PdfAnnotationViewer.tsx | Merge zoom controls into toolbar, tighten spacing |
+
+### Phase 2 (Burn Annotations)
+| File | Change |
+|---|---|
+| src/lib/pdf/burn-annotations.ts | NEW - server-side annotation burning function |
+| src/app/api/documents/[id]/export-annotated/route.ts | NEW - API endpoint for export |
+| src/components/documents/PdfAnnotationViewer.tsx | Add export buttons to toolbar |
+
+### Phase 3 (Text Boxes)
+| File | Change |
+|---|---|
+| src/types/pdf-annotations.ts | Add 'text' type + font fields |
+| src/components/documents/AnnotationToolbar.tsx | Add "Text" tool |
+| src/components/documents/AnnotationCanvas.tsx | Add text input overlay |
+| src/lib/pdf/burn-annotations.ts | Add text rendering |
+
+### Phase 4 (Text Layer)
+| File | Change |
+|---|---|
+| src/components/documents/PdfRenderer.tsx | Add pdfjs-dist TextLayerBuilder |
+| src/components/documents/PdfAnnotationViewer.tsx | Add search input |
+
+---
+
+## What This Plan Does NOT Include
+
+- **True inline text editing** (modifying existing PDF words) - impossible with current libraries
+- **Page manipulation** (add/delete/reorder pages) - pdf-lib CAN do this, but out of scope for now
+- **Image insertion** - possible with pdf-lib but out of scope
+- **Undo/redo for text boxes** - the current undo system works per-annotation, text boxes would need special handling
+
+---
+
+## Questions
+
+1. Priority order: do you want the bug fix + layout improvement first (Phase 1, quick wins), then the annotation burning (Phase 2), then text boxes (Phase 3)?
+2. Is the text layer overlay (select/copy/search) important to you, or is editing + printing annotations the priority?
+3. Any specific PDF types you work with (forms, scanned documents, reports) that might affect the approach?
