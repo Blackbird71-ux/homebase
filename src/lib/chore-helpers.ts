@@ -250,7 +250,10 @@ export function calculateInitialDueDate(
  * Calculate the next due date after a chore is **completed**.
  *
  * Base-date selection rule (the golden rule — must never drift):
- *   • triggerOnComplete=true  → base from completedAt  (user wants schedule to float)
+ *   • triggerOnComplete=true  → base from the LATER of (completedAt, nextDueDate):
+ *       the schedule floats from the completion date, EXCEPT an early completion
+ *       (completed before the chore was due) advances from the scheduled due date
+ *       so it rolls to the NEXT occurrence, not back onto the one just satisfied.
  *   • otherwise               → base from nextDueDate   (schedule stays anchored)
  *
  * This means completing a monthly chore 4 days late still schedules the next
@@ -272,7 +275,18 @@ export function calculateNextDueDate(
   // Anchor: advance from the scheduled due date, not from "now"
   let baseDate: Date
   if (chore.triggerOnComplete) {
-    baseDate = completedAt
+    // Float from the completion date — but an EARLY completion (before the
+    // chore was due) has already satisfied the current occurrence, so the next
+    // one must roll forward from that occurrence rather than collapse back onto
+    // it. Anchor on the later of (completedAt, nextDueDate): on-time/late
+    // completions float from completedAt; early completions advance from the
+    // scheduled due date. nextDueDate is the UTC instant of local midnight on
+    // the due day, so completedAt < nextDueDate is exactly "completed before the
+    // due day" in the user's timezone.
+    baseDate =
+      chore.nextDueDate && chore.nextDueDate > completedAt
+        ? chore.nextDueDate
+        : completedAt
   } else if (chore.nextDueDate) {
     baseDate = chore.nextDueDate
   } else {
