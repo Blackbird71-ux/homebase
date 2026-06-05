@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
-import { todayStringInTz } from '@/lib/timezone'
+import { todayStringInTz, endOfLocalDayUtc } from '@/lib/timezone'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 
 // GET /api/finance/balance-sheet?asAt=2026-06-30&entityId=optional
@@ -27,40 +27,6 @@ import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 // NET WORTH = Total Assets − Total Liabilities
 // EQUITY (static + net income) should equal NET WORTH when fully set up.
 
-/**
- * Convert a date-string (YYYY-MM-DD) to end-of-day UTC in the family's timezone.
- * P2 fix #2: "as at 31 May" should mean 23:59:59.999 AEST, not UTC midnight.
- */
-function asAtEndOfDay(dateStr: string, tz: string): Date {
-  // Parse the date components
-  const [year, month1, day] = dateStr.split('-').map(Number)
-  if (!year || !month1 || !day) return new Date() // fallback
-
-  try {
-    // Find midnight in the target timezone for this day
-    const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
-    const fmt = new Intl.DateTimeFormat('en-AU', {
-      timeZone: tz,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false,
-    })
-    const parts = fmt.formatToParts(new Date(noonUtc))
-    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value)
-    const tzY = get('year'), tzM = get('month'), tzD = get('day')
-    const tzH = get('hour'), tzMin = get('minute'), tzS = get('second')
-    const offsetMs = noonUtc - Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS)
-    // End of day = midnight + 24h - 1ms
-    const midnightUtc = Date.UTC(year, month1 - 1, day, 0, 0, 0, 0) + offsetMs
-    return new Date(midnightUtc + 24 * 60 * 60 * 1000 - 1)
-  } catch {
-    // Unknown timezone: fall back to end of UTC day
-    const d = new Date(`${dateStr}T00:00:00.000Z`)
-    d.setUTCHours(23, 59, 59, 999)
-    return d
-  }
-}
-
 export async function GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
@@ -75,8 +41,8 @@ export async function GET(request: NextRequest) {
 
   // asAt: interpret the date string as end-of-day in the family's timezone
   const asAt = asAtParam
-    ? asAtEndOfDay(asAtParam, tz)
-    : asAtEndOfDay(
+    ? endOfLocalDayUtc(asAtParam, tz)
+    : endOfLocalDayUtc(
         new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()),
         tz
       )

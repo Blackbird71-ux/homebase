@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
-import { todayStringInTz } from '@/lib/timezone'
+import { todayStringInTz, endOfLocalDayUtc } from '@/lib/timezone'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 
 // GET /api/finance/accounts-payable?asAt=YYYY-MM-DD
@@ -34,31 +34,6 @@ function ageBucket(invoiceDate: Date, asAt: Date): AgingBucket {
   return '91_plus'
 }
 
-function asAtEndOfDay(dateStr: string, tz: string): Date {
-  const [year, month1, day] = dateStr.split('-').map(Number)
-  if (!year || !month1 || !day) return new Date()
-  try {
-    const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
-    const fmt = new Intl.DateTimeFormat('en-AU', {
-      timeZone: tz,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false,
-    })
-    const parts = fmt.formatToParts(new Date(noonUtc))
-    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value)
-    const tzY = get('year'), tzM = get('month'), tzD = get('day')
-    const tzH = get('hour'), tzMin = get('minute'), tzS = get('second')
-    const offsetMs = noonUtc - Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS)
-    const midnightUtc = Date.UTC(year, month1 - 1, day, 0, 0, 0, 0) + offsetMs
-    return new Date(midnightUtc + 24 * 60 * 60 * 1000 - 1)
-  } catch {
-    const d = new Date(`${dateStr}T00:00:00.000Z`)
-    d.setUTCHours(23, 59, 59, 999)
-    return d
-  }
-}
-
 export async function GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
@@ -71,8 +46,8 @@ export async function GET(request: NextRequest) {
   const tz = await getFamilyTimezone(familyId)
 
   const asAt = asAtParam
-    ? asAtEndOfDay(asAtParam, tz)
-    : asAtEndOfDay(
+    ? endOfLocalDayUtc(asAtParam, tz)
+    : endOfLocalDayUtc(
         new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()),
         tz
       )

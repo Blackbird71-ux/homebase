@@ -73,6 +73,40 @@ export function localMidnightToUtc(dateStr: string, timezone: string): Date {
 }
 
 /**
+ * Convert a YYYY-MM-DD string to the UTC Date representing 23:59:59.999 of that
+ * calendar day in the given timezone. Used by finance report "as at" cutoffs so
+ * "as at 31 May" means end-of-day in the family's local zone, not UTC midnight.
+ *
+ * On malformed input returns `new Date()` (current instant) and on an unknown
+ * timezone falls back to end of the UTC day — both preserved from the inline
+ * copies this consolidates (trial-balance / balance-sheet / AP / AR).
+ */
+export function endOfLocalDayUtc(dateStr: string, timezone: string): Date {
+  const [year, month1, day] = dateStr.split('-').map(Number)
+  if (!year || !month1 || !day) return new Date()
+  try {
+    const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
+    const fmt = new Intl.DateTimeFormat('en-AU', {
+      timeZone: timezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    })
+    const parts = fmt.formatToParts(new Date(noonUtc))
+    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value)
+    const tzY = get('year'), tzM = get('month'), tzD = get('day')
+    const tzH = get('hour'), tzMin = get('minute'), tzS = get('second')
+    const offsetMs = noonUtc - Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS)
+    const midnightUtc = Date.UTC(year, month1 - 1, day, 0, 0, 0, 0) + offsetMs
+    return new Date(midnightUtc + 24 * 60 * 60 * 1000 - 1)
+  } catch {
+    const d = new Date(`${dateStr}T00:00:00.000Z`)
+    d.setUTCHours(23, 59, 59, 999)
+    return d
+  }
+}
+
+/**
  * Convert a Date that was calculated as midnight in the server's timezone (UTC)
  * to the UTC Date that represents midnight in the *user's* timezone on the same
  * calendar day.

@@ -3,36 +3,9 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
+import { endOfLocalDayUtc } from '@/lib/timezone'
 
-// Reuse the same timezone-aware end-of-day helper as balance-sheet/route.ts.
-// setHours(23,59,59,999) uses the server's local timezone (UTC on the NAS),
-// which means entries posted after 2pm AEST are excluded from the same-day filter.
-function asAtEndOfDay(dateStr: string, tz: string): Date {
-  const [year, month1, day] = dateStr.split('-').map(Number)
-  if (!year || !month1 || !day) return new Date()
-  try {
-    const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
-    const fmt = new Intl.DateTimeFormat('en-AU', {
-      timeZone: tz,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false,
-    })
-    const parts = fmt.formatToParts(new Date(noonUtc))
-    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value)
-    const tzY = get('year'), tzM = get('month'), tzD = get('day')
-    const tzH = get('hour'), tzMin = get('minute'), tzS = get('second')
-    const offsetMs = noonUtc - Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS)
-    const midnightUtc = Date.UTC(year, month1 - 1, day, 0, 0, 0, 0) + offsetMs
-    return new Date(midnightUtc + 24 * 60 * 60 * 1000 - 1)
-  } catch {
-    const d = new Date(`${dateStr}T00:00:00.000Z`)
-    d.setUTCHours(23, 59, 59, 999)
-    return d
-  }
-}
-
-// Timezone-aware start-of-day, mirroring asAtEndOfDay. Using new Date(dateStr)
+// Timezone-aware start-of-day, mirroring endOfLocalDayUtc. Using new Date(dateStr)
 // parses YYYY-MM-DD as UTC midnight, which for a UTC+10 user is 10:00 AEST —
 // excluding journals posted 00:00–10:00 AEST on the first day of a period.
 function asAtStartOfDay(dateStr: string, tz: string): Date {
@@ -90,7 +63,7 @@ export async function GET(request: NextRequest) {
   // Build date filter for journal entries — use timezone-aware end-of-day
   const dateFilter: any = {}
   if (fromRaw) dateFilter.gte = asAtStartOfDay(fromRaw, tz)
-  if (toRaw)   dateFilter.lte = asAtEndOfDay(toRaw, tz)
+  if (toRaw)   dateFilter.lte = endOfLocalDayUtc(toRaw, tz)
 
   const journalEntryFilter: any = {
     familyId,
