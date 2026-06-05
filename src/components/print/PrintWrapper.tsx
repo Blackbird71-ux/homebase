@@ -19,7 +19,8 @@
  */
 
 import { forwardRef } from 'react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 interface PrintWrapperProps {
   /** The report name shown in the print header */
@@ -33,7 +34,8 @@ interface PrintWrapperProps {
 
 export const PrintWrapper = forwardRef<HTMLDivElement, PrintWrapperProps>(
   function PrintWrapper({ reportTitle, dateRange, meta, children }, ref) {
-    const generatedAt = format(new Date(), 'd MMM yyyy, h:mm a')
+    const tz = useFamilyTimezone()
+    const generatedAt = formatInTz(new Date(), tz, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 
     return (
       <div ref={ref}>

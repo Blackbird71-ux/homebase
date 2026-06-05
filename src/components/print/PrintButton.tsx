@@ -23,7 +23,8 @@
 
 import { useCallback, useState, useRef, useEffect, RefObject } from 'react'
 import { Printer, FileOutput, ChevronDown, Loader2 } from 'lucide-react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { toast } from 'sonner'
 
 interface PrintButtonProps {
@@ -49,6 +50,7 @@ export function PrintButton({
   className = '',
   disabled = false,
 }: PrintButtonProps) {
+  const tz = useFamilyTimezone()
   const [menuOpen, setMenuOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -67,11 +69,11 @@ export function PrintButton({
   }, [menuOpen])
 
   const getDocTitle = useCallback(() => {
-    const generatedAt = format(new Date(), 'd MMM yyyy h:mm a')
+    const generatedAt = formatInTz(new Date(), tz, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
     return dateRange
       ? `HomeBase - ${reportTitle} - ${dateRange}`
       : `HomeBase - ${reportTitle} - ${generatedAt}`
-  }, [reportTitle, dateRange])
+  }, [reportTitle, dateRange, tz])
 
   const handlePrint = useCallback(() => {
     const el = printRef.current
