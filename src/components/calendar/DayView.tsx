@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { isToday } from 'date-fns'
 import { X, Utensils, ClipboardList, Plane } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import { eventFallsOnDay } from '@/lib/event-helpers'
-import { formatInTz, getLocalHourMinute } from '@/lib/timezone'
+import { formatInTz, getLocalHourMinute, isTodayInTz } from '@/lib/timezone'
 import { GRID_START, GRID_END, HOUR_PX, ALLDAY_CAP, hourLabel, topPx, heightPx, layoutEvents } from '@/lib/calendar-grid'
 import type { CalendarEvent } from '@/types'
 
@@ -27,7 +26,7 @@ export function DayView({ currentDate, events, timezone, onEventClick, onDayClic
   const [overflow, setOverflow] = useState<OverflowPopup | null>(null)
   const popupRef   = useRef<HTMLDivElement>(null)
   const scrollRef  = useRef<HTMLDivElement>(null)
-  const today      = isToday(currentDate)
+  const today      = isTodayInTz(currentDate, timezone)
 
   useEffect(() => {
     function update() {

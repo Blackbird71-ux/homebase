@@ -1,14 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, isSameMonth, isToday, format,
-  startOfDay, endOfDay, addMonths, subMonths,
-} from 'date-fns'
 import { ChevronLeft, ChevronRight, CheckIcon, ClockIcon } from 'lucide-react'
 import { choreIsCompletable } from '@/lib/chore-helpers'
-import { todayBoundsInTz } from '@/lib/timezone'
+import {
+  todayBoundsInTz, formatInTz, dateStringInTz,
+  startOfMonthInTz, endOfMonthInTz, startOfWeekInTz, endOfWeekInTz,
+  eachDayInTz, isSameMonthInTz, isTodayInTz, addMonthsInTz,
+} from '@/lib/timezone'
 
 interface ChoreCompletion {
   id: string
@@ -158,11 +157,11 @@ export function ChoreCalendarView({
   // allowEarlyStart so early-completion chores stay clickable before their due date.
   const { end: todayEnd } = todayBoundsInTz(timezone)
 
-  const monthStart = startOfMonth(currentDate)
-  const monthEnd = endOfMonth(currentDate)
-  const calStart = startOfWeek(monthStart, { weekStartsOn })
-  const calEnd = endOfWeek(monthEnd, { weekStartsOn })
-  const days = eachDayOfInterval({ start: calStart, end: calEnd })
+  const monthStart = startOfMonthInTz(currentDate, timezone)
+  const monthEnd = endOfMonthInTz(currentDate, timezone)
+  const calStart = startOfWeekInTz(monthStart, timezone, weekStartsOn)
+  const calEnd = endOfWeekInTz(monthEnd, timezone, weekStartsOn)
+  const days = eachDayInTz(calStart, calEnd, timezone)
 
   const dayHeaders =
     weekStartsOn === 0
@@ -172,9 +171,7 @@ export function ChoreCalendarView({
   const weeks = Math.ceil(days.length / 7)
 
   function navigate(dir: 'prev' | 'next') {
-    setCurrentDate(
-      dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1),
-    )
+    setCurrentDate(addMonthsInTz(currentDate, dir === 'next' ? 1 : -1, timezone))
   }
 
   function goToday() {
@@ -182,17 +179,14 @@ export function ChoreCalendarView({
   }
 
   function getChoresForDay(day: Date): Chore[] {
-    const dayStart = startOfDay(day)
-    const dayEnd = endOfDay(day)
+    const dayStr = dateStringInTz(day, timezone)
     return chores.filter((chore) => {
       if (!chore.nextDueDate) return false
-      const dueDate = new Date(chore.nextDueDate)
-      return dueDate >= dayStart && dueDate <= dayEnd
+      return dateStringInTz(new Date(chore.nextDueDate), timezone) === dayStr
     })
   }
 
-  const isThisMonth =
-    format(currentDate, 'M-yyyy') === format(new Date(), 'M-yyyy')
+  const isThisMonth = isSameMonthInTz(currentDate, new Date(), timezone)
 
   return (
     <div className="flex flex-col h-full">
@@ -216,7 +210,7 @@ export function ChoreCalendarView({
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
           <span className="text-sm font-semibold">
-            {format(currentDate, 'MMMM yyyy')}
+            {formatInTz(currentDate, timezone, { month: 'long', year: 'numeric' })}
           </span>
           <button
             type="button"
@@ -267,8 +261,8 @@ export function ChoreCalendarView({
           const col = idx % 7
           const isWeekend =
             weekStartsOn === 0 ? col === 0 || col === 6 : col === 5 || col === 6
-          const inMonth = isSameMonth(day, currentDate)
-          const today = isToday(day)
+          const inMonth = isSameMonthInTz(day, currentDate, timezone)
+          const today = isTodayInTz(day, timezone)
           const dayChores = getChoresForDay(day)
 
           return (
@@ -291,7 +285,7 @@ export function ChoreCalendarView({
                       : 'text-foreground',
                   ].join(' ')}
                 >
-                  {format(day, 'd')}
+                  {formatInTz(day, timezone, { day: 'numeric' })}
                 </span>
                 {dayChores.length > 3 && (
                   <span className="text-[10px] text-muted-foreground font-medium">

@@ -1,9 +1,8 @@
 'use client'
 
-import { eachDayOfInterval, addDays, isToday } from 'date-fns'
 import { EventBadge } from './EventBadge'
 import { eventFallsOnDay } from '@/lib/event-helpers'
-import { formatInTz } from '@/lib/timezone'
+import { formatInTz, eachDayInTz, addLocalDays, isTodayInTz } from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
 
 interface ScheduleViewProps {
@@ -15,7 +14,7 @@ interface ScheduleViewProps {
 }
 
 export function ScheduleView({ currentDate, events, timezone, onEventClick, onDayClick }: ScheduleViewProps) {
-  const days = eachDayOfInterval({ start: currentDate, end: addDays(currentDate, 59) })
+  const days = eachDayInTz(currentDate, addLocalDays(currentDate, 59, timezone), timezone)
 
   const daysWithEvents = days
     .map(day => ({
@@ -42,7 +41,7 @@ export function ScheduleView({ currentDate, events, timezone, onEventClick, onDa
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto py-2">
         {daysWithEvents.map(({ day, events: dayEvents }) => {
-          const today = isToday(day)
+          const today = isTodayInTz(day, timezone)
           return (
             <div key={day.toISOString()} className="flex gap-4 px-4 py-3 border-b border-border/30 last:border-b-0">
 

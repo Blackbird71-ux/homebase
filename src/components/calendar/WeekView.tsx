@@ -1,13 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import {
-  startOfWeek, endOfWeek, eachDayOfInterval, isToday,
-} from 'date-fns'
 import { Utensils, ClipboardList, Plane, X } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import { eventFallsOnDay } from '@/lib/event-helpers'
-import { formatInTz, getLocalHourMinute } from '@/lib/timezone'
+import {
+  formatInTz, getLocalHourMinute, startOfWeekInTz, endOfWeekInTz, eachDayInTz, isTodayInTz,
+} from '@/lib/timezone'
 import { GRID_START, GRID_END, HOUR_PX, ALLDAY_CAP, hourLabel, topPx, heightPx, layoutEvents } from '@/lib/calendar-grid'
 import type { CalendarEvent } from '@/types'
 
@@ -30,9 +29,9 @@ interface WeekViewProps {
 }
 
 export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: WeekViewProps) {
-  const weekStart = startOfWeek(currentDate, { weekStartsOn })
-  const weekEnd   = endOfWeek(currentDate, { weekStartsOn })
-  const days      = eachDayOfInterval({ start: weekStart, end: weekEnd })
+  const weekStart = startOfWeekInTz(currentDate, timezone, weekStartsOn)
+  const weekEnd   = endOfWeekInTz(currentDate, timezone, weekStartsOn)
+  const days      = eachDayInTz(weekStart, weekEnd, timezone)
 
   const [nowTop, setNowTop] = useState<number | null>(null)
   const [overflow, setOverflow] = useState<OverflowPopup | null>(null)
@@ -81,7 +80,7 @@ export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayCli
             .filter((e) => !e.isAllDay && eventFallsOnDay(e, day, timezone))
             .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
           const allEvents = [...allDay, ...timed]
-          const today = isToday(day)
+          const today = isTodayInTz(day, timezone)
 
           return (
             <button
@@ -134,7 +133,7 @@ export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayCli
         <div className="grid grid-cols-[3rem_repeat(7,1fr)] border-b border-border/60 bg-muted/30 shrink-0">
           <div className="border-r border-border/40" />
           {days.map((day) => {
-            const today = isToday(day)
+            const today = isTodayInTz(day, timezone)
             const dayTripEvent = events.find(e => e.source === 'trip' && eventFallsOnDay(e, day, timezone))
             return (
               <div
@@ -242,7 +241,7 @@ export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayCli
 
             {/* Day columns */}
             {days.map((day) => {
-              const today      = isToday(day)
+              const today      = isTodayInTz(day, timezone)
               const timed      = events.filter((e) => !e.isAllDay && eventFallsOnDay(e, day, timezone))
               const positioned = layoutEvents(timed)
 

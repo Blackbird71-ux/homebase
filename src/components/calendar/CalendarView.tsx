@@ -2,10 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-} from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutGrid, Settings2, Calendar, List, GanttChart } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,7 +14,11 @@ import { EventModal } from './EventModal'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
-import { localTimeToStoredDateTime, formatInTz } from '@/lib/timezone'
+import {
+  localTimeToStoredDateTime, formatInTz, dateStringInTz, addLocalDays,
+  addMonthsInTz, addWeeksInTz, startOfMonthInTz, endOfMonthInTz,
+  startOfWeekInTz, endOfWeekInTz, isSameMonthInTz,
+} from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
 
 interface CalendarSettings {
@@ -84,18 +84,18 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     let rangeStart: Date
     let rangeEnd: Date
     if (targetView === 'month') {
-      rangeStart = new Date(startOfWeek(startOfMonth(targetDate), { weekStartsOn }).getTime() - 7 * 24 * 60 * 60 * 1000)
-      rangeEnd   = new Date(endOfWeek(endOfMonth(targetDate),     { weekStartsOn }).getTime() + 7 * 24 * 60 * 60 * 1000)
+      rangeStart = addLocalDays(startOfWeekInTz(startOfMonthInTz(targetDate, timezone), timezone, weekStartsOn), -7, timezone)
+      rangeEnd   = addLocalDays(endOfWeekInTz(endOfMonthInTz(targetDate, timezone), timezone, weekStartsOn), 7, timezone)
     } else if (targetView === 'week' || targetView === 'horizontal') {
-      rangeStart = new Date(startOfWeek(targetDate, { weekStartsOn }).getTime() - 7 * 24 * 60 * 60 * 1000)
-      rangeEnd   = new Date(endOfWeek(targetDate,   { weekStartsOn }).getTime() + 7 * 24 * 60 * 60 * 1000)
+      rangeStart = addLocalDays(startOfWeekInTz(targetDate, timezone, weekStartsOn), -7, timezone)
+      rangeEnd   = addLocalDays(endOfWeekInTz(targetDate, timezone, weekStartsOn), 7, timezone)
     } else if (targetView === 'day') {
-      rangeStart = addDays(targetDate, -2)
-      rangeEnd   = addDays(targetDate,  2)
+      rangeStart = addLocalDays(targetDate, -2, timezone)
+      rangeEnd   = addLocalDays(targetDate,  2, timezone)
     } else {
       // schedule — 60 days forward
       rangeStart = targetDate
-      rangeEnd   = addDays(targetDate, 62)
+      rangeEnd   = addLocalDays(targetDate, 62, timezone)
     }
 
     const params = new URLSearchParams({
@@ -109,7 +109,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     })
     const res = await fetch(`/api/events?${params}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
-  }, [weekStartsOn, router])
+  }, [weekStartsOn, router, timezone])
 
   useEffect(() => {
     const cleanup = listenAppEvent(AppEvents.CALENDAR_UPDATED, () => {
@@ -127,13 +127,13 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   function navigate(dir: 'prev' | 'next') {
     let newDate: Date
     if (view === 'month') {
-      newDate = dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1)
+      newDate = addMonthsInTz(currentDate, dir === 'next' ? 1 : -1, timezone)
     } else if (view === 'week' || view === 'horizontal') {
-      newDate = dir === 'next' ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1)
+      newDate = addWeeksInTz(currentDate, dir === 'next' ? 1 : -1, timezone)
     } else if (view === 'day') {
-      newDate = dir === 'next' ? addDays(currentDate, 1) : subDays(currentDate, 1)
+      newDate = addLocalDays(currentDate, dir === 'next' ? 1 : -1, timezone)
     } else {
-      newDate = dir === 'next' ? addDays(currentDate, 30) : subDays(currentDate, 30)
+      newDate = addLocalDays(currentDate, dir === 'next' ? 30 : -30, timezone)
     }
     setCurrentDate(newDate)
     refresh(newDate, view)
@@ -152,7 +152,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   }
 
   function openNewChore(date: Date) {
-    setChoreDate(format(date, 'yyyy-MM-dd'))
+    setChoreDate(dateStringInTz(date, timezone))
     setChoreTitle('')
     setChoreTime('')
     setChoreDuration('60')
@@ -185,7 +185,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   }
 
   function openNewMeal(date: Date) {
-    setMealModalDate(format(date, 'yyyy-MM-dd'))
+    setMealModalDate(dateStringInTz(date, timezone))
     setMealModalOpen(true)
   }
 
@@ -265,16 +265,16 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
 
   const today = new Date()
   const isCurrentPeriod = view === 'month'
-    ? format(currentDate, 'M-yyyy') === format(today, 'M-yyyy')
+    ? isSameMonthInTz(currentDate, today, timezone)
     : view === 'week' || view === 'horizontal'
-    ? currentDate >= startOfWeek(today, { weekStartsOn }) && currentDate <= endOfWeek(today, { weekStartsOn })
-    : format(currentDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
+    ? dateStringInTz(startOfWeekInTz(currentDate, timezone, weekStartsOn), timezone) === dateStringInTz(startOfWeekInTz(today, timezone, weekStartsOn), timezone)
+    : dateStringInTz(currentDate, timezone) === dateStringInTz(today, timezone)
 
-  const monthLabel    = format(currentDate, 'MMMM')
-  const yearLabel     = format(currentDate, 'yyyy')
-  const weekLabel     = `${format(startOfWeek(currentDate, { weekStartsOn }), 'MMM d')} – ${format(endOfWeek(currentDate, { weekStartsOn }), 'MMM d, yyyy')}`
+  const monthLabel    = formatInTz(currentDate, timezone, { month: 'long' })
+  const yearLabel     = formatInTz(currentDate, timezone, { year: 'numeric' })
+  const weekLabel     = `${formatInTz(startOfWeekInTz(currentDate, timezone, weekStartsOn), timezone, { month: 'short', day: 'numeric' })} – ${formatInTz(endOfWeekInTz(currentDate, timezone, weekStartsOn), timezone, { month: 'short', day: 'numeric', year: 'numeric' })}`
   const dayLabel      = formatInTz(currentDate, timezone, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  const scheduleLabel = `${formatInTz(currentDate, timezone, { month: 'short', day: 'numeric' })} – ${formatInTz(addDays(currentDate, 59), timezone, { month: 'short', day: 'numeric', year: 'numeric' })}`
+  const scheduleLabel = `${formatInTz(currentDate, timezone, { month: 'short', day: 'numeric' })} – ${formatInTz(addLocalDays(currentDate, 59, timezone), timezone, { month: 'short', day: 'numeric', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col h-full gap-0 overflow-hidden">

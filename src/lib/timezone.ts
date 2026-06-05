@@ -232,3 +232,85 @@ export function getLocalHourMinute(
 export function localTimeToStoredDateTime(timeStr: string): string {
   return `2000-01-01T${timeStr}:00.000Z`
 }
+
+// ── Calendar grid helpers (timezone-aware) ──────────────────────────────────
+// These return UTC instants representing LOCAL MIDNIGHT in `timezone`, so the
+// day-cells they produce render and bucket correctly via formatInTz /
+// dateStringInTz / eventFallsOnDay (which all interpret their Date argument in
+// the family timezone). They replace the date-fns grid functions (startOfWeek,
+// endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth,
+// addMonths, addWeeks), which operate in the JS runtime timezone — wrong
+// whenever the browser's zone differs from the family's (the "wrong day" bug).
+
+/** Format a Date's UTC components as YYYY-MM-DD (used to normalise stepped dates). */
+function utcYmd(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+/** Start of the week (local midnight) containing `date`, in the given timezone. */
+export function startOfWeekInTz(date: Date, timezone: string, weekStartsOn: 0 | 1 = 0): Date {
+  const [y, m, d] = dateStringInTz(date, timezone).split('-').map(Number)
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  const diff = (dow - weekStartsOn + 7) % 7
+  return localMidnightToUtc(utcYmd(new Date(Date.UTC(y, m - 1, d - diff))), timezone)
+}
+
+/** End of the week (local midnight of the last day) containing `date`. */
+export function endOfWeekInTz(date: Date, timezone: string, weekStartsOn: 0 | 1 = 0): Date {
+  return addLocalDays(startOfWeekInTz(date, timezone, weekStartsOn), 6, timezone)
+}
+
+/** First day of the month (local midnight) containing `date`. */
+export function startOfMonthInTz(date: Date, timezone: string): Date {
+  const [y, m] = dateStringInTz(date, timezone).split('-').map(Number)
+  return localMidnightToUtc(`${y}-${String(m).padStart(2, '0')}-01`, timezone)
+}
+
+/** Last day of the month (local midnight) containing `date`. */
+export function endOfMonthInTz(date: Date, timezone: string): Date {
+  const [y, m] = dateStringInTz(date, timezone).split('-').map(Number)
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  return localMidnightToUtc(`${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`, timezone)
+}
+
+/** Inclusive array of local-midnight instants for every calendar day from `start` to `end`. */
+export function eachDayInTz(start: Date, end: Date, timezone: string): Date[] {
+  const endStr = dateStringInTz(end, timezone)
+  const days: Date[] = []
+  let cur = localMidnightToUtc(dateStringInTz(start, timezone), timezone)
+  while (dateStringInTz(cur, timezone) <= endStr) {
+    days.push(cur)
+    cur = addLocalDays(cur, 1, timezone)
+  }
+  return days
+}
+
+/** True if `date` falls on today's calendar date in the given timezone. */
+export function isTodayInTz(date: Date, timezone: string): boolean {
+  return dateStringInTz(date, timezone) === todayStringInTz(timezone)
+}
+
+/** True if `a` and `b` fall in the same calendar month in the given timezone. */
+export function isSameMonthInTz(a: Date, b: Date, timezone: string): boolean {
+  return dateStringInTz(a, timezone).slice(0, 7) === dateStringInTz(b, timezone).slice(0, 7)
+}
+
+/**
+ * Add `n` months to the local calendar date of `date`, returning local midnight.
+ * The day-of-month is clamped to the target month's last day (matching date-fns
+ * addMonths: 31 Jan + 1 month → 28/29 Feb).
+ */
+export function addMonthsInTz(date: Date, n: number, timezone: string): Date {
+  const [y, m, d] = dateStringInTz(date, timezone).split('-').map(Number)
+  const target = new Date(Date.UTC(y, m - 1 + n, 1))
+  const ty = target.getUTCFullYear()
+  const tm = target.getUTCMonth() // 0-based
+  const lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate()
+  const day = Math.min(d, lastDay)
+  return localMidnightToUtc(`${ty}-${String(tm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`, timezone)
+}
+
+/** Add `n` weeks (= n×7 calendar days) to `date`, returning local midnight. */
+export function addWeeksInTz(date: Date, n: number, timezone: string): Date {
+  return addLocalDays(date, n * 7, timezone)
+}

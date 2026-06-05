@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { startOfWeek, endOfWeek, eachDayOfInterval, isToday } from 'date-fns'
 import { eventFallsOnDay } from '@/lib/event-helpers'
-import { formatInTz, getLocalHourMinute } from '@/lib/timezone'
+import {
+  formatInTz, getLocalHourMinute, startOfWeekInTz, endOfWeekInTz, eachDayInTz, isTodayInTz,
+} from '@/lib/timezone'
 import {
   GRID_START, GRID_END, HOUR_PX,
   hourLabel, topPx, heightPx, layoutEvents,
@@ -27,9 +28,9 @@ interface HorizontalWeekViewProps {
 export function HorizontalWeekView({
   currentDate, events, weekStartsOn, timezone, onDayClick, onEventClick,
 }: HorizontalWeekViewProps) {
-  const weekStart = startOfWeek(currentDate, { weekStartsOn })
-  const weekEnd   = endOfWeek(currentDate,   { weekStartsOn })
-  const days      = eachDayOfInterval({ start: weekStart, end: weekEnd })
+  const weekStart = startOfWeekInTz(currentDate, timezone, weekStartsOn)
+  const weekEnd   = endOfWeekInTz(currentDate, timezone, weekStartsOn)
+  const days      = eachDayInTz(weekStart, weekEnd, timezone)
 
   const [nowLeft, setNowLeft] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -98,7 +99,7 @@ export function HorizontalWeekView({
 
         {/* ── Day rows ─────────────────────────────────────────────────── */}
         {dayData.map(({ day, allDay, placed, rowH }) => {
-          const today = isToday(day)
+          const today = isTodayInTz(day, timezone)
           return (
             <div
               key={day.toISOString()}

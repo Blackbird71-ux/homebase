@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, isSameMonth, isToday,
-} from 'date-fns'
 import { Utensils, ClipboardList, Plane, X } from 'lucide-react'
 import { EventBadge } from './EventBadge'
 import { eventFallsOnDay } from '@/lib/event-helpers'
-import { formatInTz } from '@/lib/timezone'
+import {
+  formatInTz, startOfMonthInTz, endOfMonthInTz, startOfWeekInTz, endOfWeekInTz,
+  eachDayInTz, isSameMonthInTz, isTodayInTz,
+} from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
 
 interface MonthViewProps {
@@ -30,11 +29,11 @@ interface OverflowPopup {
 }
 
 export function MonthView({ currentDate, events, weekStartsOn, timezone, onDayClick, onEventClick, onMealClick, onChoreClick, onTripClick }: MonthViewProps) {
-  const monthStart = startOfMonth(currentDate)
-  const monthEnd = endOfMonth(currentDate)
-  const calStart = startOfWeek(monthStart, { weekStartsOn })
-  const calEnd = endOfWeek(monthEnd, { weekStartsOn })
-  const days = eachDayOfInterval({ start: calStart, end: calEnd })
+  const monthStart = startOfMonthInTz(currentDate, timezone)
+  const monthEnd = endOfMonthInTz(currentDate, timezone)
+  const calStart = startOfWeekInTz(monthStart, timezone, weekStartsOn)
+  const calEnd = endOfWeekInTz(monthEnd, timezone, weekStartsOn)
+  const days = eachDayInTz(calStart, calEnd, timezone)
 
   const [overflow, setOverflow] = useState<OverflowPopup | null>(null)
   const popupRef = useRef<HTMLDivElement>(null)
@@ -101,8 +100,8 @@ export function MonthView({ currentDate, events, weekStartsOn, timezone, onDayCl
           const dayEvents = events.filter(e => eventFallsOnDay(e, day, timezone))
           const tripEvent = dayEvents.find(e => e.source === 'trip')
 
-          const inMonth = isSameMonth(day, currentDate)
-          const today = isToday(day)
+          const inMonth = isSameMonthInTz(day, currentDate, timezone)
+          const today = isTodayInTz(day, timezone)
 
           return (
             <div
