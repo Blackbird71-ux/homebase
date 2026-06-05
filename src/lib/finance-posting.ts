@@ -785,27 +785,7 @@ export async function reconcilePostedAccrualOnEdit(
   // ── Atomic write ───────────────────────────────────────────────────────────
   return await prisma.$transaction(async (tx) => {
     // 1. Reverse the stale accrual (flipped lines).
-    await tx.financeJournalEntry.create({
-      data: {
-        reference: reversalRef,
-        date: accrualDate,
-        description: `VOID: ${je.reference ?? je.id} — ${je.description}`,
-        type: 'reversal',
-        isPosted: true,
-        reversalOfId: je.id,
-        entityId: je.entityId,
-        familyId,
-        lines: {
-          create: je.lines.map(l => ({
-            glAccountId: l.glAccountId,
-            side: l.side === 'debit' ? 'credit' : 'debit',
-            amount: l.amount,
-            description: l.description,
-          })),
-        },
-      },
-    })
-    await tx.financeJournalEntry.update({ where: { id: je.id }, data: { isReversed: true } })
+    await reverseJournalEntry(tx, je, { reference: reversalRef, date: accrualDate, familyId })
 
     // 2. Post the fresh accrual with the new economics.
     const fresh = await tx.financeJournalEntry.create({
@@ -839,6 +819,77 @@ export async function reconcilePostedAccrualOnEdit(
 
     return { newJournalEntryId: fresh.id }
   })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reverseJournalEntry
+//
+// The single shared implementation of GL reversal. Creates a balanced
+// `type:'reversal'` entry whose lines are the source entry's lines with debit and
+// credit sides swapped, then flags the source `isReversed: true`. This is the
+// canonical "void / back-out a posted journal" operation — previously hand-rolled
+// inline in every finance route (transactions, bills, income, bills/payments) and
+// in reconcilePostedAccrualOnEdit above. One implementation, called everywhere.
+//
+// Faithful flip, no re-validation: the source is a trusted posted, balanced,
+// single-family entry, so the flipped copy is balanced and same-family by
+// construction (matches the inline copies it replaces). memberId is ALWAYS copied
+// onto the reversal lines so member-scoped P&L / tax attribution nets back to zero
+// when a member-tagged entry is voided.
+//
+// Accepts a TxClient so it runs inside a caller's $transaction (pass `tx`) or
+// standalone (pass `prisma`). The caller MUST pre-generate `reference` from
+// committed MAX BEFORE opening a $transaction (nextJournalReference /
+// nextNJournalReferences) — calling the generator inside an uncommitted
+// transaction returns colliding refs (SQLite committed-read rule).
+// ─────────────────────────────────────────────────────────────────────────────
+export interface ReverseJournalOpts {
+  /** Pre-generated reference (JE-XXXX). Generate BEFORE opening any $transaction. */
+  reference: string
+  /** Date for the reversal entry. Callers pass new Date(); reconcile passes je.date to keep the period. */
+  date: Date
+  familyId: string
+  /** Override the reversal description. Default: `VOID: ${je.reference ?? je.id} — ${je.description}`. */
+  description?: string
+}
+
+export interface ReversibleJournalEntry {
+  id: string
+  reference: string | null
+  description: string | null
+  entityId: string | null
+  lines: { glAccountId: string; side: string; amount: number; description: string | null; memberId: string | null }[]
+}
+
+export async function reverseJournalEntry(
+  tx: TxClient,
+  je: ReversibleJournalEntry,
+  opts: ReverseJournalOpts,
+): Promise<{ reversalId: string }> {
+  const reversal = await tx.financeJournalEntry.create({
+    data: {
+      reference: opts.reference,
+      date: opts.date,
+      description: opts.description ?? `VOID: ${je.reference ?? je.id} — ${je.description}`,
+      type: 'reversal',
+      isPosted: true,
+      reversalOfId: je.id,
+      entityId: je.entityId,
+      familyId: opts.familyId,
+      lines: {
+        create: je.lines.map(l => ({
+          glAccountId: l.glAccountId,
+          side: l.side === 'debit' ? 'credit' : 'debit',
+          amount: l.amount,
+          description: l.description,
+          memberId: l.memberId,
+        })),
+      },
+    },
+    select: { id: true },
+  })
+  await tx.financeJournalEntry.update({ where: { id: je.id }, data: { isReversed: true } })
+  return { reversalId: reversal.id }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

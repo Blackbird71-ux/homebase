@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { reverseJournalEntry } from '@/lib/finance-posting'
 
 /**
  * DELETE /api/finance/bills/[id]/payments/[paymentId]
@@ -78,29 +79,11 @@ export async function DELETE(
         !journalToReverse.isReversed &&
         reversalReference
       ) {
-        await tx.financeJournalEntry.create({
-          data: {
-            reference: reversalReference,
-            date: new Date(),
-            description: `VOID partial payment: ${journalToReverse.description}`,
-            type: 'reversal',
-            isPosted: true,
-            reversalOfId: journalToReverse.id,
-            entityId: journalToReverse.entityId,
-            familyId: user.familyId,
-            lines: {
-              create: journalToReverse.lines.map((l) => ({
-                glAccountId: l.glAccountId,
-                side: l.side === 'debit' ? 'credit' : 'debit',
-                amount: l.amount,
-                description: l.description,
-              })),
-            },
-          },
-        })
-        await tx.financeJournalEntry.update({
-          where: { id: journalToReverse.id },
-          data: { isReversed: true },
+        await reverseJournalEntry(tx, journalToReverse, {
+          reference: reversalReference,
+          date: new Date(),
+          familyId: user.familyId,
+          description: `VOID partial payment: ${journalToReverse.description}`,
         })
       }
 

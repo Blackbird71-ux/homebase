@@ -3,7 +3,8 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { createGstJournalEntry } from '@/lib/finance-opening-balance'
-import { nextJournalReference } from '@/lib/finance-journal-ref'
+import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
+import { reverseJournalEntry } from '@/lib/finance-posting'
 import { DEFAULT_TIMEZONE, localMidnightToUtc } from '@/lib/timezone'
 
 // ── Journal lines helper ────────────────────────────────────────────────────
@@ -464,37 +465,15 @@ export async function DELETE(request: NextRequest) {
     include: { lines: true },
   })
 
-  let reversalRefs: string[] = []
-  if (linkedJournals.length > 0) {
-    const firstRef = await nextJournalReference(user.familyId)
-    const base = parseInt(firstRef.match(/^JE-(\d+)$/)?.[1] ?? '0', 10)
-    reversalRefs = linkedJournals.map((_, i) => `JE-${String(base + i).padStart(4, '0')}`)
-  }
+  const reversalRefs = await nextNJournalReferences(user.familyId, linkedJournals.length)
 
   await prisma.$transaction(async (tx) => {
     for (let i = 0; i < linkedJournals.length; i++) {
-      const je = linkedJournals[i]
-      await tx.financeJournalEntry.create({
-        data: {
-          reference: reversalRefs[i],
-          date: new Date(),
-          description: `VOID: ${je.reference} — ${je.description}`,
-          type: 'reversal',
-          isPosted: true,
-          reversalOfId: je.id,
-          entityId: je.entityId,
-          familyId: user.familyId,
-          lines: {
-            create: je.lines.map(l => ({
-              glAccountId: l.glAccountId,
-              side: l.side === 'debit' ? 'credit' : 'debit',
-              amount: l.amount,
-              description: l.description,
-            })),
-          },
-        },
+      await reverseJournalEntry(tx, linkedJournals[i], {
+        reference: reversalRefs[i],
+        date: new Date(),
+        familyId: user.familyId,
       })
-      await tx.financeJournalEntry.update({ where: { id: je.id }, data: { isReversed: true } })
     }
     await tx.financeTransaction.delete({ where: { id } })
   })

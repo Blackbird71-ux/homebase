@@ -29,3 +29,21 @@ export async function nextJournalReference(familyId: string): Promise<string> {
   }
   return `JE-${String(max + 1).padStart(4, '0')}`
 }
+
+/**
+ * Generate N sequential journal references in one shot (JE-XXXX, JE-(XXXX+1), …).
+ *
+ * nextJournalReference reads MAX from committed DB state — calling it N times
+ * without commits in between returns the same value each time. This function
+ * calls it once and increments the number for each additional ref needed, so all
+ * N refs can be pre-generated BEFORE opening a $transaction (the SQLite
+ * committed-read rule). P2002 risk (concurrent requests) is accepted; the caller's
+ * $transaction rolls back cleanly if a collision occurs.
+ */
+export async function nextNJournalReferences(familyId: string, n: number): Promise<string[]> {
+  if (n === 0) return []
+  const first = await nextJournalReference(familyId)
+  if (n === 1) return [first]
+  const base = parseInt(first.match(/^JE-(\d+)$/)?.[1] ?? '0', 10)
+  return Array.from({ length: n }, (_, i) => `JE-${String(base + i).padStart(4, '0')}`)
+}
