@@ -24,6 +24,7 @@ export function useTodoList(
   initialItems: ListItemShape[],
   initialCategoryOrder: string[] | null,
   currentUserId: string,
+  timezone: string,
 ) {
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   // Guards optimistic local state against stale background reads (poll / app-event).
@@ -92,7 +93,7 @@ export function useTodoList(
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
-  const filtered = filterTodoItems(items, filter, undefined, currentUserId)
+  const filtered = filterTodoItems(items, filter, undefined, currentUserId, timezone)
   const activeItems = filtered.filter((i) => !i.isCompleted)
   const completedItems = (filter === 'all' || filter === 'mine') ? items.filter((i) => i.isCompleted) : []
 

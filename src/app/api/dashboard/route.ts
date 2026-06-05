@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { getLocalImageUrl } from '@/lib/image-cache'
-import { todayBoundsInTz } from '@/lib/timezone'
+import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import type { DashboardData, TodaysMeal } from '@/types'
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
         isActive: true,
         OR: [
           { nextDueDate: { lt: todayStart } },
-          { nextDueDate: { gte: todayStart, lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) } },
+          { nextDueDate: { gte: todayStart, lte: addLocalDays(todayStart, 30, timezone) } },
         ],
       },
       include: {

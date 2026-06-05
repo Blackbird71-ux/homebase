@@ -1,3 +1,5 @@
+import { dateStringInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
+
 export type ShoppingCategory = string
 
 export const DEFAULT_SHOPPING_CATEGORIES: string[] = [
@@ -101,15 +103,24 @@ export function groupByRecipe(items: ListItemShape[]): RecipeGroup[] {
 
 export type TodoFilter = 'all' | 'mine' | 'today' | 'overdue'
 
-/** Filter and sort todo items. */
+/**
+ * Filter and sort todo items.
+ *
+ * Due-date comparisons are timezone-aware. An item's due date is stored as UTC
+ * midnight of its calendar date (the meal-plan / calendar-date convention), so the
+ * stored calendar day is read in UTC, while "today" is read in the family's
+ * `timezone`. This keeps "Due today" / "Overdue" correct regardless of the device's
+ * own timezone (e.g. browser tz ≠ family tz, or a travelling user) — nothing ever
+ * lands on the wrong day. String compare of YYYY-MM-DD is chronological order.
+ */
 export function filterTodoItems(
   items: ListItemShape[],
   filter: TodoFilter,
   now: Date = new Date(),
-  currentUserId?: string
+  currentUserId?: string,
+  timezone: string = DEFAULT_TIMEZONE
 ): ListItemShape[] {
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+  const todayStr = dateStringInTz(now, timezone)
 
   let filtered = items
   if (filter === 'mine') {
@@ -125,12 +136,11 @@ export function filterTodoItems(
       (i) =>
         !i.isCompleted &&
         i.dueDate !== null &&
-        i.dueDate >= todayStart &&
-        i.dueDate < todayEnd
+        dateStringInTz(i.dueDate, 'UTC') === todayStr
     )
   } else if (filter === 'overdue') {
     filtered = items.filter(
-      (i) => !i.isCompleted && i.dueDate !== null && i.dueDate < todayStart
+      (i) => !i.isCompleted && i.dueDate !== null && dateStringInTz(i.dueDate, 'UTC') < todayStr
     )
   }
 

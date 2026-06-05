@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { dateStringInTz, formatInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
 
 interface ListItemRowProps {
   id: string
@@ -18,6 +19,8 @@ interface ListItemRowProps {
   isCompleted: boolean
   isLocked?: boolean
   dueDate?: string | null
+  /** Family timezone — used to decide "overdue" against local today. Defaults to DEFAULT_TIMEZONE. */
+  timezone?: string
   recipeName?: string | null
   showRecipePills?: boolean
   doneItemColor?: string
@@ -39,6 +42,7 @@ export function ListItemRow({
   isCompleted,
   isLocked = false,
   dueDate,
+  timezone = DEFAULT_TIMEZONE,
   recipeName,
   showRecipePills = false,
   doneItemColor = 'RED',
@@ -58,10 +62,13 @@ export function ListItemRow({
   const [isChanging, setIsChanging] = useState(false)
 
   const dueDateObj = dueDate ? new Date(dueDate) : null
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  // Due dates are stored as UTC midnight of the calendar date, so read the stored
+  // day in UTC and compare it to today in the family timezone — the overdue flag
+  // flips at local midnight, not the device's midnight.
   const isOverdue =
-    dueDateObj !== null && !isCompleted && dueDateObj < todayStart
+    dueDateObj !== null &&
+    !isCompleted &&
+    dateStringInTz(dueDateObj, 'UTC') < dateStringInTz(new Date(), timezone)
 
   const getColorValue = (color: string) => {
     const namedColors: Record<string, string> = {
@@ -186,7 +193,7 @@ export function ListItemRow({
               : 'bg-muted text-muted-foreground'
           }`}
         >
-          {dueDateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          {formatInTz(dueDateObj, 'UTC', { month: 'short', day: 'numeric' })}
         </span>
       )}
 

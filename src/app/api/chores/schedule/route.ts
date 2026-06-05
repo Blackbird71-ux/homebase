@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
-import { todayBoundsInTz } from '@/lib/timezone'
+import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
 
 export async function GET(request: NextRequest) {
@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
   const assignedToMe = searchParams.get('assignedToMe') === 'true'
 
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
-  const windowEnd = new Date(todayStart.getTime() + scope * 24 * 60 * 60 * 1000)
+  // DST-correct upper bound that aligns with buildChoreSchedule's last day bucket.
+  const windowEnd = addLocalDays(todayStart, scope, timezone)
 
   const chores = await prisma.chore.findMany({
     where: {

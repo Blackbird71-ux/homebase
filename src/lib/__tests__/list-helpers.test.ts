@@ -160,4 +160,18 @@ describe('filterTodoItems', () => {
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('1')
   })
+
+  it('uses the family timezone (not the runtime clock) for the "today" boundary', () => {
+    // 2026-04-16T15:00Z is already 2026-04-17 01:00 in Sydney (UTC+10), so an item
+    // due on the 17th (stored as UTC midnight of the calendar date) is "today" for a
+    // Sydney family — even though the test runtime (TZ=UTC) still reads the 16th.
+    // The old browser-local-Date logic bucketed this as "tomorrow"; this guards the fix.
+    const lateUtc = new Date('2026-04-16T15:00:00Z')
+    const items = [
+      makeItem({ id: '1', dueDate: new Date('2026-04-17T00:00:00Z') }),
+      makeItem({ id: '2', dueDate: new Date('2026-04-16T00:00:00Z') }),
+    ]
+    const result = filterTodoItems(items, 'today', lateUtc, undefined, 'Australia/Sydney')
+    expect(result.map((i) => i.id)).toEqual(['1'])
+  })
 })

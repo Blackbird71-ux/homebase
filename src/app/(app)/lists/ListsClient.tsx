@@ -60,9 +60,10 @@ interface ListsClientProps {
   defaultListId?: string | null
   currentUserId: string
   members: { id: string; name: string }[]
+  timezone: string
 }
 
-export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId, members }: ListsClientProps) {
+export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId, members, timezone }: ListsClientProps) {
   const searchParams = useSearchParams()
 
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
@@ -430,6 +431,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
                 })()}
                 members={members}
                 currentUserId={currentUserId}
+                timezone={timezone}
               />
             ) : (
               <TodoCalendarView
@@ -439,6 +441,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
                 currentUserId={currentUserId}
                 listId={activeList.id}
                 weekStartsOn={0}
+                timezone={timezone}
               />
             )}
           </>

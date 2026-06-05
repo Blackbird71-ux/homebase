@@ -1,13 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, isSameMonth, isToday, format,
-  startOfDay, endOfDay, addMonths, subMonths,
-} from 'date-fns'
 import { ChevronLeft, ChevronRight, CheckIcon } from 'lucide-react'
 import type { ListItemShape } from '@/lib/list-helpers'
+import { dateStringInTz, formatInTz, todayStringInTz } from '@/lib/timezone'
 import { EditItemDialog } from './EditItemDialog'
 import { toast } from 'sonner'
 
@@ -19,23 +15,64 @@ interface TodoCalendarViewProps {
   currentUserId: string
   listId: string
   weekStartsOn?: 0 | 1
+  /** Family timezone — "today" and due-date bucketing are computed against it. */
+  timezone: string
+}
+
+// ─── Pure calendar-grid builder ─────────────────────────────────────────────────
+// Builds the visible month grid (leading/trailing days to fill whole weeks),
+// mirroring date-fns startOfWeek(startOfMonth)…endOfWeek(endOfMonth). The grid is
+// abstract calendar dates, so the math is done in UTC — it never drifts across DST.
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+interface CalendarCell {
+  dateStr: string // 'YYYY-MM-DD'
+  day: number
+  inMonth: boolean
+}
+
+function buildCalendarGrid(year: number, month1: number, weekStartsOn: 0 | 1): CalendarCell[] {
+  const firstDow = new Date(Date.UTC(year, month1 - 1, 1)).getUTCDay() // 0=Sun..6=Sat
+  const lead = (firstDow - weekStartsOn + 7) % 7
+  const daysInMonth = new Date(Date.UTC(year, month1, 0)).getUTCDate()
+  const lastDow = new Date(Date.UTC(year, month1 - 1, daysInMonth)).getUTCDay()
+  const trail = (weekStartsOn + 6 - lastDow + 7) % 7
+  const total = lead + daysInMonth + trail
+  const start = new Date(Date.UTC(year, month1 - 1, 1 - lead))
+
+  const cells: CalendarCell[] = []
+  for (let i = 0; i < total; i++) {
+    const d = new Date(start.getTime() + i * 86400000)
+    const y = d.getUTCFullYear()
+    const m = d.getUTCMonth() + 1
+    const dd = d.getUTCDate()
+    cells.push({ dateStr: `${y}-${pad2(m)}-${pad2(dd)}`, day: dd, inMonth: m === month1 })
+  }
+  return cells
 }
 
 // ─── Calendar badge for a single todo item (compact pill) ───────────────────────
 
 function TodoCalendarBadge({
   item,
+  todayStr,
   onClick,
   onToggle,
   isCompleting,
 }: {
   item: ListItemShape
+  todayStr: string
   onClick: () => void
   onToggle: () => void
   isCompleting: boolean
 }) {
   const isOverdue =
-    !item.isCompleted && item.dueDate !== null && item.dueDate < startOfDay(new Date())
+    !item.isCompleted &&
+    item.dueDate !== null &&
+    dateStringInTz(item.dueDate, 'UTC') < todayStr
 
   return (
     <div className="group relative">
@@ -97,8 +134,18 @@ export function TodoCalendarView({
   currentUserId,
   listId,
   weekStartsOn = 0,
+  timezone,
 }: TodoCalendarViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date())
+  // "Today" in the family timezone (YYYY-MM-DD) — drives highlight + overdue.
+  const todayStr = todayStringInTz(timezone)
+  const [todayYear, todayMonth] = todayStr.split('-').map(Number)
+
+  // Which month is on screen, tracked as calendar year/month (1-based) so navigation
+  // is plain integer math — no Date/DST involved.
+  const [view, setView] = useState<{ year: number; month: number }>({
+    year: todayYear,
+    month: todayMonth,
+  })
   const [items, setItems] = useState<ListItemShape[]>(initialItems)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
 
@@ -107,44 +154,44 @@ export function TodoCalendarView({
     setItems(initialItems)
   }, [initialItems])
 
-  const monthStart = startOfMonth(currentDate)
-  const monthEnd = endOfMonth(currentDate)
-  const calStart = startOfWeek(monthStart, { weekStartsOn })
-  const calEnd = endOfWeek(monthEnd, { weekStartsOn })
-  const days = eachDayOfInterval({ start: calStart, end: calEnd })
+  const cells = buildCalendarGrid(view.year, view.month, weekStartsOn)
+  const weeks = cells.length / 7
 
   const dayHeaders =
     weekStartsOn === 0
       ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
       : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-  const weeks = Math.ceil(days.length / 7)
-
   // Separate items with/without due dates
   const itemsWithDates = items.filter((i) => i.dueDate !== null)
   const itemsWithoutDates = items.filter((i) => i.dueDate === null && !i.isCompleted)
 
   function navigate(dir: 'prev' | 'next') {
-    setCurrentDate(
-      dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1),
-    )
-  }
-
-  function goToday() {
-    setCurrentDate(new Date())
-  }
-
-  function getItemsForDay(day: Date): ListItemShape[] {
-    const dayStart = startOfDay(day)
-    const dayEnd = endOfDay(day)
-    return itemsWithDates.filter((item) => {
-      if (!item.dueDate) return false
-      return item.dueDate >= dayStart && item.dueDate <= dayEnd
+    setView((v) => {
+      if (dir === 'next') {
+        return v.month === 12 ? { year: v.year + 1, month: 1 } : { year: v.year, month: v.month + 1 }
+      }
+      return v.month === 1 ? { year: v.year - 1, month: 12 } : { year: v.year, month: v.month - 1 }
     })
   }
 
-  const isThisMonth =
-    format(currentDate, 'M-yyyy') === format(new Date(), 'M-yyyy')
+  function goToday() {
+    setView({ year: todayYear, month: todayMonth })
+  }
+
+  // A due date is stored as UTC midnight of its calendar date, so its day-key is read
+  // in UTC and matched against the grid cell's calendar date.
+  function getItemsForDay(dateStr: string): ListItemShape[] {
+    return itemsWithDates.filter(
+      (item) => item.dueDate !== null && dateStringInTz(item.dueDate, 'UTC') === dateStr,
+    )
+  }
+
+  const isThisMonth = view.year === todayYear && view.month === todayMonth
+  const monthLabel = formatInTz(new Date(Date.UTC(view.year, view.month - 1, 1)), 'UTC', {
+    month: 'long',
+    year: 'numeric',
+  })
 
   // ─── Edit dialog state ─────────────────────────────────────────────────────
 
@@ -254,7 +301,7 @@ export function TodoCalendarView({
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
           <span className="text-sm font-semibold">
-            {format(currentDate, 'MMMM yyyy')}
+            {monthLabel}
           </span>
           <button
             type="button"
@@ -304,17 +351,17 @@ export function TodoCalendarView({
           gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))`,
         }}
       >
-        {days.map((day, idx) => {
+        {cells.map((cell, idx) => {
           const col = idx % 7
           const isWeekend =
             weekStartsOn === 0 ? col === 0 || col === 6 : col === 5 || col === 6
-          const inMonth = isSameMonth(day, currentDate)
-          const today = isToday(day)
-          const dayItems = getItemsForDay(day)
+          const inMonth = cell.inMonth
+          const today = cell.dateStr === todayStr
+          const dayItems = getItemsForDay(cell.dateStr)
 
           return (
             <div
-              key={day.toISOString()}
+              key={cell.dateStr}
               className={[
                 'border-b border-r border-border/50 flex flex-col gap-0.5 p-1 transition-colors',
                 !inMonth ? 'opacity-35' : '',
@@ -332,7 +379,7 @@ export function TodoCalendarView({
                       : 'text-foreground',
                   ].join(' ')}
                 >
-                  {format(day, 'd')}
+                  {cell.day}
                 </span>
                 {dayItems.length > 3 && (
                   <span className="text-[10px] text-muted-foreground font-medium">
@@ -347,6 +394,7 @@ export function TodoCalendarView({
                   <TodoCalendarBadge
                     key={item.id}
                     item={item}
+                    todayStr={todayStr}
                     onClick={() => handleEditItem(item)}
                     onToggle={() => handleToggle(item)}
                     isCompleting={completingIds.has(item.id)}

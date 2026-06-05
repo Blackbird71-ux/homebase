@@ -1,7 +1,7 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
-import { todayBoundsInTz } from '@/lib/timezone'
+import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
 import { mergeDashboardCards, type DashboardCardConfig } from '@/lib/dashboard-cards'
 import { HomeClient } from './HomeClient'
 import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
@@ -186,7 +186,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
             // Using OR so chores that are past-due always show until completed.
             OR: [
               { nextDueDate: { lt: todayStart } },
-              { nextDueDate: { gte: todayStart, lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) } },
+              { nextDueDate: { gte: todayStart, lte: addLocalDays(todayStart, 30, timezone) } },
             ],
           },
           select: {

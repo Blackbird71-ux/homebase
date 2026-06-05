@@ -306,7 +306,9 @@ export function useShoppingList(
 
   function handleItemSaved(id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null, unitPrice?: number | null, quantity?: number | null) {
     guard.bump()
-    setItems(prev => prev.map(i => i.id === id ? { ...i, content, category, unitPrice: unitPrice ?? i.unitPrice, quantity: quantity ?? i.quantity } : i))
+    // Apply the saved values directly. Distinguish undefined (field not part of this
+    // save → keep existing) from null (user cleared it → must clear, not restore the old value).
+    setItems(prev => prev.map(i => i.id === id ? { ...i, content, category, unitPrice: unitPrice !== undefined ? unitPrice : i.unitPrice, quantity: quantity !== undefined ? quantity : i.quantity } : i))
   }
 
   async function handleAddShoppingCategory(name: string) {

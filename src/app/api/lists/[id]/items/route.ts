@@ -48,6 +48,16 @@ export async function POST(
   })
   if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // Validate assignedToUserId if provided — must be a family member.
+  if (assignedToUserId) {
+    const member = await prisma.user.findFirst({
+      where: { id: assignedToUserId, familyId: user.familyId },
+    })
+    if (!member) {
+      return NextResponse.json({ error: 'Invalid user' }, { status: 400 })
+    }
+  }
+
   // Idempotent offline-replay guard: if this create was already committed under the
   // same clientMutationId (response lost on a flaky reconnect), return the existing
   // row instead of duplicating it. Skip the audit log on this path.

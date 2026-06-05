@@ -175,6 +175,27 @@ export function nDaysFromTodayInTz(n: number, timezone: string): Date {
 }
 
 /**
+ * Add a whole number of *calendar* days to a UTC instant that represents local
+ * midnight in the given timezone, returning the UTC instant of local midnight on
+ * the resulting calendar day.
+ *
+ * Unlike `base.getTime() + days * 86_400_000`, this is DST-correct: across an
+ * Australian spring-forward (23h) or fall-back (25h) day the flat-millisecond
+ * stride drifts an hour off true local midnight, which mis-buckets day-precision
+ * dates (e.g. chore-schedule rows landing on the wrong calendar day, or a chore at
+ * the far edge of the fetch window being missed). Stepping by calendar date and
+ * re-resolving local midnight avoids that drift.
+ *
+ * `base` is expected to already be local midnight (e.g. from `todayBoundsInTz`).
+ */
+export function addLocalDays(base: Date, days: number, timezone: string): Date {
+  const [y, m, d] = dateStringInTz(base, timezone).split('-').map(Number)
+  const shifted = new Date(Date.UTC(y, m - 1, d + days))
+  const shiftedStr = `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`
+  return localMidnightToUtc(shiftedStr, timezone)
+}
+
+/**
  * Returns the YYYY-MM-DD calendar date string for a Date in the given timezone.
  * Use for day-range comparisons where the calendar date (not UTC date) is what matters.
  */

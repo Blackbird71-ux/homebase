@@ -30,6 +30,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'dueDate is not a valid ISO date' }, { status: 400 })
   }
 
+  // Validate assignedToUserId if a non-null value is provided — must be a family member.
+  // null/undefined fall through so the assignee can still be cleared.
+  if (assignedToUserId) {
+    const member = await prisma.user.findFirst({
+      where: { id: assignedToUserId, familyId: user.familyId },
+    })
+    if (!member) {
+      return NextResponse.json({ error: 'Invalid user' }, { status: 400 })
+    }
+  }
+
   const updated = await prisma.listItem.update({
     where: { id: itemId },
     data: {

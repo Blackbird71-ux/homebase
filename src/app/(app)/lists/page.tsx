@@ -71,7 +71,7 @@ export default async function ListsPage() {
 
   return (
     <Suspense>
-      <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} members={members} />
+      <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} members={members} timezone={session.timezone ?? 'UTC'} />
     </Suspense>
   )
 }

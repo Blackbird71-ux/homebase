@@ -24,6 +24,7 @@ import { useTodoList } from '@/hooks/lists/useTodoList'
 function SortableTodoItem({
   item,
   members,
+  timezone,
   onToggle,
   onDelete,
   onToggleLock,
@@ -32,6 +33,7 @@ function SortableTodoItem({
 }: {
   item: ListItemShape
   members: { id: string; name: string }[]
+  timezone: string
   onToggle: (id: string, isCompleted: boolean) => void
   onDelete: (id: string) => void
   onToggleLock: (id: string, isLocked: boolean) => void
@@ -73,6 +75,7 @@ function SortableTodoItem({
           isCompleted={item.isCompleted}
           isLocked={item.isLocked}
           dueDate={item.dueDate?.toISOString() ?? null}
+          timezone={timezone}
           assignedToUserId={item.assignedToUserId}
           members={members}
           onToggle={onToggle}
@@ -92,9 +95,10 @@ interface TodoListProps {
   initialCategoryOrder: string[] | null
   members: { id: string; name: string }[]
   currentUserId: string
+  timezone: string
 }
 
-export function TodoList({ listId, initialItems, initialCategoryOrder, members, currentUserId }: TodoListProps) {
+export function TodoList({ listId, initialItems, initialCategoryOrder, members, currentUserId, timezone }: TodoListProps) {
   const {
     filter, setFilter,
     categories,
@@ -124,7 +128,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
     completedItems,
     groupedItems,
     editDialogCategories,
-  } = useTodoList(listId, initialItems, initialCategoryOrder, currentUserId)
+  } = useTodoList(listId, initialItems, initialCategoryOrder, currentUserId, timezone)
 
   const filters: { label: string; value: TodoFilter }[] = [
     { label: 'All', value: 'all' },
@@ -264,6 +268,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                             key={item.id}
                             item={item}
                             members={members}
+                            timezone={timezone}
                             onToggle={toggleItem}
                             onDelete={deleteItem}
                             onToggleLock={toggleLock}
@@ -294,6 +299,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                     key={item.id}
                     item={item}
                     members={members}
+                    timezone={timezone}
                     onToggle={toggleItem}
                     onDelete={deleteItem}
                     onToggleLock={toggleLock}

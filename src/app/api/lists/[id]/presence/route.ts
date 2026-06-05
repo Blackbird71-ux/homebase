@@ -22,6 +22,12 @@ export async function GET(
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
 
+  // Scope to the caller's family — don't leak presence for another family's list.
+  const list = await prisma.list.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   const listPresence = getListPresence(id)
   const now = Date.now()
   const STALE_THRESHOLD = 45000
@@ -47,23 +53,24 @@ export async function POST(
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
   const body = await req.json()
-  const { userId, leave } = body
+  const { leave } = body
 
+  // Scope to the caller's family — never trust a list id that isn't theirs.
+  const list = await prisma.list.findFirst({
+    where: { id, familyId: user.familyId },
+  })
+  if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const listPresence = getListPresence(id)
+
+  // Identity comes from the authenticated session, not the request body.
   if (leave) {
-    const listPresence = getListPresence(id)
-    listPresence.delete(userId)
+    listPresence.delete(user.id)
     return NextResponse.json({ success: true })
   }
 
-  // Get user's display name
-  const dbUser = await (prisma as any).user.findUnique({
-    where: { id: userId },
-    select: { name: true },
-  })
-
-  const listPresence = getListPresence(id)
-  listPresence.set(userId, {
-    name: dbUser?.name ?? 'Unknown',
+  listPresence.set(user.id, {
+    name: user.name ?? 'Unknown',
     lastSeen: Date.now(),
   })
 

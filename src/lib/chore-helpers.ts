@@ -19,7 +19,7 @@
  *   choreIsCompletable          — single rule for whether a chore can be ticked off right now
  */
 
-import { utcMidnightToLocalMidnight } from '@/lib/timezone'
+import { utcMidnightToLocalMidnight, addLocalDays } from '@/lib/timezone'
 import type { ChoreScheduleDay, ChoreScheduleItem } from '@/types'
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -442,8 +442,11 @@ export function buildChoreSchedule(
 
   // ── Day-by-day sections ───────────────────────────────────────────────────
   for (let i = 0; i < days; i++) {
-    const dayStart = new Date(todayStart.getTime() + i * 86_400_000)
-    const dayEnd   = new Date(todayStart.getTime() + (i + 1) * 86_400_000)
+    // Step by calendar days in the user's timezone, not by a flat 86.4M-ms stride —
+    // the latter drifts an hour off local midnight across a DST transition and
+    // mis-buckets chores onto the wrong calendar day (see addLocalDays).
+    const dayStart = addLocalDays(todayStart, i, timezone)
+    const dayEnd   = addLocalDays(todayStart, i + 1, timezone)
     // Use the midpoint of the local day to reliably get day name/date string
     const midDay   = new Date(dayStart.getTime() + 12 * 3_600_000)
 
