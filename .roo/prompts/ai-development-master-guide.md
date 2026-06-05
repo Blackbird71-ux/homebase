@@ -195,6 +195,35 @@ For large tasks requiring parallel work:
 - Do not use git for intermediate updates — user commits manually when finished.
 - Update all relevant worktrees when finished.
 
+### 3.7 Report, Don't Fix — Out-of-Scope Discoveries
+
+When you uncover a bug, smell, or improvement that is **outside the scope of the current task**, the default is to **report it, not fix it.** Do not silently expand the diff. This protects the original task (it keeps attention and context budget on what was asked) and keeps every change attributable (if the task's diff regresses something, it should contain one intent, not opportunistic side-fixes). This is the same instinct as §3.5 "only modify files directly related to the task," applied to every kind of discovery.
+
+**On discovery, do this instead of fixing:**
+1. **Stop and surface it** — don't work past it silently.
+2. **Document it thoroughly, now, while the context is loaded.** This is the most important step. A deferred find is only safe if a future reader (you, another agent, or the user) can act on it cold, without re-deriving everything. The cheap thing to lose later is *what to change*; the expensive thing is *why the code is shaped this way and what breaks if you touch it*. A one-line "fix X later" is a trap, not a deferral.
+3. **Propose where to log it** (follow-up task, a `QA.md` §12 bug-pattern entry, or an audit-prompt sweep) and let the user triage.
+4. **Wait for confirmation before fixing.**
+
+**A deferred-issue report must contain — do not abbreviate:**
+- **Location** — file(s), function/component, and line references. List *every* site if more than one (see instance-vs-class below).
+- **Symptom** — what's wrong and how it manifests (or would manifest) to the user / to the GL / to data integrity.
+- **Why the code is currently like this** — the constraint, history, or assumption that explains the present shape. This is the context that evaporates; write it down even if it feels obvious today.
+- **Failure modes of the naïve fix** — what a careless change would break, what semantics must be preserved, what to test afterward. Name the specific invariant or smoke test (e.g. "must keep DR=CR", "re-run J1–J7", "preserve retry-on-conflict").
+- **Blast radius** — what else imports/depends on the affected code (cross-reference `QA.md` §9 for finance, §1.1 otherwise).
+- **Suggested fix direction** — enough of a sketch that the work can start without rediscovery, explicitly marked as a proposal, not a decision.
+- **Severity / urgency** — so the user can triage queue position (live data damage vs. cosmetic).
+
+Write the report as if the reader has none of your current context, because they won't. If it's worth a code change later, it's worth a paragraph now.
+
+**Instance vs. class — the most important call at discovery.** Ask: *could this same issue exist elsewhere?* If yes, fixing only the instance in front of you is **actively harmful** — it creates a fixed-here / silently-broken-there divergence, which is worse than a consistently-wrong codebase you can sweep in one pass (this is the `QA.md` §12.7 "fix one instance, miss others" pattern). A class-level discovery must become a dedicated sweep task (and the report must enumerate every known site), never an inline fix.
+
+**The only exceptions — address now, but still isolate and document:**
+- Completing the current task **genuinely requires** the fix (it cannot land correctly without it), or
+- The issue is **live damage to real data** (especially finance/GL).
+
+In both cases, make the fix, but give it its **own logical change / commit**, note the coupling to the original task in the commit message, and still write the find up (in the commit body, or `QA.md` §12 if it's a new recurring pattern). "Required to proceed" is not a licence to blur two changes into one unattributable diff, nor to skip documentation.
+
 ---
 
 ## 4. Docker / NAS Deployment
@@ -298,11 +327,11 @@ Keep previous Docker image tagged for `docker compose up --no-build` rollback.
 | **React** | React 18 (Server Components, Client Components) | |
 | **Auth** | NextAuth.js v4 | Google OAuth (Memories), Credentials Provider (HomeBase) |
 | **Database** | SQLite via Prisma ORM (better-sqlite3) | Single file, location controlled by `DATA_PATH` env var |
-| **UI** | Tailwind CSS + shadcn/ui (HomeBase) | Lucide React icons, date-fns for dates/timezones |
+| **UI** | Tailwind CSS + shadcn/ui (HomeBase) | Lucide React icons; **Luxon** for dates/timezones (date-fns retired) |
 | **Forms** | react-hook-form + zod | Form validation |
 | **Drag & Drop** | @dnd-kit | Lists, reordering |
 | **Icons** | Lucide React | |
-| **Dates** | date-fns | Date manipulation and timezone handling |
+| **Dates** | **Luxon** (`DateTime` with explicit zone) | Date manipulation and timezone handling. Wrapped by `src/lib/timezone.ts` helpers — app code calls the helpers, never Luxon/`Date` directly. date-fns is retired. See AGENTS.md §Timezone and QA.md §12.20 |
 
 ### Styling Conventions
 - Avoid raw hex colours in className — use design system tokens.
@@ -856,8 +885,8 @@ Create a summary Markdown file and save it to the `/docs` directory with:
 ## 13. Common Pitfalls & Anti-Patterns
 
 ### 13.1 Copy-Paste Bugs in Date Calculations
-**Problem**: Hardcoded values, duplicated logic across multiple locations.
-**Fix**: Extract to a shared utility function; always pass user preferences as parameters.
+**Problem**: Hardcoded values, duplicated date logic across multiple locations; treating UTC as local time.
+**Fix**: Use the Luxon-backed `src/lib/timezone.ts` helpers (`todayBoundsInTz`, `nDaysFromTodayInTz`, `monthBoundsInTz`, `formatInTz`) — never `date-fns`, raw `Date` math, or `new Date('…T00:00:00Z')` as a day boundary. Always pass the user's timezone as a parameter. See AGENTS.md §Timezone and QA.md §12.20.
 
 ### 13.2 API Shape Assumptions
 **Problem**: Client code assumes a specific response shape from the API.

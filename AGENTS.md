@@ -48,22 +48,24 @@ This generalizes §3: "if you notice unrelated dead code, mention it — don't d
 
 ---
 
-# Timezone rules — ALL date logic must work in the user's local time
+# Timezone rules — ALL date logic must work in the user's local time, via Luxon
 
-The server runs in UTC. The database stores all datetimes in UTC. The user lives in a local timezone (e.g. Australia/Sydney = UTC+10). These are not the same and the difference causes bugs.
+The server runs in UTC. The database stores all datetimes in UTC. The user lives in a local timezone (e.g. Australia/Sydney = UTC+10/+11 with DST). These are not the same and the difference causes bugs.
 
-**The rule: every date boundary, filter, and display must be computed relative to the user's local timezone, not UTC.**
+**The rule: every date boundary, filter, and display must be computed relative to the user's local timezone, not UTC — using [Luxon](https://moment.github.io/luxon/) (`DateTime` with an explicit zone).** Do **not** hand-roll UTC-offset arithmetic, do **not** use `date-fns`, and do **not** use raw `Date` math for boundaries or formatting.
+
+> **OS clock vs. app date logic — two different concerns.** The container/OS timezone (`TZ=Australia/Sydney` + `tzdata`, used by the backup cron and log timestamps) is configured at the infra layer — see `.roo/prompts/build-deploy-guide.md`. *Application* date logic (boundaries, filters, display) is Luxon's job. This section is about the latter; do not conflate them.
 
 ## The correct pattern
 
-Use helpers from `src/lib/timezone.ts` — these are the **only** approved ways to compute date boundaries and format dates server-side:
+Use helpers from `src/lib/timezone.ts` — these are the **only** approved way to compute date boundaries and format dates server-side, and they are implemented on Luxon's `DateTime`. App code calls the helpers; it never calls Luxon or `Date` directly:
 
 ```ts
-// Today's start/end as UTC Dates representing local midnight:
+// Today's start/end as UTC Dates representing local midnight (Luxon: startOf/endOf 'day' in zone):
 const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
 // todayStart for UTC+10 on 2026-05-23 = 2026-05-22T14:00:00Z  ← NOT 2026-05-23T00:00:00Z
 
-// Rolling N-day window end (= todayStart + N * 86_400_000):
+// Rolling N-day window end (= local startOf('day').plus({ days: N })):
 const endDate = nDaysFromTodayInTz(7, timezone)
 
 // Current calendar month start/end:
@@ -76,26 +78,27 @@ const label = formatInTz(date, timezone, { weekday: 'short', day: 'numeric', mon
 const onDay = eventFallsOnDay(event, day, timezone)  // from src/lib/event-helpers.ts
 ```
 
-Use `todayStart` directly as range boundaries in Prisma queries and in-code filters. Never substitute UTC midnight (`new Date('YYYY-MM-DDT00:00:00Z')`) as a stand-in for "start of day".
+The helpers wrap Luxon (e.g. `DateTime.now().setZone(tz).startOf('day').toJSDate()`). Use `todayStart` directly as range boundaries in Prisma queries and in-code filters. Never substitute UTC midnight (`new Date('YYYY-MM-DDT00:00:00Z')`) as a stand-in for "start of day".
 
-**Meal plan exception:** Meal plan dates are stored as UTC midnight of the calendar date by convention. Displaying them with `timeZone: 'UTC'` is intentional and correct — do not replace these with `formatInTz`.
+**Meal plan exception:** Meal plan dates are stored as UTC midnight of the calendar date by convention. Displaying them with `zone: 'utc'` (Luxon) is intentional and correct — do not replace these with zone-aware `formatInTz`.
 
 ## The failure modes
 
 **Missing events:** Computing a day boundary as UTC midnight is **wrong** for users east of UTC. For UTC+10, real local midnight = `2026-05-22T14:00:00Z`, but UTC midnight = `2026-05-23T00:00:00Z` — 10 hours late. Events between 14:00Z and 00:00Z are excluded.
 
-**Duplicate events (spillover):** Synthetic all-day events use `end = T23:59:59.000Z`. For UTC+10 this is 09:59 next-day local time. Using `startOfDay(new Date(event.end))` produces next-day midnight, making the event appear on two consecutive calendar days. Fix: use `eventFallsOnDay(event, day, timezone)`.
+**Duplicate events (spillover):** Synthetic all-day events use `end = T23:59:59.000Z`. For UTC+10 this is 09:59 next-day local time. Bucketing by parsing that end timestamp in local time makes the event appear on two consecutive calendar days. Fix: use `eventFallsOnDay(event, day, timezone)`, which compares day-keys in the user's zone.
 
 ## Rules
 
 1. **Never use `normalizeToUtcMidnight(dateStr)` as a query boundary for "today".** It returns UTC midnight, not the user's local midnight.
 2. **Never construct a day boundary with `new Date('YYYY-MM-DDT00:00:00Z')`.** Same problem.
-3. **Never use `startOfDay(new Date(event.end))` to bucket calendar events.** Use `eventFallsOnDay(event, day, timezone)` from `src/lib/event-helpers.ts`.
+3. **Never use `startOf(new Date(event.end))` to bucket calendar events.** Use `eventFallsOnDay(event, day, timezone)` from `src/lib/event-helpers.ts`.
 4. **`todayStart` from `todayBoundsInTz` is the single source of truth** for the start of today in all queries and in-code filters.
 5. **Scope/window end boundaries must also be tz-aware.** Use `nDaysFromTodayInTz(N, timezone)` — never compute as UTC midnight of the Nth future date.
 6. **In-code filters must use the same boundaries as the DB query.**
-7. **Display: use `formatInTz(date, timezone, options)` from `src/lib/timezone.ts`.** Do not use `date-fns` `format()` for display — it uses the JS runtime timezone (UTC on the server).
-8. **Never `import ... from 'date-fns'` in server-side files.** Use `todayBoundsInTz`/`nDaysFromTodayInTz`/`monthBoundsInTz` instead.
+7. **Display: use `formatInTz(date, timezone, options)` from `src/lib/timezone.ts`.** Do not use `date-fns` `format()` or `Date.toLocaleDateString()` without an explicit zone — both use the JS runtime timezone (UTC on the server).
+8. **Never `import ... from 'date-fns'` in any file.** date-fns is being retired in favour of Luxon. Use the `src/lib/timezone.ts` helpers (which wrap Luxon); only reach for raw Luxon inside those helpers, never in routes/components.
+9. **Test across DST boundaries** (Australia: the Oct and Apr transitions) for any new date logic.
 
 ---
 

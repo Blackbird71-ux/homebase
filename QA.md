@@ -1107,7 +1107,7 @@ end   = new Date(day + 'T23:59:59.000Z')  // UTC end-of-day
 ```
 For UTC+10, `T23:59:59.000Z` = `next day 09:59 AEST`. Any bucketing code that parses this end timestamp in local time and checks `dayStart <= eventEnd` will show the event on *two* consecutive calendar days.
 
-**The fix pattern — always use `src/lib/timezone.ts` helpers:**
+**The fix pattern — always use `src/lib/timezone.ts` helpers (which are Luxon-backed; never call Luxon or `Date` directly in routes/components):**
 
 ```ts
 // For query boundaries:
@@ -1122,12 +1122,16 @@ import { formatInTz } from '@/lib/timezone'
 formatInTz(date, timezone, { weekday: 'short', day: 'numeric' })
 ```
 
+Under the hood the helpers use Luxon, e.g. `DateTime.now().setZone(timezone).startOf('day').toJSDate()`. **date-fns is being retired — do not add new `date-fns` imports.**
+
 **Never do this:**
 ```ts
 new Date('YYYY-MM-DDT00:00:00Z')           // UTC midnight — wrong for UTC+10
-startOfDay(new Date(event.end))            // date-fns uses runtime TZ (UTC on server)
-format(date, 'EEE')                        // date-fns uses runtime TZ on server
+startOfDay(new Date(event.end))            // date-fns/raw Date — uses runtime TZ (UTC on server)
+format(date, 'EEE')                        // date-fns — uses runtime TZ on server
 date.toLocaleDateString()                  // no explicit timeZone — uses runtime TZ
+import { ... } from 'date-fns'             // retired — use the Luxon-backed src/lib/timezone.ts helpers
+DateTime.now()... // called directly in a route/component — keep Luxon inside the helpers only
 ```
 
 **Affected modules to check after any date logic change:** calendar event bucketing, upcoming events card, weekly summary, bill due date filters, chore schedules, meal plan display.

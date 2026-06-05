@@ -26,13 +26,14 @@ Domain logic keeps getting hand-copied inline across routes; the copies drift an
 
 ## Date and time — #1 source of bugs in this codebase
 
-The server is UTC. The user is UTC+10. They are not the same. **See AGENTS.md §Timezone and QA.md §12.20.**
+The server is UTC. The user is UTC+10/+11. They are not the same. **All app date logic uses Luxon (via `src/lib/timezone.ts` helpers), not `date-fns` or raw `Date` math. See AGENTS.md §Timezone and QA.md §12.20.**
 
 - [ ] **Never** use `new Date('YYYY-MM-DDT00:00:00Z')` as a day boundary → use `todayBoundsInTz(timezone)`
-- [ ] **Never** use `date-fns` in a server-side file → use helpers from `src/lib/timezone.ts`
-- [ ] **Never** use `startOfDay(new Date(event.end))` to bucket calendar events → use `eventFallsOnDay(event, day, timezone)`
-- [ ] Display dates with `formatInTz(date, timezone, options)` — not `format()` from date-fns
-- [ ] Meal plan dates are UTC midnight by convention — display with `timeZone: 'UTC'` (this is the one exception)
+- [ ] **Never** use `date-fns` or raw `Date` math for boundaries/formatting → use helpers from `src/lib/timezone.ts` (Luxon-backed)
+- [ ] **Never** call Luxon `DateTime` directly in a route/component → only inside the `src/lib/timezone.ts` helpers; app code calls the helpers
+- [ ] **Never** bucket calendar events by parsing `event.end` in local time → use `eventFallsOnDay(event, day, timezone)`
+- [ ] Display dates with `formatInTz(date, timezone, options)` — not `format()` from date-fns or `toLocaleDateString()` without an explicit zone
+- [ ] Meal plan dates are UTC midnight by convention — display with Luxon `zone: 'utc'` (this is the one exception)
 
 ---
 
