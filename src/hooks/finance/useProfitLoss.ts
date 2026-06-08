@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { type PeriodMode, toPeriodAmount, isLumpSum, getPeriodBounds, navigateAnchor, localYmd } from '@/lib/finance-period'
+import { type PeriodMode, toPeriodAmount, isLumpSum, getPeriodBounds, navigateAnchor } from '@/lib/finance-period'
+import { dateStringInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +74,7 @@ export interface PLLedgerTx {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useProfitLoss() {
+  const timezone = useFamilyTimezone()
   const [bills, setBills]               = useState<PLBill[]>([])
   const [income, setIncome]             = useState<PLIncomeEntry[]>([])
   const [transactions, setTxs]          = useState<PLTx[]>([])
@@ -93,7 +96,7 @@ export function useProfitLoss() {
   const [ledgerTxs, setLedgerTxs]         = useState<PLLedgerTx[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
 
-  const { start, end, label } = getPeriodBounds(periodMode, anchor, fyStartMonth)
+  const { start, end, label } = getPeriodBounds(periodMode, anchor, fyStartMonth, timezone)
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
 
   async function loadStatic() {
@@ -119,8 +122,8 @@ export function useProfitLoss() {
     setTxLoading(true)
     try {
       const params = new URLSearchParams({
-        startDate: localYmd(from),
-        endDate:   localYmd(to),
+        startDate: dateStringInTz(from, timezone),
+        endDate:   dateStringInTz(to, timezone),
         isCleared: 'true',
         limit:     '200',
       })
@@ -135,8 +138,8 @@ export function useProfitLoss() {
   async function loadJournalGroups(from: Date, to: Date, entityId?: string) {
     try {
       const params = new URLSearchParams({
-        from: localYmd(from),
-        to:   localYmd(to),
+        from: dateStringInTz(from, timezone),
+        to:   dateStringInTz(to, timezone),
       })
       if (entityId) params.set('entityId', entityId)
       const res = await fetch(`/api/finance/trial-balance?${params}`)
@@ -416,8 +419,8 @@ export function useProfitLoss() {
     setLedgerTxs([])
     try {
       const params = new URLSearchParams({
-        startDate: localYmd(start),
-        endDate:   localYmd(end),
+        startDate: dateStringInTz(start, timezone),
+        endDate:   dateStringInTz(end, timezone),
         isCleared: 'true',
         limit:     '200',
       })
@@ -456,6 +459,6 @@ export function useProfitLoss() {
     ledgerLabel, ledgerTxs, ledgerLoading,
     openLedger,
     // Navigation helper (re-exported so page doesn't need the finance-period import)
-    navigateAnchor,
+    navigateAnchor: (mode: PeriodMode, a: Date, dir: -1 | 1) => navigateAnchor(mode, a, dir, timezone),
   }
 }

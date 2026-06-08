@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { addMonths, addDays } from 'date-fns'
 import { todayAU } from '@/lib/utils'
+import { todayBoundsInTz, addLocalDays, addMonthsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
 import { toMonthlyAmount } from '@/lib/financeShared'
 import { type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 import { usePaymentHistory } from '@/hooks/finance/usePaymentHistory'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export type QuickFilter = { type: 'member' | 'vendor' | 'location' | 'entity'; i
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useBillCrud() {
+  const timezone = useFamilyTimezone()
   const [bills, setBills]           = useState<Bill[]>([])
   const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
@@ -525,16 +527,15 @@ export function useBillCrud() {
   // ── Derived list state ───────────────────────────────────────────────────────
 
   function toLocalMidnight(d: Date): Date {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    return utcMidnightToLocalMidnight(d, timezone)
   }
 
   const rootCategories = categories.filter(c => !c.parentId && c.type === 'expense')
-  const now       = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const rangeEnd  = dateRange === '14' ? addDays(todayStart, 14)
-    : dateRange === '30' ? addDays(todayStart, 30)
-    : dateRange === '12months' ? addMonths(todayStart, 12)
-    : addMonths(todayStart, 3)
+  const todayStart = todayBoundsInTz(timezone).start
+  const rangeEnd  = dateRange === '14' ? addLocalDays(todayStart, 14, timezone)
+    : dateRange === '30' ? addLocalDays(todayStart, 30, timezone)
+    : dateRange === '12months' ? addMonthsInTz(todayStart, 12, timezone)
+    : addMonthsInTz(todayStart, 3, timezone)
 
   const activeBills = bills.filter(b => {
     if (!b.isActive || b.paid || b.status === 'draft') return false

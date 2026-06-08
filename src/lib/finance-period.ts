@@ -1,13 +1,8 @@
 import {
-  format,
-  startOfMonth, endOfMonth,
-  startOfQuarter, endOfQuarter,
-  subMonths, addMonths,
-  subQuarters, addQuarters,
-  subYears, addYears,
-  getQuarter, getYear,
-} from 'date-fns'
-import { fyStartYear, fyLabel, fyDateRange } from '@/lib/finance-fy'
+  fyLabel, fyStartYearInTz,
+  monthRangeInTz, quarterRangeInTz, fyDateRangeInTz,
+} from '@/lib/finance-fy'
+import { DEFAULT_TIMEZONE, dateStringInTz, addMonthsInTz, formatInTz } from '@/lib/timezone'
 
 export type PeriodMode = 'month' | 'quarter' | 'year'
 
@@ -29,34 +24,42 @@ export function isLumpSum(frequency: string): boolean {
 }
 
 /**
- * Format a browser-local Date as "YYYY-MM-DD" using LOCAL calendar components.
+ * Return the start/end dates and display label for a period mode centred on
+ * anchor, with all boundaries computed in the family's IANA timezone.
  *
- * Use this when a local boundary Date (e.g. startOfMonth/endOfMonth, which are in
- * the browser's timezone) must be sent to an API as a date string. `toISOString()`
- * converts to UTC first, which shifts the date back a day for users east of UTC
- * (e.g. AEST midnight 1 Jun → 31 May 14:00Z → "...05-31"), causing month windows
- * to overlap on their boundary day and double-count transactions.
+ * `start`/`end` are UTC instants corresponding to 00:00:00 (start) and
+ * 23:59:59.999 (end) in `timezone` — the end is INCLUSIVE end-of-day, matching
+ * the date-fns endOfMonth/endOfQuarter semantics this replaced (consumers compare
+ * `<= end.getTime()`). The anchor's own calendar position is read in `timezone`.
  */
-export function localYmd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-/** Return the start/end dates and display label for a period mode centred on anchor. */
 export function getPeriodBounds(
   mode: PeriodMode,
   anchor: Date,
   fyStartMonth: number = 7,
+  timezone: string = DEFAULT_TIMEZONE,
 ): { start: Date; end: Date; label: string } {
-  if (mode === 'month')   return { start: startOfMonth(anchor),   end: endOfMonth(anchor),   label: format(anchor, 'MMMM yyyy') }
-  if (mode === 'quarter') return { start: startOfQuarter(anchor), end: endOfQuarter(anchor), label: `Q${getQuarter(anchor)} ${getYear(anchor)}` }
-  const fYear = fyStartYear(anchor, fyStartMonth)
-  const { start, end } = fyDateRange(fYear, fyStartMonth)
+  const [year, month1] = dateStringInTz(anchor, timezone).split('-').map(Number)
+  if (mode === 'month') {
+    const { start, end } = monthRangeInTz(year, month1, timezone)
+    return { start, end, label: formatInTz(start, timezone, { month: 'long', year: 'numeric' }) }
+  }
+  if (mode === 'quarter') {
+    const { start, end } = quarterRangeInTz(year, month1, timezone)
+    const q = Math.floor((month1 - 1) / 3) + 1
+    return { start, end, label: `Q${q} ${year}` }
+  }
+  const fYear = fyStartYearInTz(anchor, fyStartMonth, timezone)
+  const { start, end } = fyDateRangeInTz(fYear, fyStartMonth, timezone)
   return { start, end, label: fyLabel(fYear, fyStartMonth) }
 }
 
-/** Move the anchor date forward or backward by one period unit. */
-export function navigateAnchor(mode: PeriodMode, anchor: Date, dir: -1 | 1): Date {
-  if (mode === 'month')   return dir === -1 ? subMonths(anchor, 1)   : addMonths(anchor, 1)
-  if (mode === 'quarter') return dir === -1 ? subQuarters(anchor, 1) : addQuarters(anchor, 1)
-  return dir === -1 ? subYears(anchor, 1) : addYears(anchor, 1)
+/** Move the anchor date forward or backward by one period unit, in the family tz. */
+export function navigateAnchor(
+  mode: PeriodMode,
+  anchor: Date,
+  dir: -1 | 1,
+  timezone: string = DEFAULT_TIMEZONE,
+): Date {
+  const months = mode === 'month' ? 1 : mode === 'quarter' ? 3 : 12
+  return addMonthsInTz(anchor, dir * months, timezone)
 }

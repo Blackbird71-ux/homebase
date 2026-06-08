@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { Undo2, CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers, Ban, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
-import { format, subMonths } from 'date-fns'
+import { formatInTz, todayBoundsInTz, addMonthsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import {
@@ -32,7 +33,7 @@ function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
         <FileText className="h-2.5 w-2.5" />
         Payslip
         {payslip.payPeriodStart && payslip.payPeriodEnd && (
-          <span>{format(new Date(payslip.payPeriodStart), 'd MMM')} – {format(new Date(payslip.payPeriodEnd), 'd MMM yyyy')}</span>
+          <span>{formatInTz(new Date(payslip.payPeriodStart), 'UTC', { day: 'numeric', month: 'short' })} – {formatInTz(new Date(payslip.payPeriodEnd), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
         )}
         {open ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
       </button>
@@ -51,6 +52,7 @@ function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
 }
 
 export default function ReceivedIncomePage() {
+  const timezone = useFamilyTimezone()
   const [entries, setEntries] = useState<IncomeEntry[]>([])
   const [categories, setCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([])
   const [loading, setLoading] = useState(true)
@@ -149,15 +151,13 @@ export default function ReceivedIncomePage() {
   }
 
   const rootCategories = categories.filter(c => !c.parentId)
-  const today = new Date()
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const cutoff = subMonths(todayMidnight, monthRange)
+  const todayMidnight = todayBoundsInTz(timezone).start
+  const cutoff = addMonthsInTz(todayMidnight, -monthRange, timezone)
 
   const sorted = [...entries]
     .filter(e => {
       if (!e.receivedDate) return true
-      const pd = new Date(e.receivedDate)
-      const pdMidnight = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate())
+      const pdMidnight = utcMidnightToLocalMidnight(new Date(e.receivedDate), timezone)
       return pdMidnight >= cutoff
     })
     .sort((a, b) => {
@@ -296,7 +296,7 @@ export default function ReceivedIncomePage() {
                   }
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                  {entry.receivedDate && <span className="text-green-500">Received {format(new Date(entry.receivedDate), 'd MMM yyyy')}</span>}
+                  {entry.receivedDate && <span className="text-green-500">Received {formatInTz(new Date(entry.receivedDate), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
                   {entry.category && (
                     <span className="inline-flex items-center gap-1">
                       {entry.category.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.category.color }} />}

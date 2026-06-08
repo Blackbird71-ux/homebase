@@ -13,8 +13,9 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { subMonths } from 'date-fns'
+import { todayBoundsInTz, addMonthsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
 import { usePaymentHistory } from '@/hooks/finance/usePaymentHistory'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import type { Bill } from '@/hooks/finance/useBillCrud'
 
 export type { Bill } from '@/hooks/finance/useBillCrud'
@@ -34,6 +35,7 @@ interface GLAccount {
 }
 
 export function usePaidBills() {
+  const timezone = useFamilyTimezone()
   const [bills, setBills]           = useState<Bill[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
@@ -179,15 +181,13 @@ export function usePaidBills() {
 
   const rootCategories = categories.filter(c => !c.parentId && c.type === 'expense')
 
-  const today        = new Date()
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const cutoff       = subMonths(todayMidnight, monthRange)
+  const todayMidnight = todayBoundsInTz(timezone).start
+  const cutoff       = addMonthsInTz(todayMidnight, -monthRange, timezone)
 
   const sorted = [...bills]
     .filter(b => {
       if (!b.paidDate) return true
-      const pd = new Date(b.paidDate)
-      const pdMidnight = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate())
+      const pdMidnight = utcMidnightToLocalMidnight(new Date(b.paidDate), timezone)
       return pdMidnight >= cutoff
     })
     .sort((a, b) => {

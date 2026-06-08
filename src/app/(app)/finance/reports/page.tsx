@@ -7,16 +7,12 @@ import {
 } from 'lucide-react'
 import { PageHero } from '@/components/shared/PageHero'
 import { PnlViewNav } from '@/components/finance/PnlViewNav'
-import {
-  format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
-  startOfYear, endOfYear, subMonths, addMonths, subQuarters, addQuarters,
-  subYears, addYears, getQuarter, getYear,
-} from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getCurrentFY, formatCurrency } from '@/lib/financeShared'
 import { dropSupersededParents } from '@/lib/finance-forecast'
-import { formatInTz } from '@/lib/timezone'
+import { monthRangeInTz, quarterRangeInTz, fyDateRangeInTz } from '@/lib/finance-fy'
+import { formatInTz, dateStringInTz, addMonthsInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import EmailReportModal from '@/components/finance/EmailReportModal'
 
@@ -67,32 +63,29 @@ function fmtCurrency(n: number) {
   return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function getPeriodBounds(mode: PeriodMode, anchor: Date): { start: Date; end: Date; label: string } {
+// Boundaries are computed in the family timezone. `end` is the INCLUSIVE end-of-day
+// (23:59:59.999) of the period's last day, matching the date-fns endOfMonth/endOfQuarter/
+// endOfYear semantics this replaced (consumers compare `<= end.getTime()`). Year mode is
+// the CALENDAR year (Jan–Dec) — intentionally different from the financial-year period in
+// finance-period.ts; see the duplication note below.
+function getPeriodBounds(mode: PeriodMode, anchor: Date, tz: string): { start: Date; end: Date; label: string } {
+  const [year, month1] = dateStringInTz(anchor, tz).split('-').map(Number)
   if (mode === 'month') {
-    return {
-      start: startOfMonth(anchor),
-      end: endOfMonth(anchor),
-      label: format(anchor, 'MMMM yyyy'),
-    }
+    const { start, end } = monthRangeInTz(year, month1, tz)
+    return { start, end, label: formatInTz(start, tz, { month: 'long', year: 'numeric' }) }
   }
   if (mode === 'quarter') {
-    return {
-      start: startOfQuarter(anchor),
-      end: endOfQuarter(anchor),
-      label: `Q${getQuarter(anchor)} ${getYear(anchor)}`,
-    }
+    const { start, end } = quarterRangeInTz(year, month1, tz)
+    const q = Math.floor((month1 - 1) / 3) + 1
+    return { start, end, label: `Q${q} ${year}` }
   }
-  return {
-    start: startOfYear(anchor),
-    end: endOfYear(anchor),
-    label: `${getYear(anchor)}`,
-  }
+  const { start, end } = fyDateRangeInTz(year, 1, tz)
+  return { start, end, label: `${year}` }
 }
 
-function navigateAnchor(mode: PeriodMode, anchor: Date, dir: -1 | 1): Date {
-  if (mode === 'month')   return dir === -1 ? subMonths(anchor, 1)   : addMonths(anchor, 1)
-  if (mode === 'quarter') return dir === -1 ? subQuarters(anchor, 1) : addQuarters(anchor, 1)
-  return dir === -1 ? subYears(anchor, 1) : addYears(anchor, 1)
+function navigateAnchor(mode: PeriodMode, anchor: Date, dir: -1 | 1, tz: string): Date {
+  const months = mode === 'month' ? 1 : mode === 'quarter' ? 3 : 12
+  return addMonthsInTz(anchor, dir * months, tz)
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -138,7 +131,7 @@ export default function ReportsPage() {
     if (showHistory) loadSnapshots()
   }, [showHistory])
 
-  const { start, end, label } = getPeriodBounds(periodMode, anchor)
+  const { start, end, label } = getPeriodBounds(periodMode, anchor, tz)
 
   // ── Period multiplier ─────────────────────────────────────────────────────
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12
@@ -277,12 +270,12 @@ export default function ReportsPage() {
 
         {/* Period navigator */}
         <div className="flex items-center gap-1 rounded-lg border border-border px-2 py-1">
-          <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, -1))}
+          <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, -1, tz))}
             className="p-1 hover:bg-accent rounded text-muted-foreground">
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="text-sm font-medium px-1 min-w-[100px] text-center">{label}</span>
-          <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, 1))}
+          <button onClick={() => setAnchor(a => navigateAnchor(periodMode, a, 1, tz))}
             className="p-1 hover:bg-accent rounded text-muted-foreground">
             <ChevronRight className="h-4 w-4" />
           </button>

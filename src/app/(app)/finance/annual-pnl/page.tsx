@@ -6,12 +6,11 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/financeShared'
-import {
-  format, startOfMonth, endOfMonth, getMonth, getYear,
-} from 'date-fns'
+import { formatInTz, dateStringInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { PageHero } from '@/components/shared/PageHero'
 import { PnlViewNav } from '@/components/finance/PnlViewNav'
-import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil, fyColumnYearMonth, fyColumnMonthKey } from '@/lib/finance-fy'
+import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil, fyColumnYearMonth, fyColumnMonthKey, fyDateRangeInTz } from '@/lib/finance-fy'
 import { dropSupersededParents } from '@/lib/finance-forecast'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
@@ -106,9 +105,12 @@ function lumpSumColumns(frequency: string, baseDate: Date, fyMonths: Date[]): nu
   return cols
 }
 
-function isInMonth(dateStr: string, colDate: Date): boolean {
-  const d = new Date(dateStr)
-  return getMonth(d) === getMonth(colDate) && getYear(d) === getYear(colDate)
+// True if the stored date `dateStr` falls in the same calendar month as the column,
+// with the date's month evaluated in the family timezone (colKey is the column's
+// "YYYY-MM" key from fyColumnMonthKey). Replaces date-fns getMonth/getYear, which
+// read the date in the browser's timezone and could bucket boundary dates wrongly.
+function isInMonth(dateStr: string, colKey: string, tz: string): boolean {
+  return dateStringInTz(new Date(dateStr), tz).slice(0, 7) === colKey
 }
 
 // ── Row types for the table ───────────────────────────────────────────────────
@@ -152,13 +154,14 @@ export default function AnnualPnLPage() {
   const [glLoading, setGlLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'actuals' | 'forecast'>('actuals')
   const printRef = useRef<HTMLDivElement>(null)
+  const familyTimezone = useFamilyTimezone()
 
   const fyMonthLabelsArr = useMemo(() => fyMonthLabels(fyStartMonth), [fyStartMonth])
 
   // ── Build Excel workbook ─────────────────────────────────────────────────
   function buildExcelWorkbook(): XLSX.WorkBook {
     const wb     = XLSX.utils.book_new()
-    const now    = format(new Date(), 'd MMM yyyy h:mm a')
+    const now    = formatInTz(new Date(), familyTimezone, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
     const fyStr  = fyLabelUtil(fyStartYear, fyStartMonth)
 
     XLSX.utils.book_append_sheet(wb, buildCoverSheet({
@@ -257,6 +260,12 @@ export default function AnnualPnLPage() {
     Array.from({ length: 12 }, (_, i) => fyColDate(fyStartYear, i, fyStartMonth)),
     [fyStartYear, fyStartMonth])
 
+  // "YYYY-MM" key per column — the family-tz-safe identity of each FY month, used to
+  // bucket dates (isInMonth) without going through browser-local Date math.
+  const fyMonthKeys = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => fyColumnMonthKey(fyStartYear, fyStartMonth, i)),
+    [fyStartYear, fyStartMonth])
+
   // ── Load static data (settings + forecast sources) ───────────────────────
   useEffect(() => {
     async function load() {
@@ -294,8 +303,9 @@ export default function AnnualPnLPage() {
     setGlLoading(true)
 
     async function loadBatch() {
-      const from = startOfMonth(fyMonths[0]).toISOString().split('T')[0]
-      const to   = endOfMonth(fyMonths[11]).toISOString().split('T')[0]
+      const { start, end } = fyDateRangeInTz(fyStartYear, fyStartMonth, familyTimezone)
+      const from = dateStringInTz(start, familyTimezone)
+      const to   = dateStringInTz(end, familyTimezone)
       const params = new URLSearchParams({ from, to })
       if (selectedEntityId) params.set('entityId', selectedEntityId)
       try {
@@ -322,7 +332,7 @@ export default function AnnualPnLPage() {
     loadBatch().finally(() => { if (!cancelled) setGlLoading(false) })
 
     return () => { cancelled = true }
-  }, [fyStartYear, fyStartMonth, selectedEntityId, viewMode])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fyStartYear, fyStartMonth, selectedEntityId, viewMode, familyTimezone])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build income rows ─────────────────────────────────────────────────────
   //
@@ -364,13 +374,13 @@ export default function AnnualPnLPage() {
 
       if (e.received && e.receivedDate) {
         for (let col = 0; col < 12; col++) {
-          if (isInMonth(e.receivedDate, fyMonths[col])) row.monthly[col] += e.amount
+          if (isInMonth(e.receivedDate, fyMonthKeys[col], familyTimezone)) row.monthly[col] += e.amount
         }
       } else {
         if (e.incomeType === 'one-off' || isLumpSumFrequency(e.frequency)) {
           if (e.incomeType === 'one-off') {
             for (let col = 0; col < 12; col++) {
-              if (isInMonth(e.nextExpectedDate, fyMonths[col])) row.monthly[col] += e.amount
+              if (isInMonth(e.nextExpectedDate, fyMonthKeys[col], familyTimezone)) row.monthly[col] += e.amount
             }
           } else {
             const hitCols = lumpSumColumns(e.frequency, new Date(e.nextExpectedDate), fyMonths)
@@ -385,7 +395,7 @@ export default function AnnualPnLPage() {
 
     for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
     return Array.from(map.values()).filter(r => r.total > 0).sort((a, b) => b.total - a.total)
-  }, [income, glMonths, fyMonths, viewMode, selectedEntityId])
+  }, [income, glMonths, fyMonths, fyMonthKeys, familyTimezone, viewMode, selectedEntityId])
 
   // ── Build expense rows ────────────────────────────────────────────────────
   const expenseRows = useMemo((): TableRow[] => {
@@ -427,13 +437,13 @@ export default function AnnualPnLPage() {
 
       if (b.paid && b.paidDate) {
         for (let col = 0; col < 12; col++) {
-          if (isInMonth(b.paidDate, fyMonths[col])) row.monthly[col] += b.amount
+          if (isInMonth(b.paidDate, fyMonthKeys[col], familyTimezone)) row.monthly[col] += b.amount
         }
       } else {
         if (b.billType === 'one-off' || isLumpSumFrequency(b.frequency)) {
           if (b.billType === 'one-off') {
             for (let col = 0; col < 12; col++) {
-              if (isInMonth(b.nextDueDate, fyMonths[col])) row.monthly[col] += b.amount
+              if (isInMonth(b.nextDueDate, fyMonthKeys[col], familyTimezone)) row.monthly[col] += b.amount
             }
           } else {
             const hitCols = lumpSumColumns(b.frequency, new Date(b.nextDueDate), fyMonths)
@@ -448,7 +458,7 @@ export default function AnnualPnLPage() {
 
     for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
     return Array.from(map.values()).filter(r => r.total > 0).sort((a, b) => b.total - a.total)
-  }, [bills, glMonths, fyMonths, viewMode, selectedEntityId])
+  }, [bills, glMonths, fyMonths, fyMonthKeys, familyTimezone, viewMode, selectedEntityId])
 
   // ── Totals ────────────────────────────────────────────────────────────────
   const monthlyIncome   = useMemo(() => Array.from({ length: 12 }, (_, i) => incomeRows.reduce((s, r) => s + r.monthly[i], 0)), [incomeRows])
@@ -459,8 +469,8 @@ export default function AnnualPnLPage() {
   const totalExpenses = expenseRows.reduce((s, r) => s + r.total, 0)
   const totalNet      = totalIncome - totalExpenses
 
-  const now = new Date()
-  const currentCol = fyMonths.findIndex(m => getMonth(m) === getMonth(now) && getYear(m) === getYear(now))
+  const currentMonthKey = dateStringInTz(new Date(), familyTimezone).slice(0, 7)
+  const currentCol = fyMonthKeys.findIndex(k => k === currentMonthKey)
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading annual P&L…</div>
 

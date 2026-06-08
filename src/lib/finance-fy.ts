@@ -14,6 +14,24 @@ export function fyStartYear(date: Date, fyStartMonth: number): number {
 }
 
 /**
+ * Timezone-aware variant of fyStartYear. Returns the FY start calendar year for
+ * `date` evaluated in the family's IANA timezone.
+ *
+ * fyStartYear() reads date.getMonth()/getFullYear() in the runtime's timezone
+ * (UTC on the NAS, the browser's tz on the client). When that differs from the
+ * family tz, a date near a year/FY boundary (e.g. 2026-06-30T15:00:00Z = 1 Jul
+ * in Sydney) lands in the wrong FY. This evaluates the calendar month and year
+ * in `tz`. Falls back to fyStartYear() if tz is empty/invalid.
+ */
+export function fyStartYearInTz(date: Date, fyStartMonth: number, tz: string): number {
+  if (!tz) return fyStartYear(date, fyStartMonth)
+  const parts = getTzFormatter(tz).formatToParts(date)
+  const year   = parseInt(parts.find(p => p.type === 'year')!.value, 10)
+  const month1 = parseInt(parts.find(p => p.type === 'month')!.value, 10)
+  return month1 >= fyStartMonth ? year : year - 1
+}
+
+/**
  * Return the start and end Date objects for a financial year using LOCAL time.
  *
  * Use this on the CLIENT (browser) where new Date() is already in the user's tz.
