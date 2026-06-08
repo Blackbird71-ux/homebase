@@ -13,22 +13,22 @@
 // =============================================================================
 
 import type { FinanceRecurringBill } from '@prisma/client'
-import { addMonths, addWeeks, max } from 'date-fns'
+import { addUtcMonths, addUtcWeeks } from '@/lib/timezone'
 import { postBillPaymentJournal, type TxClient } from '@/lib/finance-posting'
 
 // Advance a recurring bill's due date by one cadence step, anchored no earlier
 // than today (so a long-overdue bill jumps forward to a sensible next date).
 export function advanceNextDueDate(date: Date, frequency: string): Date {
-  const ref = max([date, new Date()])
-  if (frequency === 'weekly')      return addWeeks(ref, 1)
-  if (frequency === 'fortnightly') return addWeeks(ref, 2)
-  if (frequency === 'monthly')     return addMonths(ref, 1)
-  if (frequency === 'bimonthly')   return addMonths(ref, 2)
-  if (frequency === 'quarterly')   return addMonths(ref, 3)
-  if (frequency === 'halfyearly')  return addMonths(ref, 6)
-  if (frequency === 'yearly')      return addMonths(ref, 12)
+  const ref = new Date(Math.max(date.getTime(), Date.now()))
+  if (frequency === 'weekly')      return addUtcWeeks(ref, 1)
+  if (frequency === 'fortnightly') return addUtcWeeks(ref, 2)
+  if (frequency === 'monthly')     return addUtcMonths(ref, 1)
+  if (frequency === 'bimonthly')   return addUtcMonths(ref, 2)
+  if (frequency === 'quarterly')   return addUtcMonths(ref, 3)
+  if (frequency === 'halfyearly')  return addUtcMonths(ref, 6)
+  if (frequency === 'yearly')      return addUtcMonths(ref, 12)
   console.warn(`[recordBillPayment] Unknown frequency "${frequency}" — defaulting to monthly`)
-  return addMonths(ref, 1)
+  return addUtcMonths(ref, 1)
 }
 
 export interface RecordBillPaymentParams {

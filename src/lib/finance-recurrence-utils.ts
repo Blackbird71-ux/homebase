@@ -8,7 +8,7 @@
 // worker can never drift apart. This file keeps the flat-parameter signatures
 // the templates UI already depends on.
 
-import { addMonths } from 'date-fns'
+import { addUtcMonths } from '@/lib/timezone'
 import { applyDayOfMonth, stepOccurrence } from '@/lib/finance-recurrence-core'
 
 export { applyDayOfMonth }
@@ -27,7 +27,7 @@ export function nextOccurrence(
   dayOfMonth: number | null,
   monthOfYear: number | null,
 ): Date {
-  return stepOccurrence(from, freq, interval, dayOfMonth, monthOfYear) ?? addMonths(from, interval)
+  return stepOccurrence(from, freq, interval, dayOfMonth, monthOfYear) ?? addUtcMonths(from, interval)
 }
 
 // ── previewOccurrences ───────────────────────────────────────────────────────

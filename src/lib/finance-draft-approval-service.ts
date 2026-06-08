@@ -43,7 +43,7 @@ import {
   type TemplateKind,
 } from '@/lib/finance-recurring-template-service'
 import { toMonthlyAmount } from '@/lib/financeShared'
-import { addYears } from 'date-fns'
+import { addUtcYears } from '@/lib/timezone'
 
 // ── Result types ─────────────────────────────────────────────────────────────
 
@@ -211,7 +211,7 @@ export async function approveBillDraft(
       if (template?.includeInBudget) {
         const monthlyAmount = toMonthlyAmount(draft.amount, draft.frequency ?? 'monthly')
         const startDate = new Date(new Date().getFullYear(), 0, 1)
-        const endDate = addYears(startDate, 10)
+        const endDate = addUtcYears(startDate, 10)
         const existing = await prisma.financeBudget.findFirst({
           where: { billId, familyId: user.familyId },
         })

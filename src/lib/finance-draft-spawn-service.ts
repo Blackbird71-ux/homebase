@@ -38,7 +38,7 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit-log'
-import { utcMidnight } from '@/lib/timezone'
+import { utcMidnight, addUtcDays } from '@/lib/timezone'
 import type { SessionUser } from '@/types'
 import {
   computeNextOccurrenceDate,
@@ -47,7 +47,6 @@ import {
   type SnapshotLine,
   type TemplateKind,
 } from '@/lib/finance-recurring-template-service'
-import { addDays } from 'date-fns'
 
 // Hard cap on how many missed occurrences a single template will spawn in one
 // worker run. See Q2=c. A weekly template off for a year = ~52 (under cap);
@@ -110,7 +109,7 @@ export function isWithinAdvanceWindow(
   createInAdvanceDays: number,
   asOf: Date = new Date(),
 ): boolean {
-  return occurrenceDate <= calendarDayEnd(addDays(asOf, createInAdvanceDays))
+  return occurrenceDate <= calendarDayEnd(addUtcDays(asOf, createInAdvanceDays))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -243,7 +242,7 @@ export async function createOccurrenceDraft(
   if (kind === 'bill') {
     // billDate = occurrence date (GL recognition date: when liability is incurred).
     // nextDueDate = occurrence + defaultDueOffsetDays (when payment is expected).
-    const dueDate = utcMidnight(addDays(occurrenceDate, template.defaultDueOffsetDays))
+    const dueDate = utcMidnight(addUtcDays(occurrenceDate, template.defaultDueOffsetDays))
     const draftBill = await tx.financeRecurringBill.create({
       data: {
         name: template.name,
@@ -615,7 +614,7 @@ export async function spawnDueDrafts(
   // days. createInAdvanceDays beyond a year is not a supported configuration;
   // the per-template loop still applies the exact threshold so this is just
   // a candidate filter, not the spawn decision.
-  const candidateWindow = calendarDayEnd(addDays(asOf, 366))
+  const candidateWindow = calendarDayEnd(addUtcDays(asOf, 366))
 
   const templates = await prisma.financeRecurringTemplate.findMany({
     where: {

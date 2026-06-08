@@ -44,6 +44,75 @@ export function utcMidnight(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
+// ── UTC-calendar (date-only) steppers ─────────────────────────────────────────
+// Advance a UTC-midnight date by whole calendar units, in the UTC calendar.
+//
+// Finance recurrence/spawn/due dates are stored as UTC midnight (see utcMidnight)
+// and represent a pure calendar date with NO time-of-day. These helpers step that
+// calendar date using getUTC*/Date.UTC only, so the result is independent of the
+// runtime timezone. The production container runs TZ=Australia/Sydney, and the
+// date-fns functions these replace (addDays/addWeeks/addMonths/addYears/setDate/
+// getDaysInMonth) use the runtime zone — across the spring-forward DST boundary a
+// monthly/weekly step landing in AEDT from an AEST source resolved one calendar
+// day early (and utcMidnight could not rescue it). Stepping in the UTC calendar
+// removes that drift entirely.
+//
+// Day-of-month is clamped to the target month's length, matching the date-fns
+// semantics they replace (31 Jan + 1 month → 28/29 Feb).
+//
+// Do NOT use these for user-facing boundaries or display (today / this-month /
+// labels) — those depend on the family's wall clock and must use the *InTz
+// helpers below.
+
+/** Number of days in the UTC calendar month of `d`. */
+export function utcDaysInMonth(d: Date): number {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
+}
+
+/** Add `n` calendar days to `d` in the UTC calendar, preserving time-of-day. */
+export function addUtcDays(d: Date, n: number): Date {
+  return new Date(Date.UTC(
+    d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n,
+    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds(),
+  ))
+}
+
+/** Add `n` weeks (= n×7 calendar days) to `d` in the UTC calendar. */
+export function addUtcWeeks(d: Date, n: number): Date {
+  return addUtcDays(d, n * 7)
+}
+
+/**
+ * Add `n` months to `d` in the UTC calendar, clamping the day to the target
+ * month's last day (date-fns addMonths: 31 Jan + 1 month → 28/29 Feb).
+ */
+export function addUtcMonths(d: Date, n: number): Date {
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1))
+  const lastDay = utcDaysInMonth(target)
+  const day = Math.min(d.getUTCDate(), lastDay)
+  return new Date(Date.UTC(
+    target.getUTCFullYear(), target.getUTCMonth(), day,
+    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds(),
+  ))
+}
+
+/** Add `n` years to `d` in the UTC calendar, clamping 29 Feb → 28 Feb in a non-leap year. */
+export function addUtcYears(d: Date, n: number): Date {
+  return addUtcMonths(d, n * 12)
+}
+
+/**
+ * Set the day-of-month of `d` in the UTC calendar, clamped to 1..daysInMonth
+ * (date-fns setDate with the same out-of-range clamp). Preserves time-of-day.
+ */
+export function setUtcDayOfMonth(d: Date, day: number): Date {
+  const clamped = Math.min(Math.max(1, day), utcDaysInMonth(d))
+  return new Date(Date.UTC(
+    d.getUTCFullYear(), d.getUTCMonth(), clamped,
+    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds(),
+  ))
+}
+
 /**
  * Convert a YYYY-MM-DD string (interpreted as midnight in the given timezone) to a UTC Date.
  */

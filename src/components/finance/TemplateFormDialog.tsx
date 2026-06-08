@@ -3,12 +3,12 @@
 import {
   Plus, Trash2, TrendingDown, TrendingUp, CalendarClock, ChevronDown, Info,
 } from 'lucide-react'
-import { format } from 'date-fns'
 import {
   Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { formatInTz } from '@/lib/timezone'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
 import { previewOccurrences } from '@/lib/finance-recurrence-utils'
@@ -84,7 +84,7 @@ function InfoTip({ text }: { text: string }) {
 
 function SchedulePreview({ preview, endMode }: { preview: Date[]; endMode: string }) {
   if (preview.length === 0) return null
-  const summaryDates = preview.slice(0, 3).map(d => format(d, 'd MMM')).join(', ')
+  const summaryDates = preview.slice(0, 3).map(d => formatInTz(d, 'UTC', { day: 'numeric', month: 'short' })).join(', ')
   const hasMore = preview.length > 3 || endMode === 'forever'
 
   return (
@@ -102,7 +102,7 @@ function SchedulePreview({ preview, endMode }: { preview: Date[]; endMode: strin
             {preview.map((d, i) => (
               <li key={i} className="text-xs flex gap-2">
                 <span className="text-muted-foreground w-4 text-right tabular-nums">{i + 1}.</span>
-                <span>{format(d, 'EEE d MMM yyyy')}</span>
+                <span>{formatInTz(d, 'UTC', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
               </li>
             ))}
           </ol>
@@ -387,13 +387,13 @@ function FrequencyTab({
     if (!form.startDate) return []
     try {
       return previewOccurrences(
-        new Date(form.startDate + 'T00:00:00'),
+        new Date(form.startDate + 'T00:00:00Z'),
         form.frequency,
         parseInt(form.interval) || 1,
         form.dayOfMonth ? parseInt(form.dayOfMonth) : null,
         form.monthOfYear ? parseInt(form.monthOfYear) : null,
         form.endMode,
-        form.endDate ? new Date(form.endDate + 'T00:00:00') : null,
+        form.endDate ? new Date(form.endDate + 'T00:00:00Z') : null,
         form.totalOccurrences ? parseInt(form.totalOccurrences) : null,
         6,
       )
