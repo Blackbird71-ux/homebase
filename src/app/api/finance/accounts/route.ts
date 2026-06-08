@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { deriveAllAccountBalances, setOpeningBalance } from '@/lib/finance-opening-balance'
+import { deriveAllAccountBalances, setOpeningBalance, syncAccountGlCategoryName } from '@/lib/finance-opening-balance'
 
 export async function GET() {
   const session = await auth()
@@ -151,6 +151,11 @@ export async function PUT(request: NextRequest) {
       ...(isActive !== undefined && { isActive }),
     },
   })
+
+  // F3: keep the per-account opening-balance GL category label in sync on rename.
+  if (name !== undefined && name !== existing.name) {
+    await syncAccountGlCategoryName(id, user.familyId, name)
+  }
 
   return NextResponse.json(account)
 }

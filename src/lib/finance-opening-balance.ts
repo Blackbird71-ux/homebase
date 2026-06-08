@@ -339,13 +339,29 @@ export async function setOpeningBalance(
   const isLiability = signedAmount < 0
   const glCategoryType = isLiability ? 'liability' : 'asset'
 
-  let accountGlCategory = await prisma.financeCategory.findFirst({
+  const existingGlCategory = await prisma.financeCategory.findFirst({
     where: { familyId, glCode: `acct:${accountId}`, isSystem: true },
-    select: { id: true },
+    select: { id: true, type: true },
   })
-  if (!accountGlCategory) {
+  let accountGlCategoryId: string
+  if (existingGlCategory) {
+    accountGlCategoryId = existingGlCategory.id
+    // Reuse path: re-sync the type to the current opening-balance sign. A sign
+    // flip (asset → liability or back) must reclassify this account-GL category
+    // to the correct side of the Balance Sheet / Trial Balance — matching what
+    // the create path below would set. Without this the category keeps its
+    // original type and a flipped opening balance lands on the wrong statement
+    // side. This system category is only ever a target for the opening-balance
+    // journal (glCode `acct:<id>`), so the retype is safe.
+    if (existingGlCategory.type !== glCategoryType) {
+      await prisma.financeCategory.update({
+        where: { id: existingGlCategory.id },
+        data: { type: glCategoryType },
+      })
+    }
+  } else {
     try {
-      accountGlCategory = await prisma.financeCategory.create({
+      const created = await prisma.financeCategory.create({
         data: {
           name:     accountGlName,
           type:     glCategoryType,
@@ -356,11 +372,12 @@ export async function setOpeningBalance(
         },
         select: { id: true },
       })
+      accountGlCategoryId = created.id
     } catch (err: any) {
       // Unique constraint on (familyId, name) — account name may already exist
       // under a different structure. Fall back to a suffixed name.
       if (err.code === 'P2002') {
-        accountGlCategory = await prisma.financeCategory.create({
+        const created = await prisma.financeCategory.create({
           data: {
             name:     `${accountGlName} (OB)`,
             type:     glCategoryType,
@@ -371,6 +388,7 @@ export async function setOpeningBalance(
           },
           select: { id: true },
         })
+        accountGlCategoryId = created.id
       } else {
         throw err
       }
@@ -385,10 +403,10 @@ export async function setOpeningBalance(
   const lines = isLiability
     ? [
         { glAccountId: obCategoryId,           side: 'debit'  as const, amount: absAmount, description: `Opening Balances equity offset` },
-        { glAccountId: accountGlCategory.id,   side: 'credit' as const, amount: absAmount, description: `Opening Balance — ${account.name}` },
+        { glAccountId: accountGlCategoryId,    side: 'credit' as const, amount: absAmount, description: `Opening Balance — ${account.name}` },
       ]
     : [
-        { glAccountId: accountGlCategory.id,   side: 'debit'  as const, amount: absAmount, description: `Opening Balance — ${account.name}` },
+        { glAccountId: accountGlCategoryId,    side: 'debit'  as const, amount: absAmount, description: `Opening Balance — ${account.name}` },
         { glAccountId: obCategoryId,           side: 'credit' as const, amount: absAmount, description: `Opening Balances equity offset` },
       ]
 
@@ -404,6 +422,44 @@ export async function setOpeningBalance(
       lines: { create: lines },
     },
   })
+}
+
+/**
+ * Keep the per-account opening-balance GL category's display name in sync with
+ * the FinanceAccount it represents (F3).
+ *
+ * setOpeningBalance() creates a system FinanceCategory named "Account: <name>"
+ * linked to the account by glCode (`acct:<accountId>`). The glCode is stable, so
+ * the link itself never breaks on a rename — but the stored name would otherwise
+ * stay frozen at creation and show stale ("Account: <old name>") on the Trial
+ * Balance / Balance Sheet / General Ledger. Call this whenever the account name
+ * changes.
+ *
+ * Best-effort: a (familyId, name) unique collision (another category already
+ * holds the desired name) is swallowed — the link by glCode is intact and only
+ * the cosmetic label stays stale. No GL amounts are affected.
+ */
+export async function syncAccountGlCategoryName(
+  accountId: string,
+  familyId: string,
+  newName: string,
+): Promise<void> {
+  const glCategory = await prisma.financeCategory.findFirst({
+    where: { familyId, glCode: `acct:${accountId}`, isSystem: true },
+    select: { id: true, name: true },
+  })
+  if (!glCategory) return
+  const desired = `Account: ${newName}`
+  if (glCategory.name === desired) return
+  try {
+    await prisma.financeCategory.update({
+      where: { id: glCategory.id },
+      data: { name: desired },
+    })
+  } catch (err: any) {
+    // (familyId, name) collision — keep the existing label; glCode link is intact.
+    if (err?.code !== 'P2002') throw err
+  }
 }
 
 /**
