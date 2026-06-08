@@ -13,22 +13,32 @@
 // =============================================================================
 
 import type { FinanceRecurringBill } from '@prisma/client'
-import { addUtcMonths, addUtcWeeks } from '@/lib/timezone'
+import { addUtcMonths, utcMidnight } from '@/lib/timezone'
+import { stepOccurrence } from '@/lib/finance-recurrence-core'
 import { postBillPaymentJournal, type TxClient } from '@/lib/finance-posting'
 
 // Advance a recurring bill's due date by one cadence step, anchored no earlier
 // than today (so a long-overdue bill jumps forward to a sensible next date).
-export function advanceNextDueDate(date: Date, frequency: string): Date {
+//
+// Delegates to the shared stepOccurrence stepper — the single source of truth
+// also used by the template / template-less spawn paths (computeNextOccurrenceDate
+// in bills/route.ts) — so the recurrence interval and dayOfMonth / monthOfYear
+// anchoring are honoured rather than re-implemented. The result is normalised to
+// UTC midnight (the anchor may carry a wall-clock time when `now` is the max).
+export function advanceNextDueDate(
+  date: Date,
+  frequency: string,
+  interval: number,
+  dayOfMonth: number | null,
+  monthOfYear: number | null,
+): Date {
   const ref = new Date(Math.max(date.getTime(), Date.now()))
-  if (frequency === 'weekly')      return addUtcWeeks(ref, 1)
-  if (frequency === 'fortnightly') return addUtcWeeks(ref, 2)
-  if (frequency === 'monthly')     return addUtcMonths(ref, 1)
-  if (frequency === 'bimonthly')   return addUtcMonths(ref, 2)
-  if (frequency === 'quarterly')   return addUtcMonths(ref, 3)
-  if (frequency === 'halfyearly')  return addUtcMonths(ref, 6)
-  if (frequency === 'yearly')      return addUtcMonths(ref, 12)
-  console.warn(`[recordBillPayment] Unknown frequency "${frequency}" — defaulting to monthly`)
-  return addUtcMonths(ref, 1)
+  const next = stepOccurrence(ref, frequency, interval, dayOfMonth, monthOfYear)
+  if (next == null) {
+    console.warn(`[recordBillPayment] Unknown frequency "${frequency}" — defaulting to monthly`)
+    return utcMidnight(addUtcMonths(ref, 1))
+  }
+  return utcMidnight(next)
 }
 
 export interface RecordBillPaymentParams {
@@ -155,7 +165,13 @@ export async function recordBillPayment(
   //    entire payment rolls back. A committed payment with no next
   //    occurrence causes the bill to silently disappear — unrecoverable.
   if (isFullyPaid && bill.billType !== 'one-off') {
-    const newDueDate = advanceNextDueDate(bill.nextDueDate, bill.frequency)
+    const newDueDate = advanceNextDueDate(
+      bill.nextDueDate,
+      bill.frequency,
+      parseInt(bill.recurrenceInterval ?? '1') || 1,
+      bill.dayOfMonth,
+      bill.monthOfYear,
+    )
     if (!bill.endDate || newDueDate <= bill.endDate) {
       await tx.financeRecurringBill.create({
         data: {
