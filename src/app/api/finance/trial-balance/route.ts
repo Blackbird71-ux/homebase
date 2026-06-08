@@ -3,33 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
-import { endOfLocalDayUtc } from '@/lib/timezone'
-
-// Timezone-aware start-of-day, mirroring endOfLocalDayUtc. Using new Date(dateStr)
-// parses YYYY-MM-DD as UTC midnight, which for a UTC+10 user is 10:00 AEST —
-// excluding journals posted 00:00–10:00 AEST on the first day of a period.
-function asAtStartOfDay(dateStr: string, tz: string): Date {
-  const [year, month1, day] = dateStr.split('-').map(Number)
-  if (!year || !month1 || !day) return new Date(`${dateStr}T00:00:00.000Z`)
-  try {
-    const noonUtc = Date.UTC(year, month1 - 1, day, 12, 0, 0, 0)
-    const fmt = new Intl.DateTimeFormat('en-AU', {
-      timeZone: tz,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false,
-    })
-    const parts = fmt.formatToParts(new Date(noonUtc))
-    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value)
-    const tzY = get('year'), tzM = get('month'), tzD = get('day')
-    const tzH = get('hour'), tzMin = get('minute'), tzS = get('second')
-    const offsetMs = noonUtc - Date.UTC(tzY, tzM - 1, tzD, tzH, tzMin, tzS)
-    const midnightUtc = Date.UTC(year, month1 - 1, day, 0, 0, 0, 0) + offsetMs
-    return new Date(midnightUtc)
-  } catch {
-    return new Date(`${dateStr}T00:00:00.000Z`)
-  }
-}
+import { localMidnightToUtc, endOfLocalDayUtc } from '@/lib/timezone'
 
 // GET /api/finance/trial-balance
 //
@@ -62,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   // Build date filter for journal entries — use timezone-aware end-of-day
   const dateFilter: any = {}
-  if (fromRaw) dateFilter.gte = asAtStartOfDay(fromRaw, tz)
+  if (fromRaw) dateFilter.gte = localMidnightToUtc(fromRaw, tz)
   if (toRaw)   dateFilter.lte = endOfLocalDayUtc(toRaw, tz)
 
   const journalEntryFilter: any = {

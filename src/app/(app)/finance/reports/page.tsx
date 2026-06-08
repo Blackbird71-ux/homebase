@@ -11,8 +11,8 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getCurrentFY, formatCurrency } from '@/lib/financeShared'
 import { dropSupersededParents } from '@/lib/finance-forecast'
-import { monthRangeInTz, quarterRangeInTz, fyDateRangeInTz } from '@/lib/finance-fy'
-import { formatInTz, dateStringInTz, addMonthsInTz } from '@/lib/timezone'
+import { formatInTz } from '@/lib/timezone'
+import { getPeriodBounds, navigateAnchor } from '@/lib/finance-period'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import EmailReportModal from '@/components/finance/EmailReportModal'
 
@@ -63,31 +63,6 @@ function fmtCurrency(n: number) {
   return formatCurrency(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// Boundaries are computed in the family timezone. `end` is the INCLUSIVE end-of-day
-// (23:59:59.999) of the period's last day, matching the date-fns endOfMonth/endOfQuarter/
-// endOfYear semantics this replaced (consumers compare `<= end.getTime()`). Year mode is
-// the CALENDAR year (Jan–Dec) — intentionally different from the financial-year period in
-// finance-period.ts; see the duplication note below.
-function getPeriodBounds(mode: PeriodMode, anchor: Date, tz: string): { start: Date; end: Date; label: string } {
-  const [year, month1] = dateStringInTz(anchor, tz).split('-').map(Number)
-  if (mode === 'month') {
-    const { start, end } = monthRangeInTz(year, month1, tz)
-    return { start, end, label: formatInTz(start, tz, { month: 'long', year: 'numeric' }) }
-  }
-  if (mode === 'quarter') {
-    const { start, end } = quarterRangeInTz(year, month1, tz)
-    const q = Math.floor((month1 - 1) / 3) + 1
-    return { start, end, label: `Q${q} ${year}` }
-  }
-  const { start, end } = fyDateRangeInTz(year, 1, tz)
-  return { start, end, label: `${year}` }
-}
-
-function navigateAnchor(mode: PeriodMode, anchor: Date, dir: -1 | 1, tz: string): Date {
-  const months = mode === 'month' ? 1 : mode === 'quarter' ? 3 : 12
-  return addMonthsInTz(anchor, dir * months, tz)
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
@@ -131,7 +106,9 @@ export default function ReportsPage() {
     if (showHistory) loadSnapshots()
   }, [showHistory])
 
-  const { start, end, label } = getPeriodBounds(periodMode, anchor, tz)
+  // fyStartMonth=1 → year mode is the CALENDAR year (Jan–Dec), the reports-page
+  // convention (distinct from the financial-year default getPeriodBounds uses elsewhere).
+  const { start, end, label } = getPeriodBounds(periodMode, anchor, 1, tz)
 
   // ── Period multiplier ─────────────────────────────────────────────────────
   const periodMonths = periodMode === 'month' ? 1 : periodMode === 'quarter' ? 3 : 12

@@ -893,6 +893,86 @@ export async function reverseJournalEntry(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// postJournalEntry
+//
+// Best-effort auto-poster for transaction-linked journals (type='auto_transaction').
+// Relocated verbatim from the inline createTransactionJournalEntry in
+// transactions/route.ts so GL posting lives in this module, not inline in a route
+// (AGENTS.md: no inline GL posting in routes).
+//
+// DELIBERATELY best-effort, UNLIKE the strict helpers above:
+//   - Missing GL account  → silently returns (no throw). The transaction is still
+//     saved; the caller logs and moves on.
+//   - Unbalanced lines    → still written, but as a DRAFT (isPosted=false) rather
+//     than discarded. Balanced lines post immediately (isPosted=true).
+//   - P2002 (ref collision) → retried up to MAX_RETRIES with a fresh reference.
+//
+// Runs on the global prisma client (each retry is a standalone create) and MUST be
+// called OUTSIDE any caller $transaction, exactly as the original did.
+//
+// memberId is copied through when supplied (the transactions route currently passes
+// none → null, identical to the original). Preserving it avoids the memberId-drop
+// footgun called out for reversals.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface PostJournalEntryParams {
+  description: string
+  lines: JournalLine[]
+  date: Date
+  familyId: string
+  entityId: string | null
+  sourceTransactionId?: string
+}
+
+export async function postJournalEntry(params: PostJournalEntryParams): Promise<void> {
+  const { description, lines, date, familyId, entityId, sourceTransactionId } = params
+
+  const glIds = [...new Set(lines.map(l => l.glAccountId))]
+  const valid = await prisma.financeCategory.findMany({
+    where: { id: { in: glIds }, familyId },
+    select: { id: true },
+  })
+  if (valid.length !== glIds.length) return   // silently skip if any account missing
+
+  // Balance decides posted-vs-draft — does NOT throw (unbalanced saves as a draft).
+  const dr = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+  const cr = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+  const balanced = Math.abs(dr - cr) < BALANCE_EPSILON
+
+  const MAX_RETRIES = 10
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const reference = await nextJournalReference(familyId)
+
+    try {
+      await prisma.financeJournalEntry.create({
+        data: {
+          reference,
+          date,
+          description,
+          type: 'auto_transaction',
+          isPosted: balanced,   // post immediately if balanced; save as draft otherwise
+          entityId: entityId ?? null,
+          familyId,
+          sourceTransactionId: sourceTransactionId ?? null,
+          lines: {
+            create: lines.map(l => ({
+              glAccountId: l.glAccountId,
+              side: l.side,
+              amount: l.amount,
+              description: l.description ?? null,
+              memberId: l.memberId ?? null,
+            })),
+          },
+        },
+      })
+      return  // success
+    } catch (err: any) {
+      if (err.code === 'P2002' && attempt < MAX_RETRIES - 1) continue
+      throw err
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // postIncomeReceiptJournal
 //
 // Called by the draft-approval service (or any flow) when a previously-accrued

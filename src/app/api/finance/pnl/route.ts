@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { DEFAULT_TIMEZONE } from '@/lib/timezone'
-import { currentFyYear, fyDateRangeInTz, monthRangeInTz, quarterRangeInTz } from '@/lib/finance-fy'
+import { getPeriodBounds, type PeriodMode } from '@/lib/finance-period'
 
 // ── GL-first P&L ─────────────────────────────────────────────────────────────
 //
@@ -20,30 +20,10 @@ import { currentFyYear, fyDateRangeInTz, monthRangeInTz, quarterRangeInTz } from
 //   journal entry is created: DR Expense / CR AP. Expense appears from that date.
 //
 // The dual-source read and its deduplication bugs are completely eliminated.
-
-function getPeriodBounds(
-  period: string,
-  anchor: Date,
-  fyStartMonth: number,
-  tz: string,
-): { start: Date; end: Date; periodMonths: number } {
-  const year  = anchor.getFullYear()
-  const month = anchor.getMonth() + 1
-
-  if (period === 'month') {
-    const { start, end } = monthRangeInTz(year, month, tz)
-    return { start, end, periodMonths: 1 }
-  }
-  if (period === 'quarter') {
-    const { start, end } = quarterRangeInTz(year, month, tz)
-    return { start, end, periodMonths: 3 }
-  }
-  const fyYear   = currentFyYear(fyStartMonth)
-  const fyOffset = month < fyStartMonth ? 1 : 0
-  const startYear = fyYear - fyOffset
-  const { start, end } = fyDateRangeInTz(startYear, fyStartMonth, tz)
-  return { start, end, periodMonths: 12 }
-}
+//
+// Period bounds come from the shared, tz-aware getPeriodBounds (finance-period.ts) —
+// the same helper the client useProfitLoss hook uses, so server and client agree on
+// the period for any anchor (including back-navigated FYs).
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -64,7 +44,7 @@ export async function GET(request: NextRequest) {
   const fyStartMonth = family?.financeYearStartMonth ?? 7
   const tz = family?.timezone ?? DEFAULT_TIMEZONE
 
-  const { start, end } = getPeriodBounds(period, anchor, fyStartMonth, tz)
+  const { start, end } = getPeriodBounds(period as PeriodMode, anchor, fyStartMonth, tz)
 
   // ── Entities for tabs ───────────────────────────────────────────────────
   const entities = await prisma.financeEntity.findMany({

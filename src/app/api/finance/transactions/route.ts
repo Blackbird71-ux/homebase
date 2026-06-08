@@ -3,74 +3,10 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { createGstJournalEntry } from '@/lib/finance-opening-balance'
-import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
-import { reverseJournalEntry } from '@/lib/finance-posting'
+import { nextNJournalReferences } from '@/lib/finance-journal-ref'
+import { reverseJournalEntry, postJournalEntry } from '@/lib/finance-posting'
+import type { JournalLine } from '@/lib/finance-posting'
 import { DEFAULT_TIMEZONE, localMidnightToUtc } from '@/lib/timezone'
-
-// ── Journal lines helper ────────────────────────────────────────────────────
-// If journalLines are supplied with a transaction POST, create a posted
-// double-entry journal entry alongside the single-sided transaction record.
-// For a quick-add expense: DR expense GL / CR AP (or bank) — posted immediately.
-
-interface JournalLineInput {
-  glAccountId: string
-  side: 'debit' | 'credit'
-  amount: number
-  description?: string
-}
-
-async function createTransactionJournalEntry(
-  description: string,
-  lines: JournalLineInput[],
-  date: Date,
-  familyId: string,
-  entityId: string | null,
-  sourceTransactionId?: string,
-): Promise<void> {
-  const glIds = [...new Set(lines.map(l => l.glAccountId))]
-  const valid = await prisma.financeCategory.findMany({
-    where: { id: { in: glIds }, familyId },
-    select: { id: true },
-  })
-  if (valid.length !== glIds.length) return   // silently skip if any account missing
-
-  // Validate balance
-  const dr = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
-  const cr = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
-  const balanced = Math.abs(dr - cr) < 0.005
-
-  const MAX_RETRIES = 10
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const reference = await nextJournalReference(familyId)
-
-    try {
-      await prisma.financeJournalEntry.create({
-        data: {
-          reference,
-          date,
-          description,
-          type: 'auto_transaction',
-          isPosted: balanced,   // post immediately if balanced; save as draft otherwise
-          entityId: entityId ?? null,
-          familyId,
-          sourceTransactionId: sourceTransactionId ?? null,
-          lines: {
-            create: lines.map(l => ({
-              glAccountId: l.glAccountId,
-              side: l.side,
-              amount: l.amount,
-              description: l.description ?? null,
-            })),
-          },
-        },
-      })
-      return  // success
-    } catch (err: any) {
-      if (err.code === 'P2002' && attempt < MAX_RETRIES - 1) continue
-      throw err
-    }
-  }
-}
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -162,7 +98,7 @@ export async function POST(request: NextRequest) {
     accountId, categoryId, type, amount, payee,
     description, date, isRecurring, isCleared, isPrivate,
     memberId, locationId, taxClassification, isTransfer, glAccountId,
-    journalLines,   // optional: JournalLineInput[] for double-entry accrual
+    journalLines,   // optional: JournalLine[] for double-entry accrual
   } = json
 
   if (!type || amount === undefined) {
@@ -216,14 +152,14 @@ export async function POST(request: NextRequest) {
   // and must be handled by the caller.
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
-      await createTransactionJournalEntry(
-        description?.trim() || payee?.trim() || type,
-        journalLines,
-        txDate,
-        user.familyId,
-        json.entityId ?? null,
-        transaction.id,
-      )
+      await postJournalEntry({
+        description: description?.trim() || payee?.trim() || type,
+        lines: journalLines,
+        date: txDate,
+        familyId: user.familyId,
+        entityId: json.entityId ?? null,
+        sourceTransactionId: transaction.id,
+      })
     } catch (err) {
       console.error('[transactions POST] Failed to create journal entry:', err)
     }
@@ -268,7 +204,7 @@ export async function POST(request: NextRequest) {
             transaction.id,
           )
         } else {
-          const autoLines: JournalLineInput[] = type === 'expense'
+          const autoLines: JournalLine[] = type === 'expense'
             ? [
                 { glAccountId: transaction.categoryId, side: 'debit',  amount },
                 { glAccountId: cashGlId,               side: 'credit', amount },
@@ -277,9 +213,14 @@ export async function POST(request: NextRequest) {
                 { glAccountId: cashGlId,               side: 'debit',  amount },
                 { glAccountId: transaction.categoryId, side: 'credit', amount },
               ]
-          await createTransactionJournalEntry(
-            desc, autoLines, txDate, user.familyId, json.entityId ?? null, transaction.id,
-          )
+          await postJournalEntry({
+            description: desc,
+            lines: autoLines,
+            date: txDate,
+            familyId: user.familyId,
+            entityId: json.entityId ?? null,
+            sourceTransactionId: transaction.id,
+          })
         }
       } else if (transaction.accountId) {
         // Bank account selected but no glAccountId — log a warning.

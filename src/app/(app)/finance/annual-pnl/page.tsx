@@ -81,23 +81,27 @@ function isLumpSumFrequency(frequency: string): boolean {
   return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
 }
 
-function lumpSumColumns(frequency: string, baseDate: Date, fyMonths: Date[]): number[] {
-  const baseMonth = baseDate.getMonth()
-  const baseYear  = baseDate.getFullYear()
+// Which FY columns (0–11) a recurring lump-sum lands in. The base month/year is read
+// in the family timezone (dateStringInTz), and each column's month/year comes from
+// fyColumnYearMonth — the integer source of truth — rather than from reading browser-
+// local Date objects, which bucketed boundary dates into the wrong month when the
+// browser timezone differed from the family timezone. baseMonth1/colM are both 1-based,
+// so the diff arithmetic is unchanged from the prior 0-based form.
+function lumpSumColumns(frequency: string, baseDate: Date, fyStartYear: number, fyStartMonth: number, tz: string): number[] {
+  const [baseYear, baseMonth1] = dateStringInTz(baseDate, tz).split('-').map(Number)
   const cols: number[] = []
   for (let col = 0; col < 12; col++) {
-    const colM = fyMonths[col].getMonth()
-    const colY = fyMonths[col].getFullYear()
+    const { year: colY, month1: colM } = fyColumnYearMonth(fyStartYear, fyStartMonth, col)
     if (frequency === 'yearly') {
-      if (colM === baseMonth) cols.push(col)
+      if (colM === baseMonth1) cols.push(col)
     } else if (frequency === 'halfyearly') {
       for (let offset = -12; offset <= 12; offset += 6) {
-        const diff = (colY - baseYear) * 12 + (colM - baseMonth)
+        const diff = (colY - baseYear) * 12 + (colM - baseMonth1)
         if (diff === offset) { cols.push(col); break }
       }
     } else if (frequency === 'quarterly') {
       for (let offset = -12; offset <= 12; offset += 3) {
-        const diff = (colY - baseYear) * 12 + (colM - baseMonth)
+        const diff = (colY - baseYear) * 12 + (colM - baseMonth1)
         if (diff === offset) { cols.push(col); break }
       }
     }
@@ -383,7 +387,7 @@ export default function AnnualPnLPage() {
               if (isInMonth(e.nextExpectedDate, fyMonthKeys[col], familyTimezone)) row.monthly[col] += e.amount
             }
           } else {
-            const hitCols = lumpSumColumns(e.frequency, new Date(e.nextExpectedDate), fyMonths)
+            const hitCols = lumpSumColumns(e.frequency, new Date(e.nextExpectedDate), fyStartYear, fyStartMonth, familyTimezone)
             for (const col of hitCols) row.monthly[col] += e.amount
           }
         } else {
@@ -395,7 +399,7 @@ export default function AnnualPnLPage() {
 
     for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
     return Array.from(map.values()).filter(r => r.total > 0).sort((a, b) => b.total - a.total)
-  }, [income, glMonths, fyMonths, fyMonthKeys, familyTimezone, viewMode, selectedEntityId])
+  }, [income, glMonths, fyStartYear, fyStartMonth, fyMonthKeys, familyTimezone, viewMode, selectedEntityId])
 
   // ── Build expense rows ────────────────────────────────────────────────────
   const expenseRows = useMemo((): TableRow[] => {
@@ -446,7 +450,7 @@ export default function AnnualPnLPage() {
               if (isInMonth(b.nextDueDate, fyMonthKeys[col], familyTimezone)) row.monthly[col] += b.amount
             }
           } else {
-            const hitCols = lumpSumColumns(b.frequency, new Date(b.nextDueDate), fyMonths)
+            const hitCols = lumpSumColumns(b.frequency, new Date(b.nextDueDate), fyStartYear, fyStartMonth, familyTimezone)
             for (const col of hitCols) row.monthly[col] += b.amount
           }
         } else {
@@ -458,7 +462,7 @@ export default function AnnualPnLPage() {
 
     for (const row of map.values()) row.total = row.monthly.reduce((s, v) => s + v, 0)
     return Array.from(map.values()).filter(r => r.total > 0).sort((a, b) => b.total - a.total)
-  }, [bills, glMonths, fyMonths, fyMonthKeys, familyTimezone, viewMode, selectedEntityId])
+  }, [bills, glMonths, fyStartYear, fyStartMonth, fyMonthKeys, familyTimezone, viewMode, selectedEntityId])
 
   // ── Totals ────────────────────────────────────────────────────────────────
   const monthlyIncome   = useMemo(() => Array.from({ length: 12 }, (_, i) => incomeRows.reduce((s, r) => s + r.monthly[i], 0)), [incomeRows])
