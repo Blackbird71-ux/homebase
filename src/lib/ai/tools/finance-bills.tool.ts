@@ -8,6 +8,7 @@ import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { formatInTz, nDaysFromTodayInTz } from '@/lib/timezone'
 import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
 import { recordBillPayment } from '@/lib/finance-bill-payment'
+import { copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -240,9 +241,10 @@ async function markBillPaidHandler(args: Record<string, unknown>, ctx: HandlerCo
   const creditGlAccountId = await ensureUndepositedFundsCategory(ctx.familyId)
   const actualDate = new Date()
 
+  let spawnedInfo: { spawnedBillId: string; spawnedBillDueDate: Date } | null = null
   try {
-    await prisma.$transaction(async (tx) => {
-      await recordBillPayment(tx, {
+    const txResult = await prisma.$transaction(async (tx) => {
+      return await recordBillPayment(tx, {
         bill,
         amount: remaining,
         actualDate,
@@ -256,9 +258,20 @@ async function markBillPaidHandler(args: Record<string, unknown>, ctx: HandlerCo
         familyId: ctx.familyId,
       })
     })
+    spawnedInfo = txResult.spawned
   } catch (err) {
     console.error('[markBillPaid] payment failed:', err)
     return { message: `Couldn't record the payment for "${bill.name}". No changes were saved.` }
+  }
+
+  // Copy the parent bill's draft journal onto a freshly-spawned template-less
+  // successor — OUTSIDE the tx (upsertDraftJournal opens its own). Shared with
+  // the bills PATCH path so both produce identical successors. Non-fatal.
+  if (spawnedInfo && bill.journalEntryId) {
+    await copySpawnedBillDraftJournal(
+      spawnedInfo.spawnedBillId, bill.journalEntryId, bill.name,
+      spawnedInfo.spawnedBillDueDate, ctx.familyId, bill.entityId ?? null,
+    )
   }
 
   return {

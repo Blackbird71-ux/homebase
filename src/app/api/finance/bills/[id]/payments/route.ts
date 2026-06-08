@@ -4,6 +4,7 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
 import { recordBillPayment } from '@/lib/finance-bill-payment'
+import { copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GL-FIRST PAYMENT ACCOUNTING
@@ -169,9 +170,10 @@ export async function POST(
 
   // ── ATOMIC: GL journal + transaction + payment record + bill update + spawn ──
   let savedPaymentId: string
+  let spawnedInfo: { spawnedBillId: string; spawnedBillDueDate: Date } | null = null
   try {
-    await prisma.$transaction(async (tx) => {
-      const { paymentId } = await recordBillPayment(tx, {
+    const txResult = await prisma.$transaction(async (tx) => {
+      return await recordBillPayment(tx, {
         bill,
         amount,
         actualDate,
@@ -184,14 +186,25 @@ export async function POST(
         userId: user.id,
         familyId: user.familyId,
       })
-      savedPaymentId = paymentId
     })
+    savedPaymentId = txResult.paymentId
+    spawnedInfo = txResult.spawned
   } catch (err) {
     console.error('[payments POST] ATOMIC write failed:', err)
     const msg = err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json(
       { error: `Failed to record payment. No changes were saved. (${msg})` },
       { status: 422 },
+    )
+  }
+
+  // Copy the parent bill's draft journal onto a freshly-spawned template-less
+  // successor — OUTSIDE the tx (upsertDraftJournal opens its own). Shared with
+  // the bills PATCH path so both produce identical successors. Non-fatal.
+  if (spawnedInfo && bill.journalEntryId) {
+    await copySpawnedBillDraftJournal(
+      spawnedInfo.spawnedBillId, bill.journalEntryId, bill.name,
+      spawnedInfo.spawnedBillDueDate, user.familyId, bill.entityId ?? null,
     )
   }
 

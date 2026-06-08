@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { getTemplate, computeNextOccurrenceDate, type OccurrenceTemplate } from '@/lib/finance-recurring-template-service'
-import { createOccurrenceDraft, isWithinAdvanceWindow } from '@/lib/finance-draft-spawn-service'
-import { utcMidnight } from '@/lib/timezone'
+import { spawnNextBillOnPayment, copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 import {
   ensureAccountsPayableCategory,
 } from '@/lib/finance-opening-balance'
@@ -1071,93 +1069,14 @@ export async function PATCH(request: NextRequest) {
         })
 
         // Spawn next occurrence INSIDE the transaction — prevents disappearing bill bug
-        // where the payment commits but the spawn fails (Bug 2 fix)
+        // where the payment commits but the spawn fails (Bug 2 fix). Shared with the
+        // payments/AI path (recordBillPayment) so the successor is identical no matter
+        // which path settled the bill (templated-aware, status='draft', strict-next).
         if (existing.billType !== 'one-off' && isFullyPaid) {
-          if (existing.templateId) {
-            // ── Templated: spawn via the shared clean path (the identical draft
-            // the cron worker produces — clean UTC-midnight billDate/nextDueDate,
-            // draft journal, snapshot hash). Step cadence from the
-            // occurrence/billDate, NEVER the due date.
-            const template = await getTemplate(user.familyId, existing.templateId)
-            if (template) {
-              const currentOccurrence = existing.billDate
-                ?? new Date(existing.nextDueDate.getTime() - template.defaultDueOffsetDays * 86_400_000)  // defensive fallback only
-              const next = computeNextOccurrenceDate(template, utcMidnight(currentOccurrence))
-              if (next) {
-                const occ = utcMidnight(next)
-                // Honour createInAdvanceDays: only materialise the next occurrence
-                // now if it falls within the template's advance window. Otherwise
-                // leave it to the nightly cron (same shared gate), so paying a bill
-                // cannot spawn its successor weeks early. The cursor still advances
-                // either way so the cron knows which occurrence to materialise when
-                // it comes due (and idempotently skips if we just created it).
-                if (isWithinAdvanceWindow(occ, template.createInAdvanceDays)) {
-                  await createOccurrenceDraft(tx, template, occ, existing.id)
-                }
-                // Advance the template cursor atomically so the cron does not
-                // re-spawn the same occurrence.
-                await tx.financeRecurringTemplate.update({
-                  where: { id: template.id },
-                  data: { nextOccurrenceDate: occ },
-                })
-              }
-            }
-          } else {
-            // ── Template-less recurring bill: step from the entry's own due date
-            // using the same clean cadence function, normalised to UTC midnight
-            // (no wall-clock pollution). The draft journal is copied from the
-            // parent below (outside the tx, gated on spawnedBillId).
-            const occTemplate: OccurrenceTemplate = {
-              frequency: existing.frequency,
-              interval: parseInt(existing.recurrenceInterval ?? '1') || 1,
-              dayOfMonth: existing.dayOfMonth,
-              monthOfYear: existing.monthOfYear,
-              startDate: existing.nextDueDate,
-              endMode: 'never',
-              endDate: existing.endDate,
-              totalOccurrences: null,
-              occurrencesRemaining: null,
-            }
-            const next = computeNextOccurrenceDate(occTemplate, utcMidnight(existing.nextDueDate))
-            const newDueDate = next ? utcMidnight(next) : null
-            if (newDueDate && (!existing.endDate || newDueDate <= existing.endDate)) {
-              const spawned = await tx.financeRecurringBill.create({
-                data: {
-                  name: existing.name,
-                  amount: existing.amount,
-                  accountId: existing.accountId,
-                  categoryId: existing.categoryId,
-                  vendorId: existing.vendorId,
-                  frequency: existing.frequency,
-                  dayOfMonth: existing.dayOfMonth,
-                  monthOfYear: existing.monthOfYear,
-                  nextDueDate: newDueDate,
-                  endDate: existing.endDate,
-                  isActive: existing.isActive,
-                  autoPay: existing.autoPay,
-                  emailReminder: existing.emailReminder,
-                  reminderDays: existing.reminderDays,
-                  notes: existing.notes,
-                  memberId: existing.memberId,
-                  locationId: existing.locationId,
-                  billType: existing.billType,
-                  recurrenceInterval: existing.recurrenceInterval,
-                  invoiceReceived: false,
-                  invoiceReceivedDate: null,
-                  paid: false,
-                  paidDate: null,
-                  parentBillId: existing.id,
-                  templateId: null,
-                  status: 'draft',
-                  entityId: existing.entityId,
-                  taxClassification: existing.taxClassification,
-                  familyId: user.familyId,
-                },
-                select: { id: true },
-              })
-              spawnedBillId = spawned.id
-              spawnedBillDueDate = newDueDate
-            }
+          const spawnedInfo = await spawnNextBillOnPayment(tx, existing, user.familyId)
+          if (spawnedInfo) {
+            spawnedBillId = spawnedInfo.spawnedBillId
+            spawnedBillDueDate = spawnedInfo.spawnedBillDueDate
           }
         }
       })
@@ -1170,32 +1089,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Copy parent journal lines to spawned bill draft — preserves custom splits (GST, etc.)
-    // Must run OUTSIDE the payment transaction because upsertBillDraftJournal uses its own $transaction.
+    // Must run OUTSIDE the payment transaction (upsertDraftJournal opens its own).
+    // Shared with the payments/AI path so both produce identical successor drafts.
     if (spawnedBillId && spawnedBillDueDate && existing.journalEntryId) {
-      try {
-        const parentLines = await prisma.financeJournalLine.findMany({
-          where: { journalEntryId: existing.journalEntryId },
-          select: { glAccountId: true, side: true, amount: true, description: true },
-        })
-        if (parentLines.length >= 2) {
-          const lines: JournalLine[] = parentLines.map(l => ({
-            glAccountId: l.glAccountId,
-            side: l.side as 'debit' | 'credit',
-            amount: l.amount,
-            description: l.description ?? undefined,
-          }))
-          const draftJeId = await upsertBillDraftJournal(
-            spawnedBillId, existing.name, null, lines, spawnedBillDueDate, user.familyId, existing.entityId ?? null,
-          )
-          await prisma.financeRecurringBill.update({
-            where: { id: spawnedBillId },
-            data: { journalEntryId: draftJeId },
-          })
-        }
-      } catch (err) {
-        console.error('[bills PATCH] Failed to create draft journal for spawned bill:', err)
-        // Non-fatal — spawned bill exists; user can set lines manually
-      }
+      await copySpawnedBillDraftJournal(
+        spawnedBillId, existing.journalEntryId, existing.name,
+        spawnedBillDueDate, user.familyId, existing.entityId ?? null,
+      )
     }
 
     const finalBill = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId }, include: BILL_INCLUDE })

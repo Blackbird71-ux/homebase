@@ -12,34 +12,9 @@
 // run inside a $transaction so either everything commits or nothing does.
 // =============================================================================
 
-import type { FinanceRecurringBill } from '@prisma/client'
-import { addUtcMonths, utcMidnight } from '@/lib/timezone'
-import { stepOccurrence } from '@/lib/finance-recurrence-core'
-import { postBillPaymentJournal, type TxClient } from '@/lib/finance-posting'
-
-// Advance a recurring bill's due date by one cadence step, anchored no earlier
-// than today (so a long-overdue bill jumps forward to a sensible next date).
-//
-// Delegates to the shared stepOccurrence stepper — the single source of truth
-// also used by the template / template-less spawn paths (computeNextOccurrenceDate
-// in bills/route.ts) — so the recurrence interval and dayOfMonth / monthOfYear
-// anchoring are honoured rather than re-implemented. The result is normalised to
-// UTC midnight (the anchor may carry a wall-clock time when `now` is the max).
-export function advanceNextDueDate(
-  date: Date,
-  frequency: string,
-  interval: number,
-  dayOfMonth: number | null,
-  monthOfYear: number | null,
-): Date {
-  const ref = new Date(Math.max(date.getTime(), Date.now()))
-  const next = stepOccurrence(ref, frequency, interval, dayOfMonth, monthOfYear)
-  if (next == null) {
-    console.warn(`[recordBillPayment] Unknown frequency "${frequency}" — defaulting to monthly`)
-    return utcMidnight(addUtcMonths(ref, 1))
-  }
-  return utcMidnight(next)
-}
+import type { FinanceRecurringBill, Prisma } from '@prisma/client'
+import { spawnNextBillOnPayment } from '@/lib/finance-draft-spawn-service'
+import { postBillPaymentJournal } from '@/lib/finance-posting'
 
 export interface RecordBillPaymentParams {
   /** The full bill being paid (loaded by the caller). */
@@ -70,12 +45,14 @@ export interface RecordBillPaymentParams {
  * Record a bill payment installment inside the caller's $transaction.
  * Posts the GL journal, creates the payment transaction + subledger record,
  * updates the bill's paid status, and spawns the next occurrence when the bill
- * is fully paid. Returns the new FinanceBillPayment id.
+ * is fully paid. Returns the new FinanceBillPayment id and, for a fully-paid
+ * template-less bill, the spawned successor so the caller can copy its draft
+ * journal AFTER the tx (copySpawnedBillDraftJournal cannot nest a transaction).
  */
 export async function recordBillPayment(
-  tx: TxClient,
+  tx: Prisma.TransactionClient,
   p: RecordBillPaymentParams,
-): Promise<{ paymentId: string }> {
+): Promise<{ paymentId: string; spawned: { spawnedBillId: string; spawnedBillDueDate: Date } | null }> {
   const {
     bill, amount, actualDate, creditGlAccountId, usingSuspense,
     glAccountId, paymentAccountId, notes, isFullyPaid, userId, familyId,
@@ -160,52 +137,21 @@ export async function recordBillPayment(
     },
   })
 
-  // 5. Spawn next occurrence for recurring bills when fully paid.
-  //    MUST be inside this $transaction (Bug 2 fix): if spawn fails the
-  //    entire payment rolls back. A committed payment with no next
-  //    occurrence causes the bill to silently disappear — unrecoverable.
+  // 5. Spawn next occurrence for recurring bills when fully paid, via the
+  //    shared spawn helper — the SAME one the bills PATCH "Mark Paid" path uses
+  //    — so the successor is identical no matter which path settled the bill
+  //    (status='draft', templated-aware, strict-next cadence).
+  //    MUST be inside this $transaction (Bug 2 fix): if the spawn fails the
+  //    entire payment rolls back. A committed payment with no successor causes
+  //    the bill to silently disappear — unrecoverable.
+  //
+  //    For a template-less bill the returned info lets the CALLER copy the
+  //    parent's draft journal AFTER the tx (copySpawnedBillDraftJournal —
+  //    upsertDraftJournal opens its own transaction and cannot nest here).
+  let spawned: { spawnedBillId: string; spawnedBillDueDate: Date } | null = null
   if (isFullyPaid && bill.billType !== 'one-off') {
-    const newDueDate = advanceNextDueDate(
-      bill.nextDueDate,
-      bill.frequency,
-      parseInt(bill.recurrenceInterval ?? '1') || 1,
-      bill.dayOfMonth,
-      bill.monthOfYear,
-    )
-    if (!bill.endDate || newDueDate <= bill.endDate) {
-      await tx.financeRecurringBill.create({
-        data: {
-          name:               bill.name,
-          amount:             bill.amount,
-          accountId:          bill.accountId,
-          categoryId:         bill.categoryId,
-          vendorId:           bill.vendorId,
-          frequency:          bill.frequency,
-          dayOfMonth:         bill.dayOfMonth,
-          monthOfYear:        bill.monthOfYear,
-          nextDueDate:        newDueDate,
-          endDate:            bill.endDate,
-          isActive:           bill.isActive,
-          autoPay:            bill.autoPay,
-          emailReminder:      bill.emailReminder,
-          reminderDays:       bill.reminderDays,
-          notes:              bill.notes,
-          memberId:           bill.memberId,
-          locationId:         bill.locationId,
-          billType:           bill.billType,
-          recurrenceInterval: bill.recurrenceInterval,
-          invoiceReceived:    false,
-          invoiceReceivedDate: null,
-          paid:               false,
-          paidDate:           null,
-          parentBillId:       bill.id,
-          entityId:           bill.entityId,
-          taxClassification:  bill.taxClassification ?? null,
-          familyId,
-        },
-      })
-    }
+    spawned = await spawnNextBillOnPayment(tx, bill, familyId)
   }
 
-  return { paymentId: payment.id }
+  return { paymentId: payment.id, spawned }
 }
