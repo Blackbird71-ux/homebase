@@ -1,7 +1,7 @@
 'use client'
 
 import { Plus, Pencil, Trash2, Filter, X, Receipt, CheckCircle } from 'lucide-react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { PageHero } from '@/components/shared/PageHero'
 import { sortedCategoryList } from '@/lib/finance-categories'
@@ -291,7 +291,7 @@ export default function TransactionsPage() {
                         {t.entity.name}
                       </span>
                     )}
-                    <span>{format(new Date(t.date), 'd MMM yyyy')}</span>
+                    <span>{formatInTz(new Date(t.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                   </div>
                 </div>
 

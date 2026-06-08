@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { RotateCcw, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -67,7 +67,7 @@ export function ReversalDialog({ reversal, onClose, onSaved }: Props) {
               <p className="text-xs text-muted-foreground mb-0.5">Reversing:</p>
               <p className="font-medium">{reversal.entry.reference} — {reversal.entry.description}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {format(new Date(reversal.entry.date), 'd MMM yyyy')}
+                {formatInTz(new Date(reversal.entry.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
               </p>
             </div>
 

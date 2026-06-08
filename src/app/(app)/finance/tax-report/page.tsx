@@ -8,11 +8,11 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { currentFyYear, fyLabel as fyLabelUtil } from '@/lib/finance-fy'
 import { calcPersonalTax } from '@/lib/tax-calculator'
-import { format } from 'date-fns'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
 import { buildTaxReportWorkbook } from '@/lib/excel/tax-report-excel'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import {
   type GlActualItem, type IncomeRow, type Member, type Entity, type TaxCat,
   type ApiResponse, type TaxColumn, type PersonTax,
@@ -176,6 +176,7 @@ export default function TaxReportPage() {
   const [fyStartMonth, setFyStartMonth] = useState<number>(7)
   const [fyStartYear, setFyStartYear]   = useState<number>(() => currentFyYear(7))
   const printRef = useRef<HTMLDivElement>(null)
+  const familyTimezone = useFamilyTimezone()
 
   // Load settings for FY start month
   useEffect(() => {
@@ -302,6 +303,7 @@ export default function TaxReportPage() {
               fyStr: fyLabelUtil(fyStartYear, fyStartMonth),
               financialYear: data?.financialYear ?? '2025-26',
               personData,
+              timezone: familyTimezone,
             })}
             filename={`HomeBase - Tax Report - ${fyLabelUtil(fyStartYear, fyStartMonth)}.xlsx`}
             disabled={loading}

@@ -6,7 +6,6 @@ import {
   CheckCircle2, AlertTriangle, ChevronDown, ChevronRight,
   CreditCard, Clock, FileText, Building2, ExternalLink,
 } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import { formatCurrency } from '@/lib/financeShared'
 import { formatInTz } from '@/lib/timezone'
@@ -196,7 +195,7 @@ export default function AccountsPayablePage() {
         <div className="text-sm text-muted-foreground py-8 text-center">Failed to load report.</div>
       ) : data.itemCount === 0 && data.glApBalance === 0 && data.difference < 0.01 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center">
-          <p className="text-sm text-muted-foreground">No outstanding accounts payable as at {format(parseISO(data.asAt), 'd MMMM yyyy')}.</p>
+          <p className="text-sm text-muted-foreground">No outstanding accounts payable as at {formatInTz(new Date(data.asAt), 'UTC', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>
         </div>
       ) : (
         <>

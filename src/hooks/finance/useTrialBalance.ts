@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { todayAU } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -153,8 +153,8 @@ export function useTrialBalance() {
   const grouped = tbData ? groupAccounts(filteredAccounts) : null
 
   const printDateRange = data?.from && data?.to
-    ? `${format(new Date(data.from), 'd MMM yyyy')} – ${format(new Date(data.to), 'd MMM yyyy')}`
-    : data?.to ? `Up to ${format(new Date(data.to), 'd MMM yyyy')}` : 'All time'
+    ? `${formatInTz(new Date(data.from), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })} – ${formatInTz(new Date(data.to), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    : data?.to ? `Up to ${formatInTz(new Date(data.to), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'All time'
 
   const printTitle = glAccountId
     ? `General Ledger${glData ? ` — ${glData.glAccount.name}` : ''}`

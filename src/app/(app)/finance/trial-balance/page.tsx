@@ -5,13 +5,14 @@ import {
   CheckCircle2, AlertTriangle, ArrowLeft, ChevronRight,
   Search, X, BookOpen, Scale,
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
 import { buildTrialBalanceWorkbook } from '@/lib/excel/trial-balance-excel'
 import { useTrialBalance } from '@/hooks/finance/useTrialBalance'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { formatCurrency } from '@/lib/financeShared'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ const TYPE_BG: Record<string, string> = {
 
 export default function TrialBalancePage() {
   const printRef = useRef<HTMLDivElement>(null)
+  const familyTimezone = useFamilyTimezone()
 
   const {
     data, loading, error,
@@ -99,7 +101,7 @@ export default function TrialBalancePage() {
             disabled={!data || loading}
           />
           <ExcelButton
-            buildWorkbook={() => buildTrialBalanceWorkbook({ data: data!, printTitle, printDateRange })}
+            buildWorkbook={() => buildTrialBalanceWorkbook({ data: data!, printTitle, printDateRange, timezone: familyTimezone })}
             filename={`HomeBase - ${printTitle} - ${printDateRange}.xlsx`}
             disabled={!data || loading}
           />
@@ -196,8 +198,8 @@ export default function TrialBalancePage() {
             </span>
             <span className="ml-auto text-xs opacity-70">
               {tbData.accounts.length} accounts · {tbData.from && tbData.to
-                ? `${format(new Date(tbData.from), 'd MMM yyyy')} – ${format(new Date(tbData.to), 'd MMM yyyy')}`
-                : tbData.to ? `up to ${format(new Date(tbData.to), 'd MMM yyyy')}` : 'all time'
+                ? `${formatInTz(new Date(tbData.from), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })} – ${formatInTz(new Date(tbData.to), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                : tbData.to ? `up to ${formatInTz(new Date(tbData.to), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'all time'
               }
             </span>
           </div>
@@ -385,7 +387,7 @@ export default function TrialBalancePage() {
               <span>{glData.lines.length} line{glData.lines.length !== 1 ? 's' : ''}</span>
               {glData.from && glData.to && (
                 <span className="ml-auto">
-                  {format(new Date(glData.from), 'd MMM yyyy')} – {format(new Date(glData.to), 'd MMM yyyy')}
+                  {formatInTz(new Date(glData.from), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })} – {formatInTz(new Date(glData.to), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
               )}
             </div>
@@ -412,7 +414,7 @@ export default function TrialBalancePage() {
               {/* Opening balance row */}
               <div className="grid items-center px-4 py-2 bg-muted/20 border-b border-border/50 text-xs text-muted-foreground"
                 style={{ gridTemplateColumns: '7rem 5rem 1fr minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}>
-                <span>{glData.from ? format(new Date(glData.from), 'd MMM yyyy') : 'All time'}</span>
+                <span>{glData.from ? formatInTz(new Date(glData.from), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' }) : 'All time'}</span>
                 <span />
                 <span className="italic">Opening balance</span>
                 <span />
@@ -431,7 +433,7 @@ export default function TrialBalancePage() {
                   style={{ gridTemplateColumns: '7rem 5rem 1fr minmax(9.5rem,max-content) minmax(9.5rem,max-content) minmax(9.5rem,max-content)' }}
                 >
                   <span className="text-xs text-muted-foreground pt-0.5">
-                    {format(new Date(line.date), 'd MMM yyyy')}
+                    {formatInTz(new Date(line.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </span>
                   <span className="text-xs font-mono text-muted-foreground pt-0.5">
                     {line.reference || '—'}

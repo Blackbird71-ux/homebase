@@ -1,6 +1,5 @@
 'use client'
 
-import { format } from 'date-fns'
 import {
   Layers, RefreshCw, Receipt, ReceiptText, CheckCircle2, Paperclip, Pencil, Trash2, Ban, FileText, ChevronDown, ChevronUp,
 } from 'lucide-react'
@@ -32,7 +31,7 @@ function PayslipBadge({ payslip }: { payslip: StoredPayslip }) {
         Payslip
         {payslip.payPeriodStart && payslip.payPeriodEnd && (
           <span className="text-violet-400">
-            {format(new Date(payslip.payPeriodStart), 'd MMM')} – {format(new Date(payslip.payPeriodEnd), 'd MMM yyyy')}
+            {formatInTz(new Date(payslip.payPeriodStart), 'UTC', { day: 'numeric', month: 'short' })} – {formatInTz(new Date(payslip.payPeriodEnd), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
           </span>
         )}
         {open ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}

@@ -1,6 +1,6 @@
 'use client'
 
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import {
   CheckCircle2, RotateCcw, Settings2, RefreshCw, Layers,
   Trash2, Ban, Undo2, Clock,
@@ -312,7 +312,7 @@ function PaidBillRow({
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-0.5">
             {bill.paidDate && (
               <span className="text-green-500">
-                Paid {format(new Date(bill.paidDate), 'd MMM yyyy')}
+                Paid {formatInTz(new Date(bill.paidDate), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             )}
             {bill.category && (
@@ -487,7 +487,7 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
             <div key={p.id}
               className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
               <span className="text-xs text-muted-foreground w-24 shrink-0">
-                {format(new Date(p.paymentDate), 'd MMM yyyy')}
+                {formatInTz(new Date(p.paymentDate), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
               <span className="font-medium shrink-0">{formatCurrency(p.amount)}</span>
               {p.glAccount

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import {
   buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle,
   totalStyle, totalLabelStyle, grandTotalStyle, grandTotalLabelStyle,
@@ -25,14 +25,15 @@ export interface ProfitLossExcelParams {
   totalExpenses: number
   estimatedTax: number
   netProfit: number
+  timezone: string
 }
 
 export function buildProfitLossWorkbook({
   label, incomeGroups, expenseGroups,
-  totalIncome, totalExpenses, estimatedTax, netProfit,
+  totalIncome, totalExpenses, estimatedTax, netProfit, timezone,
 }: ProfitLossExcelParams): XLSX.WorkBook {
   const wb  = XLSX.utils.book_new()
-  const now = format(new Date(), 'd MMM yyyy h:mm a')
+  const now = formatInTz(new Date(), timezone, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
 
   XLSX.utils.book_append_sheet(wb, buildCoverSheet({
     reportTitle: 'Profit & Loss',
@@ -96,7 +97,7 @@ export function buildProfitLossWorkbook({
     for (const item of g.items) {
       incAoa.push([
         '', item.name,
-        item.date ? format(new Date(item.date), 'd/MM/yyyy') : '',
+        item.date ? formatInTz(new Date(item.date), timezone, { day: 'numeric', month: '2-digit', year: 'numeric' }) : '',
         item.received ? 'Received' : 'Expected',
         item.amount,
         item.periodAmount,
@@ -140,7 +141,7 @@ export function buildProfitLossWorkbook({
     for (const item of g.items) {
       expAoa.push([
         '', item.name,
-        item.date ? format(new Date(item.date), 'd/MM/yyyy') : '',
+        item.date ? formatInTz(new Date(item.date), timezone, { day: 'numeric', month: '2-digit', year: 'numeric' }) : '',
         item.paid ? 'Paid' : 'Due',
         item.amount,
         item.periodAmount,

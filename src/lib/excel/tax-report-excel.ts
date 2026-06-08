@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { SUPER_CAP } from '@/lib/tax-calculator'
 import { formatCurrency } from '@/lib/financeShared'
 import {
@@ -28,13 +28,14 @@ export interface TaxReportExcelParams {
   fyStr: string
   financialYear: string
   personData: PersonData[]
+  timezone: string
 }
 
 export function buildTaxReportWorkbook({
-  fyStr, financialYear, personData,
+  fyStr, financialYear, personData, timezone,
 }: TaxReportExcelParams): XLSX.WorkBook {
   const wb  = XLSX.utils.book_new()
-  const now = format(new Date(), 'd MMM yyyy h:mm a')
+  const now = formatInTz(new Date(), timezone, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
 
   XLSX.utils.book_append_sheet(wb, buildCoverSheet({
     reportTitle: 'Tax Report',

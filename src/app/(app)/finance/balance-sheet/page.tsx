@@ -6,7 +6,8 @@ import {
   List, X,
 } from 'lucide-react'
 import { cn, todayAU } from '@/lib/utils'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
+import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
@@ -224,12 +225,13 @@ export default function BalanceSheetPage() {
   const [ledgerTxs, setLedgerTxs]      = useState<LedgerTx[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
+  const familyTimezone = useFamilyTimezone()
 
   // ── Build Excel workbook ─────────────────────────────────────────────────
   function buildExcelWorkbook(): XLSX.WorkBook {
     const wb  = XLSX.utils.book_new()
-    const now = format(new Date(), 'd MMM yyyy h:mm a')
-    const asAtFmt = format(new Date(asAt + 'T00:00:00'), 'd MMMM yyyy')
+    const now = formatInTz(new Date(), familyTimezone, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+    const asAtFmt = formatInTz(new Date(asAt), 'UTC', { day: 'numeric', month: 'long', year: 'numeric' })
 
     XLSX.utils.book_append_sheet(wb, buildCoverSheet({
       reportTitle: 'Balance Sheet',
@@ -536,7 +538,7 @@ export default function BalanceSheetPage() {
             <div className="space-y-1.5">
               {ledgerTxs.map(t => (
                 <div key={t.id} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                  <span className="text-xs text-muted-foreground w-24 shrink-0">{format(new Date(t.date), 'd MMM yyyy')}</span>
+                  <span className="text-xs text-muted-foreground w-24 shrink-0">{formatInTz(new Date(t.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                   <span className="flex-1 min-w-0 truncate">{t.description ?? t.payee ?? 'Transaction'}</span>
                   {t.category && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{t.category.name}</span>}
                   {!t.isCleared && <StatusChip variant="soon" className="shrink-0">PENDING</StatusChip>}

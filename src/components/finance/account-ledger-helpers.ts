@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 
 export interface DatePreset { label: string; from: string; to: string }
 
@@ -38,7 +38,7 @@ export interface LedgerRow {
 /** Format an ISO date string (with or without time component) as "d MMM yyyy". */
 export function fmtDate(iso: string): string {
   try {
-    return format(new Date(iso), 'd MMM yyyy')
+    return formatInTz(new Date(iso), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })
   } catch {
     return iso
   }

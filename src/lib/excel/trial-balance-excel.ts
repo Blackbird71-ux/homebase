@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import {
   buildCoverSheet, headerStyle, headerLeftStyle, sectionStyle, subSectionStyle,
   totalStyle, totalLabelStyle, grandTotalStyle, grandTotalLabelStyle,
@@ -45,13 +45,14 @@ export interface TrialBalanceExcelParams {
   data: TrialBalanceData | GeneralLedgerData
   printTitle: string
   printDateRange: string
+  timezone: string
 }
 
 export function buildTrialBalanceWorkbook({
-  data, printTitle, printDateRange,
+  data, printTitle, printDateRange, timezone,
 }: TrialBalanceExcelParams): XLSX.WorkBook {
   const wb  = XLSX.utils.book_new()
-  const now = format(new Date(), 'd MMM yyyy h:mm a')
+  const now = formatInTz(new Date(), timezone, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
 
   const TYPE_LABELS: Record<string, string> = {
     asset: 'Assets', liability: 'Liabilities', equity: 'Equity',

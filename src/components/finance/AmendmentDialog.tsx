@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react'
 import { FilePenLine, AlertTriangle, Send, CheckCircle2, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { cn, todayAU } from '@/lib/utils'
 import {
   Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
@@ -219,7 +219,7 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
               <p className="text-xs text-muted-foreground">Correcting original entry:</p>
               <p className="font-medium font-mono text-xs">{entry.reference}</p>
               <p className="font-medium">{entry.description}</p>
-              <p className="text-xs text-muted-foreground">{format(new Date(entry.date), 'd MMM yyyy')}</p>
+              <p className="text-xs text-muted-foreground">{formatInTz(new Date(entry.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
             </div>
 
             {/* Accounting warning */}

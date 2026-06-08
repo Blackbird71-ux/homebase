@@ -5,8 +5,8 @@ import {
   ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, TrendingDown, DollarSign,
   ReceiptText, List, X, FileOutput,
 } from 'lucide-react'
-import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { formatInTz } from '@/lib/timezone'
 import { PrintButton } from '@/components/print/PrintButton'
 import { formatCurrency } from '@/lib/financeShared'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
@@ -197,7 +197,7 @@ export default function ProfitLossPage() {
             disabled={loading}
           />
           <ExcelButton
-            buildWorkbook={() => buildProfitLossWorkbook({ label, incomeGroups, expenseGroups, totalIncome, totalExpenses, estimatedTax, netProfit })}
+            buildWorkbook={() => buildProfitLossWorkbook({ label, incomeGroups, expenseGroups, totalIncome, totalExpenses, estimatedTax, netProfit, timezone: familyTimezone })}
             filename={`HomeBase - P&L - ${label}.xlsx`}
             disabled={loading}
           />
@@ -274,7 +274,7 @@ export default function ProfitLossPage() {
             <div className="flex items-center gap-2">
               <List className="h-4 w-4 text-primary" />
               <span className="font-semibold text-sm">Ledger — {ledgerLabel}</span>
-              <span className="text-xs text-muted-foreground">({start ? format(start, 'd MMM') : ''} – {end ? format(end, 'd MMM yyyy') : ''})</span>
+              <span className="text-xs text-muted-foreground">({start ? formatInTz(start, familyTimezone, { day: 'numeric', month: 'short' }) : ''} – {end ? formatInTz(end, familyTimezone, { day: 'numeric', month: 'short', year: 'numeric' }) : ''})</span>
             </div>
             <button onClick={() => setLedgerOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
               <X className="h-4 w-4" />
@@ -288,7 +288,7 @@ export default function ProfitLossPage() {
             <div className="space-y-1.5">
               {ledgerTxs.map(t => (
                 <div key={t.id} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                  <span className="text-xs text-muted-foreground w-24 shrink-0">{format(new Date(t.date), 'd MMM yyyy')}</span>
+                  <span className="text-xs text-muted-foreground w-24 shrink-0">{formatInTz(new Date(t.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                   <span className="flex-1 min-w-0 truncate">{t.description ?? t.payee ?? 'Transaction'}</span>
                   {t.category && <span className="text-xs text-muted-foreground shrink-0">{t.category.name}</span>}
                   {t.account  && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{t.account.name}</span>}
@@ -352,7 +352,7 @@ export default function ProfitLossPage() {
                         {item.received ? 'Received' : 'Expected'}
                       </span>
                     )}
-                    {format(new Date(item.date), 'd MMM yyyy')}
+                    {formatInTz(new Date(item.date), familyTimezone, { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
                 </div>
                 <div className="text-right">

@@ -4,7 +4,7 @@ import {
   Clock, CheckCircle2, BookOpen, RotateCcw,
   Send, Pencil, Trash2, Ban, ChevronDown, ChevronRight, FilePenLine,
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { type JournalEntry, TYPE_LABELS, fmt } from './journal-types'
 import { StatusChip } from '@/components/shared/StatusChip'
@@ -68,7 +68,7 @@ export function JournalEntryRow({ entry, isExpanded, posting, onToggle, onPost, 
             {entry.reference && (
               <span className="text-xs font-mono font-medium text-muted-foreground">{entry.reference}</span>
             )}
-            <span className="text-xs text-muted-foreground">{format(new Date(entry.date), 'd MMM yyyy')}</span>
+            <span className="text-xs text-muted-foreground">{formatInTz(new Date(entry.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
             {entry.entity && (
               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium text-white"
                 style={{ backgroundColor: entry.entity.color ?? '#6B7280' }}>

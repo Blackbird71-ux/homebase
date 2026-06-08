@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Ban, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { todayAU } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -62,7 +62,7 @@ export function VoidDialog({ entry, onClose, onSaved }: Props) {
               <p className="text-xs text-muted-foreground mb-0.5">Voiding:</p>
               <p className="font-medium">{entry.reference} — {entry.description}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {format(new Date(entry.date), 'd MMM yyyy')}
+                {formatInTz(new Date(entry.date), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
               </p>
             </div>
 

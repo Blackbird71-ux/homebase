@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHero } from '@/components/shared/PageHero'
-import { format } from 'date-fns'
+import { formatInTz } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { ColorPicker } from '@/components/ui/color-picker'
@@ -190,7 +190,7 @@ export default function GoalsPage() {
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{percentage}% complete</span>
-                  {g.targetDate && <span>By {format(new Date(g.targetDate), 'MMM yyyy')}</span>}
+                  {g.targetDate && <span>By {formatInTz(new Date(g.targetDate), 'UTC', { month: 'short', year: 'numeric' })}</span>}
                 </div>
 
                 {isLinked && (

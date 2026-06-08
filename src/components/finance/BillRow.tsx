@@ -1,6 +1,5 @@
 'use client'
 
-import { format } from 'date-fns'
 import {
   Layers, RefreshCw, Receipt, CheckCircle2, CreditCard, Paperclip, Pencil, Trash2,
   Ban, Clock, X, BookmarkCheck, Plus, Loader2, AlertTriangle,
@@ -300,7 +299,7 @@ export function BillRow({
                 <div key={p.id}
                   className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
                   <span className="text-xs text-muted-foreground w-24 shrink-0">
-                    {format(new Date(p.paymentDate), 'd MMM yyyy')}
+                    {formatInTz(new Date(p.paymentDate), 'UTC', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </span>
                   <span className="font-medium shrink-0">{formatCurrency(p.amount)}</span>
                   {p.glAccount

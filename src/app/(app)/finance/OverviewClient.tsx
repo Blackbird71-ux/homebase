@@ -3,8 +3,8 @@
 import { Plus, TrendingUp, TrendingDown, Wallet, PiggyBank, AlertCircle, CalendarDays, EyeOff, MapPin, ExternalLink, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PageHero } from '@/components/shared/PageHero'
-import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { formatInTz } from '@/lib/timezone'
 import { formatCurrency as formatMoney } from '@/lib/financeShared'
 
 interface SerializedAccount {
@@ -262,7 +262,7 @@ export function OverviewClient({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{t.payee ?? t.description ?? 'Transaction'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {t.category?.name ?? 'Uncategorized'} &middot; {format(new Date(t.date), 'd MMM')}
+                      {t.category?.name ?? 'Uncategorized'} &middot; {formatInTz(new Date(t.date), 'UTC', { day: 'numeric', month: 'short' })}
                       {t.member && <> &middot; {t.member.name}</>}
                       {t.location && <> &middot; {t.location.name}</>}
                     </p>
@@ -300,7 +300,7 @@ export function OverviewClient({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{b.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Due {format(dueDate, 'd MMM')} ({daysUntilDue > 0 ? `${daysUntilDue}d` : 'today'})
+                        Due {formatInTz(dueDate, 'UTC', { day: 'numeric', month: 'short' })} ({daysUntilDue > 0 ? `${daysUntilDue}d` : 'today'})
                         {b.member && <> &middot; {b.member.name}</>}
                         {b.location && <> &middot; {b.location.name}</>}
                       </p>

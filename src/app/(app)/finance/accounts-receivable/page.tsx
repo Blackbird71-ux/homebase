@@ -6,7 +6,6 @@ import {
   CheckCircle2, AlertTriangle, ChevronDown, ChevronRight,
   Banknote, Clock, FileText, Users,
 } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
 import { cn, todayAU } from '@/lib/utils'
 import { formatCurrency } from '@/lib/financeShared'
 import { formatInTz } from '@/lib/timezone'
@@ -139,7 +138,7 @@ export default function AccountsReceivablePage() {
       ) : data.itemCount === 0 && data.glArBalance === 0 && data.difference < 0.01 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center">
           <p className="text-sm text-muted-foreground">
-            No outstanding accounts receivable as at {format(parseISO(data.asAt), 'd MMMM yyyy')}.
+            No outstanding accounts receivable as at {formatInTz(new Date(data.asAt), 'UTC', { day: 'numeric', month: 'long', year: 'numeric' })}.
           </p>
         </div>
       ) : (
