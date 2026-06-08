@@ -23,9 +23,18 @@
 //     overwrote freshly-mutated local state on the next poll/focus — the root cause of
 //     shopping-list and calendar items flickering in/out. See QA.md §12.27.
 //   - Cache names bumped v6→v7 so the stale SWR entries purge on activate.
+// v8 additions:
+//   - WARM_PAGES now covers EVERY primary nav route (was missing /home, /chores,
+//     /finance, /documents, /trips, /wishlists, /maintenance) so the whole app is
+//     available offline, not just six pages.
+//   - RSC navigation handler now falls back to a warmed RSC payload when the live
+//     fetch fails OR returns a 5xx (e.g. a transient SQLite lock under load) — not
+//     only when fully offline. This fixes the "tap Home several times before it
+//     loads" dead-end: a flaky navigation now shows the last-good page immediately.
+//   - Cache names bumped v7→v8 so the expanded warm list rebuilds cleanly on activate.
 
-const SHELL_CACHE = 'homebase-shell-v7';
-const API_CACHE   = 'homebase-api-v7';
+const SHELL_CACHE = 'homebase-shell-v8';
+const API_CACHE   = 'homebase-api-v8';
 const ALL_CACHES  = [SHELL_CACHE, API_CACHE];
 
 const SYNC_TAG = 'homebase-list-sync';
@@ -37,14 +46,24 @@ const PRECACHE_URLS = [
   '/icon-512.png',
 ];
 
-// Pages warmed on activation so they work offline even before first visit
+// Pages warmed on activation so they work offline even before first visit.
+// Covers every primary nav route (see Sidebar.tsx) — not just a handful — so the
+// whole app is reachable offline. Warmed sequentially and best-effort; auth-gated
+// routes simply skip if the warm fetch isn't authenticated yet.
 const WARM_PAGES = [
-  '/meal-plan',
-  '/recipes',
-  '/lists',
+  '/home',
   '/calendar',
-  '/notes',
+  '/chores',
+  '/lists',
+  '/recipes',
+  '/meal-plan',
+  '/finance',
   '/contacts',
+  '/documents',
+  '/trips',
+  '/notes',
+  '/wishlists',
+  '/maintenance',
 ];
 
 // Number of recipe detail pages to warm on activation
@@ -309,11 +328,19 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => null);
 
-        if (fresh) return fresh;
+        // Live payload succeeded — serve it.
+        if (fresh && fresh.ok) return fresh;
 
-        // Offline — return cached RSC payload so the user sees previous data
-        const cached = await cache.match(rscKey);
-        if (cached) return cached;
+        // Live fetch failed (offline) or errored (5xx — e.g. a transient SQLite
+        // lock on a heavy page like /home under load). Prefer a previously-warmed
+        // RSC payload so a flaky navigation shows the last-good page instead of
+        // dead-ending. Redirects/auth (3xx/4xx) are NOT treated as failures —
+        // those fall through to `return fresh` so Next.js handles them.
+        if (!fresh || fresh.status >= 500) {
+          const cached = await cache.match(rscKey);
+          if (cached) return cached;
+        }
+        if (fresh) return fresh;
 
         // Nothing cached — return 503 so Next.js shows its error boundary.
         // DO NOT fall through to offlineNavigationFallback here: serving full-page
@@ -368,10 +395,11 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ── Offline navigation fallback ────────────────────────────────────────────────
-// Priority: exact URL → /meal-plan → /recipes → /offline.html → plain text
+// Priority: exact URL → /home → /meal-plan → /recipes → /offline.html → plain text
 async function offlineNavigationFallback(request) {
   return (
     (await caches.match(request)) ||
+    (await caches.match('/home')) ||
     (await caches.match('/meal-plan')) ||
     (await caches.match('/recipes')) ||
     (await caches.match('/offline.html')) ||

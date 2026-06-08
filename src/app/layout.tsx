@@ -92,6 +92,15 @@ export default async function RootLayout({
               (Chrome Android only — silently ignored on other browsers) */}
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
+            // Ask the browser to keep our cache/SW from being evicted under storage
+            // pressure. Without this, Android/Chromium may purge the warmed cache,
+            // and the app silently stops working offline. Granted automatically for
+            // installed PWAs on Chromium; best-effort elsewhere.
+            if (navigator.storage && navigator.storage.persist) {
+              navigator.storage.persisted().then(function(already) {
+                if (!already) navigator.storage.persist();
+              }).catch(function() {});
+            }
             navigator.serviceWorker.register('/sw.js').then(function(reg) {
               // Idle warm-up: wait 3s then ask SW to warm the cache
               setTimeout(function() {
