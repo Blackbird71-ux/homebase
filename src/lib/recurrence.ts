@@ -98,6 +98,59 @@ export function generateRecurrenceInstances(
   let currentStart = new Date(eventStart)
   let instanceCount = 0
 
+  // ── Fast-forward an open-ended series up to the view window ──────────────────
+  // A series with no COUNT has `maxToGenerate = maxInstances` — a *safety* cap,
+  // not a semantic limit. Stepping from a long-past `eventStart` would spend that
+  // cap (and the `maxIterations` ceiling) just reaching the window, so a series
+  // whose start is more than `maxInstances` occurrences before the window would
+  // exhaust the budget and emit *nothing* — silently dropping real in-window
+  // events (e.g. a DAILY event started >365 days ago). Skip the occurrences that
+  // end before the window so the budget is spent inside it.
+  //
+  // Two exclusions:
+  //  • COUNT: RRULE COUNT counts from occurrence 1, so pre-window occurrences are
+  //    significant (they consume the COUNT). Never fast-forward a COUNT series.
+  //  • A series that ends before the window (recurrenceEndDate < rangeStart) has
+  //    no in-window occurrences; skipping the fast-forward lets the loop's own end
+  //    -date break fire correctly instead of us jumping past the end and emitting
+  //    phantom occurrences. The un-jumped loop reaches 0 cheaply (budget/end-date).
+  if (!count && (!recurrenceEndDate || recurrenceEndDate.getTime() >= rangeStart.getTime())) {
+    const dayMs = 24 * 60 * 60 * 1000
+    if (freq === 'DAILY' || freq === 'WEEKLY') {
+      // DAILY/WEEKLY advance by a fixed calendar stride with no day-of-month
+      // clamping, so the k-th occurrence == addLocalDaysPreservingTime(start,
+      // k*stride): jump in closed form with the same stepper the loop uses, so the
+      // emitted instants are byte-identical. Land at least one stride + the event's
+      // duration before the window, so the loop's own `instanceEnd > rangeStart`
+      // check selects the true first in-window occurrence (covers long events and,
+      // for WEEKLY+BYDAY, the up-to-6-day intra-week spread).
+      const strideDays = (freq === 'WEEKLY' ? 7 : 1) * interval
+      const startDateMs = Date.parse(`${dateStringInTz(eventStart, timezone)}T00:00:00Z`)
+      const rangeStartDateMs = Date.parse(`${dateStringInTz(rangeStart, timezone)}T00:00:00Z`)
+      const durationDays = Math.ceil(duration / dayMs)
+      const skippableDays = Math.floor((rangeStartDateMs - startDateMs) / dayMs) - durationDays - strideDays
+      if (skippableDays > strideDays) {
+        const k = Math.floor(skippableDays / strideDays)
+        currentStart = addLocalDaysPreservingTime(eventStart, k * strideDays, timezone)
+      }
+    } else {
+      // MONTHLY/YEARLY day-of-month can clamp path-dependently (31→28→28…), so the
+      // k-th occurrence has no closed form — step with the real stepper until the
+      // occurrence reaches the window. A realistic start is only a few dozen
+      // periods away; the guard just bounds a pathologically old start. Stepping
+      // (not jumping) is what preserves the running-date clamp the tests pin.
+      let guard = 0
+      while (guard++ < 1000) {
+        if (currentStart.getTime() + duration > rangeStart.getTime()) break
+        const next = freq === 'MONTHLY'
+          ? addLocalMonthsPreservingTime(currentStart, interval, timezone)
+          : addLocalYearsPreservingTime(currentStart, interval, timezone)
+        if (next.getTime() >= rangeEnd.getTime()) break
+        currentStart = next
+      }
+    }
+  }
+
   // Safety: limit iterations to prevent infinite loops
   const maxIterations = Math.min(maxToGenerate * 2, 1000)
   let iterations = 0
@@ -111,6 +164,11 @@ export function generateRecurrenceInstances(
     if (freq === 'WEEKLY' && byDay && byDay.length > 0) {
       // Stop once the whole week has moved past the series end date.
       if (recurrenceEndDate && currentStart.getTime() > recurrenceEndDate.getTime()) break
+
+      // Window guard (same as the non-BYDAY path below): once the week anchor is
+      // at/after rangeEnd, every day this week and later is too, so none can fall
+      // in range. Occurrences only move forward, so it is safe to stop here.
+      if (currentStart.getTime() >= rangeEnd.getTime()) break
 
       // The local calendar date of the current week position and its weekday.
       const weekDateStr = dateStringInTz(currentStart, timezone)
@@ -191,6 +249,15 @@ export function generateRecurrenceInstances(
         currentStart = addLocalYearsPreservingTime(currentStart, interval, timezone)
         break
     }
+
+    // Stop once occurrences advance past the requested window. Occurrences only
+    // move forward in time, so nothing further can fall within [rangeStart,
+    // rangeEnd]. Without this, an open-ended series (no COUNT and no end date)
+    // generates up to `maxInstances` far-future instances per event and discards
+    // nearly all of them — the dominant cost when many recurring events are
+    // expanded (dashboard / calendar / /api/events). Output is unchanged: every
+    // in-window instance is still emitted before the loop stops.
+    if (currentStart.getTime() >= rangeEnd.getTime()) break
   }
 
   return instances

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
-import { getLocalHourMinute, dateStringInTz } from '@/lib/timezone'
+import { getLocalHourMinute, dateStringInTz, localMidnightToUtc } from '@/lib/timezone'
 
 // HomeBase family timezone. Australian DST transitions in 2026 (always a Sunday):
 //   - fall back:    2026-04-05 03:00 AEDT (UTC+11) → 02:00 AEST (UTC+10)
@@ -130,6 +130,112 @@ describe('generateRecurrenceInstances — calendar clamping (matches date-fns ru
     )
     expect(instances.map(i => localDom(i.start))).toEqual([29, 28, 28]) // 2028 leap, 2029/2030 not
     for (const inst of instances) expect(localHour(inst.start)).toBe(9)
+  })
+})
+
+describe('generateRecurrenceInstances — open-ended series stay bounded to the window', () => {
+  // Guards the window-end break: an open-ended series (no COUNT, no end date)
+  // must emit exactly the in-window occurrences — not up to `maxInstances`
+  // far-future ones — and the early stop must not drop any valid instance.
+  it('YEARLY with no COUNT/end date emits only in-window occurrences', () => {
+    // 09:00 Sydney on 1 Jan 2026 (AEDT) = 2025-12-31T22:00:00Z, open-ended yearly.
+    const start = new Date('2025-12-31T22:00:00Z')
+    const end = new Date(start.getTime() + HOUR)
+
+    // A 30-day mid-2026 window contains no Jan-1 occurrence.
+    const none = generateRecurrenceInstances(
+      start, end, 'FREQ=YEARLY', null,
+      new Date('2026-06-09T00:00:00Z'), new Date('2026-07-09T00:00:00Z'), TZ,
+    )
+    expect(none).toHaveLength(0)
+
+    // A window spanning two New Years contains exactly two occurrences.
+    const two = generateRecurrenceInstances(
+      start, end, 'FREQ=YEARLY', null,
+      new Date('2025-12-01T00:00:00Z'), new Date('2027-02-01T00:00:00Z'), TZ,
+    )
+    expect(two).toHaveLength(2)
+    for (const inst of two) expect(localDom(inst.start)).toBe(1)
+  })
+
+  it('open-ended MONTHLY only emits occurrences inside the window', () => {
+    const start = new Date('2026-01-14T22:00:00Z') // 15 Jan 2026 09:00 Sydney
+    const end = new Date(start.getTime() + HOUR)
+    const rangeStart = new Date('2026-06-09T00:00:00Z')
+    const rangeEnd = new Date('2026-07-09T00:00:00Z')
+    const inst = generateRecurrenceInstances(
+      start, end, 'FREQ=MONTHLY', null, rangeStart, rangeEnd, TZ,
+    )
+    expect(inst).toHaveLength(1) // only the 15 Jun occurrence
+    for (const i of inst) {
+      expect(i.start.getTime()).toBeGreaterThanOrEqual(rangeStart.getTime())
+      expect(i.start.getTime()).toBeLessThan(rangeEnd.getTime())
+      expect(localDom(i.start)).toBe(15)
+    }
+  })
+})
+
+describe('generateRecurrenceInstances — open-ended series whose start is far before the window', () => {
+  // Regression for the maxInstances-exhaustion bug: an open-ended (no COUNT, no
+  // end date) series whose start is more than `maxInstances` (365) occurrences
+  // before the view window used to exhaust the safety budget *before* reaching the
+  // window and emit nothing — silently dropping real events. The fast-forward must
+  // jump the cursor to the window so the in-window occurrences are emitted, while
+  // leaving wall-clock, weekday and clamping semantics unchanged.
+  const winStart = localMidnightToUtc('2026-06-09', TZ) // local-midnight bounds → clean counts
+  const winEnd = localMidnightToUtc('2026-07-09', TZ)
+
+  it('DAILY started ~2.4 years before the window still emits every in-window day at 9am', () => {
+    // 09:00 Sydney on 1 Jan 2024 (AEDT) = 2023-12-31T22:00:00Z — ~888 days before the window.
+    const start = new Date('2023-12-31T22:00:00Z')
+    expect(localHour(start)).toBe(9)
+    const end = new Date(start.getTime() + HOUR)
+    const inst = generateRecurrenceInstances(start, end, 'FREQ=DAILY', null, winStart, winEnd, TZ)
+    // 9 Jun..8 Jul 2026 inclusive = 30 days. Before the fix this was 0 (budget exhausted).
+    expect(inst).toHaveLength(30)
+    expect(localDom(inst[0].start)).toBe(9)
+    for (const i of inst) {
+      expect(localHour(i.start)).toBe(9)
+      expect(i.start.getTime()).toBeGreaterThanOrEqual(winStart.getTime())
+      expect(i.start.getTime()).toBeLessThan(winEnd.getTime())
+    }
+  })
+
+  it('WEEKLY started ~2.4 years before the window still emits the correct weekday at 9am', () => {
+    // 1 Jan 2024 was a Monday; 09:00 Sydney = 2023-12-31T22:00:00Z.
+    const start = new Date('2023-12-31T22:00:00Z')
+    expect(localDow(start)).toBe(1) // Monday
+    const end = new Date(start.getTime() + HOUR)
+    const inst = generateRecurrenceInstances(start, end, 'FREQ=WEEKLY', null, winStart, winEnd, TZ)
+    expect(inst).toHaveLength(4) // Mondays 15, 22, 29 Jun and 6 Jul 2026
+    for (const i of inst) {
+      expect(localDow(i.start)).toBe(1)
+      expect(localHour(i.start)).toBe(9)
+    }
+  })
+
+  it('MONTHLY from the 31st keeps the clamped day-of-month after fast-forwarding to the window', () => {
+    // 09:00 Sydney on 31 Jan 2026 (AEDT) = 2026-01-30T22:00:00Z. The running date
+    // clamps Jan31→Feb28 and stays on 28 thereafter, so the June occurrence is 28
+    // (a closed-form month jump would wrongly yield 30/31 — this guards the choice
+    // to *step* MONTHLY/YEARLY in the fast-forward).
+    const start = new Date('2026-01-30T22:00:00Z')
+    expect(localDom(start)).toBe(31)
+    const end = new Date(start.getTime() + HOUR)
+    const inst = generateRecurrenceInstances(start, end, 'FREQ=MONTHLY', null, winStart, winEnd, TZ)
+    expect(inst).toHaveLength(1) // 28 Jun 2026
+    expect(localDom(inst[0].start)).toBe(28)
+    expect(localHour(inst[0].start)).toBe(9)
+  })
+
+  it('does NOT fast-forward a COUNT series: an ended series emits nothing in a later window', () => {
+    // DAILY COUNT=5 from 1 Jan 2026 ends on 5 Jan — a June window must be empty.
+    // (If the fast-forward ignored COUNT it would extend the series and emit June
+    // occurrences.) 09:00 Sydney on 1 Jan 2026 = 2025-12-31T22:00:00Z.
+    const start = new Date('2025-12-31T22:00:00Z')
+    const end = new Date(start.getTime() + HOUR)
+    const inst = generateRecurrenceInstances(start, end, 'FREQ=DAILY;COUNT=5', null, winStart, winEnd, TZ)
+    expect(inst).toHaveLength(0)
   })
 })
 
