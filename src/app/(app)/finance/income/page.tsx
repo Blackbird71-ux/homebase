@@ -604,25 +604,12 @@ export default function IncomePage() {
                   {/* Gross + GL */}
                   <div className="rounded-md border border-border p-3 space-y-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gross Income</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Gross Pay *</label>
-                        <input type="number" step="0.01" value={payslipForm.grossPay}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, grossPay: e.target.value }))}
-                          onFocus={e => e.currentTarget.select()}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Gross Income GL account *</label>
-                        <select value={payslipForm.grossIncomeGlAccountId}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, grossIncomeGlAccountId: e.target.value }))}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account…</option>
-                          {glAccounts.filter(a => a.type === 'income').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Gross Pay *</label>
+                      <input type="number" step="0.01" value={payslipForm.grossPay}
+                        onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, grossPay: e.target.value }))}
+                        onFocus={e => e.currentTarget.select()}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
                     </div>
 
                     {/* Pay components */}
@@ -654,25 +641,12 @@ export default function IncomePage() {
                   {/* PAYG withheld */}
                   <div className="rounded-md border border-border p-3 space-y-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">PAYG Withheld</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground">PAYG withheld amount</label>
-                        <input type="number" step="0.01" value={payslipForm.paygWithheld}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, paygWithheld: e.target.value }))}
-                          onFocus={e => e.currentTarget.select()}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">PAYG GL account (liability / expense)</label>
-                        <select value={payslipForm.paygGlAccountId}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, paygGlAccountId: e.target.value }))}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account…</option>
-                          {glAccounts.filter(a => a.type === 'liability' || a.type === 'expense').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">PAYG withheld amount</label>
+                      <input type="number" step="0.01" value={payslipForm.paygWithheld}
+                        onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, paygWithheld: e.target.value }))}
+                        onFocus={e => e.currentTarget.select()}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
                     </div>
                   </div>
 
@@ -684,7 +658,7 @@ export default function IncomePage() {
                         className="text-xs text-primary hover:underline">+ Add deduction</button>
                     </div>
                     {payslipForm.deductions.map((d, i) => (
-                      <div key={i} className="grid gap-2" style={{ gridTemplateColumns: '1fr 90px 1fr 24px' }}>
+                      <div key={i} className="grid gap-2" style={{ gridTemplateColumns: '1fr 90px 24px' }}>
                         <input placeholder="e.g. Salary Sacrifice" value={d.label}
                           onChange={e => setPayslipForm((p: PayslipFormData) => { const ds = [...p.deductions]; ds[i] = { ...ds[i], label: e.target.value }; return { ...p, deductions: ds } })}
                           className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
@@ -692,14 +666,6 @@ export default function IncomePage() {
                           onChange={e => setPayslipForm((p: PayslipFormData) => { const ds = [...p.deductions]; ds[i] = { ...ds[i], amount: parseFloat(e.target.value) || 0 }; return { ...p, deductions: ds } })}
                           onFocus={e => e.currentTarget.select()}
                           className="rounded-md border border-input bg-background px-2 py-1 text-sm text-right" />
-                        <select value={d.glAccountId ?? ''}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => { const ds = [...p.deductions]; ds[i] = { ...ds[i], glAccountId: e.target.value || null }; return { ...p, deductions: ds } })}
-                          className="rounded-md border border-input bg-background px-2 py-1 text-sm">
-                          <option value="">No GL account</option>
-                          {glAccounts.filter(a => a.type === 'expense' || a.type === 'asset' || a.type === 'liability').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
-                          ))}
-                        </select>
                         <button onClick={() => setPayslipForm((p: PayslipFormData) => ({ ...p, deductions: p.deductions.filter((_, j) => j !== i) }))}
                           className="text-red-500 hover:text-red-600">×</button>
                       </div>
@@ -710,50 +676,24 @@ export default function IncomePage() {
                   <div className="rounded-md border border-border p-3 space-y-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SGC Super (Informational)</p>
                     <p className="text-xs text-muted-foreground/60">Employer SGC is recorded for tax reporting. It doesn&apos;t affect your net pay or the journal balance.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground">SGC amount</label>
-                        <input type="number" step="0.01" value={payslipForm.sgcAmount}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcAmount: e.target.value }))}
-                          onFocus={e => e.currentTarget.select()}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">SGC GL account (optional)</label>
-                        <select value={payslipForm.sgcGlAccountId}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcGlAccountId: e.target.value }))}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account…</option>
-                          {glAccounts.filter(a => a.type === 'asset' || a.type === 'liability').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">SGC amount</label>
+                      <input type="number" step="0.01" value={payslipForm.sgcAmount}
+                        onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcAmount: e.target.value }))}
+                        onFocus={e => e.currentTarget.select()}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
                     </div>
                   </div>
 
                   {/* Net pay + bank GL */}
                   <div className="rounded-md border border-green-500/30 bg-green-500/5 p-3 space-y-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Take-Home</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Net Pay (take-home) *</label>
-                        <input type="number" step="0.01" value={payslipForm.netPay}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, netPay: e.target.value }))}
-                          onFocus={e => e.currentTarget.select()}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Bank / Take-home GL account *</label>
-                        <select value={payslipForm.bankGlAccountId}
-                          onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, bankGlAccountId: e.target.value }))}
-                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                          <option value="">Select GL account…</option>
-                          {glAccounts.filter(a => a.type === 'asset').map(a => (
-                            <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Net Pay (take-home) *</label>
+                      <input type="number" step="0.01" value={payslipForm.netPay}
+                        onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, netPay: e.target.value }))}
+                        onFocus={e => e.currentTarget.select()}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
                     </div>
                     {/* Balance indicator */}
                     {(() => {
@@ -772,6 +712,83 @@ export default function IncomePage() {
                       )
                     })()}
                   </div>
+
+                  {/* Advanced — GL account mapping. Auto-mapped from the payslip on open
+                      (handleMarkReceived); expand to override. Bindings are unchanged —
+                      the journal posts identically: DR Bank + PAYG + Deductions = CR Gross Income. */}
+                  <EditorDisclosure
+                    label="Advanced — GL account mapping"
+                    defaultOpen={!payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId}
+                    hasData={!!payslipForm.grossIncomeGlAccountId || !!payslipForm.bankGlAccountId || !!payslipForm.paygGlAccountId || !!payslipForm.sgcGlAccountId || payslipForm.deductions.some(d => !!d.glAccountId)}
+                  >
+                    <div className="space-y-3 rounded-md border border-border p-3">
+                      <p className="text-xs text-muted-foreground/60">Auto-mapped from the payslip. The journal posts DR Bank + PAYG + Deductions = CR Gross Income — override only if an account is wrong.</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Gross Income GL account *</label>
+                          <select value={payslipForm.grossIncomeGlAccountId}
+                            onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, grossIncomeGlAccountId: e.target.value }))}
+                            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                            <option value="">Select GL account…</option>
+                            {glAccounts.filter(a => a.type === 'income').map(a => (
+                              <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Bank / Take-home GL account *</label>
+                          <select value={payslipForm.bankGlAccountId}
+                            onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, bankGlAccountId: e.target.value }))}
+                            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                            <option value="">Select GL account…</option>
+                            {glAccounts.filter(a => a.type === 'asset').map(a => (
+                              <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">PAYG GL account (liability / expense)</label>
+                          <select value={payslipForm.paygGlAccountId}
+                            onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, paygGlAccountId: e.target.value }))}
+                            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                            <option value="">Select GL account…</option>
+                            {glAccounts.filter(a => a.type === 'liability' || a.type === 'expense').map(a => (
+                              <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">SGC GL account (optional)</label>
+                          <select value={payslipForm.sgcGlAccountId}
+                            onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcGlAccountId: e.target.value }))}
+                            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                            <option value="">Select GL account…</option>
+                            {glAccounts.filter(a => a.type === 'asset' || a.type === 'liability').map(a => (
+                              <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {payslipForm.deductions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-muted-foreground">Per-deduction GL accounts</label>
+                          {payslipForm.deductions.map((d, i) => (
+                            <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                              <span className="text-sm truncate text-muted-foreground">{d.label || `Deduction ${i + 1}`}</span>
+                              <select value={d.glAccountId ?? ''}
+                                onChange={e => setPayslipForm((p: PayslipFormData) => { const ds = [...p.deductions]; ds[i] = { ...ds[i], glAccountId: e.target.value || null }; return { ...p, deductions: ds } })}
+                                className="rounded-md border border-input bg-background px-2 py-1 text-sm">
+                                <option value="">No GL account</option>
+                                {glAccounts.filter(a => a.type === 'expense' || a.type === 'asset' || a.type === 'liability').map(a => (
+                                  <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </EditorDisclosure>
 
                   {/* Notes */}
                   <div>
