@@ -13,6 +13,7 @@ import { formatCurrency, toMonthlyAmount } from '@/lib/financeShared'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { JournalLinesEditor, type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import { EditorDisclosure } from '@/components/finance/EditorDisclosure'
 import { formatInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import Link from 'next/link'
@@ -340,34 +341,41 @@ function EditDialog({
                     {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                   </select>
                 </div>
-                {/* Tax Classification + Category */}
-                <div>
-                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
-                  <select value={form.taxClassification} onChange={e => set('taxClassification', e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">Not classified</option>
-                    {form.kind === 'bill' ? (
-                      <>
-                        <option value="tax_deduction">Tax Deduction</option>
-                        <option value="tax_payment">Tax Payment (PAYG)</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="taxable_income">Taxable Income</option>
-                        <option value="exempt_income">Exempt Income</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">{form.kind === 'bill' ? 'Expense Category (GL)' : 'Income Category (GL)'}</label>
-                  <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">No category</option>
-                    {filteredCats.map(c => (
-                      <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
-                    ))}
-                  </select>
+                {/* Advanced — GL category + tax classification (derived from the journal lines) */}
+                <div className="col-span-2">
+                  <EditorDisclosure label="Advanced" hasData={!!form.categoryId || !!form.taxClassification}>
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="text-xs text-muted-foreground">{form.kind === 'bill' ? 'Expense Category (GL)' : 'Income Category (GL)'}</label>
+                        <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                          <option value="">No category</option>
+                          {filteredCats.map(c => (
+                            <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground/70 mt-0.5">Derived from the first {form.kind === 'bill' ? 'debit' : 'credit'} line. Override here if needed.</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+                        <select value={form.taxClassification} onChange={e => set('taxClassification', e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                          <option value="">Not classified</option>
+                          {form.kind === 'bill' ? (
+                            <>
+                              <option value="tax_deduction">Tax Deduction</option>
+                              <option value="tax_payment">Tax Payment (PAYG)</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="taxable_income">Taxable Income</option>
+                              <option value="exempt_income">Exempt Income</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                  </EditorDisclosure>
                 </div>
                 {/* Notes — full width */}
                 <div className="col-span-2">
@@ -383,7 +391,17 @@ function EditDialog({
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <JournalLinesEditor
                   lines={journalLines}
-                  onChange={setJournalLines}
+                  onChange={lines => {
+                    setJournalLines(lines)
+                    // Derive categoryId from the primary GL line (mirrors the bill/income
+                    // editors and TemplateFormDialog): bill = first debit on an expense
+                    // account; income = first credit on an income account. categoryId
+                    // follows the lines; the Advanced dropdown remains an override.
+                    const primary = form.kind === 'bill'
+                      ? lines.find(l => l.side === 'debit' && glAccounts.some(a => a.id === l.glAccountId && a.type === 'expense'))
+                      : lines.find(l => l.side === 'credit' && glAccounts.some(a => a.id === l.glAccountId && a.type === 'income'))
+                    if (primary?.glAccountId) set('categoryId', primary.glAccountId)
+                  }}
                   glAccounts={glAccounts}
                   expectedTotal={parseFloat(form.amount) || 0}
                   errors={journalErrors}
@@ -413,15 +431,13 @@ function EditDialog({
                     <span className="text-xs text-muted-foreground">days before</span>
                   </div>
                 )}
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" checked={form.invoiceReceived} onChange={e => set('invoiceReceived', e.target.checked)} className="rounded border-input" />
-                  <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
-                </label>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-muted-foreground">Invoice date</label>
-                  <input type="date" value={form.invoiceReceivedDate}
-                    onChange={e => set('invoiceReceivedDate', e.target.value)}
-                    className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                {/* Posting status — read-only. A draft is unposted by definition;
+                    the GL accrual is posted by the Approve action, after which the
+                    item leaves the inbox. invoiceReceived is not editable here (the
+                    drafts PATCH route does not persist it). */}
+                <div className="w-full flex items-center gap-2">
+                  <StatusChip variant="soon" dot>Draft — not posted</StatusChip>
+                  <span className="text-xs text-muted-foreground">Approving this draft posts it to the journals.</span>
                 </div>
               </div>
               <div className={cn('rounded-md border px-3 py-2.5 flex items-start gap-3', form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border')}>
@@ -514,7 +530,7 @@ function DraftRow({
         <button
           onClick={() => handle('approve', onApprove)}
           disabled={busy !== null}
-          title="Approve"
+          title={kind === 'bill' ? 'Approve & post — DR Expense / CR Payable' : 'Approve & post — DR AR/Bank / CR Income'}
           className="rounded-md p-1.5 text-emerald-600 hover:bg-emerald-500/10 disabled:opacity-40 transition-colors"
         >
           {busy === 'approve' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
