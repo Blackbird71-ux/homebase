@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { todayAU } from '@/lib/utils'
 import { todayBoundsInTz, addLocalDays, addMonthsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
 import { toMonthlyAmount } from '@/lib/financeShared'
+import { deriveTaxClassification } from '@/lib/finance-categories'
 import { type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 import { usePaymentHistory } from '@/hooks/finance/usePaymentHistory'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
@@ -54,7 +55,7 @@ export function useBillCrud() {
   const timezone = useFamilyTimezone()
   const [bills, setBills]           = useState<Bill[]>([])
   const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
-  const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null; isTaxPayment?: boolean | null; isTaxDeduction?: boolean | null }[]>([])
   const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
   const [members, setMembers]       = useState<Member[]>([])
   const [locations, setLocations]   = useState<Location[]>([])
@@ -497,7 +498,11 @@ export function useBillCrud() {
   // ── Category / vendor change ─────────────────────────────────────────────────
 
   function handleCategoryChange(categoryId: string) {
-    setForm(p => ({ ...p, categoryId }))
+    // Derive Tax Classification from the picked category's tax flags, but only
+    // fill it when the user hasn't already set one — never overwrite an explicit
+    // choice, never change an existing value on edit. (Spec: derive + override.)
+    const derived = deriveTaxClassification(categories.find(c => c.id === categoryId))
+    setForm(p => ({ ...p, categoryId, taxClassification: p.taxClassification || derived }))
     setJournalLines(lines => {
       const firstDebitIdx = lines.findIndex(l => l.side === 'debit')
       if (firstDebitIdx === -1) return lines

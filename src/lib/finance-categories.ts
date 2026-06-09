@@ -53,3 +53,23 @@ export function sortedCategoryList(cats: FlatCategory[]): FlatCategory[] {
   }
   return result
 }
+
+/**
+ * Derive the bill/income "Tax Classification" value from a category's tax flags.
+ *
+ * Mirrors the two non-empty options the editors offer:
+ *   'tax_payment'   → "Tax Payment (PAYG)"
+ *   'tax_deduction' → "Tax Deduction"
+ * Returns '' ("Not classified") when neither flag is set or no category is given.
+ *
+ * Assumption: the two flags are mutually exclusive in practice; if both are
+ * somehow set, PAYG payment takes precedence over deduction.
+ */
+export function deriveTaxClassification(
+  category: { isTaxPayment?: boolean | null; isTaxDeduction?: boolean | null } | null | undefined,
+): '' | 'tax_payment' | 'tax_deduction' {
+  if (!category) return ''
+  if (category.isTaxPayment) return 'tax_payment'
+  if (category.isTaxDeduction) return 'tax_deduction'
+  return ''
+}

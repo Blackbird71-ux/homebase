@@ -21,9 +21,11 @@ import {
   Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
 } from '@/components/ui/sheet'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
+import { EditorDisclosure } from '@/components/finance/EditorDisclosure'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { useBillCrud, type Bill } from '@/hooks/finance/useBillCrud'
 import { BillRow } from '@/components/finance/BillRow'
+import { StatusChip } from '@/components/shared/StatusChip'
 
 export type { Bill } from '@/hooks/finance/useBillCrud'
 
@@ -202,49 +204,41 @@ export default function BillsPage() {
             <div className="flex flex-col md:flex-row">
               {/* Left panel */}
               <div className="md:w-[38%] px-4 pb-4 space-y-2.5 md:border-r md:border-border">
-              <div className="grid grid-cols-2 gap-2">
-                {/* Name — full width */}
-                <div className="col-span-2">
+                {/* Name */}
+                <div>
                   <label className="text-xs text-muted-foreground">Name *</label>
                   <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                     className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.name && 'border-red-500')} />
                   {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
                 </div>
-                {/* Amount + Frequency (or Assigned To for one-off) */}
-                <div>
-                  <label className="text-xs text-muted-foreground">Amount *</label>
-                  <input type="number" step="0.01" value={form.amount || ''}
-                    onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                    onFocus={e => e.target.select()}
-                    className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.amount && 'border-red-500')} />
-                  {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
+                {/* Amount + Frequency (recurring) */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Amount *</label>
+                    <input type="number" step="0.01" value={form.amount || ''}
+                      onChange={e => setForm(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
+                      onFocus={e => e.target.select()}
+                      className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.amount && 'border-red-500')} />
+                    {errors.amount && <p className="text-xs text-red-500 mt-0.5">{errors.amount}</p>}
+                  </div>
+                  {form.billType === 'recurring' ? (
+                    <div>
+                      <label className="text-xs text-muted-foreground">Frequency *</label>
+                      <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="weekly">Weekly</option>
+                        <option value="fortnightly">Fortnightly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="bimonthly">Bi-Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="halfyearly">Half-Yearly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                    </div>
+                  ) : <div />}
                 </div>
-                {form.billType === 'recurring' ? (
-                  <div>
-                    <label className="text-xs text-muted-foreground">Frequency *</label>
-                    <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
-                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                      <option value="weekly">Weekly</option>
-                      <option value="fortnightly">Fortnightly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="bimonthly">Bi-Monthly</option>
-                      <option value="quarterly">Quarterly</option>
-                      <option value="halfyearly">Half-Yearly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-xs text-muted-foreground">Assigned To</label>
-                    <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
-                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                      <option value="">Shared</option>
-                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                  </div>
-                )}
-                {/* Financial Contact — full width (needs link button) */}
-                <div className="col-span-2">
+                {/* Financial Contact */}
+                <div>
                   <label className="text-xs text-muted-foreground">Financial Contact</label>
                   <div className="flex gap-1">
                     <select value={form.vendorId} onChange={e => handleVendorChange(e.target.value)}
@@ -257,31 +251,45 @@ export default function BillsPage() {
                       title="Manage contacts"><Building2 className="h-3.5 w-3.5" /></Link>
                   </div>
                 </div>
-                {/* Due Date + End Date */}
-                <div>
-                  <label className="text-xs text-muted-foreground">{form.billType === 'one-off' ? 'Due Date *' : 'Next Due Date *'}</label>
-                  <input type="date" value={form.nextDueDate} onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
-                    className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.nextDueDate && 'border-red-500')} />
-                  {errors.nextDueDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextDueDate}</p>}
-                </div>
-                {form.billType === 'recurring' ? (
+                {/* Due Date + End Date (recurring) */}
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">End Date (optional)</label>
-                    <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
-                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    <label className="text-xs text-muted-foreground">{form.billType === 'one-off' ? 'Due Date *' : 'Next Due Date *'}</label>
+                    <input type="date" value={form.nextDueDate} onChange={e => setForm(p => ({ ...p, nextDueDate: e.target.value }))}
+                      className={cn('w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm', errors.nextDueDate && 'border-red-500')} />
+                    {errors.nextDueDate && <p className="text-xs text-red-500 mt-0.5">{errors.nextDueDate}</p>}
                   </div>
-                ) : <div />}
-                {/* Assigned To + Entity (recurring only — one-off has Assigned To above) */}
+                  {form.billType === 'recurring' ? (
+                    <div>
+                      <label className="text-xs text-muted-foreground">End Date (optional)</label>
+                      <input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                    </div>
+                  ) : <div />}
+                </div>
+                {/* Day of Month + Month of Year (recurring only) — derived + editable */}
                 {form.billType === 'recurring' && (
-                  <div>
-                    <label className="text-xs text-muted-foreground">Assigned To</label>
-                    <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
-                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                      <option value="">Shared</option>
-                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Day of Month</label>
+                      <input type="number" min={1} max={31} value={form.dayOfMonth}
+                        onChange={e => setForm(p => ({ ...p, dayOfMonth: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                        placeholder="e.g. 15" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Month (annual)</label>
+                      <select value={form.monthOfYear} onChange={e => setForm(p => ({ ...p, monthOfYear: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">None</option>
+                        {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                          <option key={i+1} value={i+1}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 )}
+                {/* Entity / Fund */}
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
                   <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
@@ -290,38 +298,57 @@ export default function BillsPage() {
                     {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
                   </select>
                 </div>
-                {/* Tax Classification + Expense Category */}
+                {/* Notes */}
                 <div>
-                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
-                  <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">Not classified</option>
-                    <option value="tax_deduction">Tax Deduction</option>
-                    <option value="tax_payment">Tax Payment (PAYG)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Expense Category (GL)</label>
-                  <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                    <option value="">No category</option>
-                    {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
-                      <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* Notes — left column, full width */}
-                <div className="col-span-2">
                   <label className="text-xs text-muted-foreground">Notes</label>
                   <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                     className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
                 </div>
-              </div>
+                {/* Optional details — Assigned To (defaulted; off the primary column) */}
+                <EditorDisclosure label="Optional details" hasData={!!form.memberId}>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Assigned To</label>
+                    <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                      <option value="">Shared</option>
+                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+                </EditorDisclosure>
+                {/* Advanced — GL category + tax classification (derived from the journal lines) */}
+                <EditorDisclosure label="Advanced" hasData={!!form.categoryId || !!form.taxClassification}>
+                  <div className="space-y-2.5">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Expense Category (GL)</label>
+                      <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">No category</option>
+                        {sortedCategoryList(categories.filter(c => c.type === 'expense')).map(c => (
+                          <option key={c.id} value={c.id}>{c.parentId ? '— ' + c.name : c.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground/70 mt-0.5">Derived from the first debit line. Override here if needed.</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3 text-amber-500" /> Tax Classification</label>
+                      <select value={form.taxClassification} onChange={e => setForm(p => ({ ...p, taxClassification: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                        <option value="">Not classified</option>
+                        <option value="tax_deduction">Tax Deduction</option>
+                        <option value="tax_payment">Tax Payment (PAYG)</option>
+                      </select>
+                    </div>
+                  </div>
+                </EditorDisclosure>
               </div>
 
               {/* Right panel */}
               <div className="md:w-[62%] px-4 pb-4 space-y-2.5">
               <div className="rounded-md border border-border bg-muted/20 p-3">
+                <div className="mb-2">
+                  <p className="text-xs font-medium text-foreground">Journal Lines</p>
+                  <p className="text-xs text-muted-foreground/70">Authoritative GL entries. When balanced, these are posted as-is — the Expense Category (under Advanced) is derived from the first debit line.</p>
+                </div>
                 <JournalLinesEditor
                   lines={journalLines}
                   onChange={setJournalLines}
@@ -356,16 +383,28 @@ export default function BillsPage() {
                     <span className="text-xs text-muted-foreground">days before</span>
                   </div>
                 )}
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
-                  <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
-                </label>
+                {/* Posting status — replaces the raw "Posted to journals" checkbox.
+                    Flips the SAME form.invoiceReceived the checkbox drove; handleSave
+                    and GL posting are unchanged — only the widget differs. */}
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-muted-foreground">Invoice date</label>
-                  <input type="date" value={form.invoiceReceivedDate}
-                    onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
-                    className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                  {form.invoiceReceived
+                    ? <StatusChip variant="ok" dot>Posted to journals</StatusChip>
+                    : <StatusChip variant="soon" dot>Draft — not posted</StatusChip>}
+                  <button type="button"
+                    onClick={() => setForm(p => ({ ...p, invoiceReceived: !p.invoiceReceived }))}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    <Receipt className="h-3.5 w-3.5" />
+                    {form.invoiceReceived ? 'Mark as draft (unpost)' : 'Mark invoice received'}
+                  </button>
                 </div>
+                {form.invoiceReceived && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground">Invoice date</label>
+                    <input type="date" value={form.invoiceReceivedDate}
+                      onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
+                      className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                  </div>
+                )}
               </div>
               <div className={cn('rounded-md border px-3 py-2.5 flex items-start gap-3', form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border')}>
                 <input type="checkbox" id="addToBudget" checked={form.addToBudget}

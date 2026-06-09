@@ -122,6 +122,7 @@ export function IncomeRow({
             {!entry.isActive && <StatusChip variant="neutral">INACTIVE</StatusChip>}
             {entry.autoPay && <StatusChip variant="info">DIRECT</StatusChip>}
             {hasRemittance && <StatusChip variant="ok" dot>POSTED</StatusChip>}
+            {!entry.invoiceReceived && !entry.received && <StatusChip variant="soon" dot>DRAFT</StatusChip>}
             {entry.isTaxTracked && (
               <StatusChip variant="soon">
                 TAX TRACKED{entry.taxRate != null && ` ${entry.taxRate}%`}

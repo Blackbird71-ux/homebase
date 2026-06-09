@@ -21,9 +21,11 @@ import {
   Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter,
 } from '@/components/ui/sheet'
 import { JournalLinesEditor } from '@/components/finance/JournalLinesEditor'
+import { EditorDisclosure } from '@/components/finance/EditorDisclosure'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import { useIncomeCrud, type IncomeEntry, type PayslipFormData } from '@/hooks/finance/useIncomeCrud'
 import { IncomeRow } from '@/components/finance/IncomeRow'
+import { StatusChip } from '@/components/shared/StatusChip'
 import { formatInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
@@ -267,16 +269,7 @@ export default function IncomePage() {
                         <option value="yearly">Yearly</option>
                       </select>
                     </div>
-                  ) : (
-                    <div>
-                      <label className="text-xs text-muted-foreground">Assigned To</label>
-                      <select value={form.memberId} onChange={e => setForm(p => ({ ...p, memberId: e.target.value }))}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                        <option value="">Shared</option>
-                        {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                      </select>
-                    </div>
-                  )}
+                  ) : <div />}
                 </div>
 
                 {/* Payer / Source — full width */}
@@ -336,8 +329,25 @@ export default function IncomePage() {
                   </div>
                 )}
 
-                {/* Assigned To + Entity (recurring only — one-off has Assigned To paired with Amount above) */}
-                {form.incomeType === 'recurring' && (
+                {/* Entity / Fund */}
+                <div>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
+                  <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="">Select entity…</option>
+                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
+                  </select>
+                </div>
+
+                {/* Notes — left column, full width */}
+                <div>
+                  <label className="text-xs text-muted-foreground">Notes</label>
+                  <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
+                </div>
+
+                {/* Optional details — Assigned To + Location (defaulted; off the primary column) */}
+                <EditorDisclosure label="Optional details" hasData={!!form.memberId || !!form.locationId}>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs text-muted-foreground">Assigned To</label>
@@ -348,28 +358,6 @@ export default function IncomePage() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
-                      <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                        <option value="">Select entity…</option>
-                        {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {/* Entity for one-off (no Assigned To pairing since it's above) */}
-                {form.incomeType === 'one-off' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="h-3 w-3" /> Entity / Fund</label>
-                      <select value={form.entityId} onChange={e => setForm(p => ({ ...p, entityId: e.target.value }))}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                        <option value="">Select entity…</option>
-                        {entities.map(e => <option key={e.id} value={e.id}>{e.name}{e.isDefault ? ' (default)' : ''}</option>)}
-                      </select>
-                    </div>
-                    <div>
                       <label className="text-xs text-muted-foreground">Location</label>
                       <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
                         className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
@@ -378,36 +366,12 @@ export default function IncomePage() {
                       </select>
                     </div>
                   </div>
-                )}
+                </EditorDisclosure>
 
-                {/* Location + Income Category (recurring) */}
-                {form.incomeType === 'recurring' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs text-muted-foreground">Location</label>
-                      <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                        <option value="">No location</option>
-                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground">Income Category</label>
-                      <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                        <option value="">No category</option>
-                        {sortedCategoryList(categories.filter(c => c.type === 'income')).map(c => (
-                          <option key={c.id} value={c.id}>{c.parentId ? '→ ' + c.name : c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {/* Income Category (one-off — location already paired with entity above) */}
-                {form.incomeType === 'one-off' && (
+                {/* Advanced — Income Category (GL) (derived from the income journal line) */}
+                <EditorDisclosure label="Advanced" hasData={!!form.categoryId}>
                   <div>
-                    <label className="text-xs text-muted-foreground">Income Category</label>
+                    <label className="text-xs text-muted-foreground">Income Category (GL)</label>
                     <select value={form.categoryId} onChange={e => handleCategoryChange(e.target.value)}
                       className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                       <option value="">No category</option>
@@ -415,15 +379,9 @@ export default function IncomePage() {
                         <option key={c.id} value={c.id}>{c.parentId ? '→ ' + c.name : c.name}</option>
                       ))}
                     </select>
+                    <p className="text-xs text-muted-foreground/70 mt-0.5">Derived from the income line. Override here if needed.</p>
                   </div>
-                )}
-
-                {/* Notes — left column, full width */}
-                <div>
-                  <label className="text-xs text-muted-foreground">Notes</label>
-                  <textarea value={form.notes} rows={2} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none" />
-                </div>
+                </EditorDisclosure>
               </div>
 
               {/* Right panel — journal lines + options + tax + notes */}
@@ -432,7 +390,7 @@ export default function IncomePage() {
               <div className="rounded-md border border-border bg-muted/20 p-3">
                 <div className="mb-2">
                   <p className="text-xs font-medium text-foreground">Journal Lines</p>
-                  <p className="text-xs text-muted-foreground/70">Authoritative GL entries. When balanced, these are posted as-is — the Income Category above is ignored.</p>
+                  <p className="text-xs text-muted-foreground/70">Authoritative GL entries. When balanced, these are posted as-is — the Income Category (under Advanced) is derived from the income line.</p>
                 </div>
                 <JournalLinesEditor
                   lines={journalLines}
@@ -469,16 +427,28 @@ export default function IncomePage() {
                     <span className="text-xs text-muted-foreground">days before</span>
                   </div>
                 )}
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" checked={form.invoiceReceived} onChange={e => setForm(p => ({ ...p, invoiceReceived: e.target.checked }))} className="rounded border-input" />
-                  <Receipt className="h-3.5 w-3.5 text-green-500" /> Posted to journals
-                </label>
+                {/* Posting status — replaces the raw "Posted to journals" checkbox.
+                    Flips the SAME form.invoiceReceived the checkbox drove; handleSave
+                    and GL posting are unchanged — only the widget differs. */}
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-muted-foreground">Remittance date</label>
-                  <input type="date" value={form.invoiceReceivedDate}
-                    onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
-                    className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                  {form.invoiceReceived
+                    ? <StatusChip variant="ok" dot>Posted to journals</StatusChip>
+                    : <StatusChip variant="soon" dot>Draft — not posted</StatusChip>}
+                  <button type="button"
+                    onClick={() => setForm(p => ({ ...p, invoiceReceived: !p.invoiceReceived }))}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    <Receipt className="h-3.5 w-3.5" />
+                    {form.invoiceReceived ? 'Mark as draft (unpost)' : 'Mark remittance received'}
+                  </button>
                 </div>
+                {form.invoiceReceived && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground">Remittance date</label>
+                    <input type="date" value={form.invoiceReceivedDate}
+                      onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
+                      className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
