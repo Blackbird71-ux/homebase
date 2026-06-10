@@ -100,9 +100,15 @@ export async function GET(request: NextRequest) {
       vendor:   { select: { id: true, name: true } },
       category: { select: { id: true, name: true, color: true } },
       entity:   { select: { id: true, name: true } },
-      journalEntry: { select: { reference: true } },
+      journalEntry: { select: { reference: true, lines: { select: { amount: true, glAccountId: true, side: true } } } },
       // Fetch payments so we can net off partial payments from the outstanding amount
-      payments: { select: { amount: true, paymentDate: true } },
+      payments: {
+        select: {
+          amount: true,
+          paymentDate: true,
+          journalEntry: { select: { lines: { select: { amount: true, glAccountId: true, side: true } } } },
+        },
+      },
     },
     orderBy: { invoiceReceivedDate: 'asc' },
   })
@@ -148,19 +154,40 @@ export async function GET(request: NextRequest) {
       // invoiceReceivedDate is guaranteed non-null by the query filter above
       const invoiceDate = b.invoiceReceivedDate!
 
-      // Sum only payments made on or before asAt
+      // §12.10 (mirrored from AR): the AP face value is the sum of AP credit
+      // lines on the accrual journal, not bill.amount — they differ when the
+      // promoted journal has a custom split (e.g. CR AP + CR other). Fall back
+      // to bill.amount only when no journal/AP lines exist.
+      const apCreditLines = apCategory
+        ? (b.journalEntry?.lines ?? []).filter(l => l.glAccountId === apCategory.id && l.side === 'credit')
+        : []
+      const accruedAp = apCreditLines.length > 0
+        ? apCreditLines.reduce((s, l) => s + l.amount, 0)
+        : b.amount
+
+      // Sum only payments made on or before asAt. Per payment, use the AP
+      // debit lines on its payment journal (what actually cleared AP); fall
+      // back to the payment amount when no journal/AP lines exist (legacy
+      // no-journal payments).
       const paymentsToDate = (b.payments ?? []).reduce((sum, p) => {
         const pDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate)
-        return pDate <= asAt ? sum + p.amount : sum
+        if (pDate > asAt) return sum
+        const apDebitLines = apCategory
+          ? (p.journalEntry?.lines ?? []).filter(l => l.glAccountId === apCategory.id && l.side === 'debit')
+          : []
+        return sum + (apDebitLines.length > 0
+          ? apDebitLines.reduce((s, l) => s + l.amount, 0)
+          : p.amount)
       }, 0)
 
-      const outstandingAmount = Math.round((b.amount - paymentsToDate) * 100) / 100
+      const outstandingAmount = Math.round((accruedAp - paymentsToDate) * 100) / 100
 
       const days = fullDaysBetween(asAt, invoiceDate)
       return {
         id:               b.id,
         name:             b.name,
-        originalAmount:   b.amount,
+        // AP face value (keeps originalAmount − paymentsToDate = amount)
+        originalAmount:   Math.round(accruedAp * 100) / 100,
         paymentsToDate:   Math.round(paymentsToDate * 100) / 100,
         amount:           outstandingAmount,
         invoiceDate:      invoiceDate.toISOString(),
