@@ -60,7 +60,9 @@ export async function postBillAccrualWithPrepayment(
 
   // When this is a prepayment, debit Prepaid Expenses instead of the expense
   // account (only affects the no-draft fallback — the draft path was already
-  // repointed above).
+  // repointed above). For the no-draft path on a gstApplicable category,
+  // prepayment.gstAmount carries the category-derived GST so the fresh entry
+  // posts DR Prepaid net / DR GST ITC gst / CR AP gross (audit F9).
   const post = await postBillAccrualJournal(tx, {
     familyId: params.familyId,
     description: params.description,
@@ -69,6 +71,9 @@ export async function postBillAccrualWithPrepayment(
     entityId: params.entityId,
     date: params.date,
     draftJournalEntryId: params.draftJournalEntryId,
+    gstSplit: prepayment?.gstItcAccountId
+      ? { gstAmount: prepayment.gstAmount, gstItcAccountId: prepayment.gstItcAccountId }
+      : null,
   })
 
   if (prepayment) {

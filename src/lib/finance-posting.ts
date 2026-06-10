@@ -278,6 +278,14 @@ export interface PostBillAccrualParams {
    * entry is created instead.
    */
   draftJournalEntryId?: string | null
+  /**
+   * Optional GST split for the fresh-entry branches (b)/(c): posts
+   * DR expense (amount − gstAmount) / DR GST ITC gstAmount / CR AP amount
+   * so the ITC is claimed at the tax point (audit F9, no-draft prepayment
+   * path). Ignored when a balanced draft is promoted via branch (a) — the
+   * draft carries its own split.
+   */
+  gstSplit?: { gstAmount: number; gstItcAccountId: string } | null
 }
 
 export async function postBillAccrualJournal(
@@ -292,6 +300,7 @@ export async function postBillAccrualJournal(
     entityId,
     date,
     draftJournalEntryId,
+    gstSplit,
   } = params
 
   if (!(amount > 0)) {
@@ -335,18 +344,26 @@ export async function postBillAccrualJournal(
     // Posted, missing, or single-line — fall through to create fresh entry.
   }
 
-  // ── Branches (b) and (c): create fresh 2-line DR Expense / CR AP ─────────
-  const lines: JournalLine[] = [
-    { glAccountId: expenseGlAccountId, side: 'debit',  amount, description },
-    { glAccountId: apCategoryId,       side: 'credit', amount, description: `AP: ${description}` },
-  ]
+  // ── Branches (b) and (c): create fresh DR Expense / CR AP entry ──────────
+  // With gstSplit, the debit side is split DR expense net + DR GST ITC gst so
+  // the ITC is claimed at the tax point (audit F9); otherwise plain 2-line.
+  const lines: JournalLine[] = gstSplit && gstSplit.gstAmount > 0
+    ? [
+        { glAccountId: expenseGlAccountId,       side: 'debit',  amount: Math.round((amount - gstSplit.gstAmount) * 100) / 100, description },
+        { glAccountId: gstSplit.gstItcAccountId, side: 'debit',  amount: gstSplit.gstAmount, description: `GST ITC: ${description}` },
+        { glAccountId: apCategoryId,             side: 'credit', amount, description: `AP: ${description}` },
+      ]
+    : [
+        { glAccountId: expenseGlAccountId, side: 'debit',  amount, description },
+        { glAccountId: apCategoryId,       side: 'credit', amount, description: `AP: ${description}` },
+      ]
 
   // Validate GL accounts belong to family (apCategoryId is guaranteed by
   // ensureAccountsPayableCategory, but expenseGlAccountId is user-supplied)
   await assertGlAccountsBelongToFamily(tx, lines, familyId)
 
-  // Balance check is mathematically redundant here (both lines are `amount`)
-  // but kept for defence-in-depth — assertBalanced returns the total.
+  // DR must equal CR (a malformed gstSplit would break this) — assertBalanced
+  // throws on imbalance and returns the total.
   assertBalanced(lines)
 
   const reference = await nextJournalReference(familyId)

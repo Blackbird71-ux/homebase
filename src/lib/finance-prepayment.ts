@@ -29,7 +29,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
-import { ensurePrepaidExpensesCategory } from '@/lib/finance-opening-balance'
+import { ensurePrepaidExpensesCategory, ensureGstAccounts, calcGst } from '@/lib/finance-opening-balance'
 import type { TxClient } from '@/lib/finance-posting'
 
 const BALANCE_EPSILON = 0.005
@@ -153,9 +153,11 @@ export function buildAmortisationSchedule(
 // ── Tax-point preparation ────────────────────────────────────────────────────
 
 /**
- * Net (ex-GST) amount to amortise. When a draft journal exists (e.g. a GST-split
- * draft authored at spawn time) the net = sum of its DEBIT lines that hit the
- * bill's expense account. Otherwise (no draft / no GST) net = the gross amount.
+ * Net (ex-GST) amount to amortise for the DRAFT path: net = sum of the draft's
+ * DEBIT lines that hit the bill's expense account (a GST-split draft carries
+ * its ITC line separately). Falls back to gross when the draft is missing or
+ * already posted. The no-draft path derives net from the category's GST
+ * settings in prepareePrepaymentAtTaxPoint instead (audit F9).
  */
 async function computePrepaymentNet(
   tx: TxClient,
@@ -197,6 +199,13 @@ async function redirectDraftExpenseToPrepaid(
 export interface PreparedPrepayment {
   prepaidAccountId: string
   net: number
+  /** GST derived from the expense category for the NO-DRAFT path (audit F9).
+   *  0 when a draft carries its own split or the category is not gstApplicable.
+   *  The caller must post DR ITC gstAmount alongside DR Prepaid net so the ITC
+   *  is claimed in full at the tax point instead of amortised. */
+  gstAmount: number
+  /** GST Input Tax Credits account id — set iff gstAmount > 0. */
+  gstItcAccountId: string | null
   coverageStart: Date
   coverageEnd: Date
   months: number
@@ -239,22 +248,51 @@ export async function prepareePrepaymentAtTaxPoint(
   })
   if (!coverage) return null
 
-  const net = await computePrepaymentNet(
-    tx, params.draftJournalEntryId, params.expenseAccountId, params.grossAmount,
-  )
+  let net: number
+  let gstAmount = 0
+
+  if (params.draftJournalEntryId) {
+    // Draft path: the draft carries its own GST split (if any); net = its
+    // expense debits. Repointing below preserves the draft's ITC line as-is.
+    net = await computePrepaymentNet(
+      tx, params.draftJournalEntryId, params.expenseAccountId, params.grossAmount,
+    )
+  } else {
+    // No-draft path (audit F9): there is no draft to carry a GST split, so
+    // derive it from the expense category. Without this the GST-inclusive
+    // gross is capitalised to Prepaid and amortised — BAS understates ITCs,
+    // which must be claimed in full at the tax point.
+    const category = await tx.financeCategory.findFirst({
+      where: { id: params.expenseAccountId, familyId: params.familyId },
+      select: { gstApplicable: true, gstRate: true },
+    })
+    if (category?.gstApplicable) {
+      const { exGst, gst } = calcGst(params.grossAmount, category.gstRate)
+      net = exGst
+      gstAmount = gst
+    } else {
+      net = params.grossAmount
+    }
+  }
+
   if (!isPrepaymentEligible(net, coverage.months, params.threshold)) return null
 
   const prepaidAccountId = await ensurePrepaidExpensesCategory(params.familyId)
 
+  let gstItcAccountId: string | null = null
   if (params.draftJournalEntryId) {
     await redirectDraftExpenseToPrepaid(
       tx, params.draftJournalEntryId, params.expenseAccountId, prepaidAccountId,
     )
+  } else if (gstAmount > 0) {
+    gstItcAccountId = (await ensureGstAccounts(params.familyId)).itcId
   }
 
   return {
     prepaidAccountId,
     net,
+    gstAmount: gstItcAccountId ? gstAmount : 0,
+    gstItcAccountId,
     coverageStart: coverage.start,
     coverageEnd: coverage.end,
     months: coverage.months,
