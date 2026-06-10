@@ -770,10 +770,15 @@ export async function PATCH(request: NextRequest) {
     const receiptAccountId = receiveToAccountId ?? existing.accountId
     const receiptGlAccountId: string | null = receiveToGlAccountId ?? null
 
-    // The actual amount to post to GL — actual overrides template for this occurrence
-    const actualAmount: number = actualAmountReceivedRaw != null
-      ? parseFloat(actualAmountReceivedRaw)
-      : (existing.amount)
+    // The actual amount to post to GL — actual overrides template for this occurrence.
+    // F10: in payslip mode the cash that hits the bank is netPay (the GL bank
+    // debit), never the template/gross amount — force it server-side so the
+    // cash-basis transaction layer cannot diverge from the GL.
+    const actualAmount: number = payslipData
+      ? payslipData.netPay
+      : actualAmountReceivedRaw != null
+        ? parseFloat(actualAmountReceivedRaw)
+        : (existing.amount)
 
     // Re-read to get latest invoiceTxId (may have just been written above in Stage 1)
     const freshEntry = await prisma.financeIncomeEntry.findFirst({
@@ -783,7 +788,14 @@ export async function PATCH(request: NextRequest) {
 
     // ── Validate payslip GL accounts when payslip mode ──────────────────────
     if (payslipData) {
-      const { grossIncomeGlAccountId, bankGlAccountId, paygGlAccountId, deductions = [] } = payslipData
+      const { grossIncomeGlAccountId, bankGlAccountId, paygGlAccountId, deductions = [], netPay } = payslipData
+      // F10: netPay is forced into actualAmount above, so it must be a valid number
+      if (typeof netPay !== 'number' || !Number.isFinite(netPay) || netPay < 0) {
+        return NextResponse.json(
+          { error: 'Payslip mode requires a numeric net pay.' },
+          { status: 400 }
+        )
+      }
       if (!grossIncomeGlAccountId) {
         return NextResponse.json(
           { error: 'Payslip mode requires a Gross Income GL account (e.g. Gross Wages).' },
