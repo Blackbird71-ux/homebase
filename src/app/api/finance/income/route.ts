@@ -7,7 +7,7 @@ import { spawnNextTemplatedOccurrence } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
-import { postPayslipReceiptJournal, postIncomeReceiptJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError } from '@/lib/finance-posting'
+import { postPayslipReceiptJournal, postIncomeReceiptJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -492,6 +492,26 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: true, voided: true })
   }
 
+  // ── F2: payslip income must never post a Stage-1 accrual ──────────────────
+  // A payslip receipt posts a self-balancing multi-line journal (DR Bank net +
+  // DR PAYG + DR deductions / CR Gross income) with NO Accounts Receivable
+  // line, so a Stage-1 DR AR / CR Income accrual would double-count income on
+  // the P&L and strand AR forever (nothing ever clears it). Reject before any
+  // row update so the entry is never flagged invoiceReceived without GL.
+  // Mirrors approveIncomeDraft, where payslip drafts post nothing at approval.
+  if (invoiceReceived === true && !existing.invoiceReceived) {
+    const payslip = await prisma.financePayslip.findFirst({
+      where: { incomeEntryId: id, familyId: user.familyId },
+      select: { id: true },
+    })
+    if (payslip) {
+      return NextResponse.json(
+        { error: 'Payslip income posts at receipt — invoice-received accrual is not applicable. Mark the payslip as received instead.' },
+        { status: 422 },
+      )
+    }
+  }
+
   const updateData: Record<string, any> = {}
 
   if (received !== undefined) {
@@ -799,22 +819,40 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // Pre-generate journal references outside the transaction so sequential
-    // increments work correctly (inside $transaction uncommitted writes are invisible).
-    //
     // BUG A: payslip MODE A posts a self-balancing multi-line journal with NO AR
     // line. Auto-posting a Stage-1 DR AR / CR Income accrual first would strand AR
     // and double-count income, so payslip receipts must never trigger auto-Stage-1.
     const needsAutoStage1 = !freshEntry?.invoiceReceived && !payslipData
-    const accrualRef  = needsAutoStage1 ? await nextJournalReference(user.familyId) : null
-    // When auto-posting Stage 1 in this same transaction, the accrual is not yet
-    // committed, so nextJournalReference would return the same JE-N for both and
-    // collide on @@unique([familyId, reference]) → P2002 → 422. Force the receipt
-    // ref to accrual+1 (mirrors bills/route.ts nextNJournalReferences and the
-    // markIncomeReceived tool). The non-auto path is unchanged.
-    const receiptRef  = needsAutoStage1
-      ? `JE-${String(parseInt(accrualRef!.match(/^JE-(\d+)$/)?.[1] ?? '0', 10) + 1).padStart(4, '0')}`
-      : await nextJournalReference(user.familyId)
+
+    // F2 defence-in-depth: Stage 1 is now rejected (422) for payslip entries,
+    // but a posted un-reversed accrual can still exist on legacy rows. The
+    // payslip receipt journal carries no AR line, so leaving that accrual in
+    // place strands AR and double-counts income — reverse it inside the
+    // receipt transaction (reversal, not delete, preserves the audit trail).
+    let payslipAccrualToReverse: ReversibleJournalEntry | null = null
+    if (payslipData && freshEntry?.journalEntryId) {
+      const staleAccrual = await prisma.financeJournalEntry.findFirst({
+        where: { id: freshEntry.journalEntryId, familyId: user.familyId },
+        include: { lines: true },
+      })
+      if (staleAccrual?.isPosted && !staleAccrual.isReversed) {
+        payslipAccrualToReverse = staleAccrual
+      }
+    }
+
+    // Pre-generate journal references outside the transaction so sequential
+    // increments work correctly: inside $transaction uncommitted writes are
+    // invisible, so two nextJournalReference calls would return the same JE-N
+    // and collide on @@unique([familyId, reference]) → P2002 → 422.
+    // needsAutoStage1 and payslipAccrualToReverse are mutually exclusive
+    // (the former requires !payslipData, the latter requires payslipData).
+    const preRefs = await nextNJournalReferences(
+      user.familyId,
+      needsAutoStage1 || payslipAccrualToReverse ? 2 : 1,
+    )
+    const accrualRef  = needsAutoStage1 ? preRefs[0] : null
+    const reversalRef = payslipAccrualToReverse ? preRefs[0] : null
+    const receiptRef  = preRefs[preRefs.length - 1]
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -866,6 +904,18 @@ export async function PATCH(request: NextRequest) {
             components = [], deductions = [],
             payPeriodStart, payPeriodEnd, notes: payslipNotes,
           } = payslipData
+
+          // F2: reverse a stale Stage-1 accrual on a legacy payslip entry before
+          // posting the receipt — the payslip journal has no AR line, so the
+          // accrual's DR AR / CR Income would otherwise stay on the books.
+          if (payslipAccrualToReverse) {
+            await reverseJournalEntry(tx, payslipAccrualToReverse, {
+              reference: reversalRef!,
+              date: actualReceivedDate,
+              familyId: user.familyId,
+              description: `Reversal of payslip accrual: ${existing.name}`,
+            })
+          }
 
           const payslipResult = await postPayslipReceiptJournal(tx, {
             familyId: user.familyId,
