@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { getTemplate, computeNextOccurrenceDate, type OccurrenceTemplate } from '@/lib/finance-recurring-template-service'
-import { createOccurrenceDraft, isWithinAdvanceWindow } from '@/lib/finance-draft-spawn-service'
+import { spawnNextTemplatedOccurrence } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
@@ -1009,30 +1009,14 @@ export async function PATCH(request: NextRequest) {
           // path (the identical draft the cron worker produces — clean
           // UTC-midnight dates, draft journal, snapshot hash, payslip). Step
           // cadence from the template schedule, anchored at the current
-          // occurrence date.
+          // occurrence date. Cursor/counter semantics (monotonic advance,
+          // decrement-at-spawn) live in spawnNextTemplatedOccurrence — shared
+          // with the bills payment path.
           const template = await getTemplate(user.familyId, existing.templateId)
           if (template) {
-            const next = computeNextOccurrenceDate(template, utcMidnight(existing.nextExpectedDate))
-            if (next) {
-              const occ = utcMidnight(next)
-              await prisma.$transaction(async (tx) => {
-                // Honour createInAdvanceDays: only materialise the next occurrence
-                // now if it falls within the template's advance window. Otherwise
-                // leave it to the nightly cron (same shared gate), so receiving
-                // income cannot spawn its successor weeks early. The cursor still
-                // advances either way so the cron knows which occurrence to
-                // materialise when it comes due (and idempotently skips it).
-                if (isWithinAdvanceWindow(occ, template.createInAdvanceDays)) {
-                  await createOccurrenceDraft(tx, template, occ, existing.id)
-                }
-                // Advance the template cursor atomically with the spawn so the
-                // cron does not re-spawn the same occurrence.
-                await tx.financeRecurringTemplate.update({
-                  where: { id: template.id },
-                  data: { nextOccurrenceDate: occ },
-                })
-              })
-            }
+            await prisma.$transaction(async (tx) => {
+              await spawnNextTemplatedOccurrence(tx, template, existing.nextExpectedDate, existing.id)
+            })
           }
         } else {
           // ── Template-less recurring entry: no template drives cadence, so

@@ -468,6 +468,85 @@ export async function createOccurrenceDraft(
   return true
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// spawnNextTemplatedOccurrence
+//
+// Shared receipt/payment spawn-next for TEMPLATED bills and income (F1b). The
+// bills "fully paid" path (spawnNextBillOnPayment) and the income PATCH
+// "received" path both call this, so the two spawn-next triggers share one
+// cursor/counter implementation. Computes the occurrence after
+// `currentOccurrence`, materialises it when inside the advance window
+// (idempotently — createOccurrenceDraft), and advances the template cursor.
+//
+// Cursor semantics: NEVER rewind — the nightly cron may already be ahead of
+// this entry's occurrence (it spawned successors the receipt path is only now
+// catching up to), and writing an older date back would make the cron re-walk
+// occurrences it has already counted (double-decrementing
+// occurrencesRemaining). When a draft for the next occurrence exists after
+// this call (created here or pre-existing), the cursor points PAST it
+// (computeNextOccurrenceDate(occ)) so the cron never re-walks a materialised
+// occurrence; when the occurrence is still outside the advance window the
+// cursor points AT it so the cron materialises it when due. Either way the
+// stored cursor is max(current, target).
+//
+// occurrencesRemaining (decrement-at-spawn): the cron decrements once per
+// occurrence it walks. Moving the cursor past an occurrence the cron has NOT
+// yet walked (cursor <= occ) takes that occurrence away from the cron, so this
+// path must perform the cron's decrement for it. If the cursor is already past
+// occ the cron has counted it — do not decrement again. Exactly-once per
+// occurrence across mixed cron/receipt/payment triggers.
+//
+// MUST run inside the caller's $transaction so the spawn + cursor advance
+// commit or roll back with the receipt/payment.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function spawnNextTemplatedOccurrence(
+  tx: Prisma.TransactionClient,
+  template: FullTemplate,
+  currentOccurrence: Date,
+  parentId: string,
+): Promise<void> {
+  const next = computeNextOccurrenceDate(template, utcMidnight(currentOccurrence))
+  if (!next) return
+  const occ = utcMidnight(next)
+
+  // Honour createInAdvanceDays: only materialise now if the occurrence falls
+  // within the template's advance window, else leave it to the nightly cron
+  // (same shared gate), so receiving/paying an entry cannot spawn its
+  // successor weeks early.
+  let draftExists = false
+  if (isWithinAdvanceWindow(occ, template.createInAdvanceDays)) {
+    await createOccurrenceDraft(tx, template, occ, parentId)
+    draftExists = true // created here, or already existed (idempotent skip)
+  }
+
+  // Decrement-at-spawn: we are about to move the cursor past occ without the
+  // cron walking it, so count the occurrence here — unless the cron already
+  // did (cursor already past occ).
+  const cronHasNotCounted = template.nextOccurrenceDate <= occ
+  const newRemaining =
+    draftExists && cronHasNotCounted && template.occurrencesRemaining != null
+      ? template.occurrencesRemaining - 1
+      : template.occurrencesRemaining
+
+  const cursorTarget = draftExists
+    ? (computeNextOccurrenceDate(
+        { ...template, occurrencesRemaining: newRemaining },
+        occ,
+      ) ?? occ)
+    : occ
+
+  await tx.financeRecurringTemplate.update({
+    where: { id: template.id },
+    data: {
+      nextOccurrenceDate:
+        cursorTarget > template.nextOccurrenceDate
+          ? cursorTarget
+          : template.nextOccurrenceDate,
+      occurrencesRemaining: newRemaining,
+    },
+  })
+}
+
 export async function spawnDraftsForTemplate(
   user: SessionUser,
   template: FullTemplate,
@@ -723,27 +802,14 @@ export async function spawnNextBillOnPayment(
     // ── Templated: spawn via the shared clean path (the identical draft the
     // cron worker produces — clean UTC-midnight billDate/nextDueDate, draft
     // journal, snapshot hash). Step cadence from the occurrence/billDate,
-    // NEVER the due date.
+    // NEVER the due date. Cursor/counter semantics (monotonic advance,
+    // decrement-at-spawn) live in spawnNextTemplatedOccurrence — shared with
+    // the income receipt path.
     const template = await getTemplate(familyId, bill.templateId)
     if (template) {
       const currentOccurrence = bill.billDate
         ?? new Date(bill.nextDueDate.getTime() - template.defaultDueOffsetDays * 86_400_000)  // defensive fallback only
-      const next = computeNextOccurrenceDate(template, utcMidnight(currentOccurrence))
-      if (next) {
-        const occ = utcMidnight(next)
-        // Honour createInAdvanceDays: only materialise now if the occurrence
-        // falls within the template's advance window, else leave it to the
-        // nightly cron (same shared gate). The cursor still advances either way
-        // so the cron knows which occurrence is next (idempotently skipping one
-        // we just created).
-        if (isWithinAdvanceWindow(occ, template.createInAdvanceDays)) {
-          await createOccurrenceDraft(tx, template, occ, bill.id)
-        }
-        await tx.financeRecurringTemplate.update({
-          where: { id: template.id },
-          data: { nextOccurrenceDate: occ },
-        })
-      }
+      await spawnNextTemplatedOccurrence(tx, template, currentOccurrence, bill.id)
     }
     return null
   }
