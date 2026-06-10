@@ -205,6 +205,46 @@ export type FullTemplate = NonNullable<
 >
 
 // ─────────────────────────────────────────────────────────────────────────────
+// occurrenceDraftExists
+//
+// The spawn idempotency check (Q1=a): does a non-cancelled draft/entry already
+// exist for (templateId, familyId, calendar-day of the occurrence)? Bills key
+// on billDate (recognition date = occurrence date — NOT nextDueDate, which is
+// occurrence + defaultDueOffsetDays and would fall outside the day window);
+// income keys on nextExpectedDate. createOccurrenceDraft calls this internally
+// so EVERY spawn path (cron worker, bill payment, income receipt) is idempotent
+// by construction: one draft per (template, occurrence-day).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function occurrenceDraftExists(
+  tx: Prisma.TransactionClient,
+  template: FullTemplate,
+  occurrenceDate: Date,
+): Promise<boolean> {
+  const dayStart = calendarDayStart(occurrenceDate)
+  const dayEnd = calendarDayEnd(occurrenceDate)
+  if (template.kind === 'income') {
+    const existing = await tx.financeIncomeEntry.count({
+      where: {
+        templateId: template.id,
+        familyId: template.familyId,
+        status: { not: 'cancelled' },
+        nextExpectedDate: { gte: dayStart, lte: dayEnd },
+      },
+    })
+    return existing > 0
+  }
+  const existing = await tx.financeRecurringBill.count({
+    where: {
+      templateId: template.id,
+      familyId: template.familyId,
+      status: { not: 'cancelled' },
+      billDate: { gte: dayStart, lte: dayEnd },
+    },
+  })
+  return existing > 0
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // createOccurrenceDraft
 //
 // Materialises ONE draft (bill or income) for `template` at `occurrenceDateRaw`,
@@ -216,22 +256,33 @@ export type FullTemplate = NonNullable<
 //
 // The occurrence date is normalised to UTC midnight (the stored convention) so a
 // wall-clock instant can never leak into billDate / nextExpectedDate / the GL
-// accrual date. The caller is responsible for idempotency, schedule bounds
-// (endDate / occurrencesRemaining) and advancing the template cursor.
+// accrual date. Idempotency lives HERE (occurrenceDraftExists): if a draft
+// already exists for the occurrence-day the insert is skipped and `false` is
+// returned, so no caller can ever produce a duplicate draft. The caller remains
+// responsible for schedule bounds (endDate / occurrencesRemaining) and for
+// advancing the template cursor.
 //
 // `parentId` records lineage on the spawned child (parentBillId / parentIncomeId).
 // The cron omits it (children are reconciled via templateId + idempotency); the
 // receipt/payment PATCH paths pass the entry being received/paid so the existing
 // undo-receipt / unpay descendant-cleanup continues to find and remove the child.
+//
+// Returns true when a draft was inserted, false when one already existed.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createOccurrenceDraft(
   tx: Prisma.TransactionClient,
   template: FullTemplate,
   occurrenceDateRaw: Date,
   parentId?: string,
-): Promise<void> {
+): Promise<boolean> {
   const kind: TemplateKind = template.kind === 'income' ? 'income' : 'bill'
   const occurrenceDate = utcMidnight(occurrenceDateRaw)
+
+  // Idempotency (F1a): one draft per (template, occurrence-day), whichever
+  // trigger fires first — cron, bill payment, or income receipt.
+  if (await occurrenceDraftExists(tx, template, occurrenceDate)) {
+    return false
+  }
   const snapshotLines = buildSnapshotLines(template.lines as TemplateLineRow[])
   const headlineAmount = computeHeadlineAmount(template.lines as TemplateLineRow[], kind)
   const snapshotHash = computeSpawnedSnapshotHash({
@@ -413,6 +464,8 @@ export async function createOccurrenceDraft(
       })
     }
   }
+
+  return true
 }
 
 export async function spawnDraftsForTemplate(
@@ -508,49 +561,20 @@ export async function spawnDraftsForTemplate(
 
     const occurrenceDate = cursorDate
 
-    // ── Idempotency (Q1=a): does a draft already exist for this date? ─────
-    const dayStart = calendarDayStart(occurrenceDate)
-    const dayEnd = calendarDayEnd(occurrenceDate)
-
-    let alreadyExists = false
-    if (kind === 'bill') {
-      // Idempotency keyed on billDate (recognition date = occurrence date), not
-      // nextDueDate, because nextDueDate = occurrenceDate + defaultDueOffsetDays
-      // and would fall outside the dayStart/dayEnd window when offset > 0.
-      const existing = await prisma.financeRecurringBill.count({
-        where: {
-          templateId: template.id,
-          familyId: template.familyId,
-          status: { not: 'cancelled' },
-          billDate: { gte: dayStart, lte: dayEnd },
-        },
-      })
-      alreadyExists = existing > 0
-    } else {
-      const existing = await prisma.financeIncomeEntry.count({
-        where: {
-          templateId: template.id,
-          familyId: template.familyId,
-          status: { not: 'cancelled' },
-          nextExpectedDate: { gte: dayStart, lte: dayEnd },
-        },
-      })
-      alreadyExists = existing > 0
-    }
-
-    if (alreadyExists) {
-      result.skippedExisting += 1
-    } else {
-      // ── Insert the draft via the shared helper, atomically ────────────
-      // createOccurrenceDraft is the single source of truth for what a
-      // spawned draft looks like; the income/bill PATCH spawn paths call it
-      // too, so a draft spawned on receipt/payment is identical to this one.
-      // It normalises the occurrence date to UTC midnight internally.
-      await prisma.$transaction(async (tx) => {
-        await createOccurrenceDraft(tx, template, occurrenceDate)
-      })
-
+    // ── Insert the draft via the shared helper, atomically ────────────────
+    // createOccurrenceDraft is the single source of truth for what a spawned
+    // draft looks like AND for idempotency (Q1=a, via occurrenceDraftExists):
+    // it returns false when a non-cancelled draft already exists for this
+    // occurrence-day. The income/bill PATCH spawn paths call it too, so a
+    // draft spawned on receipt/payment is identical to this one. It
+    // normalises the occurrence date to UTC midnight internally.
+    const created = await prisma.$transaction(async (tx) =>
+      createOccurrenceDraft(tx, template, occurrenceDate),
+    )
+    if (created) {
       result.spawned += 1
+    } else {
+      result.skippedExisting += 1
     }
 
     // ── Advance cursor for next iteration ────────────────────────────────
