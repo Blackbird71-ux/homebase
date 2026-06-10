@@ -515,21 +515,31 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     }
   }
 
-  // ── F — Payslip math: gross = net + PAYG + super ────────────────────────────
+  // ── F — Payslip math: gross = net + PAYG + deductions ───────────────────────
+  // SGC is employer super paid ON TOP of gross (memo-only, never a journal
+  // line) and must NOT be in this identity — including it flags correct
+  // payslips as broken (audit F8; QA.md §2.3).
   const payslips = await prisma.financePayslip.findMany({
     where: { familyId },
     select: {
-      id: true, grossPay: true, netPay: true, paygWithheld: true, sgcAmount: true,
+      id: true, grossPay: true, netPay: true, paygWithheld: true, deductions: true,
       incomeEntry: { select: { name: true } },
     },
   })
   for (const p of payslips) {
-    const expected = r2(p.netPay + p.paygWithheld + p.sgcAmount)
+    let deductionsTotal = 0
+    try {
+      const parsed = JSON.parse(p.deductions || '[]') as { amount?: number }[]
+      if (Array.isArray(parsed)) {
+        deductionsTotal = parsed.reduce((s, d) => s + (typeof d?.amount === 'number' ? d.amount : 0), 0)
+      }
+    } catch { /* malformed JSON → treat as no deductions */ }
+    const expected = r2(p.netPay + p.paygWithheld + deductionsTotal)
     if (!approxEq(p.grossPay, expected)) {
       add({
         severity: 'critical', code: 'PAYSLIP_GROSS_MISMATCH', recordType: 'payslip',
         recordId: p.id, label: p.incomeEntry?.name ?? p.id,
-        message: `Gross ${r2(p.grossPay)} ≠ net ${r2(p.netPay)} + PAYG ${r2(p.paygWithheld)} + super ${r2(p.sgcAmount)} (= ${expected}).`,
+        message: `Gross ${r2(p.grossPay)} ≠ net ${r2(p.netPay)} + PAYG ${r2(p.paygWithheld)} + deductions ${r2(deductionsTotal)} (= ${expected}). SGC is memo-only and excluded.`,
       })
     }
   }

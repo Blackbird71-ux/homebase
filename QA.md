@@ -126,11 +126,16 @@ DR  Bank / Cash              $amount
 ```
 DR  Bank / Cash              $netPay
 DR  PAYG Withheld Receivable $paygWithheld
-DR  SGC Superannuation       $sgcAmount   (if applicable)
+DR  <deduction GL account>   $amount      (one line per deduction that has a GL account)
     CR  Gross Wages / Income      $grossPay
 ```
 
-> `netPay + paygWithheld + sgcAmount = grossPay` must hold.
+> `netPay + paygWithheld + sum(GL'd deductions) = grossPay` must hold.
+>
+> **SGC is memo-only and never a journal line.** Employer superannuation (SGC) is
+> paid on top of gross, not withheld from it — including it in the journal or in
+> the gross/net identity would unbalance a correct payslip. `sgcAmount` is stored
+> on `FinancePayslip` for reporting only (audit F8 decision, 10 Jun 2026).
 
 #### Reversal (month-end accrual reversal)
 ```
@@ -261,7 +266,8 @@ Template
         Pre-populates payslip confirmation from entry.payslip (FIXED: was resetting to defaults)
         Calls: POST /api/finance/income/received
         PAYSLIP PATH: calls postPayslipReceiptJournal()
-          Creates: DR Bank (net) + DR PAYG Withheld + DR SGC / CR Gross Income
+          Creates: DR Bank (net) + DR PAYG Withheld + DR GL'd deductions / CR Gross Income
+          (SGC is memo-only — never a journal line; see §2.3)
         SIMPLE PATH: calls postIncomeReceiptJournal()
           Creates: DR Bank / CR AR (or CR Income if no prior accrual)
         Status: awaiting_receipt → received
@@ -271,7 +277,7 @@ Template
 ```
 
 **Key invariants to check after any income-related change:**
-- Payslip: grossPay = netPay + paygWithheld + sgcAmount
+- Payslip: grossPay = netPay + paygWithheld + sum(GL'd deductions) — SGC is memo-only, NOT in this identity
 - Payslip journal: SUM(DR lines) = grossPay; SUM(CR lines) = grossPay
 - Income account balance reflects gross (not net) for payslip entries
 - PAYG Withheld Receivable balance = sum of all withheld tax not yet returned
@@ -354,7 +360,7 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 | **I1** Create one-off income | Finance → Income → Add Income → Save | Income entry created; journal DR AR / CR Income |
 | **I2** Create recurring income | Add Income (recurring) → Save | Entry appears; spawns drafts on schedule |
 | **I3** Mark income received (simple) | Click "Mark Received" → confirm amount → Save | `received=true`; receipt journal: DR Bank / CR AR; AR balance decreases |
-| **I4** Mark income received (payslip) | Click "Mark Received" on payslip entry → confirm gross/net/PAYG | Journal: DR Bank (net) + DR PAYG Withheld + DR SGC / CR Gross Wages; grossPay = sum of DRs |
+| **I4** Mark income received (payslip) | Click "Mark Received" on payslip entry → confirm gross/net/PAYG | Journal: DR Bank (net) + DR PAYG Withheld + DR GL'd deductions / CR Gross Wages; grossPay = sum of DRs; NO SGC line |
 | **I5** Payslip pre-population | Open "Mark Received" on a draft with stored payslip | Form pre-populated from `entry.payslip`; not reset to gross=net defaults |
 | **I6** Income draft approve | Drafts panel → Approve income draft | Status → awaiting_receipt; for payslip: no GL yet (deferred to receipt) |
 | **I7** Template with payslip | Create template with payslipEnabled=true → spawn | Draft created with linked FinancePayslip; payslip fields preserved |
@@ -450,7 +456,8 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 ### 6.5 Payslip-Specific Checks
 
 ```
-[ ] For every FinancePayslip: grossPay = netPay + paygWithheld + sgcAmount (allow ±$0.01 rounding)
+[ ] For every FinancePayslip: grossPay = netPay + paygWithheld + sum(deductions with a GL account)
+    (allow ±$0.01 rounding). sgcAmount is memo-only — employer super on top of gross, NOT in this identity
 [ ] Every posted payslip journal: sum(DR lines) = grossPay; sum(CR lines) = grossPay
 [ ] PAYG Withheld Receivable balance reflects running total of all unrecouped withheld tax
 [ ] No payslip entry where netPay > grossPay (would imply negative PAYG — a data error)
