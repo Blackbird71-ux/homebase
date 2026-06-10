@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
       familyId,
       invoiceReceived: true,
       invoiceReceivedDate: { not: null, lte: asAt },
+      isVoided: false,
       ...(entityId ? { entityId } : {}),
       OR: [
         { paid: false },
@@ -113,6 +114,7 @@ export async function GET(request: NextRequest) {
       familyId,
       invoiceReceived: true,
       invoiceReceivedDate: null,
+      isVoided: false,
       ...(entityId ? { entityId } : {}),
     },
   })
