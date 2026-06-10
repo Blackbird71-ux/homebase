@@ -34,9 +34,9 @@ import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit-log'
 import type { SessionUser } from '@/types'
 import {
-  postBillAccrualJournal,
   postIncomeAccrualJournal,
 } from '@/lib/finance-posting'
+import { postBillAccrualWithPrepayment } from '@/lib/finance-bill-receive'
 import {
   computeSpawnedSnapshotHash,
   type SnapshotLine,
@@ -161,14 +161,21 @@ export async function approveBillDraft(
   }
 
   const post = await prisma.$transaction(async (tx) => {
-    const r = await postBillAccrualJournal(tx, {
+    // Same prepayment gate as direct receive (audit F5): a material prepayment
+    // approved from the Drafts inbox capitalises to Prepaid Expenses and gets
+    // its amortisation schedule, identical to receiving the bill directly.
+    const r = await postBillAccrualWithPrepayment(tx, {
       familyId: user.familyId,
+      billId,
       description: draft.name,
       amount: draft.amount,
       expenseGlAccountId: draft.categoryId!,
       entityId: draft.entityId ?? null,
       date: accrualDate,
       draftJournalEntryId: resolvedJournalEntryId,
+      frequency: draft.frequency,
+      coverageStart: draft.coverageStart,
+      coverageEnd: draft.coverageEnd,
     })
 
     await tx.financeRecurringBill.update({

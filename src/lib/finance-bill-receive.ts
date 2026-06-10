@@ -12,7 +12,7 @@
 // =============================================================================
 
 import type { FinanceRecurringBill, Prisma } from '@prisma/client'
-import { postBillAccrualJournal } from '@/lib/finance-posting'
+import { postBillAccrualJournal, type PostResult } from '@/lib/finance-posting'
 import { prepareePrepaymentAtTaxPoint, createPrepaymentSchedule } from '@/lib/finance-prepayment'
 
 /**
@@ -39,7 +39,7 @@ export async function postBillAccrualWithPrepayment(
     coverageStart: Date | null
     coverageEnd: Date | null
   },
-): Promise<{ journalEntryId: string }> {
+): Promise<PostResult> {
   const family = await tx.family.findUnique({
     where: { id: params.familyId },
     select: { prepaymentThreshold: true },
@@ -61,7 +61,7 @@ export async function postBillAccrualWithPrepayment(
   // When this is a prepayment, debit Prepaid Expenses instead of the expense
   // account (only affects the no-draft fallback — the draft path was already
   // repointed above).
-  const { journalEntryId } = await postBillAccrualJournal(tx, {
+  const post = await postBillAccrualJournal(tx, {
     familyId: params.familyId,
     description: params.description,
     amount: params.amount,
@@ -85,7 +85,7 @@ export async function postBillAccrualWithPrepayment(
     })
   }
 
-  return { journalEntryId }
+  return post
 }
 
 /**
