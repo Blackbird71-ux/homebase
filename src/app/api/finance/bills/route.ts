@@ -7,9 +7,9 @@ import {
   ensureAccountsPayableCategory,
 } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
-import { postBillAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError } from '@/lib/finance-posting'
+import { upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
-import { prepareePrepaymentAtTaxPoint, createPrepaymentSchedule } from '@/lib/finance-prepayment'
+import { receiveBillStage1 } from '@/lib/finance-bill-receive'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -198,60 +198,19 @@ export async function POST(request: NextRequest) {
   }
 
   if (shouldPostInvoice && categoryId) {
-    // Materiality threshold for prepayment capitalisation (configurable per family).
-    const family = await prisma.family.findUnique({
-      where: { id: user.familyId },
-      select: { prepaymentThreshold: true },
-    })
-    const prepaymentThreshold = family?.prepaymentThreshold ?? 300
-
+    // Same Stage-1 sequence as PATCH / PUT via the shared helper (audit F4):
+    // prepayment gate → accrual → amortisation schedule → invoice transaction →
+    // bill flags. Coverage auto-derives from frequency (the create form has no
+    // coverage override yet; edit the bill to set one).
     try {
       await prisma.$transaction(async (tx) => {
-        // Prepayment check (audit Finding F3) — same gate as PATCH STAGE 1. A
-        // bill created already-received must capitalise to Prepaid Expenses if
-        // it is a material prepayment. Coverage auto-derives from frequency
-        // (the create form has no coverage override yet; edit the bill to set one).
-        const prepayment = await prepareePrepaymentAtTaxPoint(tx, {
+        await receiveBillStage1(tx, {
+          bill,
+          invoiceDate,
+          userId: user.id,
           familyId: user.familyId,
-          expenseAccountId: categoryId,
-          grossAmount: parsedAmount,
-          frequency,
-          coverageStart: null,
-          coverageEnd: null,
-          anchorDate: invoiceDate,
-          threshold: prepaymentThreshold,
           draftJournalEntryId: draftJeId,
         })
-
-        const { journalEntryId } = await postBillAccrualJournal(tx, {
-          familyId: user.familyId,
-          description: name,
-          amount: parsedAmount,
-          expenseGlAccountId: prepayment ? prepayment.prepaidAccountId : categoryId,
-          entityId: entityId ?? null,
-          date: invoiceDate,
-          draftJournalEntryId: draftJeId,
-        })
-        if (journalEntryId !== draftJeId) {
-          await tx.financeRecurringBill.update({
-            where: { id: bill.id },
-            data: { journalEntryId },
-          })
-        }
-
-        if (prepayment) {
-          await createPrepaymentSchedule(tx, {
-            familyId: user.familyId,
-            billId: bill.id,
-            prepaidAccountId: prepayment.prepaidAccountId,
-            expenseAccountId: categoryId,
-            description: name,
-            totalNet: prepayment.net,
-            coverageStart: prepayment.coverageStart,
-            coverageEnd: prepayment.coverageEnd,
-            months: prepayment.months,
-          })
-        }
       })
     } catch (err) {
       // GL posting failed — roll back the bill's invoiceReceived status
@@ -370,8 +329,10 @@ export async function PUT(request: NextRequest) {
       ...(vendorId !== undefined && { vendorId: vendorId ?? null }),
       ...(billType !== undefined && { billType }),
       ...(recurrenceInterval !== undefined && { recurrenceInterval: recurrenceInterval ?? null }),
-      ...(invoiceReceived !== undefined && { invoiceReceived }),
-      ...(invoiceReceivedDate !== undefined && { invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null }),
+      // On a false→true transition the flags are set ATOMICALLY with the GL
+      // write in Step 2 below (audit F4) — never here, ahead of the journal.
+      ...(invoiceReceived !== undefined && !invoiceReceivedTransition && { invoiceReceived }),
+      ...(invoiceReceivedDate !== undefined && !invoiceReceivedTransition && { invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null }),
       ...(paid !== undefined && { paid }),
       ...(paidDate !== undefined && { paidDate: paidDate ? new Date(paidDate) : null }),
       ...(entityId !== undefined && { entityId: entityId ?? null }),
@@ -424,31 +385,36 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  // Step 2: promote to posted if the user is transitioning false->true.
-  // postBillAccrualJournal finds the just-written balanced draft via workingJeId and
-  // promotes it as-is, preserving any custom split (e.g. 3-line GST entry).
+  // Step 2: promote to posted if the user is transitioning false->true, via the
+  // shared Stage-1 helper (audit F4): prepayment gate → accrual (promoting the
+  // just-written balanced draft via workingJeId, preserving any custom split) →
+  // amortisation schedule → invoice transaction → bill flags, all in ONE
+  // $transaction. On failure the row stays un-received and the user gets a 422
+  // (previously: flags were set ahead of a non-atomic post with a swallowed catch).
   if (invoiceReceivedTransition) {
+    const effectiveCategoryId = categoryId !== undefined ? (categoryId ?? null) : existing.categoryId
+    if (!effectiveCategoryId) {
+      return NextResponse.json(
+        { error: 'Bill must have an expense category before posting' },
+        { status: 422 },
+      )
+    }
     try {
-      const effectiveCategoryId = categoryId ?? existing.categoryId
-      if (effectiveCategoryId) {
-        const { journalEntryId } = await postBillAccrualJournal(prisma, {
+      await prisma.$transaction(async (tx) => {
+        await receiveBillStage1(tx, {
+          bill,
+          invoiceDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
+          userId: user.id,
           familyId: user.familyId,
-          description: name ?? existing.name,
-          amount: amount !== undefined ? parseFloat(amount) : existing.amount,
-          expenseGlAccountId: effectiveCategoryId,
-          entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
-          date: invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
           draftJournalEntryId: workingJeId,
         })
-        if (journalEntryId !== workingJeId) {
-          await prisma.financeRecurringBill.update({
-            where: { id: bill.id },
-            data: { journalEntryId },
-          })
-        }
-      }
+      })
     } catch (err) {
-      console.error('[bills PUT] Failed to post GL on invoiceReceived transition:', err)
+      console.error('[bills PUT] ATOMIC invoice posting failed:', err)
+      return NextResponse.json(
+        { error: 'Failed to post bill to General Ledger. The bill remains un-received; please retry.' },
+        { status: 422 },
+      )
     }
   }
 
@@ -806,100 +772,16 @@ export async function PATCH(request: NextRequest) {
 
     const invoiceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
 
-    // Materiality threshold for prepayment capitalisation (configurable per family).
-    const family = await prisma.family.findUnique({
-      where: { id: user.familyId },
-      select: { prepaymentThreshold: true },
-    })
-    const prepaymentThreshold = family?.prepaymentThreshold ?? 300
-
-    // ATOMIC: post to GL + update bill status together
+    // ATOMIC: prepayment gate → GL accrual → amortisation schedule → invoice
+    // transaction → bill status, all together via the shared Stage-1 helper
+    // (audit F4 — same sequence as POST create-as-received and PUT transition).
     try {
       await prisma.$transaction(async (tx) => {
-        // 0. Prepayment check (audit Finding F3). If this is a material prepayment
-        //    (net ≥ threshold AND coverage spans >1 month), capitalise to Prepaid
-        //    Expenses at the tax point: repoint the draft's expense debit line(s)
-        //    to Prepaid (preserving the GST split) and pre-compute the amortisation
-        //    schedule. Returns null when not eligible.
-        const prepayment = await prepareePrepaymentAtTaxPoint(tx, {
+        await receiveBillStage1(tx, {
+          bill: existing,
+          invoiceDate,
+          userId: user.id,
           familyId: user.familyId,
-          expenseAccountId: existing.categoryId!,
-          grossAmount: existing.amount,
-          frequency: existing.frequency,
-          coverageStart: existing.coverageStart,
-          coverageEnd: existing.coverageEnd,
-          anchorDate: invoiceDate,
-          threshold: prepaymentThreshold,
-          draftJournalEntryId: existing.journalEntryId ?? null,
-        })
-
-        // 1. Post the journal entry to the GL via the canonical shared helper.
-        //    Promotes a balanced draft (preserving GST splits) if one exists;
-        //    falls back to a fresh DR <account> / CR AP entry otherwise. When this
-        //    is a prepayment, debit Prepaid Expenses instead of the expense account
-        //    (this only affects the no-draft fallback — the draft path was already
-        //    repointed above).
-        const { journalEntryId } = await postBillAccrualJournal(tx, {
-          familyId: user.familyId,
-          description: existing.name,
-          amount: existing.amount,
-          expenseGlAccountId: prepayment ? prepayment.prepaidAccountId : existing.categoryId!,
-          entityId: existing.entityId,
-          date: invoiceDate,
-          draftJournalEntryId: existing.journalEntryId ?? null,
-        })
-
-        // 1b. Persist the amortisation schedule once the accrual is posted. The
-        //     expense account is the bill's original category; Prepaid is released
-        //     to it one period at a time via the manual "Post" action.
-        if (prepayment) {
-          await createPrepaymentSchedule(tx, {
-            familyId: user.familyId,
-            billId: existing.id,
-            prepaidAccountId: prepayment.prepaidAccountId,
-            expenseAccountId: existing.categoryId!,
-            description: existing.name,
-            totalNet: prepayment.net,
-            coverageStart: prepayment.coverageStart,
-            coverageEnd: prepayment.coverageEnd,
-            months: prepayment.months,
-          })
-        }
-
-        // 2. Create the invoice transaction record (for backward compat tracking)
-        const invoiceTx = await tx.financeTransaction.create({
-          data: {
-            type: 'expense',
-            amount: existing.amount,
-            accountId: existing.accountId,
-            categoryId: existing.categoryId,
-            description: `${existing.name} (invoice received)`,
-            date: invoiceDate,
-            isRecurring: existing.billType !== 'one-off',
-            recurringBillId: existing.id,
-            vendorId: existing.vendorId,
-            notes: existing.notes,
-            memberId: existing.memberId,
-            locationId: existing.locationId,
-            isCleared: false,
-            isTransfer: false,
-            createdBy: user.id,
-            familyId: user.familyId,
-            entityId: existing.entityId,
-            taxClassification: existing.taxClassification ?? null,
-          },
-        })
-
-        // 3. Update bill status ATOMICALLY with the GL write
-        await tx.financeRecurringBill.update({
-          where: { id },
-          data: {
-            invoiceReceived: true,
-            invoiceReceivedDate: invoiceDate,
-            invoiceTxId: invoiceTx.id,
-            transactionId: invoiceTx.id,
-            journalEntryId,
-          },
         })
       })
     } catch (err) {
