@@ -127,17 +127,36 @@ export async function recordBillPayment(
     select: { id: true },
   })
 
-  // 4. Update bill paid status
-  //    paidDate = payment date when fully paid, else cleared
+  // 4. Mark the Stage-1 invoice transaction cleared (when one exists) — same
+  //    register semantics no matter which path settled the bill. The bank GL /
+  //    account are only stamped when actually known (not when using suspense).
+  if (bill.invoiceTxId) {
+    await tx.financeTransaction.updateMany({
+      where: { id: bill.invoiceTxId, familyId },
+      data: {
+        isCleared: true,
+        reconciledDate: actualDate,
+        ...(glAccountId ? { glAccountId } : {}),
+        ...(paymentAccountId ? { accountId: paymentAccountId } : {}),
+      },
+    })
+  }
+
+  // 5. Update bill paid status
+  //    paidDate = payment date when fully paid, else cleared.
+  //    status advances to its terminal 'paid' value on full settlement (BUG D)
+  //    and paymentTxId links the latest payment transaction.
   await tx.financeRecurringBill.update({
     where: { id: bill.id },
     data: {
       paid: isFullyPaid,
       paidDate: isFullyPaid ? actualDate : null,
+      paymentTxId: paymentTx.id,
+      ...(isFullyPaid ? { status: 'paid' } : {}),
     },
   })
 
-  // 5. Spawn next occurrence for recurring bills when fully paid, via the
+  // 6. Spawn next occurrence for recurring bills when fully paid, via the
   //    shared spawn helper — the SAME one the bills PATCH "Mark Paid" path uses
   //    — so the successor is identical no matter which path settled the bill
   //    (status='draft', templated-aware, strict-next cadence).

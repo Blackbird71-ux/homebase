@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { spawnNextBillOnPayment, copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
+import { copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 import {
-  ensureAccountsPayableCategory,
+  ensureUndepositedFundsCategory,
 } from '@/lib/finance-opening-balance'
-import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
+import { nextNJournalReferences } from '@/lib/finance-journal-ref'
 import { upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 import { receiveBillStage1 } from '@/lib/finance-bill-receive'
+import { recordBillPayment } from '@/lib/finance-bill-payment'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -809,157 +810,43 @@ export async function PATCH(request: NextRequest) {
     const priorPaid = (existing.payments ?? []).reduce((s, p) => s + p.amount, 0)
     const isFullyPaid = (priorPaid + payAmount) >= existing.amount - 0.005
 
+    // Resolve the credit-side GL account: bank when supplied, otherwise the
+    // Undeposited Funds suspense account (audit F6 — a no-bank payment must
+    // still post a journal and clear AP; the user allocates the bank when
+    // deposited). Mirrors the payments POST route.
+    const creditGlAccountId: string = bankGlAccountId
+      ? bankGlAccountId
+      : await ensureUndepositedFundsCategory(user.familyId)
+    const usingSuspense = !bankGlAccountId
+
     let spawnedBillId: string | null = null
     let spawnedBillDueDate: Date | null = null
 
     try {
       await prisma.$transaction(async (tx) => {
-        const apCategoryId = await ensureAccountsPayableCategory(user.familyId)
-
-        // ── GL-FIRST payment journal logic ────────────────────────────────────
-        //
-        // Two accounting paths depending on whether the bill was accrued first:
-        //
-        // PATH A — Invoice was posted first (invoiceReceived=true):
-        //   Stage 1 created: DR Expense / CR AP  (liability recognised)
-        //   Stage 2 clears:  DR AP     / CR Bank  (liability settled)
-        //   Net effect:      DR Expense / CR Bank  ✓ expense hits P&L via stage 1
-        //
-        // PATH B — Direct payment, no prior accrual (invoiceReceived=false):
-        //   No stage 1 journal exists — AP was never credited.
-        //   Wrong:  DR AP / CR Bank  → debits a liability that was never created;
-        //           expense never reaches P&L (the original bug).
-        //   Correct: DR Expense / CR Bank → single combined journal; expense hits
-        //            P&L immediately and the GL remains balanced.
-        //
-        // We detect the path via existing.invoiceReceived rather than checking
-        // whether a journal entry physically exists — invoiceReceived is the
-        // canonical flag for "stage 1 has been committed".
-        const wasAccrued = existing.invoiceReceived === true
-        const expenseCategoryId = existing.categoryId  // may be null — handled below
-
-        // Create payment GL journal — only if we have a bank GL account to credit
-        let paymentJournalId: string | null = null
-        if (bankGlAccountId) {
-          const reference = await nextJournalReference(user.familyId)
-
-          let journalLines: { glAccountId: string; side: 'debit' | 'credit'; amount: number; description: string }[]
-
-          if (wasAccrued) {
-            // PATH A: clear the AP liability that stage 1 created
-            journalLines = [
-              { glAccountId: apCategoryId,    side: 'debit',  amount: payAmount, description: `Clear AP: ${existing.name}` },
-              { glAccountId: bankGlAccountId, side: 'credit', amount: payAmount, description: `Payment: ${existing.name}` },
-            ]
-          } else if (expenseCategoryId) {
-            // PATH B: no prior accrual — combine expense recognition + cash outflow
-            // into a single journal so the expense hits the P&L in the same period
-            // as the cash payment. This is correct cash-basis accounting.
-            journalLines = [
-              { glAccountId: expenseCategoryId, side: 'debit',  amount: payAmount, description: existing.name },
-              { glAccountId: bankGlAccountId,   side: 'credit', amount: payAmount, description: `Payment: ${existing.name}` },
-            ]
-          } else {
-            // No expense category and no prior accrual — fall back to AP debit so
-            // the journal at least balances, but flag it (same behaviour as before
-            // for uncategorised bills; user should assign a category).
-            journalLines = [
-              { glAccountId: apCategoryId,    side: 'debit',  amount: payAmount, description: `Payment (no category): ${existing.name}` },
-              { glAccountId: bankGlAccountId, side: 'credit', amount: payAmount, description: `Payment: ${existing.name}` },
-            ]
-          }
-
-          const paymentJe = await tx.financeJournalEntry.create({
-            data: {
-              reference,
-              date: actualPaidDate,
-              description: `Payment: ${existing.name}`,
-              type: 'auto_transaction',
-              isPosted: true,
-              entityId: existing.entityId ?? null,
-              familyId: user.familyId,
-              lines: { create: journalLines },
-            },
-            select: { id: true },
-          })
-          paymentJournalId = paymentJe.id
-        }
-
-        // Create payment transaction
-        const paymentTx = await tx.financeTransaction.create({
-          data: {
-            type: 'expense',
-            amount: payAmount,
-            accountId: paymentAccountId,
-            categoryId: existing.categoryId,
-            description: `${existing.name} (payment)`,
-            date: actualPaidDate,
-            isRecurring: false,
-            recurringBillId: existing.id,
-            vendorId: existing.vendorId,
-            notes: existing.notes,
-            memberId: existing.memberId,
-            locationId: existing.locationId,
-            isCleared: true,
-            reconciledDate: actualPaidDate,
-            isTransfer: false,
-            glAccountId: bankGlAccountId,
-            createdBy: user.id,
-            familyId: user.familyId,
-            entityId: existing.entityId,
-            taxClassification: existing.taxClassification ?? null,
-          },
+        // GL journal (paths A–D) + payment transaction + FinanceBillPayment +
+        // invoice-tx clearing + bill status + next-occurrence spawn, all via
+        // the shared helper (audit F6; AGENTS.md Finance rules 1 & 3):
+        //   PATH A: DR AP      / CR Bank              (accrued, bank known)
+        //   PATH B: DR AP      / CR Undeposited Funds (accrued, no bank)
+        //   PATH C: DR Expense / CR Bank              (direct pay, bank known)
+        //   PATH D: DR Expense / CR Undeposited Funds (direct pay, no bank)
+        const { spawned } = await recordBillPayment(tx, {
+          bill: existing,
+          amount: payAmount,
+          actualDate: actualPaidDate,
+          creditGlAccountId,
+          usingSuspense,
+          glAccountId: bankGlAccountId,
+          paymentAccountId: paymentAccountId ?? null,
+          notes: null,
+          isFullyPaid,
+          userId: user.id,
+          familyId: user.familyId,
         })
-
-        // Create FinanceBillPayment record — journalEntryId links the GL entry for reversal on undo
-        await tx.financeBillPayment.create({
-          data: {
-            billId: id,
-            amount: payAmount,
-            paymentDate: actualPaidDate,
-            accountId: paymentAccountId ?? null,
-            glAccountId: bankGlAccountId,
-            transactionId: paymentTx.id,
-            journalEntryId: paymentJournalId,
-            createdBy: user.id,
-            familyId: user.familyId,
-          },
-        })
-
-        // Mark invoice tx as cleared
-        const invoiceTxId: string | null = existing.invoiceTxId ?? null
-        if (invoiceTxId) {
-          await tx.financeTransaction.updateMany({
-            where: { id: invoiceTxId, familyId: user.familyId },
-            data: {
-              isCleared: true,
-              reconciledDate: actualPaidDate,
-              ...(bankGlAccountId ? { glAccountId: bankGlAccountId } : {}),
-              ...(paymentAccountId ? { accountId: paymentAccountId } : {}),
-            },
-          })
-        }
-
-        // Update bill status atomically — only mark paid when fully covered.
-        // BUG D: advance the lifecycle status to its terminal 'paid' value so it
-        // no longer sits in 'awaiting_payment' once fully covered.
-        await tx.financeRecurringBill.update({
-          where: { id },
-          data: isFullyPaid
-            ? { paid: true, paidDate: actualPaidDate, paymentTxId: paymentTx.id, status: 'paid' }
-            : { paymentTxId: paymentTx.id },
-        })
-
-        // Spawn next occurrence INSIDE the transaction — prevents disappearing bill bug
-        // where the payment commits but the spawn fails (Bug 2 fix). Shared with the
-        // payments/AI path (recordBillPayment) so the successor is identical no matter
-        // which path settled the bill (templated-aware, status='draft', strict-next).
-        if (existing.billType !== 'one-off' && isFullyPaid) {
-          const spawnedInfo = await spawnNextBillOnPayment(tx, existing, user.familyId)
-          if (spawnedInfo) {
-            spawnedBillId = spawnedInfo.spawnedBillId
-            spawnedBillDueDate = spawnedInfo.spawnedBillDueDate
-          }
+        if (spawned) {
+          spawnedBillId = spawned.spawnedBillId
+          spawnedBillDueDate = spawned.spawnedBillDueDate
         }
       })
     } catch (err) {
