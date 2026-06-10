@@ -30,6 +30,7 @@
 import { prisma } from '@/lib/prisma'
 import { nextJournalReference } from '@/lib/finance-journal-ref'
 import { ensurePrepaidExpensesCategory, ensureGstAccounts, calcGst } from '@/lib/finance-opening-balance'
+import { addUtcMonths } from '@/lib/timezone'
 import type { TxClient } from '@/lib/finance-posting'
 
 const BALANCE_EPSILON = 0.005
@@ -39,14 +40,6 @@ const BALANCE_EPSILON = 0.005
 /** Floor a date to UTC midnight of its calendar day. */
 function utcMidnight(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
-}
-
-/** Add n calendar months in UTC. Day-of-month is preserved where valid; the
- *  rare day-overflow (e.g. 31 Jan + 1 month) rolls forward per JS Date and is
- *  acceptable for amortisation accounting dates (coverage usually starts on the
- *  1st). */
-function addMonthsUtc(d: Date, n: number): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()))
 }
 
 /** Number of whole calendar months a [start, end] span touches, inclusive.
@@ -111,8 +104,10 @@ export function resolveCoverage(params: {
   const months = frequencyToMonths(frequency)
   if (months == null) return null
   const start = utcMidnight(anchorDate)
-  // Inclusive end = last day before the next period begins.
-  const end = new Date(addMonthsUtc(start, months).getTime() - 86_400_000)
+  // Inclusive end = last day before the next period begins. addUtcMonths clamps
+  // day-overflow (31 Jan + 1 month → 28/29 Feb), so a coverage anchored on the
+  // 29th–31st cannot skip a month (audit F11).
+  const end = new Date(addUtcMonths(start, months).getTime() - 86_400_000)
   return { start, end, months }
 }
 
@@ -145,7 +140,7 @@ export function buildAmortisationSchedule(
   const lines: ScheduleLineSpec[] = []
   for (let i = 0; i < months; i++) {
     const amount = i < months - 1 ? per : round2(net - per * (months - 1))
-    lines.push({ periodIndex: i, periodDate: addMonthsUtc(coverageStart, i), amount })
+    lines.push({ periodIndex: i, periodDate: addUtcMonths(coverageStart, i), amount })
   }
   return lines
 }
