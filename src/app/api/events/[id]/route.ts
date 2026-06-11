@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
+import { addRecurrenceException } from '@/lib/recurrence'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { getAccessToken, deleteGoogleEvent } from '@/lib/google-calendar'
 import { createAuditLog } from '@/lib/audit-log'
@@ -106,6 +107,7 @@ export async function DELETE(
   const { id } = await params
   const { searchParams } = new URL(req.url)
   const deleteAll = searchParams.get('all') === 'true'
+  const occurrence = searchParams.get('occurrence')
 
   const existing = await prisma.event.findFirst({
     where: { id, familyId: user.familyId },
@@ -114,6 +116,36 @@ export async function DELETE(
 
   if (existing.isPersonal && existing.createdBy !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // "Delete this event only" on a recurring series: record the occurrence as
+  // an exception instead of deleting the series row (which would delete every
+  // occurrence — virtual instances all point at the one row). Replay-safe:
+  // addRecurrenceException dedupes, so a re-sent offline delete is a no-op.
+  if (!deleteAll && existing.isRecurring && occurrence) {
+    const occurrenceDate = new Date(occurrence)
+    if (isNaN(occurrenceDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid occurrence date' }, { status: 400 })
+    }
+
+    await prisma.event.update({
+      where: { id },
+      data: { recurrenceExceptions: addRecurrenceException(existing.recurrenceExceptions, occurrenceDate) },
+    })
+
+    void createAuditLog(
+      user,
+      'update',
+      'event',
+      id,
+      `Deleted occurrence ${occurrenceDate.toISOString()} of recurring event "${existing.title}"`,
+      { occurrence: occurrenceDate.toISOString() }
+    )
+
+    // Notify calendar views to refresh
+    dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
+
+    return NextResponse.json({ success: true })
   }
 
   if (deleteAll && existing.isRecurring) {

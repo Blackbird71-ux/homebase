@@ -279,12 +279,21 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       const eventId = getEventId(event)
       if (!eventId) return
 
+      // "Delete this event only" on a recurring series: the server records the
+      // occurrence (this instance's start) as an exception — deleting the row
+      // would delete the whole series, since every instance is a virtual
+      // expansion of the one row.
+      const wholeSeriesDelete = deleteAll && isRecurringEvent(event)
+      const occurrence = !wholeSeriesDelete && isRecurringEvent(event)
+        ? new Date(event.start).toISOString()
+        : undefined
+
       // Offline, or an offline-created event not yet on the server: queue the
       // delete (tmp_ events just cancel their queued POST/PUTs).
       if (!navigator.onLine || isTempEventId(eventId)) {
         try {
-          await queueEventDelete(eventId, deleteAll && isRecurringEvent(event))
-          onOfflineChange?.({ type: 'delete', id: eventId })
+          await queueEventDelete(eventId, wholeSeriesDelete, occurrence)
+          onOfflineChange?.({ type: 'delete', id: eventId, occurrence })
           toast.success('Saved offline — will sync when you reconnect')
           setLoading(false)
           setShowDeleteConfirm(false)
@@ -297,9 +306,11 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
         return
       }
 
-      const url = deleteAll && isRecurringEvent(event)
+      const url = wholeSeriesDelete
         ? `/api/events/${eventId}?all=true`
-        : `/api/events/${eventId}`
+        : occurrence
+          ? `/api/events/${eventId}?occurrence=${encodeURIComponent(occurrence)}`
+          : `/api/events/${eventId}`
       const res = await fetch(url, { method: 'DELETE' })
       setLoading(false)
       if (!res.ok) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateRecurrenceInstances } from '@/lib/recurrence'
+import { generateRecurrenceInstances, addRecurrenceException } from '@/lib/recurrence'
 import { getLocalHourMinute, dateStringInTz, localMidnightToUtc } from '@/lib/timezone'
 
 // HomeBase family timezone. Australian DST transitions in 2026 (always a Sunday):
@@ -255,5 +255,49 @@ describe('generateRecurrenceInstances — baseline (no DST involved)', () => {
       expect(localHour(inst.start)).toBe(9)
       expect(inst.end.getTime() - inst.start.getTime()).toBe(90 * 60 * 1000) // duration preserved
     }
+  })
+})
+
+describe('generateRecurrenceInstances — recurrenceExceptions (single-occurrence delete)', () => {
+  // 09:00 Sydney on 1 Jun 2026 (AEST) = 2026-05-31T23:00:00Z
+  const start = new Date('2026-05-31T23:00:00Z')
+  const end = new Date(start.getTime() + HOUR)
+  const winStart = new Date('2026-05-01T00:00:00Z')
+  const winEnd = new Date('2026-07-01T00:00:00Z')
+
+  it('omits an excluded occurrence but keeps the rest of the series', () => {
+    // Exclude 3 Jun (= start + 2 days, same instant as the generator emits)
+    const excluded = new Date('2026-06-02T23:00:00Z')
+    const instances = generateRecurrenceInstances(
+      start, end, 'FREQ=DAILY;COUNT=5', null, winStart, winEnd, TZ,
+      JSON.stringify([excluded.toISOString()]),
+    )
+    expect(instances.map(i => localDom(i.start))).toEqual([1, 2, 4, 5]) // COUNT slot consumed, not shifted
+  })
+
+  it('omits an excluded occurrence on the WEEKLY BYDAY path', () => {
+    // Weekly Mon+Wed from Mon 1 Jun 2026; exclude Wed 10 Jun (09:00 = 2026-06-09T23:00:00Z)
+    const instances = generateRecurrenceInstances(
+      start, end, 'FREQ=WEEKLY;BYDAY=MO,WE', new Date('2026-06-15T00:00:00Z'), winStart, winEnd, TZ,
+      JSON.stringify(['2026-06-09T23:00:00Z']),
+    )
+    expect(instances.map(i => localDom(i.start))).toEqual([1, 3, 8, 15])
+  })
+
+  it('ignores malformed exceptions JSON instead of hiding occurrences', () => {
+    const instances = generateRecurrenceInstances(
+      start, end, 'FREQ=DAILY;COUNT=3', null, winStart, winEnd, TZ, 'not-json{',
+    )
+    expect(instances).toHaveLength(3)
+  })
+
+  it('addRecurrenceException appends, normalizes, and dedupes', () => {
+    const occ = new Date('2026-06-02T23:00:00Z')
+    const once = addRecurrenceException(null, occ)
+    expect(JSON.parse(once)).toEqual(['2026-06-02T23:00:00.000Z'])
+    const twice = addRecurrenceException(once, occ) // offline replay of the same delete
+    expect(JSON.parse(twice)).toEqual(['2026-06-02T23:00:00.000Z'])
+    const other = addRecurrenceException(twice, new Date('2026-06-03T23:00:00Z'))
+    expect(JSON.parse(other)).toEqual(['2026-06-02T23:00:00.000Z', '2026-06-03T23:00:00.000Z'])
   })
 })

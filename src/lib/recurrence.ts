@@ -66,7 +66,41 @@ function byDayToDayOfWeek(byDay: string): number {
 }
 
 /**
+ * Parse the Event.recurrenceExceptions JSON column (array of occurrence-start
+ * ISO strings) into a set of epoch-ms instants for exact matching. Malformed
+ * JSON or entries are ignored — an unreadable exception must never hide or
+ * duplicate occurrences.
+ */
+export function parseRecurrenceExceptions(json: string | null | undefined): Set<number> {
+  const result = new Set<number>()
+  if (!json) return result
+  try {
+    const arr = JSON.parse(json)
+    if (Array.isArray(arr)) {
+      for (const entry of arr) {
+        const ms = new Date(entry).getTime()
+        if (!isNaN(ms)) result.add(ms)
+      }
+    }
+  } catch { /* ignore malformed JSON */ }
+  return result
+}
+
+/**
+ * Return the recurrenceExceptions JSON with `occurrence` appended (normalized
+ * to ISO, deduplicated) — the single place that knows the column's format.
+ */
+export function addRecurrenceException(json: string | null, occurrence: Date): string {
+  const existing = parseRecurrenceExceptions(json)
+  existing.add(occurrence.getTime())
+  return JSON.stringify([...existing].sort((a, b) => a - b).map(ms => new Date(ms).toISOString()))
+}
+
+/**
  * Generate recurrence instances for a recurring event within a given date range.
+ * Occurrences whose start matches an entry in `recurrenceExceptions` (the
+ * Event column — single-occurrence deletes) are omitted; like RFC 5545 EXDATE,
+ * an excluded occurrence still consumes its COUNT slot.
  */
 export function generateRecurrenceInstances(
   eventStart: Date,
@@ -76,10 +110,13 @@ export function generateRecurrenceInstances(
   rangeStart: Date,
   rangeEnd: Date,
   timezone: string,
+  recurrenceExceptions: string | null = null,
   maxInstances = 365
 ): RecurrenceInstance[] {
   const parsed = parseRRule(recurrenceRule)
   if (!parsed) return []
+
+  const exceptions = parseRecurrenceExceptions(recurrenceExceptions)
 
   const { freq, interval, byDay, count } = parsed
   const duration = eventEnd.getTime() - eventStart.getTime()
@@ -194,7 +231,11 @@ export function generateRecurrenceInstances(
         if (recurrenceEndDate && instanceStart.getTime() > recurrenceEndDate.getTime()) continue
 
         // Check if this instance is within the requested view range
-        if (instanceEnd.getTime() > rangeStart.getTime() && instanceStart.getTime() < rangeEnd.getTime()) {
+        if (
+          instanceEnd.getTime() > rangeStart.getTime() &&
+          instanceStart.getTime() < rangeEnd.getTime() &&
+          !exceptions.has(instanceStart.getTime())
+        ) {
           instances.push({
             start: instanceStart,
             end: instanceEnd,
@@ -217,7 +258,11 @@ export function generateRecurrenceInstances(
     const instanceEnd = new Date(currentStart.getTime() + duration)
 
     // Check if this instance is within range
-    if (instanceEnd.getTime() > rangeStart.getTime() && currentStart.getTime() < rangeEnd.getTime()) {
+    if (
+      instanceEnd.getTime() > rangeStart.getTime() &&
+      currentStart.getTime() < rangeEnd.getTime() &&
+      !exceptions.has(currentStart.getTime())
+    ) {
       instances.push({
         start: new Date(currentStart),
         end: instanceEnd,

@@ -15,10 +15,14 @@
  *   flusher's idMap rewrites it to the real id once the POST has synced
  *   (queuedAt ordering guarantees the POST replays first).
  *
- * - Delete: DELETE /api/events/[id] (+ ?all=true for a recurring series),
- *   fixed per-event id. The route 404s if the event is already gone, which
- *   the flusher drops as resolved. Deleting a tmp_ event just cancels its
- *   queued POST and any follow-up PUTs — it was never on the server.
+ * - Delete: DELETE /api/events/[id] (+ ?all=true for a recurring series, or
+ *   ?occurrence=ISO to remove one occurrence of a series), fixed per-event id
+ *   (per-occurrence for occurrence deletes, so deleting two occurrences
+ *   offline doesn't collapse to one). The route 404s if the event is already
+ *   gone, which the flusher drops as resolved; occurrence deletes append to
+ *   the series' exception list, which dedupes, so replay is idempotent.
+ *   Deleting a tmp_ event just cancels its queued POST and any follow-up
+ *   PUTs — it was never on the server.
  */
 import {
   queueOfflineMutation,
@@ -44,12 +48,13 @@ export function isTempEventId(id: string): boolean {
 export type OfflineEventOp =
   | { type: 'create'; event: CalendarEvent }
   | { type: 'update'; id: string; patch: Partial<CalendarEvent> }
-  | { type: 'delete'; id: string }
+  | { type: 'delete'; id: string; occurrence?: string }
 
 /**
  * Pure overlay of pending offline ops onto server-fetched events, in order.
  * Update/delete match by id or seriesId — edits and deletes target the series
  * row, mirroring the server (recurring instances are virtual expansions).
+ * A delete with `occurrence` removes only the matching instance of the series.
  */
 export function applyOfflineEventOps(
   events: CalendarEvent[],
@@ -62,6 +67,11 @@ export function applyOfflineEventOps(
     } else if (op.type === 'update') {
       result = result.map(e =>
         e.id === op.id || e.seriesId === op.id ? { ...e, ...op.patch } : e,
+      )
+    } else if (op.occurrence) {
+      const occurrenceMs = new Date(op.occurrence).getTime()
+      result = result.filter(e =>
+        !((e.id === op.id || e.seriesId === op.id) && new Date(e.start).getTime() === occurrenceMs),
       )
     } else {
       result = result.filter(e => e.id !== op.id && e.seriesId !== op.id)
@@ -103,18 +113,29 @@ export async function queueEventUpdate(
 /**
  * Queue an event delete. For offline-created events (tmp_ id) there is
  * nothing on the server — cancel the queued POST and any follow-up PUTs.
+ * `occurrence` (instance start ISO) deletes one occurrence of a recurring
+ * series; without it a recurring series is deleted whole only when `all`.
  */
-export async function queueEventDelete(eventId: string, all: boolean): Promise<void> {
+export async function queueEventDelete(
+  eventId: string,
+  all: boolean,
+  occurrence?: string,
+): Promise<void> {
   if (isTempEventId(eventId)) {
     try { await removeMutationsByTempId(eventId) } catch { /* IndexedDB unavailable */ }
     await broadcastQueueCount()
     return
   }
+  const suffix = all
+    ? '?all=true'
+    : occurrence
+      ? `?occurrence=${encodeURIComponent(occurrence)}`
+      : ''
   await queueOfflineMutation({
-    id: `event_del_${eventId}`,
+    id: occurrence && !all ? `event_del_${eventId}_${occurrence}` : `event_del_${eventId}`,
     listId: CALENDAR_SCOPE,
     queuedAt: Date.now(),
-    endpoint: `/api/events/${eventId}${all ? '?all=true' : ''}`,
+    endpoint: `/api/events/${eventId}${suffix}`,
     method: 'DELETE',
   })
 }

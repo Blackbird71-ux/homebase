@@ -55,7 +55,8 @@ export async function GET(req: Request) {
         event.recurrenceEndDate,
         rangeStart,
         rangeEnd,
-        user.timezone ?? 'UTC'
+        user.timezone ?? 'UTC',
+        event.recurrenceExceptions
       )
 
       // Map instances to event-like objects

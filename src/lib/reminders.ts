@@ -200,7 +200,8 @@ export async function processEventReminders(): Promise<number> {
         event.recurrenceEndDate,
         windowStart,
         windowEnd,
-        event.family.timezone ?? 'UTC'
+        event.family.timezone ?? 'UTC',
+        event.recurrenceExceptions
       )
       instancesToCheck = instances.map(i => i.start)
     } else {

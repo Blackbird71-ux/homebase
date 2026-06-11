@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
         ],
       },
       orderBy: { start: 'asc' },
-      select: { id: true, title: true, start: true, end: true, color: true, isRecurring: true, recurrenceRule: true, recurrenceEndDate: true },
+      select: { id: true, title: true, start: true, end: true, color: true, isRecurring: true, recurrenceRule: true, recurrenceEndDate: true, recurrenceExceptions: true },
     }),
     // Weekly summary: meals this week (scoped to 7/14/30 days)
     prisma.mealPlan.findMany({
@@ -238,7 +238,7 @@ export async function GET(request: NextRequest) {
   const expandedWeekEvents = (() => {
     const result = weekEvents.flatMap(e => {
       if (e.isRecurring && e.recurrenceRule) {
-        return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, weekStart, weekEndDate, timezone)
+        return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, weekStart, weekEndDate, timezone, e.recurrenceExceptions)
           .map(inst => ({ ...e, start: inst.start, end: inst.end }))
       }
       return [e]
@@ -288,7 +288,7 @@ export async function GET(request: NextRequest) {
       const windowEnd = new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000)
       const expanded = upcomingEvents.flatMap(e => {
         if (e.isRecurring && e.recurrenceRule) {
-          return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, todayStart, windowEnd, timezone)
+          return generateRecurrenceInstances(e.start, e.end, e.recurrenceRule, e.recurrenceEndDate, todayStart, windowEnd, timezone, e.recurrenceExceptions)
             .map(inst => ({ ...e, start: inst.start, end: inst.end }))
         }
         return [e]
