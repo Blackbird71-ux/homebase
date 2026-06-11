@@ -266,6 +266,26 @@ Next.js renders pages on the server first. `sessionStorage`, `localStorage`, `wi
 
 ---
 
+# API route security — every route guards itself
+
+The app stores sensitive financial and personal data. There is **no `middleware.ts`** — nothing protects a route except the code inside it. A route without an auth check is publicly reachable by anyone on the network. (Audited app-wide 12 Jun 2026; keep it that way.)
+
+## Rules
+
+1. **Every API route starts with an auth check.** Call `auth()` directly and return `NextResponse.json({ error: 'Unauthorized' }, { status: 401 })` if there is no session (never `requireSession()`/`requireAdmin()` in routes — see SSR safety rule 3).
+2. **Admin endpoints need a second check:** `user.role !== 'admin'` → 403. Cross-family admin endpoints use `requireSystemAdmin()` from `src/lib/auth-helpers.ts` (re-reads `isSystemAdmin` from the DB).
+3. **Every query is scoped to `user.familyId`.** Fetching a record by ID without `familyId` in the `where` is an IDOR bug — one family can read another's data by guessing IDs. Use `findFirst({ where: { id, familyId } })`, never bare `findUnique({ where: { id } })`.
+4. **New public (unauthenticated) routes require explicit user sign-off.** The only legitimate ones: NextAuth, register, password/PIN reset (token-gated), health, VAPID public key, public theme, image cache, and the signed-token email `complete` link. Anything else must be guarded.
+5. **Unauthenticated endpoints must not disclose infrastructure** — no file paths, DB details, versions, or raw error messages (e.g. `/api/health` returns status + timestamp only).
+6. **Token-guarded break-glass endpoints (e.g. `admin/reset-password`) must be rate-limited and logged.** Use `checkRateLimit` from `src/lib/rate-limit.ts`, log every attempt with IP, and alert the admin (email) on first exceedance per window.
+7. **After adding or touching routes, sweep for unguarded ones:**
+   ```
+   rg --files-without-match "auth\(\)|requireSystemAdmin|ADMIN_RESET_TOKEN" -g "route.ts" src/app/api
+   ```
+   Every hit must be on the known-public list in rule 4 — anything else is a missing guard.
+
+---
+
 # Regression Prevention
 
 See `QA.md` in the project root for:
