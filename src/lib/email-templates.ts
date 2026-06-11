@@ -257,3 +257,26 @@ export function recipeShareHtml(recipe: {
   `
   return baseLayout(`Recipe: ${recipe.title}`, body)
 }
+
+export function securityAlertHtml(opts: {
+  ip: string
+  attempts: number
+  windowMinutes: number
+}): string {
+  const body = `
+    <h2 style="margin:0 0 16px;color:#dc2626;font-size:20px">Security alert: password reset attempts blocked</h2>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px">
+      The admin password-reset endpoint received more than ${opts.attempts} attempts within
+      ${opts.windowMinutes} minutes and further attempts from this address are now being blocked.
+    </p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:16px;margin-bottom:24px">
+      <p style="margin:0;color:#1e293b;font-size:14px"><strong>IP address:</strong> ${opts.ip}</p>
+      <p style="margin:8px 0 0;color:#1e293b;font-size:14px"><strong>Endpoint:</strong> /api/admin/reset-password</p>
+    </div>
+    <p style="margin:0;color:#475569;font-size:14px">
+      If this wasn't you, check the admin logs in HomeBase for the full attempt history and
+      consider rotating the ADMIN_RESET_TOKEN secret.
+    </p>
+  `
+  return baseLayout('Security alert', body)
+}
