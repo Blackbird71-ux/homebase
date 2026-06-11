@@ -86,7 +86,9 @@ function buildPersonTax(
   )
   const glWageLines   = glIncomeLines.filter(l => matchGlLabel(l, /salary|wages/i))
   const glFrankLines  = glIncomeLines.filter(l => matchGlLabel(l, /franking|input credit/i))
-  const glOtherInc    = glIncomeLines.filter(l => !matchGlLabel(l, /salary|wages|franking|input credit/i))
+  // SGC income lines are employer super (not taxable income for the individual)
+  // — they feed the informational glSgc row below, never taxable income.
+  const glOtherInc    = glIncomeLines.filter(l => !matchGlLabel(l, /salary|wages|franking|input credit|sgc|employer.*super/i))
 
   const glWages    = glWageLines.reduce((s, l) => s + l.amount, 0)
   const glFranking = glFrankLines.reduce((s, l) => s + l.amount, 0)

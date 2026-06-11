@@ -42,6 +42,7 @@ export interface PayslipFormData {
   paygGlAccountId: string
   sgcAmount: string
   sgcGlAccountId: string
+  sgcIncomeGlAccountId: string
   components: PayslipComponent[]
   deductions: PayslipDeduction[]
   notes: string
@@ -58,6 +59,7 @@ export interface StoredPayslip {
   bankGlAccountId: string | null
   paygGlAccountId: string | null
   sgcGlAccountId: string | null
+  sgcIncomeGlAccountId: string | null
   components: string  // JSON
   deductions: string  // JSON
   payPeriodStart: string | null
@@ -126,7 +128,7 @@ export function useIncomeCrud() {
     grossPay: '', netPay: '',
     grossIncomeGlAccountId: '', bankGlAccountId: '',
     paygWithheld: '', paygGlAccountId: '',
-    sgcAmount: '', sgcGlAccountId: '',
+    sgcAmount: '', sgcGlAccountId: '', sgcIncomeGlAccountId: '',
     components: [], deductions: [], notes: '',
   })
   const [dateRange, setDateRange]     = useState<'14' | '30' | 'quarter' | '12months'>(() => {
@@ -578,6 +580,7 @@ export function useIncomeCrud() {
         paygGlAccountId:        ps.paygGlAccountId        ?? '',
         sgcAmount:              ps.sgcAmount.toFixed(2),
         sgcGlAccountId:         ps.sgcGlAccountId         ?? '',
+        sgcIncomeGlAccountId:   ps.sgcIncomeGlAccountId   ?? '',
         components,
         deductions,
         notes: ps.notes ?? '',
@@ -593,7 +596,7 @@ export function useIncomeCrud() {
         grossIncomeGlAccountId: entry.category?.id ?? '',
         bankGlAccountId: '',
         paygWithheld: '0', paygGlAccountId: '',
-        sgcAmount: '0', sgcGlAccountId: '',
+        sgcAmount: '0', sgcGlAccountId: '', sgcIncomeGlAccountId: '',
         components: [], deductions: [], notes: '',
       })
     }
@@ -622,6 +625,7 @@ export function useIncomeCrud() {
         paygGlAccountId:        payslipForm.paygGlAccountId || null,
         sgcAmount:              parseFloat(payslipForm.sgcAmount) || 0,
         sgcGlAccountId:         payslipForm.sgcGlAccountId || null,
+        sgcIncomeGlAccountId:   payslipForm.sgcIncomeGlAccountId || null,
         components:             payslipForm.components,
         deductions:             payslipForm.deductions,
         payPeriodStart:         payslipForm.payPeriodStart || null,

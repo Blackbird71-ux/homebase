@@ -912,7 +912,7 @@ export async function PATCH(request: NextRequest) {
           const {
             grossPay, netPay, grossIncomeGlAccountId, bankGlAccountId,
             paygWithheld = 0, paygGlAccountId,
-            sgcAmount = 0, sgcGlAccountId,
+            sgcAmount = 0, sgcGlAccountId, sgcIncomeGlAccountId,
             components = [], deductions = [],
             payPeriodStart, payPeriodEnd, notes: payslipNotes,
           } = payslipData
@@ -938,6 +938,9 @@ export async function PATCH(request: NextRequest) {
             bankGlAccountId,
             paygWithheld,
             paygGlAccountId,
+            sgcAmount,
+            sgcGlAccountId,
+            sgcIncomeGlAccountId,
             deductions: (deductions as { label: string; amount: number; glAccountId?: string | null }[]),
             entityId: existing.entityId ?? null,
             memberId: existing.memberId ?? null,
@@ -960,6 +963,7 @@ export async function PATCH(request: NextRequest) {
               paygGlAccountId: paygGlAccountId ?? null,
               sgcAmount,
               sgcGlAccountId: sgcGlAccountId ?? null,
+              sgcIncomeGlAccountId: sgcIncomeGlAccountId ?? null,
               components: JSON.stringify(components),
               deductions: JSON.stringify(deductions),
               payPeriodStart: payPeriodStart ? new Date(payPeriodStart) : null,

@@ -364,6 +364,7 @@ export interface CreateTemplateInput {
   paygGlAccountId?: string | null
   sgcAmount?: number | null
   sgcGlAccountId?: string | null
+  sgcIncomeGlAccountId?: string | null
   payslipComponents?: unknown
   payslipDeductions?: unknown
 
@@ -512,6 +513,7 @@ export async function createTemplate(
       input.bankGlAccountId,
       input.paygGlAccountId,
       input.sgcGlAccountId,
+      input.sgcIncomeGlAccountId,
     ].filter((v): v is string => !!v)
     if (payslipGlIds.length > 0) {
       const validPayslipGls = await prisma.financeCategory.findMany({
@@ -580,6 +582,7 @@ export async function createTemplate(
         paygGlAccountId: input.paygGlAccountId ?? null,
         sgcAmount: input.sgcAmount ?? null,
         sgcGlAccountId: input.sgcGlAccountId ?? null,
+        sgcIncomeGlAccountId: input.sgcIncomeGlAccountId ?? null,
         payslipComponents: input.payslipComponents != null ? JSON.stringify(input.payslipComponents) : null,
         payslipDeductions: input.payslipDeductions != null ? JSON.stringify(input.payslipDeductions) : null,
 
@@ -773,6 +776,7 @@ export async function updateTemplate(
   if (input.paygGlAccountId !== undefined) data.paygGlAccountId = input.paygGlAccountId ?? null
   if (input.sgcAmount !== undefined) data.sgcAmount = input.sgcAmount ?? null
   if (input.sgcGlAccountId !== undefined) data.sgcGlAccountId = input.sgcGlAccountId ?? null
+  if (input.sgcIncomeGlAccountId !== undefined) data.sgcIncomeGlAccountId = input.sgcIncomeGlAccountId ?? null
   if (input.payslipComponents !== undefined) {
     data.payslipComponents = input.payslipComponents != null ? JSON.stringify(input.payslipComponents) : null
   }

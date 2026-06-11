@@ -458,6 +458,7 @@ export async function createOccurrenceDraft(
           paygGlAccountId: template.paygGlAccountId,
           sgcAmount: template.sgcAmount ?? 0,
           sgcGlAccountId: template.sgcGlAccountId,
+          sgcIncomeGlAccountId: template.sgcIncomeGlAccountId,
           components: template.payslipComponents ?? '[]',
           deductions: template.payslipDeductions ?? '[]',
         },

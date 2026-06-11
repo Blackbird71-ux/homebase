@@ -62,6 +62,7 @@ export interface FormState {
   paygGlAccountId: string
   sgcAmount: string
   sgcGlAccountId: string
+  sgcIncomeGlAccountId: string
   payslipComponents: PayslipLine[]
   payslipDeductions: PayslipLine[]
 }
@@ -127,6 +128,7 @@ export const emptyForm: FormState = {
   paygGlAccountId: '',
   sgcAmount: '',
   sgcGlAccountId: '',
+  sgcIncomeGlAccountId: '',
   payslipComponents: [],
   payslipDeductions: [],
 }
@@ -221,6 +223,7 @@ export function templateToForm(t: TemplateRow): FormState {
     paygGlAccountId: t.paygGlAccountId ?? '',
     sgcAmount: t.sgcAmount != null ? String(t.sgcAmount) : '',
     sgcGlAccountId: t.sgcGlAccountId ?? '',
+    sgcIncomeGlAccountId: t.sgcIncomeGlAccountId ?? '',
     payslipComponents: t.payslipComponents
       ? (JSON.parse(t.payslipComponents) as PayslipLine[])
       : [],
@@ -271,6 +274,7 @@ export function formToBody(form: FormState) {
     paygGlAccountId: form.paygGlAccountId || null,
     sgcAmount: form.sgcAmount ? parseFloat(form.sgcAmount) : null,
     sgcGlAccountId: form.sgcGlAccountId || null,
+    sgcIncomeGlAccountId: form.sgcIncomeGlAccountId || null,
     payslipComponents: form.payslipComponents.length > 0 ? form.payslipComponents : null,
     payslipDeductions: form.payslipDeductions.length > 0 ? form.payslipDeductions : null,
     lines: form.lines.map((l, i) => ({

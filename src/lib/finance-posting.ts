@@ -1104,16 +1104,20 @@ export async function postIncomeReceiptJournal(
 //   DR  <bank GL>              netPay          (take-home into bank)
 //   DR  <PAYG GL>              paygWithheld    (if > 0 and paygGlAccountId set)
 //   DR  <deduction[i] GL>      ded[i].amount   (one per deduction with a GL)
+//   DR  <SGC accrual GL>       sgcAmount       (if > 0; e.g. Accrued SGC - <member>)
+//   CR  <SGC income GL>        sgcAmount       (if > 0; e.g. Super Fund SGC - <member>)
 //
 // Balance invariant:  netPay + paygWithheld + sum(deductions with GL)  ≈  grossPay
 //
-// SGC (Super Guarantee Contribution) note:
-//   SGC is an employer-side cost. The existing income PATCH explicitly does
-//   NOT include SGC in the journal — it is stored on FinancePayslip for
-//   record-keeping but does not affect the employee's gross/net split. This
-//   function preserves that behaviour and ignores any SGC fields in the
-//   params (the caller is responsible for storing them on FinancePayslip
-//   separately if desired).
+// SGC (Super Guarantee Contribution):
+//   Employer super is paid ON TOP of gross — it never passes through the
+//   employee's bank account, so it must not disturb the gross/net identity.
+//   It posts as a self-balancing pair appended to the same journal:
+//   DR accrued-SGC asset (super owed/paid into the fund) / CR SGC income.
+//   This mirrors Xero/QuickBooks payroll (super expense → super liability)
+//   from the receiving household's side. When sgcAmount > 0 BOTH GL accounts
+//   are required (a one-sided line cannot balance); when sgcAmount is 0 the
+//   journal is unchanged.
 //
 // Memo-only deductions:
 //   Deductions with no glAccountId are treated as memo lines for display only
@@ -1168,6 +1172,12 @@ export interface PostPayslipReceiptParams {
   paygWithheld?: number
   /** GL account for PAYG withholding (e.g. "PAYG Withholding Receivable"). */
   paygGlAccountId?: string | null
+  /** Employer SGC (>= 0). If > 0, BOTH SGC GL accounts must be provided. */
+  sgcAmount?: number
+  /** DR side — accrued SGC asset (e.g. "Accrued SGC - Mark"). */
+  sgcGlAccountId?: string | null
+  /** CR side — SGC income (e.g. "Super Fund SGC - Mark"). */
+  sgcIncomeGlAccountId?: string | null
   /** Additional deductions. Each entry with a glAccountId becomes a DR line. */
   deductions?: PayslipDeduction[]
   /** Optional entity scope. Null = unscoped. */
@@ -1193,6 +1203,9 @@ export async function postPayslipReceiptJournal(
     bankGlAccountId,
     paygWithheld = 0,
     paygGlAccountId,
+    sgcAmount = 0,
+    sgcGlAccountId,
+    sgcIncomeGlAccountId,
     deductions = [],
     entityId,
     memberId,
@@ -1211,6 +1224,15 @@ export async function postPayslipReceiptJournal(
   if (paygWithheld > 0 && !paygGlAccountId) {
     throw new Error(
       `postPayslipReceiptJournal: paygWithheld is ${paygWithheld} but no paygGlAccountId provided`,
+    )
+  }
+  if (sgcAmount < 0) {
+    throw new Error(`postPayslipReceiptJournal: sgcAmount cannot be negative, got ${sgcAmount}`)
+  }
+  if (sgcAmount > 0 && (!sgcGlAccountId || !sgcIncomeGlAccountId)) {
+    throw new Error(
+      `postPayslipReceiptJournal: sgcAmount is ${sgcAmount} but both SGC GL accounts are required ` +
+      `(accrual asset ${sgcGlAccountId ? 'set' : 'MISSING'}, income ${sgcIncomeGlAccountId ? 'set' : 'MISSING'})`,
     )
   }
   for (const d of deductions) {
@@ -1271,6 +1293,25 @@ export async function postPayslipReceiptJournal(
         memberId: memberId ?? null,
       })
     }
+  }
+
+  // SGC: employer super on top of gross — self-balancing pair, outside the
+  // gross/net identity (validated above: both accounts present when > 0).
+  if (sgcAmount > 0 && sgcGlAccountId && sgcIncomeGlAccountId) {
+    lines.push({
+      glAccountId: sgcGlAccountId,
+      side: 'debit',
+      amount: sgcAmount,
+      description: `${description} — Employer Super (SGC)`,
+      memberId: memberId ?? null,
+    })
+    lines.push({
+      glAccountId: sgcIncomeGlAccountId,
+      side: 'credit',
+      amount: sgcAmount,
+      description: `${description} — Employer Super (SGC)`,
+      memberId: memberId ?? null,
+    })
   }
 
   // Balance check: this is the critical check for payslips because grossPay,

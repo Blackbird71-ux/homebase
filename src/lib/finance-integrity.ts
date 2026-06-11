@@ -516,9 +516,10 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
   }
 
   // ── F — Payslip math: gross = net + PAYG + deductions ───────────────────────
-  // SGC is employer super paid ON TOP of gross (memo-only, never a journal
-  // line) and must NOT be in this identity — including it flags correct
-  // payslips as broken (audit F8; QA.md §2.3).
+  // SGC is employer super paid ON TOP of gross. It posts as its own balanced
+  // DR/CR pair (accrued SGC asset / SGC income) appended to the receipt
+  // journal and must NOT be in this identity — including it flags correct
+  // payslips as broken (QA.md §2.3).
   const payslips = await prisma.financePayslip.findMany({
     where: { familyId },
     select: {
@@ -539,7 +540,7 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
       add({
         severity: 'critical', code: 'PAYSLIP_GROSS_MISMATCH', recordType: 'payslip',
         recordId: p.id, label: p.incomeEntry?.name ?? p.id,
-        message: `Gross ${r2(p.grossPay)} ≠ net ${r2(p.netPay)} + PAYG ${r2(p.paygWithheld)} + deductions ${r2(deductionsTotal)} (= ${expected}). SGC is memo-only and excluded.`,
+        message: `Gross ${r2(p.grossPay)} ≠ net ${r2(p.netPay)} + PAYG ${r2(p.paygWithheld)} + deductions ${r2(deductionsTotal)} (= ${expected}). SGC posts as a separate balanced pair and is excluded.`,
       })
     }
   }

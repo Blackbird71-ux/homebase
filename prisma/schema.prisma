@@ -810,6 +810,7 @@ model FinancePayslip {
   paygGlAccountId       String?
   sgcAmount             Float              @default(0)
   sgcGlAccountId        String?
+  sgcIncomeGlAccountId  String?
   components            String             @default("[]")
   deductions            String             @default("[]")
   notes                 String?
@@ -1399,6 +1400,7 @@ model FinanceRecurringTemplate {
   paygGlAccountId         String?
   sgcAmount               Float?
   sgcGlAccountId          String?
+  sgcIncomeGlAccountId    String?
   payslipComponents       String?
   payslipDeductions       String?
 

@@ -674,8 +674,8 @@ export default function IncomePage() {
 
                   {/* SGC super */}
                   <div className="rounded-md border border-border p-3 space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SGC Super (Informational)</p>
-                    <p className="text-xs text-muted-foreground/60">Employer SGC is recorded for tax reporting. It doesn&apos;t affect your net pay or the journal balance.</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SGC Super (Employer)</p>
+                    <p className="text-xs text-muted-foreground/60">Employer super on top of gross. Posts DR accrued SGC asset / CR SGC income — it doesn&apos;t affect your net pay or the gross/net balance. GL accounts are under Advanced.</p>
                     <div>
                       <label className="text-xs text-muted-foreground">SGC amount</label>
                       <input type="number" step="0.01" value={payslipForm.sgcAmount}
@@ -719,7 +719,7 @@ export default function IncomePage() {
                   <EditorDisclosure
                     label="Advanced — GL account mapping"
                     defaultOpen={!payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId}
-                    hasData={!!payslipForm.grossIncomeGlAccountId || !!payslipForm.bankGlAccountId || !!payslipForm.paygGlAccountId || !!payslipForm.sgcGlAccountId || payslipForm.deductions.some(d => !!d.glAccountId)}
+                    hasData={!!payslipForm.grossIncomeGlAccountId || !!payslipForm.bankGlAccountId || !!payslipForm.paygGlAccountId || !!payslipForm.sgcGlAccountId || !!payslipForm.sgcIncomeGlAccountId || payslipForm.deductions.some(d => !!d.glAccountId)}
                   >
                     <div className="space-y-3 rounded-md border border-border p-3">
                       <p className="text-xs text-muted-foreground/60">Auto-mapped from the payslip. The journal posts DR Bank + PAYG + Deductions = CR Gross Income — override only if an account is wrong.</p>
@@ -758,12 +758,23 @@ export default function IncomePage() {
                           </select>
                         </div>
                         <div>
-                          <label className="text-xs text-muted-foreground">SGC GL account (optional)</label>
+                          <label className="text-xs text-muted-foreground">SGC accrued asset GL (required if SGC &gt; 0)</label>
                           <select value={payslipForm.sgcGlAccountId}
                             onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcGlAccountId: e.target.value }))}
                             className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
                             <option value="">Select GL account…</option>
                             {glAccounts.filter(a => a.type === 'asset' || a.type === 'liability').map(a => (
+                              <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">SGC income GL (required if SGC &gt; 0)</label>
+                          <select value={payslipForm.sgcIncomeGlAccountId}
+                            onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, sgcIncomeGlAccountId: e.target.value }))}
+                            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                            <option value="">Select GL account…</option>
+                            {glAccounts.filter(a => a.type === 'income').map(a => (
                               <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                             ))}
                           </select>

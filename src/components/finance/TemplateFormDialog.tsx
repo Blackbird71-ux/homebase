@@ -799,7 +799,7 @@ function TransactionTab({
               </div>
 
               {/* SGC */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-xs font-medium mb-1">SGC super ($)</label>
                   <input type="number" step="0.01" min="0" value={form.sgcAmount}
@@ -807,10 +807,18 @@ function TransactionTab({
                     className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium mb-1">SGC GL account</label>
+                  <label className="block text-xs font-medium mb-1">SGC accrued asset GL</label>
                   <GLAccountSelect
                     value={form.sgcGlAccountId}
                     onChange={v => set('sgcGlAccountId', v)}
+                    glAccounts={glAccounts}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">SGC income GL</label>
+                  <GLAccountSelect
+                    value={form.sgcIncomeGlAccountId}
+                    onChange={v => set('sgcIncomeGlAccountId', v)}
                     glAccounts={glAccounts}
                   />
                 </div>
