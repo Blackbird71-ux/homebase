@@ -16,6 +16,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/u
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
 import { CALENDAR_SCOPE, applyOfflineEventOps, type OfflineEventOp } from '@/lib/calendar-offline'
+import { CHORES_SCOPE, queueChoreComplete } from '@/lib/chores-offline'
 import {
   localTimeToStoredDateTime, formatInTz, dateStringInTz, addLocalDays,
   addMonthsInTz, addWeeksInTz, startOfMonthInTz, endOfMonthInTz,
@@ -131,6 +132,10 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       const listIds = (event as CustomEvent<{ listIds: string[] }>).detail?.listIds
       if (listIds?.includes(CALENDAR_SCOPE)) {
         setPendingOps([])
+        refresh()
+      } else if (listIds?.includes(CHORES_SCOPE)) {
+        // Replayed chore completions advance due dates server-side — refetch so
+        // the synthetic chore events move. Calendar pendingOps stay untouched.
         refresh()
       }
     }
@@ -255,6 +260,22 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   async function handleChoreComplete() {
     if (!choreCompleteId) return
     setChoreCompleting(true)
+
+    // Offline: queue the completion for idempotent replay; the post-flush
+    // refetch moves the synthetic chore event to its advanced due date.
+    if (!navigator.onLine) {
+      try {
+        await queueChoreComplete(choreCompleteId)
+        toast.success('Saved offline — will sync when you reconnect')
+        setChoreCompleteOpen(false)
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      } finally {
+        setChoreCompleting(false)
+      }
+      return
+    }
+
     try {
       const res = await fetch(`/api/chores/${choreCompleteId}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
       if (!res.ok) throw new Error('Failed to complete chore')

@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardList, UserIcon, StickyNoteIcon, RefreshCw, CheckIcon, UsersIcon, Plus, ClockIcon } from 'lucide-react'
 import type { ChoreScheduleDay, ChoreScheduleItem } from '@/types'
 import { toast } from 'sonner'
+import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
+import { CHORES_SCOPE, queueChoreComplete } from '@/lib/chores-offline'
 import { todayStringInTz } from '@/lib/timezone'
 import { ChoreDialog } from '@/app/(app)/chores/ChoreDialog'
 
@@ -74,10 +76,46 @@ export function ChoreScheduleCard({
     fetchSchedule(scope, showOnlyMine)
   }, [scope, showOnlyMine, fetchSchedule])
 
+  // After the offline queue replays chore completions, refetch the schedule so
+  // completed items disappear and advanced due dates appear.
+  useEffect(() => {
+    function handleFlushed(e: Event) {
+      const listIds = (e as CustomEvent<{ listIds: string[] }>).detail?.listIds
+      if (!listIds?.includes(CHORES_SCOPE)) return
+      fetchSchedule(scope, showOnlyMine)
+    }
+    window.addEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+    return () => window.removeEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+  }, [scope, showOnlyMine, fetchSchedule])
+
   async function handleComplete(chore: ChoreScheduleItem) {
     if (completingIds.has(chore.id)) return // prevent double-click
 
     setCompletingIds((prev) => new Set(prev).add(chore.id))
+
+    // Offline: queue the completion for idempotent replay. The strikethrough is
+    // the only feedback we can give — the post-flush refetch shows the real
+    // schedule. No 600ms refetch here: offline it would just re-serve the stale
+    // SW-cached schedule and un-strike the chore.
+    if (!navigator.onLine) {
+      try {
+        await queueChoreComplete(chore.id)
+        setCompletedIds((prev) => new Set(prev).add(chore.id))
+        toast.success('Saved offline — will sync when you reconnect')
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      } finally {
+        setTimeout(() => {
+          setCompletingIds((prev) => {
+            const next = new Set(prev)
+            next.delete(chore.id)
+            return next
+          })
+        }, 700)
+      }
+      return
+    }
+
     try {
       const res = await fetch(`/api/chores/${chore.id}/complete`, {
         method: 'POST',

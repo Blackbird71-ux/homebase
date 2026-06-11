@@ -62,8 +62,34 @@ export function nextAssigneeId(
  */
 export async function completeChore(
   chore: ChoreForCompletion,
-  opts: { completedById: string; note?: string | null; timezone: string }
+  opts: { completedById: string; note?: string | null; timezone: string; clientMutationId?: string | null }
 ) {
+  // 0. Idempotent offline-replay guard: if this clientMutationId already
+  // completed the chore (e.g. the response was lost and the offline queue
+  // replays the POST), return the existing completion without advancing the
+  // schedule or rotating the assignee a second time.
+  if (opts.clientMutationId) {
+    const existing = await prisma.choreCompletion.findUnique({
+      where: { clientMutationId: opts.clientMutationId },
+      include: { completedBy: { select: { id: true, name: true } } },
+    })
+    if (existing) {
+      const current = await prisma.chore.findUniqueOrThrow({
+        where: { id: chore.id },
+        include: {
+          currentAssignee: { select: { id: true, name: true } },
+          completions: {
+            orderBy: { completedAt: 'desc' },
+            take: 1,
+            include: { completedBy: { select: { id: true, name: true } } },
+          },
+          _count: { select: { completions: true } },
+        },
+      })
+      return { ok: true as const, completion: existing, chore: current }
+    }
+  }
+
   const { end: todayEnd } = todayBoundsInTz(opts.timezone)
 
   // 1. Early-completion gate. nextDueDate is stored as the UTC equivalent of
@@ -78,6 +104,7 @@ export async function completeChore(
       choreId: chore.id,
       completedById: opts.completedById,
       note: opts.note ?? null,
+      clientMutationId: opts.clientMutationId ?? null,
     },
     include: {
       completedBy: { select: { id: true, name: true } },

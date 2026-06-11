@@ -28,6 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     completedById: user.id,
     note: body.note ?? null,
     timezone,
+    clientMutationId: body.clientMutationId ?? null,
   })
 
   if (!result.ok) {

@@ -8,6 +8,8 @@ import { ChoreDialog } from './ChoreDialog'
 import { ChoreCalendarView } from './ChoreCalendarView'
 import { HoverCard } from '@/components/ui/hover-card'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
+import { CHORES_SCOPE, queueChoreComplete } from '@/lib/chores-offline'
 import { parseDaysOfWeek, choreIsCompletable } from '@/lib/chore-helpers'
 import { todayBoundsInTz, formatInTz } from '@/lib/timezone'
 
@@ -116,8 +118,48 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
     return cleanup
   }, [])
 
+  // After the offline queue replays chore completions, refetch so the
+  // server-advanced nextDueDate / rotated assignee replace the stale view.
+  useEffect(() => {
+    function handleFlushed(e: Event) {
+      const listIds = (e as CustomEvent<{ listIds: string[] }>).detail?.listIds
+      if (!listIds?.includes(CHORES_SCOPE)) return
+      fetch('/api/chores')
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data) setChores(data as Chore[])
+        })
+        .catch(() => {})
+    }
+    window.addEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+    return () => window.removeEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+  }, [])
+
   async function handleComplete(chore: Chore) {
     setCompletingIds((prev) => new Set(prev).add(chore.id))
+
+    // Offline: queue the completion for idempotent replay. The client can't
+    // compute the advanced nextDueDate or rotation, so feedback is just the
+    // strikethrough — the post-flush refetch realigns the real schedule.
+    if (!navigator.onLine) {
+      try {
+        await queueChoreComplete(chore.id)
+        setCompletedIds((prev) => new Set(prev).add(chore.id))
+        toast.success('Saved offline — will sync when you reconnect')
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      } finally {
+        setTimeout(() => {
+          setCompletingIds((prev) => {
+            const next = new Set(prev)
+            next.delete(chore.id)
+            return next
+          })
+        }, 700)
+      }
+      return
+    }
+
     try {
       const res = await fetch(`/api/chores/${chore.id}/complete`, {
         method: 'POST',

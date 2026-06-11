@@ -561,6 +561,9 @@ model ChoreCompletion {
   completedAt   DateTime @default(now())
   note          String?
 
+  // Idempotency key for offline-replayed completions (see offline queue)
+  clientMutationId String? @unique
+
   @@index([choreId])
   @@index([completedById])
   @@index([completedAt])

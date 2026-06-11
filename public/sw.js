@@ -97,6 +97,7 @@ const API_CACHE_PATTERNS = [
 const NETWORK_FIRST_PATTERNS = [
   /^\/api\/lists($|\?|\/)/,
   /^\/api\/events($|\?|\/)/,          // CalendarView fetches this client-side when navigating months
+  /^\/api\/chores($|\?|\/)/,          // chores page + /api/chores/schedule (dashboard card); GET-only, completion POSTs pass through
 ];
 
 // ── Install ────────────────────────────────────────────────────────────────────
