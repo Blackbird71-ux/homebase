@@ -6,7 +6,7 @@ import {
   OFFLINE_QUEUE_FLUSHED,
 } from '@/lib/offline-queue'
 import type { QueuedMutation } from '@/lib/offline-queue'
-import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { listenAppEvent, AppEvents, type AppEventName } from '@/lib/app-events'
 import type { ListItemShape } from '@/lib/list-helpers'
 import type { MutationGuard } from '@/hooks/useMutationGuard'
 
@@ -25,12 +25,13 @@ function parseServerItems(raw: Record<string, unknown>[]): ListItemShape[] {
  * useGlobalOfflineFlush (mounted in AppShell). This hook:
  * - enqueues this list's mutations (queueMutation / cancelTempItem)
  * - refetches the list when a global flush resolved mutations for it
- * - refetches on SHOPPING_LIST_UPDATED and a 30s visibility-gated poll
+ * - refetches on the list's update app-event and a 30s visibility-gated poll
  */
 export function useOfflineQueue(
   listId: string,
   setItems: React.Dispatch<React.SetStateAction<ListItemShape[]>>,
   guard: MutationGuard,
+  updateEvent: AppEventName = AppEvents.SHOPPING_LIST_UPDATED,
 ) {
   // Guarded refetch — skip overwriting state if an optimistic mutation landed
   // during the fetch window (QA.md §12.27).
@@ -70,8 +71,8 @@ export function useOfflineQueue(
 
   // Refetch when AI assistant or another source updates the list
   useEffect(() => {
-    return listenAppEvent(AppEvents.SHOPPING_LIST_UPDATED, refetchItems)
-  }, [refetchItems])
+    return listenAppEvent(updateEvent, refetchItems)
+  }, [updateEvent, refetchItems])
 
   // Poll for item changes from other devices every 30s when the tab is visible and online
   useEffect(() => {

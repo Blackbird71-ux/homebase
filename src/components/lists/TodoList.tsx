@@ -118,6 +118,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
     toggleItem,
     handleEditItem,
     handleItemSaved,
+    queueItemEdit,
     deleteItem,
     toggleLock,
     assignItem,
@@ -335,6 +336,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
         availableCategories={editDialogCategories}
         listId={listId}
         onSaved={handleItemSaved}
+        queueOfflineEdit={queueItemEdit}
         onCategoryAdded={editDialogCategories.length > 0 ? handleEditDialogCategoryAdded : undefined}
         initialDueDate={editItemDueDate}
         initialAssignedToUserId={editItemAssignedToUserId}

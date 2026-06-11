@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback, useEffect } from 'react'
+import { useState, useTransition, useCallback } from 'react'
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
 import { useMutationGuard } from '@/hooks/useMutationGuard'
 import {
@@ -16,7 +16,8 @@ import {
 } from '@dnd-kit/sortable'
 import { filterTodoItems } from '@/lib/list-helpers'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
-import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { AppEvents } from '@/lib/app-events'
+import { useOfflineQueue } from '@/hooks/lists/useOfflineQueue'
 import { toast } from 'sonner'
 
 export function useTodoList(
@@ -49,47 +50,28 @@ export function useTodoList(
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
+  // ── Offline sync ────────────────────────────────────────────────────────────
+  // Also covers the TODO_LIST_UPDATED refetch, the 30s poll, and the
+  // refetch-after-flush — all previously inlined here.
+
+  const { queueMutation, cancelTempItem } = useOfflineQueue(listId, setItems, guard, AppEvents.TODO_LIST_UPDATED)
+
   const debouncedSaveItemOrder = useDebouncedCallback(
     useCallback((updates: { id: string; sortOrder: number }[]) => {
+      if (!navigator.onLine) {
+        // No fixed id: each reorder covers only one category's items, so
+        // collapsing would drop an earlier reorder of a different category.
+        queueMutation({ endpoint: `/api/lists/${listId}/items/reorder`, method: 'PATCH', body: { items: updates } })
+        return
+      }
       fetch(`/api/lists/${listId}/items/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: updates }),
       }).catch(() => toast.error('Failed to save item order.'))
-    }, [listId]),
+    }, [listId, queueMutation]),
     500,
   )
-
-  // Pull the latest items from the server, unless a local mutation just landed
-  // (don't clobber optimistic state). Shared by the app-event listener and the poll.
-  const refetchItems = useCallback(() => {
-    const v = guard.snapshot()
-    fetch(`/api/lists/${listId}/items`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((serverItems) => {
-        if (!serverItems || !guard.canApply(v)) return
-        setItems(
-          serverItems.map((i: Record<string, unknown>) => ({
-            ...i,
-            dueDate: i.dueDate ? new Date(i.dueDate as string) : null,
-            createdAt: new Date(i.createdAt as string),
-          }))
-        )
-      })
-      .catch(() => {})
-  }, [listId, guard])
-
-  // Refetch when the AI assistant or another source updates the list
-  useEffect(() => listenAppEvent(AppEvents.TODO_LIST_UPDATED, refetchItems), [refetchItems])
-
-  // Poll for item changes from other devices every 30s when the tab is visible and online
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!navigator.onLine || document.visibilityState !== 'visible') return
-      refetchItems()
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [refetchItems])
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -118,14 +100,45 @@ export function useTodoList(
     e.preventDefault()
     if (!newContent.trim()) return
     guard.bump()
+
+    const body = {
+      content: newContent.trim(),
+      dueDate: newDueDate || null,
+      category: newItemCategory || null,
+    }
+
+    if (!navigator.onLine) {
+      const tempId = `tmp_${crypto.randomUUID()}`
+      const optimisticItem: ListItemShape = {
+        id: tempId,
+        content: body.content,
+        category: body.category,
+        isCompleted: false,
+        isLocked: false,
+        sortOrder: 0,
+        dueDate: newDueDate ? new Date(newDueDate) : null,
+        recipeId: null,
+        recipeName: null,
+        createdBy: '',
+        listId,
+        createdAt: new Date(),
+        unitPrice: null,
+        quantity: null,
+        assignedToUserId: null,
+      }
+      setItems((prev) => [...prev, optimisticItem])
+      setNewContent('')
+      setNewDueDate('')
+      // Carry the tempId as clientMutationId so a replayed POST (committed-but-lost
+      // response on a flaky reconnect) is de-duped server-side instead of re-created.
+      await queueMutation({ endpoint: `/api/lists/${listId}/items`, method: 'POST', body: { ...body, clientMutationId: tempId }, tempId })
+      return
+    }
+
     const res = await fetch(`/api/lists/${listId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: newContent.trim(),
-        dueDate: newDueDate || null,
-        category: newItemCategory || null,
-      }),
+      body: JSON.stringify(body),
     })
     if (res.ok) {
       const item = await res.json()
@@ -142,6 +155,15 @@ export function useTodoList(
 
   async function toggleItem(id: string, isCompleted: boolean) {
     guard.bump()
+
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      // tmp_ endpoints are rewritten to the real id during flush, after the
+      // item's queued POST replays — so toggles on offline-created items sync too.
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isCompleted } : i)))
+      await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { isCompleted } })
+      return
+    }
+
     startTransition(async () => {
       const res = await fetch(`/api/lists/${listId}/items/${id}`, {
         method: 'PATCH',
@@ -182,8 +204,25 @@ export function useTodoList(
     )
   }
 
+  // Backs EditItemDialog saves made offline (or on a not-yet-synced tmp_ item).
+  async function queueItemEdit(id: string, body: Record<string, unknown>) {
+    guard.bump()
+    await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body })
+  }
+
   async function deleteItem(id: string) {
     guard.bump()
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      setItems((prev) => prev.filter((i) => i.id !== id))
+      if (id.startsWith('tmp_')) {
+        // Item never reached the server — cancel its queued POST (and any
+        // follow-up mutations) instead of queueing a DELETE.
+        await cancelTempItem(id)
+      } else {
+        await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'DELETE' })
+      }
+      return
+    }
     const res = await fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setItems((prev) => prev.filter((i) => i.id !== id))
@@ -194,6 +233,11 @@ export function useTodoList(
 
   async function toggleLock(id: string, isLocked: boolean) {
     guard.bump()
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, isLocked } : i)))
+      await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { isLocked } })
+      return
+    }
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -208,6 +252,11 @@ export function useTodoList(
 
   async function assignItem(id: string, assignedToUserId: string | null) {
     guard.bump()
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, assignedToUserId } : i)))
+      await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { assignedToUserId } })
+      return
+    }
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -258,6 +307,12 @@ export function useTodoList(
   }
 
   async function saveCategoryOrder(cats: string[]) {
+    if (!navigator.onLine) {
+      // Fixed queue id — each save carries the whole order, so successive
+      // offline edits collapse to the latest one.
+      await queueMutation({ id: `catorder_${listId}`, endpoint: `/api/lists/${listId}/category-order`, method: 'PATCH', body: { categoryOrder: cats } })
+      return
+    }
     const res = await fetch(`/api/lists/${listId}/category-order`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -314,6 +369,7 @@ export function useTodoList(
     toggleItem,
     handleEditItem,
     handleItemSaved,
+    queueItemEdit,
     deleteItem,
     toggleLock,
     assignItem,
