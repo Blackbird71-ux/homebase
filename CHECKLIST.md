@@ -66,6 +66,17 @@ Silent field loss during layout refactors has happened repeatedly. **See AGENTS.
 
 ---
 
+## API route security — see AGENTS.md §API route security
+
+There is no middleware.ts — a route without its own auth check is publicly reachable.
+
+- [ ] Every new/touched route starts with `auth()` → 401 if no session; admin routes also check `user.role !== 'admin'` → 403
+- [ ] Every query scoped to `user.familyId` — `findFirst({ where: { id, familyId } })`, never bare `findUnique({ where: { id } })`
+- [ ] No new unauthenticated route without explicit user sign-off; unauthenticated responses leak no paths/versions/raw errors
+- [ ] After touching routes, sweep: `rg --files-without-match "auth\(\)|requireSystemAdmin|ADMIN_RESET_TOKEN" -g "route.ts" src/app/api` — every hit must be on the known-public list (AGENTS.md rule 4)
+
+---
+
 ## SSR safety
 
 - [ ] No `sessionStorage`, `localStorage`, `window`, or `document` in `useState` initialisers — wrap in `typeof window !== 'undefined'` or move to `useEffect`
