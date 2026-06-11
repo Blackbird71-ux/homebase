@@ -16,14 +16,17 @@ For any task with more than one distinct step, state a brief plan with verifiabl
 2. [Step] → verify: [check]
 ```
 
-## 5. Report, don't fix — out-of-scope discoveries
-When you uncover a bug, smell, or improvement that is **outside the scope of the current task**, the default is to **report it, not fix it.** Do not silently expand the diff. This protects the original task (it keeps the agent's attention and context budget on what was asked) and keeps every change attributable (if the task's diff regresses something, it should contain one intent, not opportunistic side-fixes).
+## 5. Defer, don't drop — out-of-scope discoveries
+When you uncover a bug, smell, or improvement that is **outside the scope of the current task**, do not fix it mid-task — **document it, finish the task, then address it.** Do not silently expand the diff. This protects the original task (it keeps the agent's attention and context budget on what was asked) and keeps every change attributable (if the task's diff regresses something, it should contain one intent, not opportunistic side-fixes).
+
+Deferral is sequencing, not a verdict. The default end-state of a documented find is **fixed, in its own commit, once the current task has landed** — a growing list of documented-but-unfixed issues is a failure of this rule, not compliance with it.
 
 **On discovery, do this instead of fixing:**
 1. **Stop and surface it.** Don't keep working past it silently.
 2. **Document it thoroughly, right now, while the context is loaded.** This is the most important step. A deferred find is only safe if a future reader (you, another agent, or the user) can act on it cold, without re-deriving everything. The cheap thing to lose later is *what to change*; the expensive thing is *why the code is shaped this way and what breaks if you touch it* — capture that now, because it will be gone in three weeks. A one-line "fix X later" is a trap, not a deferral.
-3. **Propose where to log it** (follow-up task, a QA.md §12 bug-pattern entry, or an audit-prompt sweep) and let the user triage.
-4. **Wait for confirmation before fixing.** Don't fix unless the user says so.
+3. **Return to the original task and finish it.**
+4. **When the task is complete, address the documented finds.** Fix them in their own commits — one intent per commit, never folded into the task's diff. Safe fixes proceed without asking. Ask the user first only when the fix would change GL output or posted accounting data, alter data semantics, or is otherwise risky enough to need triage.
+5. **Log only what genuinely can't be fixed this session** (too large, needs a user decision, blocked). Propose where (follow-up task, a QA.md §12 bug-pattern entry, or an audit-prompt sweep) and let the user triage. Logging is the fallback for what can't be fixed now — not a substitute for fixing.
 
 **A deferred-issue report must contain — do not abbreviate:**
 - **Location** — file(s), function/component, and line references. List *every* site if more than one (see instance-vs-class below).
@@ -36,7 +39,7 @@ When you uncover a bug, smell, or improvement that is **outside the scope of the
 
 Write the report as if the reader has none of your current context, because they won't. If it's worth a code change later, it's worth a paragraph now.
 
-**Instance vs. class — the most important call at discovery.** Ask: *could this same issue exist elsewhere?* If yes, fixing only the instance in front of you is **actively harmful** — it creates a fixed-here / silently-broken-there divergence, which is worse than a consistently-wrong codebase you can sweep in one pass (this is the §12.7 "fix one instance, miss others" pattern in QA.md). A class-level discovery must become a dedicated sweep task (and the report must enumerate every known site), never an inline fix.
+**Instance vs. class — the most important call at discovery.** Ask: *could this same issue exist elsewhere?* If yes, fixing only the instance in front of you is **actively harmful** — it creates a fixed-here / silently-broken-there divergence, which is worse than a consistently-wrong codebase you can sweep in one pass (this is the §12.7 "fix one instance, miss others" pattern in QA.md). A class-level discovery must be fixed as a dedicated sweep — every known site in one pass, enumerated in the report — never as an inline fix of just the instance in front of you. Like any other find, the sweep runs after the current task is complete.
 
 **The only exceptions — address now, but still isolate and document:**
 - Completing the current task **genuinely requires** the fix (the task cannot land correctly without it), or
