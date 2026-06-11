@@ -5,8 +5,9 @@ import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { calculateInitialDueDate } from '@/lib/chore-helpers'
+import { jsonWithETag } from '@/lib/http-cache'
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,7 +35,7 @@ export async function GET() {
     isOverdue: c.nextDueDate ? c.nextDueDate < todayStart : false,
   }))
 
-  return NextResponse.json(choresWithOverdue)
+  return jsonWithETag(req, choresWithOverdue)
 }
 
 export async function POST(req: Request) {

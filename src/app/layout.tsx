@@ -102,12 +102,30 @@ export default async function RootLayout({
               }).catch(function() {});
             }
             navigator.serviceWorker.register('/sw.js').then(function(reg) {
+              // saveData hint: on Data Saver the SW skips the expensive
+              // page/image warm and only refreshes the small data APIs.
+              function warmMessage() {
+                var saveData = false;
+                try { saveData = !!(navigator.connection && navigator.connection.saveData); } catch (e) {}
+                return { type: 'WARM_CACHE', saveData: saveData };
+              }
               // Idle warm-up: wait 3s then ask SW to warm the cache
               setTimeout(function() {
                 if (reg.active) {
-                  reg.active.postMessage({ type: 'WARM_CACHE' });
+                  reg.active.postMessage(warmMessage());
                 }
               }, 3000);
+
+              // Re-warm when connectivity returns, so data cached while online
+              // is fresh before the user goes offline again. Small delay lets
+              // the connection settle before the burst of revalidation fetches.
+              window.addEventListener('online', function() {
+                setTimeout(function() {
+                  if (reg.active) {
+                    reg.active.postMessage(warmMessage());
+                  }
+                }, 2000);
+              });
 
               // Periodic Background Sync — daily cache refresh
               // Supported on Chrome Android; silently ignored elsewhere

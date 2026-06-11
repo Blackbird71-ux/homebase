@@ -1,4 +1,4 @@
-// Homebase Service Worker — v6
+// Homebase Service Worker — v10
 //
 // Lessons applied from Memories offline implementation:
 //   - Two-cache architecture (shell + api) — simpler than three caches
@@ -42,9 +42,22 @@
 //     shell (useGlobalOfflineFlush) — SYNC_REQUESTED replay no longer requires a
 //     list page to be open.
 //   - Cache names bumped v8→v9 so the deeper recipe warm rebuilds cleanly on activate.
+// v10 additions (low-data cache warming):
+//   - Data API warming: /api/warm now returns apiUrls (lists/items/chores/schedule/
+//     events/meal-plan/recipes/categories, URLs computed server-side from the user's
+//     settings so they byte-match the views' requests). warmCaches() warms these on
+//     EVERY trigger — previously data APIs were only cached when a view was visited
+//     online, so a never-opened view had pages but no data offline.
+//   - ETag revalidation: cacheable API routes emit ETags; fetchWithRevalidate()
+//     replays GETs with If-None-Match from the cached copy, so repeat warms and
+//     network-first refetches cost a ~304 instead of the full body.
+//   - Full warm (pages + recipe HTML/RSC + images — the expensive part, several MB)
+//     is throttled to once per 12h via a timestamp in the API cache; data API warm
+//     runs every time. Clients pass saveData:true (Data Saver) to skip full warm.
+//   - Cache names bumped v9→v10 so caches rebuild cleanly on activate.
 
-const SHELL_CACHE = 'homebase-shell-v9';
-const API_CACHE   = 'homebase-api-v9';
+const SHELL_CACHE = 'homebase-shell-v10';
+const API_CACHE   = 'homebase-api-v10';
 const ALL_CACHES  = [SHELL_CACHE, API_CACHE];
 
 const SYNC_TAG = 'homebase-list-sync';
@@ -77,8 +90,13 @@ const WARM_PAGES = [
 ];
 
 // Number of recipe detail pages warmed with full HTML + RSC on activation.
-// Recipes beyond this depth are warmed RSC-only (see warmNavCache step 2).
+// Recipes beyond this depth are warmed RSC-only (see warmCaches step 2).
 const MAX_RECIPE_WARM = 20;
+
+// Synthetic cache entry holding the last full-warm timestamp. The pathname
+// matches no fetch-handler pattern, so it can never be served to a page.
+const WARM_META_URL = self.location.origin + '/__homebase_warm_meta';
+const FULL_WARM_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 
 // API GET paths cached with stale-while-revalidate.
@@ -119,64 +137,131 @@ self.addEventListener('activate', (event) => {
         Promise.all(keys.filter((k) => !ALL_CACHES.includes(k)).map((k) => caches.delete(k))),
       )
       .then(() => self.clients.claim())
-      .then(() => warmNavCache()),
+      .then(() => warmCaches({ fullWarm: true })),
   );
 });
 
-// Silently fetch and cache key pages so they're available offline
-// even if the user hasn't navigated to them yet in this session.
-// We fetch twice per page:
+// ── Cache warming ──────────────────────────────────────────────────────────────
+//
+// Two tiers, both driven by /api/warm:
+//   - Data API warm (ALWAYS): the apiUrls list — small JSON payloads, and ~free
+//     on repeat passes thanks to ETag/If-None-Match revalidation (304s).
+//   - Full warm (throttled to 12h / skipped on Data Saver): nav pages + recipe
+//     detail pages + recipe images. This is the expensive multi-MB tier.
+//
+// Page warming fetches twice per page:
 //   1. Full HTML → SHELL_CACHE (serves navigate requests offline)
 //   2. RSC payload → API_CACHE under ?__rsc_cache key (serves client-side
 //      navigation offline — without this, Next.js receives HTML in place of
 //      an RSC response, fails to parse it, and shows a broken partial page)
-//
-// v6: Also warms recipe detail pages and recipe images for offline viewing.
-async function warmNavCache() {
+async function warmCaches({ fullWarm }) {
   const shellCache = await caches.open(SHELL_CACHE);
   const apiCache   = await caches.open(API_CACHE);
 
-  // Step 1: Warm main navigation pages (HTML + RSC)
-  for (const url of WARM_PAGES) {
-    await warmPage(url, shellCache, apiCache);
-  }
-
-  // Step 2: Fetch warm list from /api/warm and warm recipe details + images
+  // Fetch the warm manifest once. May fail if not logged in (SW activation can
+  // happen before auth) — best-effort; pages and data cache on first visit.
+  let warmData = null;
   try {
     const warmRes = await fetch(self.location.origin + '/api/warm', {
       credentials: 'include',
     });
-    if (warmRes.ok) {
-      const warmData = await warmRes.json();
+    if (warmRes.ok) warmData = await warmRes.json();
+  } catch {}
 
-      // Warm recipe detail pages: full HTML + RSC for the newest MAX_RECIPE_WARM,
-      // RSC-only for the rest — client-side navigation from the warmed /recipes
-      // list page works offline for every recipe, at a fraction of the warm cost.
-      const recipeIds = warmData.recipeIds || [];
-      for (const id of recipeIds.slice(0, MAX_RECIPE_WARM)) {
-        await warmPage('/recipes/' + id, shellCache, apiCache);
-      }
-      for (const id of recipeIds.slice(MAX_RECIPE_WARM)) {
-        await warmPageRsc('/recipes/' + id, apiCache);
-      }
-
-      // Warm recipe images into the shell cache
-      const images = warmData.recipeImages || [];
-      for (const img of images) {
-        if (img.alreadyCached) continue;
-        // Only warm cacheable images (those with a cachePath)
-        if (!img.cachePath) continue;
-        const imgUrl = self.location.origin + '/api/images/' + img.cachePath + '?url=' + encodeURIComponent(img.url);
-        try {
-          const res = await fetch(imgUrl, { credentials: 'include' });
-          if (res.ok) await shellCache.put(imgUrl, res).catch(() => {});
-        } catch {}
-      }
-    }
-  } catch {
-    // /api/warm may fail if not logged in (SW activation can happen before auth)
-    // That's fine — the warm-up is best-effort; pages will cache on first visit.
+  // Tier 1 — data APIs, every trigger.
+  if (warmData && Array.isArray(warmData.apiUrls)) {
+    await warmApiData(warmData.apiUrls, apiCache);
   }
+
+  if (!fullWarm) return;
+
+  // Tier 2 — full warm. Step 1: main navigation pages (HTML + RSC).
+  for (const url of WARM_PAGES) {
+    await warmPage(url, shellCache, apiCache);
+  }
+
+  // Step 2: recipe detail pages + images from the warm manifest.
+  if (warmData) {
+    // Full HTML + RSC for the newest MAX_RECIPE_WARM, RSC-only for the rest —
+    // client-side navigation from the warmed /recipes list page works offline
+    // for every recipe, at a fraction of the warm cost.
+    const recipeIds = warmData.recipeIds || [];
+    for (const id of recipeIds.slice(0, MAX_RECIPE_WARM)) {
+      await warmPage('/recipes/' + id, shellCache, apiCache);
+    }
+    for (const id of recipeIds.slice(MAX_RECIPE_WARM)) {
+      await warmPageRsc('/recipes/' + id, apiCache);
+    }
+
+    // Warm recipe images into the shell cache
+    const images = warmData.recipeImages || [];
+    for (const img of images) {
+      if (img.alreadyCached) continue;
+      // Only warm cacheable images (those with a cachePath)
+      if (!img.cachePath) continue;
+      const imgUrl = self.location.origin + '/api/images/' + img.cachePath + '?url=' + encodeURIComponent(img.url);
+      try {
+        const res = await fetch(imgUrl, { credentials: 'include' });
+        if (res.ok) await shellCache.put(imgUrl, res).catch(() => {});
+      } catch {}
+    }
+  }
+
+  await markFullWarm(apiCache);
+}
+
+// Warm the data API URLs into the API cache. Each fetch revalidates with
+// If-None-Match, so unchanged payloads cost a 304 with an empty body.
+async function warmApiData(apiUrls, apiCache) {
+  for (const url of apiUrls) {
+    const request = new Request(self.location.origin + url, { credentials: 'include' });
+    try {
+      await fetchWithRevalidate(request, apiCache);
+    } catch {}
+  }
+}
+
+// True when the last full warm is older than FULL_WARM_INTERVAL_MS (or absent).
+async function fullWarmDue(apiCache) {
+  try {
+    const meta = await apiCache.match(WARM_META_URL);
+    if (!meta) return true;
+    const data = await meta.json();
+    return !data.lastFullWarm || Date.now() - data.lastFullWarm > FULL_WARM_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+async function markFullWarm(apiCache) {
+  try {
+    await apiCache.put(
+      WARM_META_URL,
+      new Response(JSON.stringify({ lastFullWarm: Date.now() }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  } catch {}
+}
+
+// Conditional fetch: replay the GET with If-None-Match from the cached copy.
+// 304 → serve the cached body (no data transferred); 200 → update the cache.
+// The header is only added when a cached copy exists, so a 304 always has a
+// body to fall back to. Lives in the SW because views fetch with
+// cache:'no-store', which bypasses the browser's own conditional caching.
+async function fetchWithRevalidate(request, cache) {
+  const cached = await cache.match(request);
+  const etag = cached && cached.headers.get('ETag');
+  let req = request;
+  if (etag) {
+    const headers = new Headers(request.headers);
+    headers.set('If-None-Match', etag);
+    req = new Request(request, { headers });
+  }
+  const res = await fetch(req);
+  if (res.status === 304 && cached) return cached;
+  if (res.ok) cache.put(request, res.clone()).catch(() => {});
+  return res;
 }
 
 // Warm a single page: fetch both full HTML and RSC payload
@@ -219,7 +304,7 @@ self.addEventListener('sync', (event) => {
 // every page while online.
 self.addEventListener('periodicsync', (event) => {
   if (event.tag === 'homebase-cache-warm') {
-    event.waitUntil(warmNavCache());
+    event.waitUntil(warmCaches({ fullWarm: true }));
   }
 });
 
@@ -234,9 +319,17 @@ async function notifyClientsToSync() {
 self.addEventListener('message', (event) => {
   // Allow new SW version to take over immediately when prompted
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
-  // Client-triggered cache warm-up (e.g. after login or idle)
+  // Client-triggered cache warm-up (page load, reconnect). Data APIs warm every
+  // time (cheap — 304s); the expensive page/image warm only when 12h have passed
+  // since the last one, and never when the client reports Data Saver is on.
   if (event.data?.type === 'WARM_CACHE') {
-    event.waitUntil(warmNavCache());
+    event.waitUntil(
+      (async () => {
+        const apiCache = await caches.open(API_CACHE);
+        const fullWarm = !event.data.saveData && (await fullWarmDue(apiCache));
+        await warmCaches({ fullWarm });
+      })(),
+    );
   }
 });
 
@@ -288,9 +381,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(API_CACHE).then(async (cache) => {
         try {
-          const res = await fetch(event.request);
-          if (res.ok) cache.put(event.request, res.clone()).catch(() => {});
-          return res;
+          // Revalidates with If-None-Match — unchanged payloads cost a 304.
+          return await fetchWithRevalidate(event.request, cache);
         } catch {
           const cached = await cache.match(event.request);
           return cached || new Response(
@@ -308,12 +400,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(API_CACHE).then(async (cache) => {
         const cached = await cache.match(event.request);
-        const fetchPromise = fetch(event.request)
-          .then((res) => {
-            if (res.ok) cache.put(event.request, res.clone()).catch(() => {});
-            return res;
-          })
-          .catch(() => null);
+        // Background revalidation sends If-None-Match — a 304 confirms freshness
+        // without re-downloading the body.
+        const fetchPromise = fetchWithRevalidate(event.request, cache).catch(() => null);
 
         // Return cached immediately; revalidate in background
         if (cached) { fetchPromise.catch(() => {}); return cached; }

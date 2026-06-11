@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
+import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
       items: { orderBy: { sortOrder: 'asc' } },
     },
   })
-  return NextResponse.json(lists)
+  return jsonWithETag(req, lists)
 }
 
 export async function POST(req: Request) {

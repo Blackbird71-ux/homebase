@@ -5,6 +5,7 @@ import type { SessionUser } from '@/types'
 import { MEAL_TYPES } from '@/lib/meal-types'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { createAuditLog } from '@/lib/audit-log'
+import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -42,7 +43,8 @@ export async function GET(req: Request) {
     orderBy: { date: 'asc' },
   })
 
-  return NextResponse.json(
+  return jsonWithETag(
+    req,
     plans.map((p) => ({
       ...p,
       date: p.date.toISOString(),

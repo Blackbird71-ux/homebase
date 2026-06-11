@@ -3,9 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
+import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -20,7 +21,7 @@ export async function GET(
     },
   })
   if (!list) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(list.items)
+  return jsonWithETag(req, list.items)
 }
 
 export async function POST(

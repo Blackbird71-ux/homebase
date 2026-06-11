@@ -4,8 +4,9 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { DEFAULT_SHOPPING_CATEGORIES } from '@/lib/list-helpers'
 import { KEYWORD_MAP } from '@/lib/ingredient-helpers'
+import { jsonWithETag } from '@/lib/http-cache'
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -122,7 +123,8 @@ export async function GET() {
   }
   const deduped = [...seen.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.category.localeCompare(b.category))
 
-  return NextResponse.json(
+  return jsonWithETag(
+    req,
     deduped.map((cat: any) => ({
       id: cat.id,
       key: cat.key,

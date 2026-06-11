@@ -8,6 +8,7 @@ import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { createAuditLog } from '@/lib/audit-log'
 import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
+import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -386,7 +387,7 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json(calendarEvents)
+  return jsonWithETag(req, calendarEvents)
 }
 
 export async function POST(req: Request) {

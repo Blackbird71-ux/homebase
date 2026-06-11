@@ -1,5 +1,86 @@
-import { dateStringInTz } from '@/lib/timezone'
+import {
+  dateStringInTz, addLocalDays, startOfWeekInTz, endOfWeekInTz,
+  startOfMonthInTz, endOfMonthInTz,
+} from '@/lib/timezone'
 import type { CalendarEvent } from '@/types'
+
+export interface CalendarToggleSettings {
+  calShowMeals: boolean
+  calShowTodos: boolean
+  calShowChores: boolean
+  calShowBills: boolean
+  calShowDocs: boolean
+}
+
+/**
+ * Parse the calendar synthetic-event toggles from a user's uiPreferences JSON.
+ * Single source of truth for the defaults — used by the calendar page (SSR)
+ * and /api/warm, so the warm URL byte-matches the URL CalendarView fetches.
+ */
+export function calendarSettingsFromPrefs(
+  uiPreferences: string | null | undefined
+): CalendarToggleSettings {
+  const defaults: CalendarToggleSettings = {
+    calShowMeals: false, calShowTodos: false, calShowChores: false,
+    calShowBills: true, calShowDocs: true,
+  }
+  if (!uiPreferences) return defaults
+  try {
+    const prefs = JSON.parse(uiPreferences)
+    return {
+      calShowMeals: !!prefs.calShowMeals,
+      calShowTodos: !!prefs.calShowTodos,
+      calShowChores: !!prefs.calShowChores,
+      calShowBills: prefs.calShowBills !== false,
+      calShowDocs: prefs.calShowDocs !== false,
+    }
+  } catch {
+    return defaults
+  }
+}
+
+export type CalendarViewName = 'month' | 'week' | 'day' | 'schedule' | 'horizontal'
+
+/**
+ * Build the /api/events query string for a calendar view. Shared by
+ * CalendarView.refresh and /api/warm — both must produce byte-identical URLs
+ * so the service worker's warmed cache entry matches the view's request.
+ */
+export function buildEventsQuery(
+  view: CalendarViewName,
+  targetDate: Date,
+  timezone: string,
+  weekStartsOn: 0 | 1,
+  s: CalendarToggleSettings
+): string {
+  let rangeStart: Date
+  let rangeEnd: Date
+  if (view === 'month') {
+    rangeStart = addLocalDays(startOfWeekInTz(startOfMonthInTz(targetDate, timezone), timezone, weekStartsOn), -7, timezone)
+    rangeEnd   = addLocalDays(endOfWeekInTz(endOfMonthInTz(targetDate, timezone), timezone, weekStartsOn), 7, timezone)
+  } else if (view === 'week' || view === 'horizontal') {
+    rangeStart = addLocalDays(startOfWeekInTz(targetDate, timezone, weekStartsOn), -7, timezone)
+    rangeEnd   = addLocalDays(endOfWeekInTz(targetDate, timezone, weekStartsOn), 7, timezone)
+  } else if (view === 'day') {
+    rangeStart = addLocalDays(targetDate, -2, timezone)
+    rangeEnd   = addLocalDays(targetDate,  2, timezone)
+  } else {
+    // schedule — 60 days forward
+    rangeStart = targetDate
+    rangeEnd   = addLocalDays(targetDate, 62, timezone)
+  }
+
+  const params = new URLSearchParams({
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+    ...(s.calShowMeals  ? { meals:  '1' } : {}),
+    ...(s.calShowTodos  ? { todos:  '1' } : {}),
+    ...(s.calShowChores ? { chores: '1' } : {}),
+    ...(s.calShowBills  ? { bills:  '1' } : {}),
+    ...(s.calShowDocs   ? { docs:   '1' } : {}),
+  })
+  return params.toString()
+}
 
 /**
  * Returns true if the event falls on the given calendar day, using the family's timezone.

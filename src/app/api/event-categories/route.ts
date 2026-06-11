@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
+import { jsonWithETag } from '@/lib/http-cache'
 
 const DEFAULT_EVENT_CATEGORIES = [
   { name: 'Medical', color: '#ef4444' },
@@ -11,7 +12,7 @@ const DEFAULT_EVENT_CATEGORIES = [
   { name: 'Other', color: '#6b7280' },
 ]
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -41,7 +42,7 @@ export async function GET() {
     return NextResponse.json(createdCategories)
   }
 
-  return NextResponse.json(existingCategories)
+  return jsonWithETag(req, existingCategories)
 }
 
 export async function POST(req: Request) {

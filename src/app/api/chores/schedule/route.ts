@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
+import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -46,5 +47,5 @@ export async function GET(request: NextRequest) {
 
   const schedule = buildChoreSchedule(chores, todayStart, todayEnd, timezone, scope)
 
-  return NextResponse.json({ schedule, today: todayStart.toISOString() })
+  return jsonWithETag(request, { schedule, today: todayStart.toISOString() })
 }

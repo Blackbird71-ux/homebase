@@ -20,9 +20,10 @@ import { CHORES_SCOPE, queueChoreComplete } from '@/lib/chores-offline'
 import { MEAL_PLAN_SCOPE, queueMealPlanSlotState } from '@/lib/meal-plan-offline'
 import {
   localTimeToStoredDateTime, formatInTz, dateStringInTz, addLocalDays,
-  addMonthsInTz, addWeeksInTz, startOfMonthInTz, endOfMonthInTz,
+  addMonthsInTz, addWeeksInTz,
   startOfWeekInTz, endOfWeekInTz, isSameMonthInTz,
 } from '@/lib/timezone'
+import { buildEventsQuery, type CalendarViewName } from '@/lib/event-helpers'
 import type { CalendarEvent } from '@/types'
 
 interface CalendarSettings {
@@ -89,33 +90,8 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     const targetDate = date ?? currentDateRef.current
     const targetView = currentView ?? viewRef.current
     const s = settings ?? calSettingsRef.current
-    let rangeStart: Date
-    let rangeEnd: Date
-    if (targetView === 'month') {
-      rangeStart = addLocalDays(startOfWeekInTz(startOfMonthInTz(targetDate, timezone), timezone, weekStartsOn), -7, timezone)
-      rangeEnd   = addLocalDays(endOfWeekInTz(endOfMonthInTz(targetDate, timezone), timezone, weekStartsOn), 7, timezone)
-    } else if (targetView === 'week' || targetView === 'horizontal') {
-      rangeStart = addLocalDays(startOfWeekInTz(targetDate, timezone, weekStartsOn), -7, timezone)
-      rangeEnd   = addLocalDays(endOfWeekInTz(targetDate, timezone, weekStartsOn), 7, timezone)
-    } else if (targetView === 'day') {
-      rangeStart = addLocalDays(targetDate, -2, timezone)
-      rangeEnd   = addLocalDays(targetDate,  2, timezone)
-    } else {
-      // schedule — 60 days forward
-      rangeStart = targetDate
-      rangeEnd   = addLocalDays(targetDate, 62, timezone)
-    }
-
-    const params = new URLSearchParams({
-      from: rangeStart.toISOString(),
-      to: rangeEnd.toISOString(),
-      ...(s.calShowMeals  ? { meals:  '1' } : {}),
-      ...(s.calShowTodos  ? { todos:  '1' } : {}),
-      ...(s.calShowChores ? { chores: '1' } : {}),
-      ...(s.calShowBills  ? { bills:  '1' } : {}),
-      ...(s.calShowDocs   ? { docs:   '1' } : {}),
-    })
-    const res = await fetch(`/api/events?${params}`, { cache: 'no-store' })
+    const query = buildEventsQuery(targetView as CalendarViewName, targetDate, timezone, weekStartsOn, s)
+    const res = await fetch(`/api/events?${query}`, { cache: 'no-store' })
     if (res.ok) setEvents(await res.json())
   }, [weekStartsOn, router, timezone])
 

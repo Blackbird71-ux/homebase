@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { createAuditLog } from '@/lib/audit-log'
+import { jsonWithETag } from '@/lib/http-cache'
 
 function safeParseArray(json: string): string[] {
   try {
@@ -175,7 +176,8 @@ export async function GET(req: Request) {
       })
     : recipes
 
-  return NextResponse.json(
+  return jsonWithETag(
+    req,
     filtered.map((r: any) => {
       const legacyTags = r.tags ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : []
       const newTags = (r as any).recipeTags?.map((rt: any) => ({

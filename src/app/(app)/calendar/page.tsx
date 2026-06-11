@@ -1,7 +1,7 @@
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
-import { maskPersonalEvent } from '@/lib/event-helpers'
+import { maskPersonalEvent, calendarSettingsFromPrefs } from '@/lib/event-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import type { CalendarEvent } from '@/types'
 
@@ -12,19 +12,7 @@ export default async function CalendarPage() {
     where: { id: user.id },
     select: { uiPreferences: true },
   })
-  let calendarSettings = { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true, calShowDocs: true }
-  if (fullUser?.uiPreferences) {
-    try {
-      const prefs = JSON.parse(fullUser.uiPreferences)
-      calendarSettings = {
-        calShowMeals:  !!prefs.calShowMeals,
-        calShowTodos:  !!prefs.calShowTodos,
-        calShowChores: !!prefs.calShowChores,
-        calShowBills:  prefs.calShowBills  !== false,
-        calShowDocs:   prefs.calShowDocs   !== false,
-      }
-    } catch { /* ignore */ }
-  }
+  const calendarSettings = calendarSettingsFromPrefs(fullUser?.uiPreferences)
 
   const now = new Date()
   const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)

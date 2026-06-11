@@ -1,14 +1,22 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
+import type { SessionUser } from '@/types'
 import { getCachePath, isCached } from '@/lib/image-cache'
+import { buildEventsQuery, calendarSettingsFromPrefs } from '@/lib/event-helpers'
+import { todayStringInTz } from '@/lib/timezone'
+import { scopeDateRange } from '@/hooks/meal-plan/types'
 
 /**
  * GET /api/warm
  *
  * Returns data the service worker can use to pre-cache content for offline use.
- * No auth required — this only returns public-facing IDs and URLs that are
- * already accessible from the client. The SW uses this to warm the cache on
- * activation and via periodic background sync.
+ * recipeIds/recipeImages/warmPages need no auth — they only contain IDs and
+ * URLs already accessible from the client. apiUrls is computed from the
+ * session user's settings (timezone, weekStartsOn, calendar toggles) so each
+ * URL byte-matches the request the corresponding view makes — a warmed cache
+ * entry only serves offline if the URLs are identical. Without a session,
+ * apiUrls is empty.
  *
  * Response:
  * {
@@ -16,10 +24,50 @@ import { getCachePath, isCached } from '@/lib/image-cache'
  *                                 // The SW warms full HTML+RSC for the first 20 and
  *                                 // RSC-only for the rest (client-nav offline coverage).
  *   recipeImages: { url: string, cachePath: string | null }[],  // Recipe image URLs for pre-caching
- *   warmPages: string[]           // Main nav pages (same as WARM_PAGES in SW)
+ *   warmPages: string[],          // Main nav pages (same as WARM_PAGES in SW)
+ *   apiUrls: string[]             // Data API URLs to warm into the SW API cache
  * }
  */
 export async function GET() {
+  const session = await auth()
+  const user = session?.user as SessionUser | undefined
+
+  let apiUrls: string[] = []
+  if (user?.id) {
+    const timezone = user.timezone ?? 'UTC'
+    const weekStartsOn = (user.weekStartsOn === 0 ? 0 : 1) as 0 | 1
+    const [fullUser, lists] = await Promise.all([
+      prisma.user.findUnique({ where: { id: user.id }, select: { uiPreferences: true } }),
+      prisma.list.findMany({
+        where: { familyId: user.familyId, isActive: true },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+        take: 15,
+      }),
+    ])
+
+    // Same URL CalendarView.refresh builds for the default month view of today.
+    const eventsQuery = buildEventsQuery(
+      'month', new Date(), timezone, weekStartsOn,
+      calendarSettingsFromPrefs(fullUser?.uiPreferences)
+    )
+    // Same from/to the meal-plan page computes: today in the family tz, 7-day scope.
+    // The server runs in UTC, so local Date components match the tz date string.
+    const { from, to } = scopeDateRange(new Date(todayStringInTz(timezone) + 'T00:00:00'), 7)
+
+    apiUrls = [
+      '/api/lists',
+      ...lists.map((l) => `/api/lists/${l.id}/items`),
+      '/api/chores',
+      '/api/chores/schedule?scope=7',
+      `/api/events?${eventsQuery}`,
+      `/api/meal-plan?from=${from}&to=${to}`,
+      '/api/recipes',
+      '/api/event-categories',
+      '/api/ingredient-categories',
+    ]
+  }
+
   // Newest first, capped at 200 to bound the SW warm pass
   const recipes = await prisma.recipe.findMany({
     orderBy: { createdAt: 'desc' },
@@ -57,5 +105,6 @@ export async function GET() {
       '/notes',
       '/contacts',
     ],
+    apiUrls,
   })
 }
