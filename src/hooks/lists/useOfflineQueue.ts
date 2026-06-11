@@ -1,18 +1,14 @@
 import { useCallback, useEffect } from 'react'
-import { enqueueMutation, getAllMutations, removeMutation } from '@/lib/offline-queue'
+import {
+  queueOfflineMutation,
+  removeMutationsByTempId,
+  broadcastQueueCount,
+  OFFLINE_QUEUE_FLUSHED,
+} from '@/lib/offline-queue'
+import type { QueuedMutation } from '@/lib/offline-queue'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import type { ListItemShape } from '@/lib/list-helpers'
 import type { MutationGuard } from '@/hooks/useMutationGuard'
-
-async function registerBackgroundSync() {
-  if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return
-  try {
-    const reg = await navigator.serviceWorker.ready
-    await (reg as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync.register('homebase-list-sync')
-  } catch {
-    // Not supported or permission denied — the online/visibilitychange fallback covers this
-  }
-}
 
 function parseServerItems(raw: Record<string, unknown>[]): ListItemShape[] {
   return raw.map(i => ({
@@ -25,122 +21,66 @@ function parseServerItems(raw: Record<string, unknown>[]): ListItemShape[] {
 }
 
 /**
- * Owns all offline-sync concerns for a shopping list:
- * - IndexedDB mutation queue (enqueue, flush, remove)
- * - Background Sync registration
- * - online / visibilitychange / SW-message event listeners
- * - SHOPPING_LIST_UPDATED app-event listener
- *
- * Returns `{ registerBackgroundSync, broadcastQueueCount, enqueueMutation }`
- * so callers can enqueue mutations and update the OfflineBanner count.
+ * Per-list side of offline sync. Flushing itself is global — see
+ * useGlobalOfflineFlush (mounted in AppShell). This hook:
+ * - enqueues this list's mutations (queueMutation / cancelTempItem)
+ * - refetches the list when a global flush resolved mutations for it
+ * - refetches on SHOPPING_LIST_UPDATED and a 30s visibility-gated poll
  */
 export function useOfflineQueue(
   listId: string,
   setItems: React.Dispatch<React.SetStateAction<ListItemShape[]>>,
   guard: MutationGuard,
 ) {
-  const broadcastQueueCount = useCallback(async () => {
-    try {
-      const all = await getAllMutations()
-      const count = all.filter(m => m.listId === listId).length
-      window.dispatchEvent(new CustomEvent('offline-queue-update', { detail: { count } }))
-    } catch {
-      // IndexedDB unavailable
+  // Guarded refetch — skip overwriting state if an optimistic mutation landed
+  // during the fetch window (QA.md §12.27).
+  const refetchItems = useCallback(() => {
+    const v = guard.snapshot()
+    fetch(`/api/lists/${listId}/items`)
+      .then(res => res.ok ? res.json() : null)
+      .then(raw => { if (raw && guard.canApply(v)) setItems(parseServerItems(raw)) })
+      .catch(() => {})
+  }, [listId, setItems, guard])
+
+  // Refetch after the global flusher synced mutations belonging to this list
+  useEffect(() => {
+    function handleFlushed(event: Event) {
+      const listIds = (event as CustomEvent<{ listIds: string[] }>).detail?.listIds
+      if (listIds?.includes(listId)) refetchItems()
     }
+    window.addEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+    return () => window.removeEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+  }, [listId, refetchItems])
+
+  // Enqueue a mutation made while offline. Passing an explicit `id` collapses
+  // repeats (e.g. successive reorders) into one queue entry — IndexedDB put()
+  // overwrites on the same key.
+  const queueMutation = useCallback(async (
+    m: Omit<QueuedMutation, 'id' | 'listId' | 'queuedAt'> & { id?: string },
+  ) => {
+    await queueOfflineMutation({ id: m.id ?? crypto.randomUUID(), listId, queuedAt: Date.now(), ...m })
   }, [listId])
 
-  const flushQueueAndRefetch = useCallback(async () => {
-    let mutations: Awaited<ReturnType<typeof getAllMutations>>
-    try {
-      mutations = await getAllMutations()
-    } catch {
-      return
-    }
-
-    const mine = mutations
-      .filter(m => m.listId === listId)
-      .sort((a, b) => a.queuedAt - b.queuedAt)
-
-    if (mine.length === 0) return
-
-    for (const mutation of mine) {
-      try {
-        const res = await fetch(mutation.endpoint, {
-          method: mutation.method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(mutation.body),
-        })
-        if (res.ok || res.status === 404) await removeMutation(mutation.id)
-      } catch {
-        break // Still offline — stop and retry next time
-      }
-    }
-
-    try {
-      // Skip overwriting state if an optimistic mutation landed during the refetch
-      // window (matches the poll/app-event guards below).
-      const v = guard.snapshot()
-      const res = await fetch(`/api/lists/${listId}/items`)
-      if (res.ok && guard.canApply(v)) setItems(parseServerItems(await res.json()))
-    } catch {
-      // Network gone again — leave optimistic state as-is
-    }
-
+  // Cancel everything queued for an offline-created item that was deleted
+  // before syncing — the POST and any follow-up PATCHes simply vanish.
+  const cancelTempItem = useCallback(async (tempId: string) => {
+    try { await removeMutationsByTempId(tempId) } catch { /* IndexedDB unavailable */ }
     await broadcastQueueCount()
-  }, [listId, broadcastQueueCount, setItems, guard])
-
-  // Flush on coming back online (iOS/Safari fallback)
-  useEffect(() => {
-    window.addEventListener('online', flushQueueAndRefetch)
-    return () => window.removeEventListener('online', flushQueueAndRefetch)
-  }, [flushQueueAndRefetch])
-
-  // Listen for Background Sync messages from the service worker (Chrome/Android)
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return
-    function handleSWMessage(event: MessageEvent) {
-      if (event.data?.type === 'SYNC_REQUESTED') flushQueueAndRefetch()
-    }
-    navigator.serviceWorker.addEventListener('message', handleSWMessage)
-    return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage)
-  }, [flushQueueAndRefetch])
-
-  // Flush when the user returns to the tab after it was backgrounded
-  useEffect(() => {
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible' && navigator.onLine) flushQueueAndRefetch()
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [flushQueueAndRefetch])
-
-  // Broadcast initial queue count on mount
-  useEffect(() => { broadcastQueueCount() }, [broadcastQueueCount])
+  }, [])
 
   // Refetch when AI assistant or another source updates the list
   useEffect(() => {
-    return listenAppEvent(AppEvents.SHOPPING_LIST_UPDATED, () => {
-      const v = guard.snapshot()
-      fetch(`/api/lists/${listId}/items`)
-        .then(res => res.ok ? res.json() : null)
-        .then(raw => { if (raw && guard.canApply(v)) setItems(parseServerItems(raw)) })
-        .catch(() => {})
-    })
-  }, [listId, setItems, guard])
+    return listenAppEvent(AppEvents.SHOPPING_LIST_UPDATED, refetchItems)
+  }, [refetchItems])
 
   // Poll for item changes from other devices every 30s when the tab is visible and online
   useEffect(() => {
     const interval = setInterval(() => {
       if (!navigator.onLine || document.visibilityState !== 'visible') return
-      const v = guard.snapshot()
-      if (!guard.canApply(v)) return
-      fetch(`/api/lists/${listId}/items`)
-        .then(res => res.ok ? res.json() : null)
-        .then(raw => { if (raw && guard.canApply(v)) setItems(parseServerItems(raw)) })
-        .catch(() => {})
+      refetchItems()
     }, 30000)
     return () => clearInterval(interval)
-  }, [listId, setItems, guard])
+  }, [refetchItems])
 
-  return { registerBackgroundSync, broadcastQueueCount, enqueueMutation }
+  return { queueMutation, cancelTempItem }
 }

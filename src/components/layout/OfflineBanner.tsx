@@ -31,7 +31,7 @@ export function OfflineBanner() {
     }
   }, [])
 
-  // Listen for queue-count updates dispatched by ShoppingList
+  // Listen for queue-count updates broadcast by the offline queue (lib/offline-queue)
   useEffect(() => {
     function handleQueueUpdate(e: Event) {
       const count = (e as CustomEvent<{ count: number }>).detail.count
@@ -50,7 +50,7 @@ export function OfflineBanner() {
   } else if (isOffline && pendingCount > 0) {
     message = `Offline — ${pendingCount} change${pendingCount === 1 ? '' : 's'} pending sync`
   } else if (isOffline) {
-    message = "You're offline — shopping list changes will sync when you reconnect"
+    message = "You're offline — changes will sync when you reconnect"
   } else {
     message = `Syncing ${pendingCount} change${pendingCount === 1 ? '' : 's'}…`
   }

@@ -62,6 +62,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
     changeItemCategory,
     handleEditItem,
     handleItemSaved,
+    queueItemEdit,
     handleAddShoppingCategory,
     handleCreateInlineCategory,
     clearCompleted,
@@ -221,6 +222,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
         availableCategories={categories}
         listId={listId}
         onSaved={handleItemSaved}
+        queueOfflineEdit={queueItemEdit}
         onCategoryAdded={handleAddShoppingCategory}
         initialUnitPrice={items.find(i => i.id === editItemId)?.unitPrice ?? null}
         initialQuantity={items.find(i => i.id === editItemId)?.quantity ?? null}

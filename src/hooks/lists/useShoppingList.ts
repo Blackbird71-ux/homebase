@@ -55,30 +55,40 @@ export function useShoppingList(
 
   // ── Offline sync ────────────────────────────────────────────────────────────
 
-  const { registerBackgroundSync, broadcastQueueCount, enqueueMutation } =
-    useOfflineQueue(listId, setItems, guard)
+  const { queueMutation, cancelTempItem } = useOfflineQueue(listId, setItems, guard)
 
   // ── Debounced saves ─────────────────────────────────────────────────────────
 
   const debouncedSaveCategoryOrder = useDebouncedCallback(
     useCallback((order: string[]) => {
+      if (!navigator.onLine) {
+        // Fixed queue id — successive offline reorders collapse to the latest one
+        queueMutation({ id: `catorder_${listId}`, endpoint: `/api/lists/${listId}/category-order`, method: 'PATCH', body: { categoryOrder: order } })
+        return
+      }
       fetch(`/api/lists/${listId}/category-order`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categoryOrder: order }),
       }).catch(() => toast.error('Failed to save category order.'))
-    }, [listId]),
+    }, [listId, queueMutation]),
     500,
   )
 
   const debouncedSaveItemOrder = useDebouncedCallback(
     useCallback((updates: { id: string; sortOrder: number }[]) => {
+      if (!navigator.onLine) {
+        // No fixed id: each reorder covers only one category's items, so
+        // collapsing would drop an earlier reorder of a different category.
+        queueMutation({ endpoint: `/api/lists/${listId}/items/reorder`, method: 'PATCH', body: { items: updates } })
+        return
+      }
       fetch(`/api/lists/${listId}/items/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: updates }),
       }).catch(() => toast.error('Failed to save item order.'))
-    }, [listId]),
+    }, [listId, queueMutation]),
     500,
   )
 
@@ -202,9 +212,7 @@ export function useShoppingList(
       setCategoryManuallySet(false)
       // Carry the tempId as clientMutationId so a replayed POST (committed-but-lost
       // response on a flaky reconnect) is de-duped server-side instead of re-created.
-      await enqueueMutation({ id: crypto.randomUUID(), endpoint: `/api/lists/${listId}/items`, method: 'POST', body: { ...body, clientMutationId: tempId }, tempId, listId, queuedAt: Date.now() })
-      await registerBackgroundSync()
-      await broadcastQueueCount()
+      await queueMutation({ endpoint: `/api/lists/${listId}/items`, method: 'POST', body: { ...body, clientMutationId: tempId }, tempId })
       return
     }
 
@@ -235,11 +243,9 @@ export function useShoppingList(
     setItems(prev => prev.map(i => i.id === id ? { ...i, isCompleted } : i))
 
     if (!navigator.onLine || id.startsWith('tmp_')) {
-      if (!id.startsWith('tmp_')) {
-        await enqueueMutation({ id: crypto.randomUUID(), endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { isCompleted }, listId, queuedAt: Date.now() })
-        await registerBackgroundSync()
-        await broadcastQueueCount()
-      }
+      // tmp_ endpoints are rewritten to the real id during flush, after the
+      // item's queued POST replays — so toggles on offline-created items sync too.
+      await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { isCompleted } })
       return
     }
 
@@ -257,6 +263,19 @@ export function useShoppingList(
   }
 
   async function deleteItem(id: string) {
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      guard.bump()
+      setItems(prev => prev.filter(i => i.id !== id))
+      if (id.startsWith('tmp_')) {
+        // Item never reached the server — cancel its queued POST (and any
+        // follow-up mutations) instead of queueing a DELETE.
+        await cancelTempItem(id)
+      } else {
+        await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'DELETE' })
+      }
+      return
+    }
+
     // Non-optimistic (state set only after the server confirms) — wrap so background
     // reads skip for the whole in-flight window, not just a fixed timeout.
     await guard.runMutation(async () => {
@@ -271,6 +290,11 @@ export function useShoppingList(
 
   async function toggleLock(id: string, isLocked: boolean) {
     guard.bump()
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      setItems(prev => prev.map(i => i.id === id ? { ...i, isLocked } : i))
+      await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { isLocked } })
+      return
+    }
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -285,6 +309,12 @@ export function useShoppingList(
 
   async function changeItemCategory(id: string, newCat: string) {
     guard.bump()
+    if (!navigator.onLine || id.startsWith('tmp_')) {
+      setItems(prev => prev.map(i => i.id === id ? { ...i, category: newCat } : i))
+      await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body: { category: newCat } })
+      toast.success('Category updated')
+      return
+    }
     const res = await fetch(`/api/lists/${listId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -311,7 +341,16 @@ export function useShoppingList(
     setItems(prev => prev.map(i => i.id === id ? { ...i, content, category, unitPrice: unitPrice !== undefined ? unitPrice : i.unitPrice, quantity: quantity !== undefined ? quantity : i.quantity } : i))
   }
 
+  // Backs EditItemDialog saves made offline (or on a not-yet-synced tmp_ item).
+  async function queueItemEdit(id: string, body: Record<string, unknown>) {
+    guard.bump()
+    await queueMutation({ endpoint: `/api/lists/${listId}/items/${id}`, method: 'PATCH', body })
+  }
+
   async function handleAddShoppingCategory(name: string) {
+    if (!navigator.onLine) {
+      throw new Error("You're offline — categories can't be created until you reconnect")
+    }
     const key = `custom_${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}_${Date.now()}`
     const res = await fetch('/api/ingredient-categories', {
       method: 'POST',
@@ -346,6 +385,20 @@ export function useShoppingList(
   }
 
   async function clearCompleted() {
+    if (!navigator.onLine) {
+      guard.bump()
+      // Queue per-item DELETEs rather than the bulk endpoint: replaying
+      // clear-completed later would also clear items completed by other
+      // devices after we went offline — per-item deletes match user intent.
+      const toClear = items.filter(i => i.isCompleted && !i.isLocked)
+      setItems(prev => prev.filter(i => !(i.isCompleted && !i.isLocked)))
+      for (const item of toClear) {
+        if (item.id.startsWith('tmp_')) await cancelTempItem(item.id)
+        else await queueMutation({ endpoint: `/api/lists/${listId}/items/${item.id}`, method: 'DELETE' })
+      }
+      return
+    }
+
     // Non-optimistic bulk delete — wrap so background reads skip for the whole
     // in-flight window, not just a fixed timeout.
     await guard.runMutation(async () => {
@@ -399,6 +452,7 @@ export function useShoppingList(
     changeItemCategory,
     handleEditItem,
     handleItemSaved,
+    queueItemEdit,
     handleAddShoppingCategory,
     handleCreateInlineCategory,
     clearCompleted,

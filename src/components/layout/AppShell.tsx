@@ -8,6 +8,7 @@ import { UniversalFAB } from './UniversalFAB'
 import { OfflineBanner } from './OfflineBanner'
 import { HelpButton } from './HelpButton'
 import { AIAssistant } from '@/components/ai/AIAssistant'
+import { useGlobalOfflineFlush } from '@/hooks/useGlobalOfflineFlush'
 
 export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -16,6 +17,9 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
   })
   const [helpOpen, setHelpOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+
+  // Replays the offline mutation queue from anywhere in the app
+  useGlobalOfflineFlush()
 
   // Listen for custom events from QuickAdd dialog or UniversalFAB sheet
   useEffect(() => {

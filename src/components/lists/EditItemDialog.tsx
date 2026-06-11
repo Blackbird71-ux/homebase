@@ -29,6 +29,9 @@ interface EditItemDialogProps {
   availableCategories: string[]
   listId: string
   onSaved: (id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null, unitPrice?: number | null, quantity?: number | null) => void
+  /** When provided, saves made offline (or on a not-yet-synced tmp_ item) are
+      queued for replay instead of failing. */
+  queueOfflineEdit?: (id: string, body: Record<string, unknown>) => Promise<void>
   onCategoryAdded?: (name: string) => Promise<void>
   initialUnitPrice?: number | null
   initialQuantity?: number | null
@@ -46,6 +49,7 @@ export function EditItemDialog({
   availableCategories,
   listId,
   onSaved,
+  queueOfflineEdit,
   onCategoryAdded,
   initialUnitPrice,
   initialQuantity,
@@ -109,17 +113,27 @@ export function EditItemDialog({
       const resolvedDueDate = members !== undefined ? (dueDate || null) : undefined
       const resolvedAssignee = members !== undefined ? (assignedToUserId || null) : undefined
 
+      const payload = {
+        content: content.trim(),
+        category: category === 'Other' ? null : category,
+        unitPrice: parsedUnitPrice,
+        quantity: parsedQuantity,
+        ...(resolvedDueDate !== undefined && { dueDate: resolvedDueDate }),
+        ...(resolvedAssignee !== undefined && { assignedToUserId: resolvedAssignee }),
+      }
+
+      if (queueOfflineEdit && (!navigator.onLine || itemId.startsWith('tmp_'))) {
+        await queueOfflineEdit(itemId, payload)
+        onSaved(itemId, payload.content, payload.category, resolvedDueDate, resolvedAssignee, parsedUnitPrice, parsedQuantity)
+        onOpenChange(false)
+        toast.success('Saved — will sync when back online')
+        return
+      }
+
       const res = await fetch(`/api/lists/${listId}/items/${itemId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: content.trim(),
-          category: category === 'Other' ? null : category,
-          unitPrice: parsedUnitPrice,
-          quantity: parsedQuantity,
-          ...(resolvedDueDate !== undefined && { dueDate: resolvedDueDate }),
-          ...(resolvedAssignee !== undefined && { assignedToUserId: resolvedAssignee }),
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (res.ok) {
