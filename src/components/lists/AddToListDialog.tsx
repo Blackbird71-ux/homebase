@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { autoGuessCategory } from '@/lib/ingredient-helpers'
+import { queueOfflineMutation } from '@/lib/offline-queue'
 
 interface ShoppingListMeta {
   id: string
@@ -107,7 +108,31 @@ export function AddToListDialog({
         toast.info('No valid ingredients to add (all were section headers).')
         return
       }
-      
+
+      if (!navigator.onLine) {
+        // Queue the POSTs for the global flusher — clientMutationId makes the
+        // replay idempotent, same pattern as useShoppingList.addItem.
+        try {
+          for (const content of toAdd) {
+            const tempId = `tmp_${crypto.randomUUID()}`
+            await queueOfflineMutation({
+              id: crypto.randomUUID(),
+              listId: selectedListId,
+              queuedAt: Date.now(),
+              endpoint: `/api/lists/${selectedListId}/items`,
+              method: 'POST',
+              body: { content, category: autoGuessCategory(content), recipeId, recipeName, clientMutationId: tempId },
+              tempId,
+            })
+          }
+          toast.success(`${toAdd.length} ingredient(s) queued — will sync when back online.`)
+          onOpenChange(false)
+        } catch {
+          toast.error('Failed to queue items — offline storage unavailable.')
+        }
+        return
+      }
+
       const results = await Promise.all(
         toAdd.map((content) => {
           const category = autoGuessCategory(content)

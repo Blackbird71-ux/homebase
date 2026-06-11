@@ -12,16 +12,18 @@ import { getCachePath, isCached } from '@/lib/image-cache'
  *
  * Response:
  * {
- *   recipeIds: string[],          // Top N recipe IDs for detail page warming
+ *   recipeIds: string[],          // Recipe IDs for detail page warming, newest first.
+ *                                 // The SW warms full HTML+RSC for the first 20 and
+ *                                 // RSC-only for the rest (client-nav offline coverage).
  *   recipeImages: { url: string, cachePath: string | null }[],  // Recipe image URLs for pre-caching
  *   warmPages: string[]           // Main nav pages (same as WARM_PAGES in SW)
  * }
  */
 export async function GET() {
-  // Get the most recent recipes (limit to 20 for warming)
+  // Newest first, capped at 200 to bound the SW warm pass
   const recipes = await prisma.recipe.findMany({
     orderBy: { createdAt: 'desc' },
-    take: 20,
+    take: 200,
     select: {
       id: true,
       image: true,
@@ -30,8 +32,10 @@ export async function GET() {
 
   const recipeIds = recipes.map((r) => r.id)
 
-  // Collect image URLs that can be pre-cached by the SW
+  // Collect image URLs that can be pre-cached by the SW — top 20 only, to
+  // bound bandwidth (matches the SW's full-page warm depth)
   const recipeImages = recipes
+    .slice(0, 20)
     .filter((r) => r.image && (r.image.startsWith('http://') || r.image.startsWith('https://')))
     .map((r) => {
       const cachePath = getCachePath(r.image)

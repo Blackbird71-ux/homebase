@@ -32,9 +32,19 @@
 //     only when fully offline. This fixes the "tap Home several times before it
 //     loads" dead-end: a flaky navigation now shows the last-good page immediately.
 //   - Cache names bumped v7→v8 so the expanded warm list rebuilds cleanly on activate.
+// v9 additions:
+//   - Recipe warm depth: /api/warm now returns up to 200 recipe IDs (newest first).
+//     Full HTML+RSC is still warmed only for the top MAX_RECIPE_WARM (cost control);
+//     the rest get RSC-only warming, which makes every recipe reachable offline via
+//     client-side navigation from the warmed /recipes list page. (Hard-refreshing a
+//     non-top-20 recipe URL offline still falls back to the nav fallback chain.)
+//   - Offline mutation flushing moved to a single global flusher mounted in the app
+//     shell (useGlobalOfflineFlush) — SYNC_REQUESTED replay no longer requires a
+//     list page to be open.
+//   - Cache names bumped v8→v9 so the deeper recipe warm rebuilds cleanly on activate.
 
-const SHELL_CACHE = 'homebase-shell-v8';
-const API_CACHE   = 'homebase-api-v8';
+const SHELL_CACHE = 'homebase-shell-v9';
+const API_CACHE   = 'homebase-api-v9';
 const ALL_CACHES  = [SHELL_CACHE, API_CACHE];
 
 const SYNC_TAG = 'homebase-list-sync';
@@ -66,7 +76,8 @@ const WARM_PAGES = [
   '/maintenance',
 ];
 
-// Number of recipe detail pages to warm on activation
+// Number of recipe detail pages warmed with full HTML + RSC on activation.
+// Recipes beyond this depth are warmed RSC-only (see warmNavCache step 2).
 const MAX_RECIPE_WARM = 20;
 
 
@@ -137,10 +148,15 @@ async function warmNavCache() {
     if (warmRes.ok) {
       const warmData = await warmRes.json();
 
-      // Warm recipe detail pages (top N)
-      const recipeIds = (warmData.recipeIds || []).slice(0, MAX_RECIPE_WARM);
-      for (const id of recipeIds) {
+      // Warm recipe detail pages: full HTML + RSC for the newest MAX_RECIPE_WARM,
+      // RSC-only for the rest — client-side navigation from the warmed /recipes
+      // list page works offline for every recipe, at a fraction of the warm cost.
+      const recipeIds = warmData.recipeIds || [];
+      for (const id of recipeIds.slice(0, MAX_RECIPE_WARM)) {
         await warmPage('/recipes/' + id, shellCache, apiCache);
+      }
+      for (const id of recipeIds.slice(MAX_RECIPE_WARM)) {
+        await warmPageRsc('/recipes/' + id, apiCache);
       }
 
       // Warm recipe images into the shell cache
@@ -169,7 +185,12 @@ async function warmPage(url, shellCache, apiCache) {
     const res = await fetch(url, { credentials: 'include' });
     if (res.ok) await shellCache.put(url, res).catch(() => {});
   } catch {}
-  // RSC payload — RSC: 1 tells Next.js to return the component payload
+  await warmPageRsc(url, apiCache);
+}
+
+// Warm only the RSC payload — RSC: 1 tells Next.js to return the component
+// payload. Enough for offline client-side navigation; ~10x cheaper than HTML.
+async function warmPageRsc(url, apiCache) {
   try {
     const res = await fetch(url, { credentials: 'include', headers: { 'RSC': '1' } });
     if (res.ok) {
