@@ -6,7 +6,7 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { resolveDayToDate } from '@/lib/ai/orchestrator'
-import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz, dateStringInTz } from '@/lib/timezone'
+import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz, dateStringInTz, dateTimeLocalToUtc } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -74,10 +74,7 @@ async function createEventHandler(args: Record<string, unknown>, ctx: HandlerCon
 
   if (startTime && !allDay) {
     const [hours, minutes] = startTime.split(':').map(Number)
-    const startIso = `${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes ?? 0).padStart(2, '0')}:00`
-    const offsetDate = new Date(new Date(startIso).toLocaleString('en-US', { timeZone: timezone }))
-    const utcOffset = new Date(startIso).getTime() - offsetDate.getTime()
-    start = new Date(new Date(startIso).getTime() + utcOffset)
+    start = dateTimeLocalToUtc(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes ?? 0).padStart(2, '0')}`, timezone)
     end = new Date(start.getTime() + (durationMinutes ?? 60) * 60 * 1000)
   } else {
     allDay = true

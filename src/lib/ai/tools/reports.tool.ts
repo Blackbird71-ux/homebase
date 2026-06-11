@@ -6,6 +6,7 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { formatInTz } from '@/lib/timezone'
+import { parseFinancePeriod } from '@/lib/ai/finance-period'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── generateFinanceReport ──────────────────────────────────────────────────────
@@ -32,44 +33,7 @@ async function generateFinanceReportHandler(args: Record<string, unknown>, ctx: 
   const { period, format } = args as { period?: string; format?: string }
   const isDetailed = format === 'detailed'
 
-  // Parse period (reuse logic from finance-accounts.tool.ts)
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const userDate = new Date(now.getTime() + 10 * 60 * 60 * 1000)
-
-  let start: Date
-  let end: Date
-  let label: string
-
-  switch (period) {
-    case 'lastMonth': {
-      const y = userDate.getFullYear()
-      const m = userDate.getMonth() - 1
-      start = new Date(y, m, 1)
-      end = new Date(y, m + 1, 1)
-      label = start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-      break
-    }
-    case 'thisYear': {
-      start = new Date(userDate.getFullYear(), 0, 1)
-      end = new Date(userDate.getFullYear() + 1, 0, 1)
-      label = `Year to date (${userDate.getFullYear()})`
-      break
-    }
-    case 'last30days': {
-      end = new Date(today)
-      start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-      label = 'Last 30 days'
-      break
-    }
-    case 'thisMonth':
-    default: {
-      start = new Date(userDate.getFullYear(), userDate.getMonth(), 1)
-      end = new Date(userDate.getFullYear(), userDate.getMonth() + 1, 1)
-      label = start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-      break
-    }
-  }
+  const { start, end, label } = parseFinancePeriod(period, ctx.timezone ?? 'UTC')
 
   // Get all transactions for the period
   const transactions = await prisma.financeTransaction.findMany({

@@ -5,6 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
+import { parseFinancePeriod } from '@/lib/ai/finance-period'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -122,41 +123,9 @@ const querySpendingByCategoryDefinition: FunctionDeclaration = {
   },
 }
 
-function parsePeriod(period: string | undefined): { start: Date; end: Date; label: string } {
-  const now = new Date()
-  const userOffset = now.getTimezoneOffset() * 60 * 1000
-  const today = new Date(now.getTime() + 10 * 60 * 60 * 1000) // Approximate AEST
-
-  switch (period) {
-    case 'lastMonth': {
-      const y = today.getFullYear()
-      const m = today.getMonth() - 1
-      const start = new Date(y, m, 1)
-      const end = new Date(y, m + 1, 1)
-      return { start, end, label: `Last month (${start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })})` }
-    }
-    case 'thisYear': {
-      const start = new Date(today.getFullYear(), 0, 1)
-      const end = new Date(today.getFullYear() + 1, 0, 1)
-      return { start, end, label: `Year to date (${today.getFullYear()})` }
-    }
-    case 'last30days': {
-      const end = new Date(today)
-      const start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-      return { start, end, label: 'Last 30 days' }
-    }
-    case 'thisMonth':
-    default: {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1)
-      const end = new Date(today.getFullYear(), today.getMonth() + 1, 1)
-      return { start, end, label: `This month (${start.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })})` }
-    }
-  }
-}
-
 async function querySpendingByCategoryHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { period, category } = args as { period?: string; category?: string }
-  const { start, end, label } = parsePeriod(period)
+  const { start, end, label } = parseFinancePeriod(period, ctx.timezone ?? 'UTC')
 
   const whereBase: Record<string, unknown> = {
     familyId: ctx.familyId,
@@ -232,7 +201,7 @@ const queryMonthlySummaryDefinition: FunctionDeclaration = {
 
 async function queryMonthlySummaryHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { period } = args as { period?: string }
-  const { start, end, label } = parsePeriod(period)
+  const { start, end, label } = parseFinancePeriod(period, ctx.timezone ?? 'UTC')
 
   const [incomeAgg, expenseAgg, transferAgg] = await Promise.all([
     prisma.financeTransaction.aggregate({

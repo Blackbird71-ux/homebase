@@ -6,6 +6,7 @@ import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { formatInTz } from '@/lib/timezone'
+import { currentFinancialYearStart, financialYearBounds, parseFinancePeriod } from '@/lib/ai/finance-period'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── queryTaxSummary ───────────────────────────────────────────────────────────
@@ -24,42 +25,23 @@ const queryTaxSummaryDefinition: FunctionDeclaration = {
   },
 }
 
-function parseFinancialYear(label: string | undefined): { start: Date; end: Date; label: string } {
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1 // 1-based
-
+function parseFinancialYear(label: string | undefined, timezone: string): { start: Date; end: Date; label: string } {
   if (label) {
     const match = label.match(/(\d{4})-(\d{4})/)
     if (match) {
       const year = parseInt(match[1])
-      return {
-        start: new Date(year, 6, 1), // July 1
-        end: new Date(year + 1, 6, 1), // July 1 next year
-        label: `${year}-${year + 1}`,
-      }
+      return { ...financialYearBounds(year, timezone), label: `${year}-${year + 1}` }
     }
   }
 
   // Default: current Australian FY (July 1 to June 30)
-  if (currentMonth >= 7) {
-    return {
-      start: new Date(currentYear, 6, 1),
-      end: new Date(currentYear + 1, 6, 1),
-      label: `${currentYear}-${currentYear + 1}`,
-    }
-  } else {
-    return {
-      start: new Date(currentYear - 1, 6, 1),
-      end: new Date(currentYear, 6, 1),
-      label: `${currentYear - 1}-${currentYear}`,
-    }
-  }
+  const startYear = currentFinancialYearStart(timezone)
+  return { ...financialYearBounds(startYear, timezone), label: `${startYear}-${startYear + 1}` }
 }
 
 async function queryTaxSummaryHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { financialYear } = args as { financialYear?: string }
-  const { start, end, label } = parseFinancialYear(financialYear)
+  const { start, end, label } = parseFinancialYear(financialYear, ctx.timezone ?? 'UTC')
 
   // Get tax-deductible categories
   const deductibleCategories = await prisma.financeCategory.findMany({
@@ -212,27 +194,7 @@ const queryDeductibleExpensesDefinition: FunctionDeclaration = {
 
 async function queryDeductibleExpensesHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
   const { period, category } = args as { period?: string; category?: string }
-
-  let start: Date
-  let end: Date
-  let label: string
-
-  if (period?.startsWith('fy')) {
-    const yr = parseInt(period.slice(2))
-    start = new Date(yr, 6, 1)
-    end = new Date(yr + 1, 6, 1)
-    label = `FY ${yr}-${yr + 1}`
-  } else if (period === 'thisYear') {
-    const now = new Date()
-    start = new Date(now.getFullYear(), 0, 1)
-    end = new Date(now.getFullYear() + 1, 0, 1)
-    label = `${now.getFullYear()}`
-  } else {
-    const now = new Date()
-    start = new Date(now.getFullYear(), now.getMonth(), 1)
-    end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    label = now.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-  }
+  const { start, end, label } = parseFinancePeriod(period, ctx.timezone ?? 'UTC')
 
   // Get deductible category IDs
   const categoryWhere: Record<string, unknown> = {

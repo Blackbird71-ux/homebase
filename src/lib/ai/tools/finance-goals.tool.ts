@@ -5,7 +5,7 @@
 import { registerTool } from '@/lib/ai/tool-registry'
 import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
-import { formatInTz } from '@/lib/timezone'
+import { formatInTz, monthBoundsInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
 
 // ── Context provider ──────────────────────────────────────────────────────────
@@ -53,25 +53,12 @@ const queryBudgetStatusDefinition: FunctionDeclaration = {
   },
 }
 
-async function queryBudgetStatusHandler(args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
-  const { period } = args as { period?: string }
-  const now = new Date()
-  const userDate = new Date(now.getTime() + 10 * 60 * 60 * 1000) // Approx AEST
-
-  // Determine current period boundaries
-  let periodStart: Date
-  let periodEnd: Date
-  let periodLabel: string
-
-  if (period === 'thisMonth' || !period) {
-    periodStart = new Date(userDate.getFullYear(), userDate.getMonth(), 1)
-    periodEnd = new Date(userDate.getFullYear(), userDate.getMonth() + 1, 1)
-    periodLabel = userDate.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-  } else {
-    periodStart = new Date(userDate.getFullYear(), userDate.getMonth(), 1)
-    periodEnd = new Date(userDate.getFullYear(), userDate.getMonth() + 1, 1)
-    periodLabel = userDate.toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-  }
+async function queryBudgetStatusHandler(_args: Record<string, unknown>, ctx: HandlerContext): Promise<HandlerResult> {
+  // Budgets are monthly amounts, so status is always reported against the
+  // current calendar month regardless of the period argument.
+  const timezone = ctx.timezone ?? 'UTC'
+  const { start: periodStart, end: periodEnd } = monthBoundsInTz(timezone)
+  const periodLabel = formatInTz(periodStart, timezone, { month: 'long', year: 'numeric' })
 
   // Get budget rules active in this period
   const budgets = await prisma.financeBudget.findMany({

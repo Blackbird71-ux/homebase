@@ -224,6 +224,15 @@ export function todayStringInTz(timezone: string): string {
 export function monthBoundsInTz(timezone: string): { start: Date; end: Date } {
   const localDate = new Date().toLocaleDateString('en-CA', { timeZone: timezone }) // YYYY-MM-DD
   const [year, month] = localDate.split('-').map(Number)
+  return monthBoundsForInTz(year, month, timezone)
+}
+
+/**
+ * Returns the start and end of a specific calendar month (1-based) in the given
+ * timezone as UTC Dates. `monthBoundsInTz` covers the current month; use this for
+ * an arbitrary month (e.g. "last month", a financial-year boundary).
+ */
+export function monthBoundsForInTz(year: number, month: number, timezone: string): { start: Date; end: Date } {
   const firstDayStr = `${year}-${String(month).padStart(2, '0')}-01`
   const nextMonth = month === 12 ? 1 : month + 1
   const nextYear  = month === 12 ? year + 1 : year
