@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
-import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
 import { calculateNextDueDateFromNow } from '@/lib/chore-helpers'
 import { todayBoundsInTz } from '@/lib/timezone'
 
@@ -103,8 +102,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     )
   }
 
-  dispatchAppEvent(AppEvents.CHORES_UPDATED)
-
   // Include the same computed isOverdue flag as the GET route so the client
   // doesn't lose the overdue badge after an edit (until the next refresh).
   const { start: todayStart } = todayBoundsInTz(user.timezone ?? 'UTC')
@@ -144,8 +141,6 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     `Deleted chore "${existing.title}"`,
     { title: existing.title }
   )
-
-  dispatchAppEvent(AppEvents.CHORES_UPDATED)
 
   return NextResponse.json({ message: 'Deleted' })
 }

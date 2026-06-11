@@ -7,7 +7,6 @@ import { addRecurrenceException } from '@/lib/recurrence'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { getAccessToken, deleteGoogleEvent } from '@/lib/google-calendar'
 import { createAuditLog } from '@/lib/audit-log'
-import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
 
 export async function GET(
   _req: Request,
@@ -91,9 +90,6 @@ export async function PUT(
     }
   )
 
-  // Notify calendar views to refresh
-  dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
-
   return NextResponse.json(maskPersonalEvent(updated, user.id))
 }
 
@@ -142,9 +138,6 @@ export async function DELETE(
       { occurrence: occurrenceDate.toISOString() }
     )
 
-    // Notify calendar views to refresh
-    dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
-
     return NextResponse.json({ success: true })
   }
 
@@ -187,9 +180,6 @@ export async function DELETE(
         }
       }
     })()
-
-    // Notify calendar views to refresh
-    dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
 
     return NextResponse.json({ success: true, deletedCount: seriesIds.length })
   }
@@ -245,9 +235,6 @@ export async function DELETE(
       }
     }
   })()
-
-  // Notify calendar views to refresh
-  dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
 
   return NextResponse.json({ success: true })
 }

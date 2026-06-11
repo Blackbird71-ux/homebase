@@ -7,7 +7,6 @@ import { localMidnightToUtc, dateStringInTz } from '@/lib/timezone'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { createAuditLog } from '@/lib/audit-log'
-import { AppEvents, dispatchAppEvent } from '@/lib/app-events'
 import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(req: Request) {
@@ -448,9 +447,6 @@ export async function POST(req: Request) {
     `Created event "${title}"`,
     { eventId: event.id }
   )
-
-  // Notify calendar views to refresh
-  dispatchAppEvent(AppEvents.CALENDAR_UPDATED)
 
   return NextResponse.json(maskPersonalEvent(event, user.id), { status: 201 })
 }
