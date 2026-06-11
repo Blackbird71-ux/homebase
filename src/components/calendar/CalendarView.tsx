@@ -14,6 +14,8 @@ import { EventModal } from './EventModal'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/sheet'
 import { listenAppEvent, AppEvents } from '@/lib/app-events'
+import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
+import { CALENDAR_SCOPE, applyOfflineEventOps, type OfflineEventOp } from '@/lib/calendar-offline'
 import {
   localTimeToStoredDateTime, formatInTz, dateStringInTz, addLocalDays,
   addMonthsInTz, addWeeksInTz, startOfMonthInTz, endOfMonthInTz,
@@ -42,6 +44,10 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [view, setView] = useState<'month' | 'week' | 'day' | 'schedule' | 'horizontal'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
+  // Mutations queued while offline, overlaid on fetched events for display —
+  // offline refreshes return the SW-cached response, which doesn't know
+  // about queued changes. Cleared once the global flusher syncs them.
+  const [pendingOps, setPendingOps] = useState<OfflineEventOp[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [defaultDate, setDefaultDate] = useState<Date | undefined>()
@@ -116,6 +122,20 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       refresh()
     })
     return cleanup
+  }, [refresh])
+
+  // Drop the optimistic overlay and refetch once the global flusher
+  // (useGlobalOfflineFlush) has synced queued calendar mutations.
+  useEffect(() => {
+    function handleFlushed(event: Event) {
+      const listIds = (event as CustomEvent<{ listIds: string[] }>).detail?.listIds
+      if (listIds?.includes(CALENDAR_SCOPE)) {
+        setPendingOps([])
+        refresh()
+      }
+    }
+    window.addEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+    return () => window.removeEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
   }, [refresh])
 
   // Fetch full event list on mount — SSR only includes real Event records,
@@ -262,6 +282,8 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       body: JSON.stringify({ uiPreferences: { [key]: next[key] } }),
     })
   }
+
+  const displayEvents = pendingOps.length > 0 ? applyOfflineEventOps(events, pendingOps) : events
 
   const today = new Date()
   const isCurrentPeriod = view === 'month'
@@ -466,7 +488,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
         {view === 'month' ? (
           <MonthView
             currentDate={currentDate}
-            events={events}
+            events={displayEvents}
             weekStartsOn={weekStartsOn}
             timezone={timezone}
             onDayClick={date => openNew(date)}
@@ -478,7 +500,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
         ) : view === 'week' ? (
           <WeekView
             currentDate={currentDate}
-            events={events}
+            events={displayEvents}
             weekStartsOn={weekStartsOn}
             timezone={timezone}
             onDayClick={date => { setCurrentDate(date); setView('day'); refresh(date, 'day') }}
@@ -490,7 +512,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
         ) : view === 'day' ? (
           <DayView
             currentDate={currentDate}
-            events={events}
+            events={displayEvents}
             timezone={timezone}
             onDayClick={date => openNew(date)}
             onEventClick={openEdit}
@@ -501,7 +523,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
         ) : view === 'horizontal' ? (
           <HorizontalWeekView
             currentDate={currentDate}
-            events={events}
+            events={displayEvents}
             weekStartsOn={weekStartsOn}
             timezone={timezone}
             onDayClick={date => { setCurrentDate(date); setView('day'); refresh(date, 'day') }}
@@ -510,7 +532,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
         ) : (
           <ScheduleView
             currentDate={currentDate}
-            events={events}
+            events={displayEvents}
             timezone={timezone}
             onDayClick={date => { setCurrentDate(date); setView('day'); refresh(date, 'day') }}
             onEventClick={openEdit}
@@ -528,6 +550,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
           setTimeout(() => setSelectedEvent(null), 300)
         }}
         onSave={refresh}
+        onOfflineChange={op => setPendingOps(prev => [...prev, op])}
       />
 
       {mealModalDate && (

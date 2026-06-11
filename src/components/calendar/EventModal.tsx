@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { CalendarEvent } from '@/types'
 import { getEventId, isRecurringEvent } from '@/lib/event-helpers'
+import {
+  isTempEventId,
+  queueEventCreate,
+  queueEventUpdate,
+  queueEventDelete,
+  type OfflineEventOp,
+} from '@/lib/calendar-offline'
 import { EventAttendeePanel } from './EventAttendeePanel'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import {
@@ -52,9 +60,11 @@ interface EventModalProps {
   currentUserId: string
   onClose: () => void
   onSave: () => Promise<void>
+  /** Optimistic-display hook for offline saves — see applyOfflineEventOps. */
+  onOfflineChange?: (op: OfflineEventOp) => void
 }
 
-export function EventModal({ event, defaultDate, open, currentUserId, onClose, onSave }: EventModalProps) {
+export function EventModal({ event, defaultDate, open, currentUserId, onClose, onSave, onOfflineChange }: EventModalProps) {
   const [title, setTitle] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -190,6 +200,46 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
         body.recurrenceEndDate = null
       }
 
+      // Offline, or editing an offline-created event that hasn't synced yet:
+      // queue the mutation and let the calendar update optimistically.
+      if (!navigator.onLine || (eventId && isTempEventId(eventId))) {
+        const patch: Partial<CalendarEvent> = {
+          title,
+          description: description || null,
+          location: location || null,
+          category,
+          color: color || null,
+          isPersonal,
+          recurrenceRule: (body.recurrenceRule as string | null) ?? null,
+          isRecurring: (body.isRecurring as boolean) ?? false,
+          recurrenceEndDate: (body.recurrenceEndDate as string | undefined) ?? null,
+        }
+        if (!isRecurringInstance) {
+          patch.start = body.start as string
+          patch.end = body.end as string
+          patch.isAllDay = isAllDay
+        }
+        try {
+          if (eventId) {
+            await queueEventUpdate(eventId, body)
+            onOfflineChange?.({ type: 'update', id: eventId, patch })
+          } else {
+            const tempId = await queueEventCreate(body)
+            onOfflineChange?.({
+              type: 'create',
+              event: { id: tempId, createdBy: currentUserId, isBusy: false, ...patch } as CalendarEvent,
+            })
+          }
+          toast.success('Saved offline — will sync when you reconnect')
+          setLoading(false)
+          onClose()
+        } catch {
+          setLoading(false)
+          setError('Failed to save offline — storage unavailable.')
+        }
+        return
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -228,6 +278,24 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
       const eventId = getEventId(event)
       if (!eventId) return
+
+      // Offline, or an offline-created event not yet on the server: queue the
+      // delete (tmp_ events just cancel their queued POST/PUTs).
+      if (!navigator.onLine || isTempEventId(eventId)) {
+        try {
+          await queueEventDelete(eventId, deleteAll && isRecurringEvent(event))
+          onOfflineChange?.({ type: 'delete', id: eventId })
+          toast.success('Saved offline — will sync when you reconnect')
+          setLoading(false)
+          setShowDeleteConfirm(false)
+          setDeleteAll(false)
+          onClose()
+        } catch {
+          setLoading(false)
+          setError('Failed to save offline — storage unavailable.')
+        }
+        return
+      }
 
       const url = deleteAll && isRecurringEvent(event)
         ? `/api/events/${eventId}?all=true`

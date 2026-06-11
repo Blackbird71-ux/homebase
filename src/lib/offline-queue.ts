@@ -17,7 +17,7 @@ export const OFFLINE_QUEUE_UPDATE = 'offline-queue-update'
 export interface QueuedMutation {
   id: string
   endpoint: string
-  method: 'POST' | 'PATCH' | 'DELETE'
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   /** Request body — omitted for DELETE. */
   body?: Record<string, unknown>
   /** Temporary client-side ID used for POST mutations until the server returns the real ID. */

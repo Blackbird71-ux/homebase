@@ -393,7 +393,7 @@ export async function POST(req: Request) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { title, description, location, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails } = body
+  const { title, description, location, start, end, isAllDay, category, color, isPersonal, recurrenceRule, isRecurring, recurrenceEndDate, emailReminder, emailReminderHours, emailReminderEmails, clientMutationId } = body
 
   if (!title || !start || !end) {
     return NextResponse.json({ error: 'title, start, and end are required' }, { status: 400 })
@@ -402,6 +402,15 @@ export async function POST(req: Request) {
   const validation = validateEventDates(start, end, isAllDay)
   if (!validation.valid) {
     return NextResponse.json({ error: validation.error }, { status: 400 })
+  }
+
+  // Idempotent offline-replay guard: if this clientMutationId was already
+  // created (e.g. the response was lost and the queue replays the POST),
+  // return the existing event instead of creating a duplicate. Skip the
+  // audit log on this path — it already ran on first creation.
+  if (clientMutationId) {
+    const existing = await prisma.event.findUnique({ where: { clientMutationId } })
+    if (existing) return NextResponse.json(maskPersonalEvent(existing, user.id), { status: 200 })
   }
 
   const event = await prisma.event.create({
@@ -423,6 +432,7 @@ export async function POST(req: Request) {
       emailReminder: emailReminder ?? false,
       emailReminderHours: emailReminderHours ?? 24,
       emailReminderEmails: emailReminderEmails ? JSON.stringify(emailReminderEmails) : null,
+      clientMutationId: clientMutationId ?? null,
     },
   })
 

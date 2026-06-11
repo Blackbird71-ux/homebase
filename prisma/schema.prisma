@@ -138,6 +138,9 @@ model Event {
   emailReminderHours   Int                    @default(24)     // Hours before start to send reminder
   emailReminderEmails  String?                // JSON array of extra recipient emails (non-family)
 
+  // Idempotency key for offline-replayed POSTs (see offline queue)
+  clientMutationId     String?                @unique
+
   @@index([familyId, start])
   @@index([seriesId])
 }
