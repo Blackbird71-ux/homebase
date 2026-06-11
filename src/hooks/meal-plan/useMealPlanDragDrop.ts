@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
+import { queueMealPlanSlotState, queueMealPlanSlotDelete } from '@/lib/meal-plan-offline'
 import { type MealPlanEntry, type ScopeDays, scopeDateRange } from './types'
 
 export function useMealPlanDragDrop({
@@ -99,6 +100,45 @@ export function useMealPlanDragDrop({
     targetDate: string,
     targetMealType: string,
   ) {
+    if (!navigator.onLine) {
+      // Optimistic append (we have the title from the drag data), queued as
+      // whole-slot state — the slot upsert is idempotent on replay.
+      const existingTarget = entries.find(e => e.date.slice(0, 10) === targetDate && e.mealType === targetMealType)
+      const alreadyThere = existingTarget?.recipes?.some(r => r.recipeId === recipeId)
+      const optimistic: MealPlanEntry = existingTarget
+        ? alreadyThere
+          ? existingTarget
+          : {
+              ...existingTarget,
+              recipes: [
+                ...(existingTarget.recipes || []),
+                { id: recipeId, recipeId, order: existingTarget.recipes?.length || 0, courseType: null, recipe: { id: recipeId, title: recipeName, image: null } },
+              ],
+            }
+        : {
+            id: `temp-${Date.now()}`,
+            date: targetDate + 'T00:00:00.000Z',
+            mealType: targetMealType,
+            recipeId: null, recipe: null, note: null,
+            familyId: entries[0]?.familyId ?? '',
+            recipes: [{ id: recipeId, recipeId, order: 0, courseType: null, recipe: { id: recipeId, title: recipeName, image: null } }],
+          }
+      setEntries(prev => {
+        const filtered = prev.filter(e => !(e.date.slice(0, 10) === targetDate && e.mealType === targetMealType))
+        return [...filtered, optimistic]
+      })
+      markNewlyMoved(optimistic.id)
+      try {
+        await queueMealPlanSlotState(
+          targetDate, targetMealType,
+          optimistic.recipes.map(r => r.recipeId), optimistic.note,
+        )
+        toast.success(`Added ${recipeName} (offline — will sync)`)
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      }
+      return
+    }
     try {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
@@ -178,6 +218,29 @@ export function useMealPlanDragDrop({
 
     markNewlyMoved(optimisticTarget.id)
 
+    if (!navigator.onLine) {
+      // The /move route's response ids can't be reconciled on replay, so the
+      // move is queued as slot-state for both slots (delete source if emptied).
+      try {
+        if (updatedSourceRecipes.length === 0) {
+          await queueMealPlanSlotDelete(sourceDate, sourceMealType, sourceEntryId)
+        } else {
+          await queueMealPlanSlotState(
+            sourceDate, sourceMealType,
+            updatedSourceRecipes.map(r => r.recipeId), sourceEntry.note,
+          )
+        }
+        await queueMealPlanSlotState(
+          targetDate, targetMealType,
+          optimisticTarget.recipes.map(r => r.recipeId), optimisticTarget.note,
+        )
+        toast.success('Moved offline — will sync when you reconnect')
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      }
+      return
+    }
+
     try {
       const res = await fetch(`/api/meal-plan/recipe/${recipeId}/move`, {
         method: 'PATCH',
@@ -228,6 +291,21 @@ export function useMealPlanDragDrop({
     })
 
     markNewlyMoved(optimisticTarget.id)
+
+    if (!navigator.onLine) {
+      // Whole entry moved: source slot is emptied, target gets all its recipes.
+      try {
+        await queueMealPlanSlotDelete(sourceEntry.date.slice(0, 10), sourceEntry.mealType, sourceId)
+        await queueMealPlanSlotState(
+          targetDate, targetMealType,
+          optimisticTarget.recipes.map(r => r.recipeId), optimisticTarget.note,
+        )
+        toast.success('Moved offline — will sync when you reconnect')
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      }
+      return
+    }
 
     try {
       const res = await fetch(`/api/meal-plan/${sourceId}/move`, {
