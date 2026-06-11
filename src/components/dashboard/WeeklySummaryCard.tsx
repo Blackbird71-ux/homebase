@@ -10,6 +10,8 @@ import { EventModal } from '@/components/calendar/EventModal'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { CardQuickAdd } from './CardQuickAdd'
 import { toast } from 'sonner'
+import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
+import { MEAL_PLAN_SCOPE, queueMealPlanSlotState } from '@/lib/meal-plan-offline'
 import type { WeatherData } from '@/types'
 
 export interface WeeklySummaryData {
@@ -130,7 +132,30 @@ export function WeeklySummaryCard({
     prefetchWeather()
   }, [])
 
+  // Re-render server data once the offline queue replays meal-plan mutations.
+  useEffect(() => {
+    function handleFlushed(e: Event) {
+      const listIds = (e as CustomEvent<{ listIds: string[] }>).detail?.listIds
+      if (listIds?.includes(MEAL_PLAN_SCOPE)) router.refresh()
+    }
+    window.addEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+    return () => window.removeEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+  }, [router])
+
   async function handleMealAssign(assignData: { recipeIds?: string[]; note?: string }) {
+    // Offline: queue the slot's desired state for idempotent replay (same
+    // whole-slot replace the online POST performs).
+    if (!navigator.onLine) {
+      try {
+        await queueMealPlanSlotState(today, 'dinner', assignData.recipeIds ?? [], assignData.note ?? null)
+        toast.success('Saved offline — will sync when you reconnect')
+        setMealOpen(false)
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      }
+      return
+    }
+
     try {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',

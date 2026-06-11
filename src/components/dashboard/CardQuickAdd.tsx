@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { queueMealPlanSlotState } from '@/lib/meal-plan-offline'
 
 type QuickAddType = 'chore' | 'event' | 'meal' | 'todo-item'
 
@@ -98,6 +99,15 @@ export function CardQuickAdd({ type, listId }: CardQuickAddProps) {
         case 'meal': {
           if (!date || !mealType) { toast.error('Date and meal type are required'); setSubmitting(false); return }
           if (!mealNote.trim()) { toast.error('Enter what you\'re having'); setSubmitting(false); return }
+          // Offline: queue the slot state for idempotent replay; skip the
+          // router.refresh() — the flush listeners realign once back online.
+          if (!navigator.onLine) {
+            await queueMealPlanSlotState(date, mealType, [], mealNote.trim())
+            toast.success('Saved offline — will sync when you reconnect')
+            setSuccess(true)
+            setTimeout(() => setOpen(false), 700)
+            return
+          }
           const res = await fetch('/api/meal-plan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

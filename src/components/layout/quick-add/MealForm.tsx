@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { todayAU } from '@/lib/utils'
+import { queueMealPlanSlotState } from '@/lib/meal-plan-offline'
 import type { QuickAddFormProps } from './types'
 
 const MEAL_TYPE_OPTIONS = [
@@ -31,6 +32,12 @@ export function MealForm({ onSuccess, onBack }: QuickAddFormProps) {
     if (!note.trim()) { toast.error("Enter what you're having"); return }
     setSubmitting(true)
     try {
+      // Offline: queue the slot state for idempotent replay instead of POSTing.
+      if (!navigator.onLine) {
+        await queueMealPlanSlotState(date, mealType, [], note.trim())
+        onSuccess('Saved offline — will sync when you reconnect')
+        return
+      }
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

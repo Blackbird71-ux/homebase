@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Coffee, Utensils, Pizza, Apple, Plus } from 'lucide-react'
@@ -8,6 +8,8 @@ import type { TodaysMeals, TodaysMeal } from '@/types'
 import Link from 'next/link'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { toast } from 'sonner'
+import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
+import { MEAL_PLAN_SCOPE, queueMealPlanSlotState } from '@/lib/meal-plan-offline'
 
 const MEAL_CONFIG = [
   { key: 'breakfast' as const, label: 'Breakfast', Icon: Coffee },
@@ -54,7 +56,30 @@ export function TodaysMealsCard({ meals, title = "Today's Meals" }: { meals: Tod
   const [mealOpen, setMealOpen] = useState(false)
   const today = todayLocal()
 
+  // Re-render server data once the offline queue replays meal-plan mutations.
+  useEffect(() => {
+    function handleFlushed(e: Event) {
+      const listIds = (e as CustomEvent<{ listIds: string[] }>).detail?.listIds
+      if (listIds?.includes(MEAL_PLAN_SCOPE)) router.refresh()
+    }
+    window.addEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+    return () => window.removeEventListener(OFFLINE_QUEUE_FLUSHED, handleFlushed)
+  }, [router])
+
   async function handleAssign(data: { recipeIds?: string[]; note?: string }) {
+    // Offline: queue the slot's desired state for idempotent replay (same
+    // whole-slot replace the online POST performs).
+    if (!navigator.onLine) {
+      try {
+        await queueMealPlanSlotState(today, 'dinner', data.recipeIds ?? [], data.note ?? null)
+        toast.success('Saved offline — will sync when you reconnect')
+        setMealOpen(false)
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      }
+      return
+    }
+
     try {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',

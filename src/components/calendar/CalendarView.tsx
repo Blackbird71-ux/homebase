@@ -17,6 +17,7 @@ import { listenAppEvent, AppEvents } from '@/lib/app-events'
 import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
 import { CALENDAR_SCOPE, applyOfflineEventOps, type OfflineEventOp } from '@/lib/calendar-offline'
 import { CHORES_SCOPE, queueChoreComplete } from '@/lib/chores-offline'
+import { MEAL_PLAN_SCOPE, queueMealPlanSlotState } from '@/lib/meal-plan-offline'
 import {
   localTimeToStoredDateTime, formatInTz, dateStringInTz, addLocalDays,
   addMonthsInTz, addWeeksInTz, startOfMonthInTz, endOfMonthInTz,
@@ -133,9 +134,10 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       if (listIds?.includes(CALENDAR_SCOPE)) {
         setPendingOps([])
         refresh()
-      } else if (listIds?.includes(CHORES_SCOPE)) {
-        // Replayed chore completions advance due dates server-side — refetch so
-        // the synthetic chore events move. Calendar pendingOps stay untouched.
+      } else if (listIds?.includes(CHORES_SCOPE) || listIds?.includes(MEAL_PLAN_SCOPE)) {
+        // Replayed chore completions / meal-plan edits change the synthetic
+        // chore and meal events server-side — refetch so they realign.
+        // Calendar pendingOps stay untouched.
         refresh()
       }
     }
@@ -215,6 +217,19 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   }
 
   async function handleMealAssign({ recipeIds, note }: { recipeIds?: string[]; note?: string }) {
+    // Offline: queue the slot's desired state for idempotent replay (same
+    // whole-slot replace the online append:false POST performs).
+    if (!navigator.onLine) {
+      try {
+        await queueMealPlanSlotState(mealModalDate, 'dinner', recipeIds ?? [], note ?? null)
+        toast.success('Saved offline — will sync when you reconnect')
+        setMealModalOpen(false)
+      } catch {
+        toast.error('Failed to save offline — storage unavailable.')
+      }
+      return
+    }
+
     try {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
