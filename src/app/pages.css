@@ -928,7 +928,8 @@
 
 /* Dark sidebar themes ──────────────────────────────────────── */
 .dark, .midnight, .glass-dark, .apple-pro, .apple-graphite, .apple-midnight,
-.high-contrast-dark, .high-contrast-midnight {
+.high-contrast-dark, .high-contrast-midnight,
+.paper, .harbour, .plum {
   --sidebar-grad:         linear-gradient(180deg, oklch(0.21 0.025 260) 0%, oklch(0.16 0.018 258) 100%);
   --sidebar-fg:           rgba(255,255,255,0.72);
   --sidebar-fg-dim:       rgba(255,255,255,0.45);
@@ -953,6 +954,11 @@
 .apple-aqua    { --sidebar-grad: oklch(0.930 0.007 240); --sidebar-fg: oklch(0.30 0.01 240); --sidebar-fg-dim: oklch(0.52 0.01 240); }
 .apple-sunset  { --sidebar-grad: oklch(0.930 0.02  42);  --sidebar-fg: oklch(0.28 0.02  40); --sidebar-fg-dim: oklch(0.50 0.02  40); --sidebar-text: oklch(0.15 0.02  40); }
 .apple-forest  { --sidebar-grad: oklch(0.920 0.018 148); --sidebar-fg: oklch(0.28 0.02 148); --sidebar-fg-dim: oklch(0.50 0.02 148); --sidebar-text: oklch(0.15 0.03 148); }
+
+/* Coloured dark sidebars on light content (Paper / Harbour / Plum) ── */
+.paper   { --sidebar-grad: linear-gradient(180deg, oklch(0.30 0.03  55) 0%, oklch(0.24 0.028  50) 100%); }
+.harbour { --sidebar-grad: linear-gradient(180deg, oklch(0.27 0.055 258) 0%, oklch(0.21 0.05  256) 100%); }
+.plum    { --sidebar-grad: linear-gradient(180deg, oklch(0.30 0.065 332) 0%, oklch(0.24 0.055 328) 100%); }
 
 /* ── Sidebar shell ────────────────────────────────────────── */
 .hb-sidebar {
