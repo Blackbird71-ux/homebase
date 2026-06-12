@@ -60,6 +60,8 @@ model Family {
   budgetIncomeStreams     String?               // JSON: [{id,name,amount,frequency,isIncluded,entityId?}]
   wishlistItems          WishlistItem[]
   homeAssets             HomeAsset[]
+  pantryItems            PantryItem[]
+  barcodeMappings        BarcodeMapping[]
 }
 
 model User {
@@ -360,6 +362,35 @@ model IngredientMapping {
   updatedAt DateTime @updatedAt
 
   @@unique([familyId, ingredient])
+}
+
+model PantryItem {
+  id         String    @id @default(cuid())
+  familyId   String
+  family     Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name       String
+  location   String    @default("pantry")   // pantry | fridge | freezer
+  status     String    @default("stocked")  // stocked | low | out
+  isStaple   Boolean   @default(true)       // staples get re-suggested when out; one-offs don't
+  expiryDate DateTime?                      // opt-in, only where it matters (freezer meat etc.)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([familyId, name])
+}
+
+// Learned barcode → product-name mappings. Scans resolve here first (covers
+// Aldi/Coles home brands missing from public databases), then fall back to
+// Open Food Facts; an unresolved scan is named once by the user and remembered.
+model BarcodeMapping {
+  id          String   @id @default(cuid())
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  barcode     String
+  productName String
+  createdAt   DateTime @default(now())
+
+  @@unique([familyId, barcode])
 }
 
 model RecipeBook {
