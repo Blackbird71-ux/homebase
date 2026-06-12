@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { formatCurrency } from '@/lib/financeShared'
+import { formatCurrency, toMonthlyAmount } from '@/lib/financeShared'
 
 export interface BudgetRule {
   id: string
@@ -28,12 +28,7 @@ interface CategoryGroup {
 }
 
 function toMonthly(amount: number, period: string): number {
-  if (period === 'weekly')      return amount * 52 / 12
-  if (period === 'fortnightly') return amount * 26 / 12
-  if (period === 'quarterly')   return amount / 3
-  if (period === 'halfyearly')  return amount / 6
-  if (period === 'yearly')      return amount / 12
-  return amount
+  return toMonthlyAmount(amount, period)
 }
 
 function fmtCurrency(n: number) {

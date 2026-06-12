@@ -8,7 +8,7 @@ import {
 import { PageHero } from '@/components/shared/PageHero'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { formatCurrency } from '@/lib/financeShared'
+import { formatCurrency, toMonthlyAmount } from '@/lib/financeShared'
 import { cn } from '@/lib/utils'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/sheet'
 import { CategorySpendView, type BudgetRule } from '@/components/finance/CategorySpendView'
@@ -37,25 +37,11 @@ interface IncomeStream {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function streamToMonthly(s: IncomeStream): number {
-  const { amount, frequency } = s
-  switch (frequency) {
-    case 'weekly':      return amount * 52 / 12
-    case 'fortnightly': return amount * 26 / 12
-    case 'monthly':     return amount
-    case 'quarterly':   return amount / 3
-    case 'halfyearly':  return amount / 6
-    case 'yearly':      return amount / 12
-    default:            return amount
-  }
+  return toMonthlyAmount(s.amount, s.frequency)
 }
 
 function toMonthly(amount: number, period: string): number {
-  if (period === 'weekly')      return amount * 52 / 12
-  if (period === 'fortnightly') return amount * 26 / 12
-  if (period === 'quarterly')   return amount / 3
-  if (period === 'halfyearly')  return amount / 6
-  if (period === 'yearly')      return amount / 12
-  return amount
+  return toMonthlyAmount(amount, period)
 }
 
 function fmtCurrency(n: number) {
