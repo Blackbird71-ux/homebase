@@ -9,6 +9,7 @@ import {
   Settings, LogOut, StickyNote, ListChecks, BookUser,
   Plus, FileText, DollarSign, Search, ChevronDown,
   Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench, PiggyBank,
+  ShoppingBasket,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   // Kitchen
   { href: '/recipes',   label: 'Recipes',   icon: ChefHat,      group: 'kitchen',  cat: 'var(--cat-recipes)' },
   { href: '/meal-plan', label: 'Meal Plan', icon: CalendarDays, group: 'kitchen',  cat: 'var(--cat-mealplan)' },
+  { href: '/pantry',    label: 'Pantry',    icon: ShoppingBasket, group: 'kitchen', cat: 'var(--cat-pantry)' },
   // Household
   { href: '/finance',   label: 'Finance',   icon: DollarSign,   group: 'household', cat: 'var(--cat-finance)' },
   { href: '/contacts',  label: 'Contacts',  icon: BookUser,     group: 'household', cat: 'var(--cat-contacts)' },

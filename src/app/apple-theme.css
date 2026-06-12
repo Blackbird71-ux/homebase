@@ -54,6 +54,7 @@
   --cat-finance:    #34C759;
   --cat-trips:      #5856D6;
   --cat-maintenance: #A2845E;
+  --cat-pantry:     #00C7BE;
 
   /* ──────── Type ──────── */
   --font-sans:  -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter Tight", "Inter", system-ui, sans-serif;
@@ -163,6 +164,7 @@
   --cat-finance:   #30D158;
   --cat-trips:     #7A78F5;
   --cat-maintenance: #AC8E68;
+  --cat-pantry:    #66D4CF;
   --ring:   0 0 0 0.5px rgba(255, 255, 255, 0.08);
   --ring-2: 0 0 0 0.5px rgba(255, 255, 255, 0.14);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6), var(--ring);
@@ -200,6 +202,7 @@
   --cat-finance:   #5EC489;
   --cat-trips:     #9B99F7;
   --cat-maintenance: #C9A87E;
+  --cat-pantry:    #6FD3C0;
   --ring:   0 0 0 0.5px rgba(255, 255, 255, 0.06);
   --ring-2: 0 0 0 0.5px rgba(255, 255, 255, 0.12);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), var(--ring);
