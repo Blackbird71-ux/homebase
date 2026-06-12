@@ -43,6 +43,21 @@ interface NetWorthPoint {
   liabilities: number
 }
 
+interface BudgetRow {
+  categoryId: string
+  name: string
+  color: string | null
+  budget: number
+  actual: number
+}
+
+interface BudgetVsActual {
+  month: string
+  label: string
+  rows: BudgetRow[]
+  totals: { budget: number; actual: number; unbudgeted: number }
+}
+
 function fmtCurrency(n: number) {
   return formatCurrency(n, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
@@ -61,8 +76,16 @@ const DEFAULT_COLORS = [
 export default function InsightsPage() {
   const [data, setData] = useState<InsightsData | null>(null)
   const [netWorth, setNetWorth] = useState<NetWorthPoint[]>([])
+  const [budget, setBudget] = useState<BudgetVsActual | null>(null)
   const [loading, setLoading] = useState(true)
   const [months, setMonths] = useState('12')
+
+  useEffect(() => {
+    fetch('/api/finance/insights/budget-vs-actual')
+      .then(r => r.json())
+      .then(d => setBudget(d.rows ? d : null))
+      .catch(() => setBudget(null))
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -242,6 +265,52 @@ export default function InsightsPage() {
               <Line type="monotone" dataKey="netWorth"    name="netWorth"    stroke="#6366f1" strokeWidth={2.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Budget vs actual — current month */}
+      {!loading && budget && budget.rows.length > 0 && (
+        <div className="rounded-lg border border-border p-4">
+          <h3 className="text-sm font-semibold mb-1">Budget vs actual</h3>
+          <p className="text-xs text-muted-foreground mb-4">{budget.label} — spending so far against your category budgets</p>
+          <div className="space-y-3">
+            {budget.rows.map((row, i) => {
+              const pct = row.budget > 0 ? (row.actual / row.budget) * 100 : 0
+              const over = row.actual > row.budget
+              const color = row.color ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length]
+              return (
+                <div key={row.categoryId}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-sm">{row.name}</span>
+                    </div>
+                    <span className={cn('text-sm', over ? 'font-semibold text-red-500' : 'text-muted-foreground')}>
+                      <span className="font-semibold text-foreground">{fmtCurrency(row.actual)}</span>
+                      {' / '}{fmtCurrency(row.budget)}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${Math.min(100, pct)}%`, backgroundColor: over ? '#ef4444' : color }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-border text-sm">
+            <span className="text-muted-foreground">
+              Total{budget.totals.unbudgeted > 0 && (
+                <span> · {fmtCurrency(budget.totals.unbudgeted)} spent outside budgeted categories</span>
+              )}
+            </span>
+            <span className={cn(budget.totals.actual > budget.totals.budget ? 'font-semibold text-red-500' : '')}>
+              <span className="font-semibold text-foreground">{fmtCurrency(budget.totals.actual)}</span>
+              {' / '}{fmtCurrency(budget.totals.budget)}
+            </span>
+          </div>
         </div>
       )}
     </div>
