@@ -61,6 +61,7 @@ interface Chore {
   emailReminderDays: number
   emailReminderHours: number
   startTime: string | null
+  rewardAmount: number | null
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string
@@ -123,6 +124,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [emailReminderDays, setEmailReminderDays] = useState(chore?.emailReminderDays?.toString() ?? '1')
   const [dueTime, setDueTime] = useState(toTimeInputValue(chore?.startTime ?? null))
   const [emailReminderHours, setEmailReminderHours] = useState(chore?.emailReminderHours?.toString() ?? '24')
+  const [rewardAmount, setRewardAmount] = useState(chore?.rewardAmount?.toString() ?? '')
   const [saving, setSaving] = useState(false)
 
   function toggleDay(day: number) {
@@ -162,6 +164,7 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         emailReminderDays: parseInt(emailReminderDays) || 1,
         emailReminderHours: parseInt(emailReminderHours) || 24,
         startTime: dueTime ? localTimeToStoredDateTime(dueTime) : null,
+        rewardAmount: parseFloat(rewardAmount) > 0 ? parseFloat(rewardAmount) : null,
       }
 
       // For monthly-based chores, auto-set dayOfMonth from start date if not explicitly set
@@ -354,6 +357,22 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="chore-reward">Pocket money reward ($)</Label>
+              <Input
+                id="chore-reward"
+                type="number"
+                min={0}
+                step="0.50"
+                value={rewardAmount}
+                onChange={(e) => setRewardAmount(e.target.value)}
+                placeholder="None"
+                className="w-32"
+              />
+              <p className="text-xs text-muted-foreground">
+                Earned by whoever completes it. Leave blank for no reward.
+              </p>
             </div>
             <div className="space-y-3 pt-2 border-t border-border/50">
               {frequency !== 'one-off' && (

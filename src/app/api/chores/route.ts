@@ -63,6 +63,7 @@ export async function POST(req: Request) {
     emailReminderHours,
     startTime,
     duration,
+    rewardAmount,
   } = body
 
   if (!title) {
@@ -107,6 +108,7 @@ export async function POST(req: Request) {
       emailReminderHours: emailReminderHours ?? 24,
       startTime: startTime ? new Date(startTime) : null,
       duration: duration ?? null,
+      rewardAmount: rewardAmount ?? null,
       familyId: user.familyId,
     },
     include: {

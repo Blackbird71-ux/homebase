@@ -8,7 +8,7 @@ import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
   Plus, FileText, DollarSign, Search,
-  Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench,
+  Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench, PiggyBank,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
   { href: '/trips',     label: 'Trips',     icon: Plane,        group: 'household', cat: 'var(--cat-trips)' },
   { href: '/notes',      label: 'Notes',     icon: StickyNote,   group: 'household', cat: 'var(--cat-notes)' },
   { href: '/wishlists',    label: 'Wishlist',     icon: Gift,    group: 'household', cat: 'var(--cat-contacts)' },
+  { href: '/pocket-money', label: 'Pocket Money', icon: PiggyBank, group: 'household', cat: 'var(--cat-chores)' },
   { href: '/maintenance',  label: 'Maintenance',  icon: Wrench,  group: 'household', cat: 'var(--cat-documents)' },
 ]
 

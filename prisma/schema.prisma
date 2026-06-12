@@ -35,6 +35,7 @@ model Family {
   eventCategories      EventCategory[]
   mealPlanTemplates    MealPlanTemplate[]
   chores               Chore[]
+  pocketMoneyEntries   PocketMoneyEntry[]
   householdContacts    HouseholdContact[]
   auditLogs            AuditLog[]
   documents            Document[]
@@ -87,6 +88,8 @@ model User {
   eventAttendees      EventAttendee[]
   choreAssignments       Chore[]               @relation("ChoreAssignee")
   choreCompletions       ChoreCompletion[]
+  pocketMoneyEntries     PocketMoneyEntry[]    @relation("PocketMoneyOwner")
+  pocketMoneyCreated     PocketMoneyEntry[]    @relation("PocketMoneyCreatedBy")
   pushSubscriptions      PushSubscription[]
   documents              Document[]
   listItems              ListItem[]            @relation("ListItemAssignee")
@@ -469,6 +472,7 @@ model Chore {
   emailReminderHours   Int                @default(24)      // Hours before due time to send reminder (timed chores only)
   startTime            DateTime?          // Optional time of day (UTC h/m = local h/m, date portion ignored)
   duration             Int?               // Duration in minutes (null = all-day)
+  rewardAmount         Float?             // Pocket money earned per completion (null/0 = no reward)
   completions          ChoreCompletion[]
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
@@ -565,9 +569,34 @@ model ChoreCompletion {
   // Idempotency key for offline-replayed completions (see offline queue)
   clientMutationId String? @unique
 
+  pocketMoneyEntry PocketMoneyEntry?
+
   @@index([choreId])
   @@index([completedById])
   @@index([completedAt])
+}
+
+// Pocket money — standalone tracked balance (deliberately NOT part of the
+// finance module / GL; see ROADMAP.md). Balance = SUM(amount) per user.
+model PocketMoneyEntry {
+  id                String           @id @default(cuid())
+  familyId          String
+  family            Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  userId            String           // whose balance this affects
+  user              User             @relation("PocketMoneyOwner", fields: [userId], references: [id], onDelete: Cascade)
+  amount            Float            // positive = earned, negative = spent/deducted
+  type              String           // chore | adjustment | redemption
+  note              String?
+  choreCompletionId String?          @unique  // set for type=chore; keeps auto-award idempotent
+  choreCompletion   ChoreCompletion? @relation(fields: [choreCompletionId], references: [id], onDelete: SetNull)
+  wishlistItemId    String?          // set when a redemption targets a wishlist item
+  wishlistItem      WishlistItem?    @relation(fields: [wishlistItemId], references: [id], onDelete: SetNull)
+  createdById       String?          // who recorded a manual adjustment/redemption (null = automatic)
+  createdBy         User?            @relation("PocketMoneyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
+
+  @@index([familyId])
+  @@index([userId, createdAt])
 }
 
 model EmailReminderLog {
@@ -1488,6 +1517,7 @@ model WishlistItem {
   suggestedBy    User?             @relation("WishlistSuggested", fields: [suggestedById], references: [id], onDelete: SetNull)
   purchasedAt    DateTime?
   createdAt      DateTime          @default(now())
+  pocketMoneyEntries PocketMoneyEntry[]
 
   @@index([familyId])
   @@index([contactId])

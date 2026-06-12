@@ -40,6 +40,7 @@ interface Chore {
   emailReminderDays: number
   emailReminderHours: number
   startTime: string | null
+  rewardAmount: number | null
   completions: ChoreCompletion[]
   _count: { completions: number }
   createdAt: string

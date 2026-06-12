@@ -20,15 +20,18 @@
 import { prisma } from '@/lib/prisma'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { calculateNextDueDate, type ChoreForSchedule } from '@/lib/chore-helpers'
+import { awardChoreReward } from '@/lib/pocket-money'
 
 // The chore fields completeChore needs on top of the schedule fields. A full
 // prisma.chore record is a structural superset, so callers pass it directly.
 type ChoreForCompletion = ChoreForSchedule & {
   id: string
+  title: string
   familyId: string
   autoRotateOnComplete: boolean
   rotationInterval: number | null
   currentAssigneeId: string | null
+  rewardAmount: number | null
 }
 
 /**
@@ -110,6 +113,10 @@ export async function completeChore(
       completedBy: { select: { id: true, name: true } },
     },
   })
+
+  // 2b. Award pocket money for rewarded chores (no-op when rewardAmount is
+  // unset; idempotent; never throws — see pocket-money.ts).
+  await awardChoreReward(chore, completion)
 
   // 3. Advance the schedule.
   const nextDueDate = calculateNextDueDate(chore, new Date(), opts.timezone)
