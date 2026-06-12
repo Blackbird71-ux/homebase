@@ -30,7 +30,7 @@ export function WeatherCard() {
     try {
       const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`)
       if (!res.ok) {
-        if (res.status === 501) {
+        if (res.status === 503) {
           setState('unconfigured')
           return
         }
