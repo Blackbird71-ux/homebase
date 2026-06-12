@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
+import { birthdayOccurrencesInRange } from '@/lib/date-engine'
 import { localMidnightToUtc, dateStringInTz } from '@/lib/timezone'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
@@ -21,6 +22,8 @@ export async function GET(req: Request) {
   const showChores = searchParams.get('chores') === '1'
   const showBills = searchParams.get('bills') === '1'
   const showDocs = searchParams.get('docs') === '1'
+  const showBirthdays = searchParams.get('birthdays') === '1'
+  const showMaintenance = searchParams.get('maintenance') === '1'
 
   const rangeStart = from ? new Date(from) : null
   const rangeEnd = to ? new Date(to) : null
@@ -86,7 +89,7 @@ export async function GET(req: Request) {
     // The synthetic-event sources are independent — fetch the enabled ones together
     // rather than awaiting each in series. Disabled (flag-gated) sources resolve to [].
     const ninetyDays = 90 * 24 * 60 * 60 * 1000
-    const [bills, tripActivities, income, meals, todos, docs, chores] = await Promise.all([
+    const [bills, tripActivities, income, meals, todos, docs, chores, family, maintenance] = await Promise.all([
       showBills
         ? prisma.financeRecurringBill.findMany({
             where: {
@@ -183,6 +186,22 @@ export async function GET(req: Request) {
               nextDueDate: { gte: rangeStart, lte: rangeEnd },
             },
             select: { id: true, title: true, nextDueDate: true, startTime: true, duration: true },
+          })
+        : Promise.resolve([]),
+      showBirthdays
+        ? prisma.family.findUnique({
+            where: { id: user.familyId },
+            select: { birthdays: true },
+          })
+        : Promise.resolve(null),
+      showMaintenance
+        ? prisma.maintenanceRecord.findMany({
+            where: {
+              familyId: user.familyId,
+              nextDueDate: { gte: rangeStart, lte: rangeEnd },
+              asset: { isActive: true },
+            },
+            select: { id: true, description: true, nextDueDate: true, asset: { select: { name: true } } },
           })
         : Promise.resolve([]),
     ])
@@ -381,6 +400,48 @@ export async function GET(req: Request) {
           color: '#06b6d4',
           createdBy: user.id,
           source: 'chore',
+        })
+      }
+    }
+
+    if (showBirthdays && family?.birthdays) {
+      const occurrences = birthdayOccurrencesInRange(family.birthdays, rangeStart, rangeEnd, user.timezone ?? 'UTC')
+      for (const occ of occurrences) {
+        const label = occ.type === 'anniversary' ? 'Anniversary' : 'Birthday'
+        calendarEvents.push({
+          id: `birthday-${occ.day}-${occ.name}`,
+          title: `${label}: ${occ.name}`,
+          description: null,
+          start: new Date(occ.day + 'T00:00:00.000Z').toISOString(),
+          end: new Date(occ.day + 'T23:59:59.000Z').toISOString(),
+          isAllDay: true,
+          isPersonal: false,
+          isBusy: false,
+          category: 'birthday',
+          color: '#ec4899',
+          createdBy: user.id,
+          source: 'birthday',
+        })
+      }
+    }
+
+    if (showMaintenance) {
+      for (const rec of maintenance) {
+        if (!rec.nextDueDate) continue
+        const day = dateStringInTz(rec.nextDueDate, user.timezone ?? 'UTC')
+        calendarEvents.push({
+          id: `maintenance-${rec.id}`,
+          title: `Maintenance due: ${rec.asset.name}`,
+          description: rec.description ?? null,
+          start: new Date(day + 'T00:00:00.000Z').toISOString(),
+          end: new Date(day + 'T23:59:59.000Z').toISOString(),
+          isAllDay: true,
+          isPersonal: false,
+          isBusy: false,
+          category: 'maintenance',
+          color: '#f97316',
+          createdBy: user.id,
+          source: 'maintenance',
         })
       }
     }

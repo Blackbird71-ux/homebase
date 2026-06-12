@@ -171,7 +171,7 @@ export interface CalendarEvent {
   isRecurring?: boolean
   isRecurringInstance?: boolean
   location?: string | null
-  source?: 'bill' | 'income' | 'trip' | 'meal' | 'todo' | 'chore' | 'document'
+  source?: 'bill' | 'income' | 'trip' | 'meal' | 'todo' | 'chore' | 'document' | 'birthday' | 'maintenance'
   tripId?: string
   createdByName?: string | null
 }

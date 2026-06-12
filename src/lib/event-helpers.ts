@@ -10,6 +10,8 @@ export interface CalendarToggleSettings {
   calShowChores: boolean
   calShowBills: boolean
   calShowDocs: boolean
+  calShowBirthdays: boolean
+  calShowMaintenance: boolean
 }
 
 /**
@@ -23,6 +25,7 @@ export function calendarSettingsFromPrefs(
   const defaults: CalendarToggleSettings = {
     calShowMeals: false, calShowTodos: false, calShowChores: false,
     calShowBills: true, calShowDocs: true,
+    calShowBirthdays: true, calShowMaintenance: true,
   }
   if (!uiPreferences) return defaults
   try {
@@ -33,6 +36,8 @@ export function calendarSettingsFromPrefs(
       calShowChores: !!prefs.calShowChores,
       calShowBills: prefs.calShowBills !== false,
       calShowDocs: prefs.calShowDocs !== false,
+      calShowBirthdays: prefs.calShowBirthdays !== false,
+      calShowMaintenance: prefs.calShowMaintenance !== false,
     }
   } catch {
     return defaults
@@ -78,6 +83,8 @@ export function buildEventsQuery(
     ...(s.calShowChores ? { chores: '1' } : {}),
     ...(s.calShowBills  ? { bills:  '1' } : {}),
     ...(s.calShowDocs   ? { docs:   '1' } : {}),
+    ...(s.calShowBirthdays   ? { birthdays:   '1' } : {}),
+    ...(s.calShowMaintenance ? { maintenance: '1' } : {}),
   })
   return params.toString()
 }

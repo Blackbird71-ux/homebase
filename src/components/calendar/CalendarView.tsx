@@ -32,6 +32,8 @@ interface CalendarSettings {
   calShowChores: boolean
   calShowBills: boolean
   calShowDocs: boolean
+  calShowBirthdays: boolean
+  calShowMaintenance: boolean
 }
 
 interface CalendarViewProps {
@@ -67,7 +69,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [choreCompleteTitle, setChoreCompleteTitle] = useState('')
   const [choreCompleting, setChoreCompleting] = useState(false)
   const [calSettings, setCalSettings] = useState<CalendarSettings>(
-    initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true, calShowDocs: true }
+    initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true, calShowDocs: true, calShowBirthdays: true, calShowMaintenance: true }
   )
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -232,9 +234,13 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       return
     }
     if (event.isBusy) return
-    if (event.source === 'bill' || event.source === 'income') return
+    if (event.source === 'bill' || event.source === 'income' || event.source === 'birthday') return
     if (event.source === 'document') {
       router.push('/documents')
+      return
+    }
+    if (event.source === 'maintenance') {
+      router.push('/maintenance')
       return
     }
     if (event.source === 'chore') {
@@ -455,6 +461,8 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
                   { key: 'calShowChores' as const, label: 'Chores due' },
                   { key: 'calShowBills'  as const, label: 'Bills & income due' },
                   { key: 'calShowDocs'   as const, label: 'Document expiry' },
+                  { key: 'calShowBirthdays'   as const, label: 'Birthdays & anniversaries' },
+                  { key: 'calShowMaintenance' as const, label: 'Maintenance due' },
                 ] as const).map(({ key, label }) => (
                   <label key={key} className="flex items-center gap-2.5 cursor-pointer select-none">
                     <button
