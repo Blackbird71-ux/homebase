@@ -9,7 +9,7 @@ import { PageHero } from '@/components/shared/PageHero'
 import { PnlViewNav } from '@/components/finance/PnlViewNav'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { getCurrentFY, formatCurrency } from '@/lib/financeShared'
+import { getCurrentFY, formatCurrency, toMonthlyAmount } from '@/lib/financeShared'
 import { dropSupersededParents } from '@/lib/finance-forecast'
 import { formatInTz } from '@/lib/timezone'
 import { getPeriodBounds, navigateAnchor } from '@/lib/finance-period'
@@ -49,14 +49,7 @@ interface GroupRow {
  * the period they fall due (handled by the caller).
  */
 function toPeriodAmount(amount: number, frequency: string, periodMonths: number): number {
-  // How many times does this frequency fire in periodMonths?
-  let timesPerMonth: number
-  if (frequency === 'weekly')      timesPerMonth = 52 / 12
-  else if (frequency === 'fortnightly') timesPerMonth = 26 / 12
-  else if (frequency === 'quarterly')   timesPerMonth = 1 / 3
-  else if (frequency === 'yearly')      timesPerMonth = 1 / 12
-  else                                  timesPerMonth = 1  // monthly
-  return amount * timesPerMonth * periodMonths
+  return toMonthlyAmount(amount, frequency) * periodMonths
 }
 
 function fmtCurrency(n: number) {
