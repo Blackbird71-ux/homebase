@@ -46,6 +46,23 @@ export function formatBirthdayDate(date: string): string {
 }
 
 /**
+ * Extract a contact name from a birthday event title: "Nan's Birthday" → 'Nan',
+ * "Birthday: Nan" → 'Nan', "Nan's 60th Birthday 🎂" → 'Nan'. Falls back to the
+ * trimmed title if nothing is left after stripping.
+ */
+export function contactNameFromBirthdayTitle(title: string): string {
+  const name = title
+    .replace(/birthday/gi, ' ')
+    .replace(/\b\d+(st|nd|rd|th)\b/gi, ' ')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, ' ')
+    .replace(/['’]s(?=\s|$)/g, ' ')
+    .replace(/^[\s:–—\-!,.]+|[\s:–—\-!,.]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return name || title.trim()
+}
+
+/**
  * Expand birthday/anniversary entries into the occurrences that fall within
  * [rangeStart, rangeEnd], recurring annually. Entries store 'YYYY-MM-DD' or
  * 'MM-DD' (see birthdays.tool.ts — month/day are the last two segments).

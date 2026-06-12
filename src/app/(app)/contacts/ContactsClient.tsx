@@ -99,6 +99,18 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
   const [unlockContact, setUnlockContact] = useState<Contact | null>(null)
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
 
+  // ?edit=<id> deep link (e.g. from calendar birthday → contact conversion):
+  // open the editor for that contact on arrival. window.location is read in
+  // an effect — SSR-safe, and avoids useSearchParams' Suspense requirement.
+  useEffect(() => {
+    const editId = new URLSearchParams(window.location.search).get('edit')
+    if (!editId) return
+    const contact = initialContacts.find((c) => c.id === editId)
+    if (contact) openEdit(contact)
+    window.history.replaceState(null, '', window.location.pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Lock a contact by calling the lock API and updating local state
   const handleLock = useCallback(async (contactId: string) => {
     try {

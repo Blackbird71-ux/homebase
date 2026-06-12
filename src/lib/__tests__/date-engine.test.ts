@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { birthdayOccurrencesInRange, isValidBirthdayDate, formatBirthdayDate } from '@/lib/date-engine'
+import { birthdayOccurrencesInRange, isValidBirthdayDate, formatBirthdayDate, contactNameFromBirthdayTitle } from '@/lib/date-engine'
 
 const TZ = 'Australia/Sydney'
 
@@ -72,6 +72,20 @@ describe('isValidBirthdayDate', () => {
     expect(isValidBirthdayDate('1980-05-32')).toBe(false)
     expect(isValidBirthdayDate('May 23')).toBe(false)
     expect(isValidBirthdayDate('5-23')).toBe(false)
+  })
+})
+
+describe('contactNameFromBirthdayTitle', () => {
+  it('strips possessives, prefixes, ordinals, and emoji', () => {
+    expect(contactNameFromBirthdayTitle("Nan's Birthday")).toBe('Nan')
+    expect(contactNameFromBirthdayTitle('Birthday: Nan')).toBe('Nan')
+    expect(contactNameFromBirthdayTitle('Nan Birthday')).toBe('Nan')
+    expect(contactNameFromBirthdayTitle("Nan's 60th Birthday 🎂")).toBe('Nan')
+    expect(contactNameFromBirthdayTitle('Uncle Bob birthday')).toBe('Uncle Bob')
+  })
+
+  it('falls back to the trimmed title when nothing is left', () => {
+    expect(contactNameFromBirthdayTitle(' Birthday ')).toBe('Birthday')
   })
 })
 

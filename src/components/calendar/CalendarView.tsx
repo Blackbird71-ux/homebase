@@ -23,7 +23,8 @@ import {
   addMonthsInTz, addWeeksInTz,
   startOfWeekInTz, endOfWeekInTz, isSameMonthInTz,
 } from '@/lib/timezone'
-import { buildEventsQuery, type CalendarViewName } from '@/lib/event-helpers'
+import { buildEventsQuery, getEventId, type CalendarViewName } from '@/lib/event-helpers'
+import { contactNameFromBirthdayTitle } from '@/lib/date-engine'
 import type { CalendarEvent } from '@/types'
 
 interface CalendarSettings {
@@ -69,7 +70,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [choreCompleteTitle, setChoreCompleteTitle] = useState('')
   const [choreCompleting, setChoreCompleting] = useState(false)
   const [birthdayContactOpen, setBirthdayContactOpen] = useState(false)
-  const [birthdayContactEntry, setBirthdayContactEntry] = useState<{ name: string; type: string; date: string } | null>(null)
+  const [birthdayContactEntry, setBirthdayContactEntry] = useState<{ name: string; date: string; eventId?: string } | null>(null)
   const [birthdayContactSaving, setBirthdayContactSaving] = useState(false)
   const [calSettings, setCalSettings] = useState<CalendarSettings>(
     initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true, calShowDocs: true, calShowBirthdays: true, calShowMaintenance: true }
@@ -242,7 +243,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       if (event.contactId) {
         router.push('/contacts')
       } else if (event.birthdayEntry && event.birthdayEntry.type !== 'anniversary') {
-        setBirthdayContactEntry(event.birthdayEntry)
+        setBirthdayContactEntry({ name: event.birthdayEntry.name, date: event.birthdayEntry.date })
         setBirthdayContactOpen(true)
       }
       return
@@ -298,6 +299,19 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
     }
   }
 
+  // EventModal "Save as Contact" — convert a real birthday-titled event
+  function openEventToContact(event: CalendarEvent) {
+    setModalOpen(false)
+    setSelectedEvent(null)
+    setBirthdayContactEntry({
+      name: contactNameFromBirthdayTitle(event.title),
+      // MM-DD of this occurrence — the event year isn't the birth year
+      date: dateStringInTz(new Date(event.start), timezone).slice(5),
+      eventId: getEventId(event),
+    })
+    setBirthdayContactOpen(true)
+  }
+
   async function handleBirthdayContactCreate() {
     if (!birthdayContactEntry) return
     setBirthdayContactSaving(true)
@@ -305,12 +319,17 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       const res = await fetch('/api/contacts/from-birthday', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: birthdayContactEntry.name, date: birthdayContactEntry.date }),
+        body: JSON.stringify({
+          name: birthdayContactEntry.name,
+          date: birthdayContactEntry.date,
+          ...(birthdayContactEntry.eventId ? { eventId: birthdayContactEntry.eventId } : {}),
+        }),
       })
       if (!res.ok) throw new Error('Failed to create contact')
+      const contact = await res.json()
       toast.success(`Contact created for ${birthdayContactEntry.name}`)
       setBirthdayContactOpen(false)
-      refresh()
+      router.push(`/contacts?edit=${contact.id}`)
     } catch {
       toast.error('Failed to create contact')
     } finally {
@@ -603,6 +622,7 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
         }}
         onSave={refresh}
         onOfflineChange={op => setPendingOps(prev => [...prev, op])}
+        onCreateContact={openEventToContact}
       />
 
       {mealModalDate && (
@@ -705,9 +725,11 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
             <DrawerTitle>Create contact for {birthdayContactEntry?.name}?</DrawerTitle>
           </DrawerHeader>
           <div className="px-4 py-4 text-sm text-muted-foreground">
-            Adds {birthdayContactEntry?.name} to your Contacts with their birthday saved.
-            The standalone calendar entry is removed — the contact becomes the single
-            source of this birthday.
+            Adds {birthdayContactEntry?.name} to your Contacts with their birthday saved,
+            then opens the contact so you can fill in the rest of their details.{' '}
+            {birthdayContactEntry?.eventId
+              ? 'The calendar event is removed — the contact’s birthday takes its place on the calendar each year.'
+              : 'The standalone calendar entry is removed — the contact becomes the single source of this birthday.'}
           </div>
           <div className="border-t border-border px-4 py-3 flex justify-end gap-2">
             <button onClick={() => setBirthdayContactOpen(false)} className="px-4 py-2 rounded-md text-sm border border-input hover:bg-accent">Cancel</button>

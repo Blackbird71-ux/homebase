@@ -62,9 +62,11 @@ interface EventModalProps {
   onSave: () => Promise<void>
   /** Optimistic-display hook for offline saves — see applyOfflineEventOps. */
   onOfflineChange?: (op: OfflineEventOp) => void
+  /** Shown for birthday-titled events: convert this event into a contact. */
+  onCreateContact?: (event: CalendarEvent) => void
 }
 
-export function EventModal({ event, defaultDate, open, currentUserId, onClose, onSave, onOfflineChange }: EventModalProps) {
+export function EventModal({ event, defaultDate, open, currentUserId, onClose, onSave, onOfflineChange, onCreateContact }: EventModalProps) {
   const [title, setTitle] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -602,6 +604,11 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
               )}
             </div>
             <DrawerFooter className="px-6 py-4 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
+              {event && onCreateContact && /birthday/i.test(event.title) && (
+                <Button variant="outline" className="w-full sm:w-auto sm:mr-auto" onClick={() => onCreateContact(event)} disabled={loading}>
+                  Save as Contact
+                </Button>
+              )}
               {event && (
                 <Button variant="destructive" className="w-full sm:w-auto" onClick={handleDelete} disabled={loading}>Delete</Button>
               )}
