@@ -6,6 +6,8 @@ import { formatCurrency } from '@/lib/financeShared'
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -34,6 +36,13 @@ interface InsightsData {
   categoryBreakdown: CategoryRow[]
 }
 
+interface NetWorthPoint {
+  label: string
+  netWorth: number
+  assets: number
+  liabilities: number
+}
+
 function fmtCurrency(n: number) {
   return formatCurrency(n, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
@@ -51,6 +60,7 @@ const DEFAULT_COLORS = [
 
 export default function InsightsPage() {
   const [data, setData] = useState<InsightsData | null>(null)
+  const [netWorth, setNetWorth] = useState<NetWorthPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [months, setMonths] = useState('12')
 
@@ -60,6 +70,10 @@ export default function InsightsPage() {
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
+    fetch(`/api/finance/insights/net-worth?months=${months}`)
+      .then(r => r.json())
+      .then(d => setNetWorth(d.points ?? []))
+      .catch(() => setNetWorth([]))
   }, [months])
 
   const totalIncome   = data?.monthly.reduce((s, m) => s + m.income,   0) ?? 0
@@ -192,6 +206,43 @@ export default function InsightsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Net worth trend — independent of the income/expense data above */}
+      {!loading && netWorth.some(p => p.netWorth !== 0 || p.assets !== 0 || p.liabilities !== 0) && (
+        <div className="rounded-lg border border-border p-4">
+          <h3 className="text-sm font-semibold mb-1">Net worth</h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Assets minus liabilities at each month end — same figures as the Balance Sheet
+          </p>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={netWorth} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} />
+              <YAxis
+                tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                width={50}
+              />
+              <Tooltip
+                formatter={(value, name) => [
+                  fmtCurrency(Number(value ?? 0)),
+                  name === 'netWorth' ? 'Net worth' : name === 'assets' ? 'Assets' : 'Liabilities',
+                ]}
+                contentStyle={{ fontSize: 12, borderRadius: 8 }}
+              />
+              <Legend
+                formatter={v => v === 'netWorth' ? 'Net worth' : v === 'assets' ? 'Assets' : 'Liabilities'}
+                wrapperStyle={{ fontSize: 12 }}
+              />
+              <Line type="monotone" dataKey="assets"      name="assets"      stroke="#22c55e" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="liabilities" name="liabilities" stroke="#ef4444" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="netWorth"    name="netWorth"    stroke="#6366f1" strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   )
