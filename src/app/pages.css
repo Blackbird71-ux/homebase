@@ -1142,6 +1142,45 @@
   color: var(--sidebar-fg-dim);
 }
 
+/* Accordion group toggle (the label is a button) */
+.hb-sidebar__group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.hb-sidebar__group-toggle:hover { color: var(--sidebar-fg); }
+.hb-sidebar__group-chevron {
+  margin-left: auto;
+  opacity: 0.7;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+.hb-sidebar__group-chevron.is-closed { transform: rotate(-90deg); }
+.hb-sidebar__group-active-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.hb-sidebar__group-items {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.18s ease;
+}
+.hb-sidebar__group-items.is-closed { grid-template-rows: 0fr; }
+.hb-sidebar__group-items-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* Nav items ─────────────────────────────────────────────── */
 .hb-sidebar__nav {
   display: flex;

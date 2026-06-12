@@ -1,13 +1,13 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, FileText, DollarSign, Search,
+  Plus, FileText, DollarSign, Search, ChevronDown,
   Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench, PiggyBank,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -51,6 +51,12 @@ const GROUP_LABEL: Record<Group, string> = {
   household: 'Household',
 }
 
+const OPEN_GROUP_KEY = 'sidebar_open_group'
+
+function isGroup(v: string | null): v is Group {
+  return v === 'schedule' || v === 'kitchen' || v === 'household'
+}
+
 interface SidebarProps {
   collapsed?: boolean
   isAdmin?: boolean
@@ -72,6 +78,37 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname()
   const timezone = useFamilyTimezone()
+
+  // Accordion: one group expanded at a time. The active route's group always
+  // expands; on ungrouped routes the last-opened group is restored from
+  // localStorage (read in effects, never in the initializer — SSR safety).
+  const activeGroup = navItems.find(
+    n => n.group && (pathname === n.href || pathname.startsWith(n.href + '/'))
+  )?.group ?? null
+  const [openGroup, setOpenGroup] = useState<Group | null>(activeGroup)
+
+  useEffect(() => {
+    if (activeGroup) return
+    try {
+      const stored = localStorage.getItem(OPEN_GROUP_KEY)
+      if (isGroup(stored)) setOpenGroup(stored)
+    } catch { /* ignore */ }
+    // mount only: restore last-opened group when landing on an ungrouped route
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (activeGroup) setOpenGroup(activeGroup)
+  }, [activeGroup])
+
+  function toggleGroup(group: Group) {
+    const next = openGroup === group ? null : group
+    setOpenGroup(next)
+    try {
+      if (next) localStorage.setItem(OPEN_GROUP_KEY, next)
+      else localStorage.removeItem(OPEN_GROUP_KEY)
+    } catch { /* ignore */ }
+  }
 
   const today = new Date()
   const dateNum  = today.getDate()
@@ -117,12 +154,30 @@ export function Sidebar({
       !(hideFinanceModule && n.href === '/finance')
     )
     if (items.length === 0) return null
+    // Icon-only sidebar mode is exempt from the accordion — all icons stay visible
+    const isOpen = collapsed || openGroup === group
+    const hasActive = items.some(
+      n => pathname === n.href || pathname.startsWith(n.href + '/')
+    )
     return (
       <React.Fragment key={group}>
         {!collapsed && (
-          <div className="hb-sidebar__group-label">{GROUP_LABEL[group]}</div>
+          <button
+            type="button"
+            onClick={() => toggleGroup(group)}
+            className="hb-sidebar__group-label hb-sidebar__group-toggle"
+            aria-expanded={isOpen}
+          >
+            <span>{GROUP_LABEL[group]}</span>
+            {hasActive && !isOpen && <span className="hb-sidebar__group-active-dot" />}
+            <ChevronDown className={cn('hb-sidebar__group-chevron h-3 w-3', !isOpen && 'is-closed')} />
+          </button>
         )}
-        {items.map(item => renderItem(item))}
+        <div className={cn('hb-sidebar__group-items', !isOpen && 'is-closed')}>
+          <div className="hb-sidebar__group-items-inner">
+            {items.map(item => renderItem(item))}
+          </div>
+        </div>
       </React.Fragment>
     )
   }
