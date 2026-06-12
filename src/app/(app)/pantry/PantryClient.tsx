@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PlusIcon, BarcodeIcon, ShoppingBasketIcon, Trash2Icon, PencilIcon, ClipboardCheckIcon } from 'lucide-react'
+import { PlusIcon, BarcodeIcon, ShoppingBasketIcon, ShoppingCartIcon, Trash2Icon, PencilIcon, ClipboardCheckIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -196,6 +196,25 @@ export function PantryClient({ initialItems }: Props) {
   }
 
   const lowOrOut = items.filter(i => i.status !== 'stocked')
+  const [sendingToShopping, setSendingToShopping] = useState(false)
+
+  async function addLowOutToShopping() {
+    if (sendingToShopping || lowOrOut.length === 0) return
+    setSendingToShopping(true)
+    try {
+      const res = await fetch('/api/pantry/to-shopping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: lowOrOut.map(i => i.id) }),
+      })
+      if (!res.ok) throw new Error()
+      const { added, skipped } = await res.json()
+      toast.success(skipped > 0
+        ? `Added ${added} to Groceries (${skipped} already on the list)`
+        : `Added ${added} to Groceries`)
+    } catch { toast.error('Failed to add to shopping list') }
+    finally { setSendingToShopping(false) }
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -207,9 +226,16 @@ export function PantryClient({ initialItems }: Props) {
             <span className="text-xs text-muted-foreground">{lowOrOut.length} low or out</span>
           )}
         </div>
-        <Button size="sm" variant={stocktake ? 'default' : 'outline'} onClick={() => setStocktake(v => !v)}>
-          <ClipboardCheckIcon className="h-4 w-4 mr-1" /> {stocktake ? 'Done' : 'Stocktake'}
-        </Button>
+        <div className="flex gap-2">
+          {lowOrOut.length > 0 && !stocktake && (
+            <Button size="sm" variant="outline" onClick={addLowOutToShopping} disabled={sendingToShopping}>
+              <ShoppingCartIcon className="h-4 w-4 mr-1" /> Add {lowOrOut.length} to shopping
+            </Button>
+          )}
+          <Button size="sm" variant={stocktake ? 'default' : 'outline'} onClick={() => setStocktake(v => !v)}>
+            <ClipboardCheckIcon className="h-4 w-4 mr-1" /> {stocktake ? 'Done' : 'Stocktake'}
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-6 flex flex-col gap-3">

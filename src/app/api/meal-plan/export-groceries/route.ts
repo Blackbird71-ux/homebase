@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
+import { ensureGroceriesList } from '@/lib/grocery-list'
 
 interface ExportItem {
   text: string
@@ -41,23 +42,7 @@ export async function POST(req: Request) {
     )
   )
 
-  let list = await prisma.list.findFirst({
-    where: { familyId: user.familyId, name: 'Groceries', type: 'SHOPPING', isActive: true },
-  })
-  if (!list) {
-    try {
-      list = await prisma.list.create({
-        data: { name: 'Groceries', type: 'SHOPPING', familyId: user.familyId },
-      })
-    } catch {
-      list = await prisma.list.findFirst({
-        where: { familyId: user.familyId, name: 'Groceries', type: 'SHOPPING', isActive: true },
-      })
-      if (!list) throw new Error('Failed to find or create Groceries list')
-    }
-  }
-
-  const resolvedList = list!  // guaranteed non-null: either found or created above
+  const resolvedList = await ensureGroceriesList(user.familyId)
 
   if (mode === 'replace') {
     await prisma.listItem.deleteMany({ where: { listId: resolvedList.id } })

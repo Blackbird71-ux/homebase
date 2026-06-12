@@ -2,7 +2,9 @@
 // Pure/client-safe logic lives in pantry-helpers.ts.
 
 import { prisma } from '@/lib/prisma'
-import { matchPantryItem } from '@/lib/pantry-helpers'
+import { matchPantryItem, normalizePantryName } from '@/lib/pantry-helpers'
+import { normalizeIngredient, autoGuessCategory } from '@/lib/ingredient-helpers'
+import { ensureGroceriesList } from '@/lib/grocery-list'
 
 // Bulk "we just bought these" — match each name against existing pantry items
 // (case-insensitive via normalizePantryName) and flip them to stocked; names
@@ -80,6 +82,51 @@ export async function resolveBarcode(
     // Network failure / timeout — treat as unresolved, not an error
     return null
   }
+}
+
+// Add the given pantry items to the Groceries shopping list, skipping any
+// whose name already appears as an uncompleted item there. Categories come
+// from the family's learned IngredientCategory mappings, else the built-in
+// keyword guess — same resolution order as the meal-plan grocery export.
+export async function addPantryItemsToShopping(
+  familyId: string,
+  userId: string,
+  ids: string[]
+): Promise<{ added: number; skipped: number }> {
+  const pantryItems = await prisma.pantryItem.findMany({
+    where: { id: { in: ids }, familyId },
+  })
+  if (pantryItems.length === 0) return { added: 0, skipped: 0 }
+
+  const list = await ensureGroceriesList(familyId)
+  const onList = await prisma.listItem.findMany({
+    where: { listId: list.id, isCompleted: false },
+    select: { content: true },
+  })
+  const onListKeys = new Set(onList.map(i => normalizePantryName(i.content)))
+
+  const toAdd = pantryItems.filter(p => !onListKeys.has(normalizePantryName(p.name)))
+  if (toAdd.length > 0) {
+    const keys = toAdd.map(p => normalizeIngredient(p.name))
+    const learned = await prisma.ingredientCategory.findMany({
+      where: { familyId, key: { in: keys } },
+    })
+    const learnedMap = new Map(learned.map(l => [l.key, l.category]))
+    await prisma.listItem.createMany({
+      data: toAdd.map((p, i) => {
+        const key = normalizeIngredient(p.name)
+        return {
+          content: p.name,
+          category: learnedMap.get(key) ?? autoGuessCategory(key),
+          sortOrder: i,
+          createdBy: userId,
+          listId: list.id,
+        }
+      }),
+    })
+  }
+
+  return { added: toAdd.length, skipped: pantryItems.length - toAdd.length }
 }
 
 export async function teachBarcode(familyId: string, barcode: string, productName: string) {
