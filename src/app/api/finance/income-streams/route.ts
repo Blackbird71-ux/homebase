@@ -21,33 +21,10 @@ export interface IncomeStream {
   taxRate: number | null
 }
 
-/** Convert a stream's amount to a monthly equivalent for budget summaries. */
-export function streamToMonthly(s: IncomeStream): number {
-  const { amount, frequency, customInterval, customUnit } = s
-  switch (frequency) {
-    case 'weekly':      return amount * 52 / 12
-    case 'fortnightly': return amount * 26 / 12
-    case 'monthly':     return amount
-    // bimonthly = every 2 months = 6×/year → monthly equivalent = amount / 2
-    case 'bimonthly':   return amount / 2
-    case 'quarterly':   return amount / 3
-    case 'halfyearly':  return amount / 6
-    case 'yearly':      return amount / 12
-    case 'custom': {
-      if (!customInterval || !customUnit || customInterval <= 0) return amount
-      let periodsPerYear: number
-      switch (customUnit) {
-        case 'days':   periodsPerYear = 365 / customInterval; break
-        case 'weeks':  periodsPerYear = 52  / customInterval; break
-        case 'months': periodsPerYear = 12  / customInterval; break
-        case 'years':  periodsPerYear = 1   / customInterval; break
-        default:       periodsPerYear = 1
-      }
-      return amount * periodsPerYear / 12
-    }
-    default: return amount
-  }
-}
+// Monthly normalization lives in financeShared.toMonthlyAmount — the budget
+// page applies it client-side. Note FinanceIncomeEntry cannot represent custom
+// frequencies (no interval columns); mapFrequency below flattens them to
+// monthly, so customInterval/customUnit are always null in responses.
 
 // ─── Map FinanceIncomeEntry frequency to IncomeStream frequency ───────────────
 function mapFrequency(freq: string): IncomeStream['frequency'] {
