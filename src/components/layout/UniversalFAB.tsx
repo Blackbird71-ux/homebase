@@ -66,18 +66,9 @@ export function UniversalFAB({ onQuickAction }: UniversalFABProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
-  // Keyboard shortcut: Cmd+K / Ctrl+K opens the dialog
+  // ⌘K is owned by CommandPalette; Escape still closes the mobile sheet
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        if (window.innerWidth >= 768) {
-          // Desktop — dispatch event to open QuickAdd dialog
-          window.dispatchEvent(new CustomEvent('homebase:quickadd'))
-        } else {
-          setOpen((prev) => !prev)
-        }
-      }
       if (e.key === 'Escape' && open) setOpen(false)
     }
     window.addEventListener('keydown', handleKeyDown)

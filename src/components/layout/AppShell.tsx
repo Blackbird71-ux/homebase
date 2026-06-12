@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { QuickAdd } from './QuickAdd'
+import { CommandPalette } from './CommandPalette'
 import { UniversalFAB } from './UniversalFAB'
 import { OfflineBanner } from './OfflineBanner'
 import { HelpButton } from './HelpButton'
@@ -66,8 +67,11 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       {/* Universal floating action button — visible on all screen sizes */}
       <UniversalFAB />
 
-      {/* Quick-add dialog — triggered by FAB or keyboard shortcut */}
+      {/* Quick-add dialog — triggered by FAB, sidebar button, or the palette's > actions */}
       <QuickAdd />
+
+      {/* ⌘K command palette — global search, navigation, and quick-add launcher */}
+      <CommandPalette isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} />
 
       {/* Context-sensitive help dialog */}
       <HelpButton open={helpOpen} onOpenChange={setHelpOpen} />

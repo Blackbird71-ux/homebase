@@ -7,7 +7,7 @@ import { signOut } from 'next-auth/react'
 import {
   Home, Calendar, CheckSquare, ChefHat, CalendarDays,
   Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, FileText, DollarSign,
+  Plus, FileText, DollarSign, Search,
   Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -83,6 +83,10 @@ export function Sidebar({
     window.dispatchEvent(new CustomEvent('homebase:quickadd'))
   }
 
+  function openSearch() {
+    window.dispatchEvent(new CustomEvent('homebase:command-palette'))
+  }
+
   const renderItem = ({ href, label, icon: Icon, cat, count: staticCount }: NavItem) => {
     const isActive = pathname === href || pathname.startsWith(href + '/')
     const count = counts[href] ?? staticCount
@@ -151,15 +155,21 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Quick Add */}
-      <button type="button" onClick={openQuickAdd} className="hb-sidebar__quickadd">
-        <Plus className="h-4 w-4 shrink-0" />
+      {/* Search (⌘K command palette) */}
+      <button type="button" onClick={openSearch} className="hb-sidebar__quickadd">
+        <Search className="h-4 w-4 shrink-0" />
         {!collapsed && (
           <>
-            <span className="hb-sidebar__quickadd-text">Quick Add</span>
+            <span className="hb-sidebar__quickadd-text">Search</span>
             <kbd className="hb-sidebar__quickadd-kbd">⌘K</kbd>
           </>
         )}
+      </button>
+
+      {/* Quick Add */}
+      <button type="button" onClick={openQuickAdd} className="hb-sidebar__quickadd">
+        <Plus className="h-4 w-4 shrink-0" />
+        {!collapsed && <span className="hb-sidebar__quickadd-text">Quick Add</span>}
       </button>
 
       {/* Nav */}

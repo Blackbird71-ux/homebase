@@ -52,18 +52,7 @@ export function QuickAdd() {
   const [mode, setMode] = useState<QuickAction | null>(null)
   const [success, setSuccess] = useState(false)
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setOpen(prev => !prev)
-      }
-      if (e.key === 'Escape' && open) setOpen(false)
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open])
-
+  // ⌘K is owned by CommandPalette; QuickAdd opens via the events below
   useEffect(() => {
     function handleSidebarOpen() { setOpen(true) }
     window.addEventListener('homebase:quickadd', handleSidebarOpen)
