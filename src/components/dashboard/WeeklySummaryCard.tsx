@@ -9,6 +9,7 @@ import { WeatherDialog } from './WeatherDialog'
 import { EventModal } from '@/components/calendar/EventModal'
 import { AssignMealModal } from '@/components/meal-plan/AssignMealModal'
 import { CardQuickAdd } from './CardQuickAdd'
+import { eventColor } from '@/lib/event-color'
 import { toast } from 'sonner'
 import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
 import { MEAL_PLAN_SCOPE, queueMealPlanSlotState } from '@/lib/meal-plan-offline'
@@ -245,7 +246,7 @@ export function WeeklySummaryCard({
                 <div className="mt-2 space-y-1">
                   {data.topEvents.map((e) => (
                     <div key={e.id} className="flex items-center gap-1.5 text-xs">
-                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color ?? '#6366f1' }} />
+                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: eventColor(e) }} />
                       <span className="text-muted-foreground font-medium shrink-0 w-[28px]">{e.dayLabel}</span>
                       <span className="truncate">{e.title}</span>
                     </div>

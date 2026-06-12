@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { eventFallsOnDay } from '@/lib/event-helpers'
+import { eventColor } from '@/lib/event-color'
 import {
   formatInTz, getLocalHourMinute, startOfWeekInTz, endOfWeekInTz, eachDayInTz, isTodayInTz,
 } from '@/lib/timezone'
@@ -134,7 +135,7 @@ export function HorizontalWeekView({
                       <span
                         key={e.id}
                         className="text-[9px] leading-tight px-1 py-0.5 rounded-sm truncate text-white text-center"
-                        style={{ background: e.color ?? 'var(--primary)' }}
+                        style={{ background: eventColor(e) }}
                         title={e.title}
                         onClick={ev => { ev.stopPropagation(); onEventClick(e) }}
                       >
@@ -194,7 +195,7 @@ export function HorizontalWeekView({
                         width,
                         top,
                         height: laneH,
-                        background: e.color ?? 'var(--primary)',
+                        background: eventColor(e),
                       }}
                     >
                       <span className="text-white text-[10px] font-medium leading-tight truncate select-none">

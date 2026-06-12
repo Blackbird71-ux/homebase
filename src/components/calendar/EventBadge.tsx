@@ -1,5 +1,6 @@
 import { Lock } from 'lucide-react'
 import type { CalendarEvent } from '@/types'
+import { eventColor } from '@/lib/event-color'
 
 function getEventIcon(event: CalendarEvent): { icon: string; title: string } | null {
   const category = event.category?.toLowerCase() ?? ''
@@ -27,7 +28,7 @@ export function EventBadge({
     )
   }
 
-  const color = event.color ?? '#6366f1'
+  const color = eventColor(event)
   const e = event as unknown as Record<string, unknown>
   const isRecurringInstance = !!(e.isRecurringInstance || e.seriesId)
   const specialIcon = getEventIcon(event)
@@ -46,7 +47,7 @@ export function EventBadge({
       {/* Content area */}
       <span
         className="flex-1 px-1.5 py-0.5 truncate rounded-r-md flex items-center gap-1"
-        style={{ backgroundColor: color + '20', color }}
+        style={{ backgroundColor: `color-mix(in oklab, ${color} 13%, transparent)`, color }}
       >
         {specialIcon ? (
           <span className="shrink-0 text-xs" title={specialIcon.title}>{specialIcon.icon}</span>

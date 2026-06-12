@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, Plus } from 'lucide-react'
 import { formatInTz } from '@/lib/timezone'
+import { eventColor } from '@/lib/event-color'
 import type { UpcomingEvent } from '@/types'
 import Link from 'next/link'
 import { EventModal } from '@/components/calendar/EventModal'
@@ -55,7 +56,7 @@ export function UpcomingEventsCard({ events, timezone }: { events: UpcomingEvent
         ) : (
           events.map(e => (
             <Link key={e.id} href="/calendar" className="flex items-start gap-2 hover:opacity-80 transition-opacity">
-              <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: e.color ?? '#6366f1' }} />
+              <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: eventColor(e) }} />
               <div>
                 <p className="text-sm font-medium leading-tight">{e.title}</p>
                 <p className="text-xs text-muted-foreground">
