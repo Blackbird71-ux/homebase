@@ -42,7 +42,7 @@ const navItems: NavItem[] = [
   { href: '/notes',      label: 'Notes',     icon: StickyNote,   group: 'household', cat: 'var(--cat-notes)' },
   { href: '/wishlists',    label: 'Wishlist',     icon: Gift,    group: 'household', cat: 'var(--cat-contacts)' },
   { href: '/pocket-money', label: 'Pocket Money', icon: PiggyBank, group: 'household', cat: 'var(--cat-chores)' },
-  { href: '/maintenance',  label: 'Maintenance',  icon: Wrench,  group: 'household', cat: 'var(--cat-documents)' },
+  { href: '/maintenance',  label: 'Maintenance',  icon: Wrench,  group: 'household', cat: 'var(--cat-maintenance)' },
 ]
 
 const GROUP_LABEL: Record<Group, string> = {

@@ -6,6 +6,7 @@ function getEventIcon(event: CalendarEvent): { icon: string; title: string } | n
   const category = event.category?.toLowerCase() ?? ''
   if (category === 'birthday') return { icon: '🎂', title: 'Birthday' }
   if (category === 'anniversary') return { icon: '💍', title: 'Anniversary' }
+  if (category === 'document-expired') return { icon: '⚠️', title: 'Expires' }
   return null
 }
 

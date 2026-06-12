@@ -367,7 +367,7 @@ export async function GET(req: Request) {
             start: expiryStart.toISOString(),
             end: new Date(expiryDay + 'T23:59:59.000Z').toISOString(),
             isAllDay: true, isPersonal: false, isBusy: false,
-            category: 'document', color: '#ef4444',
+            category: 'document-expired', color: '#ef4444',
             createdBy: user.id, source: 'document',
           })
         }

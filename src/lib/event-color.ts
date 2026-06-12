@@ -12,11 +12,14 @@ const SOURCE_COLOR_VARS: Record<string, string> = {
   bill: 'var(--cat-finance)',
   income: 'var(--cat-finance)',
   document: 'var(--cat-documents)',
-  maintenance: 'var(--cat-documents)',
+  maintenance: 'var(--cat-maintenance)',
   birthday: 'var(--cat-contacts)',
 }
 
-export function eventColor(event: { source?: string | null; color?: string | null }): string {
+export function eventColor(event: { source?: string | null; color?: string | null; category?: string | null }): string {
+  // Expiry-day document events: urgency overrides module identity (like
+  // overdue reminders in iOS) — the advance "Expiring:" reminder keeps grey.
+  if (event.category === 'document-expired') return 'var(--destructive)'
   if (event.source && SOURCE_COLOR_VARS[event.source]) return SOURCE_COLOR_VARS[event.source]
   return event.color ?? 'var(--cat-calendar)'
 }
