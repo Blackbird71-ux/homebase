@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   CalendarPlus, ListPlus, ChefHat, StickyNote,
   Check, DollarSign, ListChecks, ShoppingCart,
@@ -32,6 +32,19 @@ const FORM_REGISTRY: Partial<Record<QuickAction, React.ComponentType<QuickAddFor
   'note':          NoteForm,
 }
 
+// Context-aware default: opening Quick Add on one of these routes jumps
+// straight to the matching form (Back still returns to the full grid).
+// Unmapped routes (e.g. /home) open the grid as before.
+const ROUTE_DEFAULT_ACTION: [string, QuickAction][] = [
+  ['/calendar',  'event'],
+  ['/chores',    'chore'],
+  ['/finance',   'expense'],
+  ['/lists',     'list-item'],
+  ['/recipes',   'recipe'],
+  ['/meal-plan', 'meal'],
+  ['/notes',     'note'],
+]
+
 const actions: { id: QuickAction; label: string; icon: React.ReactNode }[] = [
   { id: 'event',         label: 'Event',         icon: <CalendarPlus className="h-5 w-5" /> },
   { id: 'chore',         label: 'Chore',         icon: <ListChecks className="h-5 w-5" /> },
@@ -48,16 +61,23 @@ const actions: { id: QuickAction; label: string; icon: React.ReactNode }[] = [
 
 export function QuickAdd() {
   const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<QuickAction | null>(null)
   const [success, setSuccess] = useState(false)
 
   // ⌘K is owned by CommandPalette; QuickAdd opens via the events below
   useEffect(() => {
-    function handleSidebarOpen() { setOpen(true) }
+    function handleSidebarOpen() {
+      setOpen(true)
+      const match = ROUTE_DEFAULT_ACTION.find(
+        ([prefix]) => pathname === prefix || pathname.startsWith(prefix + '/')
+      )
+      if (match) setMode(match[1])
+    }
     window.addEventListener('homebase:quickadd', handleSidebarOpen)
     return () => window.removeEventListener('homebase:quickadd', handleSidebarOpen)
-  }, [])
+  }, [pathname])
 
   useEffect(() => {
     function handleQuickAddAction(e: Event) {
