@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { toast } from 'sonner'
 import {
   DndContext,
   closestCenter,
@@ -73,6 +75,27 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
   } = useShoppingList(listId, initialItems, initialCategoryOrder, onNonCompletedCountChange)
 
   const hasRecipeItems = items.some(i => i.recipeName)
+
+  // Checked-off items are what was just bought — clearing them is the natural
+  // moment to flip the pantry to stocked (matched items) / add new ones.
+  const [restockPantry, setRestockPantry] = useState(true)
+
+  async function restockFromCompleted() {
+    const names = completedItems.map(i => i.content)
+    if (names.length === 0) return
+    try {
+      const res = await fetch('/api/pantry/restock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names }),
+      })
+      if (!res.ok) throw new Error()
+      const { updated, created } = await res.json()
+      toast.success(`Pantry updated — ${updated} restocked, ${created} added`)
+    } catch {
+      toast.error('Pantry not updated — you can restock from the Pantry page')
+    }
+  }
 
   return (
     <div className="flex flex-col gap-2 sm:gap-4">
@@ -152,7 +175,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
       </div>
 
       {completedItems.length > 0 && (
-        <Button variant="ghost" size="sm" onClick={() => setShowClearConfirm(true)} className="self-end text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={() => { setRestockPantry(true); setShowClearConfirm(true) }} className="self-end text-muted-foreground">
           Clear {completedItems.length} completed
         </Button>
       )}
@@ -206,9 +229,13 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
               Are you sure you want to clear all {completedItems.length} completed item{completedItems.length !== 1 ? 's' : ''}? Locked items will be kept.
             </DialogDescription>
           </DialogHeader>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={restockPantry} onChange={e => setRestockPantry(e.target.checked)} className="h-4 w-4" />
+            Add {completedItems.length === 1 ? 'this item' : 'these items'} to the pantry as stocked
+          </label>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
-            <Button variant="default" onClick={() => { setShowClearConfirm(false); clearCompleted() }}>Clear</Button>
+            <Button variant="default" onClick={() => { setShowClearConfirm(false); if (restockPantry) restockFromCompleted(); clearCompleted() }}>Clear</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
