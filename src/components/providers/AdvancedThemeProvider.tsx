@@ -101,9 +101,18 @@ function buildStyleContent(customTheme: CustomThemeColors | null | undefined): s
     '.glass-dark',
     '.modern',
     '.apple-grey',
+    '.apple-pro',
+    '.apple-aqua',
+    '.apple-graphite',
+    '.apple-sunset',
+    '.apple-midnight',
+    '.apple-forest',
     '.sunset',
     '.ocean',
-    '.forest'
+    '.forest',
+    '.paper',
+    '.harbour',
+    '.plum'
   ]
   
   const themeBlocks = themeClasses.map(theme => `${theme} {\n${declarations}\n}`).join('\n\n')
