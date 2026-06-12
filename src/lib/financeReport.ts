@@ -95,6 +95,7 @@ export interface ReportPayload {
 
 // ─── Re-export getCurrentFY for backward compatibility ─────────────────────────
 import { currentFyYear, fyLabel } from './finance-fy'
+import { toMonthlyAmount } from './financeShared'
 
 /**
  * Get current financial year string e.g. "2026-27" (uses default July FY).
@@ -115,23 +116,6 @@ export function fyDateRange(fy: string): { start: Date; end: Date } {
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Calculate how many times a given frequency fires within a month.
- * Used by the tax estimation section only.
- */
-function timesPerMonth(frequency: string): number {
-  switch (frequency) {
-    case 'weekly':      return 52 / 12
-    case 'fortnightly': return 26 / 12
-    case 'monthly':     return 1
-    case 'quarterly':   return 1 / 3
-    case 'halfyearly':  return 1 / 6
-    case 'yearly':
-    case 'annual':      return 1 / 12
-    default:            return 1
-  }
-}
 
 /**
  * True for frequencies that land on a specific date rather than recurring every month.
@@ -455,7 +439,7 @@ export async function buildYtdReport(
     for (const entity of entities) {
       const entityIncome = relevantIncomeEntries
         .filter(inc => inc.entityId === entity.id && inc.isTaxTracked)
-        .reduce((sum, inc) => sum + inc.amount * timesPerMonth(inc.frequency) * monthsComplete, 0)
+        .reduce((sum, inc) => sum + toMonthlyAmount(inc.amount, inc.frequency) * monthsComplete, 0)
 
       if (entityIncome > 0) {
         taxByEntity.push({
@@ -476,7 +460,7 @@ export async function buildYtdReport(
       )
       const taxableIncome = memberIncome
         .filter(inc => inc.isTaxTracked)
-        .reduce((sum, inc) => sum + inc.amount * timesPerMonth(inc.frequency) * monthsComplete, 0)
+        .reduce((sum, inc) => sum + toMonthlyAmount(inc.amount, inc.frequency) * monthsComplete, 0)
 
       if (taxableIncome > 0) {
         taxByMember.push({
