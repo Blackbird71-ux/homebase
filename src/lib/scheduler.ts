@@ -2,6 +2,7 @@
 
 import cron from 'node-cron'
 import { processAllReminders, processTimedChoreReminders } from '@/lib/reminders'
+import { sendDailyBriefings } from '@/lib/daily-briefing'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -46,4 +47,22 @@ export function initScheduler(): void {
   })
 
   console.log(`[scheduler] Timed chore reminder cron scheduled: ${timedSchedule}`)
+
+  // Daily briefing push digest — 7am local (container TZ). Dedup inside
+  // sendDailyBriefings makes re-fires within the same local day harmless.
+  const briefingSchedule = process.env.BRIEFING_CRON_SCHEDULE ?? '0 7 * * *'
+
+  if (!cron.validate(briefingSchedule)) {
+    console.warn(`[scheduler] Invalid BRIEFING_CRON_SCHEDULE "${briefingSchedule}", defaulting to "0 7 * * *"`)
+  }
+
+  cron.schedule(cron.validate(briefingSchedule) ? briefingSchedule : '0 7 * * *', async () => {
+    try {
+      await sendDailyBriefings()
+    } catch (err) {
+      console.error('[scheduler] Daily briefing failed:', err)
+    }
+  })
+
+  console.log(`[scheduler] Daily briefing cron scheduled: ${briefingSchedule}`)
 }
