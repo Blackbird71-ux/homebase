@@ -12,6 +12,7 @@ import { PageHero } from '@/components/shared/PageHero'
 import { PnlViewNav } from '@/components/finance/PnlViewNav'
 import { fyMonthLabels, currentFyYear, fyLabel as fyLabelUtil, fyColumnYearMonth, fyColumnMonthKey, fyDateRangeInTz } from '@/lib/finance-fy'
 import { dropSupersededParents } from '@/lib/finance-forecast'
+import { toPeriodAmount as toPeriodAmountShared, isLumpSum } from '@/lib/finance-period'
 import { PrintButton } from '@/components/print/PrintButton'
 import { PrintWrapper } from '@/components/print/PrintWrapper'
 import { ExcelButton } from '@/components/print/ExcelButton'
@@ -72,13 +73,11 @@ interface Entity { id: string; name: string; type: string; isDefault: boolean }
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toPeriodAmount(amount: number, frequency: string): number {
-  if (frequency === 'weekly')       return amount * 52 / 12
-  if (frequency === 'fortnightly')  return amount * 26 / 12
-  return amount
+  return toPeriodAmountShared(amount, frequency, 1)
 }
 
 function isLumpSumFrequency(frequency: string): boolean {
-  return frequency === 'yearly' || frequency === 'halfyearly' || frequency === 'quarterly'
+  return isLumpSum(frequency)
 }
 
 // Which FY columns (0–11) a recurring lump-sum lands in. The base month/year is read
