@@ -55,6 +55,9 @@
 //     is throttled to once per 12h via a timestamp in the API cache; data API warm
 //     runs every time. Clients pass saveData:true (Data Saver) to skip full warm.
 //   - Cache names bumped v9→v10 so caches rebuild cleanly on activate.
+//   - Fix: the 12h full-warm timestamp is written at the START of the sweep, not
+//     the end — an interrupted warm (~300 sequential fetches) used to leave the
+//     timestamp unwritten, restarting the entire flood on every page load.
 
 const SHELL_CACHE = 'homebase-shell-v10';
 const API_CACHE   = 'homebase-api-v10';
@@ -175,6 +178,16 @@ async function warmCaches({ fullWarm }) {
 
   if (!fullWarm) return;
 
+  // Mark the full warm BEFORE the expensive tier, not after. The sweep below is
+  // ~300 sequential fetches taking a minute or more; if the SW is killed mid-warm
+  // (tab closed, device sleep), an end-of-sweep timestamp never lands and every
+  // subsequent page load restarts the entire multi-MB flood. Worst case now is
+  // the opposite and benign: an interrupted warm leaves some pages uncached for
+  // up to 12h — acceptable for a best-effort offline cache. Only marked when the
+  // warm manifest loaded (signed in + online), so a pre-auth attempt still
+  // retries on the next load.
+  if (warmData) await markFullWarm(apiCache);
+
   // Tier 2 — full warm. Step 1: main navigation pages (HTML + RSC).
   for (const url of WARM_PAGES) {
     await warmPage(url, shellCache, apiCache);
@@ -206,8 +219,6 @@ async function warmCaches({ fullWarm }) {
       } catch {}
     }
   }
-
-  await markFullWarm(apiCache);
 }
 
 // Warm the data API URLs into the API cache. Each fetch revalidates with
