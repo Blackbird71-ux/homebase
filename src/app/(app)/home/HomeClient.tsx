@@ -7,12 +7,15 @@ import { DashboardGrid, type DashboardGridHandle } from '@/components/dashboard/
 import { DashboardCustomiser } from '@/components/dashboard/DashboardCustomiser'
 import type { DashboardCardConfig } from '@/lib/dashboard-cards'
 import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
+import { useCurrentWeather } from '@/lib/hooks/useCurrentWeather'
+import { formatInTz, getLocalHourMinute } from '@/lib/timezone'
 import type { DashboardData } from '@/types'
 
 type ScopeDays = 7 | 14 | 30
 
 interface HomeClientProps {
   data: DashboardData
+  userName: string
   timezone: string
   initialCards: DashboardCardConfig[]
   initialLayouts?: CardLayoutMap | null
@@ -26,6 +29,7 @@ interface HomeClientProps {
 
 export function HomeClient({
   data: initialData,
+  userName,
   timezone,
   initialCards,
   initialLayouts,
@@ -171,11 +175,40 @@ export function HomeClient({
     }
   }, [])
 
+  const now = new Date()
+  const { hour } = getLocalHourMinute(now.toISOString(), timezone)
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = userName.split(' ')[0]
+  const dateLabel = formatInTz(now, timezone, { weekday: 'long', day: 'numeric', month: 'long' })
+  const { weather } = useCurrentWeather()
+
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">
-      <div className="flex items-center justify-between mb-4 shrink-0">
-        <h1 className="hb-page-head__title">Home</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-4 mb-4 shrink-0">
+        <div className="min-w-0">
+          <h1 className="hb-page-head__title">{greeting}, {firstName}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{dateLabel}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {weather && (
+            <div
+              className="hidden sm:flex items-center gap-1.5 mr-2"
+              title={`${weather.location} — feels like ${Math.round(weather.feelsLike)}°`}
+            >
+              {weather.icon && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
+                  alt={weather.condition}
+                  className="h-9 w-9 -my-2 shrink-0"
+                />
+              )}
+              <span className="text-sm font-semibold">{Math.round(weather.temperature)}°</span>
+              <span className="text-sm text-muted-foreground capitalize hidden md:inline">
+                {weather.description}
+              </span>
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"

@@ -460,6 +460,7 @@ export default async function HomePage() {
   return (
     <HomeClient
       data={data}
+      userName={user.name}
       timezone={timezone}
       initialCards={cards}
       initialLayouts={dashboardCardLayouts}
