@@ -1,6 +1,6 @@
 'use client'
 
-import { PlusIcon, XIcon, ShoppingCartIcon, GripVerticalIcon, EyeIcon, ChefHatIcon } from 'lucide-react'
+import { PlusIcon, XIcon, ShoppingCartIcon, GripVerticalIcon, EyeIcon, ChefHatIcon, CookingPotIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getMealTypeColor } from '@/lib/meal-types'
 import { useDraggable } from '@dnd-kit/core'
@@ -25,6 +25,7 @@ interface MealSlotCellProps {
   onClear: () => void
   onRemoveRecipe?: (mealPlanRecipeId: string) => void
   onAddToGroceries?: () => void
+  onCookedIt?: () => void
   onViewRecipe?: (recipeId: string) => void
   naturalHeight?: boolean // mobile: remove fixed h-16 and line-clamp
   isDragOverlay?: boolean // whether this is being rendered as a drag preview
@@ -42,6 +43,7 @@ export function MealSlotCell({
   onClear,
   onRemoveRecipe,
   onAddToGroceries,
+  onCookedIt,
   onViewRecipe,
   naturalHeight = false,
   isDragOverlay = false,
@@ -263,6 +265,21 @@ export function MealSlotCell({
             title="Add to groceries"
           >
             <ShoppingCartIcon className="h-2.5 w-2.5" />
+          </Button>
+        )}
+        {onCookedIt && hasRecipes && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={cn(btnVisibility, 'hover:text-primary')}
+            onClick={(e) => {
+              e.stopPropagation()
+              onCookedIt()
+            }}
+            aria-label="Cooked it — update pantry"
+            title="Cooked it — update pantry"
+          >
+            <CookingPotIcon className="h-2.5 w-2.5" />
           </Button>
         )}
         {mealPlanId && (

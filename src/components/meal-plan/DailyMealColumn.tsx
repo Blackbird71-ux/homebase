@@ -34,6 +34,7 @@ interface DailyMealColumnProps {
   onMealClear: (entryId: string) => void
   onRemoveRecipe?: (mealPlanRecipeId: string, mealPlanId: string) => void
   onMealAddToGroceries: (entryId: string) => void
+  onMealCooked?: (entryId: string) => void
   onViewRecipe?: (recipeId: string) => void
   selectMode?: boolean
   selectedMealIds?: Set<string>
@@ -57,6 +58,7 @@ function DroppableMealSlot({
   onMealClear,
   onRemoveRecipe,
   onMealAddToGroceries,
+  onMealCooked,
   onViewRecipe,
   compact,
   isDragActive,
@@ -72,6 +74,7 @@ function DroppableMealSlot({
   onMealClear: (entryId: string) => void
   onRemoveRecipe?: (mealPlanRecipeId: string, mealPlanId: string) => void
   onMealAddToGroceries: (entryId: string) => void
+  onMealCooked?: (entryId: string) => void
   onViewRecipe?: (recipeId: string) => void
   compact: boolean
   isDragActive: boolean
@@ -159,6 +162,7 @@ function DroppableMealSlot({
           onClear={() => entry && onMealClear(entry.id)}
           onRemoveRecipe={entry ? (mealPlanRecipeId) => onRemoveRecipe?.(mealPlanRecipeId, entry.id) : undefined}
           onAddToGroceries={entry ? () => onMealAddToGroceries(entry.id) : undefined}
+          onCookedIt={entry && onMealCooked ? () => onMealCooked(entry.id) : undefined}
           onViewRecipe={onViewRecipe}
           naturalHeight={compact}
           isNewlyMoved={isNewlyMoved}
@@ -178,6 +182,7 @@ export function DailyMealColumn({
   onMealClear,
   onRemoveRecipe,
   onMealAddToGroceries,
+  onMealCooked,
   onViewRecipe,
   selectMode = false,
   selectedMealIds = new Set(),
@@ -251,6 +256,7 @@ export function DailyMealColumn({
                   onMealClear={onMealClear}
                   onRemoveRecipe={onRemoveRecipe}
                   onMealAddToGroceries={onMealAddToGroceries}
+                  onMealCooked={onMealCooked}
                   onViewRecipe={onViewRecipe}
                   compact
                   isDragActive={isDragActive}
@@ -410,6 +416,7 @@ export function DailyMealColumn({
               onMealClear={onMealClear}
               onRemoveRecipe={onRemoveRecipe}
               onMealAddToGroceries={onMealAddToGroceries}
+              onMealCooked={onMealCooked}
               onViewRecipe={onViewRecipe}
               compact={false}
               isDragActive={isDragActive}

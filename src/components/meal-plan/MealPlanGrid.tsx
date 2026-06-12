@@ -10,6 +10,7 @@ import { SaveTemplateDialog } from './SaveTemplateDialog'
 import { ApplyTemplateDialog } from './ApplyTemplateDialog'
 import { MealPlanRightPanel } from './MealPlanRightPanel'
 import { RecipeViewPopup } from './RecipeViewPopup'
+import { CookedItDialog } from './CookedItDialog'
 import { Button } from '@/components/ui/button'
 import {
   ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, Trash2Icon,
@@ -67,6 +68,7 @@ export function MealPlanGrid({
   const [layout, setLayout]                 = useState<'single' | 'multi'>(initialLayout)
   const [panelSelectedDate, setPanelSelectedDate] = useState<string | null>(null)
   const [viewingRecipeId, setViewingRecipeId] = useState<string | null>(null)
+  const [cookedRecipeIds, setCookedRecipeIds] = useState<string[] | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -88,6 +90,13 @@ export function MealPlanGrid({
 
   function handleViewRecipe(recipeId: string) {
     setViewingRecipeId(recipeId)
+  }
+
+  function handleMealCooked(entryId: string) {
+    const entry = entries.find(e => e.id === entryId)
+    const recipeIds = entry?.recipes?.map(r => r.recipeId) ?? []
+    if (recipeIds.length === 0) return
+    setCookedRecipeIds(recipeIds)
   }
 
   function toggleSelectMode() {
@@ -298,6 +307,7 @@ export function MealPlanGrid({
                         onMealClear={remove}
                         onRemoveRecipe={removeRecipe}
                         onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
+                        onMealCooked={handleMealCooked}
                         onViewRecipe={handleViewRecipe}
                         selectMode={selectMode}
                         selectedMealIds={selectedMealIds}
@@ -420,6 +430,12 @@ export function MealPlanGrid({
             open={viewingRecipeId !== null}
             onOpenChange={(open) => { if (!open) setViewingRecipeId(null) }}
             onRecipeUpdated={refresh}
+          />
+
+          <CookedItDialog
+            open={cookedRecipeIds !== null}
+            onOpenChange={(open) => { if (!open) setCookedRecipeIds(null) }}
+            recipeIds={cookedRecipeIds ?? []}
           />
         </div>
 

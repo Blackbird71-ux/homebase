@@ -3,7 +3,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { matchPantryItem, normalizePantryName } from '@/lib/pantry-helpers'
-import { normalizeIngredient, autoGuessCategory } from '@/lib/ingredient-helpers'
+import { normalizeIngredient, autoGuessCategory, isLikelyHeading } from '@/lib/ingredient-helpers'
 import { ensureGroceriesList } from '@/lib/grocery-list'
 
 // Bulk "we just bought these" — match each name against existing pantry items
@@ -127,6 +127,50 @@ export async function addPantryItemsToShopping(
   }
 
   return { added: toAdd.length, skipped: pantryItems.length - toAdd.length }
+}
+
+// Suggest pantry items likely used by the given recipes — the meal-plan
+// "Cooked it" flow. Recipe.ingredients is free text, so matching is fuzzy:
+// each ingredient line and each pantry name reduce to normalizeIngredient
+// word lists, and they match when the shorter word list is contained in the
+// longer. The result is a suggestion list the user confirms — never applied
+// silently.
+export async function suggestPantryDepletions(
+  familyId: string,
+  recipeIds: string[]
+): Promise<Array<{ id: string; name: string; location: string; status: string }>> {
+  const recipes = await prisma.recipe.findMany({
+    where: { id: { in: recipeIds }, familyId },
+    select: { ingredients: true },
+  })
+  if (recipes.length === 0) return []
+
+  const lineWordLists: string[][] = []
+  for (const recipe of recipes) {
+    for (const line of recipe.ingredients.split('\n')) {
+      const text = line.trim()
+      if (!text || isLikelyHeading(text)) continue
+      const words = normalizeIngredient(text).split(/\s+/).filter(Boolean)
+      if (words.length > 0) lineWordLists.push(words)
+    }
+  }
+  if (lineWordLists.length === 0) return []
+
+  const pantryItems = await prisma.pantryItem.findMany({
+    where: { familyId },
+    orderBy: [{ location: 'asc' }, { name: 'asc' }],
+  })
+
+  return pantryItems
+    .filter(item => {
+      const itemWords = normalizeIngredient(item.name).split(/\s+/).filter(Boolean)
+      if (itemWords.length === 0) return false
+      return lineWordLists.some(lineWords =>
+        itemWords.every(w => lineWords.includes(w)) ||
+        lineWords.every(w => itemWords.includes(w))
+      )
+    })
+    .map(i => ({ id: i.id, name: i.name, location: i.location, status: i.status }))
 }
 
 export async function teachBarcode(familyId: string, barcode: string, productName: string) {
