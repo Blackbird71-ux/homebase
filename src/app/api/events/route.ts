@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { validateEventDates, maskPersonalEvent } from '@/lib/event-helpers'
-import { birthdayOccurrencesInRange } from '@/lib/date-engine'
+import { birthdayOccurrencesInRange, birthdayEntryOccurrencesInRange } from '@/lib/date-engine'
 import { localMidnightToUtc, dateStringInTz } from '@/lib/timezone'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
@@ -89,7 +89,7 @@ export async function GET(req: Request) {
     // The synthetic-event sources are independent — fetch the enabled ones together
     // rather than awaiting each in series. Disabled (flag-gated) sources resolve to [].
     const ninetyDays = 90 * 24 * 60 * 60 * 1000
-    const [bills, tripActivities, income, meals, todos, docs, chores, family, maintenance] = await Promise.all([
+    const [bills, tripActivities, income, meals, todos, docs, chores, family, birthdayContacts, maintenance] = await Promise.all([
       showBills
         ? prisma.financeRecurringBill.findMany({
             where: {
@@ -194,6 +194,12 @@ export async function GET(req: Request) {
             select: { birthdays: true },
           })
         : Promise.resolve(null),
+      showBirthdays
+        ? prisma.householdContact.findMany({
+            where: { familyId: user.familyId, birthday: { not: null } },
+            select: { id: true, name: true, birthday: true },
+          })
+        : Promise.resolve([]),
       showMaintenance
         ? prisma.maintenanceRecord.findMany({
             where: {
@@ -421,7 +427,34 @@ export async function GET(req: Request) {
           color: '#ec4899',
           createdBy: user.id,
           source: 'birthday',
+          birthdayEntry: { name: occ.name, type: occ.type, date: occ.date },
         })
+      }
+    }
+
+    if (showBirthdays) {
+      for (const c of birthdayContacts) {
+        const occurrences = birthdayEntryOccurrencesInRange(
+          [{ name: c.name, type: 'birthday', date: c.birthday as string }],
+          rangeStart, rangeEnd, user.timezone ?? 'UTC'
+        )
+        for (const occ of occurrences) {
+          calendarEvents.push({
+            id: `birthday-contact-${c.id}-${occ.day}`,
+            title: `Birthday: ${occ.name}`,
+            description: null,
+            start: new Date(occ.day + 'T00:00:00.000Z').toISOString(),
+            end: new Date(occ.day + 'T23:59:59.000Z').toISOString(),
+            isAllDay: true,
+            isPersonal: false,
+            isBusy: false,
+            category: 'birthday',
+            color: '#ec4899',
+            createdBy: user.id,
+            source: 'birthday',
+            contactId: c.id,
+          })
+        }
       }
     }
 

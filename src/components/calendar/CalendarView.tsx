@@ -68,6 +68,9 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
   const [choreCompleteId, setChoreCompleteId] = useState('')
   const [choreCompleteTitle, setChoreCompleteTitle] = useState('')
   const [choreCompleting, setChoreCompleting] = useState(false)
+  const [birthdayContactOpen, setBirthdayContactOpen] = useState(false)
+  const [birthdayContactEntry, setBirthdayContactEntry] = useState<{ name: string; type: string; date: string } | null>(null)
+  const [birthdayContactSaving, setBirthdayContactSaving] = useState(false)
   const [calSettings, setCalSettings] = useState<CalendarSettings>(
     initialSettings ?? { calShowMeals: false, calShowTodos: false, calShowChores: false, calShowBills: true, calShowDocs: true, calShowBirthdays: true, calShowMaintenance: true }
   )
@@ -234,7 +237,16 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       return
     }
     if (event.isBusy) return
-    if (event.source === 'bill' || event.source === 'income' || event.source === 'birthday') return
+    if (event.source === 'bill' || event.source === 'income') return
+    if (event.source === 'birthday') {
+      if (event.contactId) {
+        router.push('/contacts')
+      } else if (event.birthdayEntry && event.birthdayEntry.type !== 'anniversary') {
+        setBirthdayContactEntry(event.birthdayEntry)
+        setBirthdayContactOpen(true)
+      }
+      return
+    }
     if (event.source === 'document') {
       router.push('/documents')
       return
@@ -283,6 +295,26 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
       toast.error('Failed to complete chore')
     } finally {
       setChoreCompleting(false)
+    }
+  }
+
+  async function handleBirthdayContactCreate() {
+    if (!birthdayContactEntry) return
+    setBirthdayContactSaving(true)
+    try {
+      const res = await fetch('/api/contacts/from-birthday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: birthdayContactEntry.name, date: birthdayContactEntry.date }),
+      })
+      if (!res.ok) throw new Error('Failed to create contact')
+      toast.success(`Contact created for ${birthdayContactEntry.name}`)
+      setBirthdayContactOpen(false)
+      refresh()
+    } catch {
+      toast.error('Failed to create contact')
+    } finally {
+      setBirthdayContactSaving(false)
     }
   }
 
@@ -664,6 +696,28 @@ export function CalendarView({ initialEvents, weekStartsOn, currentUserId, timez
                 {choreCompleting ? 'Saving…' : 'Mark Done'}
               </button>
             </div>
+          </div>
+        </DrawerContent>
+      </Drawer>
+      <Drawer open={birthdayContactOpen} onOpenChange={setBirthdayContactOpen}>
+        <DrawerContent className="sm:max-w-[480px]" showCloseButton={true}>
+          <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+            <DrawerTitle>Create contact for {birthdayContactEntry?.name}?</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4 py-4 text-sm text-muted-foreground">
+            Adds {birthdayContactEntry?.name} to your Contacts with their birthday saved.
+            The standalone calendar entry is removed — the contact becomes the single
+            source of this birthday.
+          </div>
+          <div className="border-t border-border px-4 py-3 flex justify-end gap-2">
+            <button onClick={() => setBirthdayContactOpen(false)} className="px-4 py-2 rounded-md text-sm border border-input hover:bg-accent">Cancel</button>
+            <button
+              onClick={handleBirthdayContactCreate}
+              disabled={birthdayContactSaving}
+              className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {birthdayContactSaving ? 'Saving…' : 'Create Contact'}
+            </button>
           </div>
         </DrawerContent>
       </Drawer>

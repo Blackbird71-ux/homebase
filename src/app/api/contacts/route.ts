@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
+import { isValidBirthdayDate } from '@/lib/date-engine'
 
 export async function GET() {
   const session = await auth()
@@ -22,10 +23,13 @@ export async function POST(req: Request) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { name, category, phone, email, address, notes, pin } = body
+  const { name, category, phone, email, address, notes, birthday, pin } = body
 
   if (!name) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
+  }
+  if (birthday != null && !isValidBirthdayDate(birthday)) {
+    return NextResponse.json({ error: 'birthday must be YYYY-MM-DD or MM-DD' }, { status: 400 })
   }
 
   // Hash PIN if provided
@@ -43,6 +47,7 @@ export async function POST(req: Request) {
       email: email ?? null,
       address: address ?? null,
       notes: notes ?? null,
+      birthday: birthday ?? null,
       pinHash,
       familyId: user.familyId,
     },

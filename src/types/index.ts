@@ -172,6 +172,8 @@ export interface CalendarEvent {
   isRecurringInstance?: boolean
   location?: string | null
   source?: 'bill' | 'income' | 'trip' | 'meal' | 'todo' | 'chore' | 'document' | 'birthday' | 'maintenance'
+  contactId?: string // birthday events sourced from a HouseholdContact
+  birthdayEntry?: { name: string; type: string; date: string } // birthday events sourced from Family.birthdays JSON
   tripId?: string
   createdByName?: string | null
 }

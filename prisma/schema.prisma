@@ -485,6 +485,7 @@ model HouseholdContact {
   email     String?
   address   String?
   notes     String?
+  birthday  String?  // 'YYYY-MM-DD' or 'MM-DD' (year unknown) — same convention as Family.birthdays
   pinHash   String?  // bcrypt hash of PIN for secure contacts (null = not secured)
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)

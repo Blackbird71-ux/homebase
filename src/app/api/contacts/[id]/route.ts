@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
+import { isValidBirthdayDate } from '@/lib/date-engine'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -16,6 +17,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   })
   if (!existing) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  if (body.birthday != null && !isValidBirthdayDate(body.birthday)) {
+    return NextResponse.json({ error: 'birthday must be YYYY-MM-DD or MM-DD' }, { status: 400 })
   }
 
   // Handle PIN changes
@@ -35,6 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.email !== undefined ? { email: body.email } : {}),
       ...(body.address !== undefined ? { address: body.address } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
+      ...(body.birthday !== undefined ? { birthday: body.birthday } : {}),
       ...(body.pin !== undefined ? { pinHash } : {}),
     },
   })

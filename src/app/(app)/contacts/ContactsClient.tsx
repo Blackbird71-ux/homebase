@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PlusIcon, PhoneIcon, MailIcon, MapPinIcon, Trash2Icon, PencilIcon, LockIcon, UnlockIcon, ShieldCheckIcon } from 'lucide-react'
+import { PlusIcon, PhoneIcon, MailIcon, MapPinIcon, Trash2Icon, PencilIcon, LockIcon, UnlockIcon, ShieldCheckIcon, CakeIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ import {
 import { PillNav } from '@/components/shared/PillNav'
 import { toast } from 'sonner'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
+import { isValidBirthdayDate, formatBirthdayDate } from '@/lib/date-engine'
 
 interface Contact {
   id: string
@@ -33,6 +34,7 @@ interface Contact {
   email: string | null
   address: string | null
   notes: string | null
+  birthday: string | null
   pinHash: string | null
   createdAt: string
   updatedAt: string
@@ -88,6 +90,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
   const [email, setEmail] = useState('')
   const [address, setAddress] = useState('')
   const [notes, setNotes] = useState('')
+  const [birthday, setBirthday] = useState('')
   const [pin, setPin] = useState('')
   const [pinEnabled, setPinEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -150,6 +153,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     setEmail('')
     setAddress('')
     setNotes('')
+    setBirthday('')
     setPin('')
     setPinEnabled(false)
     setDialogOpen(true)
@@ -170,6 +174,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
     setEmail(contact.email ?? '')
     setAddress(contact.address ?? '')
     setNotes(contact.notes ?? '')
+    setBirthday(contact.birthday ?? '')
     setPin('')
     setPinEnabled(!!contact.pinHash)
     setDialogOpen(true)
@@ -185,6 +190,10 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
       toast.error('Please enter a category name')
       return
     }
+    if (birthday.trim() && !isValidBirthdayDate(birthday.trim())) {
+      toast.error('Birthday must be YYYY-MM-DD or MM-DD')
+      return
+    }
 
     setSaving(true)
     try {
@@ -195,6 +204,7 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
         email: email.trim() || null,
         address: address.trim() || null,
         notes: notes.trim() || null,
+        birthday: birthday.trim() || null,
       }
 
       // Handle PIN
@@ -355,6 +365,12 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
                   <span>{contact.address}</span>
                 </div>
               )}
+              {contact.birthday && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CakeIcon className="h-3 w-3 shrink-0" />
+                  {formatBirthdayDate(contact.birthday)}
+                </div>
+              )}
               {contact.notes && (
                 <p className="text-xs text-muted-foreground/60 italic mt-1">{contact.notes}</p>
               )}
@@ -464,6 +480,16 @@ export function ContactsClient({ initialContacts }: ContactsClientProps) {
                   className="mt-2"
                 />
               )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="contact-birthday">Birthday</Label>
+              <Input
+                id="contact-birthday"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                placeholder="YYYY-MM-DD, or MM-DD if year unknown"
+              />
+              <p className="text-xs text-muted-foreground">Shows on the calendar each year.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="contact-phone">Phone</Label>
