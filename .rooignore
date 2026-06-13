@@ -4,6 +4,9 @@
 # EXCEPT your specific Roo Code instruction files
 !.roo/prompts/**/*.md
 !.roomodes
+!AGENTS.md
+!QA.md
+!CLAUDE.md
 
 # EXCEPT project documentation files
 !README.md
