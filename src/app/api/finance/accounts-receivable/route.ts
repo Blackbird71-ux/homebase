@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
 import { todayStringInTz, endOfLocalDayUtc } from '@/lib/timezone'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
+import { sumControlAccountLines } from '@/lib/finance-subledger'
 
 // GET /api/finance/accounts-receivable?asAt=YYYY-MM-DD
 //
@@ -137,12 +138,7 @@ export async function GET(request: NextRequest) {
     // Use the actual AR journal line debit rather than entry.amount (gross face value).
     // They differ when the income has a custom journal split (e.g. salary with PAYG withheld:
     // DR AR $971.56 / DR Tax $361 / CR Gross Wages $1,332.56 — entry.amount is $1,332.56).
-    const arLines = arCategory
-      ? (e.journalEntry?.lines ?? []).filter(l => l.glAccountId === arCategory.id && l.side === 'debit')
-      : []
-    const outstandingAmount = arLines.length > 0
-      ? arLines.reduce((s, l) => s + l.amount, 0)
-      : e.amount
+    const outstandingAmount = sumControlAccountLines(e.journalEntry?.lines, arCategory?.id, 'debit', e.amount)
     return {
       id:               e.id,
       name:             e.name,

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
 import { todayStringInTz, endOfLocalDayUtc } from '@/lib/timezone'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
+import { sumControlAccountLines } from '@/lib/finance-subledger'
 
 // GET /api/finance/accounts-payable?asAt=YYYY-MM-DD
 //
@@ -158,12 +159,7 @@ export async function GET(request: NextRequest) {
       // lines on the accrual journal, not bill.amount — they differ when the
       // promoted journal has a custom split (e.g. CR AP + CR other). Fall back
       // to bill.amount only when no journal/AP lines exist.
-      const apCreditLines = apCategory
-        ? (b.journalEntry?.lines ?? []).filter(l => l.glAccountId === apCategory.id && l.side === 'credit')
-        : []
-      const accruedAp = apCreditLines.length > 0
-        ? apCreditLines.reduce((s, l) => s + l.amount, 0)
-        : b.amount
+      const accruedAp = sumControlAccountLines(b.journalEntry?.lines, apCategory?.id, 'credit', b.amount)
 
       // Sum only payments made on or before asAt. Per payment, use the AP
       // debit lines on its payment journal (what actually cleared AP); fall
@@ -172,12 +168,7 @@ export async function GET(request: NextRequest) {
       const paymentsToDate = (b.payments ?? []).reduce((sum, p) => {
         const pDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate)
         if (pDate > asAt) return sum
-        const apDebitLines = apCategory
-          ? (p.journalEntry?.lines ?? []).filter(l => l.glAccountId === apCategory.id && l.side === 'debit')
-          : []
-        return sum + (apDebitLines.length > 0
-          ? apDebitLines.reduce((s, l) => s + l.amount, 0)
-          : p.amount)
+        return sum + sumControlAccountLines(p.journalEntry?.lines, apCategory?.id, 'debit', p.amount)
       }, 0)
 
       const outstandingAmount = Math.round((accruedAp - paymentsToDate) * 100) / 100
