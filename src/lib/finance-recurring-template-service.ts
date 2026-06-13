@@ -19,6 +19,7 @@ import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit-log'
 import { todayBoundsInTz, utcMidnight, DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { stepOccurrence } from '@/lib/finance-recurrence-core'
+import { deriveTemplatePrimaryCategory } from '@/lib/finance-template-helpers'
 import type { SessionUser } from '@/types'
 
 // ── Literal types matching the schema string columns ────────────────────────
@@ -442,8 +443,8 @@ function assertValidTemplateInput(input: CreateTemplateInput | UpdateTemplateInp
       if (line.side !== 'debit' && line.side !== 'credit') {
         throw new Error(`Line ${i + 1}: side must be 'debit' or 'credit', got "${line.side}"`)
       }
-      if (line.amount < 0) {
-        throw new Error(`Line ${i + 1}: amount must be >= 0, got ${line.amount}`)
+      if (!(line.amount > 0)) {
+        throw new Error(`Line ${i + 1}: amount must be greater than 0, got ${line.amount}`)
       }
       if (line.side === 'debit') totalDR += line.amount
       else totalCR += line.amount
@@ -497,7 +498,7 @@ export async function createTemplate(
   const glIds = [...new Set(input.lines.map(l => l.glAccountId))]
   const validGlIds = await prisma.financeCategory.findMany({
     where: { id: { in: glIds }, familyId: user.familyId },
-    select: { id: true },
+    select: { id: true, type: true },
   })
   if (validGlIds.length !== glIds.length) {
     throw new Error(
@@ -505,6 +506,13 @@ export async function createTemplate(
       `(referenced ${glIds.length}, found ${validGlIds.length})`,
     )
   }
+
+  // Derive the primary expense/income category from the lines when the caller
+  // didn't set one explicitly (audit F1/F2). Without this a balanced multi-line
+  // template can be saved with categoryId=null, spawning drafts that post fine
+  // but cannot be approved (the approval gate requires a category).
+  const resolvedCategoryId =
+    input.categoryId ?? deriveTemplatePrimaryCategory(input.kind, input.lines, validGlIds)
 
   // For payslip templates also validate the per-side GL accounts
   if (input.payslipEnabled) {
@@ -542,7 +550,7 @@ export async function createTemplate(
 
         counterpartyId: input.counterpartyId ?? null,
         accountId: input.accountId ?? null,
-        categoryId: input.categoryId ?? null,
+        categoryId: resolvedCategoryId,
         entityId: input.entityId ?? null,
         locationId: input.locationId ?? null,
         memberId: input.memberId ?? null,
@@ -664,14 +672,21 @@ export async function updateTemplate(
   }
 
   // Validate any new GL account references belong to family
+  let derivedCategoryId: string | null | undefined
   if (input.lines != null) {
     const glIds = [...new Set(input.lines.map(l => l.glAccountId))]
     const validGlIds = await prisma.financeCategory.findMany({
       where: { id: { in: glIds }, familyId: user.familyId },
-      select: { id: true },
+      select: { id: true, type: true },
     })
     if (validGlIds.length !== glIds.length) {
       throw new Error('One or more line GL accounts not found for this family')
+    }
+    // Re-derive the primary category from the new lines when the caller didn't
+    // send one explicitly (audit F1/F2) — mirrors createTemplate.
+    if (input.categoryId === undefined) {
+      const kind = (input.kind ?? existing.kind) as 'bill' | 'income'
+      derivedCategoryId = deriveTemplatePrimaryCategory(kind, input.lines, validGlIds)
     }
   }
 
@@ -742,6 +757,7 @@ export async function updateTemplate(
   if (input.counterpartyId !== undefined) data.counterpartyId = input.counterpartyId ?? null
   if (input.accountId !== undefined) data.accountId = input.accountId ?? null
   if (input.categoryId !== undefined) data.categoryId = input.categoryId ?? null
+  else if (derivedCategoryId != null) data.categoryId = derivedCategoryId
   if (input.entityId !== undefined) data.entityId = input.entityId ?? null
   if (input.locationId !== undefined) data.locationId = input.locationId ?? null
   if (input.memberId !== undefined) data.memberId = input.memberId ?? null

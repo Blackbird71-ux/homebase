@@ -289,6 +289,33 @@ export function formToBody(form: FormState) {
   }
 }
 
+// ── Primary category derivation ───────────────────────────────────────────────
+// A template's `categoryId` is the expense/income GL account used for budget
+// classification and as the fallback posting account. For multi-line templates
+// it must be derived from the lines themselves — the journal posts from the
+// lines via branch (a), so a null categoryId would otherwise block approval
+// (audit F1) even though the GL would post correctly.
+//
+//   bill   → the debit line whose GL account is an expense account
+//   income → the credit line whose GL account is an income account
+//
+// When several candidates exist, the largest-amount line wins (the principal
+// expense/income leg). Returns null when no matching line is found (e.g. a
+// single-leg template, or a transfer between asset/liability accounts).
+export function deriveTemplatePrimaryCategory(
+  kind: 'bill' | 'income',
+  lines: { glAccountId: string; side: string; amount: number }[],
+  glAccounts: { id: string; type: string }[],
+): string | null {
+  const typeById = new Map(glAccounts.map(a => [a.id, a.type]))
+  const wantSide = kind === 'bill' ? 'debit' : 'credit'
+  const wantType = kind === 'bill' ? 'expense' : 'income'
+  const candidates = lines
+    .filter(l => l.side === wantSide && typeById.get(l.glAccountId) === wantType)
+    .sort((a, b) => b.amount - a.amount)
+  return candidates[0]?.glAccountId ?? null
+}
+
 export function validate(form: FormState): Record<string, string> {
   const e: Record<string, string> = {}
   if (!form.name.trim()) e.name = 'Name is required'
@@ -308,7 +335,7 @@ export function validate(form: FormState): Record<string, string> {
   form.lines.forEach((l, i) => {
     if (!l.glAccountId) e[`line_${i}_account`] = 'Select an account'
     const amt = parseFloat(l.amount)
-    if (isNaN(amt) || amt < 0) e[`line_${i}_amount`] = 'Enter a valid amount'
+    if (isNaN(amt) || amt <= 0) e[`line_${i}_amount`] = 'Enter an amount greater than 0'
   })
   if (form.lines.length >= 2) {
     let dr = 0, cr = 0

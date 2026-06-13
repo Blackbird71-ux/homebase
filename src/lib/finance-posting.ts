@@ -584,6 +584,15 @@ export interface PostIncomeAccrualParams {
    * 2-line entry is created instead.
    */
   draftJournalEntryId?: string | null
+  /**
+   * Optional pre-generated journal reference for the fresh 2-line entry. Pass
+   * this when posting inside a $transaction that also creates another journal,
+   * so the two references are allocated up-front from committed MAX and cannot
+   * collide (nextJournalReference reads committed state and would otherwise
+   * return the same JE-N twice within one uncommitted transaction). Ignored
+   * when an existing balanced draft is promoted (it keeps its own reference).
+   */
+  reference?: string
 }
 
 export async function postIncomeAccrualJournal(
@@ -598,6 +607,7 @@ export async function postIncomeAccrualJournal(
     entityId,
     date,
     draftJournalEntryId,
+    reference: preGeneratedReference,
   } = params
 
   if (!(amount > 0)) {
@@ -651,7 +661,7 @@ export async function postIncomeAccrualJournal(
   await assertGlAccountsBelongToFamily(tx, lines, familyId)
   assertBalanced(lines)
 
-  const reference = await nextJournalReference(familyId)
+  const reference = preGeneratedReference ?? await nextJournalReference(familyId)
   const entry = await tx.financeJournalEntry.create({
     data: {
       reference,

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { DEFAULT_TIMEZONE, localMidnightToUtc, monthBoundsInTz } from '@/lib/timezone'
+import { sumControlAccountLines } from '@/lib/finance-subledger'
 
 // GET /api/finance/vendor-statement?vendorId=xxx&type=ap&from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -17,6 +18,12 @@ import { DEFAULT_TIMEZONE, localMidnightToUtc, monthBoundsInTz } from '@/lib/tim
 // Data sources:
 //   AP: FinanceRecurringBill (invoices) + FinanceBillPayment (payments)
 //   AR: FinanceIncomeEntry   (invoices) + receivedDate/actualAmountReceived (receipts)
+//
+// Charge/payment figures are sourced from the POSTED journal lines on the AP/AR
+// control account (sumControlAccountLines), not the nominal record amount, so
+// the statement reconciles with the AP/AR aging reports and the Balance Sheet
+// even when a journal carries a custom split (§12.10). The nominal amount is
+// used only as a fallback for legacy records with no journal.
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -70,6 +77,14 @@ async function buildApStatement(
   to: Date,
   tz: string,
 ) {
+  // Accounts Payable control account — charge/payment figures come from its
+  // journal lines (see §12.10 note above).
+  const apCandidates = await prisma.financeCategory.findMany({
+    where: { familyId, type: 'liability', isSystem: true },
+    select: { id: true, name: true },
+  })
+  const apCategory = apCandidates.find(c => c.name.toLowerCase().includes('accounts payable'))
+
   // All bills for this vendor that affect the period (invoiced or paid on/before `to`)
   const bills = await prisma.financeRecurringBill.findMany({
     where: {
@@ -81,14 +96,24 @@ async function buildApStatement(
     select: {
       id: true, name: true, amount: true,
       invoiceReceivedDate: true,
-      journalEntry: { select: { reference: true } },
+      journalEntry: { select: { reference: true, lines: { select: { glAccountId: true, side: true, amount: true } } } },
       payments: {
-        select: { id: true, amount: true, paymentDate: true },
+        select: {
+          id: true, amount: true, paymentDate: true,
+          journalEntry: { select: { lines: { select: { glAccountId: true, side: true, amount: true } } } },
+        },
         orderBy: { paymentDate: 'asc' },
       },
     },
     orderBy: { invoiceReceivedDate: 'asc' },
   })
+
+  // Charge = CR AP lines on the accrual journal (fallback bill.amount).
+  // Payment = DR AP lines on each payment's journal (fallback payment.amount).
+  const billCharge = (bill: typeof bills[number]) =>
+    sumControlAccountLines(bill.journalEntry?.lines, apCategory?.id, 'credit', bill.amount)
+  const paymentCleared = (p: typeof bills[number]['payments'][number]) =>
+    sumControlAccountLines(p.journalEntry?.lines, apCategory?.id, 'debit', p.amount)
 
   // Opening balance: invoices before `from`, net of payments also before `from`
   let openingBalance = 0
@@ -97,8 +122,8 @@ async function buildApStatement(
     if (invDate >= from) continue  // invoice is in-period or later — not in opening balance
     const paidBefore = bill.payments
       .filter(p => new Date(p.paymentDate) < from)
-      .reduce((s, p) => s + p.amount, 0)
-    const outstanding = bill.amount - paidBefore
+      .reduce((s, p) => s + paymentCleared(p), 0)
+    const outstanding = billCharge(bill) - paidBefore
     if (outstanding > 0.005) openingBalance += outstanding
   }
   openingBalance = Math.round(openingBalance * 100) / 100
@@ -138,7 +163,7 @@ async function buildApStatement(
         id:          bill.id,
         description: bill.name,
         reference:   bill.journalEntry?.reference ?? null,
-        amount:      bill.amount,
+        amount:      billCharge(bill),
       })
     }
     // In-period payments (for any bill, including pre-period invoices)
@@ -151,7 +176,7 @@ async function buildApStatement(
           id:          p.id,
           description: `Payment — ${bill.name}`,
           reference:   bill.journalEntry?.reference ?? null,
-          amount:      p.amount,
+          amount:      paymentCleared(p),
         })
       }
     }
@@ -211,6 +236,14 @@ async function buildArStatement(
   to: Date,
   tz: string,
 ) {
+  // Accounts Receivable control account — charge/receipt figures come from its
+  // journal lines (see §12.10 note above).
+  const arCandidates = await prisma.financeCategory.findMany({
+    where: { familyId, type: 'asset', isSystem: true },
+    select: { id: true, name: true },
+  })
+  const arCategory = arCandidates.find(c => c.name.toLowerCase().includes('accounts receivable'))
+
   const entries = await prisma.financeIncomeEntry.findMany({
     where: {
       familyId,
@@ -222,10 +255,22 @@ async function buildArStatement(
       id: true, name: true, amount: true, actualAmountReceived: true,
       invoiceReceivedDate: true,
       received: true, receivedDate: true,
-      journalEntry: { select: { reference: true } },
+      journalEntry:        { select: { reference: true, lines: { select: { glAccountId: true, side: true, amount: true } } } },
+      receiptJournalEntry: { select: { lines: { select: { glAccountId: true, side: true, amount: true } } } },
     },
     orderBy: { invoiceReceivedDate: 'asc' },
   })
+
+  // Charge = DR AR lines on the accrual journal (fallback entry.amount).
+  // Receipt = CR AR lines on the receipt journal (fallback actualAmountReceived
+  // ?? entry.amount). AR has no partial receipts — an entry is open or cleared.
+  const entryCharge = (entry: typeof entries[number]) =>
+    sumControlAccountLines(entry.journalEntry?.lines, arCategory?.id, 'debit', entry.amount)
+  const entryReceipt = (entry: typeof entries[number]) =>
+    sumControlAccountLines(
+      entry.receiptJournalEntry?.lines, arCategory?.id, 'credit',
+      entry.actualAmountReceived ?? entry.amount,
+    )
 
   // Opening balance: invoices before `from`, net of receipts also before `from`
   let openingBalance = 0
@@ -234,7 +279,7 @@ async function buildArStatement(
     if (invDate >= from) continue
     if (entry.received && entry.receivedDate && new Date(entry.receivedDate) < from) continue
     // Invoice was issued before `from` and not yet received before `from`
-    openingBalance += entry.amount
+    openingBalance += entryCharge(entry)
   }
   openingBalance = Math.round(openingBalance * 100) / 100
 
@@ -271,20 +316,19 @@ async function buildArStatement(
         id:          entry.id,
         description: entry.name,
         reference:   entry.journalEntry?.reference ?? null,
-        amount:      entry.amount,
+        amount:      entryCharge(entry),
       })
     }
     if (entry.received && entry.receivedDate) {
       const rd = new Date(entry.receivedDate)
       if (rd >= from && rd <= to) {
-        const receiptAmt = entry.actualAmountReceived ?? entry.amount
         events.push({
           date:        rd,
           type:        'receipt',
           id:          `${entry.id}_receipt`,
           description: `Receipt — ${entry.name}`,
           reference:   entry.journalEntry?.reference ?? null,
-          amount:      receiptAmt,
+          amount:      entryReceipt(entry),
         })
       }
     }

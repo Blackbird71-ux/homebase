@@ -5,19 +5,26 @@ import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 // src/app/api/finance/balance-sheet/route.ts so the net-worth trend report
 // computes its points from exactly the same logic as the Balance Sheet page.
 //
+// Every figure below is derived EXCLUSIVELY from posted journal lines
+// (FinanceJournalLine) via deriveJournalLineBalances — the same source as the
+// Trial Balance, so the two always agree. FinanceRecurringBill /
+// FinanceIncomeEntry / FinanceTransaction rows are NOT read for any balance;
+// FinanceAccount is read for metadata (name, type) only, its balance comes
+// from the journal-line map.
+//
 // ASSETS
-//   Bank & Cash accounts          derived from cleared income/expense/OB transactions + journal lines
-//   Accounts Receivable           income entries where invoiceReceived=true AND received=false
-//   COA asset accounts            opening balance +/- GL transaction flows +/- journal line flows
+//   Bank & Cash accounts          posted journal-line balance of each bank GL account
+//   Accounts Receivable           posted journal-line balance of the AR GL account
+//   COA asset accounts            opening balance OR posted journal-line balance
 //
 // LIABILITIES
-//   Credit cards & loans          bank accounts with negative derived balance
-//   Accounts Payable              bills where invoiceReceived=true AND paid=false
-//   COA liability accounts        opening balance +/- GL flows +/- journal line flows
+//   Credit cards & loans          bank GL accounts with negative journal-line balance
+//   Accounts Payable              posted journal-line balance of the AP GL account
+//   COA liability accounts        opening balance OR posted journal-line balance
 //
 // EQUITY
-//   COA equity accounts           opening balance +/- journal line flows
-//   Current Period Net Income     cleared income − cleared expenses up to asAt (P0 fix #2)
+//   COA equity accounts           opening balance OR posted journal-line balance
+//   Current Period Net Income     posted income − expense journal-line balances up to asAt
 //
 // NET WORTH = Total Assets − Total Liabilities
 // EQUITY (static + net income) should equal NET WORTH when fully set up.

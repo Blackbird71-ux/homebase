@@ -7,7 +7,7 @@ import { spawnNextTemplatedOccurrence } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
-import { postPayslipReceiptJournal, postIncomeReceiptJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
+import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -638,77 +638,33 @@ export async function PATCH(request: NextRequest) {
     const remittanceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
     try {
       await prisma.$transaction(async (tx) => {
-        const arCategoryId = await ensureAccountsReceivableCategory(user.familyId)
-
-        // 1. Create GL journal: DR AR / CR Income — posted immediately
+        // 1. Post the Stage-1 accrual (DR AR / CR Income) via the shared helper.
+        // It promotes a balanced unposted draft journal as-is (preserving any
+        // GST split) or creates a fresh 2-line entry (AGENTS.md Finance rule 1 —
+        // no inline GL posting). If the linked journal is ALREADY posted, re-use
+        // it to avoid a duplicate that would double revenue/AR.
         let journalEntryId: string
         const existingJeId: string | null = existing.journalEntryId ?? null
+        const alreadyPosted = existingJeId
+          ? (await tx.financeJournalEntry.findFirst({
+              where: { id: existingJeId, familyId: user.familyId },
+              select: { isPosted: true },
+            }))?.isPosted ?? false
+          : false
 
-        if (existingJeId) {
-          const existingJe = await tx.financeJournalEntry.findFirst({
-            where: { id: existingJeId, familyId: user.familyId },
-            include: { lines: true },
-          })
-          if (existingJe && !existingJe.isPosted && existingJe.lines.length >= 2) {
-            const dr = existingJe.lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
-            const cr = existingJe.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
-            if (Math.abs(dr - cr) <= 0.005) {
-              // GL-FIRST: balanced draft exists (e.g. user-configured GST split) —
-              // promote it as-is rather than discarding and building a fresh 2-line entry.
-              await tx.financeJournalEntry.update({ where: { id: existingJeId }, data: { isPosted: true, date: remittanceDate } })
-              journalEntryId = existingJeId
-            } else {
-              // Unbalanced draft — fall back to standard 2-line auto entry
-              const reference = await nextJournalReference(user.familyId)
-              const je = await tx.financeJournalEntry.create({
-                data: {
-                  reference, date: remittanceDate, description: existing.name,
-                  type: 'auto_transaction', isPosted: true,
-                  entityId: existing.entityId ?? null, familyId: user.familyId,
-                  lines: { create: [
-                    { glAccountId: arCategoryId,         side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
-                    { glAccountId: existing.categoryId!, side: 'credit', amount: existing.amount, description: existing.name },
-                  ]},
-                }, select: { id: true },
-              })
-              journalEntryId = je.id
-            }
-          } else if (existingJe?.isPosted) {
-            // Already posted — accrual is correctly in the GL; re-use the
-            // existing entry to avoid creating a duplicate that would double
-            // revenue on the P&L and AR on the balance sheet.
-            journalEntryId = existingJeId
-          } else {
-            // Exists but has no lines — create a fresh standard 2-line entry
-            const reference = await nextJournalReference(user.familyId)
-            const je = await tx.financeJournalEntry.create({
-              data: {
-                reference, date: remittanceDate, description: existing.name,
-                type: 'auto_transaction', isPosted: true,
-                entityId: existing.entityId ?? null, familyId: user.familyId,
-                lines: { create: [
-                  { glAccountId: arCategoryId,         side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
-                  { glAccountId: existing.categoryId!, side: 'credit', amount: existing.amount, description: existing.name },
-                ]},
-              }, select: { id: true },
-            })
-            journalEntryId = je.id
-          }
+        if (existingJeId && alreadyPosted) {
+          journalEntryId = existingJeId
         } else {
-          // No draft journal — create standard 2-line entry
-          const reference = await nextJournalReference(user.familyId)
-          const je = await tx.financeJournalEntry.create({
-            data: {
-              reference, date: remittanceDate, description: existing.name,
-              type: 'auto_transaction', isPosted: true,
-              entityId: existing.entityId ?? null, familyId: user.familyId,
-              lines: { create: [
-                { glAccountId: arCategoryId,         side: 'debit',  amount: existing.amount, description: `AR: ${existing.name}` },
-                { glAccountId: existing.categoryId!, side: 'credit', amount: existing.amount, description: existing.name },
-              ]},
-            }, select: { id: true },
+          const posted = await postIncomeAccrualJournal(tx, {
+            familyId: user.familyId,
+            description: existing.name,
+            amount: existing.amount,
+            incomeGlAccountId: existing.categoryId!,
+            entityId: existing.entityId ?? null,
+            date: remittanceDate,
+            draftJournalEntryId: existingJeId,
           })
-          journalEntryId = je.id
+          journalEntryId = posted.journalEntryId
         }
 
         // 2. Create tracking transaction
@@ -788,7 +744,7 @@ export async function PATCH(request: NextRequest) {
 
     // ── Validate payslip GL accounts when payslip mode ──────────────────────
     if (payslipData) {
-      const { grossIncomeGlAccountId, bankGlAccountId, paygGlAccountId, deductions = [], netPay } = payslipData
+      const { grossIncomeGlAccountId, bankGlAccountId, paygGlAccountId, sgcAmount = 0, sgcGlAccountId, sgcIncomeGlAccountId, deductions = [], netPay } = payslipData
       // F10: netPay is forced into actualAmount above, so it must be a valid number
       if (typeof netPay !== 'number' || !Number.isFinite(netPay) || netPay < 0) {
         return NextResponse.json(
@@ -808,11 +764,23 @@ export async function PATCH(request: NextRequest) {
           { status: 400 }
         )
       }
+      // SGC posts a self-balancing DR Accrued SGC / CR SGC Income pair, so both
+      // GL accounts are required when sgcAmount > 0 (postPayslipReceiptJournal
+      // throws otherwise — see QA.md §2.3). Validate up front for a clean 400
+      // rather than a late failure inside the posting transaction.
+      if (sgcAmount > 0 && (!sgcGlAccountId || !sgcIncomeGlAccountId)) {
+        return NextResponse.json(
+          { error: 'SGC amount is positive but the Accrued SGC and/or SGC Income GL account is not set.' },
+          { status: 400 }
+        )
+      }
       // Validate all GL IDs referenced in the payslip belong to this family
       const glIds = [
         grossIncomeGlAccountId,
         bankGlAccountId,
         paygGlAccountId,
+        sgcGlAccountId,
+        sgcIncomeGlAccountId,
         ...(deductions as { glAccountId?: string }[]).map(d => d.glAccountId),
       ].filter((v): v is string => !!v)
       const validCount = await prisma.financeCategory.count({
@@ -881,29 +849,27 @@ export async function PATCH(request: NextRequest) {
           if (!existing.categoryId) {
             throw new Error('Income entry must have an income category before cash can be posted to GL')
           }
-          const accrualJe = await tx.financeJournalEntry.create({
-            data: {
-              reference: accrualRef!,
-              date: actualReceivedDate,
-              description: existing.name,
-              type: 'auto_transaction',
-              isPosted: true,
-              entityId: existing.entityId ?? null,
-              familyId: user.familyId,
-              lines: {
-                create: [
-                  { glAccountId: arCategoryId,        side: 'debit',  amount: actualAmount, description: `AR: ${existing.name}` },
-                  { glAccountId: existing.categoryId, side: 'credit', amount: actualAmount, description: existing.name },
-                ],
-              },
-            },
-            select: { id: true },
+          // Fresh DR AR / CR Income via the shared helper (AGENTS.md Finance
+          // rule 1 — no inline GL posting). draftJournalEntryId is null: this
+          // path always posts at actualAmount (which may override the template
+          // amount), so a draft must not be promoted in its place. The reference
+          // is pre-allocated (accrualRef) so it cannot collide with the receipt
+          // journal created later in this same transaction.
+          const accrual = await postIncomeAccrualJournal(tx, {
+            familyId: user.familyId,
+            description: existing.name,
+            amount: actualAmount,
+            incomeGlAccountId: existing.categoryId,
+            entityId: existing.entityId ?? null,
+            date: actualReceivedDate,
+            draftJournalEntryId: null,
+            reference: accrualRef!,
           })
           await tx.financeIncomeEntry.update({
             where: { id },
-            data: { invoiceReceived: true, invoiceReceivedDate: actualReceivedDate, journalEntryId: accrualJe.id },
+            data: { invoiceReceived: true, invoiceReceivedDate: actualReceivedDate, journalEntryId: accrual.journalEntryId },
           })
-          accrualJournalId = accrualJe.id
+          accrualJournalId = accrual.journalEntryId
         }
 
         // ── MODE A: Payslip multi-line journal ─────────────────────────────

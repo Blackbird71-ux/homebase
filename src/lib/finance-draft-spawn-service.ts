@@ -573,6 +573,7 @@ export async function spawnDraftsForTemplate(
     template.bankGlAccountId,
     template.paygGlAccountId,
     template.sgcGlAccountId,
+    template.sgcIncomeGlAccountId,
   ].filter((v): v is string => !!v)
 
   const missing = await findMissingGlAccounts(template.familyId, lineGlIds, payslipGlIds)

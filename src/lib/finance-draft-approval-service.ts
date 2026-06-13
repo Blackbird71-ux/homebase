@@ -44,6 +44,7 @@ import {
 } from '@/lib/finance-recurring-template-service'
 import { toMonthlyAmount } from '@/lib/financeShared'
 import { addUtcYears } from '@/lib/timezone'
+import { deriveTemplatePrimaryCategory } from '@/lib/finance-template-helpers'
 
 // ── Result types ─────────────────────────────────────────────────────────────
 
@@ -81,6 +82,29 @@ function assertDraftStatus(status: string | null, id: string): void {
   }
 }
 
+// ── Internal: recover a draft's primary GL category from its template ─────────
+// Drafts spawned before categoryId derivation (audit F1) carry categoryId=null.
+// The expense/income GL account still lives on the template lines, so derive it
+// the same way createTemplate now does. Returns null when there is no template
+// or no identifiable expense/income line (caller then rejects the approval).
+async function deriveDraftCategoryFromTemplate(
+  user: SessionUser,
+  kind: TemplateKind,
+  templateId: string | null,
+): Promise<string | null> {
+  if (!templateId) return null
+  const template = await prisma.financeRecurringTemplate.findFirst({
+    where: { id: templateId, familyId: user.familyId },
+    include: { lines: true },
+  })
+  if (!template || template.lines.length === 0) return null
+  const glAccounts = await prisma.financeCategory.findMany({
+    where: { id: { in: template.lines.map(l => l.glAccountId) }, familyId: user.familyId },
+    select: { id: true, type: true },
+  })
+  return deriveTemplatePrimaryCategory(kind, template.lines, glAccounts)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // approveBillDraft
 //
@@ -105,11 +129,24 @@ export async function approveBillDraft(
   }
   assertDraftStatus(draft.status, billId)
 
-  if (!draft.categoryId) {
+  // The expense category is the GL account used for the prepayment gate, budget
+  // sync, and the no-draft posting fallback. Legacy drafts spawned from a
+  // template whose categoryId was never derived (audit F1) carry categoryId=null
+  // even though their balanced draft journal would post correctly. Recover it
+  // from the template's expense line before gating on it.
+  const resolvedCategoryId = draft.categoryId
+    ?? await deriveDraftCategoryFromTemplate(user, 'bill', draft.templateId)
+  if (!resolvedCategoryId) {
     throw new Error(
       `Cannot approve bill draft ${billId}: no expense category set. ` +
       `Assign a category before approving.`,
     )
+  }
+  if (resolvedCategoryId !== draft.categoryId) {
+    await prisma.financeRecurringBill.update({
+      where: { id: billId },
+      data: { categoryId: resolvedCategoryId },
+    })
   }
 
   // Accrual is recognised on billDate (the occurrence/invoice date — when the
@@ -169,7 +206,7 @@ export async function approveBillDraft(
       billId,
       description: draft.name,
       amount: draft.amount,
-      expenseGlAccountId: draft.categoryId!,
+      expenseGlAccountId: resolvedCategoryId,
       entityId: draft.entityId ?? null,
       date: accrualDate,
       draftJournalEntryId: resolvedJournalEntryId,
@@ -228,7 +265,7 @@ export async function approveBillDraft(
             data: {
               name: draft.name,
               amount: monthlyAmount,
-              categoryId: draft.categoryId ?? null,
+              categoryId: resolvedCategoryId,
               period: 'monthly',
               isIncludedInPlanner: true,
               ...(draft.entityId !== undefined && { entityId: draft.entityId ?? null }),
@@ -239,7 +276,7 @@ export async function approveBillDraft(
             data: {
               name: draft.name,
               amount: monthlyAmount,
-              categoryId: draft.categoryId ?? null,
+              categoryId: resolvedCategoryId,
               period: 'monthly',
               startDate,
               endDate,
@@ -335,11 +372,21 @@ export async function approveIncomeDraft(
   }
 
   // ── SIMPLE income: post Stage-1 accrual ─────────────────────────────────
-  if (!draft.categoryId) {
+  // Recover a missing income category from the template's income line (audit
+  // F1) — same rationale as approveBillDraft.
+  const resolvedCategoryId = draft.categoryId
+    ?? await deriveDraftCategoryFromTemplate(user, 'income', draft.templateId)
+  if (!resolvedCategoryId) {
     throw new Error(
       `Cannot approve income draft ${incomeId}: no income category set. ` +
       `Assign a category before approving.`,
     )
+  }
+  if (resolvedCategoryId !== draft.categoryId) {
+    await prisma.financeIncomeEntry.update({
+      where: { id: incomeId },
+      data: { categoryId: resolvedCategoryId },
+    })
   }
 
   // Accrual recognised on the expected date (when the income is earned /
@@ -396,7 +443,7 @@ export async function approveIncomeDraft(
       familyId: user.familyId,
       description: draft.name,
       amount: draft.amount,
-      incomeGlAccountId: draft.categoryId!,
+      incomeGlAccountId: resolvedCategoryId,
       entityId: draft.entityId ?? null,
       date: accrualDate,
       draftJournalEntryId: resolvedJournalEntryId,
