@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Home, Calendar, ListChecks, Utensils, ChefHat, CheckSquare, DollarSign,
   Users, FileText, Plane, StickyNote, Gift, Wrench, Settings, Shield,
-  Search, CornerDownLeft, Plus, Loader2, ShoppingBasket,
+  Search, CornerDownLeft, Plus, Loader2, ShoppingBasket, PiggyBank,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { SearchResult, SearchResultType } from '@/lib/global-search'
@@ -85,6 +85,7 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false }: {
     { label: 'Trips',          url: '/trips',          icon: <Plane className="h-4 w-4" /> },
     { label: 'Notes',          url: '/notes',          icon: <StickyNote className="h-4 w-4" /> },
     { label: 'Wishlist',       url: '/wishlists',      icon: <Gift className="h-4 w-4" /> },
+    { label: 'Pocket Money',   url: '/pocket-money',   icon: <PiggyBank className="h-4 w-4" /> },
     { label: 'Maintenance',    url: '/maintenance',    icon: <Wrench className="h-4 w-4" /> },
     { label: 'Settings',       url: '/settings',       icon: <Settings className="h-4 w-4" /> },
     ...(isAdmin ? [{ label: 'Admin', url: '/admin', icon: <Shield className="h-4 w-4" /> }] : []),

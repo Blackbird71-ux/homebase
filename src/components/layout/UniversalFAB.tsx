@@ -24,23 +24,33 @@ import {
   Bot,
   HelpCircle,
   Plane,
+  ShoppingBasket,
+  FileText,
+  Gift,
+  PiggyBank,
+  Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
 
 const navItems = [
-  { href: '/home',      label: 'Home',     icon: Home },
-  { href: '/calendar',  label: 'Calendar', icon: Calendar },
-  { href: '/lists',     label: 'Lists',    icon: CheckSquare },
-  { href: '/chores',    label: 'Chores',   icon: ListChecks },
-  { href: '/contacts',  label: 'Contacts', icon: BookUser },
-  { href: '/finance',   label: 'Finance',  icon: DollarSign },
-  { href: '/recipes',   label: 'Recipes',  icon: ChefHat },
-  { href: '/meal-plan', label: 'Meals',    icon: CalendarDays },
-  { href: '/trips',     label: 'Trips',    icon: Plane },
-  { href: '/notes',     label: 'Notes',    icon: StickyNote },
-  { href: '/settings',  label: 'Settings', icon: Settings },
+  { href: '/home',         label: 'Home',         icon: Home },
+  { href: '/calendar',     label: 'Calendar',     icon: Calendar },
+  { href: '/chores',       label: 'Chores',       icon: ListChecks },
+  { href: '/lists',        label: 'Lists',        icon: CheckSquare },
+  { href: '/recipes',      label: 'Recipes',      icon: ChefHat },
+  { href: '/meal-plan',    label: 'Meals',        icon: CalendarDays },
+  { href: '/pantry',       label: 'Pantry',       icon: ShoppingBasket },
+  { href: '/finance',      label: 'Finance',      icon: DollarSign },
+  { href: '/contacts',     label: 'Contacts',     icon: BookUser },
+  { href: '/documents',    label: 'Documents',    icon: FileText },
+  { href: '/trips',        label: 'Trips',        icon: Plane },
+  { href: '/notes',        label: 'Notes',        icon: StickyNote },
+  { href: '/wishlists',    label: 'Wishlist',     icon: Gift },
+  { href: '/pocket-money', label: 'Pocket Money', icon: PiggyBank },
+  { href: '/maintenance',  label: 'Maintenance',  icon: Wrench },
+  { href: '/settings',     label: 'Settings',     icon: Settings },
 ]
 
 const quickActions: { id: QuickAction; label: string; icon: React.ReactNode; description: string }[] = [
@@ -60,9 +70,10 @@ const quickActions: { id: QuickAction; label: string; icon: React.ReactNode; des
 interface UniversalFABProps {
   /** Called when the user picks a quick action on desktop (opens QuickAdd dialog) */
   onQuickAction?: (action: QuickAction) => void
+  hideFinanceModule?: boolean
 }
 
-export function UniversalFAB({ onQuickAction }: UniversalFABProps) {
+export function UniversalFAB({ onQuickAction, hideFinanceModule = false }: UniversalFABProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -191,7 +202,7 @@ export function UniversalFAB({ onQuickAction }: UniversalFABProps) {
                 Navigate
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {navItems.map(({ href, label, icon: Icon }) => {
+                {navItems.filter(({ href }) => !(hideFinanceModule && href === '/finance')).map(({ href, label, icon: Icon }) => {
                   const isActive = pathname === href || pathname.startsWith(href + '/')
                   return (
                     <Link

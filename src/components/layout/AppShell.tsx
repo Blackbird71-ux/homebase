@@ -65,7 +65,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       </main>
 
       {/* Universal floating action button — visible on all screen sizes */}
-      <UniversalFAB />
+      <UniversalFAB hideFinanceModule={hideFinanceModule} />
 
       {/* Quick-add dialog — triggered by FAB, sidebar button, or the palette's > actions */}
       <QuickAdd />
