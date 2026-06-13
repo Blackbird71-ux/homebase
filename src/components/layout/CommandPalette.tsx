@@ -33,6 +33,7 @@ const quickActions: QuickAction[] = [
   { id: 'recipe',        label: 'Recipe' },
   { id: 'meal',          label: 'Meal' },
   { id: 'note',          label: 'Note' },
+  { id: 'pantry-item',   label: 'Pantry Item' },
   { id: 'ai',            label: 'AI Assistant' },
 ]
 

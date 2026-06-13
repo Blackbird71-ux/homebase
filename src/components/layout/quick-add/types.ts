@@ -1,7 +1,7 @@
 export type QuickAction =
   | 'event' | 'chore' | 'expense' | 'list-item'
   | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note'
-  | 'ai' | 'help'
+  | 'pantry-item' | 'ai' | 'help'
 
 export interface QuickAddFormProps {
   onSuccess: (message: string, navigate?: () => void) => void

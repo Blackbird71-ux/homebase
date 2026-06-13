@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'ai' | 'help'
+type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'pantry-item' | 'ai' | 'help'
 
 const navItems = [
   { href: '/home',         label: 'Home',         icon: Home },
@@ -63,6 +63,7 @@ const quickActions: { id: QuickAction; label: string; icon: React.ReactNode; des
   { id: 'recipe',        label: 'Recipe',        icon: <ChefHat className="h-5 w-5" />,       description: 'Add a recipe' },
   { id: 'meal',          label: 'Meal',          icon: <Utensils className="h-5 w-5" />,      description: 'Plan a meal' },
   { id: 'note',          label: 'Note',          icon: <StickyNote className="h-5 w-5" />,    description: 'Write a note' },
+  { id: 'pantry-item',   label: 'Pantry Item',   icon: <ShoppingBasket className="h-5 w-5" />, description: 'Add to the pantry' },
   { id: 'ai',            label: 'AI Assistant',  icon: <Bot className="h-5 w-5" />,           description: 'Voice or chat commands' },
   { id: 'help',          label: 'Help',           icon: <HelpCircle className="h-5 w-5" />,   description: 'How to use this page' },
 ]

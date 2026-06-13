@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   CalendarPlus, ListPlus, ChefHat, StickyNote,
   Check, DollarSign, ListChecks, ShoppingCart,
-  CheckSquare, Utensils, Bot, HelpCircle,
+  CheckSquare, Utensils, Bot, HelpCircle, ShoppingBasket,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -18,6 +18,7 @@ import { TodoListForm }     from './quick-add/TodoListForm'
 import { RecipeForm }       from './quick-add/RecipeForm'
 import { MealForm }         from './quick-add/MealForm'
 import { NoteForm }         from './quick-add/NoteForm'
+import { PantryItemForm }   from './quick-add/PantryItemForm'
 import type { QuickAction, QuickAddFormProps } from './quick-add/types'
 
 const FORM_REGISTRY: Partial<Record<QuickAction, React.ComponentType<QuickAddFormProps>>> = {
@@ -30,6 +31,7 @@ const FORM_REGISTRY: Partial<Record<QuickAction, React.ComponentType<QuickAddFor
   'recipe':        RecipeForm,
   'meal':          MealForm,
   'note':          NoteForm,
+  'pantry-item':   PantryItemForm,
 }
 
 // Context-aware default: opening Quick Add on one of these routes jumps
@@ -43,6 +45,7 @@ const ROUTE_DEFAULT_ACTION: [string, QuickAction][] = [
   ['/recipes',   'recipe'],
   ['/meal-plan', 'meal'],
   ['/notes',     'note'],
+  ['/pantry',    'pantry-item'],
 ]
 
 const actions: { id: QuickAction; label: string; icon: React.ReactNode }[] = [
@@ -55,6 +58,7 @@ const actions: { id: QuickAction; label: string; icon: React.ReactNode }[] = [
   { id: 'recipe',        label: 'Recipe',        icon: <ChefHat className="h-5 w-5" /> },
   { id: 'meal',          label: 'Meal',          icon: <Utensils className="h-5 w-5" /> },
   { id: 'note',          label: 'Note',          icon: <StickyNote className="h-5 w-5" /> },
+  { id: 'pantry-item',   label: 'Pantry Item',   icon: <ShoppingBasket className="h-5 w-5" /> },
   { id: 'ai',            label: 'AI Assistant',  icon: <Bot className="h-5 w-5" /> },
   { id: 'help',          label: 'Help',          icon: <HelpCircle className="h-5 w-5" /> },
 ]
