@@ -90,6 +90,7 @@ async function buildApStatement(
     where: {
       familyId,
       vendorId:     vendor.id,
+      isVoided:     false,   // voided bills carry a reversed journal and must not appear (mirrors AP aging)
       invoiceReceived: true,
       invoiceReceivedDate: { not: null, lte: to },
     },
@@ -248,6 +249,7 @@ async function buildArStatement(
     where: {
       familyId,
       vendorId:           vendor.id,
+      isVoided:           false,   // voided entries carry a reversed journal and must not appear (mirrors AR aging)
       invoiceReceived:    true,
       invoiceReceivedDate: { not: null, lte: to },
     },
