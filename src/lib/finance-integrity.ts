@@ -20,9 +20,17 @@ import { sumControlAccountLines } from '@/lib/finance-subledger'
  * `ensure*` helpers, which create categories when missing.
  */
 
+// Reconciliation / amount-equality tolerance — matches the AP/AR reports'
+// `difference < 0.01`. Used for control-vs-subledger and record-vs-line amounts.
 const TOL = 0.01
+// Per-entry / trial-balance balance tolerance — matches the poster's
+// BALANCE_EPSILON (finance-posting.ts). Tighter than TOL so an entry imbalanced
+// in (0.005, 0.01] (only reachable via non-poster write paths — opening-balance
+// import, manual line edits) is still flagged. Do NOT collapse the two (FC-05).
+const BALANCE_TOL = 0.005
 const r2 = (n: number) => Math.round(n * 100) / 100
 const approxEq = (a: number, b: number) => Math.abs(a - b) <= TOL
+const balancedEq = (a: number, b: number) => Math.abs(a - b) <= BALANCE_TOL
 
 export type IntegrityFinding = {
   severity: 'critical' | 'warning' | 'info'
@@ -507,7 +515,7 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     }
     totalDebit += entryDebit
     totalCredit += entryCredit
-    if (!approxEq(entryDebit, entryCredit)) {
+    if (!balancedEq(entryDebit, entryCredit)) {
       add({
         severity: 'critical', code: 'JOURNAL_ENTRY_UNBALANCED', recordType: 'journal',
         recordId: e.id, label: e.reference ?? e.id,
@@ -522,7 +530,7 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
       })
     }
   }
-  if (!approxEq(totalDebit, totalCredit)) {
+  if (!balancedEq(totalDebit, totalCredit)) {
     add({
       severity: 'critical', code: 'TRIAL_BALANCE_UNBALANCED', recordType: 'gl',
       recordId: 'trial-balance', label: 'Trial balance',
