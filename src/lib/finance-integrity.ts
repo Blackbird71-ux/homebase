@@ -92,6 +92,9 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'AP_CONTROL_UNRESOLVED',        label: 'AP control account is uniquely resolvable' },
   { code: 'AR_CONTROL_UNRESOLVED',        label: 'AR control account is uniquely resolvable' },
   { code: 'PAYSLIP_GROSS_MISMATCH',       label: 'Payslip gross = net + PAYG + super' },
+  { code: 'PAYSLIP_JOURNAL_TOTAL',        label: 'Payslip receipt journal totals gross + SGC each side' },
+  { code: 'PAYSLIP_SGC_ACCOUNTS_PRESENT', label: 'Payslips with SGC have both super GL accounts set' },
+  { code: 'PAYSLIP_NET_EXCEEDS_GROSS',    label: 'Payslip net pay never exceeds gross' },
   { code: 'DATE_REQUIRED_PRESENT',        label: 'Required dates present and within a plausible range' },
   { code: 'FUTURE_DATED_POSTING',         label: 'Posted journals dated after today (review)' },
 ]
@@ -640,10 +643,19 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     where: { familyId },
     select: {
       id: true, grossPay: true, netPay: true, paygWithheld: true, deductions: true,
-      incomeEntry: { select: { name: true } },
+      sgcAmount: true, sgcGlAccountId: true, sgcIncomeGlAccountId: true,
+      incomeEntry: {
+        select: {
+          name: true,
+          receiptJournalEntry: {
+            select: { isPosted: true, isReversed: true, lines: { select: { side: true, amount: true } } },
+          },
+        },
+      },
     },
   })
   for (const p of payslips) {
+    const label = p.incomeEntry?.name ?? p.id
     let deductionsTotal = 0
     try {
       const parsed = JSON.parse(p.deductions || '[]') as { amount?: number }[]
@@ -655,9 +667,53 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     if (!approxEq(p.grossPay, expected)) {
       add({
         severity: 'critical', code: 'PAYSLIP_GROSS_MISMATCH', recordType: 'payslip',
-        recordId: p.id, label: p.incomeEntry?.name ?? p.id,
+        recordId: p.id, label,
         message: `Gross ${r2(p.grossPay)} ≠ net ${r2(p.netPay)} + PAYG ${r2(p.paygWithheld)} + deductions ${r2(deductionsTotal)} (= ${expected}). SGC posts as a separate balanced pair and is excluded.`,
       })
+    }
+
+    // FC-06a — net must never exceed gross (would imply negative PAYG, a data error;
+    // QA §6.5). Independent of the receipt journal, so it catches the bad row even
+    // before posting. Tolerance-guarded so net == gross (zero PAYG) is not flagged.
+    if (p.netPay > p.grossPay + TOL) {
+      add({
+        severity: 'critical', code: 'PAYSLIP_NET_EXCEEDS_GROSS', recordType: 'payslip',
+        recordId: p.id, label,
+        message: `Net pay ${r2(p.netPay)} exceeds gross pay ${r2(p.grossPay)} — implies negative PAYG/deductions, a data error.`,
+      })
+    }
+
+    // FC-06b — when SGC (employer super) is present, BOTH the accrued-SGC asset and
+    // the SGC-income GL accounts must be set (QA §2.3 / §6.5 — the poster rejects the
+    // receipt otherwise). A payslip carrying sgcAmount>0 with a missing account is a
+    // row that can never post its super pair.
+    if (p.sgcAmount > 0 && (!p.sgcGlAccountId || !p.sgcIncomeGlAccountId)) {
+      add({
+        severity: 'critical', code: 'PAYSLIP_SGC_ACCOUNTS_PRESENT', recordType: 'payslip',
+        recordId: p.id, label,
+        message: `Payslip has SGC ${r2(p.sgcAmount)} but ${!p.sgcGlAccountId && !p.sgcIncomeGlAccountId ? 'neither SGC GL account is' : !p.sgcGlAccountId ? 'the accrued-SGC asset account is' : 'the SGC-income account is'} set — the super pair can never post.`,
+      })
+    }
+
+    // FC-06c — a posted, live receipt journal must total grossPay + sgcAmount on each
+    // side (QA §6.5: sum(DR) = sum(CR) = grossPay + sgcAmount). JOURNAL_ENTRY_UNBALANCED
+    // already proves DR = CR; this proves the magnitude is right (catches a journal that
+    // balances but at the wrong total — e.g. SGC pair dropped, or net/gross swapped).
+    // Only checked when a live receipt journal exists; a missing one is owned by
+    // INCOME_RECEIVED_NO_RECEIPT_GL.
+    const receipt = p.incomeEntry?.receiptJournalEntry
+    if (receipt && receipt.isPosted && !receipt.isReversed) {
+      const expectedTotal = r2(p.grossPay + p.sgcAmount)
+      const debitTotal = r2(receipt.lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0))
+      const creditTotal = r2(receipt.lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0))
+      if (!balancedEq(debitTotal, expectedTotal) || !balancedEq(creditTotal, expectedTotal)) {
+        add({
+          severity: 'critical', code: 'PAYSLIP_JOURNAL_TOTAL', recordType: 'payslip',
+          recordId: p.id, label,
+          message: `Receipt journal totals (DR ${debitTotal}, CR ${creditTotal}) ≠ gross ${r2(p.grossPay)} + SGC ${r2(p.sgcAmount)} (= ${expectedTotal}).`,
+          detail: { expectedTotal, debitTotal, creditTotal, grossPay: r2(p.grossPay), sgcAmount: r2(p.sgcAmount) },
+        })
+      }
     }
   }
 
