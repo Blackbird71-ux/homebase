@@ -123,7 +123,7 @@ export async function GET(
     // ── Verify category ───────────────────────────────────────────────────
     const category = await prisma.financeCategory.findFirst({
       where: { id: categoryId, familyId: user.familyId },
-      select: { id: true, name: true, type: true, glCode: true, openingBalance: true },
+      select: { id: true, name: true, type: true, glCode: true },
     })
     if (!category) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
@@ -132,8 +132,12 @@ export async function GET(
     const norm = normalBalance(category.type ?? 'expense')
 
     // ── Opening balance ───────────────────────────────────────────────────
-    // Static field on the category PLUS all pre-period posted GL lines.
-    let openingBalance = (category.openingBalance as number | null) ?? 0
+    // Net of all pre-period posted GL lines. COA opening balances are now
+    // journalised (type='opening_balance'), so they are captured here when dated
+    // before the period; the static category.openingBalance field is a display
+    // mirror only and must NOT be seeded as well (it would double-count the
+    // journalised opening entry). See finance-opening-balance.setCategoryOpeningBalance.
+    let openingBalance = 0
 
     const preJLines = await prisma.financeJournalLine.findMany({
       where: {

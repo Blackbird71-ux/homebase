@@ -425,6 +425,115 @@ export async function setOpeningBalance(
 }
 
 /**
+ * Set or clear the opening balance for a Chart-of-Accounts entry (FinanceCategory).
+ *
+ * GL-first (WI-1 / P7-FC-01): an opening balance posts a real, balanced
+ * `opening_balance` journal entry — DR/CR the category on its normal side and the
+ * contra to the system "Opening Balances" equity account — so every balance
+ * reader (Trial Balance, Balance Sheet, ledgers) agrees and BS=TB holds. The
+ * previous behaviour wrote only the `openingBalance` field, which the JE-only
+ * Trial Balance never saw (BS≠TB) and which posted no equity contra (Balance
+ * Sheet equity ≠ net worth).
+ *
+ * The `openingBalance` / `openingBalanceDate` fields are retained ONLY as the
+ * display/edit mirror for the Categories UI — the GL is the source of truth for
+ * every balance read, and readers no longer seed opening balances from the field
+ * (see trial-balance and category-ledger routes), so there is no double-count.
+ *
+ * Re-setting cleanly replaces: any prior opening JE for this category is deleted
+ * (opening JEs are isolated — nothing links to them — and their lines cascade)
+ * before the new one is posted. amount null/0 clears both the JE and the field.
+ *
+ * Positive amount = the account's normal balance (asset in funds, liability owed,
+ * equity in credit); negative flips the sides (rare — e.g. an overdrawn asset).
+ */
+export async function setCategoryOpeningBalance(
+  categoryId: string,
+  familyId: string,
+  amount: number | null,
+  date: Date | null,
+): Promise<void> {
+  const category = await prisma.financeCategory.findFirst({
+    where: { id: categoryId, familyId },
+    select: { id: true, name: true, type: true },
+  })
+  if (!category) throw new Error('Category not found')
+  if (!['asset', 'liability', 'equity'].includes(category.type)) {
+    throw new Error(
+      `Opening balances are only valid for asset, liability, and equity accounts. This account is type "${category.type}".`,
+    )
+  }
+
+  const obCategoryId = await ensureOpeningBalancesCategory(familyId)
+  if (categoryId === obCategoryId) {
+    throw new Error('The Opening Balances equity account cannot itself carry an opening balance.')
+  }
+
+  // Find any prior opening-balance JE for THIS category (the opening_balance
+  // entry with a line on this glAccount) so a re-set replaces rather than stacks.
+  const priorJournals = await prisma.financeJournalEntry.findMany({
+    where: { familyId, type: 'opening_balance', lines: { some: { glAccountId: categoryId } } },
+    select: { id: true },
+  })
+  const priorIds = priorJournals.map(j => j.id)
+
+  // Clear path: drop the prior JE and the mirror fields, atomically.
+  if (amount == null || amount === 0) {
+    await prisma.$transaction(async (tx) => {
+      if (priorIds.length > 0) {
+        await tx.financeJournalEntry.deleteMany({ where: { id: { in: priorIds }, familyId } })
+      }
+      await tx.financeCategory.update({
+        where: { id: categoryId },
+        data: { openingBalance: null, openingBalanceDate: null },
+      })
+    })
+    return
+  }
+
+  const txDate = date ?? new Date()
+  const absAmount = Math.abs(amount)
+  // Reference generated OUTSIDE the transaction — uncommitted creates are
+  // invisible to the max-ref read, so generating inside risks a P2002 collision.
+  const reference = await nextJournalReference(familyId)
+
+  // Normal balance: assets are debit-normal; liabilities and equity credit-normal.
+  // A positive opening balance sits on the account's normal side; negative flips.
+  // The Opening Balances equity account takes the contra so the JE self-balances.
+  const normalDebit = category.type === 'asset'
+  const categoryOnDebit = normalDebit ? amount > 0 : amount < 0
+  const categorySide: 'debit' | 'credit' = categoryOnDebit ? 'debit' : 'credit'
+  const obeSide: 'debit' | 'credit' = categoryOnDebit ? 'credit' : 'debit'
+
+  await prisma.$transaction(async (tx) => {
+    if (priorIds.length > 0) {
+      await tx.financeJournalEntry.deleteMany({ where: { id: { in: priorIds }, familyId } })
+    }
+    await tx.financeJournalEntry.create({
+      data: {
+        reference,
+        date: txDate,
+        description: `Opening Balance — ${category.name}`,
+        type: 'opening_balance',
+        isPosted: true,
+        familyId,
+        lines: {
+          create: [
+            { glAccountId: categoryId,   side: categorySide, amount: absAmount, description: `Opening Balance — ${category.name}` },
+            { glAccountId: obCategoryId, side: obeSide,      amount: absAmount, description: 'Opening Balances equity offset' },
+          ],
+        },
+      },
+    })
+    // Mirror the value onto the category for the Categories UI prefill/badge only.
+    await tx.financeCategory.update({
+      where: { id: categoryId },
+      data: { openingBalance: amount, openingBalanceDate: txDate },
+    })
+  })
+}
+
+/**
  * Keep the per-account opening-balance GL category's display name in sync with
  * the FinanceAccount it represents (F3).
  *

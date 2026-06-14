@@ -103,7 +103,35 @@ export async function GET(request: NextRequest) {
     // Assets & Expenses: DR increases, CR decreases
     // Liabilities, Equity, Income: CR increases, DR decreases
     const normalDebitSide = ['asset', 'expense'].includes(glAccount.type)
-    const openingBalance  = glAccount.openingBalance ?? 0
+
+    // Opening balance = net of all posted lines BEFORE the period start (mirrors
+    // the category ledger). COA opening balances are journalised
+    // (type='opening_balance'), so they are captured here when dated before
+    // `from`; the static glAccount.openingBalance field is a display mirror only
+    // and must NOT be seeded as well — that would double-count the journalised
+    // opening entry. With no `from`, the opening JE falls inside the range and
+    // shows as a dated line, so the seed is 0.
+    let openingBalance = 0
+    if (dateFilter.gte) {
+      const priorLines = await prisma.financeJournalLine.findMany({
+        where: {
+          glAccountId,
+          journalEntry: {
+            familyId,
+            isPosted: true,
+            date: { lt: dateFilter.gte },
+            ...(entityId ? { entityId } : {}),
+          },
+        },
+        select: { side: true, amount: true },
+      })
+      for (const l of priorLines) {
+        openingBalance += normalDebitSide
+          ? (l.side === 'debit' ? l.amount : -l.amount)
+          : (l.side === 'credit' ? l.amount : -l.amount)
+      }
+      openingBalance = Math.round(openingBalance * 100) / 100
+    }
     let running = openingBalance
 
     const ledgerLines = entries.map(e => {

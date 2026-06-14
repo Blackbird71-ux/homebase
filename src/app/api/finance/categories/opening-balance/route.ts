@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { setCategoryOpeningBalance } from '@/lib/finance-opening-balance'
 
 // POST /api/finance/categories/opening-balance
 // Body: { categoryId: string, amount: number | null, date: string | null }
@@ -45,18 +46,20 @@ export async function POST(request: NextRequest) {
     ? new Date(date)
     : null
 
-  // Update the category record
-  const updated = await prisma.financeCategory.update({
-    where: { id: categoryId },
-    data: {
-      openingBalance:     parsedAmount,
-      openingBalanceDate: parsedDate,
-    },
+  // GL-first: post (or clear) the opening-balance journal and mirror the value
+  // onto the category. All balance posting lives in the shared helper.
+  await setCategoryOpeningBalance(categoryId, user.familyId, parsedAmount, parsedDate)
+
+  const updated = await prisma.financeCategory.findFirst({
+    where: { id: categoryId, familyId: user.familyId },
     select: {
       id: true, name: true, type: true,
       openingBalance: true, openingBalanceDate: true,
     },
   })
+  if (!updated) {
+    return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+  }
 
   return NextResponse.json({
     success: true,
