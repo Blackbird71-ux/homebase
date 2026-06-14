@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
+import { sumControlAccountLines } from '@/lib/finance-subledger'
 
 /**
  * Finance Integrity Audit — strictly READ-ONLY.
@@ -469,13 +470,30 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     const apBills = await prisma.financeRecurringBill.findMany({
       where: {
         familyId, invoiceReceived: true, invoiceReceivedDate: { not: null, lte: asAt },
+        isVoided: false,
         OR: [{ paid: false }, { paid: true, paidDate: { gt: asAt } }],
       },
-      select: { amount: true, payments: { select: { amount: true, paymentDate: true } } },
+      select: {
+        amount: true,
+        journalEntry: { select: { lines: { select: { amount: true, glAccountId: true, side: true } } } },
+        payments: {
+          select: {
+            amount: true, paymentDate: true,
+            journalEntry: { select: { lines: { select: { amount: true, glAccountId: true, side: true } } } },
+          },
+        },
+      },
     })
     const apSubledger = r2(apBills.reduce((sum, b) => {
-      const paidToDate = b.payments.reduce((s, p) => (p.paymentDate <= asAt ? s + p.amount : s), 0)
-      const outstanding = r2(b.amount - paidToDate)
+      // §12.10: the AP face value is the sum of AP credit lines on the accrual, not
+      // bill.amount — they differ on a custom/GST split (CR AP + CR GST). Net off each
+      // payment by its AP debit lines. Mirrors accounts-payable/route.ts exactly so the
+      // auditor reconciles the same two figures the report does (FC-01).
+      const accruedAp = sumControlAccountLines(b.journalEntry?.lines, apCategory.id, 'credit', b.amount)
+      const paidToDate = b.payments.reduce((s, p) => (
+        p.paymentDate <= asAt ? s + sumControlAccountLines(p.journalEntry?.lines, apCategory.id, 'debit', p.amount) : s
+      ), 0)
+      const outstanding = r2(accruedAp - paidToDate)
       return outstanding > 0.005 ? sum + outstanding : sum
     }, 0))
     if (!approxEq(apControl, apSubledger)) {
@@ -493,6 +511,7 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     const arEntries = await prisma.financeIncomeEntry.findMany({
       where: {
         familyId, invoiceReceived: true, invoiceReceivedDate: { not: null, lte: asAt },
+        isVoided: false,
         OR: [{ received: false }, { received: true, receivedDate: { gt: asAt } }],
       },
       select: {
