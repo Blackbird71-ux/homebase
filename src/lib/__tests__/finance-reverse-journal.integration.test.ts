@@ -1,13 +1,12 @@
 /**
- * Stage C-1 QA gate — `reverseJournalEntry` exercised against a WRITABLE COPY of
- * the real SQLite database, then checked with the read-only integrity audit.
+ * Stage C-1 QA gate — `reverseJournalEntry` exercised against a SELF-SEEDED throwaway
+ * SQLite database (built from prisma/schema.prisma), then checked with the read-only
+ * integrity audit.
  *
- * Standing rule: the live DB (data/homebase.db) may be READ but never mutated.
- * This test copies it to a throwaway temp file and points prisma at the copy via
- * DATABASE_URL, so nothing here can touch the live file.
- *
- * It self-skips when data/homebase.db is absent (CI / other machines), so it is
- * safe to leave in the repo. Run locally: `npx vitest run finance-reverse-journal`.
+ * Standing rule: the live DB (data/homebase.db) may be READ but never mutated. This
+ * test never touches it — `setupFinanceTestDb` creates its own database from the
+ * schema, so the suite runs on EVERY machine (CI included) and no longer self-skips
+ * into a false green. Run locally: `npx vitest run finance-reverse-journal`.
  *
  * Proves the three mandatory Stage C-1 assertions:
  *   1. faithful, balanced flip (sides swapped, amounts/accounts preserved, original
@@ -19,26 +18,19 @@
  *      balance still balances after the void.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import { setupFinanceTestDb, FINANCE_TEST_FAMILY, type FinanceTestDb } from './_finance-test-db'
 
-const REPO = path.resolve(__dirname, '..', '..', '..')
-const LIVE_DB = path.join(REPO, 'data', 'homebase.db')
-const FAMILY = 'cmo3yb55h000001ldlk4w6p37' // "The Liddles"
-// AP / AR control accounts — avoid them so the synthetic entry can't disturb the
-// AP/AR-control-vs-subledger reconciliation checks.
+const FAMILY = FINANCE_TEST_FAMILY
+// AP / AR control accounts — the seeded chart contains none, so this filter passes
+// every seeded account through as usable; kept for parity with the live-DB era.
 const CONTROL_ACCOUNT_IDS = new Set([
   'cmozfz2uq000c01miyi36avpc', // Accounts Payable
   'cmozfyqwo000b01mio4knh0kc', // Accounts Receivable
   'cmp4y099e000h01nnzjzkgy76', // Accounts Receivable (deprecated)
 ])
 
-const haveDb = fs.existsSync(LIVE_DB)
-const d = haveDb ? describe : describe.skip
-
-d('Stage C-1 — reverseJournalEntry against a writable DB copy', () => {
-  let tmpDir: string
+describe('Stage C-1 — reverseJournalEntry against a self-seeded DB', () => {
+  let fx: FinanceTestDb
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prisma: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,20 +53,12 @@ d('Stage C-1 — reverseJournalEntry against a writable DB copy', () => {
   let reversalLines: any[]
 
   beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-stage-c1-'))
-    const copy = path.join(tmpDir, 'homebase.db')
-    fs.copyFileSync(LIVE_DB, copy)
-    // Copy WAL/SHM sidecars if present so the snapshot is internally consistent.
-    for (const ext of ['-wal', '-shm']) {
-      if (fs.existsSync(LIVE_DB + ext)) fs.copyFileSync(LIVE_DB + ext, copy + ext)
-    }
-    // Bind prisma to the COPY before the prisma module is first evaluated.
-    process.env.DATABASE_URL = `file:${copy}`
-
-    // Relative dynamic imports so the prisma singleton is created here (after env
-    // is set), not at top-of-file. finance-posting / -integrity reach the same
+    // Build + seed a throwaway DB and bind the prisma singleton to it. Subsequent
+    // dynamic imports (finance-posting / -journal-ref / -integrity) reach the same
     // singleton via their '@/lib/prisma' import (same resolved file).
-    ;({ prisma } = await import('../prisma'))
+    fx = await setupFinanceTestDb('hb-stage-c1-')
+    prisma = fx.prisma
+
     ;({ reverseJournalEntry } = await import('../finance-posting'))
     ;({ nextNJournalReferences } = await import('../finance-journal-ref'))
     ;({ runFinanceIntegrityAudit } = await import('../finance-integrity'))
@@ -103,15 +87,13 @@ d('Stage C-1 — reverseJournalEntry against a writable DB copy', () => {
       select: { memberId: true },
     })
     memberId = memberLine?.memberId ?? 'qa-stage-c1-member'
-  }, 60_000)
+  }, 120_000)
 
   afterAll(async () => {
-    await prisma?.$disconnect?.()
-    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
+    await fx?.cleanup()
   })
 
-  it('connects to the copy and the family has a posted ledger', async () => {
-    expect(haveDb).toBe(true)
+  it('connects to the seeded DB and the family has a posted ledger', async () => {
     const posted = await prisma.financeJournalEntry.count({
       where: { familyId: FAMILY, isPosted: true },
     })

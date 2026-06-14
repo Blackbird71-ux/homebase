@@ -23,32 +23,25 @@
  *     the trial balance still balances.
  *
  * Standing rule: the live DB (data/homebase.db) may be READ but never mutated.
- * This copies it to a throwaway temp file and points prisma at the copy via
- * DATABASE_URL, so nothing here can touch the live file. Self-skips when the DB
- * is absent (CI / other machines). Run locally: `npx vitest run route.c2a`.
+ * This never touches it — `setupFinanceTestDb` builds its own database from
+ * prisma/schema.prisma, so the suite runs on EVERY machine (CI included) instead of
+ * self-skipping into a false green. Run locally: `npx vitest run route.c2a`.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import { setupFinanceTestDb, FINANCE_TEST_FAMILY, type FinanceTestDb } from '@/lib/__tests__/_finance-test-db'
 
 // Only @/lib/auth is mocked — everything else (prisma, finance-posting,
-// finance-integrity, finance-journal-ref) is the REAL module bound to the copy.
+// finance-integrity, finance-journal-ref) is the REAL module bound to the seeded DB.
 vi.mock('@/lib/auth', () => ({ auth: vi.fn() }))
 
-const REPO = path.resolve(__dirname, '..', '..', '..', '..', '..', '..')
-const LIVE_DB = path.join(REPO, 'data', 'homebase.db')
-const FAMILY = 'cmo3yb55h000001ldlk4w6p37' // "The Liddles"
-// AP / AR control accounts — avoid them so the synthetic entries can't disturb
-// the AP/AR-control-vs-subledger reconciliation checks.
+const FAMILY = FINANCE_TEST_FAMILY
+// AP / AR control accounts — the seeded chart contains none, so this filter passes
+// every seeded account through as usable; kept for parity with the live-DB era.
 const CONTROL_ACCOUNT_IDS = new Set([
   'cmozfz2uq000c01miyi36avpc', // Accounts Payable
   'cmozfyqwo000b01mio4knh0kc', // Accounts Receivable
   'cmp4y099e000h01nnzjzkgy76', // Accounts Receivable (deprecated)
 ])
-
-const haveDb = fs.existsSync(LIVE_DB)
-const d = haveDb ? describe : describe.skip
 
 function patchReq(body: unknown) {
   return { json: async () => body } as unknown as Parameters<typeof import('../route')['PATCH']>[0]
@@ -59,8 +52,8 @@ function deleteReq(id: string) {
   >[0]
 }
 
-d('Stage C-2a — journals reverse/void/amend handlers against a writable DB copy', () => {
-  let tmpDir: string
+describe('Stage C-2a — journals reverse/void/amend handlers against a self-seeded DB', () => {
+  let fx: FinanceTestDb
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prisma: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -101,24 +94,18 @@ d('Stage C-2a — journals reverse/void/amend handlers against a writable DB cop
   }
 
   beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-stage-c2a-'))
-    const copy = path.join(tmpDir, 'homebase.db')
-    fs.copyFileSync(LIVE_DB, copy)
-    for (const ext of ['-wal', '-shm']) {
-      if (fs.existsSync(LIVE_DB + ext)) fs.copyFileSync(LIVE_DB + ext, copy + ext)
-    }
-    // Bind prisma to the COPY before any module that imports it is evaluated.
-    process.env.DATABASE_URL = `file:${copy}`
+    // Build + seed a throwaway DB and bind the prisma singleton to it.
+    fx = await setupFinanceTestDb('hb-stage-c2a-')
+    prisma = fx.prisma
 
-    // auth() → a session for THE LIDDLES, matching the seeded family.
+    // auth() → a session for the seeded family.
     const { auth } = await import('@/lib/auth')
     ;(auth as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue({
       user: { id: 'qa-c2a', familyId: FAMILY },
     })
 
-    // Dynamic imports AFTER env is set so the prisma singleton (shared by the
-    // route + finance-integrity + finance-journal-ref) is constructed on the copy.
-    ;({ prisma } = await import('@/lib/prisma'))
+    // Dynamic imports so the route + finance-integrity + finance-journal-ref reach
+    // the same prisma singleton the fixture constructed on the seeded DB.
     ;({ PATCH, DELETE } = await import('../route'))
     ;({ nextJournalReference } = await import('@/lib/finance-journal-ref'))
     ;({ runFinanceIntegrityAudit } = await import('@/lib/finance-integrity'))
@@ -143,15 +130,13 @@ d('Stage C-2a — journals reverse/void/amend handlers against a writable DB cop
       select: { memberId: true },
     })
     memberId = memberLine?.memberId ?? 'qa-c2a-member'
-  }, 60_000)
+  }, 120_000)
 
   afterAll(async () => {
-    await prisma?.$disconnect?.()
-    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
+    await fx?.cleanup()
   })
 
-  it('connects to the copy with a clean baseline and usable accounts', async () => {
-    expect(haveDb).toBe(true)
+  it('connects to the seeded DB with a clean baseline and usable accounts', async () => {
     expect(glA).toBeTruthy()
     expect(glB).toBeTruthy()
     expect(glA).not.toBe(glB)

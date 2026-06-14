@@ -4,9 +4,9 @@
  * SQLite database, then checked with the read-only integrity audit.
  *
  * Standing rule: the live DB (data/homebase.db) may be READ but never mutated.
- * This test copies it to a throwaway temp file and points prisma at the copy via
- * DATABASE_URL, so nothing here can touch the live file. It self-skips when
- * data/homebase.db is absent (CI / other machines). Run locally:
+ * This test never touches it — `setupFinanceTestDb` builds its own database from
+ * prisma/schema.prisma, so the suite runs on EVERY machine (CI included) instead of
+ * self-skipping into a false green. Run locally:
  *   `npx vitest run finance-spawn-bill-on-payment`
  *
  * Context: the on-payment bill spawn used to be TWO divergent inline copies (the
@@ -28,15 +28,11 @@
  *      balance still balances after the spawn.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import { setupFinanceTestDb, FINANCE_TEST_FAMILY, type FinanceTestDb } from './_finance-test-db'
 
-const REPO = path.resolve(__dirname, '..', '..', '..')
-const LIVE_DB = path.join(REPO, 'data', 'homebase.db')
-const FAMILY = 'cmo3yb55h000001ldlk4w6p37' // "The Liddles"
-// AP / AR control accounts — avoid them so the synthetic entry can't disturb the
-// AP/AR-control-vs-subledger reconciliation checks.
+const FAMILY = FINANCE_TEST_FAMILY
+// AP / AR control accounts — the seeded chart contains none, so this filter passes
+// every seeded account through as usable; kept for parity with the live-DB era.
 const CONTROL_ACCOUNT_IDS = new Set([
   'cmozfz2uq000c01miyi36avpc', // Accounts Payable
   'cmozfyqwo000b01mio4knh0kc', // Accounts Receivable
@@ -50,11 +46,8 @@ const CONTROL_ACCOUNT_IDS = new Set([
 const SEED_DUE = Date.UTC(2026, 0, 15)        // 2026-01-15T00:00:00Z (overdue)
 const EXPECT_NEXT = Date.UTC(2026, 1, 15)     // 2026-02-15T00:00:00Z (strict-next)
 
-const haveDb = fs.existsSync(LIVE_DB)
-const d = haveDb ? describe : describe.skip
-
-d('spawnNextBillOnPayment / copySpawnedBillDraftJournal against a writable DB copy', () => {
-  let tmpDir: string
+describe('spawnNextBillOnPayment / copySpawnedBillDraftJournal against a self-seeded DB', () => {
+  let fx: FinanceTestDb
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prisma: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,16 +71,9 @@ d('spawnNextBillOnPayment / copySpawnedBillDraftJournal against a writable DB co
   let spawnedDueDate: Date
 
   beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-spawn-'))
-    const copy = path.join(tmpDir, 'homebase.db')
-    fs.copyFileSync(LIVE_DB, copy)
-    for (const ext of ['-wal', '-shm']) {
-      if (fs.existsSync(LIVE_DB + ext)) fs.copyFileSync(LIVE_DB + ext, copy + ext)
-    }
-    // Bind prisma to the COPY before the prisma module is first evaluated.
-    process.env.DATABASE_URL = `file:${copy}`
+    fx = await setupFinanceTestDb('hb-spawn-')
+    prisma = fx.prisma
 
-    ;({ prisma } = await import('../prisma'))
     ;({ spawnNextBillOnPayment, copySpawnedBillDraftJournal } = await import('../finance-draft-spawn-service'))
     ;({ runFinanceIntegrityAudit } = await import('../finance-integrity'))
 
@@ -108,15 +94,13 @@ d('spawnNextBillOnPayment / copySpawnedBillDraftJournal against a writable DB co
     glA = usable[0]
     glB = usable[1]
     glC = usable[2]
-  }, 60_000)
+  }, 120_000)
 
   afterAll(async () => {
-    await prisma?.$disconnect?.()
-    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
+    await fx?.cleanup()
   })
 
-  it('connects to the copy and the family has a posted ledger', async () => {
-    expect(haveDb).toBe(true)
+  it('connects to the seeded DB and the family has a posted ledger', async () => {
     const posted = await prisma.financeJournalEntry.count({
       where: { familyId: FAMILY, isPosted: true },
     })
