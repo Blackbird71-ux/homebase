@@ -5,7 +5,9 @@ import { prisma } from '@/lib/prisma'
 import { copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 import {
   ensureUndepositedFundsCategory,
+  ensureAccountsPayableCategory,
 } from '@/lib/finance-opening-balance'
+import { sumControlAccountLines } from '@/lib/finance-subledger'
 import { nextNJournalReferences } from '@/lib/finance-journal-ref'
 import { upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
@@ -802,13 +804,33 @@ export async function PATCH(request: NextRequest) {
   // ══════════════════════════════════════════════════════════════════════════
   if (paid === true && !existing.paid) {
     const actualPaidDate = paidDateRaw ? new Date(paidDateRaw) : new Date()
-    const payAmount = paymentAmount ?? existing.amount
+
+    // WI-4 (P3-FC-01/02): settle from the AP control line, not the gross bill
+    // face. For an accrued bill the posted accrual's CR AP line is the true
+    // outstanding AP raised — a custom split (e.g. DR Expense net / DR GST /
+    // CR AP) makes that line differ from bill.amount. A direct-pay bill has no
+    // accrual, so the expected payment is bill.amount. Mirrors the AP-aging
+    // route's sumControlAccountLines(..., 'credit', bill.amount) (QA.md §12.10).
+    let apFace = existing.amount
+    if (existing.invoiceReceived && existing.journalEntryId) {
+      const apCategoryId = await ensureAccountsPayableCategory(user.familyId)
+      const accrualLines = await prisma.financeJournalLine.findMany({
+        where: { journalEntryId: existing.journalEntryId },
+        select: { glAccountId: true, side: true, amount: true },
+      })
+      apFace = sumControlAccountLines(accrualLines, apCategoryId, 'credit', existing.amount)
+    }
+
+    // Determine prior partial payments, then default this payment to the
+    // REMAINING AP balance — the old default (existing.amount) ignored prior
+    // partials and over-paid (P3-FC-02). An explicit paymentAmount overrides.
+    const priorPaid = (existing.payments ?? []).reduce((s, p) => s + p.amount, 0)
+    const payAmount = paymentAmount ?? (apFace - priorPaid)
     const bankGlAccountId: string | null = payFromGlAccountId ?? null
     const paymentAccountId = payFromAccountId ?? existing.accountId
 
-    // Determine if this payment fully covers the bill (including prior partial payments)
-    const priorPaid = (existing.payments ?? []).reduce((s, p) => s + p.amount, 0)
-    const isFullyPaid = (priorPaid + payAmount) >= existing.amount - 0.005
+    // Fully covered when prior partials plus this payment settle the AP face.
+    const isFullyPaid = (priorPaid + payAmount) >= apFace - 0.005
 
     // Resolve the credit-side GL account: bank when supplied, otherwise the
     // Undeposited Funds suspense account (audit F6 — a no-bank payment must
