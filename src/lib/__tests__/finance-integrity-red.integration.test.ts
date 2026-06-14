@@ -1,0 +1,315 @@
+/**
+ * Integrity-audit RED tests — prove the auditor's green is reachable-to-red. (WI-0b)
+ *
+ * The integration suites that exercise the real posting helpers assert the audit
+ * stays GREEN. That only means something if the same audit actually turns RED when a
+ * known bug class is present — otherwise a check that never fires (a dead assertion)
+ * reads as a permanent pass. This suite injects each known divergence directly into a
+ * self-seeded throwaway DB and asserts the corresponding check flips pass→fail with a
+ * finding of the expected severity, then cleans the injection back out so the next
+ * case starts from the same clean baseline (each case's "clean before" assertion is
+ * therefore also proof the previous case cleaned up).
+ *
+ * Standing rule: the live DB (data/homebase.db) may be READ but never mutated. This
+ * never touches it — `setupFinanceTestDb` builds its own database from
+ * prisma/schema.prisma. Run locally: `npx vitest run finance-integrity-red`.
+ *
+ * Bug class → check proven here:
+ *   • unbalanced fallback      → JOURNAL_ENTRY_UNBALANCED + TRIAL_BALANCE_UNBALANCED
+ *   • non-positive line        → NONPOSITIVE_LINE_AMOUNT
+ *   • voided-still-aging (bill)→ BILL_ACCRUAL_STALE
+ *   • voided-still-aging (inc) → INCOME_ACCRUAL_STALE  (bills↔income parity)
+ *   • stranded receipt JE      → AR_CONTROL_VS_SUBLEDGER
+ *   • payslip double-count     → PAYSLIP_JOURNAL_TOTAL
+ *
+ * KNOWN GAP (no red test — the auditor has no check for it): a DUPLICATE SPAWN (two
+ * draft successors for one paid bill/income) produces no GL anomaly — each draft's
+ * journal is unposted (so ORPHANED_DRAFT_JOURNAL ignores it while linked), and once
+ * paid both the AP/AR control and subledger double together, so they still reconcile.
+ * Detecting it needs a new row-level check (≤1 live draft successor per parent). Logged
+ * for a follow-up auditor-only WI alongside P10-G1/G3.
+ */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { setupFinanceTestDb, FINANCE_TEST_FAMILY, type FinanceTestDb } from './_finance-test-db'
+
+const FAMILY = FINANCE_TEST_FAMILY
+const DAY = 86_400_000
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Audit = any
+const status = (a: Audit, code: string): string | undefined =>
+  a.checks.find((c: { code: string }) => c.code === code)?.status
+const findings = (a: Audit, code: string) =>
+  a.findings.filter((f: { code: string }) => f.code === code)
+
+describe('Integrity audit — RED reachability (injected bugs flip the audit)', () => {
+  let fx: FinanceTestDb
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let prisma: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let runFinanceIntegrityAudit: any
+  let A: string // assetA (QA Bank)
+  let B: string // assetB (QA Savings)
+  let C: string // assetC (QA Petty Cash)
+  let ref = 9000
+  const nextRef = () => `JE-RED${ref++}`
+
+  beforeAll(async () => {
+    fx = await setupFinanceTestDb('hb-red-')
+    prisma = fx.prisma
+    ;({ runFinanceIntegrityAudit } = await import('../finance-integrity'))
+    A = fx.accounts.assetA
+    B = fx.accounts.assetB
+    C = fx.accounts.assetC
+  }, 120_000)
+
+  afterAll(async () => {
+    await fx?.cleanup()
+  })
+
+  it('seeded baseline is clean (every target check passes, no critical/warning)', async () => {
+    const a = await runFinanceIntegrityAudit(FAMILY)
+    expect(a.summary.critical).toBe(0)
+    expect(a.summary.warning).toBe(0)
+    for (const code of [
+      'JOURNAL_ENTRY_UNBALANCED', 'TRIAL_BALANCE_UNBALANCED', 'NONPOSITIVE_LINE_AMOUNT',
+      'BILL_ACCRUAL_STALE', 'INCOME_ACCRUAL_STALE', 'AR_CONTROL_VS_SUBLEDGER', 'PAYSLIP_JOURNAL_TOTAL',
+    ]) {
+      expect(status(a, code), code).toBe('pass')
+    }
+  })
+
+  it('unbalanced posted entry → JOURNAL_ENTRY_UNBALANCED + TRIAL_BALANCE_UNBALANCED critical', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'JOURNAL_ENTRY_UNBALANCED')).toBe('pass')
+    expect(status(before, 'TRIAL_BALANCE_UNBALANCED')).toBe('pass')
+
+    const je = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: new Date('2026-02-01T00:00:00Z'),
+        description: 'RED unbalanced entry', type: 'manual', isPosted: true, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: A, side: 'debit', amount: 100 },
+          { glAccountId: B, side: 'credit', amount: 90 }, // DR 100 ≠ CR 90
+        ] },
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'JOURNAL_ENTRY_UNBALANCED')).toBe('fail')
+      expect(status(after, 'TRIAL_BALANCE_UNBALANCED')).toBe('fail')
+      expect(findings(after, 'JOURNAL_ENTRY_UNBALANCED').some((f: { severity: string }) => f.severity === 'critical')).toBe(true)
+      expect(findings(after, 'TRIAL_BALANCE_UNBALANCED').some((f: { severity: string }) => f.severity === 'critical')).toBe(true)
+    } finally {
+      await prisma.financeJournalEntry.delete({ where: { id: je.id } })
+    }
+  })
+
+  it('zero-amount line on a balanced posted entry → NONPOSITIVE_LINE_AMOUNT critical', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'NONPOSITIVE_LINE_AMOUNT')).toBe('pass')
+
+    const je = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: new Date('2026-02-02T00:00:00Z'),
+        description: 'RED zero-amount line', type: 'manual', isPosted: true, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: A, side: 'debit', amount: 100 },
+          { glAccountId: B, side: 'credit', amount: 100 }, // entry stays balanced (TB unaffected)
+          { glAccountId: C, side: 'debit', amount: 0 },    // non-positive line
+        ] },
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'NONPOSITIVE_LINE_AMOUNT')).toBe('fail')
+      // Isolated: the entry balances, so the unbalanced checks must stay green.
+      expect(status(after, 'JOURNAL_ENTRY_UNBALANCED')).toBe('pass')
+      expect(status(after, 'TRIAL_BALANCE_UNBALANCED')).toBe('pass')
+    } finally {
+      await prisma.financeJournalEntry.delete({ where: { id: je.id } })
+    }
+  })
+
+  it('voided bill still carrying a live accrual → BILL_ACCRUAL_STALE critical', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'BILL_ACCRUAL_STALE')).toBe('pass')
+
+    const accrual = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: new Date('2026-02-03T00:00:00Z'),
+        description: 'RED voided-bill accrual', type: 'auto_transaction', isPosted: true, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: A, side: 'debit', amount: 50 },
+          { glAccountId: B, side: 'credit', amount: 50 },
+        ] },
+      },
+      select: { id: true },
+    })
+    const bill = await prisma.financeRecurringBill.create({
+      data: {
+        name: 'RED Voided Bill', amount: 50, nextDueDate: new Date('2026-02-03T00:00:00Z'),
+        invoiceReceived: true, isVoided: true, journalEntryId: accrual.id, familyId: FAMILY,
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'BILL_ACCRUAL_STALE')).toBe('fail')
+      expect(findings(after, 'BILL_ACCRUAL_STALE').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'critical' && f.recordId === bill.id)).toBe(true)
+    } finally {
+      await prisma.financeRecurringBill.delete({ where: { id: bill.id } })
+      await prisma.financeJournalEntry.delete({ where: { id: accrual.id } })
+    }
+  })
+
+  it('voided income still carrying a live accrual → INCOME_ACCRUAL_STALE critical (parity)', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'INCOME_ACCRUAL_STALE')).toBe('pass')
+
+    const accrual = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: new Date('2026-02-04T00:00:00Z'),
+        description: 'RED voided-income accrual', type: 'auto_transaction', isPosted: true, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: A, side: 'debit', amount: 70 },
+          { glAccountId: B, side: 'credit', amount: 70 },
+        ] },
+      },
+      select: { id: true },
+    })
+    const income = await prisma.financeIncomeEntry.create({
+      data: {
+        name: 'RED Voided Income', amount: 70, nextExpectedDate: new Date('2026-02-04T00:00:00Z'),
+        invoiceReceived: true, isVoided: true, journalEntryId: accrual.id, familyId: FAMILY,
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'INCOME_ACCRUAL_STALE')).toBe('fail')
+      expect(findings(after, 'INCOME_ACCRUAL_STALE').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'critical' && f.recordId === income.id)).toBe(true)
+    } finally {
+      await prisma.financeIncomeEntry.delete({ where: { id: income.id } })
+      await prisma.financeJournalEntry.delete({ where: { id: accrual.id } })
+    }
+  })
+
+  it('stranded receipt JE (AR cleared in GL but income still outstanding) → AR_CONTROL_VS_SUBLEDGER critical', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'AR_CONTROL_VS_SUBLEDGER')).toBe('pass')
+
+    // A system AR control account (asset) + a revenue account, so the AR reconciliation
+    // actually runs (it is skipped when no control account resolves).
+    const ar = await prisma.financeCategory.create({
+      data: { familyId: FAMILY, name: 'Accounts Receivable', type: 'asset', isSystem: true }, select: { id: true },
+    })
+    const rev = await prisma.financeCategory.create({
+      data: { familyId: FAMILY, name: 'RED Revenue', type: 'income' }, select: { id: true },
+    })
+    const taxPoint = new Date(Date.now() - 30 * DAY)
+    // Accrual: DR AR / CR Revenue — income still outstanding (received=false).
+    const accrual = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: taxPoint, description: 'RED AR accrual',
+        type: 'auto_transaction', isPosted: true, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: ar.id, side: 'debit', amount: 100 },
+          { glAccountId: rev.id, side: 'credit', amount: 100 },
+        ] },
+      },
+      select: { id: true },
+    })
+    // The STRANDED receipt: CR AR / DR Bank clears the AR control in the GL, but the
+    // income row was never marked received — so subledger (100) ≠ control (0).
+    const stranded = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: new Date(Date.now() - 20 * DAY), description: 'RED stranded receipt',
+        type: 'manual', isPosted: true, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: A, side: 'debit', amount: 100 },
+          { glAccountId: ar.id, side: 'credit', amount: 100 },
+        ] },
+      },
+      select: { id: true },
+    })
+    const income = await prisma.financeIncomeEntry.create({
+      data: {
+        name: 'RED AR Income', amount: 100, nextExpectedDate: taxPoint,
+        invoiceReceived: true, invoiceReceivedDate: taxPoint, received: false, isVoided: false,
+        categoryId: rev.id, journalEntryId: accrual.id, familyId: FAMILY,
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'AR_CONTROL_VS_SUBLEDGER')).toBe('fail')
+      expect(findings(after, 'AR_CONTROL_VS_SUBLEDGER').some((f: { severity: string }) => f.severity === 'critical')).toBe(true)
+      // Sanity: the AR control resolved (no UNRESOLVED skip) and the accrual matched
+      // the row (no accrual-mismatch noise) — the failure is the reconciliation only.
+      expect(status(after, 'AR_CONTROL_UNRESOLVED')).toBe('pass')
+      expect(status(after, 'INCOME_ACCRUAL_MISMATCH')).toBe('pass')
+    } finally {
+      await prisma.financeIncomeEntry.delete({ where: { id: income.id } })
+      await prisma.financeJournalEntry.delete({ where: { id: stranded.id } })
+      await prisma.financeJournalEntry.delete({ where: { id: accrual.id } })
+      await prisma.financeCategory.delete({ where: { id: rev.id } })
+      await prisma.financeCategory.delete({ where: { id: ar.id } })
+    }
+  })
+
+  it('payslip whose receipt journal double-counts (DR/CR = 2× gross) → PAYSLIP_JOURNAL_TOTAL critical', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'PAYSLIP_JOURNAL_TOTAL')).toBe('pass')
+
+    // Receipt journal that balances (so JOURNAL_ENTRY_UNBALANCED stays green) but
+    // totals 200 each side — twice the payslip's 100 gross.
+    const receipt = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: new Date('2026-02-06T00:00:00Z'), description: 'RED payslip receipt',
+        type: 'auto_transaction', isPosted: true, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: A, side: 'debit', amount: 200 },
+          { glAccountId: B, side: 'credit', amount: 200 },
+        ] },
+      },
+      select: { id: true },
+    })
+    // invoiceReceived=false keeps the accrual checks out of it; the income exists only
+    // to host the receipt journal and label the payslip.
+    const income = await prisma.financeIncomeEntry.create({
+      data: {
+        name: 'RED Payslip Income', amount: 100, nextExpectedDate: new Date('2026-02-06T00:00:00Z'),
+        invoiceReceived: false, received: false, isVoided: false,
+        receiptJournalEntryId: receipt.id, familyId: FAMILY,
+      },
+      select: { id: true },
+    })
+    const payslip = await prisma.financePayslip.create({
+      data: { incomeEntryId: income.id, familyId: FAMILY, grossPay: 100, netPay: 100 },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'PAYSLIP_JOURNAL_TOTAL')).toBe('fail')
+      expect(findings(after, 'PAYSLIP_JOURNAL_TOTAL').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'critical' && f.recordId === payslip.id)).toBe(true)
+      // The receipt balances, so the magnitude check is what fired — not DR≠CR.
+      expect(status(after, 'JOURNAL_ENTRY_UNBALANCED')).toBe('pass')
+    } finally {
+      await prisma.financePayslip.delete({ where: { id: payslip.id } })
+      await prisma.financeIncomeEntry.delete({ where: { id: income.id } })
+      await prisma.financeJournalEntry.delete({ where: { id: receipt.id } })
+    }
+  })
+
+  it('baseline is clean again after every injection was cleaned up', async () => {
+    const a = await runFinanceIntegrityAudit(FAMILY)
+    expect(a.summary.critical).toBe(0)
+    expect(a.summary.warning).toBe(0)
+  })
+})
