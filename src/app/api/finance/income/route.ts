@@ -7,7 +7,8 @@ import { spawnNextTemplatedOccurrence } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
-import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry, type TxClient } from '@/lib/finance-posting'
+import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
+import { deleteUnreceivedIncomeDescendants } from '@/lib/finance-descendants'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -414,23 +415,6 @@ export async function DELETE(request: NextRequest) {
   return NextResponse.json({ success: true })
 }
 
-// Recursively deletes unreceived child entries for a given parent, depth-first.
-// The simple deleteMany({ parentIncomeId: id }) only removes direct children;
-// with the chain master→child1→child2, undoing master leaves child2 orphaned
-// if child1 was already received.
-async function deleteUnreceivedDescendants(parentId: string, familyId: string, client: TxClient = prisma): Promise<void> {
-  const children = await client.financeIncomeEntry.findMany({
-    where: { parentIncomeId: parentId, familyId, received: false },
-    select: { id: true },
-  })
-  for (const child of children) {
-    await deleteUnreceivedDescendants(child.id, familyId, client)
-  }
-  await client.financeIncomeEntry.deleteMany({
-    where: { parentIncomeId: parentId, familyId, received: false },
-  })
-}
-
 export async function PATCH(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
@@ -487,6 +471,9 @@ export async function PATCH(request: NextRequest) {
         where: { id },
         data: { isVoided: true, voidedAt: new Date(), voidNote: voidNote ?? null },
       })
+      // Voiding a parent retires its future no-GL drafts too — otherwise the
+      // spawned-but-unreceived successors live on as actionable entries (P4-FC-02).
+      await deleteUnreceivedIncomeDescendants(id, user.familyId, tx)
     })
 
     return NextResponse.json({ success: true, voided: true })
@@ -601,7 +588,7 @@ export async function PATCH(request: NextRequest) {
         if (receiptJeId) updateData.receiptJournalEntryId = null
         updateData.received = false
         updateData.receivedDate = null
-        await deleteUnreceivedDescendants(id, user.familyId, tx)
+        await deleteUnreceivedIncomeDescendants(id, user.familyId, tx)
       }
 
       await tx.financeIncomeEntry.update({ where: { id }, data: updateData })
@@ -657,7 +644,7 @@ export async function PATCH(request: NextRequest) {
           data: { isCleared: false, reconciledDate: null },
         })
       }
-      await deleteUnreceivedDescendants(id, user.familyId, tx)
+      await deleteUnreceivedIncomeDescendants(id, user.familyId, tx)
 
       await tx.financeIncomeEntry.update({ where: { id }, data: updateData })
     })

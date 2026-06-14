@@ -13,6 +13,7 @@ import { upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, 
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 import { receiveBillStage1 } from '@/lib/finance-bill-receive'
 import { recordBillPayment } from '@/lib/finance-bill-payment'
+import { deleteUnpaidBillDescendants } from '@/lib/finance-descendants'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -662,17 +663,7 @@ export async function PATCH(request: NextRequest) {
         await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: user.familyId } })
 
         // Recursively delete all unpaid descendant bills to prevent orphaned chains
-        let currentParents = [id]
-        while (currentParents.length > 0) {
-          const children = await tx.financeRecurringBill.findMany({
-            where: { parentBillId: { in: currentParents }, familyId: user.familyId, paid: false },
-            select: { id: true },
-          })
-          const childIds = children.map((c: { id: string }) => c.id)
-          if (childIds.length === 0) break
-          await tx.financeRecurringBill.deleteMany({ where: { id: { in: childIds }, familyId: user.familyId } })
-          currentParents = childIds
-        }
+        await deleteUnpaidBillDescendants(id, user.familyId, tx)
       }
 
       await tx.financeRecurringBill.update({
@@ -734,19 +725,7 @@ export async function PATCH(request: NextRequest) {
       // 3. Delete payment records
       await tx.financeBillPayment.deleteMany({ where: { billId: id, familyId: user.familyId } })
       // Recursively delete all unpaid descendant bills (Bug 6 fix)
-      let currentParents = [id]
-      while (currentParents.length > 0) {
-        const children = await tx.financeRecurringBill.findMany({
-          where: { parentBillId: { in: currentParents }, familyId: user.familyId, paid: false },
-          select: { id: true },
-        })
-        const childIds = children.map((c: { id: string }) => c.id)
-        if (childIds.length === 0) break
-        await tx.financeRecurringBill.deleteMany({
-          where: { id: { in: childIds }, familyId: user.familyId },
-        })
-        currentParents = childIds
-      }
+      await deleteUnpaidBillDescendants(id, user.familyId, tx)
       // Re-open invoice tx so AP is outstanding again
       const invoiceTxId: string | null = existing.invoiceTxId ?? null
       if (invoiceTxId) {
@@ -938,6 +917,9 @@ export async function PATCH(request: NextRequest) {
         where: { id },
         data: { isVoided: true, voidedAt: new Date(), voidNote: voidNote ?? null },
       })
+      // Voiding a parent retires its future no-GL drafts too — otherwise the
+      // spawned-but-unpaid successors live on as actionable bills (P3-FC-03).
+      await deleteUnpaidBillDescendants(id, user.familyId, tx)
     })
 
     return NextResponse.json({ success: true, voided: true })
