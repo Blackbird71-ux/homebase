@@ -97,6 +97,8 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'PAYSLIP_JOURNAL_TOTAL',        label: 'Payslip receipt journal totals gross + SGC each side' },
   { code: 'PAYSLIP_SGC_ACCOUNTS_PRESENT', label: 'Payslips with SGC have both super GL accounts set' },
   { code: 'PAYSLIP_NET_EXCEEDS_GROSS',    label: 'Payslip net pay never exceeds gross' },
+  { code: 'PAYG_WITHHELD_RECONCILIATION', label: 'Payslip PAYG posts to the PAYG Withheld Receivable account' },
+  { code: 'OPENING_BALANCE_JOURNAL_PRESENT', label: 'Configured opening balances have a posted journal' },
   { code: 'DATE_REQUIRED_PRESENT',        label: 'Required dates present and within a plausible range' },
   { code: 'FUTURE_DATED_POSTING',         label: 'Posted journals dated after today (review)' },
 ]
@@ -751,13 +753,13 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
   const payslips = await prisma.financePayslip.findMany({
     where: { familyId },
     select: {
-      id: true, grossPay: true, netPay: true, paygWithheld: true, deductions: true,
+      id: true, grossPay: true, netPay: true, paygWithheld: true, paygGlAccountId: true, deductions: true,
       sgcAmount: true, sgcGlAccountId: true, sgcIncomeGlAccountId: true,
       incomeEntry: {
         select: {
           name: true,
           receiptJournalEntry: {
-            select: { isPosted: true, isReversed: true, lines: { select: { side: true, amount: true } } },
+            select: { isPosted: true, isReversed: true, lines: { select: { side: true, amount: true, glAccountId: true } } },
           },
         },
       },
@@ -822,6 +824,34 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
           message: `Receipt journal totals (DR ${debitTotal}, CR ${creditTotal}) ≠ gross ${r2(p.grossPay)} + SGC ${r2(p.sgcAmount)} (= ${expectedTotal}).`,
           detail: { expectedTotal, debitTotal, creditTotal, grossPay: r2(p.grossPay), sgcAmount: r2(p.sgcAmount) },
         })
+      }
+    }
+
+    // FC-08a — PAYG withheld reconciliation (§6.2). PAYG Withheld Receivable is a
+    // current asset that must reflect the running total of unrecouped withholding.
+    // The only posting path is the payslip receipt journal (DR paygGlAccountId,
+    // there is no separate "return" event), so the per-payslip invariant is: every
+    // withheld amount lands as a DR to that account. A wrong-account or missing PAYG
+    // line silently understates the receivable — invisible to PAYSLIP_JOURNAL_TOTAL,
+    // which only checks the journal's grand total. Only checked against a live
+    // receipt journal.
+    if (p.paygWithheld > 0 && receipt && receipt.isPosted && !receipt.isReversed) {
+      if (!p.paygGlAccountId) {
+        add({
+          severity: 'warning', code: 'PAYG_WITHHELD_RECONCILIATION', recordType: 'payslip',
+          recordId: p.id, label,
+          message: `Payslip withholds PAYG ${r2(p.paygWithheld)} but has no PAYG GL account set — the receivable cannot be tracked.`,
+        })
+      } else {
+        const postedPayg = r2(receipt.lines.filter(l => l.side === 'debit' && l.glAccountId === p.paygGlAccountId).reduce((s, l) => s + l.amount, 0))
+        if (!approxEq(postedPayg, p.paygWithheld)) {
+          add({
+            severity: 'critical', code: 'PAYG_WITHHELD_RECONCILIATION', recordType: 'payslip',
+            recordId: p.id, label,
+            message: `Receipt journal posts ${postedPayg} to the PAYG Withheld Receivable account but the payslip withheld ${r2(p.paygWithheld)} — the receivable is mis-stated.`,
+            detail: { paygWithheld: r2(p.paygWithheld), postedPayg, paygGlAccountId: p.paygGlAccountId },
+          })
+        }
       }
     }
   }
