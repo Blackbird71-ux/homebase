@@ -178,6 +178,33 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
             recordId: b.id, label: b.name,
             message: `Accrual has ${lines.length} lines (custom/GST split) — verify manually.`,
           })
+          // FC-02: a custom/GST split still must credit the full bill amount to
+          // Accounts Payable (the control leg = bill.amount, gross) and debit the
+          // bill's own category account somewhere (the expense leg posts the net
+          // amount, so we assert presence not amount — the GST component split is the
+          // job of GST_SPLIT_DIVERGENT). Without this, a split that books the expense
+          // to the wrong account — the divergence this module exists to catch — would
+          // hide silently in the info-only SPLIT list.
+          if (lines.length >= 3) {
+            const problems: string[] = []
+            if (apCategory) {
+              const apCredit = r2(lines.filter(l => l.side === 'credit' && l.glAccountId === apCategory.id).reduce((s, l) => s + l.amount, 0))
+              if (!approxEq(apCredit, b.amount))
+                problems.push(`Accounts Payable credit ${r2(apCredit)} ≠ bill amount ${r2(b.amount)}`)
+            }
+            if (!lines.some(l => l.side === 'debit' && l.glAccountId === b.categoryId))
+              problems.push(`no debit line posts to the bill category ${acct(b.categoryId)}`)
+            if ((b.journalEntry!.entityId ?? null) !== (b.entityId ?? null))
+              problems.push(`accrual entity differs from bill entity`)
+            if (problems.length > 0) {
+              add({
+                severity: 'critical', code: 'BILL_ACCRUAL_MISMATCH', recordType: 'bill',
+                recordId: b.id, label: b.name,
+                message: `Split accrual disagrees with the bill row: ${problems.join('; ')}.`,
+                detail: { billCategory: acct(b.categoryId), billAmount: r2(b.amount), lineCount: lines.length },
+              })
+            }
+          }
         }
         // Tax point ↔ accrual date. The AP subledger keys on invoiceReceivedDate while
         // the GL control keys on the accrual journal date; when they fall on different
@@ -278,8 +305,34 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
           add({
             severity: 'info', code: 'INCOME_ACCRUAL_SPLIT', recordType: 'income',
             recordId: e.id, label: e.name,
-            message: `Accrual has ${lines.length} lines (payslip/custom split) — verify manually.`,
+            message: `Accrual has ${lines.length} lines (custom/GST split) — verify manually.`,
           })
+          // FC-02 (income mirror): a custom/GST split must debit the full income
+          // amount to Accounts Receivable (the control leg = income.amount, gross) and
+          // credit the income's own category account somewhere (the income leg posts
+          // the net amount, so presence not amount — GST_SPLIT_DIVERGENT owns the
+          // component). Payslip income posts no accrual (route F2), so it never reaches
+          // here; the only ≥3-line income accruals are GST/custom splits.
+          if (lines.length >= 3) {
+            const problems: string[] = []
+            if (arCategory) {
+              const arDebit = r2(lines.filter(l => l.side === 'debit' && l.glAccountId === arCategory.id).reduce((s, l) => s + l.amount, 0))
+              if (!approxEq(arDebit, e.amount))
+                problems.push(`Accounts Receivable debit ${r2(arDebit)} ≠ income amount ${r2(e.amount)}`)
+            }
+            if (!lines.some(l => l.side === 'credit' && l.glAccountId === e.categoryId))
+              problems.push(`no credit line posts to the income category ${acct(e.categoryId)}`)
+            if ((e.journalEntry!.entityId ?? null) !== (e.entityId ?? null))
+              problems.push(`accrual entity differs from income entity`)
+            if (problems.length > 0) {
+              add({
+                severity: 'critical', code: 'INCOME_ACCRUAL_MISMATCH', recordType: 'income',
+                recordId: e.id, label: e.name,
+                message: `Split accrual disagrees with the income row: ${problems.join('; ')}.`,
+                detail: { incomeCategory: acct(e.categoryId), incomeAmount: r2(e.amount), lineCount: lines.length },
+              })
+            }
+          }
         }
         // Tax point ↔ accrual date (income-side mirror of BILL_TAXPOINT_DIVERGENT). The
         // AR subledger keys on invoiceReceivedDate while the GL control keys on the
