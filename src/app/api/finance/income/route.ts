@@ -7,7 +7,7 @@ import { spawnNextTemplatedOccurrence } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
 import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
-import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
+import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry, type TxClient } from '@/lib/finance-posting'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -418,15 +418,15 @@ export async function DELETE(request: NextRequest) {
 // The simple deleteMany({ parentIncomeId: id }) only removes direct children;
 // with the chain master→child1→child2, undoing master leaves child2 orphaned
 // if child1 was already received.
-async function deleteUnreceivedDescendants(parentId: string, familyId: string): Promise<void> {
-  const children = await prisma.financeIncomeEntry.findMany({
+async function deleteUnreceivedDescendants(parentId: string, familyId: string, client: TxClient = prisma): Promise<void> {
+  const children = await client.financeIncomeEntry.findMany({
     where: { parentIncomeId: parentId, familyId, received: false },
     select: { id: true },
   })
   for (const child of children) {
-    await deleteUnreceivedDescendants(child.id, familyId)
+    await deleteUnreceivedDescendants(child.id, familyId, client)
   }
-  await prisma.financeIncomeEntry.deleteMany({
+  await client.financeIncomeEntry.deleteMany({
     where: { parentIncomeId: parentId, familyId, received: false },
   })
 }
@@ -531,88 +531,142 @@ export async function PATCH(request: NextRequest) {
       : null
   }
 
-  // ── Undo remittance: delete the stage-1 income transaction ────────────────
+  // ── Undo remittance: reverse accrual (+ receipt) GL journals ATOMICALLY ────
+  //
+  // WI-3 / P8-FC-01 + P8-FC-02. This block was non-atomic (loose prisma.* ops)
+  // and — when the entry was ALSO received — reversed only the accrual, stranding
+  // the receipt JE (DR Bank / CR AR): AR went negative and Bank stayed debited
+  // with phantom cash. Mirror bills' undo-invoice: pre-fetch journals + generate
+  // all reversal refs OUTSIDE the tx (nextJournalReference reads committed state,
+  // so calls inside a $transaction would all return the same number), then run a
+  // single atomic transaction passing `tx` to reverseJournalEntry.
   if (invoiceReceived === false && existing.invoiceReceived === true) {
-    const invoiceTxId: string | null = existing.invoiceTxId ?? null
-    if (invoiceTxId) {
-      await prisma.financeTransaction.deleteMany({
-        where: { id: invoiceTxId, familyId: user.familyId },
-      })
-      updateData.invoiceTxId = null
-      if (existing.transactionId === invoiceTxId) updateData.transactionId = null
-    }
-    // Reverse the accrual journal entry (do NOT delete — preserve audit trail per R4)
-    const jeId: string | null = existing.journalEntryId ?? null
-    if (jeId) {
-      const je = await prisma.financeJournalEntry.findFirst({
-        where: { id: jeId, familyId: user.familyId },
-        include: { lines: true },
-      })
-      if (je?.isPosted && !je.isReversed) {
-        const reversalRef = await nextJournalReference(user.familyId)
-        await reverseJournalEntry(prisma, je, { reference: reversalRef, date: new Date(), familyId: user.familyId })
-      } else if (je && !je.isPosted) {
-        // Draft entry — zero GL effect, safe to delete
-        await prisma.financeJournalEntry.delete({ where: { id: je.id } })
-      }
-      updateData.journalEntryId = null
-    }
-    // Undo received too if it was set
-    if (existing.received) {
-      const receiptTxId: string | null = existing.receiptTxId ?? null
-      if (receiptTxId) {
-        await prisma.financeTransaction.deleteMany({
-          where: { id: receiptTxId, familyId: user.familyId },
+    const accrualJeId: string | null = existing.journalEntryId ?? null
+    const accrualJe = accrualJeId
+      ? await prisma.financeJournalEntry.findFirst({
+          where: { id: accrualJeId, familyId: user.familyId },
+          include: { lines: true },
         })
-        updateData.receiptTxId = null
-        if (existing.transactionId === receiptTxId) updateData.transactionId = null
+      : null
+    const needsAccrualReversal = accrualJe?.isPosted === true && !accrualJe.isReversed
+
+    // When the entry was also received, the receipt JE must be reversed too.
+    const alsoReceived = !!existing.received
+    const receiptJeId: string | null = alsoReceived
+      ? ((existing as any).receiptJournalEntryId ?? null)
+      : null
+    const receiptJe = receiptJeId
+      ? await prisma.financeJournalEntry.findFirst({
+          where: { id: receiptJeId, familyId: user.familyId },
+          include: { lines: true },
+        })
+      : null
+    const needsReceiptReversal = receiptJe?.isPosted === true && !receiptJe.isReversed
+
+    const totalRefs = (needsAccrualReversal ? 1 : 0) + (needsReceiptReversal ? 1 : 0)
+    const allRefs = await nextNJournalReferences(user.familyId, totalRefs)
+    let refIdx = 0
+    const accrualRef = needsAccrualReversal ? allRefs[refIdx++] : null
+    const receiptRef = needsReceiptReversal ? allRefs[refIdx++] : null
+
+    await prisma.$transaction(async (tx) => {
+      // Delete the stage-1 invoice transaction
+      const invoiceTxId: string | null = existing.invoiceTxId ?? null
+      if (invoiceTxId) {
+        await tx.financeTransaction.deleteMany({ where: { id: invoiceTxId, familyId: user.familyId } })
+        updateData.invoiceTxId = null
+        if (existing.transactionId === invoiceTxId) updateData.transactionId = null
       }
-      updateData.received = false
-      updateData.receivedDate = null
-      await deleteUnreceivedDescendants(id, user.familyId)
-    }
+      // Reverse the accrual (DR AR / CR Income → flip); draft = zero GL, delete it.
+      if (accrualJe && needsAccrualReversal && accrualRef) {
+        await reverseJournalEntry(tx, accrualJe, { reference: accrualRef, date: new Date(), familyId: user.familyId })
+      } else if (accrualJe && !accrualJe.isPosted) {
+        await tx.financeJournalEntry.delete({ where: { id: accrualJe.id } })
+      }
+      if (accrualJeId) updateData.journalEntryId = null
+
+      // Undo received too if it was set — reverse the receipt JE (P8-FC-01).
+      if (alsoReceived) {
+        const receiptTxId: string | null = existing.receiptTxId ?? null
+        if (receiptTxId) {
+          await tx.financeTransaction.deleteMany({ where: { id: receiptTxId, familyId: user.familyId } })
+          updateData.receiptTxId = null
+          if (existing.transactionId === receiptTxId) updateData.transactionId = null
+        }
+        if (receiptJe && needsReceiptReversal && receiptRef) {
+          await reverseJournalEntry(tx, receiptJe, { reference: receiptRef, date: new Date(), familyId: user.familyId })
+        } else if (receiptJe && !receiptJe.isPosted) {
+          await tx.financeJournalEntry.delete({ where: { id: receiptJe.id } })
+        }
+        if (receiptJeId) updateData.receiptJournalEntryId = null
+        updateData.received = false
+        updateData.receivedDate = null
+        await deleteUnreceivedDescendants(id, user.familyId, tx)
+      }
+
+      await tx.financeIncomeEntry.update({ where: { id }, data: updateData })
+    })
+
+    const undoEntry = await prisma.financeIncomeEntry.findFirst({
+      where: { id, familyId: user.familyId },
+      include: INCOME_INCLUDE,
+    })
+    return NextResponse.json(undoEntry)
   }
 
-  // ── Undo received: delete stage-2 receipt transaction + receipt GL journal + spawned children ──
+  // ── Undo received: reverse stage-2 receipt GL journal ATOMICALLY ───────────
+  //
+  // WI-3 / P8-FC-02. Was non-atomic (loose prisma.* ops, prisma passed to
+  // reverseJournalEntry). The accrual is correctly left open (income is still
+  // recognised, just not yet received). Pre-generate the single reversal ref
+  // outside the tx, then run one atomic transaction.
   if (received === false && existing.received === true) {
-    const receiptTxId: string | null = existing.receiptTxId ?? null
-    if (receiptTxId) {
-      await prisma.financeTransaction.deleteMany({
-        where: { id: receiptTxId, familyId: user.familyId },
-      })
-      updateData.receiptTxId = null
-      if (existing.transactionId === receiptTxId) updateData.transactionId = null
-    } else if (existing.transactionId) {
-      // Legacy: older records stored receipt in transactionId directly
-      await prisma.financeTransaction.deleteMany({
-        where: { id: existing.transactionId, familyId: user.familyId },
-      })
-      updateData.transactionId = null
-    }
-    // Reverse the receipt GL journal (do NOT delete — preserve audit trail per R4)
     const receiptJeId: string | null = (existing as any).receiptJournalEntryId ?? null
-    if (receiptJeId) {
-      const je = await prisma.financeJournalEntry.findFirst({
-        where: { id: receiptJeId, familyId: user.familyId },
-        include: { lines: true },
-      })
-      if (je?.isPosted && !je.isReversed) {
-        const reversalRef = await nextJournalReference(user.familyId)
-        await reverseJournalEntry(prisma, je, { reference: reversalRef, date: new Date(), familyId: user.familyId })
-      } else if (je && !je.isPosted) {
-        await prisma.financeJournalEntry.delete({ where: { id: je.id } })
+    const receiptJe = receiptJeId
+      ? await prisma.financeJournalEntry.findFirst({
+          where: { id: receiptJeId, familyId: user.familyId },
+          include: { lines: true },
+        })
+      : null
+    const needsReceiptReversal = receiptJe?.isPosted === true && !receiptJe.isReversed
+    const receiptRef = needsReceiptReversal ? await nextJournalReference(user.familyId) : null
+
+    await prisma.$transaction(async (tx) => {
+      const receiptTxId: string | null = existing.receiptTxId ?? null
+      if (receiptTxId) {
+        await tx.financeTransaction.deleteMany({ where: { id: receiptTxId, familyId: user.familyId } })
+        updateData.receiptTxId = null
+        if (existing.transactionId === receiptTxId) updateData.transactionId = null
+      } else if (existing.transactionId) {
+        // Legacy: older records stored receipt in transactionId directly
+        await tx.financeTransaction.deleteMany({ where: { id: existing.transactionId, familyId: user.familyId } })
+        updateData.transactionId = null
       }
-      updateData.receiptJournalEntryId = null
-    }
-    // Re-open stage-1 remittance tx (income still recognised, just not yet received)
-    const invoiceTxId: string | null = existing.invoiceTxId ?? null
-    if (invoiceTxId) {
-      await prisma.financeTransaction.updateMany({
-        where: { id: invoiceTxId, familyId: user.familyId },
-        data: { isCleared: false, reconciledDate: null },
-      })
-    }
-    await deleteUnreceivedDescendants(id, user.familyId)
+      // Reverse the receipt GL journal (do NOT delete — preserve audit trail per R4)
+      if (receiptJe && needsReceiptReversal && receiptRef) {
+        await reverseJournalEntry(tx, receiptJe, { reference: receiptRef, date: new Date(), familyId: user.familyId })
+      } else if (receiptJe && !receiptJe.isPosted) {
+        await tx.financeJournalEntry.delete({ where: { id: receiptJe.id } })
+      }
+      if (receiptJeId) updateData.receiptJournalEntryId = null
+      // Re-open stage-1 remittance tx (income still recognised, just not yet received)
+      const invoiceTxId: string | null = existing.invoiceTxId ?? null
+      if (invoiceTxId) {
+        await tx.financeTransaction.updateMany({
+          where: { id: invoiceTxId, familyId: user.familyId },
+          data: { isCleared: false, reconciledDate: null },
+        })
+      }
+      await deleteUnreceivedDescendants(id, user.familyId, tx)
+
+      await tx.financeIncomeEntry.update({ where: { id }, data: updateData })
+    })
+
+    const undoEntry = await prisma.financeIncomeEntry.findFirst({
+      where: { id, familyId: user.familyId },
+      include: INCOME_INCLUDE,
+    })
+    return NextResponse.json(undoEntry)
   }
 
   // Apply status field updates
