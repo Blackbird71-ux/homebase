@@ -81,6 +81,8 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'REVERSAL_PAIR_BROKEN',         label: 'Reversal pairs are intact' },
   { code: 'AP_CONTROL_VS_SUBLEDGER',      label: 'AP control account reconciles to the bills subledger' },
   { code: 'AR_CONTROL_VS_SUBLEDGER',      label: 'AR control account reconciles to the income subledger' },
+  { code: 'AP_CONTROL_UNRESOLVED',        label: 'AP control account is uniquely resolvable' },
+  { code: 'AR_CONTROL_UNRESOLVED',        label: 'AR control account is uniquely resolvable' },
   { code: 'PAYSLIP_GROSS_MISMATCH',       label: 'Payslip gross = net + PAYG + super' },
   { code: 'DATE_REQUIRED_PRESENT',        label: 'Required dates present and within a plausible range' },
   { code: 'FUTURE_DATED_POSTING',         label: 'Posted journals dated after today (review)' },
@@ -114,8 +116,42 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
 
   // Read-only AP/AR control-account discovery — mirrors accounts-payable/route.ts
   // and accounts-receivable/route.ts. Does NOT call ensureAccounts*Category.
-  const apCategory = categories.find(c => c.isSystem && c.type === 'liability' && c.name.toLowerCase().includes('accounts payable'))
-  const arCategory = categories.find(c => c.isSystem && c.type === 'asset' && c.name.toLowerCase().includes('accounts receivable'))
+  //
+  // FC-03: discovery must be loud, not silent. The reconciliation checks (and the
+  // AP/AR legs of the accrual MISMATCH checks) are skipped when the control account
+  // can't be resolved — and a silent skip reads as PASS, indistinguishable from a
+  // genuine clean reconciliation. So when a system account of the right type EXISTS
+  // but the name lookup fails (renamed/re-cased) or is ambiguous (>1 match — no
+  // deterministic pick), we resolve to undefined AND raise a warning, so a skipped
+  // reconciliation can never look green. The report routes deliberately pick the first
+  // match; the auditor intentionally does not share that "silent pick" behaviour.
+  const resolveControl = (type: 'liability' | 'asset', needle: string) => {
+    const systemOfType = categories.filter(c => c.isSystem && c.type === type)
+    const matches = systemOfType.filter(c => c.name.toLowerCase().includes(needle))
+    return { account: matches.length === 1 ? matches[0] : undefined, systemCount: systemOfType.length, matchCount: matches.length }
+  }
+  const apResolved = resolveControl('liability', 'accounts payable')
+  const arResolved = resolveControl('asset', 'accounts receivable')
+  const apCategory = apResolved.account
+  const arCategory = arResolved.account
+  if (!apCategory && apResolved.systemCount > 0) {
+    add({
+      severity: 'warning', code: 'AP_CONTROL_UNRESOLVED', recordType: 'gl',
+      recordId: 'ap-control', label: 'Accounts Payable',
+      message: apResolved.matchCount > 1
+        ? `${apResolved.matchCount} system liability accounts match "accounts payable" — the control account is ambiguous, so AP reconciliation was skipped.`
+        : `No system liability account named "accounts payable" found among ${apResolved.systemCount} system liability account(s) — AP reconciliation was skipped.`,
+    })
+  }
+  if (!arCategory && arResolved.systemCount > 0) {
+    add({
+      severity: 'warning', code: 'AR_CONTROL_UNRESOLVED', recordType: 'gl',
+      recordId: 'ar-control', label: 'Accounts Receivable',
+      message: arResolved.matchCount > 1
+        ? `${arResolved.matchCount} system asset accounts match "accounts receivable" — the control account is ambiguous, so AR reconciliation was skipped.`
+        : `No system asset account named "accounts receivable" found among ${arResolved.systemCount} system asset account(s) — AR reconciliation was skipped.`,
+    })
+  }
 
   // ── A + B — Bills: accrual divergence + payment-journal presence ────────────
   const bills = await prisma.financeRecurringBill.findMany({
