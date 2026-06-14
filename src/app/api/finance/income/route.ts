@@ -763,6 +763,30 @@ export async function PATCH(request: NextRequest) {
   // In both modes the next-occurrence spawn ALWAYS uses entry.amount (the
   // template/expected amount) so forecasting remains stable.
   if (received === true && !existing.received) {
+    // P5-FC-01: the MODE A (payslip) vs MODE B (simple) branch below is decided
+    // solely by whether `payslipData` was sent in the request body. But whether
+    // this entry IS a payslip is a property of the stored FinancePayslip record
+    // (written at draft-spawn and refreshed at each receipt), not of the request.
+    // A payslip receipt that omits the breakdown would silently fall into MODE B:
+    // it recognises the amount as simple income with no PAYG/SGC decomposition,
+    // never debits PAYG Withheld Receivable, and leaves the stored record stale —
+    // yet it balances (DR=CR), so no TB/integrity check catches it. Reject so the
+    // caller must supply the breakdown (the shipped mark-received dialog always
+    // does). Mirrors the F2 guard on the invoiceReceived transition above, which
+    // also keys off the stored record rather than the body.
+    if (!payslipData) {
+      const storedPayslip = await prisma.financePayslip.findFirst({
+        where: { incomeEntryId: id, familyId: user.familyId },
+        select: { id: true },
+      })
+      if (storedPayslip) {
+        return NextResponse.json(
+          { error: 'This is a payslip income — the receipt must include the payslip breakdown (gross, PAYG, deductions, net). Mark it received from the payslip dialog.' },
+          { status: 422 },
+        )
+      }
+    }
+
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
     const receiptAccountId = receiveToAccountId ?? existing.accountId
     const receiptGlAccountId: string | null = receiveToGlAccountId ?? null
