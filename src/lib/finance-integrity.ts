@@ -856,6 +856,43 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     }
   }
 
+  // ── F.2 — Opening-balance journal presence ──────────────────────────────────
+  // §6.2: a configured opening balance must be backed by a posted opening-balance
+  // journal, or the asset/liability is missing from the Trial Balance and Balance
+  // Sheet (setOpeningBalance posts DR account / CR Opening Balances on save). Only
+  // fires when the family actually set a non-zero opening balance — a cleared one
+  // is stored as null and is out of scope.
+  const obAccounts = await prisma.financeAccount.findMany({
+    where: { familyId, openingBalance: { not: null } },
+    select: { id: true, name: true, openingBalance: true, openingBalanceTxId: true },
+  })
+  const nonZeroObAccounts = obAccounts.filter(a => a.openingBalance != null && Math.abs(a.openingBalance) > 0.005)
+  if (nonZeroObAccounts.length > 0) {
+    const obJournals = await prisma.financeJournalEntry.findMany({
+      where: { familyId, type: 'opening_balance' },
+      select: { isPosted: true, sourceTransactionId: true },
+    })
+    const obJournalByTx = new Map(obJournals.filter(j => j.sourceTransactionId).map(j => [j.sourceTransactionId!, j]))
+    for (const a of nonZeroObAccounts) {
+      const journal = a.openingBalanceTxId ? obJournalByTx.get(a.openingBalanceTxId) : undefined
+      if (!journal) {
+        add({
+          severity: 'critical', code: 'OPENING_BALANCE_JOURNAL_PRESENT', recordType: 'gl',
+          recordId: a.id, label: a.name,
+          message: `Account "${a.name}" has an opening balance ${r2(a.openingBalance!)} but no opening-balance journal — it is missing from the Trial Balance and Balance Sheet.`,
+          detail: { openingBalance: r2(a.openingBalance!) },
+        })
+      } else if (!journal.isPosted) {
+        add({
+          severity: 'critical', code: 'OPENING_BALANCE_JOURNAL_PRESENT', recordType: 'gl',
+          recordId: a.id, label: a.name,
+          message: `Account "${a.name}" has an opening balance ${r2(a.openingBalance!)} but its opening-balance journal is unposted — it does not affect the ledger.`,
+          detail: { openingBalance: r2(a.openingBalance!) },
+        })
+      }
+    }
+  }
+
   // ── G — Date presence & plausibility ────────────────────────────────────────
   // Prisma guarantees stored datetimes parse and that non-nullable columns are set,
   // so this catches the two failure modes it cannot: (1) a record whose *state* implies
