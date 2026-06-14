@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { getFamilyTimezone } from '@/lib/family'
 import { todayBoundsInTz } from '@/lib/timezone'
-import { deriveJournalLineBalances } from '@/lib/finance-opening-balance'
+import { deriveJournalLineBalances, calcGst } from '@/lib/finance-opening-balance'
 import { sumControlAccountLines } from '@/lib/finance-subledger'
 
 /**
@@ -120,10 +120,20 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
   // Category id → name/type map for human-readable messages.
   const categories = await prisma.financeCategory.findMany({
     where: { familyId },
-    select: { id: true, name: true, type: true, isSystem: true },
+    select: { id: true, name: true, type: true, isSystem: true, gstApplicable: true, gstRate: true },
   })
   const catName = new Map(categories.map(c => [c.id, c.name]))
   const catType = new Map(categories.map(c => [c.id, c.type]))
+  const catGst = new Map(categories.map(c => [c.id, { applicable: c.gstApplicable, rate: c.gstRate }]))
+  // Read-only discovery of the system GST GL accounts (mirrors ensureGstAccounts'
+  // exact names, case-insensitively). Bill accruals split GST to "GST Input Tax
+  // Credits" (a debit ITC); income accruals split to "GST Collected" (a credit).
+  const gstItcIds = new Set(
+    categories.filter(c => c.isSystem && c.type === 'liability' && c.name.toLowerCase().includes('input tax credit')).map(c => c.id),
+  )
+  const gstCollectedIds = new Set(
+    categories.filter(c => c.isSystem && c.type === 'liability' && c.name.toLowerCase().includes('gst collected')).map(c => c.id),
+  )
   const acct = (id: string | null | undefined) =>
     id ? `${catName.get(id) ?? '(unknown)'} (${catType.get(id) ?? '?'})` : '(none)'
 
@@ -680,6 +690,55 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
         severity: 'critical', code: 'NORMAL_BALANCE_VIOLATION', recordType: 'income',
         recordId: e.id, label: e.name,
         message: `Income is categorised to an expense account ${acct(e.categoryId)} — income must not post to an expense (§6.3).`,
+      })
+    }
+  }
+
+  // ── E.3 — GST split correctness ─────────────────────────────────────────────
+  // §2.4: when a category is gstApplicable, the GST component split to the GST GL
+  // account must equal gross × rate ÷ (100 + rate). This checks the *posted* GST
+  // line on each live accrual against that computation (via the shared calcGst).
+  //
+  // Scope: only accruals whose category is gstApplicable AND that actually posted a
+  // GST line (a gstApplicable bill entered GST-free posts no GST line — out of
+  // scope here; the expense is just the full gross). Severity is warning, not
+  // critical: a legitimate mixed/partial supply can post a non-standard GST amount,
+  // so this surfaces "verify the GST figure" rather than asserting corruption.
+  // gross is read from the control leg (AP credit / AR debit) so it matches the
+  // gross-inclusive base the GST was computed on.
+  for (const b of bills) {
+    const live = b.journalEntry && b.journalEntry.isPosted && !b.journalEntry.isReversed
+    if (!live || b.isVoided || !b.categoryId || !catGst.get(b.categoryId)?.applicable) continue
+    const lines = b.journalEntry!.lines
+    const postedGst = r2(lines.filter(l => l.side === 'debit' && gstItcIds.has(l.glAccountId)).reduce((s, l) => s + l.amount, 0))
+    if (postedGst === 0) continue
+    const gross = sumControlAccountLines(lines, apCategory?.id, 'credit', b.amount)
+    const rate = catGst.get(b.categoryId)?.rate ?? 10
+    const expectedGst = calcGst(gross, rate).gst
+    if (!approxEq(postedGst, expectedGst)) {
+      add({
+        severity: 'warning', code: 'GST_SPLIT_DIVERGENT', recordType: 'bill',
+        recordId: b.id, label: b.name,
+        message: `Posted GST ITC ${postedGst} ≠ ${rate}% of gross ${r2(gross)} (= ${expectedGst}). Confirm this is an intended non-standard split, not a GST math error.`,
+        detail: { gross: r2(gross), rate, postedGst, expectedGst },
+      })
+    }
+  }
+  for (const e of incomes) {
+    const live = e.journalEntry && e.journalEntry.isPosted && !e.journalEntry.isReversed
+    if (!live || e.isVoided || !e.categoryId || !catGst.get(e.categoryId)?.applicable) continue
+    const lines = e.journalEntry!.lines
+    const postedGst = r2(lines.filter(l => l.side === 'credit' && gstCollectedIds.has(l.glAccountId)).reduce((s, l) => s + l.amount, 0))
+    if (postedGst === 0) continue
+    const gross = sumControlAccountLines(lines, arCategory?.id, 'debit', e.amount)
+    const rate = catGst.get(e.categoryId)?.rate ?? 10
+    const expectedGst = calcGst(gross, rate).gst
+    if (!approxEq(postedGst, expectedGst)) {
+      add({
+        severity: 'warning', code: 'GST_SPLIT_DIVERGENT', recordType: 'income',
+        recordId: e.id, label: e.name,
+        message: `Posted GST Collected ${postedGst} ≠ ${rate}% of gross ${r2(gross)} (= ${expectedGst}). Confirm this is an intended non-standard split, not a GST math error.`,
+        detail: { gross: r2(gross), rate, postedGst, expectedGst },
       })
     }
   }
