@@ -799,10 +799,32 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    // WI-2 (P4-FC-01): an income entry can already carry a POSTED, un-reversed
+    // accrual (DR AR / CR Income) while invoiceReceived is still false — a POST
+    // with journalLines posts the accrual immediately (upsertIncomeJournalEntry
+    // forces isPosted:true) but leaves invoiceReceived=false. Keying auto-Stage-1
+    // off the flag alone would then post a SECOND accrual here, double-counting
+    // income and stranding the first accrual's AR. Detect the existing posted
+    // accrual (read outside the tx, like payslipAccrualToReverse below) and treat
+    // Stage-1 as already done: the receipt reuses it (accrualJournalId stays
+    // freshEntry.journalEntryId) and MODE B's BUG B check clears AR by exactly its
+    // open balance. Mirrors the Stage-1 reuse guard above (existingJeId &&
+    // alreadyPosted). The bill side cannot reach this state — bills post the
+    // accrual only on the invoiceReceived false→true transition (the draft stays
+    // unposted until then), so wasAccrued tracks the posted accrual faithfully.
+    let existingPostedAccrual = false
+    if (freshEntry?.journalEntryId) {
+      const linkedJe = await prisma.financeJournalEntry.findFirst({
+        where: { id: freshEntry.journalEntryId, familyId: user.familyId },
+        select: { isPosted: true, isReversed: true },
+      })
+      existingPostedAccrual = !!linkedJe?.isPosted && !linkedJe.isReversed
+    }
+
     // BUG A: payslip MODE A posts a self-balancing multi-line journal with NO AR
     // line. Auto-posting a Stage-1 DR AR / CR Income accrual first would strand AR
     // and double-count income, so payslip receipts must never trigger auto-Stage-1.
-    const needsAutoStage1 = !freshEntry?.invoiceReceived && !payslipData
+    const needsAutoStage1 = !freshEntry?.invoiceReceived && !payslipData && !existingPostedAccrual
 
     // F2 defence-in-depth: Stage 1 is now rejected (422) for payslip entries,
     // but a posted un-reversed accrual can still exist on legacy rows. The
