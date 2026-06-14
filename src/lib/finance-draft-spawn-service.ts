@@ -659,7 +659,12 @@ export async function spawnDraftsForTemplate(
     }
 
     // ── Advance cursor for next iteration ────────────────────────────────
-    if (occurrencesRemaining != null) {
+    // Decrement-at-spawn, exactly-once: only count an occurrence the cron
+    // actually spawned. A skippedExisting draft was already materialised AND
+    // counted by whichever trigger created it (mirrors the receipt path's
+    // cronHasNotCounted guard) — counting it again undercounts the schedule and
+    // can end a for_n template an occurrence early (P6-FC-01).
+    if (created && occurrencesRemaining != null) {
       occurrencesRemaining = occurrencesRemaining - 1
     }
 
@@ -677,16 +682,32 @@ export async function spawnDraftsForTemplate(
   }
 
   // ── Persist the advanced cursor on the template ─────────────────────────
+  // Concurrency-safe read-modify-write (P6-FC-01): a receipt/payment trigger may
+  // have advanced this template's cursor / decremented its counter WHILE we were
+  // walking (the start-of-walk read and this persist are not one transaction).
+  // Re-read inside a transaction and:
+  //   • cursor: write max(ours, stored) so a concurrent advance is never rewound
+  //     (mirrors spawnNextTemplatedOccurrence's max guard);
+  //   • counter: subtract only the occurrences WE spawned (result.spawned) from
+  //     the CURRENT stored value, so our decrement composes with a concurrent
+  //     one instead of clobbering it (a blind write would lose that update).
   // lastSpawnedDate = the latest occurrence we processed (spawned or skipped).
-  // nextOccurrenceDate = the next un-processed occurrence (cursorDate).
-  // occurrencesRemaining = decremented count (null if not count-bounded).
-  await prisma.financeRecurringTemplate.update({
-    where: { id: template.id },
-    data: {
-      lastSpawnedDate: asOf,
-      nextOccurrenceDate: cursorDate,
-      occurrencesRemaining,
-    },
+  await prisma.$transaction(async (tx) => {
+    const fresh = await tx.financeRecurringTemplate.findUnique({
+      where: { id: template.id },
+      select: { nextOccurrenceDate: true, occurrencesRemaining: true },
+    })
+    const storedCursor = fresh?.nextOccurrenceDate ?? template.nextOccurrenceDate
+    const storedRemaining = fresh?.occurrencesRemaining ?? null
+    await tx.financeRecurringTemplate.update({
+      where: { id: template.id },
+      data: {
+        lastSpawnedDate: asOf,
+        nextOccurrenceDate: cursorDate > storedCursor ? cursorDate : storedCursor,
+        occurrencesRemaining:
+          storedRemaining != null ? storedRemaining - result.spawned : null,
+      },
+    })
   })
 
   return result
