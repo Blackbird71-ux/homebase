@@ -99,6 +99,7 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'PAYSLIP_NET_EXCEEDS_GROSS',    label: 'Payslip net pay never exceeds gross' },
   { code: 'PAYG_WITHHELD_RECONCILIATION', label: 'Payslip PAYG posts to the PAYG Withheld Receivable account' },
   { code: 'OPENING_BALANCE_JOURNAL_PRESENT', label: 'Configured opening balances have a posted journal' },
+  { code: 'PREPAYMENT_AMORTISATION_INCOMPLETE', label: 'Prepayment schedules fully amortise the capitalised net to zero' },
   { code: 'DATE_REQUIRED_PRESENT',        label: 'Required dates present and within a plausible range' },
   { code: 'FUTURE_DATED_POSTING',         label: 'Posted journals dated after today (review)' },
 ]
@@ -888,6 +889,65 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
           recordId: a.id, label: a.name,
           message: `Account "${a.name}" has an opening balance ${r2(a.openingBalance!)} but its opening-balance journal is unposted — it does not affect the ledger.`,
           detail: { openingBalance: r2(a.openingBalance!) },
+        })
+      }
+    }
+  }
+
+  // ── F.3 — Prepayment amortisation completeness ──────────────────────────────
+  // The prepaid-and-amortise lifecycle (finance-prepayment.ts) capitalises a
+  // material prepayment to Prepaid Expenses at the tax point (DR Prepaid / CR AP)
+  // and releases it over the coverage period (DR Expense / CR Prepaid, net/N each).
+  // When every period has posted, the release credits must fully offset the
+  // capitalised debit, returning this schedule's contribution to Prepaid Expenses
+  // to zero. Two ways that invariant breaks, both leaving the asset overstated:
+  //   1. the amortisation lines don't sum to the capitalised net (totalNet) — the
+  //      schedule can never release the full amount regardless of posting; and
+  //   2. a schedule flagged `completed` still has an unposted or reversed period —
+  //      the release is short, so Prepaid retains a stranded balance.
+  // totalNet is trusted as the capitalised figure (it is what createPrepaymentSchedule
+  // stored and what the tax-point accrual debited) rather than re-derived from the
+  // bill accrual, keeping the check self-contained. Cancelled schedules are excluded
+  // (their capitalisation is reversed on cancellation, not amortised).
+  const prepaymentSchedules = await prisma.financePrepaymentSchedule.findMany({
+    where: { familyId, status: { not: 'cancelled' } },
+    select: {
+      id: true, description: true, totalNet: true, periodCount: true, status: true,
+      lines: {
+        select: {
+          amount: true, posted: true,
+          journalEntry: { select: { isPosted: true, isReversed: true } },
+        },
+      },
+    },
+  })
+  for (const s of prepaymentSchedules) {
+    const lineSum = r2(s.lines.reduce((acc, l) => acc + l.amount, 0))
+    if (!approxEq(lineSum, s.totalNet)) {
+      add({
+        severity: 'critical', code: 'PREPAYMENT_AMORTISATION_INCOMPLETE', recordType: 'gl',
+        recordId: s.id, label: s.description,
+        message: `Amortisation lines total ${lineSum} ≠ capitalised net ${r2(s.totalNet)} (difference ${r2(Math.abs(lineSum - s.totalNet))}) — the schedule can never release Prepaid Expenses back to zero.`,
+        detail: { lineSum, totalNet: r2(s.totalNet), periodCount: s.periodCount, lineCount: s.lines.length },
+      })
+    }
+    if (s.lines.length !== s.periodCount) {
+      add({
+        severity: 'warning', code: 'PREPAYMENT_AMORTISATION_INCOMPLETE', recordType: 'gl',
+        recordId: s.id, label: s.description,
+        message: `Schedule has ${s.lines.length} amortisation line(s) but its periodCount is ${s.periodCount} — the schedule rows are inconsistent.`,
+        detail: { lineCount: s.lines.length, periodCount: s.periodCount },
+      })
+    }
+    if (s.status === 'completed') {
+      const unreleased = s.lines.filter(l => !(l.posted && l.journalEntry && l.journalEntry.isPosted && !l.journalEntry.isReversed))
+      if (unreleased.length > 0) {
+        const stranded = r2(unreleased.reduce((acc, l) => acc + l.amount, 0))
+        add({
+          severity: 'critical', code: 'PREPAYMENT_AMORTISATION_INCOMPLETE', recordType: 'gl',
+          recordId: s.id, label: s.description,
+          message: `Schedule is marked completed but ${unreleased.length} of ${s.lines.length} amortisation period(s) are unposted or reversed — Prepaid Expenses retains ${stranded} that should be zero.`,
+          detail: { unreleasedPeriods: unreleased.length, strandedAmount: stranded, totalNet: r2(s.totalNet) },
         })
       }
     }

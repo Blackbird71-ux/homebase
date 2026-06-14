@@ -307,6 +307,67 @@ describe('Integrity audit — RED reachability (injected bugs flip the audit)', 
     }
   })
 
+  it('prepayment whose amortisation lines do not total the capitalised net → PREPAYMENT_AMORTISATION_INCOMPLETE critical', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'PREPAYMENT_AMORTISATION_INCOMPLETE')).toBe('pass')
+
+    // totalNet 120 but the three lines sum to 100 — the schedule can never release
+    // Prepaid Expenses back to zero. A/B stand in as the prepaid/expense accounts;
+    // the check inspects the schedule rows only, not account type.
+    const schedule = await prisma.financePrepaymentSchedule.create({
+      data: {
+        familyId: FAMILY, prepaidAccountId: A, expenseAccountId: B,
+        description: 'RED short-amortisation prepayment', totalNet: 120,
+        coverageStart: new Date('2026-02-01T00:00:00Z'), coverageEnd: new Date('2026-04-30T00:00:00Z'),
+        periodCount: 3, status: 'active',
+        lines: { create: [
+          { periodIndex: 0, periodDate: new Date('2026-02-01T00:00:00Z'), amount: 40 },
+          { periodIndex: 1, periodDate: new Date('2026-03-01T00:00:00Z'), amount: 40 },
+          { periodIndex: 2, periodDate: new Date('2026-04-01T00:00:00Z'), amount: 20 }, // sums to 100, not 120
+        ] },
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'PREPAYMENT_AMORTISATION_INCOMPLETE')).toBe('fail')
+      expect(findings(after, 'PREPAYMENT_AMORTISATION_INCOMPLETE').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'critical' && f.recordId === schedule.id)).toBe(true)
+    } finally {
+      await prisma.financePrepaymentSchedule.delete({ where: { id: schedule.id } })
+    }
+  })
+
+  it('completed prepayment with an unposted period → PREPAYMENT_AMORTISATION_INCOMPLETE critical', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'PREPAYMENT_AMORTISATION_INCOMPLETE')).toBe('pass')
+
+    // Lines sum to totalNet (60), but the schedule is flagged completed while one
+    // period is still unposted — Prepaid Expenses retains 20 that should be zero.
+    const schedule = await prisma.financePrepaymentSchedule.create({
+      data: {
+        familyId: FAMILY, prepaidAccountId: A, expenseAccountId: B,
+        description: 'RED completed-but-unreleased prepayment', totalNet: 60,
+        coverageStart: new Date('2026-02-01T00:00:00Z'), coverageEnd: new Date('2026-04-30T00:00:00Z'),
+        periodCount: 3, status: 'completed',
+        lines: { create: [
+          { periodIndex: 0, periodDate: new Date('2026-02-01T00:00:00Z'), amount: 20, posted: true },
+          { periodIndex: 1, periodDate: new Date('2026-03-01T00:00:00Z'), amount: 20, posted: true },
+          { periodIndex: 2, periodDate: new Date('2026-04-01T00:00:00Z'), amount: 20, posted: false }, // not released
+        ] },
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'PREPAYMENT_AMORTISATION_INCOMPLETE')).toBe('fail')
+      expect(findings(after, 'PREPAYMENT_AMORTISATION_INCOMPLETE').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'critical' && f.recordId === schedule.id)).toBe(true)
+    } finally {
+      await prisma.financePrepaymentSchedule.delete({ where: { id: schedule.id } })
+    }
+  })
+
   it('baseline is clean again after every injection was cleaned up', async () => {
     const a = await runFinanceIntegrityAudit(FAMILY)
     expect(a.summary.critical).toBe(0)
