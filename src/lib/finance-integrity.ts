@@ -91,6 +91,8 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'AR_CONTROL_VS_SUBLEDGER',      label: 'AR control account reconciles to the income subledger' },
   { code: 'AP_CONTROL_UNRESOLVED',        label: 'AP control account is uniquely resolvable' },
   { code: 'AR_CONTROL_UNRESOLVED',        label: 'AR control account is uniquely resolvable' },
+  { code: 'NORMAL_BALANCE_VIOLATION',     label: 'Income/expense accounts on their normal side; no cross-posting' },
+  { code: 'GST_SPLIT_DIVERGENT',          label: 'Posted GST line equals gross × rate ÷ (100 + rate)' },
   { code: 'PAYSLIP_GROSS_MISMATCH',       label: 'Payslip gross = net + PAYG + super' },
   { code: 'PAYSLIP_JOURNAL_TOTAL',        label: 'Payslip receipt journal totals gross + SGC each side' },
   { code: 'PAYSLIP_SGC_ACCOUNTS_PRESENT', label: 'Payslips with SGC have both super GL accounts set' },
@@ -630,6 +632,54 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
         recordId: arCategory.id, label: 'Accounts Receivable',
         message: `AR control account ${r2(arControl)} does not reconcile to the income subledger ${r2(arSubledger)} (difference ${r2(Math.abs(arControl - arSubledger))}).`,
         detail: { glControl: arControl, subledger: arSubledger },
+      })
+    }
+  }
+
+  // ── E.2 — Normal balance side & income/expense cross-posting ────────────────
+  // §6.3 P&L sanity: income accounts carry a credit balance, expense accounts a
+  // debit balance, and no income entry posts to an expense category (or a bill to
+  // an income one).
+  //
+  // Wrong-side balance (warning): deriveJournalLineBalances returns netBalance on
+  // the account's normal side (positive = normal), so a materially negative
+  // income/expense balance is on the wrong side. It's a warning, not critical: a
+  // refund/reversal-heavy period can legitimately dip an account negative within
+  // the window — it's a review signal, not proof of corruption.
+  for (const [glId, bal] of balances) {
+    if ((bal.accountType === 'income' || bal.accountType === 'expense') && bal.netBalance < -TOL) {
+      const wrongSide = bal.accountType === 'income' ? 'debit' : 'credit'
+      const normalSide = bal.accountType === 'income' ? 'credit' : 'debit'
+      add({
+        severity: 'warning', code: 'NORMAL_BALANCE_VIOLATION', recordType: 'gl',
+        recordId: glId, label: bal.accountName,
+        message: `${bal.accountType === 'income' ? 'Income' : 'Expense'} account "${bal.accountName}" has a net ${wrongSide} balance ${r2(Math.abs(bal.netBalance))} — abnormal for an account whose normal side is ${normalSide}. Expected from refunds/reversals; otherwise investigate.`,
+        detail: { accountType: bal.accountType, netBalance: r2(bal.netBalance), normalSide },
+      })
+    }
+  }
+  // Cross-posting (critical, §6.3): a bill is an expense document and must not be
+  // categorised to an income account; an income entry must not be categorised to
+  // an expense account. Narrowly the income↔expense pair only — bills may
+  // legitimately capitalise to an asset (Prepaid Expenses) and income may offset a
+  // liability, so those are left alone. Voided records are excluded.
+  for (const b of bills) {
+    if (b.isVoided || !b.categoryId) continue
+    if (catType.get(b.categoryId) === 'income') {
+      add({
+        severity: 'critical', code: 'NORMAL_BALANCE_VIOLATION', recordType: 'bill',
+        recordId: b.id, label: b.name,
+        message: `Bill is categorised to an income account ${acct(b.categoryId)} — an expense document must not post to income (§6.3).`,
+      })
+    }
+  }
+  for (const e of incomes) {
+    if (e.isVoided || !e.categoryId) continue
+    if (catType.get(e.categoryId) === 'expense') {
+      add({
+        severity: 'critical', code: 'NORMAL_BALANCE_VIOLATION', recordType: 'income',
+        recordId: e.id, label: e.name,
+        message: `Income is categorised to an expense account ${acct(e.categoryId)} — income must not post to an expense (§6.3).`,
       })
     }
   }
