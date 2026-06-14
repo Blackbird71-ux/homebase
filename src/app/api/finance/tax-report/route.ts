@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { currentFyYear, fyDateRangeInTz, fyLabel } from '@/lib/finance-fy'
+import { currentFyContextInTz, fyDateRangeInTz, fyLabel } from '@/lib/finance-fy'
 import { localMidnightToUtc, dateStringInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { deriveGlActualTaxFields } from '@/lib/finance-tax-report'
 
@@ -51,8 +51,10 @@ export async function GET(request: NextRequest) {
   const fyStartMonth = family?.financeYearStartMonth ?? 7
   const tz = family?.timezone ?? DEFAULT_TIMEZONE
 
-  // Default to current financial year based on family's FY start month
-  const fyStartYear = currentFyYear(fyStartMonth)
+  // Default to current financial year based on family's FY start month.
+  // Read "now" in the family tz, not server-UTC, so a family east of UTC isn't
+  // handed the prior FY within the offset after a local FY rollover (P9-FC-01).
+  const fyStartYear = currentFyContextInTz(fyStartMonth, tz).fyYear
   const { start: defaultFrom, end: defaultTo } = fyDateRangeInTz(fyStartYear, fyStartMonth, tz)
 
   // from/to arrive as YYYY-MM-DD calendar dates and must be read in the family

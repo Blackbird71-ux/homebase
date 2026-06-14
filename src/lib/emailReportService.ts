@@ -2,7 +2,8 @@
 // Email service for report emails — reads SMTP from env vars, attaches .xlsx
 
 import nodemailer from 'nodemailer'
-import { buildYtdReport, getCurrentFY, type ReportPayload } from '@/lib/financeReport'
+import { buildYtdReport, type ReportPayload } from '@/lib/financeReport'
+import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { generateExcelBuffer } from './reportExcel'
 import { formatCurrency } from '@/lib/financeShared'
 
@@ -118,12 +119,19 @@ export async function sendReportEmail({
   recipients,
   note,
   snapshotId,
+  fyStartMonth = 7,
+  tz = DEFAULT_TIMEZONE,
 }: {
   familyId: string
   year: string
   recipients: string[]
   note?: string
   snapshotId?: string
+  // FY start month + family tz must match the ones the caller resolved the
+  // report `year` against, so the emailed workbook covers the same period the
+  // caller intended (omitting them silently defaulted to a July/Sydney FY — P9-FC-02).
+  fyStartMonth?: number
+  tz?: string
 }): Promise<{ success: true; emailIds: string[] } | { success: false; error: string }> {
   try {
     const smtp = getEnvSmtpConfig()
@@ -132,7 +140,7 @@ export async function sendReportEmail({
     }
 
     // Build the report data
-    const report = await buildYtdReport(familyId, year)
+    const report = await buildYtdReport(familyId, year, fyStartMonth, tz)
 
     // Generate excel attachment buffer
     const excelBuf = generateExcelBuffer(report)

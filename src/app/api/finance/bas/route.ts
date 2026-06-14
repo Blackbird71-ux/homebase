@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { DEFAULT_TIMEZONE, localMidnightToUtc } from '@/lib/timezone'
-import { fyStartYear, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
+import { currentFyContextInTz, fyLabel, monthRangeInTz } from '@/lib/finance-fy'
 import {
   computeBasFigures,
   gstCollectedContribution,
@@ -54,9 +54,10 @@ function basQuarterRange(
 }
 
 function currentBasQuarter(fyStartMonth: number, tz: string) {
-  const now = new Date()
-  const fyYear = fyStartYear(now, fyStartMonth)
-  const todayM1 = now.getMonth() + 1
+  // "Now" must be read in the family tz, not the server's UTC clock: within the
+  // UTC offset after a local quarter rollover, server-UTC still reports the prior
+  // calendar month and hands an east-of-UTC family the previous BAS quarter (P9-FC-01).
+  const { fyYear, month1: todayM1 } = currentFyContextInTz(fyStartMonth, tz)
   const monthsFromFyStart = (todayM1 - fyStartMonth + 12) % 12
   const qIdx = Math.floor(monthsFromFyStart / 3)
   return basQuarterRange(fyYear, fyStartMonth, qIdx, tz)

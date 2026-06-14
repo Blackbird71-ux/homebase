@@ -6,7 +6,8 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { DEFAULT_TIMEZONE } from '@/lib/timezone'
-import { buildYtdReport, getCurrentFY, fyDateRange } from '@/lib/financeReport'
+import { buildYtdReport } from '@/lib/financeReport'
+import { currentFyContextInTz, fyLabel } from '@/lib/finance-fy'
 import * as XLSX from 'xlsx'
 
 const CURRENCY_FMT = '$#,##0.00;($#,##0.00);"-"'
@@ -34,7 +35,10 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const mode = searchParams.get('mode') ?? 'budget' // budget | tax
-    const year = searchParams.get('year') ?? getCurrentFY()
+    // Default FY label is computed from "now" in the family tz (not server-UTC),
+    // so an east-of-UTC family isn't exported the prior FY within the offset after
+    // a local FY rollover (P9-FC-01/-02).
+    const year = searchParams.get('year') ?? fyLabel(currentFyContextInTz(fyStartMonth, tz).fyYear, fyStartMonth)
     const snapshotId = searchParams.get('snapshotId')
 
     // Build or load report data

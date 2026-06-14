@@ -5,7 +5,8 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { buildYtdReport, getCurrentFY } from '@/lib/financeReport'
+import { buildYtdReport } from '@/lib/financeReport'
+import { currentFyContextInTz, fyLabel } from '@/lib/finance-fy'
 import { sendReportEmail } from '@/lib/emailReportService'
 import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 
@@ -40,7 +41,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'At least one recipient is required' }, { status: 400 })
     }
 
-    const reportYear = year || getCurrentFY()
+    // Default FY label is computed from "now" in the family tz (not server-UTC),
+    // so an east-of-UTC family isn't emailed the prior FY within the offset after
+    // a local FY rollover (P9-FC-01/-02).
+    const reportYear = year || fyLabel(currentFyContextInTz(fyStartMonth, timezone).fyYear, fyStartMonth)
 
     // If snapshotId provided, ensure it exists and belongs to this family
     if (snapshotId) {
@@ -95,6 +99,8 @@ export async function POST(request: Request) {
       recipients,
       note,
       snapshotId: actualSnapshotId,
+      fyStartMonth,
+      tz: timezone,
     })
 
     if (!result.success) {

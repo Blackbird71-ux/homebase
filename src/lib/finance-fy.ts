@@ -346,3 +346,33 @@ export function fyMonthsCompleteInTz(now: Date, fyYear: number, fyStartMonth: nu
 export function currentFyYear(fyStartMonth: number): number {
   return fyStartYear(new Date(), fyStartMonth)
 }
+
+/**
+ * Today's FY start year AND local 1-based calendar month, both evaluated in the
+ * family IANA timezone from a SINGLE `new Date()` read. This is the tz-aware
+ * basis every DEFAULT report period should use (BAS quarter, tax-report FY,
+ * Excel/print-export FY, scheduled-email FY) so none of them recompute "now" in
+ * the server's UTC clock — which, within the UTC offset after a local FY/quarter
+ * rollover, hands an east-of-UTC family the PRIOR period (P9-FC-01/-02). Callers
+ * that pass an explicit from/to (or year) override this and are tz-correct already.
+ *
+ * Falls back to the runtime tz if `tz` is empty/invalid (mirrors fyStartYearInTz).
+ */
+export function currentFyContextInTz(
+  fyStartMonth: number,
+  tz: string,
+): { fyYear: number; month1: number } {
+  const now = new Date()
+  let year: number
+  let month1: number
+  if (!tz) {
+    year = now.getFullYear()
+    month1 = now.getMonth() + 1
+  } else {
+    const parts = getTzFormatter(tz).formatToParts(now)
+    year   = parseInt(parts.find(p => p.type === 'year')!.value, 10)
+    month1 = parseInt(parts.find(p => p.type === 'month')!.value, 10)
+  }
+  const fyYear = month1 >= fyStartMonth ? year : year - 1
+  return { fyYear, month1 }
+}

@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   fyColumnYearMonth,
   fyColumnMonthKey,
   monthRangeInTz,
   fyDateRangeInTz,
   fyMonthIndexInTz,
+  currentFyContextInTz,
 } from '@/lib/finance-fy'
 import { localMidnightToUtc } from '@/lib/timezone'
 
@@ -92,6 +93,49 @@ describe('FY window is timezone-aware at the boundary (tax-report + Annual P&L b
     expect(rangeEnd.toISOString()).toBe('2026-06-30T13:59:59.999Z')
     const lastDayTimed = new Date('2026-06-30T05:00:00.000Z')
     expect(lastDayTimed.getTime()).toBeLessThanOrEqual(rangeEnd.getTime())
+  })
+})
+
+describe('currentFyContextInTz — default report period reads "now" in the family tz (P9-FC-01/-02)', () => {
+  // Every DEFAULT server report period (tax-report FY, BAS quarter, Excel/print
+  // export FY, scheduled-email FY) derives the current FY/month from this helper.
+  // It must evaluate `new Date()` in the family tz, never the server's UTC clock —
+  // otherwise, within the UTC offset after a local rollover, an east-of-UTC family
+  // is handed the PRIOR period. Time is pinned with fake timers so the rollover
+  // instant is deterministic.
+  afterEach(() => { vi.useRealTimers() })
+
+  const fakeNow = (iso: string) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(iso))
+  }
+
+  it('REGRESSION (FY rollover): 2025-06-30T15:00Z is 1 Jul 01:00 Sydney → FY 2025-26, month 7', () => {
+    fakeNow('2025-06-30T15:00:00.000Z')
+    // UTC-naive read: still 30 Jun → fyYear 2024, month1 6 (the bug). Sydney: 1 Jul.
+    expect(currentFyContextInTz(7, TZ)).toEqual({ fyYear: 2025, month1: 7 })
+  })
+
+  it('REGRESSION (FY rollover, other side): 2025-06-30T13:00Z is 30 Jun 23:00 Sydney → FY 2024-25, month 6', () => {
+    fakeNow('2025-06-30T13:00:00.000Z')
+    expect(currentFyContextInTz(7, TZ)).toEqual({ fyYear: 2024, month1: 6 })
+  })
+
+  it('REGRESSION (BAS quarter rollover): 2025-09-30T15:00Z is 1 Oct 01:00 Sydney → month 10 (Q2), not 9 (Q1)', () => {
+    // currentBasQuarter derives the quarter from month1; a UTC-naive Sep read would
+    // keep an Oct-rolled-over family in the Jul–Sep quarter.
+    fakeNow('2025-09-30T15:00:00.000Z')
+    expect(currentFyContextInTz(7, TZ)).toEqual({ fyYear: 2025, month1: 10 })
+  })
+
+  it('a clean mid-FY instant resolves to its own FY/month', () => {
+    fakeNow('2026-03-15T02:00:00.000Z') // 13:00 Sydney, 15 Mar 2026
+    expect(currentFyContextInTz(7, TZ)).toEqual({ fyYear: 2025, month1: 3 })
+  })
+
+  it('honours a January-start (calendar-year) FY', () => {
+    fakeNow('2026-03-15T02:00:00.000Z')
+    expect(currentFyContextInTz(1, TZ)).toEqual({ fyYear: 2026, month1: 3 })
   })
 })
 

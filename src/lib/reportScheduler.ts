@@ -4,7 +4,7 @@
 import cron from 'node-cron'
 import { prisma } from '@/lib/prisma'
 import { buildYtdReport } from '@/lib/financeReport'
-import { currentFyYear, fyLabel } from '@/lib/finance-fy'
+import { currentFyContextInTz, fyLabel } from '@/lib/finance-fy'
 import { sendReportEmail } from '@/lib/emailReportService'
 import { DEFAULT_TIMEZONE } from '@/lib/timezone'
 
@@ -74,7 +74,11 @@ export function startReportScheduler(): void {
           try {
             // Use each family's configured FY start month (default 7 = July)
             const fyStartMonth = family.financeYearStartMonth ?? 7
-            const fyStartYr    = currentFyYear(fyStartMonth)
+            const tz           = family.timezone ?? DEFAULT_TIMEZONE
+            // "Now" is read in the family tz, not server-UTC: within the offset
+            // after a local FY rollover the UTC clock still reports the prior FY,
+            // snapshotting/emailing the wrong year (P9-FC-01).
+            const fyStartYr    = currentFyContextInTz(fyStartMonth, tz).fyYear
             const year         = fyLabel(fyStartYr, fyStartMonth) // e.g. "2025-26"
 
             // Check if a snapshot already exists for this period
@@ -93,7 +97,7 @@ export function startReportScheduler(): void {
             }
 
             // Build report — pass fyStartMonth and timezone so the report uses correct FY bounds (P2 fix #2)
-            const report = await buildYtdReport(family.id, year, fyStartMonth, family.timezone ?? DEFAULT_TIMEZONE)
+            const report = await buildYtdReport(family.id, year, fyStartMonth, tz)
 
             // Save snapshot
             const snapshot = await prisma.financeSnapshot.create({
@@ -114,6 +118,8 @@ export function startReportScheduler(): void {
               year,
               recipients,
               snapshotId: snapshot.id,
+              fyStartMonth,
+              tz,
             })
 
             if (emailResult.success) {

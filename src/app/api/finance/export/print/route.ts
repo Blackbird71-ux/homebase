@@ -6,7 +6,8 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { DEFAULT_TIMEZONE } from '@/lib/timezone'
-import { buildYtdReport, getCurrentFY } from '@/lib/financeReport'
+import { buildYtdReport } from '@/lib/financeReport'
+import { currentFyContextInTz, fyLabel } from '@/lib/finance-fy'
 import { formatCurrency } from '@/lib/financeShared'
 
 function fmt(n: number): string {
@@ -21,7 +22,6 @@ export async function GET(req: NextRequest) {
     const familyId = user.familyId
     const { searchParams } = new URL(req.url)
     const mode = searchParams.get('mode') ?? 'budget'
-    const year = searchParams.get('year') ?? getCurrentFY()
 
     const family = await prisma.family.findUnique({
       where: { id: familyId },
@@ -29,6 +29,11 @@ export async function GET(req: NextRequest) {
     })
     const fyStartMonth = family?.financeYearStartMonth ?? 7
     const tz = family?.timezone ?? DEFAULT_TIMEZONE
+
+    // Default FY label is computed from "now" in the family tz (not server-UTC),
+    // so an east-of-UTC family isn't printed the prior FY within the offset after
+    // a local FY rollover (P9-FC-01/-02).
+    const year = searchParams.get('year') ?? fyLabel(currentFyContextInTz(fyStartMonth, tz).fyYear, fyStartMonth)
 
     const report = await buildYtdReport(familyId, year, fyStartMonth, tz)
 

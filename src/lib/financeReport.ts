@@ -93,27 +93,12 @@ export interface ReportPayload {
   } | null
 }
 
-// ─── Re-export getCurrentFY for backward compatibility ─────────────────────────
-import { currentFyYear, fyLabel } from './finance-fy'
 import { toMonthlyAmount } from './financeShared'
 
-/**
- * Get current financial year string e.g. "2026-27" (uses default July FY).
- * Callers that need to support a configurable FY start month should compute
- * the FY label themselves using currentFyYear(fyStartMonth) + fyLabel().
- */
-export function getCurrentFY(): string {
-  return fyLabel(currentFyYear(7), 7)
-}
-
-/**
- * Legacy fyDateRange that takes a label string.
- * New code should use fyDateRangeInTz(fyYear, fyStartMonth, tz) from finance-fy.ts.
- */
-export function fyDateRange(fy: string): { start: Date; end: Date } {
-  const fyYear = parseFyLabel(fy)
-  return fyDateRangeInTz(fyYear, 7, DEFAULT_TIMEZONE)
-}
+// NOTE: the July-hardcoded getCurrentFY()/fyDateRange(label) helpers that used to
+// live here were removed (P9-FC-02). Server default report periods now derive the
+// current FY from family settings + tz via currentFyContextInTz() in finance-fy.ts;
+// the client uses the separate financeShared.getCurrentFY (already local-time).
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
