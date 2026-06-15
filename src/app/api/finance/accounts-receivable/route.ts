@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const asAtParam = searchParams.get('asAt')
+  const entityId  = searchParams.get('entityId') ?? undefined
   const familyId  = user.familyId
 
   const tz = await getFamilyTimezone(familyId)
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
 
   let glArBalance = 0
   if (arCategory) {
-    const journalBalances = await deriveJournalLineBalances(familyId, null, asAt)
+    const journalBalances = await deriveJournalLineBalances(familyId, null, asAt, entityId)
     const netBalance = journalBalances.get(arCategory.id)?.netBalance ?? 0
     glArBalance = Math.round(Math.max(0, netBalance) * 100) / 100
   }
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest) {
       invoiceReceived: true,
       invoiceReceivedDate: { not: null, lte: asAt },
       isVoided: false,
+      ...(entityId ? { entityId } : {}),
       OR: [
         { received: false },
         { received: true, receivedDate: { gt: asAt } },
@@ -109,6 +111,7 @@ export async function GET(request: NextRequest) {
       invoiceReceived: true,
       invoiceReceivedDate: null,
       isVoided: false,
+      ...(entityId ? { entityId } : {}),
     },
   })
 
@@ -210,6 +213,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     asAt:          asAtParam ?? todayStringInTz(tz),
+    entityId:      entityId ?? null,
     hasArAccount:  !!arCategory,
     glArBalance,
     subledgerTotal,
