@@ -4,7 +4,7 @@ import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 import { createGstJournalEntry } from '@/lib/finance-opening-balance'
 import { nextNJournalReferences } from '@/lib/finance-journal-ref'
-import { reverseJournalEntry, postJournalEntry } from '@/lib/finance-posting'
+import { reverseJournalEntry, postJournalEntry, postJournalWarning } from '@/lib/finance-posting'
 import type { JournalLine } from '@/lib/finance-posting'
 import { DEFAULT_TIMEZONE, localMidnightToUtc } from '@/lib/timezone'
 
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
   let glWarning: string | null = null
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
-      await postJournalEntry({
+      const outcome = await postJournalEntry({
         description: description?.trim() || payee?.trim() || type,
         lines: journalLines,
         date: txDate,
@@ -166,6 +166,7 @@ export async function POST(request: NextRequest) {
         entityId: json.entityId ?? null,
         sourceTransactionId: transaction.id,
       })
+      glWarning = postJournalWarning(outcome)
     } catch (err) {
       console.error('[transactions POST] Failed to create journal entry:', err)
     }
@@ -225,7 +226,7 @@ export async function POST(request: NextRequest) {
                 { glAccountId: cashGlId,               side: 'debit',  amount },
                 { glAccountId: transaction.categoryId, side: 'credit', amount },
               ]
-          await postJournalEntry({
+          const outcome = await postJournalEntry({
             description: desc,
             lines: autoLines,
             date: txDate,
@@ -233,6 +234,7 @@ export async function POST(request: NextRequest) {
             entityId: json.entityId ?? null,
             sourceTransactionId: transaction.id,
           })
+          glWarning = postJournalWarning(outcome)
         }
       } else if (transaction.accountId) {
         // Bank account selected but no glAccountId — log a warning.

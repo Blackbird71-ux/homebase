@@ -967,7 +967,32 @@ export interface PostJournalEntryParams {
   sourceTransactionId?: string
 }
 
-export async function postJournalEntry(params: PostJournalEntryParams): Promise<void> {
+// What postJournalEntry actually did. It never throws on a bad journal (so the
+// already-committed transaction is preserved) — instead it reports the outcome so
+// the caller can surface a warning rather than silently swallowing it.
+//   posted  — balanced, written and posted to the GL.
+//   draft   — unbalanced; saved as an UNPOSTED draft, NOT in the GL until fixed.
+//   skipped — a referenced GL account was missing; nothing was written.
+export type PostJournalOutcome = 'posted' | 'draft' | 'skipped'
+
+// Maps an outcome to a user-facing warning (null when nothing is wrong). Lives
+// here, next to the logic that produces the outcome, so every caller surfaces the
+// same authoritative message instead of hand-rolling its own.
+export function postJournalWarning(outcome: PostJournalOutcome): string | null {
+  switch (outcome) {
+    case 'posted':
+      return null
+    case 'draft':
+      return 'The transaction was saved, but its journal entry was unbalanced and ' +
+        'saved as an unposted draft — it will not appear in the General Ledger until ' +
+        'the lines are corrected.'
+    case 'skipped':
+      return 'The transaction was saved, but no journal entry was created because a ' +
+        'referenced GL account could not be found.'
+  }
+}
+
+export async function postJournalEntry(params: PostJournalEntryParams): Promise<PostJournalOutcome> {
   const { description, lines, date, familyId, entityId, sourceTransactionId } = params
 
   const glIds = [...new Set(lines.map(l => l.glAccountId))]
@@ -975,7 +1000,7 @@ export async function postJournalEntry(params: PostJournalEntryParams): Promise<
     where: { id: { in: glIds }, familyId },
     select: { id: true },
   })
-  if (valid.length !== glIds.length) return   // silently skip if any account missing
+  if (valid.length !== glIds.length) return 'skipped'   // a referenced account is missing
 
   // Balance decides posted-vs-draft — does NOT throw (unbalanced saves as a draft).
   const dr = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
@@ -1008,12 +1033,14 @@ export async function postJournalEntry(params: PostJournalEntryParams): Promise<
           },
         },
       })
-      return  // success
+      return balanced ? 'posted' : 'draft'   // success
     } catch (err: any) {
       if (err.code === 'P2002' && attempt < MAX_RETRIES - 1) continue
       throw err
     }
   }
+  // Exhausted reference-collision retries without writing anything.
+  return 'skipped'
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
