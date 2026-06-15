@@ -5,7 +5,7 @@
 // FinanceJournalLine entries (GL-first, same source as pnl/route.ts).
 // Tax estimates are computed from FinanceIncomeEntry (planning data).
 import { prisma } from '@/lib/prisma'
-import { DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { DEFAULT_TIMEZONE, addUtcMonths } from '@/lib/timezone'
 import {
   fyDateRangeInTz,
   parseFyLabel,
@@ -139,8 +139,12 @@ function lumpSumMonthIndices(
   const maxIterations = Math.ceil(12 / intervalMonths) + 2
 
   for (let i = -maxIterations; i <= maxIterations; i++) {
-    const occurrenceDate = new Date(baseDate)
-    occurrenceDate.setMonth(occurrenceDate.getMonth() + i * intervalMonths)
+    // P9-A3: clamp month-end via addUtcMonths (Jan 31 +3mo → Apr 30), matching
+    // the recurrence stepper. Raw setMonth rolls over (Jan 31 +3mo → May 1),
+    // shifting a month-end-anchored occurrence into the wrong FY month and, at an
+    // FY boundary, flipping whether this lump-sum income counts toward the FY.
+    // Non-accumulating: always offset from baseDate, never the prior iteration.
+    const occurrenceDate = addUtcMonths(baseDate, i * intervalMonths)
     const idx = fyMonthIndexInTz(occurrenceDate, fyYear, fyStartMonth, tz)
     if (idx >= 0 && idx < monthsComplete) {
       indices.push(idx)
