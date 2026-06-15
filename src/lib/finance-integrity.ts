@@ -93,6 +93,7 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'AR_CONTROL_UNRESOLVED',        label: 'AR control account is uniquely resolvable' },
   { code: 'NORMAL_BALANCE_VIOLATION',     label: 'Income/expense accounts on their normal side; no cross-posting' },
   { code: 'MEMBER_ATTRIBUTION_DANGLING',  label: 'Member-attributed accounts/income reference an existing family member' },
+  { code: 'DUPLICATE_DRAFT_SPAWN',        label: 'At most one live draft per recurring template occurrence' },
   { code: 'GST_SPLIT_DIVERGENT',          label: 'Posted GST line equals gross × rate ÷ (100 + rate)' },
   { code: 'PAYSLIP_GROSS_MISMATCH',       label: 'Payslip gross = net + PAYG + super' },
   { code: 'PAYSLIP_JOURNAL_TOTAL',        label: 'Payslip receipt journal totals gross + SGC each side' },
@@ -777,6 +778,56 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
       })
     }
   }
+
+  // ── E.5 — Duplicate draft spawn (WI-0b gap) ─────────────────────────────────
+  // Drafts are spawned with idempotency keyed on (templateId, occurrence-day):
+  // occurrenceDraftExists forbids a 2nd non-cancelled row for the same template +
+  // calendar-day (bills key on billDate, income on nextExpectedDate; both stored
+  // at UTC midnight). If that guard is ever bypassed (a race between the cron and a
+  // receipt/payment PATCH, or a code regression), two live draft successors exist
+  // for one occurrence — and it leaves NO GL anomaly to catch it elsewhere: each
+  // draft's journal is unposted, and once approved the AP/AR control and subledger
+  // double together so they still reconcile. So this is the only check that can see
+  // it. The invariant is per (template, occurrence-day), NOT per parent: catch-up
+  // legitimately spawns several drafts for one template across DIFFERENT occurrence
+  // days. Warning (review): a duplicate overstates the liability/expense once
+  // approved, but is recoverable by voiding one — it doesn't break DR=CR. Voided and
+  // cancelled rows are excluded (not live). Manual (non-template) bills/income have
+  // no templateId and no idempotency invariant, so they're out of scope.
+  const utcDay = (d: Date) => d.toISOString().slice(0, 10)
+  const flagDupGroups = (
+    rows: { id: string; name: string; templateId: string | null; day: Date | null }[],
+    recordType: 'bill' | 'income',
+  ) => {
+    const groups = new Map<string, { name: string; templateId: string; ids: string[] }>()
+    for (const r of rows) {
+      if (!r.templateId || !r.day) continue
+      const key = `${r.templateId}|${utcDay(r.day)}`
+      const g = groups.get(key) ?? { name: r.name, templateId: r.templateId, ids: [] }
+      g.ids.push(r.id)
+      groups.set(key, g)
+    }
+    for (const [key, g] of groups) {
+      if (g.ids.length <= 1) continue
+      const day = key.split('|')[1]
+      add({
+        severity: 'warning', code: 'DUPLICATE_DRAFT_SPAWN', recordType,
+        recordId: g.templateId, label: g.name,
+        message: `Template "${g.name}" has ${g.ids.length} live ${recordType} drafts for the ${day} occurrence (expected ≤1) — duplicate spawn; void all but one.`,
+        detail: { templateId: g.templateId, occurrenceDay: day, duplicateIds: g.ids },
+      })
+    }
+  }
+  const dupBills = await prisma.financeRecurringBill.findMany({
+    where: { familyId, templateId: { not: null }, status: { not: 'cancelled' }, isVoided: false },
+    select: { id: true, name: true, templateId: true, billDate: true },
+  })
+  flagDupGroups(dupBills.map(b => ({ id: b.id, name: b.name, templateId: b.templateId, day: b.billDate })), 'bill')
+  const dupIncomes = await prisma.financeIncomeEntry.findMany({
+    where: { familyId, templateId: { not: null }, status: { not: 'cancelled' }, isVoided: false },
+    select: { id: true, name: true, templateId: true, nextExpectedDate: true },
+  })
+  flagDupGroups(dupIncomes.map(e => ({ id: e.id, name: e.name, templateId: e.templateId, day: e.nextExpectedDate })), 'income')
 
   // ── E.3 — GST split correctness ─────────────────────────────────────────────
   // §2.4: when a category is gstApplicable, the GST component split to the GST GL

@@ -25,13 +25,16 @@
  *   • 3-line GST category drift→ TX_JOURNAL_ACCOUNT_DRIFT
  *   • dangling member (account) → MEMBER_ATTRIBUTION_DANGLING
  *   • dangling member (income)  → MEMBER_ATTRIBUTION_DANGLING (parity)
+ *   • duplicate draft (bill)    → DUPLICATE_DRAFT_SPAWN
+ *   • duplicate draft (income)  → DUPLICATE_DRAFT_SPAWN (parity)
  *
- * KNOWN GAP (no red test — the auditor has no check for it): a DUPLICATE SPAWN (two
- * draft successors for one paid bill/income) produces no GL anomaly — each draft's
- * journal is unposted (so ORPHANED_DRAFT_JOURNAL ignores it while linked), and once
- * paid both the AP/AR control and subledger double together, so they still reconcile.
- * Detecting it needs a new row-level check (≤1 live draft successor per parent). Logged
- * for a follow-up auditor-only WI alongside P10-G1 (G3 is now covered below).
+ * DUPLICATE SPAWN (two draft successors for one occurrence) produces no GL anomaly —
+ * each draft's journal is unposted (so ORPHANED_DRAFT_JOURNAL ignores it while linked),
+ * and once paid both the AP/AR control and subledger double together, so they still
+ * reconcile. DUPLICATE_DRAFT_SPAWN is the only check that sees it; the invariant is per
+ * (template, occurrence-day), NOT per parent (catch-up legitimately spawns several drafts
+ * across different days). Proven RED below. P10-G1 (3-line GST drift on cash-leg) remains
+ * the only logged auditor gap without a check.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupFinanceTestDb, FINANCE_TEST_FAMILY, type FinanceTestDb } from './_finance-test-db'
@@ -457,6 +460,71 @@ describe('Integrity audit — RED reachability (injected bugs flip the audit)', 
         f.severity === 'warning' && f.recordId === income.id)).toBe(true)
     } finally {
       await prisma.financeIncomeEntry.delete({ where: { id: income.id } })
+    }
+  })
+
+  it('two live bill drafts for one template occurrence → DUPLICATE_DRAFT_SPAWN warning', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'DUPLICATE_DRAFT_SPAWN')).toBe('pass')
+
+    const tpl = await prisma.financeRecurringTemplate.create({
+      data: {
+        familyId: FAMILY, kind: 'bill', name: 'RED Dup Bill Template', frequency: 'monthly', createdBy: 'red',
+        startDate: new Date('2026-03-01T00:00:00Z'), nextOccurrenceDate: new Date('2026-03-01T00:00:00Z'),
+      },
+      select: { id: true },
+    })
+    const occ = new Date('2026-03-01T00:00:00Z')
+    // Two non-cancelled, non-voided draft bills for the SAME (template, occurrence-day).
+    const d1 = await prisma.financeRecurringBill.create({
+      data: { name: 'RED Dup Bill', amount: 50, nextDueDate: occ, billDate: occ, templateId: tpl.id, status: 'draft', familyId: FAMILY },
+      select: { id: true },
+    })
+    const d2 = await prisma.financeRecurringBill.create({
+      data: { name: 'RED Dup Bill', amount: 50, nextDueDate: occ, billDate: occ, templateId: tpl.id, status: 'draft', familyId: FAMILY },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'DUPLICATE_DRAFT_SPAWN')).toBe('fail')
+      expect(findings(after, 'DUPLICATE_DRAFT_SPAWN').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'warning' && f.recordId === tpl.id)).toBe(true)
+    } finally {
+      await prisma.financeRecurringBill.delete({ where: { id: d1.id } })
+      await prisma.financeRecurringBill.delete({ where: { id: d2.id } })
+      await prisma.financeRecurringTemplate.delete({ where: { id: tpl.id } })
+    }
+  })
+
+  it('two live income drafts for one template occurrence → DUPLICATE_DRAFT_SPAWN warning (parity)', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'DUPLICATE_DRAFT_SPAWN')).toBe('pass')
+
+    const tpl = await prisma.financeRecurringTemplate.create({
+      data: {
+        familyId: FAMILY, kind: 'income', name: 'RED Dup Income Template', frequency: 'monthly', createdBy: 'red',
+        startDate: new Date('2026-03-15T00:00:00Z'), nextOccurrenceDate: new Date('2026-03-15T00:00:00Z'),
+      },
+      select: { id: true },
+    })
+    const occ = new Date('2026-03-15T00:00:00Z')
+    const d1 = await prisma.financeIncomeEntry.create({
+      data: { name: 'RED Dup Income', amount: 80, nextExpectedDate: occ, templateId: tpl.id, status: 'draft', familyId: FAMILY },
+      select: { id: true },
+    })
+    const d2 = await prisma.financeIncomeEntry.create({
+      data: { name: 'RED Dup Income', amount: 80, nextExpectedDate: occ, templateId: tpl.id, status: 'draft', familyId: FAMILY },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'DUPLICATE_DRAFT_SPAWN')).toBe('fail')
+      expect(findings(after, 'DUPLICATE_DRAFT_SPAWN').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'warning' && f.recordId === tpl.id)).toBe(true)
+    } finally {
+      await prisma.financeIncomeEntry.delete({ where: { id: d1.id } })
+      await prisma.financeIncomeEntry.delete({ where: { id: d2.id } })
+      await prisma.financeRecurringTemplate.delete({ where: { id: tpl.id } })
     }
   })
 
