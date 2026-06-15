@@ -9,6 +9,7 @@ import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
 import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
 import { deleteUnreceivedIncomeDescendants } from '@/lib/finance-descendants'
+import { receiveIncomeStage1 } from '@/lib/finance-income-receive'
 import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 
 const INCOME_INCLUDE = {
@@ -703,57 +704,16 @@ export async function PATCH(request: NextRequest) {
     const remittanceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
     try {
       await prisma.$transaction(async (tx) => {
-        // 1. Post the Stage-1 accrual (DR AR / CR Income) via the shared helper.
-        // It promotes a balanced unposted draft journal as-is (preserving any
-        // GST split) or creates a fresh 2-line entry (AGENTS.md Finance rule 1 —
-        // no inline GL posting). If the linked journal is ALREADY posted, re-use
-        // it to avoid a duplicate that would double revenue/AR.
-        let journalEntryId: string
-        const existingJeId: string | null = existing.journalEntryId ?? null
-        const alreadyPosted = existingJeId
-          ? (await tx.financeJournalEntry.findFirst({
-              where: { id: existingJeId, familyId: user.familyId },
-              select: { isPosted: true },
-            }))?.isPosted ?? false
-          : false
-
-        if (existingJeId && alreadyPosted) {
-          journalEntryId = existingJeId
-        } else {
-          const posted = await postIncomeAccrualJournal(tx, {
-            familyId: user.familyId,
-            description: existing.name,
-            amount: existing.amount,
-            incomeGlAccountId: existing.categoryId!,
-            entityId: existing.entityId ?? null,
-            date: remittanceDate,
-            draftJournalEntryId: existingJeId,
-          })
-          journalEntryId = posted.journalEntryId
-        }
-
-        // 2. Create tracking transaction
-        const remittanceTx = await tx.financeTransaction.create({
-          data: {
-            type: 'income', amount: existing.amount,
-            accountId: existing.accountId, categoryId: existing.categoryId,
-            description: `${existing.name} (remittance received)`,
-            date: remittanceDate, isRecurring: existing.incomeType !== 'one-off',
-            vendorId: existing.vendorId, notes: existing.notes,
-            memberId: existing.memberId, locationId: existing.locationId,
-            isCleared: false, isTransfer: false,
-            createdBy: user.id, familyId: user.familyId, entityId: existing.entityId,
-          },
-        })
-
-        // 3. Update income entry ATOMICALLY with GL write
-        await tx.financeIncomeEntry.update({
-          where: { id },
-          data: {
-            invoiceReceived: true, invoiceReceivedDate: remittanceDate,
-            invoiceTxId: remittanceTx.id, transactionId: remittanceTx.id,
-            journalEntryId,
-          },
+        // Stage-1 accrual + remittance transaction + atomic flag update via the
+        // shared helper (AGENTS.md Finance rule 1 — no inline GL posting; mirror
+        // of bills' receiveBillStage1). It promotes the linked balanced draft
+        // (preserving any GST split) or posts a fresh DR AR / CR Income entry,
+        // re-using an already-posted journal rather than duplicating it.
+        await receiveIncomeStage1(tx, {
+          entry: existing,
+          remittanceDate,
+          userId: user.id,
+          familyId: user.familyId,
         })
       })
     } catch (err) {
