@@ -242,12 +242,13 @@ export async function PUT(request: NextRequest) {
   // so a REJECTED edit never leaves the row and GL diverged. "Reconcile if unpaid,
   // block if paid": once cash is received the AR has been cleared, so the accrual
   // cannot be safely reversed here.
+  const invoiceReceivedTransition = invoiceReceived === true && !existing.invoiceReceived
   const incomeGlFieldChanged =
     (categoryId !== undefined && (categoryId ?? null) !== existing.categoryId) ||
     (entityId !== undefined && (entityId ?? null) !== existing.entityId) ||
     (amount !== undefined && parseFloat(amount) !== existing.amount)
   const needsAccrualResync =
-    incomeGlFieldChanged && existing.invoiceReceived === true && !!existing.journalEntryId
+    incomeGlFieldChanged && existing.invoiceReceived === true && !invoiceReceivedTransition && !!existing.journalEntryId
 
   if (needsAccrualResync) {
     if (existing.received) {
@@ -289,8 +290,10 @@ export async function PUT(request: NextRequest) {
       ...(dayOfMonth !== undefined && { dayOfMonth: dayOfMonth != null ? parseInt(dayOfMonth, 10) : null }),
       ...(monthOfYear !== undefined && { monthOfYear: monthOfYear != null ? parseInt(monthOfYear, 10) : null }),
       ...(recurrenceInterval !== undefined && { recurrenceInterval: recurrenceInterval ?? null }),
-      ...(invoiceReceived !== undefined && { invoiceReceived }),
-      ...(invoiceReceivedDate !== undefined && { invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null }),
+      // On a false→true transition the flags are set ATOMICALLY with the GL
+      // write in Step 2 below — never here, ahead of the journal (parity with bills).
+      ...(invoiceReceived !== undefined && !invoiceReceivedTransition && { invoiceReceived }),
+      ...(invoiceReceivedDate !== undefined && !invoiceReceivedTransition && { invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null }),
       ...(notes !== undefined && { notes: notes ?? null }),
       ...(memberId !== undefined && { memberId: memberId ?? null }),
       ...(locationId !== undefined && { locationId: locationId ?? null }),
@@ -304,50 +307,70 @@ export async function PUT(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
-  // Upsert journal entry if lines provided.
-  // F-I5 guard: if the existing journal is already posted, skip the upsert entirely.
-  // upsertIncomeJournalEntry falls through to create a new journal when it finds
-  // an already-posted entry, which orphans the original and doubles revenue/AR.
-  if (Array.isArray(journalLines) && journalLines.length >= 2) {
+  // If invoiceReceived is transitioning false->true, post the GL accrual journal
+  // (invoiceReceivedTransition computed in the pre-edit GL guard above).
+  const hasCustomLines = Array.isArray(journalLines) && journalLines.length >= 2
+
+  // Step 1: refresh the draft journal from custom lines if provided.
+  // GL-FIRST: write the user's split as a balanced UNPOSTED draft FIRST so any
+  // subsequent posting step promotes it as-is rather than falling back to a
+  // hardcoded 2-line auto entry. Skipped when the entry is already received —
+  // a posted journal is locked and must not be silently overwritten on save.
+  let workingJeId: string | null = existing.journalEntryId ?? null
+  if (hasCustomLines && !existing.invoiceReceived) {
     try {
-      const existingJeId: string | null = existing.journalEntryId ?? null
-      const existingJe = existingJeId
-        ? await prisma.financeJournalEntry.findFirst({
-            where: { id: existingJeId, familyId: user.familyId },
-            select: { isPosted: true },
-          })
-        : null
-      if (existingJe?.isPosted) {
-        // Journal already posted — do not overwrite or create a duplicate
-      } else {
-        const accrualDate = nextExpectedDate ? new Date(nextExpectedDate) : existing.nextExpectedDate
-        const journalEntryId = await upsertIncomeJournalEntry(
-          name ?? existing.name,
-          existingJeId,
-          journalLines,
-          accrualDate,
-          user.familyId,
-          entityId !== undefined ? (entityId ?? null) : existing.entityId,
-        )
-        if (journalEntryId !== existingJeId) {
-          await prisma.financeIncomeEntry.update({
-            where: { id: entry.id },
-            data: {
-              journalEntryId,
-              // P4-FC-03 (parity with POST): a freshly-posted accrual recognises the
-              // income on the AR control account, so invoiceReceived must track it for
-              // the AR subledger to include it and reconcile. Respect an explicit
-              // invoiceReceived already applied in the row update above.
-              ...(entry.invoiceReceived ? {} : {
-                invoiceReceived: true,
-                invoiceReceivedDate: entry.invoiceReceivedDate ?? accrualDate,
-              }),
-            },
-          })
-        }
+      const accrualDate = nextExpectedDate ? new Date(nextExpectedDate) : existing.nextExpectedDate
+      workingJeId = await upsertIncomeJournalEntry(
+        name ?? existing.name,
+        workingJeId,
+        journalLines,
+        accrualDate,
+        user.familyId,
+        entityId !== undefined ? (entityId ?? null) : existing.entityId,
+      )
+      if (workingJeId !== (existing.journalEntryId ?? null)) {
+        await prisma.financeIncomeEntry.update({
+          where: { id: entry.id },
+          data: { journalEntryId: workingJeId },
+        })
       }
     } catch (err) {
-      console.error('[income PUT] Failed to upsert journal entry:', err)
+      // Unbalanced or invalid lines. Surface as 422; other field updates are
+      // already saved, the journal is not modified.
+      console.error('[income PUT] Failed to upsert draft journal:', err)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      return NextResponse.json({ error: `Failed to save journal lines: ${msg}` }, { status: 422 })
+    }
+  }
+
+  // Step 2: promote to posted on a false->true transition via the shared Stage-1
+  // helper — accrual (promoting the just-written draft via workingJeId, preserving
+  // any custom split) → remittance transaction → income flags, all in ONE
+  // $transaction. On failure the row stays un-received and the user gets a 422.
+  if (invoiceReceivedTransition) {
+    const effectiveCategoryId = categoryId !== undefined ? (categoryId ?? null) : existing.categoryId
+    if (!effectiveCategoryId) {
+      return NextResponse.json(
+        { error: 'Income must have a category before posting' },
+        { status: 422 },
+      )
+    }
+    try {
+      await prisma.$transaction(async (tx) => {
+        await receiveIncomeStage1(tx, {
+          entry,
+          remittanceDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
+          userId: user.id,
+          familyId: user.familyId,
+          draftJournalEntryId: workingJeId,
+        })
+      })
+    } catch (err) {
+      console.error('[income PUT] ATOMIC invoice posting failed:', err)
+      return NextResponse.json(
+        { error: 'Failed to post income to General Ledger. The income remains un-received; please retry.' },
+        { status: 422 },
+      )
     }
   }
 
@@ -389,7 +412,13 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(entry)
+  // Re-fetch so the response reflects Step 1/2 updates (journalEntryId, the
+  // atomically-set invoiceReceived flags) rather than the stale row-update object.
+  const finalEntry = await prisma.financeIncomeEntry.findFirst({
+    where: { id, familyId: user.familyId },
+    include: INCOME_INCLUDE,
+  })
+  return NextResponse.json(finalEntry ?? entry)
 }
 
 export async function DELETE(request: NextRequest) {
