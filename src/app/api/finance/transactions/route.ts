@@ -321,7 +321,9 @@ export async function PUT(request: NextRequest) {
   const glAccountChanged   = glAccountId !== undefined && glAccountId !== existing.glAccountId
   const typeChanged        = type       !== undefined && type        !== existing.type
 
+  let glWarning: string | null = null
   if (amountChanged || dateChanged || descriptionChanged || payeeChanged || categoryChanged || glAccountChanged || typeChanged) {
+    const glAccountEditPending = categoryChanged || glAccountChanged || typeChanged
     try {
       const linkedJournal = await prisma.financeJournalEntry.findFirst({
         where: { sourceTransactionId: id, familyId: user.familyId, type: 'auto_transaction' },
@@ -351,7 +353,7 @@ export async function PUT(request: NextRequest) {
           creditLine.glAccountId === oldCreditGl
 
         const repoint =
-          (categoryChanged || glAccountChanged || typeChanged) &&
+          glAccountEditPending &&
           canonicalShape &&
           (transaction.type === 'expense' || transaction.type === 'income') &&
           !!transaction.categoryId && !!transaction.glAccountId
@@ -377,13 +379,32 @@ export async function PUT(request: NextRequest) {
             }),
           ),
         ])
+
+        // A GL-account change was requested but the journal wasn't in canonical shape
+        // (hand-adjusted, or the new type/accounts weren't both present), so only the
+        // amounts synced and the journal's GL accounts are now stale vs. the row.
+        if (glAccountEditPending && !repoint) {
+          glWarning = 'The transaction was saved, but its linked journal entry could not be ' +
+            're-pointed to the new account(s) automatically — its General Ledger accounts may ' +
+            'be out of date. Review the journal entry.'
+        }
+      } else if (linkedJournal) {
+        // 3-line GST journal (or any non-2-line shape): deliberately not auto-synced, so its
+        // amounts/accounts are now stale vs. the edited row. Surface it instead of swallowing.
+        glWarning = 'The transaction was saved, but its linked GST/multi-line journal entry was ' +
+          'not updated automatically — its General Ledger amounts may be out of date. Correct ' +
+          'the journal entry manually.'
       }
     } catch (err) {
       console.error('[transactions PUT] Failed to sync journal entry:', err)
+      glWarning = 'The transaction was saved, but updating its linked journal entry in the ' +
+        'General Ledger failed — the GL may be out of date. Please retry the edit.'
     }
   }
 
-  return NextResponse.json(transaction)
+  return NextResponse.json(
+    glWarning ? { ...transaction, warning: glWarning } : transaction,
+  )
 }
 
 export async function DELETE(request: NextRequest) {
