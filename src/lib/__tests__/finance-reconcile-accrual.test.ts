@@ -109,8 +109,8 @@ describe('reconcilePostedAccrualOnEdit', () => {
     expect(fresh.data.entityId).toBe('ent-1')
     expect(fresh.data.date).toBe(ACCRUAL_DATE)
     expect((fresh.data.lines as { create: unknown[] }).create).toEqual([
-      { glAccountId: 'gl-newexp', side: 'debit', amount: 74.18, description: 'Apco Bendigo Fuel' },
-      { glAccountId: 'gl-ap', side: 'credit', amount: 74.18, description: 'AP: Apco Bendigo Fuel' },
+      { glAccountId: 'gl-newexp', side: 'debit', amount: 74.18, description: 'Apco Bendigo Fuel', memberId: null },
+      { glAccountId: 'gl-ap', side: 'credit', amount: 74.18, description: 'AP: Apco Bendigo Fuel', memberId: null },
     ])
 
     // Linked invoice transaction re-pointed to the new economics.
@@ -145,11 +145,40 @@ describe('reconcilePostedAccrualOnEdit', () => {
     expect(res).toEqual({ newJournalEntryId: 'je-new' })
     const fresh = (vi.mocked(prisma.financeJournalEntry.create).mock.calls[1][0]) as { data: Record<string, unknown> }
     expect((fresh.data.lines as { create: unknown[] }).create).toEqual([
-      { glAccountId: 'gl-ar', side: 'debit', amount: 200, description: 'AR: Salary' },
-      { glAccountId: 'gl-income', side: 'credit', amount: 200, description: 'Salary' },
+      { glAccountId: 'gl-ar', side: 'debit', amount: 200, description: 'AR: Salary', memberId: null },
+      { glAccountId: 'gl-income', side: 'credit', amount: 200, description: 'Salary', memberId: null },
     ])
     // No invoice tx to re-sync.
     expect(prisma.financeTransaction.update).not.toHaveBeenCalled()
+  })
+
+  it('carries per-member attribution from the stale accrual onto the fresh lines', async () => {
+    const { prisma } = await getMocks()
+    // A member-attributed posted accrual: memberId rides on the source lines.
+    vi.mocked(prisma.financeJournalEntry.findFirst).mockResolvedValue({
+      ...postedBillAccrual(),
+      lines: [
+        { glAccountId: 'gl-visa', side: 'debit', amount: 74.18, description: 'Apco Bendigo Fuel', memberId: 'mem-x' },
+        { glAccountId: 'gl-ap', side: 'credit', amount: 74.18, description: 'AP: Apco Bendigo Fuel', memberId: 'mem-x' },
+      ],
+    } as never)
+
+    await reconcilePostedAccrualOnEdit({
+      kind: 'bill',
+      familyId: 'fam-1',
+      journalEntryId: 'je-old',
+      description: 'Apco Bendigo Fuel',
+      amount: 74.18,
+      glAccountId: 'gl-newexp',
+      entityId: 'ent-1',
+      invoiceTxId: 'tx-1',
+    })
+
+    const fresh = (vi.mocked(prisma.financeJournalEntry.create).mock.calls[1][0]) as { data: Record<string, unknown> }
+    expect((fresh.data.lines as { create: unknown[] }).create).toEqual([
+      { glAccountId: 'gl-newexp', side: 'debit', amount: 74.18, description: 'Apco Bendigo Fuel', memberId: 'mem-x' },
+      { glAccountId: 'gl-ap', side: 'credit', amount: 74.18, description: 'AP: Apco Bendigo Fuel', memberId: 'mem-x' },
+    ])
   })
 
   it('blocks a custom split (more than 2 lines) and writes nothing', async () => {

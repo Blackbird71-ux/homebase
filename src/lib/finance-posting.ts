@@ -787,14 +787,22 @@ export async function reconcilePostedAccrualOnEdit(
     ? await ensureAccountsPayableCategory(familyId)
     : await ensureAccountsReceivableCategory(familyId)
 
+  // P8-A1: preserve per-member attribution across the reverse+repost. This is
+  // null in every path reachable today (member-bearing lines come only from
+  // multi-line payslips, which the 2-line guard above rejects), so behaviour is
+  // unchanged — but it keeps the module's "memberId is ALWAYS copied through"
+  // contract and avoids a silent attribution drop if a 2-line member-attributed
+  // accrual is ever introduced.
+  const carriedMemberId = je.lines.find(l => l.memberId)?.memberId ?? null
+
   const freshLines: JournalLine[] = kind === 'bill'
     ? [
-        { glAccountId,                side: 'debit',  amount, description },
-        { glAccountId: counterpartId, side: 'credit', amount, description: `AP: ${description}` },
+        { glAccountId,                side: 'debit',  amount, description, memberId: carriedMemberId },
+        { glAccountId: counterpartId, side: 'credit', amount, description: `AP: ${description}`, memberId: carriedMemberId },
       ]
     : [
-        { glAccountId: counterpartId, side: 'debit',  amount, description: `AR: ${description}` },
-        { glAccountId,                side: 'credit', amount, description },
+        { glAccountId: counterpartId, side: 'debit',  amount, description: `AR: ${description}`, memberId: carriedMemberId },
+        { glAccountId,                side: 'credit', amount, description, memberId: carriedMemberId },
       ]
 
   await assertGlAccountsBelongToFamily(prisma, freshLines, familyId)
@@ -830,6 +838,7 @@ export async function reconcilePostedAccrualOnEdit(
             side: l.side,
             amount: l.amount,
             description: l.description ?? null,
+            memberId: l.memberId ?? null,
           })),
         },
       },
