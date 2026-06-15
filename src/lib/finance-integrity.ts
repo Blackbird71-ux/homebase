@@ -92,6 +92,7 @@ const CHECK_CATALOG: { code: string; label: string }[] = [
   { code: 'AP_CONTROL_UNRESOLVED',        label: 'AP control account is uniquely resolvable' },
   { code: 'AR_CONTROL_UNRESOLVED',        label: 'AR control account is uniquely resolvable' },
   { code: 'NORMAL_BALANCE_VIOLATION',     label: 'Income/expense accounts on their normal side; no cross-posting' },
+  { code: 'MEMBER_ATTRIBUTION_DANGLING',  label: 'Member-attributed accounts/income reference an existing family member' },
   { code: 'GST_SPLIT_DIVERGENT',          label: 'Posted GST line equals gross × rate ÷ (100 + rate)' },
   { code: 'PAYSLIP_GROSS_MISMATCH',       label: 'Payslip gross = net + PAYG + super' },
   { code: 'PAYSLIP_JOURNAL_TOTAL',        label: 'Payslip receipt journal totals gross + SGC each side' },
@@ -123,7 +124,7 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
   // Category id → name/type map for human-readable messages.
   const categories = await prisma.financeCategory.findMany({
     where: { familyId },
-    select: { id: true, name: true, type: true, isSystem: true, gstApplicable: true, gstRate: true },
+    select: { id: true, name: true, type: true, isSystem: true, gstApplicable: true, gstRate: true, memberId: true },
   })
   const catName = new Map(categories.map(c => [c.id, c.name]))
   const catType = new Map(categories.map(c => [c.id, c.type]))
@@ -139,6 +140,15 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
   )
   const acct = (id: string | null | undefined) =>
     id ? `${catName.get(id) ?? '(unknown)'} (${catType.get(id) ?? '?'})` : '(none)'
+
+  // Family member ids — for member-attribution referential checks (E.4). memberId
+  // on FinanceCategory / FinanceIncomeEntry is a loose String? (no FK, no onDelete),
+  // so a deleted member leaves a dangling id behind. The tax report keys per-person
+  // attribution off these ids (memberMap.get(id)); a dangling id resolves to no name
+  // and silently buckets that account's wages under a phantom member.
+  const memberIds = new Set(
+    (await prisma.user.findMany({ where: { familyId }, select: { id: true } })).map(u => u.id),
+  )
 
   // Read-only AP/AR control-account discovery — mirrors accounts-payable/route.ts
   // and accounts-receivable/route.ts. Does NOT call ensureAccounts*Category.
@@ -313,7 +323,7 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
   const incomes = await prisma.financeIncomeEntry.findMany({
     where: { familyId },
     select: {
-      id: true, name: true, amount: true, categoryId: true, entityId: true,
+      id: true, name: true, amount: true, categoryId: true, entityId: true, memberId: true,
       invoiceReceived: true, invoiceReceivedDate: true, isVoided: true, received: true, receiptJournalEntryId: true,
       journalEntry: {
         select: {
@@ -732,6 +742,38 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
         severity: 'critical', code: 'NORMAL_BALANCE_VIOLATION', recordType: 'income',
         recordId: e.id, label: e.name,
         message: `Income is categorised to an expense account ${acct(e.categoryId)} — income must not post to an expense (§6.3).`,
+      })
+    }
+  }
+
+  // ── E.4 — Member-attribution referential integrity (G3) ─────────────────────
+  // The Tax Report attributes GL actuals per-person off the GL account's memberId
+  // (deriveGlActualTaxFields) and income estimates off the income entry's memberId,
+  // resolving each id against the family's members (memberMap.get(id)). Both columns
+  // are loose String? with no FK/onDelete, so deleting a member leaves a dangling id
+  // that resolves to no name — the account's wages then bucket under a phantom member
+  // rather than the intended person. A per-member *net-zero* balance is not a real
+  // invariant (members legitimately carry non-zero net income), and per-account signed
+  // balance is already covered by NORMAL_BALANCE_VIOLATION; the genuine residual gap is
+  // this referential one. Warning, not critical: the GL still balances — only the
+  // report's per-person split is wrong. Voided income is excluded (not reported on).
+  for (const c of categories) {
+    if (c.memberId && !memberIds.has(c.memberId)) {
+      add({
+        severity: 'warning', code: 'MEMBER_ATTRIBUTION_DANGLING', recordType: 'gl',
+        recordId: c.id, label: c.name,
+        message: `Account "${c.name}" is attributed to member ${c.memberId}, who is not in the family — the Tax Report will bucket its amounts under an unknown member instead of the intended person.`,
+        detail: { memberId: c.memberId },
+      })
+    }
+  }
+  for (const e of incomes) {
+    if (e.memberId && !e.isVoided && !memberIds.has(e.memberId)) {
+      add({
+        severity: 'warning', code: 'MEMBER_ATTRIBUTION_DANGLING', recordType: 'income',
+        recordId: e.id, label: e.name,
+        message: `Income "${e.name}" is attributed to member ${e.memberId}, who is not in the family — the Tax Report income estimate will show no owner instead of the intended person.`,
+        detail: { memberId: e.memberId },
       })
     }
   }

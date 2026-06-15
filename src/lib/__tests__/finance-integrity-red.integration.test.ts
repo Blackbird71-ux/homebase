@@ -23,13 +23,15 @@
  *   • payslip double-count     → PAYSLIP_JOURNAL_TOTAL
  *   • short/incomplete amort.  → PREPAYMENT_AMORTISATION_INCOMPLETE
  *   • 3-line GST category drift→ TX_JOURNAL_ACCOUNT_DRIFT
+ *   • dangling member (account) → MEMBER_ATTRIBUTION_DANGLING
+ *   • dangling member (income)  → MEMBER_ATTRIBUTION_DANGLING (parity)
  *
  * KNOWN GAP (no red test — the auditor has no check for it): a DUPLICATE SPAWN (two
  * draft successors for one paid bill/income) produces no GL anomaly — each draft's
  * journal is unposted (so ORPHANED_DRAFT_JOURNAL ignores it while linked), and once
  * paid both the AP/AR control and subledger double together, so they still reconcile.
  * Detecting it needs a new row-level check (≤1 live draft successor per parent). Logged
- * for a follow-up auditor-only WI alongside P10-G1/G3.
+ * for a follow-up auditor-only WI alongside P10-G1 (G3 is now covered below).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupFinanceTestDb, FINANCE_TEST_FAMILY, type FinanceTestDb } from './_finance-test-db'
@@ -414,6 +416,47 @@ describe('Integrity audit — RED reachability (injected bugs flip the audit)', 
       await prisma.financeJournalEntry.delete({ where: { id: journal.id } })
       await prisma.financeTransaction.delete({ where: { id: tx.id } })
       await prisma.financeCategory.delete({ where: { id: itc.id } })
+    }
+  })
+
+  it('account attributed to a non-existent member → MEMBER_ATTRIBUTION_DANGLING warning', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'MEMBER_ATTRIBUTION_DANGLING')).toBe('pass')
+
+    // memberId is a loose String? (no FK) — a deleted member leaves this id behind.
+    const cat = await prisma.financeCategory.create({
+      data: { familyId: FAMILY, name: 'RED Member Income', type: 'income', memberId: 'ghost-member-red' },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'MEMBER_ATTRIBUTION_DANGLING')).toBe('fail')
+      expect(findings(after, 'MEMBER_ATTRIBUTION_DANGLING').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'warning' && f.recordId === cat.id)).toBe(true)
+    } finally {
+      await prisma.financeCategory.delete({ where: { id: cat.id } })
+    }
+  })
+
+  it('income attributed to a non-existent member → MEMBER_ATTRIBUTION_DANGLING warning (parity)', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'MEMBER_ATTRIBUTION_DANGLING')).toBe('pass')
+
+    const income = await prisma.financeIncomeEntry.create({
+      data: {
+        name: 'RED Member-attributed Income', amount: 80, nextExpectedDate: new Date('2026-02-12T00:00:00Z'),
+        invoiceReceived: false, received: false, isVoided: false,
+        memberId: 'ghost-member-red', familyId: FAMILY,
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'MEMBER_ATTRIBUTION_DANGLING')).toBe('fail')
+      expect(findings(after, 'MEMBER_ATTRIBUTION_DANGLING').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'warning' && f.recordId === income.id)).toBe(true)
+    } finally {
+      await prisma.financeIncomeEntry.delete({ where: { id: income.id } })
     }
   })
 
