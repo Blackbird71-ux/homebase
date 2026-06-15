@@ -143,17 +143,30 @@ export async function POST(request: NextRequest) {
   // If journal lines provided, create the draft accrual journal entry
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
+      const accrualDate = new Date(nextExpectedDate ?? new Date())
       const journalEntryId = await upsertIncomeJournalEntry(
         entry.name,
         null,
         journalLines,
-        new Date(nextExpectedDate ?? new Date()),
+        accrualDate,
         user.familyId,
         entityId ?? null,
       )
       await prisma.financeIncomeEntry.update({
         where: { id: entry.id },
-        data: { journalEntryId },
+        data: {
+          journalEntryId,
+          // P4-FC-03: this accrual is posted (isPosted:true) — the income is now
+          // recognised on the TB/P&L and sits on the AR control account. Mark
+          // invoiceReceived so the AR subledger (which filters invoiceReceived=true
+          // AND a non-null invoiceReceivedDate) includes it and reconciles to the GL
+          // control. Without this the entry shows "DRAFT" yet is already on the books
+          // and AR aging under-reports. Respect an explicit invoiceReceived on create.
+          ...(entry.invoiceReceived ? {} : {
+            invoiceReceived: true,
+            invoiceReceivedDate: entry.invoiceReceivedDate ?? accrualDate,
+          }),
+        },
       })
     } catch (err) {
       console.error('[income POST] Failed to create journal entry:', err)
@@ -271,18 +284,29 @@ export async function PUT(request: NextRequest) {
       if (existingJe?.isPosted) {
         // Journal already posted — do not overwrite or create a duplicate
       } else {
+        const accrualDate = nextExpectedDate ? new Date(nextExpectedDate) : existing.nextExpectedDate
         const journalEntryId = await upsertIncomeJournalEntry(
           name ?? existing.name,
           existingJeId,
           journalLines,
-          nextExpectedDate ? new Date(nextExpectedDate) : existing.nextExpectedDate,
+          accrualDate,
           user.familyId,
           entityId !== undefined ? (entityId ?? null) : existing.entityId,
         )
         if (journalEntryId !== existingJeId) {
           await prisma.financeIncomeEntry.update({
             where: { id: entry.id },
-            data: { journalEntryId },
+            data: {
+              journalEntryId,
+              // P4-FC-03 (parity with POST): a freshly-posted accrual recognises the
+              // income on the AR control account, so invoiceReceived must track it for
+              // the AR subledger to include it and reconcile. Respect an explicit
+              // invoiceReceived already applied in the row update above.
+              ...(entry.invoiceReceived ? {} : {
+                invoiceReceived: true,
+                invoiceReceivedDate: entry.invoiceReceivedDate ?? accrualDate,
+              }),
+            },
           })
         }
       }
