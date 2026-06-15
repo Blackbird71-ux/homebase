@@ -35,8 +35,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(snapshots)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    console.error('[snapshots] Error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    // P11-A1: log the detail server-side but never return the raw error to the
+    // client — align with the app's leak-nothing posture (a Prisma/DB string
+    // could otherwise surface to a logged-in user).
+    console.error('[snapshots] Error:', err instanceof Error ? err.message : 'Unknown error')
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

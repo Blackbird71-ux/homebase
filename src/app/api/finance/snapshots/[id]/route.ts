@@ -43,8 +43,8 @@ export async function GET(
       report,
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    console.error('[snapshots/[id]] Error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    // P11-A1: log server-side, never return the raw error to the client.
+    console.error('[snapshots/[id]] Error:', err instanceof Error ? err.message : 'Unknown error')
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
