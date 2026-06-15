@@ -31,9 +31,11 @@ const INCOME_INCLUDE = {
 // Lines: DR Accounts Receivable / CR income account(s) [+ GST Payable]
 //
 // Delegates to the shared upsertDraftJournal in finance-posting.ts (single
-// implementation shared with bills' upsertBillDraftJournal). Income is
-// recognised immediately (isPosted=true); the balance, GL-family, posted-guard
-// and atomic-write guarantees live in the shared function.
+// implementation shared with bills' upsertBillDraftJournal). The accrual is
+// written as an UNPOSTED draft (isPosted=false); it is promoted to posted only
+// on the invoiceReceived false→true transition via receiveIncomeStage1 — the
+// same trigger bills use. The balance, GL-family, posted-guard and atomic-write
+// guarantees live in the shared function.
 
 interface JournalLine {
   glAccountId: string
@@ -50,8 +52,10 @@ async function upsertIncomeJournalEntry(
   familyId: string,
   entityId: string | null,
 ): Promise<string> {
-  // Income is recognised immediately on save (isPosted=true). The shared upsert
-  // throws on unbalanced lines, so a posted entry is always balanced.
+  // Write the accrual as an UNPOSTED draft (isPosted=false). It carries the
+  // user's intended split (incl. any GST line) and is promoted on the
+  // invoiceReceived false→true transition by receiveIncomeStage1. The shared
+  // upsert throws on unbalanced lines, so the draft is always balanced.
   return upsertDraftJournal({
     description: incomeName,
     existingJournalEntryId,
@@ -59,7 +63,7 @@ async function upsertIncomeJournalEntry(
     date,
     familyId,
     entityId,
-    isPosted: true,
+    isPosted: false,
   })
 }
 
@@ -105,6 +109,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Name, amount, and frequency are required' }, { status: 400 })
   }
 
+  const accrualDate = new Date(nextExpectedDate ?? new Date())
+  // Symmetric with bills (audit P4-A1): revenue is recognised on the
+  // invoiceReceived false→true transition, NOT the moment journal lines exist.
+  // shouldPostInvoice gates whether we promote the draft to a posted accrual.
+  const shouldPostInvoice = invoiceReceived === true
+  const invoiceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : accrualDate
+
   const entry = await prisma.financeIncomeEntry.create({
     data: {
       name,
@@ -114,7 +125,7 @@ export async function POST(request: NextRequest) {
       vendorId: vendorId ?? null,
       frequency,
       incomeType: incomeType ?? 'recurring',
-      nextExpectedDate: new Date(nextExpectedDate ?? new Date()),
+      nextExpectedDate: accrualDate,
       endDate: endDate ? new Date(endDate) : null,
       isActive: isActive ?? true,
       received: received ?? false,
@@ -125,8 +136,8 @@ export async function POST(request: NextRequest) {
       dayOfMonth: dayOfMonth != null ? parseInt(dayOfMonth, 10) : null,
       monthOfYear: monthOfYear != null ? parseInt(monthOfYear, 10) : null,
       recurrenceInterval: recurrenceInterval ?? null,
-      invoiceReceived: invoiceReceived ?? false,
-      invoiceReceivedDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : null,
+      invoiceReceived: shouldPostInvoice,
+      invoiceReceivedDate: shouldPostInvoice ? invoiceDate : null,
       notes: notes ?? null,
       memberId: memberId ?? null,
       locationId: locationId ?? null,
@@ -141,11 +152,14 @@ export async function POST(request: NextRequest) {
     include: INCOME_INCLUDE,
   })
 
-  // If journal lines provided, create the draft accrual journal entry
+  // Materialise a custom journal split as an UNPOSTED draft (if provided). This
+  // runs for BOTH draft and posted entries:
+  //   - shouldPostInvoice=false: ends here, entry keeps the draft for later promotion
+  //   - shouldPostInvoice=true:  draft is then promoted by receiveIncomeStage1 below
+  let draftJeId: string | null = null
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
-      const accrualDate = new Date(nextExpectedDate ?? new Date())
-      const journalEntryId = await upsertIncomeJournalEntry(
+      draftJeId = await upsertIncomeJournalEntry(
         entry.name,
         null,
         journalLines,
@@ -155,22 +169,43 @@ export async function POST(request: NextRequest) {
       )
       await prisma.financeIncomeEntry.update({
         where: { id: entry.id },
-        data: {
-          journalEntryId,
-          // P4-FC-03: this accrual is posted (isPosted:true) — the income is now
-          // recognised on the TB/P&L and sits on the AR control account. Mark
-          // invoiceReceived so the AR subledger (which filters invoiceReceived=true
-          // AND a non-null invoiceReceivedDate) includes it and reconciles to the GL
-          // control. Without this the entry shows "DRAFT" yet is already on the books
-          // and AR aging under-reports. Respect an explicit invoiceReceived on create.
-          ...(entry.invoiceReceived ? {} : {
-            invoiceReceived: true,
-            invoiceReceivedDate: entry.invoiceReceivedDate ?? accrualDate,
-          }),
-        },
+        data: { journalEntryId: draftJeId },
       })
     } catch (err) {
-      console.error('[income POST] Failed to create journal entry:', err)
+      // Custom lines failed validation (e.g. unbalanced or invalid GL accounts).
+      // Delete the orphan entry so it doesn't sit without the journal the user
+      // thought they saved, and surface 422.
+      console.error('[income POST] Failed to save draft journal from custom lines:', err)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      await prisma.financeIncomeEntry.delete({ where: { id: entry.id } }).catch(() => {})
+      return NextResponse.json({ error: `Failed to save journal lines: ${msg}` }, { status: 422 })
+    }
+  }
+
+  // Promote to a posted accrual only when invoiceReceived=true on create — the
+  // same Stage-1 sequence as PATCH/PUT, via the shared helper.
+  if (shouldPostInvoice && categoryId) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await receiveIncomeStage1(tx, {
+          entry,
+          remittanceDate: invoiceDate,
+          userId: user.id,
+          familyId: user.familyId,
+          draftJournalEntryId: draftJeId,
+        })
+      })
+    } catch (err) {
+      // GL posting failed — roll back invoiceReceived so the entry stays a draft.
+      console.error('[income POST] GL posting failed, reverting invoiceReceived:', err)
+      await prisma.financeIncomeEntry.update({
+        where: { id: entry.id },
+        data: { invoiceReceived: false, invoiceReceivedDate: null },
+      })
+      return NextResponse.json(
+        { error: 'Failed to post to General Ledger. Income saved as draft.' },
+        { status: 422 }
+      )
     }
   }
 
