@@ -150,6 +150,12 @@ export async function POST(request: NextRequest) {
   //
   // Transfers are excluded: they require paired entries across two accounts
   // and must be handled by the caller.
+  //
+  // FC-12-03: the GST journal can fail to post (missing GST GL account, unbalanced
+  // split) while the transaction itself is already committed. Capture that and
+  // surface it as a non-fatal warning in the response so a GST tx never silently
+  // saves with no GST leg (which would under-report BAS).
+  let glWarning: string | null = null
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
       await postJournalEntry({
@@ -189,7 +195,7 @@ export async function POST(request: NextRequest) {
       // Only auto-create journal if we have a valid GL account for the cash side
       if (cashGlId) {
         if (cat?.gstApplicable) {
-          await createGstJournalEntry(
+          const gstJournalId = await createGstJournalEntry(
             type as 'expense' | 'income',
             amount,
             cat.gstRate ?? 10,
@@ -203,6 +209,12 @@ export async function POST(request: NextRequest) {
             user.id,
             transaction.id,
           )
+          if (!gstJournalId) {
+            glWarning =
+              'The transaction was saved, but its GST journal did not post to the General Ledger ' +
+              '(check the GST control accounts are configured). BAS reporting will be incomplete ' +
+              'until the GST entry is recorded.'
+          }
         } else {
           const autoLines: JournalLine[] = type === 'expense'
             ? [
@@ -237,7 +249,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(transaction, { status: 201 })
+  return NextResponse.json(
+    glWarning ? { ...transaction, warning: glWarning } : transaction,
+    { status: 201 },
+  )
 }
 
 export async function PUT(request: NextRequest) {

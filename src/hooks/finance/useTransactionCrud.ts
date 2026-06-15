@@ -165,7 +165,13 @@ export function useTransactionCrud() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (res.ok) { toast.success(editing ? 'Transaction updated' : 'Transaction created'); closeForm(); load() }
+    if (res.ok) {
+      const saved = await res.json().catch(() => ({}))
+      toast.success(editing ? 'Transaction updated' : 'Transaction created')
+      // FC-12-03: the tx saved but its GST journal may not have posted — surface it.
+      if (saved?.warning) toast.warning(saved.warning, { duration: 10000 })
+      closeForm(); load()
+    }
     else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? 'Failed') }
   }
 
