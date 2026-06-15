@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { buildYtdReport } from '@/lib/financeReport'
 import { currentFyContextInTz, fyLabel } from '@/lib/finance-fy'
 import { sendReportEmail } from '@/lib/emailReportService'
-import { DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { DEFAULT_TIMEZONE, todayStringInTz } from '@/lib/timezone'
 
 export async function POST(request: Request) {
   try {
@@ -62,13 +62,18 @@ export async function POST(request: Request) {
     // Save snapshot if not using an existing one
     let actualSnapshotId = snapshotId
     if (!actualSnapshotId) {
-      // Determine current month for snapshot metadata
-      const now = new Date()
+      // Determine current month for snapshot metadata (P9-A1).
+      // Stamp the capture-month label in the family tz, not server-UTC — the
+      // report body is already tz-correct, so a run in the post-midnight UTC
+      // window near a month boundary must not mislabel the capture month.
+      const todayLocal = todayStringInTz(timezone) // 'YYYY-MM-DD' in family tz
+      const snapshotYearLocal = Number(todayLocal.slice(0, 4))
+      const snapshotMonthLocal = Number(todayLocal.slice(5, 7)) // 1-12
       const snapshot = await prisma.financeSnapshot.create({
         data: {
           financialYear: reportYear,
-          snapshotMonth: now.getMonth() + 1, // 1-12
-          snapshotYear: now.getFullYear(),
+          snapshotMonth: snapshotMonthLocal,
+          snapshotYear: snapshotYearLocal,
           periodLabel: report.meta.periodLabel,
           monthsComplete: report.meta.monthsComplete,
           reportJson: JSON.stringify(report),
