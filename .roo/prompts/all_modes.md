@@ -24,6 +24,9 @@ Every tool call = 1 approval prompt. Budget:
 | Ask | NO - read-only | Never make changes, only answer questions |
 | Debug | **NO** (just fix it) | Read context, identify root cause, apply fix. No repro permission needed. |
 | Test | **NO** (just add them) | Follow existing test patterns, add tests inline |
+| Orchestrator | NO (coordinates) | Decompose → delegate via new_task → synthesize. Fan out reads; funnel writes to ONE Code subtask. Never delegate finance EDITS — finance investigation goes to Finance Auditor only. See modes/orchestrator.md. |
+| Finance Auditor | NO - read-only | Senior CA + engineer. NO edit group. Finds finance bugs, reports findings + coverage ledger, never fixes. See modes/finance-auditor.md. |
+| Blast-Radius Scout | NO - read-only | Finds every OTHER place a pattern/bug exists (esp. bills↔income mirror). NO edit group. Reports the full set, never fixes. See modes/blast-radius-scout.md. |
 
 ## Shared Memory
 - Remember preferences across sessions within same project

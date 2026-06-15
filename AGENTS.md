@@ -286,6 +286,66 @@ The app stores sensitive financial and personal data. There is **no `middleware.
 
 ---
 
+# Subagent & delegation doctrine — fan out reads, funnel writes
+
+This project uses subagents/delegation (Claude Code subagents; Roo Orchestrator → mode
+delegation) to go faster **without** weakening blast-radius discipline. The whole policy
+reduces to one rule: **parallelize investigation; keep all mutation single-threaded.**
+
+## Why
+
+A single agent thread fills its context with file reads, search results, and side-quests,
+and quality degrades as it approaches the window limit. Delegating read-heavy work to a
+child with its own context keeps the main thread focused and fast. But parallel *writers*
+cannot see each other's diffs — two agents editing a shared lib and its callers at the
+same time is exactly the "fix one, miss others" / field-loss class this repo guards against.
+
+## The rule
+
+1. **Reads fan out. Writes funnel.** Investigation, audit, blast-radius scans, "does this
+   pattern exist elsewhere", report reconciliation, and post-change verification may run in
+   parallel across multiple subagents. **All edits go through ONE parent thread** under the
+   normal single-shot approval flow. Never run two write-capable agents concurrently.
+
+2. **Finance is read-only for subagents — no exceptions.** Any subagent touching
+   `src/lib/finance-*`, `src/app/api/finance/**`, `src/hooks/finance/**`,
+   `prisma/schema.prisma`, or anything posting to the GL operates in **report-only** mode:
+   it produces findings (file:function, invariant, evidence, recommendation) and returns
+   them. It does **not** edit. The parent applies finance edits itself, consulting QA.md
+   §1/§2/§5 before and after, because finance changes have real-money impact and must be
+   serialized and human-approved.
+
+3. **Writes are allowed for non-finance work** — tests, docs, UI/components, non-finance
+   routes, config — provided rule 1 holds (one writer at a time). A subagent fixing a UI
+   component or adding tests may edit; a subagent investigating finance may not.
+
+4. **Subagents inherit the house rules.** Delegation does not relax AGENTS.md or `global.md`:
+   surgical diffs, no field loss, tz helpers over UTC midnight, shared logic in `src/lib/`,
+   `auth()` in route handlers, the Prisma migration rule. A child agent that doesn't know a
+   rule must be given it in its prompt — never assume the child inherited project context.
+
+5. **Delegate when it pays; don't when it doesn't.** Worth it: ≥3 independent files to
+   investigate, a blast-radius sweep across modules, an audit-campaign pass, "check the
+   mirror module" parity work (bills↔income). Not worth it: a single-file edit, a task that
+   needs shared context to make sense, anything where the coordination overhead exceeds the
+   work. Parallel agents consume token quota linearly (N agents ≈ N× spend) — fan out for
+   wall-clock speed and context hygiene, not reflexively.
+
+6. **Child prompts must be self-contained and bounded.** State the exact scope, the invariant
+   or property to check, what to return, and the read-only/write boundary. A child with a
+   vague brief samples and guesses — the same failure as an unbounded "audit the module" ask.
+
+## Tooling map (where this is configured)
+
+- **Claude Code:** project subagents in `.claude/agents/*.md` (Markdown + YAML frontmatter).
+  Finance/audit/scout agents omit `Edit`/`Write`/`Bash` from their `tools:` list so they are
+  read-only by construction. The parent session orchestrates and owns all edits.
+- **Roo Code:** the built-in 🪃 **Orchestrator** mode delegates via `new_task` to specialized
+  modes; registered in `.roomodes` and detailed in `.roo/prompts/modes/`. Finance-audit and
+  investigator modes have restricted `groups` (no `edit`) so they cannot write.
+
+---
+
 # Regression Prevention
 
 See `QA.md` in the project root for:
