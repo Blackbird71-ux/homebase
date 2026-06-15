@@ -269,9 +269,7 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  const entry = await prisma.financeIncomeEntry.update({
-    where: { id },
-    data: {
+  const incomeUpdateData = {
       ...(name !== undefined && { name }),
       ...(amount !== undefined && { amount: parseFloat(amount) }),
       ...(accountId !== undefined && { accountId: accountId ?? null }),
@@ -303,9 +301,54 @@ export async function PUT(request: NextRequest) {
       ...(taxClassification !== undefined && { taxClassification: taxClassification ?? null }),
       ...(showOnCalendar !== undefined && { showOnCalendar }),
       ...(actualAmountReceived !== undefined && { actualAmountReceived: actualAmountReceived != null ? parseFloat(actualAmountReceived) : null }),
-    },
-    include: INCOME_INCLUDE,
-  })
+  }
+
+  // FC-12-02 (mirror of bills): reconcile the posted accrual ATOMICALLY with the
+  // row update so a rolled-back reconcile leaves the row unchanged — otherwise the
+  // row/GL diverge and the param-vs-row retry-detection skips the resync forever.
+  const reconcileCategoryId = categoryId !== undefined ? (categoryId ?? null) : existing.categoryId
+  const doAtomicResync = needsAccrualResync && !!reconcileCategoryId && !!existing.journalEntryId
+
+  let entry
+  if (doAtomicResync) {
+    try {
+      entry = await prisma.$transaction(async (tx) => {
+        const { newJournalEntryId } = await reconcilePostedAccrualOnEdit({
+          kind: 'income',
+          familyId: user.familyId,
+          journalEntryId: existing.journalEntryId!,
+          description: name ?? existing.name,
+          amount: amount !== undefined ? parseFloat(amount) : existing.amount,
+          glAccountId: reconcileCategoryId!,
+          entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
+          invoiceTxId: existing.invoiceTxId ?? null,
+        }, tx)
+        return tx.financeIncomeEntry.update({
+          where: { id },
+          data: {
+            ...incomeUpdateData,
+            ...(newJournalEntryId !== existing.journalEntryId && { journalEntryId: newJournalEntryId }),
+          },
+          include: INCOME_INCLUDE,
+        })
+      })
+    } catch (err) {
+      if (err instanceof AccrualReconcileBlockedError) {
+        return NextResponse.json({ error: err.message }, { status: 422 })
+      }
+      console.error('[income PUT] Failed to reconcile posted accrual on edit:', err)
+      return NextResponse.json(
+        { error: 'Failed to update the General Ledger for this edit. The income and GL were left unchanged; please retry.' },
+        { status: 422 },
+      )
+    }
+  } else {
+    entry = await prisma.financeIncomeEntry.update({
+      where: { id },
+      data: incomeUpdateData,
+      include: INCOME_INCLUDE,
+    })
+  }
 
   // If invoiceReceived is transitioning false->true, post the GL accrual journal
   // (invoiceReceivedTransition computed in the pre-edit GL guard above).
@@ -374,43 +417,9 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  // Reconcile the posted accrual when a GL-relevant field changed on an income
-  // entry whose accrual is already posted. The received / custom-split cases were
-  // rejected by the pre-edit GL guard above, so this only runs on the safe path.
-  // (Residual risk: if the reconcile transaction fails unexpectedly its GL writes
-  // roll back, but the row was already updated — surfaced as a 422 so the user retries.)
-  if (needsAccrualResync) {
-    const effectiveCategoryId = categoryId !== undefined ? (categoryId ?? null) : existing.categoryId
-    if (effectiveCategoryId && existing.journalEntryId) {
-      try {
-        const { newJournalEntryId } = await reconcilePostedAccrualOnEdit({
-          kind: 'income',
-          familyId: user.familyId,
-          journalEntryId: existing.journalEntryId,
-          description: name ?? existing.name,
-          amount: amount !== undefined ? parseFloat(amount) : existing.amount,
-          glAccountId: effectiveCategoryId,
-          entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
-          invoiceTxId: existing.invoiceTxId ?? null,
-        })
-        if (newJournalEntryId !== existing.journalEntryId) {
-          await prisma.financeIncomeEntry.update({
-            where: { id: entry.id },
-            data: { journalEntryId: newJournalEntryId },
-          })
-        }
-      } catch (err) {
-        if (err instanceof AccrualReconcileBlockedError) {
-          return NextResponse.json({ error: err.message }, { status: 422 })
-        }
-        console.error('[income PUT] Failed to reconcile posted accrual on edit:', err)
-        return NextResponse.json(
-          { error: 'Failed to update the General Ledger for this edit. The GL was left unchanged; please retry.' },
-          { status: 422 },
-        )
-      }
-    }
-  }
+  // FC-12-02: the posted-accrual reconcile now runs ATOMICALLY with the row update
+  // in the doAtomicResync branch above (mirrors bills) — no separate post-update
+  // reconcile pass here, which previously left the row/GL divergent on failure.
 
   // Re-fetch so the response reflects Step 1/2 updates (journalEntryId, the
   // atomically-set invoiceReceived flags) rather than the stale row-update object.

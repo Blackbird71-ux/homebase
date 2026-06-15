@@ -758,6 +758,7 @@ export interface ReconcileAccrualParams {
 
 export async function reconcilePostedAccrualOnEdit(
   params: ReconcileAccrualParams,
+  outerTx?: Prisma.TransactionClient,
 ): Promise<{ newJournalEntryId: string }> {
   const { kind, familyId, journalEntryId, description, amount, glAccountId, entityId, invoiceTxId } = params
 
@@ -818,7 +819,12 @@ export async function reconcilePostedAccrualOnEdit(
   const accrualDate = je.date
 
   // ── Atomic write ───────────────────────────────────────────────────────────
-  return await prisma.$transaction(async (tx) => {
+  // When the caller passes its own transaction (outerTx), run the GL writes on it
+  // so the reconcile commits or rolls back ATOMICALLY with the caller's row update
+  // — otherwise a rolled-back reconcile leaves the row ahead of the GL and the
+  // retry-detection (param-vs-row diff) silently skips the resync (FC-12-02).
+  // With no outerTx, open our own transaction exactly as before.
+  const runWrites = async (tx: Prisma.TransactionClient) => {
     // 1. Reverse the stale accrual (flipped lines).
     await reverseJournalEntry(tx, je, { reference: reversalRef, date: accrualDate, familyId })
 
@@ -854,7 +860,9 @@ export async function reconcilePostedAccrualOnEdit(
     }
 
     return { newJournalEntryId: fresh.id }
-  })
+  }
+
+  return outerTx ? runWrites(outerTx) : prisma.$transaction(runWrites)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
