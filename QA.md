@@ -329,9 +329,14 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 ### 4.6 Void / Amendment Flow
 
 ```
-[Void] VoidDialog.tsx → PATCH /api/finance/bills/[id] OR /api/finance/income/[id]
+[Void] VoidDialog.tsx → PATCH /api/finance/bills (doVoid) OR /api/finance/income (action:'void')
   Sets: isVoided=true, voidedAt, voidNote
-  Does NOT reverse the GL — if already posted, a manual reversal is required
+  REVERSES the GL: posts dated reversing journals for the accrual AND every
+    payment/receipt journal (the posted ledger is immutable — corrections are
+    reversing entries, never edits/deletes), all inside one $transaction.
+  SWEEPS un-actioned descendants: deleteUnpaidBillDescendants /
+    deleteUnreceivedIncomeDescendants remove future un-actioned spawned drafts,
+    so void is a clean error-correction (distinct from "cancel going forward").
 
 [Amend] AmendmentDialog.tsx → creates new JournalEntry with amendmentOfId set
   Original entry: unchanged (audit trail)
@@ -356,7 +361,7 @@ finance-draft-approval-service.ts: bulkApproveUnchangedDrafts()
 | **B5** Bill draft approve (single) | Drafts panel → Approve one draft | Status → awaiting_payment; GL posted; trial balance unchanged |
 | **B6** Bulk draft approve | Drafts panel → Approve All Unchanged | All unchanged drafts approved; GL balanced for each |
 | **B7** Edit draft before approve | Open draft → change amount → save → approve | Edited amount used in journal (not template default) |
-| **B8** Void a bill | Overflow → Void → enter reason | `isVoided=true`; bill removed from active list; GL NOT automatically reversed |
+| **B8** Void a bill | Overflow → Void → enter reason | `isVoided=true`; bill removed from active list; GL reversed via dated reversing journals (accrual + any payments); future un-actioned spawned drafts swept |
 | **B9** Bill with GST | Create bill under GST-applicable category | GST component split correctly; net amount posted to expense |
 | **B10** Multi-leg bill template (e.g. GST split) | Create bill template with 3 lines (DR Expense / DR GST Receivable / CR AP) → spawn → open draft in edit dialog → approve | Draft editor shows all 3 lines from template (NOT the 2-line default); approval posts a 3-line journal; trial balance unchanged |
 
