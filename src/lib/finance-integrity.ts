@@ -452,6 +452,16 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
     : []
   const txMap = new Map(txs.map(t => [t.id, t]))
 
+  // GST system accounts (read-only mirror of ensureGstAccounts' lookup — never
+  // create here, the auditor only reads). Used to identify the GST leg of a
+  // 3-line transaction-sourced GST journal (createGstJournalEntry) so the cash
+  // and category legs can be drift-checked like the 2-line case below.
+  const gstSystemAccounts = await prisma.financeCategory.findMany({
+    where: { familyId, isSystem: true, type: 'liability', name: { in: ['GST Input Tax Credits', 'GST Collected'] } },
+    select: { id: true },
+  })
+  const gstAccountIds = new Set(gstSystemAccounts.map(c => c.id))
+
   for (const j of autoJournals) {
     const tx = txMap.get(j.sourceTransactionId!)
     if (!tx) {
@@ -462,8 +472,7 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
       })
       continue
     }
-    // Only the clean 2-line case (bank line + category line) is checked; GST splits
-    // (3 lines) are skipped to avoid false positives.
+    // The clean 2-line case (bank line + category line).
     if (j.lines.length === 2 && tx.glAccountId && tx.categoryId) {
       const categoryLine = j.lines.find(l => l.glAccountId !== tx.glAccountId)
       if (categoryLine && categoryLine.glAccountId !== tx.categoryId) {
@@ -473,6 +482,36 @@ export async function runFinanceIntegrityAudit(familyId: string): Promise<AuditR
           message: `Journal posts to ${acct(categoryLine.glAccountId)} but the transaction's category is ${acct(tx.categoryId)}.`,
           detail: { journalAccount: acct(categoryLine.glAccountId), transactionCategory: acct(tx.categoryId), reference: j.reference },
         })
+      }
+    } else if (j.lines.length === 3 && tx.glAccountId && tx.categoryId && gstAccountIds.size > 0) {
+      // 3-line transaction-sourced GST journal (createGstJournalEntry, W9):
+      //   expense: DR category(ex-GST) / DR ITC(gst) / CR cash(total)
+      //   income:  DR cash(total) / CR category(ex-GST) / CR Collected(gst)
+      // The 2-line branch skips these; assert the same account identity here —
+      // the GST leg is the system ITC/Collected account, leaving a cash leg (must
+      // match the transaction's GL account) and a category leg (must match its
+      // category). A line that isn't the GST leg, the cash leg, nor the category
+      // is the drift. (No GST-math check: FinanceTransaction stores no rate/amount.)
+      const gstLine = j.lines.find(l => gstAccountIds.has(l.glAccountId))
+      if (gstLine) {
+        const nonGst = j.lines.filter(l => l !== gstLine)
+        const cashLine = nonGst.find(l => l.glAccountId === tx.glAccountId)
+        const categoryLine = nonGst.find(l => l.glAccountId !== tx.glAccountId)
+        if (!cashLine) {
+          add({
+            severity: 'warning', code: 'TX_JOURNAL_ACCOUNT_DRIFT', recordType: 'transaction',
+            recordId: tx.id, label: tx.description || tx.id,
+            message: `GST journal has no line on the transaction's GL account ${acct(tx.glAccountId)} — the cash leg has drifted.`,
+            detail: { transactionGlAccount: acct(tx.glAccountId), journalAccounts: j.lines.map(l => acct(l.glAccountId)), reference: j.reference },
+          })
+        } else if (categoryLine && categoryLine.glAccountId !== tx.categoryId) {
+          add({
+            severity: 'warning', code: 'TX_JOURNAL_ACCOUNT_DRIFT', recordType: 'transaction',
+            recordId: tx.id, label: tx.description || tx.id,
+            message: `GST journal posts the category leg to ${acct(categoryLine.glAccountId)} but the transaction's category is ${acct(tx.categoryId)}.`,
+            detail: { journalAccount: acct(categoryLine.glAccountId), transactionCategory: acct(tx.categoryId), reference: j.reference },
+          })
+        }
       }
     }
   }

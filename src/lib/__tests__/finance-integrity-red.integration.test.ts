@@ -21,6 +21,8 @@
  *   • voided-still-aging (inc) → INCOME_ACCRUAL_STALE  (bills↔income parity)
  *   • stranded receipt JE      → AR_CONTROL_VS_SUBLEDGER
  *   • payslip double-count     → PAYSLIP_JOURNAL_TOTAL
+ *   • short/incomplete amort.  → PREPAYMENT_AMORTISATION_INCOMPLETE
+ *   • 3-line GST category drift→ TX_JOURNAL_ACCOUNT_DRIFT
  *
  * KNOWN GAP (no red test — the auditor has no check for it): a DUPLICATE SPAWN (two
  * draft successors for one paid bill/income) produces no GL anomaly — each draft's
@@ -365,6 +367,53 @@ describe('Integrity audit — RED reachability (injected bugs flip the audit)', 
         f.severity === 'critical' && f.recordId === schedule.id)).toBe(true)
     } finally {
       await prisma.financePrepaymentSchedule.delete({ where: { id: schedule.id } })
+    }
+  })
+
+  it('3-line transaction-sourced GST journal whose category leg drifts → TX_JOURNAL_ACCOUNT_DRIFT warning', async () => {
+    const before = await runFinanceIntegrityAudit(FAMILY)
+    expect(status(before, 'TX_JOURNAL_ACCOUNT_DRIFT')).toBe('pass')
+
+    // System ITC account so the auditor can identify the GST leg read-only.
+    const itc = await prisma.financeCategory.create({
+      data: { name: 'GST Input Tax Credits', type: 'liability', isSystem: true, level: 0, familyId: FAMILY },
+      select: { id: true },
+    })
+    // Expense transaction: cash = A, correct category = B.
+    const tx = await prisma.financeTransaction.create({
+      data: {
+        type: 'expense', amount: 110, date: new Date('2026-02-10T00:00:00Z'),
+        description: 'RED GST drift', glAccountId: A, categoryId: B,
+        createdBy: 'red', familyId: FAMILY,
+      },
+      select: { id: true },
+    })
+    // 3-line GST journal that BALANCES (DR 110 = CR 110) but posts the category
+    // leg to C instead of the transaction's category B — the drift.
+    const journal = await prisma.financeJournalEntry.create({
+      data: {
+        reference: nextRef(), date: new Date('2026-02-10T00:00:00Z'), description: 'GST: RED GST drift',
+        type: 'auto_transaction', isPosted: true, isReversed: false,
+        sourceTransactionId: tx.id, familyId: FAMILY,
+        lines: { create: [
+          { glAccountId: C, side: 'debit', amount: 100 },   // category leg → wrong account (should be B)
+          { glAccountId: itc.id, side: 'debit', amount: 10 }, // GST ITC leg
+          { glAccountId: A, side: 'credit', amount: 110 },   // cash leg (correct)
+        ] },
+      },
+      select: { id: true },
+    })
+    try {
+      const after = await runFinanceIntegrityAudit(FAMILY)
+      expect(status(after, 'TX_JOURNAL_ACCOUNT_DRIFT')).toBe('fail')
+      expect(findings(after, 'TX_JOURNAL_ACCOUNT_DRIFT').some((f: { severity: string; recordId: string }) =>
+        f.severity === 'warning' && f.recordId === tx.id)).toBe(true)
+      // The journal balances, so it's the account-identity check that fired.
+      expect(status(after, 'JOURNAL_ENTRY_UNBALANCED')).toBe('pass')
+    } finally {
+      await prisma.financeJournalEntry.delete({ where: { id: journal.id } })
+      await prisma.financeTransaction.delete({ where: { id: tx.id } })
+      await prisma.financeCategory.delete({ where: { id: itc.id } })
     }
   })
 
