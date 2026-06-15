@@ -777,6 +777,11 @@ function TransactionTab({
                     glAccounts={glAccounts}
                   />
                   {errors.grossIncomeGlAccountId && <p className="text-xs text-red-500 mt-0.5">{errors.grossIncomeGlAccountId}</p>}
+                  {form.grossIncomeGlAccountId && !glAccounts.find(a => a.id === form.grossIncomeGlAccountId)?.memberId && (
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      Not attributed to a family member — the Tax Report will split these wages jointly. Set the member on the account if that&apos;s wrong.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -795,6 +800,11 @@ function TransactionTab({
                     onChange={v => set('paygGlAccountId', v)}
                     glAccounts={glAccounts}
                   />
+                  {form.paygGlAccountId && !glAccounts.find(a => a.id === form.paygGlAccountId)?.isTaxPayment && (
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      Not flagged as a PAYG/tax-payment account — the Tax Report won&apos;t count this withholding. Set the flag on the account if that&apos;s wrong.
+                    </p>
+                  )}
                 </div>
               </div>
 

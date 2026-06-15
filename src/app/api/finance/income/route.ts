@@ -872,14 +872,29 @@ export async function PATCH(request: NextRequest) {
         sgcIncomeGlAccountId,
         ...(deductions as { glAccountId?: string }[]).map(d => d.glAccountId),
       ].filter((v): v is string => !!v)
-      const validCount = await prisma.financeCategory.count({
+      const payslipAccounts = await prisma.financeCategory.findMany({
         where: { id: { in: [...new Set(glIds)] }, familyId: user.familyId },
+        select: { id: true, isTaxPayment: true, memberId: true },
       })
-      if (validCount < new Set(glIds).size) {
+      if (payslipAccounts.length < new Set(glIds).size) {
         return NextResponse.json(
           { error: 'One or more payslip GL accounts not found.' },
           { status: 400 }
         )
+      }
+      // P5-FC-03 (soft, non-blocking): the Tax Report buckets PAYG solely by the
+      // line account's isTaxPayment flag and attributes wages by the gross account's
+      // memberId. A mis-flagged account still posts a balanced journal (DR=CR) but
+      // silently skews the per-person Tax Report (PAYG omitted / wages split jointly).
+      // Account tax-config is the user's call, so warn rather than block. Mirrors the
+      // inline warnings on the template GL pickers (TemplateFormDialog).
+      const paygAcct = paygGlAccountId ? payslipAccounts.find(a => a.id === paygGlAccountId) : null
+      if (paygAcct && !paygAcct.isTaxPayment) {
+        console.warn(`[income PATCH] payslip ${id}: PAYG GL account ${paygGlAccountId} is not flagged isTaxPayment — Tax Report will omit this withholding.`)
+      }
+      const grossAcct = payslipAccounts.find(a => a.id === grossIncomeGlAccountId)
+      if (grossAcct && !grossAcct.memberId) {
+        console.warn(`[income PATCH] payslip ${id}: gross income GL account ${grossIncomeGlAccountId} has no memberId — Tax Report will split these wages jointly.`)
       }
     } else if (!receiptGlAccountId) {
       return NextResponse.json(

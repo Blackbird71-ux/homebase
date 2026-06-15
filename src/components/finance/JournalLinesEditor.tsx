@@ -25,6 +25,8 @@ export interface GLAccount {
   type: string        // asset | liability | equity | income | expense
   glCode: string | null
   parentId: string | null
+  isTaxPayment?: boolean       // PAYG/tax-payment flag — payslip GL soft-validation (P5-FC-03)
+  memberId?: string | null     // member attribution — payslip GL soft-validation (P5-FC-03)
 }
 
 export interface JournalFormLine {
