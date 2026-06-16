@@ -88,7 +88,7 @@ export function MonthView({ currentDate, events, weekStartsOn, timezone, onDayCl
 
       {/* Calendar grid */}
       <div
-        className="flex-1 grid grid-cols-7"
+        className="flex-1 min-h-0 grid grid-cols-7"
         style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
       >
         {days.map((day, idx) => {
