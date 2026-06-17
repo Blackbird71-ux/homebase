@@ -10,13 +10,19 @@ export default async function AppLayout({
   const session = await requireSession()
   const isAdmin = session.role === 'admin'
 
-  const family = await prisma.family.findUnique({
-    where: { id: session.familyId },
-    select: { hideFinanceModule: true, name: true },
-  })
+  const [family, dbUser] = await Promise.all([
+    prisma.family.findUnique({
+      where: { id: session.familyId },
+      select: { hideFinanceModule: true, name: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.id },
+      select: { shareLocation: true },
+    }),
+  ])
 
   return (
-    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule} familyName={family?.name} memberName={session.name} memberRole={session.role}>
+    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule} familyName={family?.name} memberName={session.name} memberRole={session.role} shareLocation={!!dbUser?.shareLocation}>
       {children}
     </AppShell>
   )

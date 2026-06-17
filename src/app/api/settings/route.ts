@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { clearUserLocation } from '@/lib/location'
 import type { SessionUser } from '@/types'
 
 export async function GET() {
@@ -22,6 +23,7 @@ export async function GET() {
       fontWeight: true,
       weekStartsOn: true,
       doneItemColor: true,
+      shareLocation: true,
       uiPreferences: true,
       family: {
         select: {
@@ -51,7 +53,7 @@ export async function PATCH(req: Request) {
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
 
-  const { theme, fontSize, lineHeight, fontWeight, weekStartsOn, doneItemColor, name, currentPassword, newPassword, uiPreferences } = body
+  const { theme, fontSize, lineHeight, fontWeight, weekStartsOn, doneItemColor, name, currentPassword, newPassword, uiPreferences, shareLocation } = body
 
   if (theme !== undefined && !['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'apple-pro', 'apple-aqua', 'apple-graphite', 'apple-sunset', 'apple-midnight', 'apple-forest', 'glass-dark', 'sunset', 'ocean', 'forest', 'paper', 'harbour', 'plum', 'high-contrast', 'high-contrast-dark', 'high-contrast-sunset', 'high-contrast-ocean', 'high-contrast-forest', 'high-contrast-midnight'].includes(theme)) {
     return NextResponse.json({ error: 'Invalid theme value' }, { status: 400 })
@@ -67,6 +69,9 @@ export async function PATCH(req: Request) {
   }
   if (weekStartsOn !== undefined && ![0, 1].includes(weekStartsOn)) {
     return NextResponse.json({ error: 'Invalid weekStartsOn value' }, { status: 400 })
+  }
+  if (shareLocation !== undefined && typeof shareLocation !== 'boolean') {
+    return NextResponse.json({ error: 'Invalid shareLocation value' }, { status: 400 })
   }
   
   // Validate doneItemColor - allow hex codes (#RRGGBB) or named colors
@@ -117,6 +122,7 @@ export async function PATCH(req: Request) {
   if (fontWeight !== undefined) updateData.fontWeight = fontWeight
   if (weekStartsOn !== undefined) updateData.weekStartsOn = weekStartsOn
   if (doneItemColor !== undefined) updateData.doneItemColor = doneItemColor
+  if (shareLocation !== undefined) updateData.shareLocation = shareLocation
   if (name !== undefined && typeof name === 'string' && name.trim().length > 0) {
     updateData.name = name.trim()
   }
@@ -181,9 +187,15 @@ export async function PATCH(req: Request) {
       fontWeight: true,
       weekStartsOn: true,
       doneItemColor: true,
+      shareLocation: true,
       uiPreferences: true,
     },
   })
+
+  // Turning sharing off removes the last-known location so it can't be read by others
+  if (shareLocation === false) {
+    await clearUserLocation(user.id)
+  }
 
   // Parse uiPreferences in response
   const parsedUpdated = {

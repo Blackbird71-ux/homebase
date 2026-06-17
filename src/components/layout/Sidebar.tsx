@@ -9,7 +9,7 @@ import {
   Settings, LogOut, StickyNote, ListChecks, BookUser,
   Plus, FileText, DollarSign, Search, ChevronDown,
   Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench, PiggyBank,
-  ShoppingBasket,
+  ShoppingBasket, MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
@@ -45,6 +45,7 @@ const navItems: NavItem[] = [
   { href: '/wishlists',    label: 'Wishlist',     icon: Gift,    group: 'household', cat: 'var(--cat-contacts)' },
   { href: '/pocket-money', label: 'Pocket Money', icon: PiggyBank, group: 'household', cat: 'var(--cat-chores)' },
   { href: '/maintenance',  label: 'Maintenance',  icon: Wrench,  group: 'household', cat: 'var(--cat-maintenance)' },
+  { href: '/location',     label: 'Locations',    icon: MapPin,  group: 'household', cat: 'var(--cat-contacts)' },
 ]
 
 const GROUP_LABEL: Record<Group, string> = {

@@ -65,6 +65,7 @@ interface SettingsClientProps {
     fontWeight: string | null
     weekStartsOn: number | null
     doneItemColor: string | null
+    shareLocation: boolean | null
     uiPreferences: string | null
     googleConnected: boolean
     googleEmail: string | null
@@ -130,6 +131,7 @@ export function SettingsClient({ isAdmin, user, coziImports, supportedTimezones 
               name: user.name,
               email: user.email,
               role: user.role,
+              shareLocation: user.shareLocation ?? false,
               family: user.family,
             }}
             supportedTimezones={supportedTimezones}

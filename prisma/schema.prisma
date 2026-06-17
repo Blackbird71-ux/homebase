@@ -76,6 +76,8 @@ model User {
   theme               String                @default("dark")
   fontSize            String                @default("base")
   weekStartsOn        Int                   @default(0)
+  shareLocation       Boolean               @default(false)
+  location            UserLocation?
   doneItemColor       String                @default("RED")
   lineHeight          String                @default("normal")  // normal | relaxed | spacious
   fontWeight          String                @default("normal")  // normal | medium
@@ -98,6 +100,19 @@ model User {
   wishlistItemsSuggested WishlistItem[]        @relation("WishlistSuggested")
   wishlistItemsPurchased WishlistItem[]        @relation("WishlistPurchased")
   createdAt              DateTime              @default(now())
+}
+
+model UserLocation {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyId  String
+  lat       Float
+  lng       Float
+  accuracy  Float?
+  updatedAt DateTime @updatedAt
+
+  @@index([familyId])
 }
 
 model InviteCode {

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
 import { CheckCircle, AlertCircle, Copy, RefreshCw, Check } from 'lucide-react'
 import { formatInTz } from '@/lib/timezone'
 
@@ -33,6 +34,7 @@ interface AccountTabProps {
     name: string
     email: string
     role: string
+    shareLocation: boolean
     family: {
       id: string
       name: string
@@ -52,6 +54,11 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
   const [name, setName] = useState(user.name)
   const [nameStatus, setNameStatus] = useState<Status>(null)
   const [nameSaving, setNameSaving] = useState(false)
+
+  // Location sharing
+  const [shareLocation, setShareLocation] = useState(user.shareLocation)
+  const [locationStatus, setLocationStatus] = useState<Status>(null)
+  const [locationSaving, setLocationSaving] = useState(false)
 
   // Password
   const [currentPassword, setCurrentPassword] = useState('')
@@ -108,6 +115,36 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
       setNameStatus({ type: 'error', message: 'Network error.' })
     } finally {
       setNameSaving(false)
+    }
+  }
+
+  async function toggleShareLocation(next: boolean) {
+    setShareLocation(next)
+    setLocationSaving(true)
+    setLocationStatus(null)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shareLocation: next }),
+      })
+      if (res.ok) {
+        setLocationStatus({
+          type: 'success',
+          message: next
+            ? 'Location sharing on. Your position updates while Homebase is open.'
+            : 'Location sharing off. Your stored location has been cleared.',
+        })
+      } else {
+        setShareLocation(!next)
+        const data = await res.json()
+        setLocationStatus({ type: 'error', message: data.error ?? 'Failed to update location sharing.' })
+      }
+    } catch {
+      setShareLocation(!next)
+      setLocationStatus({ type: 'error', message: 'Network error.' })
+    } finally {
+      setLocationSaving(false)
     }
   }
 
@@ -343,6 +380,30 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
             {passwordSaving ? 'Updating...' : 'Update Password'}
           </Button>
           {passwordStatus && <StatusMessage status={passwordStatus} />}
+        </CardContent>
+      </Card>
+
+      {/* Location Sharing */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Location Sharing</CardTitle>
+          <CardDescription>
+            Share your device&apos;s location with other family members on the Locations map.
+            Your position only updates while Homebase is open on your device — there is no
+            background tracking. Turning this off clears your stored location.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="share-location">Share my location</Label>
+            <Switch
+              id="share-location"
+              checked={shareLocation}
+              onCheckedChange={toggleShareLocation}
+              disabled={locationSaving}
+            />
+          </div>
+          {locationStatus && <StatusMessage status={locationStatus} />}
         </CardContent>
       </Card>
 

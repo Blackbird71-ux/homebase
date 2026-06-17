@@ -20,6 +20,7 @@ export default async function SettingsPage() {
         fontWeight: true,
         weekStartsOn: true,
         doneItemColor: true,
+        shareLocation: true,
         uiPreferences: true,
         googleConnected: true,
         googleEmail: true,

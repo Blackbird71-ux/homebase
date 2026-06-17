@@ -10,8 +10,9 @@ import { OfflineBanner } from './OfflineBanner'
 import { HelpButton } from './HelpButton'
 import { AIAssistant } from '@/components/ai/AIAssistant'
 import { useGlobalOfflineFlush } from '@/hooks/useGlobalOfflineFlush'
+import { useLocationReporter } from '@/hooks/useLocationReporter'
 
-export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string }) {
+export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole, shareLocation = false }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string; shareLocation?: boolean }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sidebar-collapsed') === 'true'
@@ -21,6 +22,9 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
 
   // Replays the offline mutation queue from anywhere in the app
   useGlobalOfflineFlush()
+
+  // Reports this device's location while sharing is enabled (foreground only)
+  useLocationReporter(shareLocation)
 
   // Listen for custom events from QuickAdd dialog or UniversalFAB sheet
   useEffect(() => {
