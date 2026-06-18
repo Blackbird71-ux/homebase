@@ -7,6 +7,7 @@ import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import type { DashboardData, TodaysMeal } from '@/types'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 
 function normalizeToUtcMidnight(dateStr: string): Date {
   const d = new Date(dateStr + 'T00:00:00Z')
@@ -186,6 +187,7 @@ export async function GET(request: NextRequest) {
         isActive: true,
         paid: false,
         nextDueDate: { lte: new Date(mealPlanTodayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+        ...liveBillWhere,
       },
       orderBy: { nextDueDate: 'asc' },
       select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true, payments: { select: { amount: true } } },

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 
 // ── queryWeekSummary ───────────────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ async function queryWeekSummaryHandler(_args: Record<string, unknown>, ctx: Hand
       isActive: true,
       paid: false,
       nextDueDate: { gte: start, lte: end },
+      ...liveBillWhere,
     },
     select: { name: true, amount: true, nextDueDate: true },
     orderBy: { nextDueDate: 'asc' },

@@ -6,6 +6,7 @@ import { choreReminderHtml, eventReminderHtml, documentExpiryHtml, billReminderH
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { generateCompleteToken } from '@/lib/complete-token'
 import { dateStringInTz, todayStringInTz, localMidnightToUtc, DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 
 function todayKey(): string {
   return new Date().toISOString().split('T')[0]
@@ -292,7 +293,7 @@ export async function processDocumentReminders(): Promise<number> {
 
 export async function processBillReminders(): Promise<number> {
   const bills = await prisma.financeRecurringBill.findMany({
-    where: { emailReminder: true, isActive: true, paid: false },
+    where: { emailReminder: true, isActive: true, paid: false, ...liveBillWhere },
     include: {
       family: {
         include: { users: { select: { id: true, name: true, email: true } } },

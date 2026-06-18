@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
+import { liveBillWhere, liveIncomeWhere } from '@/lib/finance-live-filter'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ async function queryRemindersHandler(args: Record<string, unknown>, ctx: Handler
       paid: false,
       emailReminder: true,
       nextDueDate: { lte: cutoff },
+      ...liveBillWhere,
     },
     select: { id: true, name: true, amount: true, nextDueDate: true, reminderDays: true },
     orderBy: { nextDueDate: 'asc' },
@@ -125,6 +127,7 @@ async function queryRemindersHandler(args: Record<string, unknown>, ctx: Handler
       received: false,
       emailReminder: true,
       nextExpectedDate: { lte: cutoff },
+      ...liveIncomeWhere,
     },
     select: { id: true, name: true, amount: true, nextExpectedDate: true, reminderDays: true },
     orderBy: { nextExpectedDate: 'asc' },
@@ -214,7 +217,7 @@ async function setReminderHandler(args: Record<string, unknown>, ctx: HandlerCon
 
     case 'bill': {
       const bills = await prisma.financeRecurringBill.findMany({
-        where: { familyId: ctx.familyId, isActive: true },
+        where: { familyId: ctx.familyId, isActive: true, ...liveBillWhere },
         select: { id: true, name: true, nextDueDate: true, reminderDays: true, emailReminder: true },
       })
 
@@ -276,7 +279,7 @@ async function setReminderHandler(args: Record<string, unknown>, ctx: HandlerCon
 
     case 'income': {
       const incomes = await prisma.financeIncomeEntry.findMany({
-        where: { familyId: ctx.familyId, isActive: true },
+        where: { familyId: ctx.familyId, isActive: true, ...liveIncomeWhere },
         select: { id: true, name: true, nextExpectedDate: true, reminderDays: true, emailReminder: true },
       })
 

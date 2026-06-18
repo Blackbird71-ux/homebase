@@ -9,6 +9,7 @@ import { formatInTz, nDaysFromTodayInTz } from '@/lib/timezone'
 import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
 import { postIncomeAccrualJournal, postIncomeReceiptJournal } from '@/lib/finance-posting'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
+import { liveIncomeWhere } from '@/lib/finance-live-filter'
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
@@ -17,19 +18,20 @@ async function incomeContextProvider(familyId: string, _userId: string, timezone
   const thirtyDaysFromNow = nDaysFromTodayInTz(30, timezone)
 
   const [activeIncome, upcomingIncome, monthTotal] = await Promise.all([
-    prisma.financeIncomeEntry.count({ where: { familyId, isActive: true } }),
+    prisma.financeIncomeEntry.count({ where: { familyId, isActive: true, ...liveIncomeWhere } }),
     prisma.financeIncomeEntry.findMany({
       where: {
         familyId,
         isActive: true,
         received: false,
         nextExpectedDate: { gte: now, lte: thirtyDaysFromNow },
+        ...liveIncomeWhere,
       },
       select: { name: true, amount: true, nextExpectedDate: true },
       orderBy: { nextExpectedDate: 'asc' },
     }),
     prisma.financeIncomeEntry.aggregate({
-      where: { familyId, isActive: true, received: false },
+      where: { familyId, isActive: true, received: false, ...liveIncomeWhere },
       _sum: { amount: true },
     }),
   ])
@@ -97,6 +99,7 @@ async function queryIncomeHandler(args: Record<string, unknown>, ctx: HandlerCon
       familyId: ctx.familyId,
       isActive: true,
       ...(whereReceived !== undefined ? { received: whereReceived } : {}),
+      ...liveIncomeWhere,
     },
     include: {
       account: { select: { name: true } },
@@ -152,7 +155,7 @@ async function markIncomeReceivedHandler(args: Record<string, unknown>, ctx: Han
   const lower = incomeName.toLowerCase()
 
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: ctx.familyId, isActive: true, received: false, isVoided: false },
+    where: { familyId: ctx.familyId, isActive: true, received: false, ...liveIncomeWhere },
     select: { id: true, name: true, amount: true, categoryId: true, entityId: true, invoiceReceived: true },
   })
 

@@ -4,6 +4,7 @@ import { seedFinanceCategories } from '@/lib/finance-seed'
 import { deriveAllAccountBalances, deriveJournalLineBalances } from '@/lib/finance-opening-balance'
 import { OverviewClient } from './OverviewClient'
 import { monthBoundsInTz } from '@/lib/timezone'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 import type {
   FinanceAccount, FinanceTransaction, FinanceBudget,
   FinanceRecurringBill, FinanceSavingsGoal, FinanceCategory, FinanceLocation,
@@ -51,7 +52,10 @@ export default async function FinanceOverviewPage() {
       orderBy: { name: 'asc' },
     }) as Promise<(FinanceBudget & { category: FinanceCategory | null })[]>,
     prisma.financeRecurringBill.findMany({
-      where: { familyId, isActive: true },
+      // Exclude draft/cancelled/voided bills — they are not live obligations and
+      // must not surface in the dashboard "Upcoming Bills" widget (mirrors the
+      // canonical bills list in /api/finance/bills).
+      where: { familyId, isActive: true, ...liveBillWhere },
       include: {
         account: true,
         category: true,

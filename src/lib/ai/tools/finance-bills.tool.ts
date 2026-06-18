@@ -10,6 +10,7 @@ import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
 import { recordBillPayment } from '@/lib/finance-bill-payment'
 import { copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 
 // ── Context provider ──────────────────────────────────────────────────────────
 
@@ -18,13 +19,14 @@ async function billsContextProvider(familyId: string, _userId: string, timezone:
   const thirtyDaysFromNow = nDaysFromTodayInTz(30, timezone)
 
   const [totalBills, upcomingBills, overdueBills, unpaidCount, monthlyTotal] = await Promise.all([
-    prisma.financeRecurringBill.count({ where: { familyId, isActive: true } }),
+    prisma.financeRecurringBill.count({ where: { familyId, isActive: true, ...liveBillWhere } }),
     prisma.financeRecurringBill.findMany({
       where: {
         familyId,
         isActive: true,
         paid: false,
         nextDueDate: { gte: now, lte: thirtyDaysFromNow },
+        ...liveBillWhere,
       },
       select: { name: true, amount: true, nextDueDate: true, frequency: true },
       orderBy: { nextDueDate: 'asc' },
@@ -35,15 +37,16 @@ async function billsContextProvider(familyId: string, _userId: string, timezone:
         isActive: true,
         paid: false,
         nextDueDate: { lt: now },
+        ...liveBillWhere,
       },
       select: { name: true, amount: true, nextDueDate: true },
       orderBy: { nextDueDate: 'asc' },
     }),
     prisma.financeRecurringBill.count({
-      where: { familyId, isActive: true, paid: false },
+      where: { familyId, isActive: true, paid: false, ...liveBillWhere },
     }),
     prisma.financeRecurringBill.aggregate({
-      where: { familyId, isActive: true, paid: false },
+      where: { familyId, isActive: true, paid: false, ...liveBillWhere },
       _sum: { amount: true },
     }),
   ])
@@ -105,6 +108,7 @@ async function queryBillsHandler(args: Record<string, unknown>, ctx: HandlerCont
           isActive: true,
           paid: false,
           nextDueDate: { lt: now },
+          ...liveBillWhere,
         },
         include: {
           account: { select: { name: true } },
@@ -124,6 +128,7 @@ async function queryBillsHandler(args: Record<string, unknown>, ctx: HandlerCont
           isActive: true,
           paid: false,
           nextDueDate: { gte: now, lte: thirtyDaysFromNow },
+          ...liveBillWhere,
         },
         include: {
           account: { select: { name: true } },
@@ -141,6 +146,7 @@ async function queryBillsHandler(args: Record<string, unknown>, ctx: HandlerCont
           familyId: ctx.familyId,
           isActive: true,
           paid: true,
+          ...liveBillWhere,
         },
         include: {
           account: { select: { name: true } },
@@ -155,7 +161,7 @@ async function queryBillsHandler(args: Record<string, unknown>, ctx: HandlerCont
     }
     default: {
       bills = await prisma.financeRecurringBill.findMany({
-        where: { familyId: ctx.familyId, isActive: true },
+        where: { familyId: ctx.familyId, isActive: true, ...liveBillWhere },
         include: {
           account: { select: { name: true } },
           category: { select: { name: true } },
@@ -211,7 +217,7 @@ async function markBillPaidHandler(args: Record<string, unknown>, ctx: HandlerCo
 
   // Load full bill records — recordBillPayment needs the whole row.
   const bills = await prisma.financeRecurringBill.findMany({
-    where: { familyId: ctx.familyId, isActive: true, paid: false, isVoided: false },
+    where: { familyId: ctx.familyId, isActive: true, paid: false, ...liveBillWhere },
   })
 
   // Find best match — use let + sequential checks for TypeScript narrowing
@@ -300,7 +306,7 @@ async function queryBillDetailsHandler(args: Record<string, unknown>, ctx: Handl
   const lower = billName.toLowerCase()
 
   const bills = await prisma.financeRecurringBill.findMany({
-    where: { familyId: ctx.familyId, isActive: true },
+    where: { familyId: ctx.familyId, isActive: true, ...liveBillWhere },
     include: {
       account: { select: { name: true } },
       category: { select: { name: true, type: true } },

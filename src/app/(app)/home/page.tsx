@@ -7,6 +7,7 @@ import { HomeClient } from './HomeClient'
 import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
 import { buildChoreSchedule } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 
 /**
  * Normalize a date string to midnight UTC for meal plan queries.
@@ -213,6 +214,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
             isActive: true,
             paid: false,
             nextDueDate: { lte: new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000) },
+            ...liveBillWhere,
           },
           orderBy: { nextDueDate: 'asc' },
           select: { id: true, name: true, amount: true, frequency: true, nextDueDate: true, autoPay: true },

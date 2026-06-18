@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma'
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { todayBoundsInTz, nDaysFromTodayInTz, formatInTz, monthBoundsInTz, dateStringInTz } from '@/lib/timezone'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 
 // ── generateDailyDigest ────────────────────────────────────────────────────────
 
@@ -111,7 +112,7 @@ async function dailyDigestHandler(args: Record<string, unknown>, ctx: HandlerCon
   // ── Bills due today / overdue ───────────────────────────────────────────────
 
   const bills = await prisma.financeRecurringBill.findMany({
-    where: { familyId: ctx.familyId, isActive: true, paid: false },
+    where: { familyId: ctx.familyId, isActive: true, paid: false, ...liveBillWhere },
     select: { id: true, name: true, amount: true, nextDueDate: true },
     orderBy: { nextDueDate: 'asc' },
   })

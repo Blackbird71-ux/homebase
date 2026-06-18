@@ -9,6 +9,7 @@ import { sendPushToUser } from '@/lib/push'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { birthdayEntryOccurrencesInRange, type BirthdayEntry } from '@/lib/date-engine'
 import { todayBoundsInTz, todayStringInTz, nDaysFromTodayInTz, formatInTz, DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { liveBillWhere } from '@/lib/finance-live-filter'
 
 interface BriefingEvent {
   title: string
@@ -50,8 +51,8 @@ export async function gatherFamilyBriefing(familyId: string, timezone: string): 
         familyId,
         isActive: true,
         paid: false,
-        isVoided: false,
         nextDueDate: { gte: todayStart, lt: weekEnd },
+        ...liveBillWhere,
       },
       select: { name: true, amount: true, nextDueDate: true },
       orderBy: { nextDueDate: 'asc' },

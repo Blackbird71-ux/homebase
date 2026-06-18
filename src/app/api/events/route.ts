@@ -8,6 +8,7 @@ import { localMidnightToUtc, dateStringInTz } from '@/lib/timezone'
 import { pushEventToGoogle } from '@/lib/google-sync'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { createAuditLog } from '@/lib/audit-log'
+import { liveBillWhere, liveIncomeWhere } from '@/lib/finance-live-filter'
 import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(req: Request) {
@@ -96,9 +97,9 @@ export async function GET(req: Request) {
               familyId: user.familyId,
               showOnCalendar: true,
               paid: false,
-              isVoided: false,
               isActive: true,
               nextDueDate: { gte: rangeStart, lte: rangeEnd },
+              ...liveBillWhere,
             },
             select: { id: true, name: true, nextDueDate: true },
           })
@@ -130,9 +131,9 @@ export async function GET(req: Request) {
               familyId: user.familyId,
               showOnCalendar: true,
               received: false,
-              isVoided: false,
               isActive: true,
               nextExpectedDate: { gte: rangeStart, lte: rangeEnd },
+              ...liveIncomeWhere,
             },
             select: { id: true, name: true, nextExpectedDate: true },
           })

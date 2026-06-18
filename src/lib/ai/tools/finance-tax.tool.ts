@@ -8,6 +8,7 @@ import { SchemaType, type FunctionDeclaration } from '@google/generative-ai'
 import { formatInTz } from '@/lib/timezone'
 import { currentFinancialYearStart, financialYearBounds, parseFinancePeriod } from '@/lib/ai/finance-period'
 import type { HandlerContext, HandlerResult } from '@/lib/ai/types'
+import { liveBillWhere, liveIncomeWhere } from '@/lib/finance-live-filter'
 
 // ── queryTaxSummary ───────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ async function queryTaxSummaryHandler(args: Record<string, unknown>, ctx: Handle
       isTaxTracked: true,
       received: true,
       receivedDate: { gte: start, lt: end },
+      ...liveIncomeWhere,
     },
     select: { name: true, amount: true, taxRate: true, taxClassification: true },
   })
@@ -111,6 +113,7 @@ async function queryTaxSummaryHandler(args: Record<string, unknown>, ctx: Handle
       familyId: ctx.familyId,
       isActive: true,
       taxClassification: { not: null },
+      ...liveBillWhere,
     },
     select: { name: true, amount: true, taxClassification: true, frequency: true },
   })
