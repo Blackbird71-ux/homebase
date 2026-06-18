@@ -120,6 +120,36 @@ describe('reconcilePostedAccrualOnEdit', () => {
     })
   })
 
+  it('bill-date change (newDate): reverses in the ORIGINAL period, reposts the fresh accrual on the NEW date, re-dates the invoice tx (Xero/MYOB period move)', async () => {
+    const { prisma } = await getMocks()
+    const NEW_DATE = new Date('2026-06-15T00:00:00.000Z')
+
+    await reconcilePostedAccrualOnEdit({
+      kind: 'bill',
+      familyId: 'fam-1',
+      journalEntryId: 'je-old',
+      description: 'Apco Bendigo Fuel',
+      amount: 74.18,
+      glAccountId: 'gl-visa',
+      entityId: null,
+      invoiceTxId: 'tx-1',
+      newDate: NEW_DATE,
+    })
+
+    const createCalls = vi.mocked(prisma.financeJournalEntry.create).mock.calls
+    // Reversal backs the original accrual out of its ORIGINAL period.
+    const reversal = createCalls[0][0] as { data: Record<string, unknown> }
+    expect(reversal.data.date).toBe(ACCRUAL_DATE)
+    // Fresh accrual recognises the expense in the NEW period.
+    const fresh = createCalls[1][0] as { data: Record<string, unknown> }
+    expect(fresh.data.date).toBe(NEW_DATE)
+    // Invoice tx follows the GL to the new date.
+    expect(prisma.financeTransaction.update).toHaveBeenCalledWith({
+      where: { id: 'tx-1' },
+      data: { categoryId: 'gl-visa', entityId: null, amount: 74.18, date: NEW_DATE },
+    })
+  })
+
   it('income: posts a fresh DR AR / CR newIncome', async () => {
     const { prisma } = await getMocks()
     // Posted income accrual is DR AR / CR Income.

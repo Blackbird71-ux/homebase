@@ -161,6 +161,9 @@ export async function receiveBillStage1(
     data: {
       invoiceReceived: true,
       invoiceReceivedDate: invoiceDate,
+      // billDate is the GL recognition (tax-point) date the accrual posted on.
+      // Record it so the row always reflects what the ledger used.
+      billDate: invoiceDate,
       invoiceTxId: invoiceTx.id,
       transactionId: invoiceTx.id,
       journalEntryId,

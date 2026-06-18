@@ -251,6 +251,13 @@ export default function BillsPage() {
                       title="Manage contacts"><Building2 className="h-3.5 w-3.5" /></Link>
                   </div>
                 </div>
+                {/* Bill Date — supplier invoice / tax-point date; drives GL recognition */}
+                <div>
+                  <label className="text-xs text-muted-foreground">Bill Date (supplier invoice date)</label>
+                  <input type="date" value={form.billDate} onChange={e => setForm(p => ({ ...p, billDate: e.target.value }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">The date the supplier dated the bill — when the expense and payable are recognised in the GL. Due date below is payment timing only.</p>
+                </div>
                 {/* Due Date + End Date (recurring) */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -397,15 +404,10 @@ export default function BillsPage() {
                     {form.invoiceReceived ? 'Mark as draft (unpost)' : 'Mark invoice received'}
                   </button>
                 </div>
-                {form.invoiceReceived && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground">Invoice date</label>
-                    <input type="date" value={form.invoiceReceivedDate}
-                      onChange={e => setForm(p => ({ ...p, invoiceReceivedDate: e.target.value }))}
-                      className="rounded-md border border-input bg-background px-2 py-1 text-sm" />
-                  </div>
-                )}
               </div>
+              {/* The budget planner models recurring monthly commitments — a one-off
+                  bill is a single expense, not a monthly liability, so it is excluded. */}
+              {form.billType !== 'one-off' && (
               <div className={cn('rounded-md border px-3 py-2.5 flex items-start gap-3', form.addToBudget ? 'border-primary/40 bg-primary/5' : 'border-border')}>
                 <input type="checkbox" id="addToBudget" checked={form.addToBudget}
                   onChange={e => setForm(p => ({ ...p, addToBudget: e.target.checked }))} className="rounded border-input mt-0.5" />
@@ -421,6 +423,7 @@ export default function BillsPage() {
                   )}
                 </label>
               </div>
+              )}
             </div>
           </div>
           </div>

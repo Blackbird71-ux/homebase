@@ -716,8 +716,10 @@ export async function postIncomeAccrualJournal(
 //   3. Re-points the linked invoice transaction (category / entity / amount) so
 //      account & balance views match the corrected GL.
 //
-// Both the reversal and the fresh accrual are dated to the ORIGINAL accrual's
-// date, so the correction is a period-neutral swap (no cross-period movement).
+// The reversal is dated to the ORIGINAL accrual's date. The fresh accrual is dated
+// to `newDate` when supplied (a bill-date change moves the expense to a new period,
+// as Xero/MYOB do), otherwise to the original date — a period-neutral swap for
+// category/amount/entity-only corrections.
 //
 // Throws AccrualReconcileBlockedError when the posted accrual is NOT a plain
 // 2-line entry (a custom GST / withholding split). Re-posting a flat 2-line
@@ -754,13 +756,21 @@ export interface ReconcileAccrualParams {
   entityId: string | null
   /** Linked invoice transaction to keep in sync (category/entity/amount). Null = none. */
   invoiceTxId?: string | null
+  /**
+   * New recognition (tax-point) date for the fresh accrual. When set, the reversal
+   * stays in the ORIGINAL period (je.date) and the fresh accrual posts in the NEW
+   * period — moving the expense/payable between periods, exactly as Xero/MYOB do
+   * when a posted bill's date is changed. Omit/null = period-neutral swap (repost
+   * on the original date), used for category/amount/entity-only corrections.
+   */
+  newDate?: Date | null
 }
 
 export async function reconcilePostedAccrualOnEdit(
   params: ReconcileAccrualParams,
   outerTx?: Prisma.TransactionClient,
 ): Promise<{ newJournalEntryId: string }> {
-  const { kind, familyId, journalEntryId, description, amount, glAccountId, entityId, invoiceTxId } = params
+  const { kind, familyId, journalEntryId, description, amount, glAccountId, entityId, invoiceTxId, newDate } = params
 
   if (!(amount > 0)) {
     throw new Error(`reconcilePostedAccrualOnEdit: amount must be positive, got ${amount}`)
@@ -815,8 +825,11 @@ export async function reconcilePostedAccrualOnEdit(
   const reversalRef = `JE-${String(baseNum).padStart(4, '0')}`
   const freshRef = `JE-${String(baseNum + 1).padStart(4, '0')}`
 
-  // Keep the correction in the SAME accounting period as the original accrual.
+  // The reversal always backs the original accrual out of its ORIGINAL period.
   const accrualDate = je.date
+  // The fresh accrual posts on the new recognition date when supplied (a bill-date
+  // change moves the expense to a new period), else stays period-neutral.
+  const freshDate = newDate ?? je.date
 
   // ── Atomic write ───────────────────────────────────────────────────────────
   // When the caller passes its own transaction (outerTx), run the GL writes on it
@@ -832,7 +845,7 @@ export async function reconcilePostedAccrualOnEdit(
     const fresh = await tx.financeJournalEntry.create({
       data: {
         reference: freshRef,
-        date: accrualDate,
+        date: freshDate,
         description,
         type: 'auto_transaction',
         isPosted: true,
@@ -855,7 +868,7 @@ export async function reconcilePostedAccrualOnEdit(
     if (invoiceTxId) {
       await tx.financeTransaction.update({
         where: { id: invoiceTxId },
-        data: { categoryId: glAccountId, entityId: entityId ?? null, amount },
+        data: { categoryId: glAccountId, entityId: entityId ?? null, amount, ...(newDate && { date: freshDate }) },
       })
     }
 

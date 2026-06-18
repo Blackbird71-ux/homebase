@@ -101,7 +101,7 @@ export function useBillCrud() {
     notes: '', memberId: '', locationId: '', vendorId: '',
     entityId: '',
     billType: 'recurring', recurrenceInterval: '',
-    invoiceReceived: false, invoiceReceivedDate: '',
+    invoiceReceived: false, billDate: todayAU(),
     taxClassification: '',
     showOnCalendar: true,
     addToBudget: true,
@@ -229,8 +229,11 @@ export function useBillCrud() {
   // ── Budget sync ──────────────────────────────────────────────────────────────
 
   async function syncBudgetRule(bill: Bill, addToBudget: boolean) {
+    // One-off bills are single expenses, not recurring monthly commitments — never
+    // model them as a monthly budget liability. Force removal of any stale rule.
+    const effectiveAdd = addToBudget && bill.billType !== 'one-off'
     try {
-      if (addToBudget) {
+      if (effectiveAdd) {
         const res = await fetch('/api/finance/budget', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -303,7 +306,9 @@ export function useBillCrud() {
       entityId: b.entity?.id ?? entities.find(e => e.isDefault)?.id ?? '',
       billType: b.billType ?? 'recurring', recurrenceInterval: b.recurrenceInterval ?? '',
       invoiceReceived: b.invoiceReceived ?? false,
-      invoiceReceivedDate: b.invoiceReceivedDate ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : '',
+      billDate: b.billDate
+        ? new Date(b.billDate).toISOString().split('T')[0]
+        : (b.invoiceReceivedDate ? new Date(b.invoiceReceivedDate).toISOString().split('T')[0] : ''),
       taxClassification: b.taxClassification ?? '',
       showOnCalendar: b.showOnCalendar ?? true,
       addToBudget: budgetBillIds.has(b.id),
@@ -323,7 +328,10 @@ export function useBillCrud() {
       memberId: form.memberId || null, locationId: form.locationId || null,
       billType: form.billType || 'recurring', recurrenceInterval: form.recurrenceInterval || null,
       invoiceReceived: form.invoiceReceived,
-      invoiceReceivedDate: form.invoiceReceivedDate || null,
+      // Bill date = supplier invoice date = the GL recognition (tax-point) date.
+      // It also stands in for invoiceReceivedDate — they are the same supplier date.
+      billDate: form.billDate || null,
+      invoiceReceivedDate: form.billDate || null,
       taxClassification: form.taxClassification || null,
       showOnCalendar: form.showOnCalendar,
     }

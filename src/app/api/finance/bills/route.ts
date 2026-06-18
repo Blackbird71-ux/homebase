@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     isActive, autoPay, emailReminder, reminderDays,
     notes, memberId, locationId, vendorId,
     billType, recurrenceInterval,
-    invoiceReceived, invoiceReceivedDate,
+    invoiceReceived, invoiceReceivedDate, billDate,
     paid, paidDate, entityId, taxClassification,
     showOnCalendar,
     journalLines,
@@ -117,8 +117,12 @@ export async function POST(request: NextRequest) {
 
   const parsedAmount = parseFloat(amount)
   const dueDate = new Date(nextDueDate ?? new Date())
+  // Bill date = supplier invoice date = GL recognition (tax-point) date. It drives
+  // when the accrual hits the P&L and AP. Fall back to invoiceReceivedDate (legacy
+  // clients) then today.
+  const billDateValue = billDate ? new Date(billDate) : null
   const shouldPostInvoice = invoiceReceived === true
-  const invoiceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
+  const invoiceDate = billDateValue ?? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
 
   // ── ATOMIC: create bill + GL journal entry if invoiceReceived=true ─────────
   // If invoiceReceived=true on creation, we post to the GL immediately.
@@ -147,6 +151,7 @@ export async function POST(request: NextRequest) {
           locationId: locationId ?? null,
           billType: billType ?? 'recurring',
           recurrenceInterval: recurrenceInterval ?? null,
+          billDate: billDateValue,
           invoiceReceived: shouldPostInvoice,
           invoiceReceivedDate: shouldPostInvoice ? invoiceDate : null,
           paid: paid ?? false,
@@ -181,7 +186,7 @@ export async function POST(request: NextRequest) {
   if (Array.isArray(journalLines) && journalLines.length >= 2) {
     try {
       draftJeId = await upsertBillDraftJournal(
-        bill.id, name, null, journalLines, dueDate, user.familyId, entityId ?? null,
+        bill.id, name, null, journalLines, invoiceDate, user.familyId, entityId ?? null,
       )
       await prisma.financeRecurringBill.update({
         where: { id: bill.id },
@@ -263,7 +268,7 @@ export async function PUT(request: NextRequest) {
     isActive, autoPay, emailReminder, reminderDays,
     notes, memberId, locationId, vendorId,
     billType, recurrenceInterval,
-    invoiceReceived, invoiceReceivedDate,
+    invoiceReceived, invoiceReceivedDate, billDate,
     paid, paidDate, entityId, taxClassification,
     showOnCalendar,
     journalLines,
@@ -274,6 +279,14 @@ export async function PUT(request: NextRequest) {
   const existing = await prisma.financeRecurringBill.findFirst({ where: { id, familyId: user.familyId } })
   if (!existing) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
 
+  // Recognition (tax-point) date for a false→true posting transition: the supplier
+  // bill date from this request, else the bill's stored billDate, else the legacy
+  // invoiceReceivedDate, else today.
+  const putRecognitionDate =
+    (billDate !== undefined && billDate ? new Date(billDate) : null)
+    ?? existing.billDate
+    ?? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
+
   // ── Pre-edit GL guard ───────────────────────────────────────────────────────
   // When a GL-relevant field (category / amount / entity) changes on a bill whose
   // accrual is ALREADY posted, the posted journal must be re-synced or the row and
@@ -282,10 +295,17 @@ export async function PUT(request: NextRequest) {
   // "Reconcile if unpaid, block if paid": a paid bill's AP has been cleared, so its
   // accrual cannot be safely reversed here — reject and tell the user to un-pay first.
   const invoiceReceivedTransition = invoiceReceived === true && !existing.invoiceReceived
+  // A bill-date change on a posted bill moves the GL recognition to a new period —
+  // it must reverse the original accrual and repost on the new date (Xero/MYOB
+  // behaviour), so it is a GL-relevant change just like category/amount/entity.
+  const billDateChanged =
+    billDate !== undefined &&
+    (billDate ? new Date(billDate).getTime() : null) !== (existing.billDate ? existing.billDate.getTime() : null)
   const billGlFieldChanged =
     (categoryId !== undefined && (categoryId ?? null) !== existing.categoryId) ||
     (entityId !== undefined && (entityId ?? null) !== existing.entityId) ||
-    (amount !== undefined && parseFloat(amount) !== existing.amount)
+    (amount !== undefined && parseFloat(amount) !== existing.amount) ||
+    billDateChanged
   const needsAccrualResync =
     billGlFieldChanged && existing.invoiceReceived === true && !invoiceReceivedTransition && !!existing.journalEntryId
 
@@ -331,6 +351,7 @@ export async function PUT(request: NextRequest) {
       ...(vendorId !== undefined && { vendorId: vendorId ?? null }),
       ...(billType !== undefined && { billType }),
       ...(recurrenceInterval !== undefined && { recurrenceInterval: recurrenceInterval ?? null }),
+      ...(billDate !== undefined && { billDate: billDate ? new Date(billDate) : null }),
       // On a false→true transition the flags are set ATOMICALLY with the GL
       // write in Step 2 below (audit F4) — never here, ahead of the journal.
       ...(invoiceReceived !== undefined && !invoiceReceivedTransition && { invoiceReceived }),
@@ -365,6 +386,10 @@ export async function PUT(request: NextRequest) {
           glAccountId: reconcileCategoryId!,
           entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
           invoiceTxId: existing.invoiceTxId ?? null,
+          // A bill-date change moves recognition to a new period: reverse in the
+          // original period, repost the fresh accrual on the new date (Xero/MYOB).
+          // Unchanged date → null → period-neutral swap (category/amount/entity edits).
+          newDate: billDateChanged ? (billDate ? new Date(billDate) : existing.billDate) : null,
         }, tx)
         return tx.financeRecurringBill.update({
           where: { id },
@@ -413,7 +438,7 @@ export async function PUT(request: NextRequest) {
         name ?? existing.name,
         workingJeId,
         journalLines,
-        nextDueDate ? new Date(nextDueDate) : existing.nextDueDate,
+        putRecognitionDate,
         user.familyId,
         entityId !== undefined ? (entityId ?? null) : existing.entityId,
       )
@@ -454,7 +479,7 @@ export async function PUT(request: NextRequest) {
       await prisma.$transaction(async (tx) => {
         await receiveBillStage1(tx, {
           bill,
-          invoiceDate: invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date(),
+          invoiceDate: putRecognitionDate,
           userId: user.id,
           familyId: user.familyId,
           draftJournalEntryId: workingJeId,
@@ -474,7 +499,7 @@ export async function PUT(request: NextRequest) {
   // above — see the doAtomicResync branch.
 
   const putPeriodWarning = invoiceReceivedTransition
-    ? await getPeriodLockWarning(user.familyId, invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date())
+    ? await getPeriodLockWarning(user.familyId, putRecognitionDate)
     : null
 
   const finalBill = await prisma.financeRecurringBill.findFirst({
@@ -763,7 +788,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Bill must have an expense category before posting' }, { status: 400 })
     }
 
-    const invoiceDate = invoiceReceivedDate ? new Date(invoiceReceivedDate) : new Date()
+    // Recognise on the supplier bill date (tax point). The list toggle sends no
+    // date, so fall back to the bill's stored billDate, then legacy
+    // invoiceReceivedDate, then today.
+    const invoiceDate = invoiceReceivedDate
+      ? new Date(invoiceReceivedDate)
+      : (existing.billDate ?? new Date())
 
     // ATOMIC: prepayment gate → GL accrual → amortisation schedule → invoice
     // transaction → bill status, all together via the shared Stage-1 helper
