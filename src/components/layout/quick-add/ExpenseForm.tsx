@@ -3,14 +3,21 @@
 /**
  * ExpenseForm — Quick Add: Expense
  *
- * Records a double-entry expense journal:
- *   DR  Expense account  (e.g. 5.1 Office Supplies)
- *   CR  Payment account  (e.g. 1.2 Visa Card)
+ * Records a double-entry expense paid from a bank/card account:
+ *   DR  Expense account   (e.g. 5.1 Office Supplies)
+ *   CR  Bank account       (the FinanceAccount's bound 1:1 GL category)
  *
- * Both sides are GL accounts (FinanceCategory), NOT bank accounts.
- * The form posts directly to /api/finance/journals with postImmediately=true.
+ * The DR side is a GL expense category; the cash (CR) side is a FinanceAccount
+ * (Xero "bank = GL account, 1:1" model), never a raw asset/liability GL
+ * category — so the cash always moves an account the dashboard / Accounts page /
+ * Balance Sheet read from, and the balances reconcile by construction.
  *
- * Last-used GL selections are persisted to localStorage so repeat entries
+ * Posts to /api/finance/transactions (type='expense', accountId + categoryId),
+ * the same account-bound, GST-aware path the manual transactions register uses.
+ * The server resolves the account to its bound GL category and posts the journal
+ * (splitting GST when the expense category is GST-applicable).
+ *
+ * Last-used selections are persisted to localStorage so repeat entries
  * (same card, same expense type) require only amount + description.
  */
 
@@ -22,15 +29,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { todayAU } from '@/lib/utils'
-import type { QuickAddFormProps, CategoryMeta } from './types'
+import type { QuickAddFormProps, CategoryMeta, AccountMeta } from './types'
 
 // ── localStorage persistence ─────────────────────────────────────────────────
 
-const PREFS_KEY = 'homebase:quickadd:expense:v2'
+// v3: the payment side is now a FinanceAccount id, not a GL category id. The key
+// is bumped so a stale v2 category id is never misapplied as an account id.
+const PREFS_KEY = 'homebase:quickadd:expense:v3'
 
 interface ExpensePrefs {
   expenseCategoryId: string  // DR — expense GL account
-  paymentGlId: string        // CR — asset/liability GL account (e.g. Visa Card)
+  paymentAccountId: string   // CR — FinanceAccount paid from (bank/card)
 }
 
 function loadPrefs(): ExpensePrefs {
@@ -38,7 +47,7 @@ function loadPrefs(): ExpensePrefs {
     const raw = localStorage.getItem(PREFS_KEY)
     if (raw) return JSON.parse(raw) as ExpensePrefs
   } catch { /* ignore */ }
-  return { expenseCategoryId: '', paymentGlId: '' }
+  return { expenseCategoryId: '', paymentAccountId: '' }
 }
 
 function savePrefs(prefs: ExpensePrefs) {
@@ -65,9 +74,10 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
   const [date, setDate]                         = useState(todayAU())
   const [description, setDescription]           = useState('')
   const [expenseCategoryId, setExpenseCategoryId] = useState('')   // DR
-  const [paymentGlId, setPaymentGlId]           = useState('')    // CR
+  const [paymentAccountId, setPaymentAccountId] = useState('')    // CR (bank/card account)
 
   const [allCategories, setAllCategories]       = useState<CategoryMeta[]>([])
+  const [accounts, setAccounts]                 = useState<AccountMeta[]>([])
   const [dataLoading, setDataLoading]           = useState(false)
   const [submitting, setSubmitting]             = useState(false)
 
@@ -77,16 +87,19 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // ── Load GL accounts and restore last-used prefs ─────────────────────────
+  // ── Load expense categories + accounts, restore last-used prefs ──────────
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 100)
     setDataLoading(true)
 
-    fetch('/api/finance/categories')
-      .then(r => r.json())
-      .then((cats: CategoryMeta[]) => {
+    Promise.all([
+      fetch('/api/finance/categories').then(r => r.json()),
+      fetch('/api/finance/accounts').then(r => r.json()),
+    ])
+      .then(([cats, accts]: [CategoryMeta[], AccountMeta[]]) => {
         setAllCategories(cats)
+        setAccounts(accts)
 
         const prefs = loadPrefs()
 
@@ -94,12 +107,12 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
           setExpenseCategoryId(prefs.expenseCategoryId)
           setRememberedExpense(true)
         }
-        if (prefs.paymentGlId && cats.some(c => c.id === prefs.paymentGlId)) {
-          setPaymentGlId(prefs.paymentGlId)
+        if (prefs.paymentAccountId && accts.some(a => a.id === prefs.paymentAccountId)) {
+          setPaymentAccountId(prefs.paymentAccountId)
           setRememberedPayment(true)
         }
       })
-      .catch(() => toast.error('Could not load GL accounts'))
+      .catch(() => toast.error('Could not load accounts'))
       .finally(() => setDataLoading(false))
   }, [])
 
@@ -108,11 +121,6 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
   // DR side: expense categories only
   const expenseCategories = sortedCategoryList(
     allCategories.filter(c => c.type === 'expense')
-  )
-
-  // CR side: asset + liability categories (where payment accounts live)
-  const paymentGlCategories = sortedCategoryList(
-    allCategories.filter(c => c.type === 'asset' || c.type === 'liability')
   )
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -129,38 +137,42 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
       toast.error('Select an expense type (the DR account)')
       return
     }
-    if (!paymentGlId) {
-      toast.error('Select a payment account (the CR account)')
+    if (!paymentAccountId) {
+      toast.error('Select an account to pay from')
       return
     }
 
     setSubmitting(true)
 
     // Persist selections for next time
-    savePrefs({ expenseCategoryId, paymentGlId })
+    savePrefs({ expenseCategoryId, paymentAccountId })
 
     try {
-      const res = await fetch('/api/finance/journals', {
+      // Post via the account-bound transactions path: the server resolves the
+      // selected FinanceAccount to its bound GL category for the cash (CR) side
+      // and posts the double-entry journal (splitting GST when the expense
+      // category is GST-applicable). DR = expense category, CR = bank account.
+      const res = await fetch('/api/finance/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date:            date ? new Date(date + 'T12:00:00').toISOString() : new Date().toISOString(),
-          description:     description.trim() || 'Expense',
-          type:            'manual',
-          postImmediately: true,
-          lines: [
-            // DR — expense hits the P&L
-            { glAccountId: expenseCategoryId, side: 'debit',  amount: parsed },
-            // CR — reduces the asset or increases the liability (e.g. credit card balance goes up)
-            { glAccountId: paymentGlId,       side: 'credit', amount: parsed },
-          ],
+          type:        'expense',
+          accountId:   paymentAccountId,
+          categoryId:  expenseCategoryId,
+          amount:      parsed,
+          description: description.trim() || 'Expense',
+          date:        date ? new Date(date + 'T12:00:00').toISOString() : new Date().toISOString(),
+          isCleared:   true,
         }),
       })
 
+      const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? 'Failed to record expense')
       }
+      // Non-fatal GL warning (e.g. GST control account missing): the transaction
+      // saved but its journal is incomplete — surface it rather than swallow it.
+      if (body.warning) toast.warning(body.warning)
 
       onSuccess('Expense recorded')
     } catch (err) {
@@ -253,37 +265,39 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
         )}
       </div>
 
-      {/* CR — Payment account (asset/liability) */}
+      {/* CR — Account paid from (bank/card) */}
       <div className="space-y-1.5">
         <Label htmlFor="qa-exp-cr">
           Paid From
           <span className="ml-1.5 text-xs font-normal text-muted-foreground">(credit)</span>
-          {rememberedPayment && paymentGlId && (
+          {rememberedPayment && paymentAccountId && (
             <span className="ml-2 text-xs font-normal text-muted-foreground">(remembered)</span>
           )}
         </Label>
 
-        {dataLoading ? loadingPlaceholder : paymentGlCategories.length === 0 ? (
+        {dataLoading ? loadingPlaceholder : accounts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No asset or liability accounts found. Add them in Finance → Categories.
+            No accounts found. Add a bank or card account in Finance → Accounts.
           </p>
         ) : (
           <select
             id="qa-exp-cr"
-            value={paymentGlId}
-            onChange={e => { setPaymentGlId(e.target.value); setRememberedPayment(false) }}
+            value={paymentAccountId}
+            onChange={e => { setPaymentAccountId(e.target.value); setRememberedPayment(false) }}
             className={selectClass}
           >
-            <option value="">Select payment account…</option>
-            {paymentGlCategories.map(c => (
-              <option key={c.id} value={c.id}>{optionLabel(c)}</option>
+            <option value="">Select account…</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.institution ? `${a.name} · ${a.institution}` : a.name}
+              </option>
             ))}
           </select>
         )}
 
-        {!paymentGlId && !dataLoading && paymentGlCategories.length > 0 && (
+        {!paymentAccountId && !dataLoading && accounts.length > 0 && (
           <p className="text-xs text-amber-500">
-            ⚠ Required — e.g. 1.2 Visa Card, 1.1 Business Cheque, 1.5 Petty Cash
+            ⚠ Required — the bank or card account the money came out of
           </p>
         )}
       </div>
