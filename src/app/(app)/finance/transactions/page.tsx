@@ -157,12 +157,12 @@ export default function TransactionsPage() {
                 <label className="text-xs text-muted-foreground">GL Account (cash/asset side)</label>
                 <select value={form.glAccountId} onChange={e => setForm(p => ({ ...p, glAccountId: e.target.value }))}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="">No GL account (no journal entry)</option>
+                  <option value="">No GL account</option>
                   {sortedCategoryList(categories.filter(c => ['asset','liability'].includes(c.type))).map(c => (
                     <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
                   ))}
                 </select>
-                <p className="text-xs text-muted-foreground mt-0.5">Required for GL entry. Select bank account, term deposit, property, etc.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Only needed when no Account is selected — e.g. term deposit, property, vehicle. When an Account is chosen it is the cash side.</p>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Member</label>

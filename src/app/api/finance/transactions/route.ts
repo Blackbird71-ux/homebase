@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { createGstJournalEntry } from '@/lib/finance-opening-balance'
+import { createGstJournalEntry, resolveAccountGlCategoryId } from '@/lib/finance-opening-balance'
 import { nextNJournalReferences } from '@/lib/finance-journal-ref'
 import { reverseJournalEntry, postJournalEntry, postJournalWarning } from '@/lib/finance-posting'
 import type { JournalLine } from '@/lib/finance-posting'
@@ -110,6 +110,23 @@ export async function POST(request: NextRequest) {
 
   const txDate = date ? new Date(date) : new Date()
 
+  // Cash/asset side of the double-entry. In the Xero "bank = GL account, 1:1"
+  // model a selected FinanceAccount IS the cash side — resolve it to its bound GL
+  // category so the posting moves that account's displayed balance and the
+  // dashboard / Accounts page / Balance Sheet reconcile by construction. An
+  // explicit GL category is only the fallback for non-account items (term
+  // deposit, property, vehicle) when no account is chosen. The resolved value is
+  // persisted as the row's glAccountId so the journal and the PUT edit-sync agree.
+  let cashGlId: string | null = null
+  if (accountId) {
+    cashGlId = await resolveAccountGlCategoryId(accountId, user.familyId)
+    if (!cashGlId) {
+      return NextResponse.json({ error: 'Selected account not found. Cannot post transaction.' }, { status: 422 })
+    }
+  } else if (glAccountId) {
+    cashGlId = glAccountId
+  }
+
   const transaction = await prisma.financeTransaction.create({
     data: {
       accountId: accountId ?? null,
@@ -127,7 +144,7 @@ export async function POST(request: NextRequest) {
       entityId: json.entityId ?? null,
       taxClassification: taxClassification ?? null,
       isTransfer: isTransfer ?? false,
-      glAccountId: glAccountId ?? null,
+      glAccountId: cashGlId,
       createdBy: user.id,
       familyId: user.familyId,
     },
@@ -172,13 +189,12 @@ export async function POST(request: NextRequest) {
     }
   } else if (
     transaction.categoryId &&
-    (transaction.accountId || glAccountId) &&
+    cashGlId &&
     (type === 'expense' || type === 'income')
   ) {
-    // Auto-journal gate: fires when EITHER a bank account OR a GL category account
-    // is provided as the cash/asset side of the double-entry.
-    // glAccountId = a FinanceCategory (asset/liability type) used instead of a bank account.
-    // This supports term deposits, properties, vehicles, and any non-FinanceAccount GL item.
+    // Auto-journal gate: fires when a cash/asset side exists — either a selected
+    // FinanceAccount (resolved to its bound GL category above) or an explicit GL
+    // category for non-account items (term deposit, property, vehicle).
     try {
       const cat = await prisma.financeCategory.findFirst({
         where: { id: transaction.categoryId, familyId: user.familyId },
@@ -187,64 +203,46 @@ export async function POST(request: NextRequest) {
 
       const desc = description?.trim() || payee?.trim() || type
 
-      // The cash/asset side: prefer explicit glAccountId, fall back to bank accountId
-      // Both are valid FinanceCategory IDs in the GL context.
-      // Note: accountId (FinanceAccount) is NOT a FinanceCategory ID.
-      // We use glAccountId for the journal; accountId is tracked separately on the tx.
-      const cashGlId = glAccountId ?? null
-
-      // Only auto-create journal if we have a valid GL account for the cash side
-      if (cashGlId) {
-        if (cat?.gstApplicable) {
-          const gstJournalId = await createGstJournalEntry(
-            type as 'expense' | 'income',
-            amount,
-            cat.gstRate ?? 10,
-            transaction.categoryId,
-            cashGlId,
-            accountId ?? null,
-            txDate,
-            desc,
-            user.familyId,
-            json.entityId ?? null,
-            user.id,
-            transaction.id,
-          )
-          if (!gstJournalId) {
-            glWarning =
-              'The transaction was saved, but its GST journal did not post to the General Ledger ' +
-              '(check the GST control accounts are configured). BAS reporting will be incomplete ' +
-              'until the GST entry is recorded.'
-          }
-        } else {
-          const autoLines: JournalLine[] = type === 'expense'
-            ? [
-                { glAccountId: transaction.categoryId, side: 'debit',  amount },
-                { glAccountId: cashGlId,               side: 'credit', amount },
-              ]
-            : [
-                { glAccountId: cashGlId,               side: 'debit',  amount },
-                { glAccountId: transaction.categoryId, side: 'credit', amount },
-              ]
-          const outcome = await postJournalEntry({
-            description: desc,
-            lines: autoLines,
-            date: txDate,
-            familyId: user.familyId,
-            entityId: json.entityId ?? null,
-            sourceTransactionId: transaction.id,
-          })
-          glWarning = postJournalWarning(outcome)
-        }
-      } else if (transaction.accountId) {
-        // Bank account selected but no glAccountId — log a warning.
-        // To get a GL entry, the user must also set glAccountId.
-        // This is by design: the GL requires both sides to be FinanceCategory IDs.
-        console.warn(
-          `[transactions POST] No glAccountId for tx ${transaction.id} — ` +
-          `bank account ${transaction.accountId} is not a GL category. ` +
-          `Set glAccountId to get a GL journal entry.`
+      if (cat?.gstApplicable) {
+        const gstJournalId = await createGstJournalEntry(
+          type as 'expense' | 'income',
+          amount,
+          cat.gstRate ?? 10,
+          transaction.categoryId,
+          cashGlId,
+          accountId ?? null,
+          txDate,
+          desc,
+          user.familyId,
+          json.entityId ?? null,
+          user.id,
+          transaction.id,
         )
+        if (!gstJournalId) {
+          glWarning =
+            'The transaction was saved, but its GST journal did not post to the General Ledger ' +
+            '(check the GST control accounts are configured). BAS reporting will be incomplete ' +
+            'until the GST entry is recorded.'
+        }
+      } else {
+        const autoLines: JournalLine[] = type === 'expense'
+          ? [
+              { glAccountId: transaction.categoryId, side: 'debit',  amount },
+              { glAccountId: cashGlId,               side: 'credit', amount },
+            ]
+          : [
+              { glAccountId: cashGlId,               side: 'debit',  amount },
+              { glAccountId: transaction.categoryId, side: 'credit', amount },
+            ]
+        const outcome = await postJournalEntry({
+          description: desc,
+          lines: autoLines,
+          date: txDate,
+          familyId: user.familyId,
+          entityId: json.entityId ?? null,
+          sourceTransactionId: transaction.id,
+        })
+        glWarning = postJournalWarning(outcome)
       }
     } catch (err) {
       console.error('[transactions POST] Failed to create journal entry:', err)
@@ -279,6 +277,24 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
   }
 
+  // Resolve the cash/asset side the same way POST does: a selected FinanceAccount
+  // is the cash side (its bound GL category); else an explicit GL category for
+  // non-account items. Only recompute when the caller actually touched the
+  // account or GL fields — bare edits like handleClear ({ id, isCleared }) leave
+  // both undefined and must not disturb the existing glAccountId. The resolved
+  // value drives both the row update and the journal edit-sync below.
+  let resolvedCashGlId: string | null | undefined = undefined
+  if (accountId !== undefined || glAccountId !== undefined) {
+    if (accountId) {
+      resolvedCashGlId = await resolveAccountGlCategoryId(accountId, user.familyId)
+      if (!resolvedCashGlId) {
+        return NextResponse.json({ error: 'Selected account not found. Cannot post transaction.' }, { status: 422 })
+      }
+    } else {
+      resolvedCashGlId = glAccountId ?? null
+    }
+  }
+
   const transaction = await prisma.financeTransaction.update({
     where: { id },
     data: {
@@ -297,7 +313,7 @@ export async function PUT(request: NextRequest) {
       ...(json.entityId !== undefined && { entityId: json.entityId ?? null }),
       ...(taxClassification !== undefined && { taxClassification: taxClassification ?? null }),
       ...(isTransfer !== undefined && { isTransfer }),
-      ...(glAccountId !== undefined && { glAccountId: glAccountId ?? null }),
+      ...(resolvedCashGlId !== undefined && { glAccountId: resolvedCashGlId }),
     },
     include: {
       category: true,
@@ -318,7 +334,7 @@ export async function PUT(request: NextRequest) {
   const descriptionChanged = description !== undefined && description !== existing.description
   const payeeChanged       = payee      !== undefined && payee      !== existing.payee
   const categoryChanged    = categoryId !== undefined && categoryId  !== existing.categoryId
-  const glAccountChanged   = glAccountId !== undefined && glAccountId !== existing.glAccountId
+  const glAccountChanged   = resolvedCashGlId !== undefined && resolvedCashGlId !== existing.glAccountId
   const typeChanged        = type       !== undefined && type        !== existing.type
 
   let glWarning: string | null = null
