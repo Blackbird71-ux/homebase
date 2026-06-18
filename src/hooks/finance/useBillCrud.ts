@@ -69,7 +69,7 @@ export function useBillCrud() {
   const [journalErrors, setJournalErrors] = useState<Record<string, string>>({})
   const [paidConfirm, setPaidConfirm] = useState<{ bill: Bill } | null>(null)
   const [paidConfirmDate, setPaidConfirmDate] = useState<string>('')
-  const [paidConfirmGlAccountId, setPaidConfirmGlAccountId] = useState<string>('')
+  const [paidConfirmAccountId, setPaidConfirmAccountId] = useState<string>('')
   const [paidConfirmAmount, setPaidConfirmAmount] = useState<number>(0)
   const [dateRange, setDateRange]   = useState<'14' | '30' | 'quarter' | '12months'>(() => {
     if (typeof window !== 'undefined') {
@@ -451,7 +451,8 @@ export function useBillCrud() {
 
   async function handleMarkPaid(bill: Bill) {
     setPaidConfirmDate(todayAU())
-    setPaidConfirmGlAccountId('')
+    // Preselect the account the bill is configured to be paid from (Xero 1:1).
+    setPaidConfirmAccountId(bill.account?.id ?? '')
     setPaidConfirmAmount(bill.amount)
     setPaidConfirm({ bill })
   }
@@ -466,7 +467,7 @@ export function useBillCrud() {
         id: paidConfirm.bill.id,
         paid: true,
         paidDate: paidConfirmDate,
-        payFromGlAccountId: paidConfirmGlAccountId || null,
+        payFromAccountId: paidConfirmAccountId || null,
         paymentAmount: payAmount < paidConfirm.bill.amount ? payAmount : undefined,
       }),
     })
@@ -589,7 +590,7 @@ export function useBillCrud() {
     // Confirmation dialogs
     paidConfirm, setPaidConfirm,
     paidConfirmDate, setPaidConfirmDate,
-    paidConfirmGlAccountId, setPaidConfirmGlAccountId,
+    paidConfirmAccountId, setPaidConfirmAccountId,
     paidConfirmAmount, setPaidConfirmAmount,
     deleteConfirm, setDeleteConfirm,
     voidConfirm, setVoidConfirm,

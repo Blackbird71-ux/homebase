@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/financeShared'
 import { formatInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
-import { sortedCategoryList } from '@/lib/finance-categories'
 import { AttachmentSection } from '@/components/finance/AttachmentSection'
 import { useAttachmentManager } from '@/hooks/finance/useAttachmentManager'
 import type { Bill, QuickFilter } from '@/hooks/finance/useBillCrud'
@@ -17,11 +16,9 @@ import { StatusChip } from '@/components/shared/StatusChip'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface GLAccount {
+interface PayFromAccount {
   id: string
   name: string
-  type: string
-  parentId: string | null
 }
 
 export interface BillRowProps {
@@ -54,12 +51,13 @@ export interface BillRowProps {
   deletingPaymentId:   string | null
   onOpenPanel:         (billId: string) => void
   onClosePanel:        () => void
-  onOpenAddForm:       (billAmount: number, totalPaid: number) => void
+  onOpenAddForm:       (billAmount: number, totalPaid: number, defaultAccountId?: string) => void
   onCancelAddForm:     () => void
   onSubmitAddPayment:  (billId: string) => void
   onDeletePayment:     (billId: string, paymentId: string) => void
-  // Asset GL accounts for "pay from" selector
-  glAccounts:          GLAccount[]
+  // FinanceAccounts for the "pay from" selector (Xero 1:1 model — the cash side
+  // posts to the selected account's bound GL category).
+  accounts:            PayFromAccount[]
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -72,7 +70,7 @@ export function BillRow({
   openBillId, payments, loadingHistory,
   showAddForm, addForm, setAddForm, addingPayment, deletingPaymentId,
   onOpenPanel, onClosePanel, onOpenAddForm, onCancelAddForm, onSubmitAddPayment, onDeletePayment,
-  glAccounts,
+  accounts,
 }: BillRowProps) {
 
   const tz                   = useFamilyTimezone()
@@ -84,8 +82,6 @@ export function BillRow({
   const isPartiallyPaid      = totalPaid > 0 && !bill.paid
   const remaining            = Math.max(0, bill.amount - totalPaid)
 
-  // Asset accounts for the "pay from" dropdown in the add-payment form
-  const assetGlAccounts = glAccounts.filter(a => a.type === 'asset')
 
   return (
     <div>
@@ -270,7 +266,7 @@ export function BillRow({
               {/* Add payment — only when bill is not fully paid and form not already open */}
               {!bill.paid && !showAddForm && (
                 <button
-                  onClick={() => onOpenAddForm(bill.amount, totalPaid)}
+                  onClick={() => onOpenAddForm(bill.amount, totalPaid, bill.account?.id)}
                   className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
                 >
                   <Plus className="h-3 w-3" /> Add payment
@@ -377,25 +373,23 @@ export function BillRow({
                 </div>
               </div>
 
-              {/* GL account (bank/cash) */}
+              {/* Pay from account (Xero 1:1 — cash posts to its bound GL category) */}
               <div>
                 <label className="text-xs text-muted-foreground">
-                  Pay from GL account
+                  Pay from account
                   <span className="ml-1 text-xs text-muted-foreground/70">(leave blank → posts to Undeposited Funds)</span>
                 </label>
                 <select
-                  value={addForm.glAccountId}
-                  onChange={e => setAddForm({ ...addForm, glAccountId: e.target.value })}
+                  value={addForm.accountId}
+                  onChange={e => setAddForm({ ...addForm, accountId: e.target.value })}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1"
                 >
                   <option value="">— Undeposited Funds (suspense) —</option>
-                  {sortedCategoryList(assetGlAccounts).map(a => (
-                    <option key={a.id} value={a.id}>
-                      {(a as any).parentId ? `— ${a.name}` : a.name}
-                    </option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
-                {!addForm.glAccountId && (
+                {!addForm.accountId && (
                   <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                     Will post to Undeposited Funds — allocate to a bank account when deposited

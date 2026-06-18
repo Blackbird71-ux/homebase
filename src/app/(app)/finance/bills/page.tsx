@@ -35,11 +35,11 @@ export default function BillsPage() {
     journalLines, setJournalLines,
     journalErrors, setJournalErrors,
     form, setForm, errors,
-    categories, glAccounts, members, locations, vendors, entities,
+    accounts, categories, glAccounts, members, locations, vendors, entities,
     budgetBillIds,
     paidConfirm, setPaidConfirm,
     paidConfirmDate, setPaidConfirmDate,
-    paidConfirmGlAccountId, setPaidConfirmGlAccountId,
+    paidConfirmAccountId, setPaidConfirmAccountId,
     paidConfirmAmount, setPaidConfirmAmount,
     deleteConfirm, setDeleteConfirm,
     voidConfirm, setVoidConfirm,
@@ -467,16 +467,16 @@ export default function BillsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1" />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Pay from GL account</label>
-                <select value={paidConfirmGlAccountId} onChange={e => setPaidConfirmGlAccountId(e.target.value)}
+                <label className="text-xs text-muted-foreground">Pay from account</label>
+                <select value={paidConfirmAccountId} onChange={e => setPaidConfirmAccountId(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                  <option value="">No GL account (unlinked)</option>
-                  {sortedCategoryList(categories.filter(c => c.type === 'asset')).map(c => (
-                    <option key={c.id} value={c.id}>{c.parentId ? `— ${c.name}` : c.name}</option>
+                  <option value="">— Undeposited Funds (suspense) —</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
-                {!paidConfirmGlAccountId && (
-                  <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won't update</p>
+                {!paidConfirmAccountId && (
+                  <p className="text-xs text-amber-500 mt-1">⚠ No account selected — posts to Undeposited Funds; allocate to a bank account when deposited</p>
                 )}
               </div>
             </div>
@@ -573,7 +573,7 @@ export default function BillsPage() {
               onToggleInvoice={handleToggleInvoice}
               onQuickFilter={handleQuickFilter}
               att={att}
-              glAccounts={glAccounts}
+              accounts={accounts}
               // Payment history — from usePaymentHistory via useBillCrud
               openBillId={paymentHistory.openBillId}
               payments={paymentHistory.payments}

@@ -6,6 +6,7 @@ import { copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 import {
   ensureUndepositedFundsCategory,
   ensureAccountsPayableCategory,
+  resolveAccountGlCategoryId,
 } from '@/lib/finance-opening-balance'
 import { sumControlAccountLines } from '@/lib/finance-subledger'
 import { nextNJournalReferences } from '@/lib/finance-journal-ref'
@@ -613,7 +614,7 @@ export async function PATCH(request: NextRequest) {
   const {
     id, paid, paidDate: paidDateRaw,
     invoiceReceived, invoiceReceivedDate,
-    payFromAccountId, payFromGlAccountId, paymentAmount,
+    payFromAccountId, paymentAmount,
     void: doVoid, voidNote,
   } = json
 
@@ -852,20 +853,33 @@ export async function PATCH(request: NextRequest) {
     // partials and over-paid (P3-FC-02). An explicit paymentAmount overrides.
     const priorPaid = (existing.payments ?? []).reduce((s, p) => s + p.amount, 0)
     const payAmount = paymentAmount ?? (apFace - priorPaid)
-    const bankGlAccountId: string | null = payFromGlAccountId ?? null
-    const paymentAccountId = payFromAccountId ?? existing.accountId
+    const paymentAccountId: string | null = payFromAccountId ?? existing.accountId ?? null
 
     // Fully covered when prior partials plus this payment settle the AP face.
     const isFullyPaid = (priorPaid + payAmount) >= apFace - 0.005
 
-    // Resolve the credit-side GL account: bank when supplied, otherwise the
-    // Undeposited Funds suspense account (audit F6 — a no-bank payment must
-    // still post a journal and clear AP; the user allocates the bank when
-    // deposited). Mirrors the payments POST route.
-    const creditGlAccountId: string = bankGlAccountId
-      ? bankGlAccountId
-      : await ensureUndepositedFundsCategory(user.familyId)
-    const usingSuspense = !bankGlAccountId
+    // Resolve the credit-side cash GL account from the SELECTED FinanceAccount's
+    // bound 1:1 GL category (Xero model) — users pick an account, never a raw GL
+    // category, so cash can never be routed to a non-account category. No account
+    // selected → Undeposited Funds suspense (audit F6: a no-bank payment must
+    // still post a journal and clear AP; allocate the bank when deposited).
+    // Mirrors the payments POST route.
+    let creditGlAccountId: string
+    let usingSuspense: boolean
+    if (paymentAccountId) {
+      const resolved = await resolveAccountGlCategoryId(paymentAccountId, user.familyId)
+      if (!resolved) {
+        return NextResponse.json(
+          { error: 'Selected account not found. Cannot post payment.' },
+          { status: 422 },
+        )
+      }
+      creditGlAccountId = resolved
+      usingSuspense = false
+    } else {
+      creditGlAccountId = await ensureUndepositedFundsCategory(user.familyId)
+      usingSuspense = true
+    }
 
     let spawnedBillId: string | null = null
     let spawnedBillDueDate: Date | null = null
@@ -885,7 +899,7 @@ export async function PATCH(request: NextRequest) {
           actualDate: actualPaidDate,
           creditGlAccountId,
           usingSuspense,
-          glAccountId: bankGlAccountId,
+          glAccountId: usingSuspense ? null : creditGlAccountId,
           paymentAccountId: paymentAccountId ?? null,
           notes: null,
           isFullyPaid,

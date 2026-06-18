@@ -31,12 +31,12 @@ export interface BillPayment {
 export interface AddPaymentForm {
   amount: string
   paymentDate: string
-  glAccountId: string
+  accountId: string
   notes: string
 }
 
 function emptyAddForm(): AddPaymentForm {
-  return { amount: '', paymentDate: todayAU(), glAccountId: '', notes: '' }
+  return { amount: '', paymentDate: todayAU(), accountId: '', notes: '' }
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -96,11 +96,14 @@ export function usePaymentHistory(onRefresh: () => void) {
 
   // ── Add payment form ────────────────────────────────────────────────────────
 
-  function openAddForm(billAmount: number, totalPaidSoFar: number) {
+  function openAddForm(billAmount: number, totalPaidSoFar: number, defaultAccountId?: string) {
     const remaining = Math.max(0, billAmount - totalPaidSoFar)
     setAddForm({
       ...emptyAddForm(),
       amount: remaining > 0 ? remaining.toFixed(2) : '',
+      // Preselect the account the bill is configured to be paid from (Xero 1:1
+      // model) so the cash side posts to the right ledger account by default.
+      accountId: defaultAccountId ?? '',
     })
     setShowAddForm(true)
   }
@@ -129,8 +132,8 @@ export function usePaymentHistory(onRefresh: () => void) {
         body: JSON.stringify({
           amount,
           paymentDate: addForm.paymentDate,
-          glAccountId: addForm.glAccountId || undefined,
-          notes:       addForm.notes       || undefined,
+          accountId:   addForm.accountId || undefined,
+          notes:       addForm.notes     || undefined,
         }),
       })
 

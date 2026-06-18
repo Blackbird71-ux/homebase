@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { ensureUndepositedFundsCategory } from '@/lib/finance-opening-balance'
+import { ensureUndepositedFundsCategory, resolveAccountGlCategoryId } from '@/lib/finance-opening-balance'
 import { recordBillPayment } from '@/lib/finance-bill-payment'
 import { copySpawnedBillDraftJournal } from '@/lib/finance-draft-spawn-service'
 
@@ -75,9 +75,10 @@ export async function GET(
  * Body:
  *   amount       number   Required. Amount paid this installment.
  *   paymentDate  string   Required. ISO date string.
- *   glAccountId  string?  GL asset category for the bank/cash account.
- *                         If omitted, credits "Undeposited Funds" (suspense).
- *   accountId    string?  FinanceAccount for UI display / balance tracking.
+ *   accountId    string?  FinanceAccount the cash came from (Xero 1:1 model).
+ *                         The credit side posts to that account's bound GL
+ *                         category. If omitted, credits "Undeposited Funds"
+ *                         (suspense) to allocate to a real account later.
  *   notes        string?
  */
 export async function POST(
@@ -90,7 +91,7 @@ export async function POST(
   const { id: billId } = await params
 
   const body = await request.json()
-  const { amount, paymentDate, glAccountId, accountId, notes } = body
+  const { amount, paymentDate, accountId, notes } = body
 
   // ── Input validation ────────────────────────────────────────────────────────
   if (!amount || amount <= 0) {
@@ -136,25 +137,26 @@ export async function POST(
   //           (DR Expense / CR Bank-or-Suspense)
   const wasAccrued = bill.invoiceReceived === true
 
-  // Resolve the credit-side GL account (bank or suspense).
-  // Suspense account is auto-created on first use — no migration required.
-  const creditGlAccountId: string = glAccountId
-    ? glAccountId
-    : await ensureUndepositedFundsCategory(user.familyId)
-
-  const usingSuspense = !glAccountId
-
-  // Validate user-supplied bank GL account belongs to family before writing anything
-  if (glAccountId) {
-    const valid = await prisma.financeCategory.count({
-      where: { id: glAccountId, familyId: user.familyId },
-    })
-    if (!valid) {
+  // Resolve the credit-side cash GL account from the SELECTED FinanceAccount's
+  // bound 1:1 GL category (Xero model). Users pick an account, never a raw GL
+  // category, so cash can never be routed to a non-account category — which is
+  // exactly the divergence that made balances and reports disagree. No account
+  // selected → post to Undeposited Funds suspense and allocate later.
+  let creditGlAccountId: string
+  let usingSuspense: boolean
+  if (paymentAccountId) {
+    const resolved = await resolveAccountGlCategoryId(paymentAccountId, user.familyId)
+    if (!resolved) {
       return NextResponse.json(
-        { error: 'GL account not found. Cannot post payment.' },
+        { error: 'Selected account not found. Cannot post payment.' },
         { status: 422 },
       )
     }
+    creditGlAccountId = resolved
+    usingSuspense = false
+  } else {
+    creditGlAccountId = await ensureUndepositedFundsCategory(user.familyId)
+    usingSuspense = true
   }
 
   // PATH C/D: warn when no expense category — postBillPaymentJournal falls back to AP
@@ -179,7 +181,7 @@ export async function POST(
         actualDate,
         creditGlAccountId,
         usingSuspense,
-        glAccountId: glAccountId ?? null,
+        glAccountId: usingSuspense ? null : creditGlAccountId,
         paymentAccountId,
         notes: notes ?? null,
         isFullyPaid,

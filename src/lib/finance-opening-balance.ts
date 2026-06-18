@@ -592,6 +592,32 @@ export async function ensureAccountGlCategory(params: {
 }
 
 /**
+ * Resolve a FinanceAccount to its bound 1:1 GL category id (Xero model),
+ * creating the binding if missing. Family-scoped: returns null when the account
+ * does not exist for this family, so callers can 422 rather than silently post
+ * to the wrong place. This is how cash-movement routes (bill payment, income
+ * receipt, manual transaction) turn a user-selected ACCOUNT into the GL category
+ * the cash side posts to — users pick an account, never a raw GL category, so
+ * cash can never be routed to a non-account category.
+ */
+export async function resolveAccountGlCategoryId(
+  accountId: string,
+  familyId: string,
+): Promise<string | null> {
+  const acct = await prisma.financeAccount.findFirst({
+    where: { id: accountId, familyId },
+    select: { id: true, name: true, type: true },
+  })
+  if (!acct) return null
+  return ensureAccountGlCategory({
+    accountId: acct.id,
+    familyId,
+    name: acct.name,
+    type: accountTypeToGlType(acct.type),
+  })
+}
+
+/**
  * Idempotently backfill the bound GL category for every account in the family.
  * Cheap to call on each finance load (mirrors seedFinanceCategories). Only
  * CREATES missing bindings — never realigns an existing category's type, so a

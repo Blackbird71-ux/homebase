@@ -26,7 +26,7 @@ export default function PaidBillsPage() {
   const {
     loading,
     sorted,
-    glAccounts,
+    accounts,
     hideDeleteBills,
     monthRange, setMonthRangePersisted,
     selectedCatIds, showCatPicker, setShowCatPicker, toggleCat,
@@ -210,7 +210,7 @@ export default function PaidBillsPage() {
               onVoid={handleVoid}
               onDelete={handleDelete}
               att={att}
-              glAccounts={glAccounts}
+              accounts={accounts}
               paymentHistory={paymentHistory}
             />
           ))}
@@ -259,14 +259,14 @@ interface PaidBillRowProps {
   onVoid: (id: string, name: string) => void
   onDelete: (id: string, name: string) => void
   att: ReturnType<typeof useAttachmentManager>
-  glAccounts: { id: string; name: string; type: string; parentId: string | null }[]
+  accounts: { id: string; name: string }[]
   paymentHistory: ReturnType<typeof usePaidBills>['paymentHistory']
 }
 
 function PaidBillRow({
   bill, colCats, billAmountForCat, gridTemplate, hideDelete,
   onUndoPaid, onVoid, onDelete,
-  att, glAccounts, paymentHistory,
+  att, accounts, paymentHistory,
 }: PaidBillRowProps) {
   const isOneOff        = bill.billType === 'one-off'
   const totalPaid       = bill.payments?.reduce((s, p) => s + p.amount, 0) ?? 0
@@ -402,7 +402,7 @@ function PaidBillRow({
         // We render a standalone panel matching BillRow's payment panel markup.
         <PaymentPanel
           bill={bill}
-          glAccounts={glAccounts}
+          accounts={accounts}
           paymentHistory={paymentHistory}
         />
       )}
@@ -424,15 +424,14 @@ function PaidBillRow({
 // usePaymentHistory hook and the same API endpoints.
 
 import { AlertTriangle, Plus, Loader2, X } from 'lucide-react'
-import { sortedCategoryList } from '@/lib/finance-categories'
 
 interface PaymentPanelProps {
   bill: Bill
-  glAccounts: { id: string; name: string; type: string; parentId: string | null }[]
+  accounts: { id: string; name: string }[]
   paymentHistory: ReturnType<typeof usePaidBills>['paymentHistory']
 }
 
-function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
+function PaymentPanel({ bill, accounts, paymentHistory }: PaymentPanelProps) {
   const {
     payments, loadingHistory,
     showAddForm, addForm, setAddForm, addingPayment, deletingPaymentId,
@@ -441,7 +440,6 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
 
   const totalPaid  = bill.payments?.reduce((s, p) => s + p.amount, 0) ?? 0
   const remaining  = Math.max(0, bill.amount - totalPaid)
-  const assetAccounts = glAccounts.filter(a => a.type === 'asset')
 
   return (
     <div className="rounded-b-lg border border-t-0 border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-3">
@@ -461,7 +459,7 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
               remaining balance discrepancies or partial re-opens */}
           {remaining > 0 && !showAddForm && (
             <button
-              onClick={() => openAddForm(bill.amount, totalPaid)}
+              onClick={() => openAddForm(bill.amount, totalPaid, bill.account?.id)}
               className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
             >
               <Plus className="h-3 w-3" /> Add payment
@@ -570,24 +568,22 @@ function PaymentPanel({ bill, glAccounts, paymentHistory }: PaymentPanelProps) {
 
           <div>
             <label className="text-xs text-muted-foreground">
-              Pay from GL account
+              Pay from account
               <span className="ml-1 text-xs text-muted-foreground/70">
                 (leave blank → posts to Undeposited Funds)
               </span>
             </label>
             <select
-              value={addForm.glAccountId}
-              onChange={e => setAddForm({ ...addForm, glAccountId: e.target.value })}
+              value={addForm.accountId}
+              onChange={e => setAddForm({ ...addForm, accountId: e.target.value })}
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1"
             >
               <option value="">— Undeposited Funds (suspense) —</option>
-              {sortedCategoryList(assetAccounts).map(a => (
-                <option key={a.id} value={a.id}>
-                  {(a as any).parentId ? `— ${a.name}` : a.name}
-                </option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
-            {!addForm.glAccountId && (
+            {!addForm.accountId && (
               <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3 shrink-0" />
                 Will post to Undeposited Funds — allocate to a bank account when deposited

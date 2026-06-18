@@ -39,6 +39,7 @@ export function usePaidBills() {
   const [bills, setBills]           = useState<Bill[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
+  const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading]       = useState(true)
   const [hideDeleteBills, setHideDeleteBills] = useState(false)
 
@@ -74,10 +75,11 @@ export function usePaidBills() {
   async function load() {
     setLoading(true)
     try {
-      const [billsRes, catsRes, glRes, sRes] = await Promise.all([
+      const [billsRes, catsRes, glRes, acctRes, sRes] = await Promise.all([
         fetch('/api/finance/bills'),
         fetch('/api/finance/categories'),
         fetch('/api/finance/categories?forPicker=true'),
+        fetch('/api/finance/accounts'),
         fetch('/api/settings'),
       ])
       if (billsRes.ok) {
@@ -88,6 +90,10 @@ export function usePaidBills() {
       if (glRes.ok) {
         const glCats = await glRes.json()
         setGLAccounts(glCats.filter((c: any) => c.type !== 'transfer'))
+      }
+      if (acctRes.ok) {
+        const accts = await acctRes.json()
+        setAccounts(accts.map((a: any) => ({ id: a.id, name: a.name })))
       }
       if (sRes.ok) {
         const settings = await sRes.json()
@@ -212,6 +218,7 @@ export function usePaidBills() {
     sorted,
     categories,
     glAccounts,
+    accounts,
     hideDeleteBills,
     // Filter state
     monthRange, setMonthRangePersisted,
