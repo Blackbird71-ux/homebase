@@ -120,7 +120,7 @@ export function useIncomeCrud() {
   const [voidNote, setVoidNote] = useState('')
   const [receivedConfirm, setReceivedConfirm] = useState<{ entry: IncomeEntry } | null>(null)
   const [receivedConfirmDate, setReceivedConfirmDate] = useState<string>('')
-  const [receivedConfirmGlAccountId, setReceivedConfirmGlAccountId] = useState<string>('')
+  const [receivedConfirmAccountId, setReceivedConfirmAccountId] = useState<string>('')
   const [receivedConfirmActualAmount, setReceivedConfirmActualAmount] = useState<string>('')
   const [payslipForm, setPayslipForm] = useState<PayslipFormData>({
     enabled: false,
@@ -558,7 +558,7 @@ export function useIncomeCrud() {
 
   async function handleMarkReceived(entry: IncomeEntry) {
     setReceivedConfirmDate(todayAU())
-    setReceivedConfirmGlAccountId('')
+    setReceivedConfirmAccountId(entry.account?.id ?? '')
     setReceivedConfirmActualAmount(entry.amount.toFixed(2))
 
     if (entry.payslip) {
@@ -634,8 +634,10 @@ export function useIncomeCrud() {
       }
       body.actualAmountReceived = parseFloat(payslipForm.netPay) || 0
     } else {
-      // Simple mode: just bank GL account + optional actual amount
-      body.receiveToGlAccountId = receivedConfirmGlAccountId || null
+      // Simple mode: receive-to bank account + optional actual amount. The
+      // server resolves the account to its bound 1:1 GL category for the DR Bank
+      // line, so cash can never land on a non-account GL category.
+      body.receiveToAccountId = receivedConfirmAccountId || null
       const actual = parseFloat(receivedConfirmActualAmount)
       if (!isNaN(actual) && Math.abs(actual - entry.amount) > 0.005) {
         body.actualAmountReceived = actual
@@ -769,7 +771,7 @@ export function useIncomeCrud() {
     voidNote, setVoidNote,
     receivedConfirm, setReceivedConfirm,
     receivedConfirmDate, setReceivedConfirmDate,
-    receivedConfirmGlAccountId, setReceivedConfirmGlAccountId,
+    receivedConfirmAccountId, setReceivedConfirmAccountId,
     receivedConfirmActualAmount, setReceivedConfirmActualAmount,
     payslipForm, setPayslipForm,
     // Filter state

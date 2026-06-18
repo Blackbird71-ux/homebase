@@ -43,7 +43,7 @@ export default function IncomePage() {
     voidNote, setVoidNote,
     receivedConfirm, setReceivedConfirm,
     receivedConfirmDate, setReceivedConfirmDate,
-    receivedConfirmGlAccountId, setReceivedConfirmGlAccountId,
+    receivedConfirmAccountId, setReceivedConfirmAccountId,
     receivedConfirmActualAmount, setReceivedConfirmActualAmount,
     payslipForm, setPayslipForm,
     dateRange, setDateRangePersisted,
@@ -563,16 +563,16 @@ export default function IncomePage() {
                       className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">Receive into GL account (bank)</label>
-                    <select value={receivedConfirmGlAccountId} onChange={e => setReceivedConfirmGlAccountId(e.target.value)}
+                    <label className="text-xs text-muted-foreground">Receive into account (bank)</label>
+                    <select value={receivedConfirmAccountId} onChange={e => setReceivedConfirmAccountId(e.target.value)}
                       className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                      <option value="">Select GL account…</option>
-                      {glAccounts.filter(a => a.type === 'asset').map(a => (
-                        <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
+                      <option value="">Select account…</option>
+                      {accounts.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
                       ))}
                     </select>
-                    {!receivedConfirmGlAccountId && (
-                      <p className="text-xs text-amber-500 mt-1">⚠ No GL account selected — balance sheet won&apos;t update</p>
+                    {!receivedConfirmAccountId && (
+                      <p className="text-xs text-amber-500 mt-1">⚠ No account selected — balance sheet won&apos;t update</p>
                     )}
                   </div>
                 </div>
@@ -819,7 +819,7 @@ export default function IncomePage() {
               onClick={confirmMarkReceived}
               disabled={payslipForm.enabled
                 ? !payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId
-                : !receivedConfirmGlAccountId
+                : !receivedConfirmAccountId
               }
               className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               Mark as received

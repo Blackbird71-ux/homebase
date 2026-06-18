@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getTemplate, computeNextOccurrenceDate, type OccurrenceTemplate } from '@/lib/finance-recurring-template-service'
 import { spawnNextTemplatedOccurrence } from '@/lib/finance-draft-spawn-service'
 import { utcMidnight } from '@/lib/timezone'
-import { ensureAccountsReceivableCategory } from '@/lib/finance-opening-balance'
+import { ensureAccountsReceivableCategory, resolveAccountGlCategoryId } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
 import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
 import { deleteUnreceivedIncomeDescendants } from '@/lib/finance-descendants'
@@ -518,7 +518,7 @@ export async function PATCH(request: NextRequest) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const json = await request.json()
-  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId, receiveToGlAccountId, void: doVoid, voidNote, actualAmountReceived: actualAmountReceivedRaw, payslip: payslipData } = json
+  const { id, received, receivedDate: receivedDateRaw, invoiceReceived, invoiceReceivedDate, receiveToAccountId, void: doVoid, voidNote, actualAmountReceived: actualAmountReceivedRaw, payslip: payslipData } = json
 
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
@@ -846,7 +846,12 @@ export async function PATCH(request: NextRequest) {
 
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
     const receiptAccountId = receiveToAccountId ?? existing.accountId
-    const receiptGlAccountId: string | null = receiveToGlAccountId ?? null
+    // MODE B cash side is resolved from the chosen FinanceAccount's bound 1:1 GL
+    // category (Xero bank=GL model) — never a raw GL category, so a receipt can
+    // never land on a category no account reads from. Payslip MODE A keeps its
+    // own bankGlAccountId. Resolved in the MODE B branch below (after payslip
+    // validation), so it can stay null here.
+    let receiptGlAccountId: string | null = null
 
     // The actual amount to post to GL — actual overrides template for this occurrence.
     // F10: in payslip mode the cash that hits the bank is netPay (the GL bank
@@ -929,11 +934,25 @@ export async function PATCH(request: NextRequest) {
       if (grossAcct && !grossAcct.memberId) {
         console.warn(`[income PATCH] payslip ${id}: gross income GL account ${grossIncomeGlAccountId} has no memberId — Tax Report will split these wages jointly.`)
       }
-    } else if (!receiptGlAccountId) {
-      return NextResponse.json(
-        { error: 'A GL account (bank account) is required to post a cash receipt.' },
-        { status: 400 }
-      )
+    } else {
+      // ── MODE B: resolve the bank cash side from the selected FinanceAccount ──
+      // The receipt must credit AR and debit the bound GL category of a real
+      // account, so the displayed bank balance moves and reconciles by
+      // construction. A bare GL category is no longer accepted.
+      if (!receiptAccountId) {
+        return NextResponse.json(
+          { error: 'A bank account is required to record this receipt.' },
+          { status: 400 }
+        )
+      }
+      const resolvedBankGl = await resolveAccountGlCategoryId(receiptAccountId, user.familyId)
+      if (!resolvedBankGl) {
+        return NextResponse.json(
+          { error: 'Selected account not found. Cannot post receipt.' },
+          { status: 422 }
+        )
+      }
+      receiptGlAccountId = resolvedBankGl
     }
 
     // WI-2 (P4-FC-01): an income entry can carry a POSTED, un-reversed accrual
