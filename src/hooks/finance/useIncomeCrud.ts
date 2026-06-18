@@ -615,12 +615,16 @@ export function useIncomeCrud() {
     }
 
     if (payslipForm.enabled) {
-      // Payslip mode: send full breakdown, GL accounts come from payslip
+      // Payslip mode: send full breakdown. The take-home cash side comes from the
+      // selected bank account (receiveToAccountId) — the server resolves it to its
+      // bound 1:1 GL category for the DR Bank line, so net pay can never land on a
+      // non-account GL category. The remaining GL accounts (gross income, PAYG,
+      // SGC, deductions) are real ledger categories and still come from the payslip.
+      body.receiveToAccountId = receivedConfirmAccountId || null
       body.payslip = {
         grossPay:               parseFloat(payslipForm.grossPay) || 0,
         netPay:                 parseFloat(payslipForm.netPay) || 0,
         grossIncomeGlAccountId: payslipForm.grossIncomeGlAccountId || null,
-        bankGlAccountId:        payslipForm.bankGlAccountId || null,
         paygWithheld:           parseFloat(payslipForm.paygWithheld) || 0,
         paygGlAccountId:        payslipForm.paygGlAccountId || null,
         sgcAmount:              parseFloat(payslipForm.sgcAmount) || 0,

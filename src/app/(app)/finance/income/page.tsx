@@ -585,6 +585,24 @@ export default function IncomePage() {
                     Payslip mode builds a multi-line GL journal: DR Bank + PAYG + Deductions = CR Gross Income. Net Pay + PAYG + Deductions must equal Gross Pay.
                   </div>
 
+                  {/* Take-home bank account — the DR Bank cash side. Bound to a real
+                      FinanceAccount so net pay lands on a GL category the balance
+                      sheet reads from (replaces the old raw "Bank / Take-home GL"
+                      picker). */}
+                  <div>
+                    <label className="text-xs text-muted-foreground">Receive take-home into account (bank) *</label>
+                    <select value={receivedConfirmAccountId} onChange={e => setReceivedConfirmAccountId(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
+                      <option value="">Select account…</option>
+                      {accounts.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    {!receivedConfirmAccountId && (
+                      <p className="text-xs text-amber-500 mt-1">⚠ No account selected — balance sheet won&apos;t update</p>
+                    )}
+                  </div>
+
                   {/* Pay period */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -718,8 +736,8 @@ export default function IncomePage() {
                       the journal posts identically: DR Bank + PAYG + Deductions = CR Gross Income. */}
                   <EditorDisclosure
                     label="Advanced — GL account mapping"
-                    defaultOpen={!payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId}
-                    hasData={!!payslipForm.grossIncomeGlAccountId || !!payslipForm.bankGlAccountId || !!payslipForm.paygGlAccountId || !!payslipForm.sgcGlAccountId || !!payslipForm.sgcIncomeGlAccountId || payslipForm.deductions.some(d => !!d.glAccountId)}
+                    defaultOpen={!payslipForm.grossIncomeGlAccountId}
+                    hasData={!!payslipForm.grossIncomeGlAccountId || !!payslipForm.paygGlAccountId || !!payslipForm.sgcGlAccountId || !!payslipForm.sgcIncomeGlAccountId || payslipForm.deductions.some(d => !!d.glAccountId)}
                   >
                     <div className="space-y-3 rounded-md border border-border p-3">
                       <p className="text-xs text-muted-foreground/60">Auto-mapped from the payslip. The journal posts DR Bank + PAYG + Deductions = CR Gross Income — override only if an account is wrong.</p>
@@ -731,17 +749,6 @@ export default function IncomePage() {
                             className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
                             <option value="">Select GL account…</option>
                             {glAccounts.filter(a => a.type === 'income').map(a => (
-                              <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground">Bank / Take-home GL account *</label>
-                          <select value={payslipForm.bankGlAccountId}
-                            onChange={e => setPayslipForm((p: PayslipFormData) => ({ ...p, bankGlAccountId: e.target.value }))}
-                            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm mt-1">
-                            <option value="">Select GL account…</option>
-                            {glAccounts.filter(a => a.type === 'asset').map(a => (
                               <option key={a.id} value={a.id}>{a.parentId ? ` → ${a.name}` : a.name}</option>
                             ))}
                           </select>
@@ -818,7 +825,7 @@ export default function IncomePage() {
             <button
               onClick={confirmMarkReceived}
               disabled={payslipForm.enabled
-                ? !payslipForm.grossIncomeGlAccountId || !payslipForm.bankGlAccountId
+                ? !payslipForm.grossIncomeGlAccountId || !receivedConfirmAccountId
                 : !receivedConfirmAccountId
               }
               className="rounded-md bg-green-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">

@@ -846,11 +846,11 @@ export async function PATCH(request: NextRequest) {
 
     const actualReceivedDate = receivedDateRaw ? new Date(receivedDateRaw) : new Date()
     const receiptAccountId = receiveToAccountId ?? existing.accountId
-    // MODE B cash side is resolved from the chosen FinanceAccount's bound 1:1 GL
-    // category (Xero bank=GL model) — never a raw GL category, so a receipt can
-    // never land on a category no account reads from. Payslip MODE A keeps its
-    // own bankGlAccountId. Resolved in the MODE B branch below (after payslip
-    // validation), so it can stay null here.
+    // The bank cash side (DR Bank) is resolved from the chosen FinanceAccount's
+    // bound 1:1 GL category (Xero bank=GL model) — never a raw GL category — so a
+    // receipt can never land on a category no displayed account reads from. Both
+    // MODE A (payslip take-home) and MODE B (simple receipt) resolve into this in
+    // their respective branches below, so it stays null here.
     let receiptGlAccountId: string | null = null
 
     // The actual amount to post to GL — actual overrides template for this occurrence.
@@ -871,7 +871,7 @@ export async function PATCH(request: NextRequest) {
 
     // ── Validate payslip GL accounts when payslip mode ──────────────────────
     if (payslipData) {
-      const { grossIncomeGlAccountId, bankGlAccountId, paygGlAccountId, sgcAmount = 0, sgcGlAccountId, sgcIncomeGlAccountId, deductions = [], netPay } = payslipData
+      const { grossIncomeGlAccountId, paygGlAccountId, sgcAmount = 0, sgcGlAccountId, sgcIncomeGlAccountId, deductions = [], netPay } = payslipData
       // F10: netPay is forced into actualAmount above, so it must be a valid number
       if (typeof netPay !== 'number' || !Number.isFinite(netPay) || netPay < 0) {
         return NextResponse.json(
@@ -885,12 +885,24 @@ export async function PATCH(request: NextRequest) {
           { status: 400 }
         )
       }
-      if (!bankGlAccountId) {
+      // Take-home cash side: bind to the selected FinanceAccount's GL category
+      // (Xero bank=GL), exactly like MODE B and bills/manual transactions, so the
+      // net pay that hits "bank" lands on a GL category a displayed account reads
+      // from. A raw bank GL category is no longer accepted.
+      if (!receiptAccountId) {
         return NextResponse.json(
-          { error: 'Payslip mode requires a Bank / Take-home GL account.' },
+          { error: 'A bank account is required to record this payslip receipt.' },
           { status: 400 }
         )
       }
+      const resolvedPayslipBankGl = await resolveAccountGlCategoryId(receiptAccountId, user.familyId)
+      if (!resolvedPayslipBankGl) {
+        return NextResponse.json(
+          { error: 'Selected account not found. Cannot post receipt.' },
+          { status: 422 }
+        )
+      }
+      receiptGlAccountId = resolvedPayslipBankGl
       // SGC posts a self-balancing DR Accrued SGC / CR SGC Income pair, so both
       // GL accounts are required when sgcAmount > 0 (postPayslipReceiptJournal
       // throws otherwise — see QA.md §2.3). Validate up front for a clean 400
@@ -904,7 +916,6 @@ export async function PATCH(request: NextRequest) {
       // Validate all GL IDs referenced in the payslip belong to this family
       const glIds = [
         grossIncomeGlAccountId,
-        bankGlAccountId,
         paygGlAccountId,
         sgcGlAccountId,
         sgcIncomeGlAccountId,
@@ -1053,7 +1064,7 @@ export async function PATCH(request: NextRequest) {
         let receiptJe: { id: string }
         if (payslipData) {
           const {
-            grossPay, netPay, grossIncomeGlAccountId, bankGlAccountId,
+            grossPay, netPay, grossIncomeGlAccountId,
             paygWithheld = 0, paygGlAccountId,
             sgcAmount = 0, sgcGlAccountId, sgcIncomeGlAccountId,
             components = [], deductions = [],
@@ -1078,7 +1089,7 @@ export async function PATCH(request: NextRequest) {
             grossPay,
             netPay,
             grossIncomeGlAccountId,
-            bankGlAccountId,
+            bankGlAccountId: receiptGlAccountId!,
             paygWithheld,
             paygGlAccountId,
             sgcAmount,
@@ -1101,7 +1112,7 @@ export async function PATCH(request: NextRequest) {
               grossPay,
               netPay,
               grossIncomeGlAccountId: grossIncomeGlAccountId ?? null,
-              bankGlAccountId: bankGlAccountId ?? null,
+              bankGlAccountId: receiptGlAccountId ?? null,
               paygWithheld,
               paygGlAccountId: paygGlAccountId ?? null,
               sgcAmount,
@@ -1170,7 +1181,7 @@ export async function PATCH(request: NextRequest) {
               reconciledDate: actualReceivedDate,
               date: actualReceivedDate,
               amount: actualAmount,
-              glAccountId: payslipData ? payslipData.bankGlAccountId : receiptGlAccountId,
+              glAccountId: receiptGlAccountId,
               accountId: receiptAccountId,
             },
           })
@@ -1189,7 +1200,7 @@ export async function PATCH(request: NextRequest) {
               memberId: existing.memberId, locationId: existing.locationId,
               isCleared: true, reconciledDate: actualReceivedDate,
               isTransfer: false,
-              glAccountId: payslipData ? payslipData.bankGlAccountId : receiptGlAccountId,
+              glAccountId: receiptGlAccountId,
               createdBy: user.id, familyId: user.familyId,
               entityId: existing.entityId,
             },
