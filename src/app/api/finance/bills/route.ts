@@ -14,6 +14,7 @@ import { getPeriodLockWarning } from '@/lib/finance-period-lock'
 import { receiveBillStage1 } from '@/lib/finance-bill-receive'
 import { recordBillPayment } from '@/lib/finance-bill-payment'
 import { deleteUnpaidBillDescendants } from '@/lib/finance-descendants'
+import { removeBillBudgetRule } from '@/lib/finance-budget-rule'
 
 const BILL_INCLUDE = {
   account: { select: { id: true, name: true } },
@@ -587,6 +588,11 @@ export async function DELETE(request: NextRequest) {
       await tx.financeTransaction.deleteMany({ where: { id: { in: txIdsToDelete }, familyId: user.familyId } })
     }
 
+    // Remove the bill's "include in budget" planner rule BEFORE deleting the bill.
+    // Once the bill row is gone the FK SET NULL has cleared billId, so the rule
+    // could no longer be matched and would orphan as a phantom expected cost.
+    await removeBillBudgetRule(tx, id, user.familyId)
+
     // Delete the bill — FinanceBillPayment and BillAttachment cascade automatically
     await tx.financeRecurringBill.delete({ where: { id } })
     // Bill is gone — now safe to remove its stranded unposted accrual draft journal
@@ -958,6 +964,9 @@ export async function PATCH(request: NextRequest) {
         where: { id },
         data: { isVoided: true, voidedAt: new Date(), voidNote: voidNote ?? null },
       })
+      // A voided bill must drop out of the budget forecast — remove its
+      // "include in budget" planner rule so it can't show as a phantom cost.
+      await removeBillBudgetRule(tx, id, user.familyId)
       // Voiding a parent retires its future no-GL drafts too — otherwise the
       // spawned-but-unpaid successors live on as actionable bills (P3-FC-03).
       await deleteUnpaidBillDescendants(id, user.familyId, tx)

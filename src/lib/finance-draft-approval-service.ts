@@ -45,6 +45,7 @@ import {
 import { toMonthlyAmount } from '@/lib/financeShared'
 import { addUtcYears } from '@/lib/timezone'
 import { deriveTemplatePrimaryCategory } from '@/lib/finance-template-helpers'
+import { removeBillBudgetRule } from '@/lib/finance-budget-rule'
 
 // ── Result types ─────────────────────────────────────────────────────────────
 
@@ -518,6 +519,10 @@ export async function cancelDraft(
       where: { id },
       data: { status: 'cancelled' },
     })
+
+    // A cancelled bill must drop out of the budget forecast — remove its
+    // "include in budget" planner rule so it can't show as a phantom cost.
+    await removeBillBudgetRule(prisma, id, user.familyId)
 
     await createAuditLog(
       user,

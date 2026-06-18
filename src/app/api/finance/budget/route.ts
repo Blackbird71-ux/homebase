@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
+import { removeBillBudgetRule } from '@/lib/finance-budget-rule'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -174,7 +175,7 @@ export async function PATCH(request: NextRequest) {
   if (json.removeFromBill) {
     const { billId } = json
     if (!billId) return NextResponse.json({ error: 'billId required' }, { status: 400 })
-    await prisma.financeBudget.deleteMany({ where: { billId, familyId: user.familyId } })
+    await removeBillBudgetRule(prisma, billId, user.familyId)
     return NextResponse.json({ success: true })
   }
 

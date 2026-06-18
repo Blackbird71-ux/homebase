@@ -55,6 +55,10 @@ export async function GET() {
       familyId: user.familyId,
       isActive: true,
       received: false,  // Only pending/upcoming entries for forward-looking budget
+      isVoided: false,
+      // Exclude draft/cancelled entries — they are not live income and must not
+      // surface as a budget income stream (mirrors the canonical income list).
+      OR: [{ status: null }, { status: { notIn: ['draft', 'cancelled'] } }],
     },
     select: {
       id: true,
@@ -117,7 +121,13 @@ export async function PUT(_request: NextRequest) {
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const entries = await prisma.financeIncomeEntry.findMany({
-    where: { familyId: user.familyId, isActive: true, received: false },
+    where: {
+      familyId: user.familyId,
+      isActive: true,
+      received: false,
+      isVoided: false,
+      OR: [{ status: null }, { status: { notIn: ['draft', 'cancelled'] } }],
+    },
     select: { id: true, name: true, amount: true, frequency: true, incomeType: true, entityId: true, isActive: true, parentIncomeId: true, nextExpectedDate: true, isTaxTracked: true, taxRate: true },
     orderBy: { nextExpectedDate: 'asc' },
   })
