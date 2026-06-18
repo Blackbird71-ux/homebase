@@ -1,3 +1,21 @@
+# 🏛️ North star — this is a commercial accounting product. Build it like one.
+
+**The finance module must behave exactly as a chartered accountant would expect, and exactly as a commercial accounting product (Xero, MYOB, QuickBooks) behaves. This is the non-negotiable standard against which every finance change is measured.** Not "close enough for a household app." Not "good enough for now." If a qualified accountant sitting at Xero would do it differently, the code is wrong.
+
+What this means in practice:
+
+1. **Correctness is the spec.** Before writing finance code, ask: *what would Xero/MYOB do here, and would an accountant sign off on the resulting ledger?* That answer is the requirement — not an approximation of it. Double-entry must always balance (DR=CR), recognition happens at the correct tax point, period-moving corrections reverse in the old period and repost in the new one, GST/PAYG/super follow Australian GAAP, and the trial balance, P&L, balance sheet, and AR/AP subledgers must always reconcile.
+
+2. **Accounting correctness is fixed NOW, never deferred.** A behaviour that diverges from what a chartered accountant or a commercial product would expect is **not** an out-of-scope "find" to document and defer — it is a defect in the thing you are building, and it gets fixed immediately, in its own commit, like any live-data bug. The "Defer, don't drop" rule below explicitly does **not** apply to finance correctness. Do not stop and ask permission to make the ledger correct; make it correct, then report what you did. (You still serialize finance edits, keep them human-reviewable, and consult QA.md §1/§2/§5 before and after — speed never means skipping the invariant checks.)
+
+3. **"Works like Xero/MYOB" beats "matches the current code."** If the existing code is internally consistent but accounting-wrong, the existing code is the bug. Don't preserve a wrong behaviour for the sake of surgical minimalism — fix it (in its own commit) and note the divergence you corrected.
+
+4. **No half-correct accounting.** A feature that posts the expense but not the matching payable, recognises on the wrong date, or leaves the subledger out of step with the GL is not "partially done" — it is broken and must not ship. Real money depends on it; treat every gap as a stop-ship.
+
+The sections below (shared helpers, finance architecture, blast-radius) are *how* you keep that standard. This section is *the standard itself.* When any other rule appears to conflict with making the accounting correct, the accounting wins.
+
+---
+
 # General coding discipline
 
 ## 1. Surface assumptions before coding
@@ -43,9 +61,10 @@ Write the report as if the reader has none of your current context, because they
 
 **The only exceptions — address now, but still isolate and document:**
 - Completing the current task **genuinely requires** the fix (the task cannot land correctly without it), or
-- The issue is **live damage to real data** (especially finance/GL — see QA.md).
+- The issue is **live damage to real data** (especially finance/GL — see QA.md), or
+- The issue is **accounting incorrectness** — the ledger, recognition, GST/PAYG/super, or a subledger does **not** behave as a chartered accountant or a commercial accounting product (Xero/MYOB) would expect. Per the North-star section at the top of this file, finance correctness is **never** a deferable find. Fix it now, in its own commit. Do not document-and-defer it, and do not stop to ask permission merely to make the accounting correct.
 
-In both cases, make the fix, but give it its **own logical change / commit**, note the coupling to the original task in the commit message, and still write the find up (in the commit body or QA.md §12 if it's a new pattern). "Required to proceed" is not a licence to blur two changes into one unattributable diff, nor to skip documentation.
+In all cases, make the fix, but give it its **own logical change / commit**, note the coupling to the original task in the commit message, and still write the find up (in the commit body or QA.md §12 if it's a new pattern). "Required to proceed" is not a licence to blur two changes into one unattributable diff, nor to skip documentation. Fixing accounting immediately does **not** relax the QA.md §1/§2/§5 invariant checks — run them before and after; "fast" never means "unverified."
 
 This generalizes §3: "if you notice unrelated dead code, mention it — don't delete it" is the same instinct applied to every kind of discovery.
 

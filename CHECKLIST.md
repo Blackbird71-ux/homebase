@@ -58,6 +58,8 @@ Silent field loss during layout refactors has happened repeatedly. **See AGENTS.
 
 ## Finance — always consult QA.md first
 
+- [ ] **Standard = Xero/MYOB + a chartered accountant signs off** (AGENTS.md North-star). Ask "what would a commercial accounting product do here?" — that answer is the spec
+- [ ] Accounting incorrectness is **fixed now, not deferred** — it's a stop-ship defect, not an out-of-scope find (AGENTS.md North-star §2)
 - [ ] Read **QA.md §1** (blast-radius protocol) before touching any finance file
 - [ ] Read **QA.md §2** (accounting invariants) before any GL or journal change
 - [ ] Read **QA.md §12** (known anti-patterns) — especially 12.1, 12.2, 12.7, 12.9, 12.20

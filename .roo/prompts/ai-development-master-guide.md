@@ -223,9 +223,10 @@ Write the report as if the reader has none of your current context, because they
 
 **The only exceptions — address now, but still isolate and document:**
 - Completing the current task **genuinely requires** the fix (it cannot land correctly without it), or
-- The issue is **live damage to real data** (especially finance/GL).
+- The issue is **live damage to real data** (especially finance/GL), or
+- The issue is **accounting incorrectness** — the ledger, recognition, GST/PAYG/super, or a subledger does **not** behave as a chartered accountant or a commercial accounting product (Xero/MYOB) would expect. Finance correctness is **never** a deferable find: fix it now, in its own commit, and do not stop to ask permission merely to make the accounting correct.
 
-In both cases, make the fix, but give it its **own logical change / commit**, note the coupling to the original task in the commit message, and still write the find up (in the commit body, or `QA.md` §12 if it's a new recurring pattern). "Required to proceed" is not a licence to blur two changes into one unattributable diff, nor to skip documentation.
+In all cases, make the fix, but give it its **own logical change / commit**, note the coupling to the original task in the commit message, and still write the find up (in the commit body, or `QA.md` §12 if it's a new recurring pattern). "Required to proceed" is not a licence to blur two changes into one unattributable diff, nor to skip documentation. Fixing accounting immediately does **not** relax the QA.md §1/§2/§5 invariant checks — run them before and after.
 
 ---
 
