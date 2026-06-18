@@ -1,7 +1,7 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { seedFinanceCategories } from '@/lib/finance-seed'
-import { deriveAllAccountBalances, deriveJournalLineBalances } from '@/lib/finance-opening-balance'
+import { deriveAccountBalancesFromGl, deriveJournalLineBalances, ensureAllAccountGlCategories } from '@/lib/finance-opening-balance'
 import { OverviewClient } from './OverviewClient'
 import { monthBoundsInTz } from '@/lib/timezone'
 import { liveBillWhere } from '@/lib/finance-live-filter'
@@ -17,6 +17,9 @@ export default async function FinanceOverviewPage() {
 
   // Ensure default categories exist
   await seedFinanceCategories(familyId)
+  // Ensure every account is bound 1:1 to its GL category (Xero model) so the
+  // balances below read from the ledger and reconcile with the Balance Sheet.
+  await ensureAllAccountGlCategories(familyId)
 
   const now = new Date()
   const { start: monthStart, end: monthEnd } = monthBoundsInTz(timezone)
@@ -77,7 +80,7 @@ export default async function FinanceOverviewPage() {
     prisma.financeLocation.findMany({
       where: { familyId, isActive: true },
     }),
-    deriveAllAccountBalances(familyId),
+    deriveAccountBalancesFromGl(familyId),
     deriveJournalLineBalances(familyId, monthStart, monthEnd),
   ])
 

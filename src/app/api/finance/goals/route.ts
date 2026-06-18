@@ -18,7 +18,7 @@ export async function GET() {
   const enriched = await Promise.all(goals.map(async (g) => {
     let derived = g.currentAmount
     if (g.accountId && g.account) {
-      derived = await deriveAccountBalance(g.accountId)
+      derived = await deriveAccountBalance(g.accountId, user.familyId)
     }
     return { ...g, currentAmount: derived }
   }))
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const result = {
     ...goal,
     currentAmount: goal.accountId && goal.account
-      ? await deriveAccountBalance(goal.accountId)
+      ? await deriveAccountBalance(goal.accountId, user.familyId)
       : goal.currentAmount,
   }
 
@@ -93,7 +93,7 @@ export async function PUT(request: NextRequest) {
   const result = {
     ...goal,
     currentAmount: goal.accountId && goal.account
-      ? await deriveAccountBalance(goal.accountId)
+      ? await deriveAccountBalance(goal.accountId, user.familyId)
       : goal.currentAmount,
   }
 

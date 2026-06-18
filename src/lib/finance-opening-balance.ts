@@ -333,67 +333,19 @@ export async function setOpeningBalance(
     })
   }
 
-  // Ensure a dedicated GL category exists for this bank account.
-  // We store the accountId in glCode for cross-reference.
-  const accountGlName = `Account: ${account.name}`
+  // Ensure this account's bound 1:1 GL category exists (Xero model), realigning
+  // its type to the current opening-balance sign — a flip asset↔liability must
+  // reclassify it to the correct side of the Balance Sheet / Trial Balance.
+  // Single source of truth: ensureAccountGlCategory (also called on account
+  // create + the all-accounts backfill).
   const isLiability = signedAmount < 0
-  const glCategoryType = isLiability ? 'liability' : 'asset'
-
-  const existingGlCategory = await prisma.financeCategory.findFirst({
-    where: { familyId, glCode: `acct:${accountId}`, isSystem: true },
-    select: { id: true, type: true },
+  const accountGlCategoryId = await ensureAccountGlCategory({
+    accountId,
+    familyId,
+    name: account.name,
+    type: isLiability ? 'liability' : 'asset',
+    realignType: true,
   })
-  let accountGlCategoryId: string
-  if (existingGlCategory) {
-    accountGlCategoryId = existingGlCategory.id
-    // Reuse path: re-sync the type to the current opening-balance sign. A sign
-    // flip (asset → liability or back) must reclassify this account-GL category
-    // to the correct side of the Balance Sheet / Trial Balance — matching what
-    // the create path below would set. Without this the category keeps its
-    // original type and a flipped opening balance lands on the wrong statement
-    // side. This system category is only ever a target for the opening-balance
-    // journal (glCode `acct:<id>`), so the retype is safe.
-    if (existingGlCategory.type !== glCategoryType) {
-      await prisma.financeCategory.update({
-        where: { id: existingGlCategory.id },
-        data: { type: glCategoryType },
-      })
-    }
-  } else {
-    try {
-      const created = await prisma.financeCategory.create({
-        data: {
-          name:     accountGlName,
-          type:     glCategoryType,
-          isSystem: true,
-          level:    0,
-          glCode:   `acct:${accountId}`,
-          familyId,
-        },
-        select: { id: true },
-      })
-      accountGlCategoryId = created.id
-    } catch (err: any) {
-      // Unique constraint on (familyId, name) — account name may already exist
-      // under a different structure. Fall back to a suffixed name.
-      if (err.code === 'P2002') {
-        const created = await prisma.financeCategory.create({
-          data: {
-            name:     `${accountGlName} (OB)`,
-            type:     glCategoryType,
-            isSystem: true,
-            level:    0,
-            glCode:   `acct:${accountId}`,
-            familyId,
-          },
-          select: { id: true },
-        })
-        accountGlCategoryId = created.id
-      } else {
-        throw err
-      }
-    }
-  }
 
   const absAmount = Math.abs(signedAmount)
   const reference = await nextJournalReference(familyId)
@@ -572,82 +524,158 @@ export async function syncAccountGlCategoryName(
 }
 
 /**
- * Derive the current balance for a single account from its cleared transactions.
+ * Map a FinanceAccount.type to the GL side its bound category posts to.
+ * Credit cards and loans are liabilities; everything else (bank/cash/savings)
+ * is an asset. (An overdrawn asset can still be reclassified to liability by a
+ * negative opening balance — see ensureAccountGlCategory `realignType`.)
  */
-export async function deriveAccountBalance(accountId: string): Promise<number> {
-  const txs = await prisma.financeTransaction.findMany({
-    where: { accountId, isCleared: true },
-    select: { type: true, amount: true },
-  })
-  let balance = 0
-  for (const tx of txs) {
-    if (tx.type === 'income') balance += tx.amount
-    else if (tx.type === 'expense') balance -= tx.amount
-    else if (tx.type === 'opening_balance') balance += tx.amount
-  }
-  return balance
+export function accountTypeToGlType(accountType: string): 'asset' | 'liability' {
+  return accountType === 'credit' || accountType === 'loan' ? 'liability' : 'asset'
 }
 
 /**
- * Derive balances for all accounts/GL categories from:
- *   1. Cleared FinanceTransactions (bank account movements)
- *   2. Posted FinanceJournalLines (GL account movements)
+ * Ensure a FinanceAccount has its bound 1:1 GL category (Xero model: a bank
+ * account IS a GL account). The category is system, named "Account: <name>",
+ * linked by glCode `acct:<accountId>`. Returns its id.
  *
- * Returns a Map<accountId | glAccountId, derivedBalance>.
+ * SINGLE source of truth for the account↔GL binding, called from three places:
+ * account creation, the all-accounts backfill, and setOpeningBalance.
+ * Idempotent — reuses the existing bound category by glCode.
  *
- * NOTE: This function uses a hybrid read (transactions + journal lines) because
- * FinanceAccount records are not fully linked to FinanceCategory GL accounts.
- * The opening balance fix in setOpeningBalance() now creates a proper GL category
- * for each account, so new opening balances will appear in journal lines.
- * Legacy opening balance transactions are still read here for backward compatibility.
+ * `realignType` (setOpeningBalance only) reclassifies an existing category when
+ * the desired side changes (opening-balance sign flip asset↔liability). The
+ * backfill and create paths pass it false so a page load never thrashes the
+ * type a deliberate opening balance set.
  */
-export async function deriveAllAccountBalances(
+export async function ensureAccountGlCategory(params: {
+  accountId: string
+  familyId: string
+  name: string
+  type: 'asset' | 'liability'
+  realignType?: boolean
+}): Promise<string> {
+  const { accountId, familyId, name, type, realignType = false } = params
+  const glName = `Account: ${name}`
+
+  const existing = await prisma.financeCategory.findFirst({
+    where: { familyId, glCode: `acct:${accountId}`, isSystem: true },
+    select: { id: true, type: true },
+  })
+  if (existing) {
+    if (realignType && existing.type !== type) {
+      await prisma.financeCategory.update({
+        where: { id: existing.id },
+        data: { type },
+      })
+    }
+    return existing.id
+  }
+
+  try {
+    const created = await prisma.financeCategory.create({
+      data: { name: glName, type, isSystem: true, level: 0, glCode: `acct:${accountId}`, familyId },
+      select: { id: true },
+    })
+    return created.id
+  } catch (err: any) {
+    // (familyId, name) unique collision — fall back to a suffixed label. The
+    // glCode link is what matters; the name is cosmetic.
+    if (err?.code === 'P2002') {
+      const created = await prisma.financeCategory.create({
+        data: { name: `${glName} (OB)`, type, isSystem: true, level: 0, glCode: `acct:${accountId}`, familyId },
+        select: { id: true },
+      })
+      return created.id
+    }
+    throw err
+  }
+}
+
+/**
+ * Idempotently backfill the bound GL category for every account in the family.
+ * Cheap to call on each finance load (mirrors seedFinanceCategories). Only
+ * CREATES missing bindings — never realigns an existing category's type, so a
+ * deliberate opening-balance reclassification is never undone by a page load.
+ */
+export async function ensureAllAccountGlCategories(familyId: string): Promise<void> {
+  const accounts = await prisma.financeAccount.findMany({
+    where: { familyId },
+    select: { id: true, name: true, type: true },
+  })
+  for (const a of accounts) {
+    await ensureAccountGlCategory({
+      accountId: a.id,
+      familyId,
+      name: a.name,
+      type: accountTypeToGlType(a.type),
+    })
+  }
+}
+
+/**
+ * Derive each account's current balance from the GL (Xero 1:1 model), keyed by
+ * FinanceAccount.id. Every account's cash movements post to its bound GL
+ * category (glCode `acct:<id>`); reading the balance from there means the
+ * dashboard total, the Accounts page, and the Balance Sheet reconcile BY
+ * CONSTRUCTION — there is no second register to drift from the ledger.
+ *
+ * Asset-bound accounts return their debit-normal balance as-is (positive =
+ * funds). Liability-bound accounts (credit cards, loans) NEGATE the credit-
+ * normal balance so the register convention holds (a $500 card debt shows -500).
+ *
+ * `asAt` (optional) caps to journals posted on/before that date; omit for the
+ * live cumulative balance.
+ */
+export async function deriveAccountBalancesFromGl(
   familyId: string,
   asAt?: Date,
 ): Promise<Map<string, number>> {
-  const txWhere: any = { familyId, isCleared: true }
-  if (asAt) txWhere.date = { lte: asAt }
+  const [accounts, boundCats, glBalances] = await Promise.all([
+    prisma.financeAccount.findMany({ where: { familyId }, select: { id: true } }),
+    prisma.financeCategory.findMany({
+      where: { familyId, isSystem: true, glCode: { startsWith: 'acct:' } },
+      select: { id: true, glCode: true },
+    }),
+    deriveJournalLineBalances(familyId, null, asAt ?? null),
+  ])
 
-  const txs = await prisma.financeTransaction.findMany({
-    where: txWhere,
-    select: { accountId: true, glAccountId: true, type: true, amount: true },
-  })
-
-  const map = new Map<string, number>()
-  function add(key: string, delta: number) {
-    map.set(key, (map.get(key) ?? 0) + delta)
+  // accountId -> bound category id(s). Normally 1:1, but a historical P2002
+  // name-collision fallback could leave two categories sharing one glCode; sum
+  // them so no posted movement is dropped.
+  const catsByAccount = new Map<string, string[]>()
+  for (const c of boundCats) {
+    if (!c.glCode) continue
+    const accId = c.glCode.slice('acct:'.length)
+    const arr = catsByAccount.get(accId) ?? []
+    arr.push(c.id)
+    catsByAccount.set(accId, arr)
   }
 
-  for (const tx of txs) {
-    const bucket = tx.glAccountId ?? tx.accountId
-    if (!bucket) continue
-    if (tx.type === 'income') add(bucket, tx.amount)
-    else if (tx.type === 'expense') add(bucket, -tx.amount)
-    else if (tx.type === 'opening_balance') add(bucket, tx.amount)
-  }
-
-  // Posted journal lines
-  const journalLineWhere: any = { journalEntry: { familyId, isPosted: true } }
-  if (asAt) journalLineWhere.journalEntry = { ...journalLineWhere.journalEntry, date: { lte: asAt } }
-
-  const journalLines = await prisma.financeJournalLine.findMany({
-    where: journalLineWhere,
-    include: { glAccount: { select: { id: true, type: true } } },
-  })
-
-  for (const line of journalLines) {
-    const acctType = line.glAccount.type
-    const bucket   = line.glAccountId
-    let delta: number
-    if (acctType === 'asset' || acctType === 'expense') {
-      delta = line.side === 'debit' ? line.amount : -line.amount
-    } else {
-      delta = line.side === 'credit' ? line.amount : -line.amount
+  const result = new Map<string, number>()
+  for (const a of accounts) {
+    let bal = 0
+    for (const catId of catsByAccount.get(a.id) ?? []) {
+      const gl = glBalances.get(catId)
+      if (!gl) continue
+      bal += gl.accountType === 'liability' ? -gl.netBalance : gl.netBalance
     }
-    add(bucket, delta)
+    result.set(a.id, Math.round(bal * 100) / 100)
   }
+  return result
+}
 
-  return map
+/**
+ * Derive the current balance for a single account from the GL (Xero 1:1 model).
+ * Thin wrapper over deriveAccountBalancesFromGl so single-account callers
+ * (savings goals) read the SAME number the dashboard and Accounts page show.
+ */
+export async function deriveAccountBalance(
+  accountId: string,
+  familyId: string,
+  asAt?: Date,
+): Promise<number> {
+  const map = await deriveAccountBalancesFromGl(familyId, asAt)
+  return map.get(accountId) ?? 0
 }
 
 /**

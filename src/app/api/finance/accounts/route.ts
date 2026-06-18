@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { deriveAllAccountBalances, setOpeningBalance, syncAccountGlCategoryName } from '@/lib/finance-opening-balance'
+import {
+  deriveAccountBalancesFromGl,
+  ensureAccountGlCategory,
+  ensureAllAccountGlCategories,
+  accountTypeToGlType,
+  setOpeningBalance,
+  syncAccountGlCategoryName,
+} from '@/lib/finance-opening-balance'
 
 export async function GET() {
   const session = await auth()
@@ -10,58 +17,44 @@ export async function GET() {
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const familyId = user.familyId
 
-  // Fetch accounts and all cleared/pending transactions in two queries (not N+1).
-  const [accounts, allTxs] = await Promise.all([
+  // Xero 1:1 model: each account IS a GL account. Ensure every account is bound
+  // to its GL category, then read the displayed balance from the ledger so the
+  // Accounts page reconciles with the Balance Sheet BY CONSTRUCTION. The old
+  // path summed FinanceTransaction rows and explicitly dropped every GL-routed
+  // payment (a paid bill never reduced the account), producing a number that
+  // disagreed with the reports.
+  await ensureAllAccountGlCategories(familyId)
+
+  const [accounts, glBalanceMap, pendingTxs] = await Promise.all([
     prisma.financeAccount.findMany({
       where: { familyId },
       orderBy: { sortOrder: 'asc' },
     }),
+    deriveAccountBalancesFromGl(familyId),
+    // Pending (uncleared) transactions are a UI cache concept with no GL
+    // posting yet — still surfaced as informational badges, keyed by accountId.
     prisma.financeTransaction.findMany({
-      where: { familyId },
-      select: { accountId: true, glAccountId: true, type: true, amount: true, isCleared: true },
+      where: { familyId, isCleared: false },
+      select: { accountId: true, type: true, amount: true },
     }),
   ])
 
-  // Build derived balance map from cleared transactions (single pass).
-  const clearedBalanceMap = new Map<string, number>()
   const pendingCountMap = new Map<string, number>()
   const pendingExpenseMap = new Map<string, number>()
   const pendingIncomeMap = new Map<string, number>()
-
-  for (const tx of allTxs) {
-    if (!tx.accountId && !tx.glAccountId) continue
-    // glAccountId takes precedence — GL-routed payments post to the GL category bucket, not accountId
-    // But the Accounts page only tracks FinanceAccount balances, so only accumulate when accountId is set
-    // and there is NO glAccountId override (glAccountId means it went to a GL category, not a bank account)
-    const bankBucket = tx.glAccountId ? null : tx.accountId
-    if (tx.isCleared) {
-      if (bankBucket) {
-        const cur = clearedBalanceMap.get(bankBucket) ?? 0
-        if (tx.type === 'income') {
-          clearedBalanceMap.set(bankBucket, cur + tx.amount)
-        } else if (tx.type === 'expense') {
-          clearedBalanceMap.set(bankBucket, cur - tx.amount)
-        } else if (tx.type === 'opening_balance') {
-          // Signed amount: positive for assets, negative for liabilities.
-          clearedBalanceMap.set(bankBucket, cur + tx.amount)
-        }
-      }
-    } else {
-      // Pending — still track by accountId (GL-pending transactions are rare)
-      const pendingBucket = tx.accountId
-      if (!pendingBucket) continue
-      pendingCountMap.set(pendingBucket, (pendingCountMap.get(pendingBucket) ?? 0) + 1)
-      if (tx.type === 'expense') {
-        pendingExpenseMap.set(pendingBucket, (pendingExpenseMap.get(pendingBucket) ?? 0) + tx.amount)
-      } else if (tx.type === 'income') {
-        pendingIncomeMap.set(pendingBucket, (pendingIncomeMap.get(pendingBucket) ?? 0) + tx.amount)
-      }
+  for (const tx of pendingTxs) {
+    if (!tx.accountId) continue
+    pendingCountMap.set(tx.accountId, (pendingCountMap.get(tx.accountId) ?? 0) + 1)
+    if (tx.type === 'expense') {
+      pendingExpenseMap.set(tx.accountId, (pendingExpenseMap.get(tx.accountId) ?? 0) + tx.amount)
+    } else if (tx.type === 'income') {
+      pendingIncomeMap.set(tx.accountId, (pendingIncomeMap.get(tx.accountId) ?? 0) + tx.amount)
     }
   }
 
   const enriched = accounts.map((acct) => ({
     ...acct,
-    currentBalance: clearedBalanceMap.get(acct.id) ?? 0,
+    currentBalance: glBalanceMap.get(acct.id) ?? 0,
     pendingCount: pendingCountMap.get(acct.id) ?? 0,
     pendingExpense: pendingExpenseMap.get(acct.id) ?? 0,
     pendingIncome: pendingIncomeMap.get(acct.id) ?? 0,
@@ -104,6 +97,17 @@ export async function POST(request: NextRequest) {
       sortOrder: (maxOrder?.sortOrder ?? 0) + 1,
       familyId: user.familyId,
     },
+  })
+
+  // Xero 1:1 model: bind the new account to its GL category immediately so its
+  // balance reads from the ledger from the first transaction (not only once an
+  // opening balance is set). setOpeningBalance below will realign the type if a
+  // signed opening balance demands it.
+  await ensureAccountGlCategory({
+    accountId: account.id,
+    familyId: user.familyId,
+    name: account.name,
+    type: accountTypeToGlType(account.type),
   })
 
   // If opening balance provided, create the double-entry opening balance transaction
