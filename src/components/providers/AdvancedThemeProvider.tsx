@@ -1,8 +1,7 @@
 // src/components/providers/AdvancedThemeProvider.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useTheme } from 'next-themes'
+import { useMemo, useSyncExternalStore } from 'react'
 import { CustomThemeColors } from '@/types'
 
 interface AdvancedThemeProviderProps {
@@ -100,6 +99,7 @@ function buildStyleContent(customTheme: CustomThemeColors | null | undefined): s
     '.midnight',
     '.glass-dark',
     '.modern',
+    '.aurora',
     '.apple-grey',
     '.apple-pro',
     '.apple-aqua',
@@ -120,20 +120,22 @@ function buildStyleContent(customTheme: CustomThemeColors | null | undefined): s
   return themeBlocks
 }
 
+// Stable no-op subscribe for useSyncExternalStore (module-level so it never
+// resubscribes across renders). Detects whether we're on the client without a
+// setState-in-effect, avoiding the SSR/hydration mismatch the old `mounted`
+// flag guarded against.
+const emptySubscribe = () => () => {}
+
 export function AdvancedThemeProvider({ children, customTheme }: AdvancedThemeProviderProps) {
-  const { theme, systemTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  const [styleContent, setStyleContent] = useState('')
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Rebuild the injected style block whenever theme or custom colors change
-  useEffect(() => {
-    if (!mounted) return
-    setStyleContent(buildStyleContent(customTheme))
-  }, [customTheme, theme, systemTheme, mounted])
+  // `mounted` is false during SSR, true on the client.
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
+  // Derived CSS is computed during render (pure), not via effect-set state.
+  // Output depends only on customTheme — the active theme/systemTheme don't
+  // change the generated variable block (it targets every theme class).
+  const styleContent = useMemo(
+    () => buildStyleContent(customTheme),
+    [customTheme]
+  )
 
   return (
     <>

@@ -26,8 +26,6 @@ export function DashboardCardWrapper({
   cardId,
   layout,
   children,
-  isDragging,
-  isResizing,
   isDragActive,
   isResizeActive,
   onDragStart,
