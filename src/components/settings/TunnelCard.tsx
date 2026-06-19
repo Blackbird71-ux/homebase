@@ -214,6 +214,10 @@ export function TunnelCard() {
   const tunnelCreated = status?.tunnelCreated ?? false
   const configured = status?.configured ?? false
   const allDone = loggedIn && tunnelCreated && configured
+  // The tunnel is running if the server reports a live connection, or we just
+  // restarted it this session. Don't rely on local restartDone state alone —
+  // on a fresh page load it's false even when the tunnel is up.
+  const isRunning = restartDone || (status?.running ?? false)
 
   return (
     <Card>
@@ -333,19 +337,19 @@ export function TunnelCard() {
         {configured && (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <StepIcon state={restartDone ? 'done' : 'pending'} />
+              <StepIcon state={isRunning ? 'done' : 'pending'} />
               <span className="font-medium text-sm">
-                {allDone && !restartDone ? 'Start Tunnel' : 'Tunnel Active'}
+                {isRunning ? 'Tunnel Active' : 'Start Tunnel'}
               </span>
             </div>
             <div className="ml-8 flex items-center gap-3">
-              <Button type="button" onClick={handleRestart} disabled={restartLoading} size="sm" variant={restartDone ? 'outline' : 'default'}>
+              <Button type="button" onClick={handleRestart} disabled={restartLoading} size="sm" variant={isRunning ? 'outline' : 'default'}>
                 {restartLoading
                   ? <><Loader2 className="h-3 w-3 mr-2 animate-spin" />Starting...</>
-                  : <><RefreshCw className="h-3 w-3 mr-2" />{restartDone ? 'Restart Tunnel' : 'Start Tunnel'}</>
+                  : <><RefreshCw className="h-3 w-3 mr-2" />{isRunning ? 'Restart Tunnel' : 'Start Tunnel'}</>
                 }
               </Button>
-              {restartDone && (
+              {isRunning && (
                 <span className="text-sm text-green-600 dark:text-green-400">Tunnel running</span>
               )}
             </div>
