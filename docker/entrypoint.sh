@@ -317,6 +317,7 @@ if [ -f /etc/cloudflared/config.yml ]; then
     while true; do
       su-exec nextjs:nodejs cloudflared tunnel \
         --no-autoupdate \
+        --metrics 127.0.0.1:20241 \
         --config /etc/cloudflared/config.yml \
         run
       echo "   Cloudflare tunnel exited – restarting in 5 seconds..."

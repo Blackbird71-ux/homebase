@@ -12,6 +12,48 @@ interface TunnelStatus {
   tunnelCreated: boolean
   configured: boolean
   tunnelId: string | null
+  // Runtime health (present when the server is running in Docker)
+  inContainer?: boolean
+  running?: boolean
+  readyConnections?: number | null
+  processAlive?: boolean
+  originReachable?: boolean
+  uptime?: string | null
+}
+
+function LiveHealthBadge({ status }: { status: TunnelStatus }) {
+  // Only meaningful in the container; local dev has no tunnel process.
+  if (!status.inContainer) return null
+
+  if (status.running) {
+    const conns = status.readyConnections ?? 0
+    return (
+      <div className="flex items-start gap-2 text-sm p-3 rounded-md bg-green-500/10 text-green-700 dark:text-green-400">
+        <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>
+          Tunnel connected — {conns} edge connection{conns === 1 ? '' : 's'} ready
+          {status.uptime ? ` · up ${status.uptime}` : ''}.
+          {!status.originReachable && ' (Warning: origin localhost:3000 not responding.)'}
+        </span>
+      </div>
+    )
+  }
+
+  if (status.processAlive) {
+    return (
+      <div className="flex items-start gap-2 text-sm p-3 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400">
+        <Loader2 className="h-4 w-4 mt-0.5 shrink-0 animate-spin" />
+        <span>cloudflared is running but not yet connected to Cloudflare. Reconnecting…</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-start gap-2 text-sm p-3 rounded-md bg-destructive/10 text-destructive">
+      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+      <span>Tunnel not running. The supervisor restarts it automatically every ~5s — or use Restart below.</span>
+    </div>
+  )
 }
 
 type StepState = 'pending' | 'active' | 'done' | 'error'
@@ -144,6 +186,7 @@ export function TunnelCard() {
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
       setRestartDone(true)
+      await fetchStatus()
     } catch {
       setError('Network error')
     } finally {
@@ -188,6 +231,8 @@ export function TunnelCard() {
             <span>{error}</span>
           </div>
         )}
+
+        {configured && status && <LiveHealthBadge status={status} />}
 
         {/* Step 1 — Authenticate */}
         <div className="space-y-3">
