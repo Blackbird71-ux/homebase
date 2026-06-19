@@ -123,6 +123,43 @@ dependencies.
 
 ---
 
+## 5. Pull-to-refresh
+
+A downward pull from the top of a page shows an elastic spinner and reloads on release.
+Mobile/touch only — mouse and trackpad never emit the touch events it listens for.
+
+**Pieces**
+
+- [`src/hooks/usePullToRefresh.ts`](../src/hooks/usePullToRefresh.ts) — the gesture hook.
+  Attaches touch listeners to a container and reports `{ distance, status, threshold }`.
+- [`src/components/layout/PullToRefresh.tsx`](../src/components/layout/PullToRefresh.tsx) —
+  the wrapper + spinner indicator, mounted **once** in
+  [`AppShell`](../src/components/layout/AppShell.tsx) around `{children}`. No per-page wiring.
+
+**Why it's mounted at the shell, not per page:** the shell never scrolls — each page owns
+its own `overflow-y-auto` container inside `{children}`. The hook finds the nearest
+scrollable ancestor *under the finger* and only arms when that scroller is at `scrollTop 0`,
+so it works on every page regardless of how that page lays out its scroll region.
+
+**Guards (so it never hijacks other gestures):**
+
+- **Axis-locked** — once a drag commits to mostly-horizontal it's abandoned, so the
+  `PillNav` category pills and other horizontal scrollers keep working.
+- Only arms at the top of the scroller; if the page is scrolled down it's a no-op and native
+  scroll runs untouched.
+- `preventDefault` fires *only* during an active downward pull, to stop the browser's own
+  rubber-band / native pull-to-refresh fighting ours.
+
+**What "refresh" does — and the upgrade path.** v1 calls `window.location.reload()`. That's
+the only action that universally re-fetches data, because HomeBase pages fetch client-side in
+their own effects — `router.refresh()` re-runs *server* components but wouldn't re-trigger
+those client fetches, so most pages would silently do nothing. The reload is fast behind the
+service worker. To remove the reload flash on a given page later, swap the `onRefresh` in
+`PullToRefresh.tsx` to dispatch a `homebase:refresh` event and have that page listen and
+re-run its fetch in place — an opt-in, page-by-page enhancement, not a rewrite.
+
+---
+
 ## Reduced motion
 
 premium.css ends with a `@media (prefers-reduced-motion: reduce)` block that collapses these

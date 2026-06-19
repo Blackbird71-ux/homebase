@@ -7,6 +7,7 @@ import { QuickAdd } from './QuickAdd'
 import { CommandPalette } from './CommandPalette'
 import { UniversalFAB } from './UniversalFAB'
 import { OfflineBanner } from './OfflineBanner'
+import { PullToRefresh } from './PullToRefresh'
 import { HelpButton } from './HelpButton'
 import { AIAssistant } from '@/components/ai/AIAssistant'
 import { useGlobalOfflineFlush } from '@/hooks/useGlobalOfflineFlush'
@@ -62,10 +63,11 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       </div>
 
       <main className="flex-1 overflow-hidden flex flex-col min-w-0 relative">
-        {/* pb-16 gives clearance for the universal FAB on all screen sizes */}
-        <div className="flex-1 overflow-hidden pb-16">
+        {/* pb-16 gives clearance for the universal FAB on all screen sizes.
+            PullToRefresh owns this wrapper so a pull from the top reloads. */}
+        <PullToRefresh>
           {children}
-        </div>
+        </PullToRefresh>
       </main>
 
       {/* Universal floating action button — visible on all screen sizes */}
