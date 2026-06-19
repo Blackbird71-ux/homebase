@@ -51,7 +51,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       defaultTheme="dark"
       enableSystem
       disableTransitionOnChange
-      themes={['light', 'dark', 'system', 'modern', 'midnight', 'apple-grey', 'apple-pro', 'glass-dark', 'sunset', 'ocean', 'forest', 'paper', 'harbour', 'plum', 'high-contrast', 'high-contrast-dark', 'high-contrast-sunset', 'high-contrast-ocean', 'high-contrast-forest', 'high-contrast-midnight', 'apple-aqua', 'apple-graphite', 'apple-sunset', 'apple-midnight', 'apple-forest']}
+      themes={['light', 'dark', 'system', 'modern', 'aurora', 'midnight', 'apple-grey', 'apple-pro', 'glass-dark', 'sunset', 'ocean', 'forest', 'paper', 'harbour', 'plum', 'high-contrast', 'high-contrast-dark', 'high-contrast-sunset', 'high-contrast-ocean', 'high-contrast-forest', 'high-contrast-midnight', 'apple-aqua', 'apple-graphite', 'apple-sunset', 'apple-midnight', 'apple-forest']}
     >
       <ThemeSyncer>
         {children}

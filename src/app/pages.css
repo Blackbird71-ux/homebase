@@ -951,6 +951,7 @@
 .high-contrast-ocean  { --sidebar-grad: oklch(0.96 0.01 215); --sidebar-fg: oklch(0.05 0.04 220); --sidebar-fg-dim: oklch(0.30 0.04 220); --sidebar-text: oklch(0.05 0.04 220); }
 .high-contrast-forest { --sidebar-grad: oklch(0.96 0.01 138); --sidebar-fg: oklch(0.05 0.05 140); --sidebar-fg-dim: oklch(0.30 0.05 140); --sidebar-text: oklch(0.05 0.05 140); }
 .apple-grey    { --sidebar-grad: oklch(0.975 0.002 260); }
+.aurora        { --sidebar-grad: linear-gradient(180deg, oklch(1 0 0 / 0.55) 0%, oklch(0.99 0.01 280 / 0.40) 100%); --sidebar-fg: oklch(0.34 0.02 275); --sidebar-fg-dim: oklch(0.54 0.02 275); --sidebar-text: oklch(0.18 0.02 275); }
 .apple-aqua    { --sidebar-grad: oklch(0.930 0.007 240); --sidebar-fg: oklch(0.30 0.01 240); --sidebar-fg-dim: oklch(0.52 0.01 240); }
 .apple-sunset  { --sidebar-grad: oklch(0.930 0.02  42);  --sidebar-fg: oklch(0.28 0.02  40); --sidebar-fg-dim: oklch(0.50 0.02  40); --sidebar-text: oklch(0.15 0.02  40); }
 .apple-forest  { --sidebar-grad: oklch(0.920 0.018 148); --sidebar-fg: oklch(0.28 0.02 148); --sidebar-fg-dim: oklch(0.50 0.02 148); --sidebar-text: oklch(0.15 0.03 148); }

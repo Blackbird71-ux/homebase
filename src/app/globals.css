@@ -983,6 +983,38 @@ body {
   --radius: 0.75rem;
 }
 
+/* ─── Theme: Aurora (flagship — light, airy, indigo-violet glass) ──────── */
+.aurora {
+  --background:           oklch(0.99 0.004 270);
+  --foreground:           oklch(0.21 0.02 275);
+  --card:                 oklch(1 0 0 / 0.72);
+  --card-foreground:      oklch(0.21 0.02 275);
+  --popover:              oklch(1 0 0 / 0.94);
+  --popover-foreground:   oklch(0.21 0.02 275);
+  --primary:              oklch(0.55 0.22 283);
+  --primary-foreground:   oklch(1 0 0);
+  --secondary:            oklch(0.96 0.012 280 / 0.7);
+  --secondary-foreground: oklch(0.21 0.02 275);
+  --muted:                oklch(0.96 0.01 280 / 0.7);
+  --muted-foreground:     oklch(0.46 0.025 275);
+  --accent:               oklch(0.95 0.022 285 / 0.7);
+  --accent-foreground:    oklch(0.40 0.18 283);
+  --destructive:          oklch(0.58 0.24 27);
+  --border:               oklch(0 0 0 / 6%);
+  --input:                oklch(0 0 0 / 6%);
+  --ring:                 oklch(0.55 0.22 283);
+  --radius:               0.9rem;
+  --sidebar:              oklch(0.98 0.01 280 / 0.85);
+  --sidebar-foreground:   oklch(0.32 0.02 275);
+  --sidebar-primary:      oklch(0.55 0.22 283);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent:       oklch(0.95 0.022 285 / 0.8);
+  --sidebar-accent-foreground: oklch(0.40 0.18 283);
+  --sidebar-border:       oklch(0 0 0 / 6%);
+  --sidebar-ring:         oklch(0.55 0.22 283);
+  --color-sidebar:        oklch(0.98 0.01 280 / 0.85);
+}
+
 /* ── Print / PDF styles ───────────────────────────────────────────────────── */
 /* These supplement the dynamic styles injected by PrintButton.tsx.           */
 /* They ensure the print-header div (hidden on screen) is visible in print.   */
