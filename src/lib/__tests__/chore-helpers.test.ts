@@ -68,16 +68,30 @@ describe('calculateNextDueDate — early completion (triggerOnComplete)', () => 
     expect(localDay(calculateNextDueDate(chore, late, TZ))).toBe('2026-06-13')
   })
 
-  it('biweekly: completing early advances 14 days from the due date, not from today', () => {
+  it('biweekly (floating): completing early advances 14 days from the completion day', () => {
     const chore = makeChore({
       frequency: 'biweekly',
       triggerOnComplete: true,
       allowEarlyStart: true,
       nextDueDate: localMidnight('2026-06-06'),
     })
-    const completedEarly = new Date('2026-06-05T08:00:00Z')
-    // From due 6 Jun + 14 days = 20 Jun (NOT 5 Jun + 14 = 19 Jun).
-    expect(localDay(calculateNextDueDate(chore, completedEarly, TZ))).toBe('2026-06-20')
+    const completedEarly = new Date('2026-06-05T08:00:00Z') // Fri 5 Jun ~18:00 Sydney
+    // Biweekly has no pinned calendar slot, so it floats from the completion
+    // date: 5 Jun + 14 days = 19 Jun (NOT 6 Jun + 14 = 20 Jun). Rolling forward
+    // from the due date would skip a day, the same defect as daily chores.
+    expect(localDay(calculateNextDueDate(chore, completedEarly, TZ))).toBe('2026-06-19')
+  })
+
+  it('daily (floating): completing a day early advances one day, not two', () => {
+    const chore = makeChore({
+      frequency: 'daily',
+      triggerOnComplete: true,
+      allowEarlyStart: true,
+      nextDueDate: localMidnight('2026-06-06'), // due Sat 6 Jun
+    })
+    const completedEarly = new Date('2026-06-05T09:00:00Z') // Fri 5 Jun ~19:00 Sydney
+    // Must land on Sat 6 Jun (completion + 1), NOT Sun 7 Jun (due + 1).
+    expect(localDay(calculateNextDueDate(chore, completedEarly, TZ))).toBe('2026-06-06')
   })
 
   it('biweekly: completing late advances 14 days from the completion day', () => {

@@ -96,8 +96,11 @@ export async function completeChore(
   const { end: todayEnd } = todayBoundsInTz(opts.timezone)
 
   // 1. Early-completion gate. nextDueDate is stored as the UTC equivalent of
-  // local midnight, so a direct Date comparison is correct.
-  if (!chore.allowEarlyStart && chore.nextDueDate && chore.nextDueDate > todayEnd) {
+  // local midnight, so a direct Date comparison is correct. todayEnd is
+  // tomorrow's local midnight (exclusive): a chore due today sits before it and
+  // is completable; a chore due tomorrow sits exactly AT it and must be gated —
+  // hence `>=` (mirror of choreIsCompletable's strict `<`).
+  if (!chore.allowEarlyStart && chore.nextDueDate && chore.nextDueDate >= todayEnd) {
     return { ok: false as const, reason: 'not-due' as const }
   }
 

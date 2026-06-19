@@ -250,10 +250,13 @@ export function calculateInitialDueDate(
  * Calculate the next due date after a chore is **completed**.
  *
  * Base-date selection rule (the golden rule — must never drift):
- *   • triggerOnComplete=true  → base from the LATER of (completedAt, nextDueDate):
- *       the schedule floats from the completion date, EXCEPT an early completion
- *       (completed before the chore was due) advances from the scheduled due date
- *       so it rolls to the NEXT occurrence, not back onto the one just satisfied.
+ *   • triggerOnComplete=true  → base from completedAt (schedule floats from when
+ *       it was actually done), EXCEPT for chores PINNED to a fixed calendar slot
+ *       (weekly with a weekday, or the monthly family with a dayOfMonth): there,
+ *       an early completion advances from the LATER of (completedAt, nextDueDate)
+ *       so it rolls to the NEXT slot, not back onto the one just satisfied.
+ *       Floating chores (daily, biweekly, pin-less weekly/monthly) never roll
+ *       forward — a daily chore done a day early advances one day, not two.
  *   • otherwise               → base from nextDueDate   (schedule stays anchored)
  *
  * This means completing a monthly chore 4 days late still schedules the next
@@ -275,16 +278,26 @@ export function calculateNextDueDate(
   // Anchor: advance from the scheduled due date, not from "now"
   let baseDate: Date
   if (chore.triggerOnComplete) {
-    // Float from the completion date — but an EARLY completion (before the
-    // chore was due) has already satisfied the current occurrence, so the next
-    // one must roll forward from that occurrence rather than collapse back onto
-    // it. Anchor on the later of (completedAt, nextDueDate): on-time/late
-    // completions float from completedAt; early completions advance from the
-    // scheduled due date. nextDueDate is the UTC instant of local midnight on
-    // the due day, so completedAt < nextDueDate is exactly "completed before the
-    // due day" in the user's timezone.
+    // Float from the completion date. The roll-forward exception below applies
+    // ONLY to chores pinned to a fixed calendar slot (a weekday for weekly, a
+    // day-of-month for the monthly family): for those, an EARLY completion has
+    // already satisfied the current occurrence, so anchoring on the later of
+    // (completedAt, nextDueDate) rolls forward to the NEXT slot instead of
+    // re-landing on the slot just satisfied — e.g. a weekly Saturday chore done
+    // Friday goes to next Saturday, not tomorrow.
+    //
+    // Floating chores — daily, biweekly, and weekly/monthly with no pinned day —
+    // have no fixed slot, so they ALWAYS float from the completion date. This is
+    // why a daily chore completed a day early advances exactly one day and never
+    // skips the in-between day (the bug this guards against). nextDueDate is the
+    // UTC instant of local midnight on the due day, so completedAt < nextDueDate
+    // is exactly "completed before the due day" in the user's timezone.
+    const isPinned =
+      (chore.frequency === 'weekly' &&
+        effectiveWeekdays(chore.dayOfWeek, chore.daysOfWeek).length > 0) ||
+      (frequencyToMonths(chore.frequency) > 0 && chore.dayOfMonth !== null)
     baseDate =
-      chore.nextDueDate && chore.nextDueDate > completedAt
+      isPinned && chore.nextDueDate && chore.nextDueDate > completedAt
         ? chore.nextDueDate
         : completedAt
   } else if (chore.nextDueDate) {
@@ -389,7 +402,10 @@ export function choreIsCompletable(
   todayEnd: Date
 ): boolean {
   if (!nextDueDate) return true           // null = due now
-  if (nextDueDate <= todayEnd) return true // overdue or due today
+  // todayEnd is tomorrow's local midnight (exclusive). A chore due today is
+  // stored at today's local midnight (< todayEnd); a chore due TOMORROW is
+  // stored exactly at todayEnd, so it must be excluded here — strict `<`.
+  if (nextDueDate < todayEnd) return true  // overdue or due today
   return allowEarlyStart                   // future: only if flag set
 }
 
