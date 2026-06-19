@@ -107,7 +107,7 @@ export async function PATCH(req: Request) {
           }
         }
       }
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid uiPreferences JSON format' },
         { status: 400 }
