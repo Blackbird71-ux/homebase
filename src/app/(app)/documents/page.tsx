@@ -9,6 +9,7 @@ import { DocumentUploadDialog } from '@/components/documents/DocumentUploadDialo
 import { GeneratePdfDialog } from '@/components/documents/GeneratePdfDialog'
 import { Plus, Search, AlertTriangle, FileText, Bell, FileOutput } from 'lucide-react'
 import { PillNav } from '@/components/shared/PillNav'
+import { Reveal } from '@/components/ui/Reveal'
 
 const CATEGORY_LABELS: Record<string, string> = {
   all:        'All',
@@ -132,7 +133,7 @@ export default function DocumentsPage() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-32 rounded-lg bg-muted animate-pulse" />
+              <div key={i} className="h-32 rounded-lg skeleton" />
             ))}
           </div>
         ) : fetchError ? (
@@ -159,13 +160,14 @@ export default function DocumentsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((doc) => (
-              <DocumentCard
-                key={doc.id}
-                document={doc}
-                onDeleted={(id) => setDocuments((prev) => prev.filter((d) => d.id !== id))}
-                onUpdated={(updated) => setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))}
-              />
+            {filtered.map((doc, i) => (
+              <Reveal key={doc.id} index={i}>
+                <DocumentCard
+                  document={doc}
+                  onDeleted={(id) => setDocuments((prev) => prev.filter((d) => d.id !== id))}
+                  onUpdated={(updated) => setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))}
+                />
+              </Reveal>
             ))}
           </div>
         )}

@@ -269,6 +269,67 @@ kbd {
   background-image: linear-gradient(135deg, oklch(0.60 0.21 276), oklch(0.55 0.23 292));
 }
 
+/* ─────────────────── Scroll reveal ─────────────────── */
+/* Elements fade + rise as they scroll into view. The useReveal hook adds
+   `.is-visible` via one shared IntersectionObserver. Independent `translate`
+   composes with the card hover-lift above instead of fighting it.
+   --reveal-delay lets a caller stagger a batch. Reduced motion (below)
+   collapses the transition to an instant snap. */
+.reveal {
+  opacity: 0;
+  translate: 0 16px;
+  transition: opacity 0.55s var(--hb-ease-out), translate 0.55s var(--hb-spring);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal.is-visible {
+  opacity: 1;
+  translate: 0 0;
+}
+
+/* ─────────────────── Skeleton shimmer ─────────────────── */
+/* Moving sheen for loading placeholders — a gradient sweep instead of a flat
+   opacity pulse. Tints derive from --foreground via color-mix, so every theme
+   (light and dark) adapts automatically. Apply alongside the placeholder's
+   own rounding/size utilities (replaces `bg-muted animate-pulse`). */
+@keyframes hb-skeleton-sweep {
+  0%   { background-position: -200% 0 }
+  100% { background-position:  200% 0 }
+}
+.skeleton {
+  background-color: transparent;
+  background-image: linear-gradient(90deg,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 25%,
+      color-mix(in oklab, var(--foreground) 14%, transparent) 37%,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 63%);
+  background-size: 200% 100%;
+  background-position: -200% 0;
+  animation: hb-skeleton-sweep 1.45s ease-in-out infinite;
+}
+
+/* ─────────────────── Spring modals ─────────────────── */
+/* Dialogs/sheets already animate in (zoom-in-95 / slide-in-from-bottom). Swap
+   the open-state timing to a spring so panels arrive with momentum rather than
+   a flat ease. Open only — close stays quick. */
+[data-slot="dialog-content"][data-open],
+[data-slot="sheet-content"][data-open] {
+  animation-timing-function: var(--hb-spring) !important;
+  animation-duration: 300ms !important;
+}
+
+/* ─────────────────── View transitions ─────────────────── */
+/* ViewTransitions.tsx wraps same-origin navigation in
+   document.startViewTransition; this tunes the root crossfade so a route
+   change reads as one continuous motion — old fades out, new fades + rises.
+   The interceptor no-ops under reduced motion, so these never run there. */
+::view-transition-old(root) {
+  animation: hb-vt-fade-out 0.26s var(--hb-ease-out) both;
+}
+::view-transition-new(root) {
+  animation: hb-vt-fade-rise 0.3s var(--hb-ease-out) both;
+}
+@keyframes hb-vt-fade-out { to { opacity: 0 } }
+@keyframes hb-vt-fade-rise { from { opacity: 0; transform: translateY(10px) } }
+
 /* ─────────────────── Reduced motion ─────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

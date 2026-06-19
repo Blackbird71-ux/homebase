@@ -9,6 +9,7 @@ import './enhancements.css'
 import './homebase-trips.css'
 import './premium.css' // Premium polish layer — loaded LAST so it wins source-order ties
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
+import { ViewTransitions } from '@/components/providers/ViewTransitions'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -79,6 +80,7 @@ export default async function RootLayout({
     >
       <body className={`${inter.className} h-full bg-background text-foreground overflow-hidden`}>
         <ThemeProvider>
+          <ViewTransitions />
           {children}
         </ThemeProvider>
         {/* Register service worker as early as possible after page is interactive.
