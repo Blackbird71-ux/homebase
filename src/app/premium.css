@@ -1,0 +1,248 @@
+/* ============================================================
+   HOMEBASE — Premium Polish Layer
+   ------------------------------------------------------------
+   A drop-in "finishing" pass that lifts every universal surface
+   (cards, buttons, inputs, glass panels, sidebar, scrollbars) to
+   an Apple-grade level of depth and refinement.
+
+   Design principles
+   • Depth via layered, hairline-ringed shadows (the Apple signature)
+   • Frosted glass materials on floating panels (sheets / dialogs)
+   • Restrained motion: smooth spring-y ease, never flashy
+   • Theme-token driven — works across EVERY theme automatically
+   • Additive only: no component code changed, no fields removed.
+     Uses the independent `translate`/`scale` properties so hover /
+     press feedback never fights drag transforms.
+
+   Loaded LAST (after enhancements.css) in src/app/layout.tsx so its
+   rules win source-order ties against the base utility classes.
+   ============================================================ */
+
+/* ───────────────────────── Tokens ───────────────────────── */
+:root {
+  /* Hairlines (1/2px rings) derived from the active theme's ink */
+  --hb-hairline:        color-mix(in srgb, var(--foreground) 12%, transparent);
+  --hb-hairline-strong: color-mix(in srgb, var(--foreground) 22%, transparent);
+
+  /* Layered elevation — ambient + key + drop. Soft, never harsh. */
+  --hb-elev-1: 0 1px 2px rgba(15, 17, 21, 0.05), 0 1px 1px rgba(15, 17, 21, 0.04);
+  --hb-elev-2: 0 2px 5px rgba(15, 17, 21, 0.06), 0 8px 20px -8px rgba(15, 17, 21, 0.12);
+  --hb-elev-3: 0 10px 30px -8px rgba(15, 17, 21, 0.18), 0 30px 70px -20px rgba(15, 17, 21, 0.26);
+
+  /* Top-edge sheen — the subtle highlight that makes a surface feel lit */
+  --hb-top-sheen: inset 0 1px 0 color-mix(in srgb, #fff 7%, transparent);
+
+  /* Motion */
+  --hb-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --hb-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Glass material for floating panels (mostly opaque → crisp text,
+     just translucent enough to read as glass over the blurred dim) */
+  --hb-glass-bg: color-mix(in srgb, var(--popover) 90%, transparent);
+}
+
+/* Dark themes: black shadows vanish, so shift elevation toward deeper
+   drops + a brighter hairline so panels still separate cleanly. */
+.dark,
+.midnight,
+.glass-dark,
+.high-contrast-dark,
+.high-contrast-midnight,
+.apple-midnight {
+  --hb-elev-1: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --hb-elev-2: 0 2px 6px rgba(0, 0, 0, 0.45), 0 8px 22px -10px rgba(0, 0, 0, 0.55);
+  --hb-elev-3: 0 12px 34px -10px rgba(0, 0, 0, 0.55), 0 34px 80px -24px rgba(0, 0, 0, 0.65);
+  --hb-top-sheen: inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+  --hb-hairline:        color-mix(in srgb, var(--foreground) 14%, transparent);
+  --hb-hairline-strong: color-mix(in srgb, var(--foreground) 26%, transparent);
+}
+
+/* ─────────────────── Base rendering & type ─────────────────── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+:where(h1, h2, h3, h4, h5, h6),
+[data-slot="card-title"],
+[data-slot="sheet-title"],
+[data-slot="dialog-title"],
+.font-heading {
+  letter-spacing: -0.02em;
+}
+
+/* Crisp, aligned figures for tables and money */
+table,
+.tabular,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─────────────────── Selection & scrollbars ─────────────────── */
+::selection {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--foreground);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
+}
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--foreground) 28%, transparent);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ─────────────────── Ambient canvas ─────────────────── */
+/* A whisper of the theme accent glowing from the top of the canvas —
+   gives the whole app a sense of depth and atmosphere without any
+   busy texture. Sits over --background, fixed to the viewport. */
+body {
+  background-image: radial-gradient(
+    130% 85% at 50% -12%,
+    color-mix(in srgb, var(--primary) 7%, transparent) 0%,
+    transparent 55%
+  );
+  background-attachment: fixed;
+}
+
+/* ─────────────────── Cards ─────────────────── */
+/* Every card floats on a soft, hairline-ringed shadow with a lit
+   top edge. `translate` (not `transform`) is used for the hover lift
+   so it never interferes with grid drag transforms. */
+[data-slot="card"] {
+  box-shadow: var(--hb-top-sheen), var(--hb-elev-1), 0 0 0 0.5px var(--hb-hairline);
+  transition: box-shadow 220ms var(--hb-ease-out), translate 220ms var(--hb-ease-out);
+}
+a [data-slot="card"],
+button [data-slot="card"],
+[data-slot="card"][data-interactive="true"] {
+  cursor: pointer;
+}
+a [data-slot="card"]:hover,
+button [data-slot="card"]:hover,
+[data-slot="card"][data-interactive="true"]:hover {
+  box-shadow: var(--hb-top-sheen), var(--hb-elev-2), 0 0 0 0.5px var(--hb-hairline-strong);
+  translate: 0 -2px;
+}
+
+/* ─────────────────── Buttons ─────────────────── */
+[data-slot="button"] {
+  transition: background-color 180ms var(--hb-ease-out),
+    box-shadow 180ms var(--hb-ease-out),
+    border-color 180ms var(--hb-ease-out),
+    color 180ms var(--hb-ease-out),
+    scale 120ms var(--hb-ease-out);
+}
+/* Filled (primary) buttons get real tactile depth */
+[data-slot="button"].bg-primary {
+  box-shadow: var(--hb-top-sheen),
+    0 1px 2px rgba(15, 17, 21, 0.16),
+    0 0 0 0.5px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+[data-slot="button"].bg-primary:hover {
+  box-shadow: var(--hb-top-sheen),
+    0 3px 8px rgba(15, 17, 21, 0.22),
+    0 0 0 0.5px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+/* Gentle press — `scale` composes with the base translate-y, never fights drag */
+[data-slot="button"]:active:not(:disabled) {
+  scale: 0.97;
+}
+/* Soft branded focus glow instead of a hard ring */
+[data-slot="button"]:focus-visible {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+
+/* ─────────────────── Inputs, textarea, select ─────────────────── */
+[data-slot="input"],
+textarea,
+select {
+  transition: box-shadow 180ms var(--hb-ease-out), border-color 180ms var(--hb-ease-out);
+}
+[data-slot="input"]:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: color-mix(in srgb, var(--ring) 65%, var(--border));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 18%, transparent);
+  outline: none;
+}
+
+/* Keyboard hints (⌘K etc.) read as little frosted keys */
+kbd {
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  border: 0.5px solid var(--hb-hairline);
+  box-shadow: var(--hb-top-sheen), 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+  border-radius: 6px;
+}
+
+/* ─────────────────── Glass panels (Sheet / Drawer / Dialog) ─────────────────── */
+[data-slot="sheet-content"],
+[data-slot="dialog-content"] {
+  background: var(--hb-glass-bg);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(180%);
+  box-shadow: var(--hb-top-sheen), var(--hb-elev-3), 0 0 0 0.5px var(--hb-hairline-strong);
+  border-color: transparent;
+}
+
+/* ─────────────────── Overlays ─────────────────── */
+/* A touch richer dim + blur so panels feel like they lift above the app */
+[data-slot="dialog-overlay"],
+[data-slot="sheet-overlay"] {
+  background: color-mix(in srgb, #000 22%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: blur(8px) saturate(140%);
+}
+
+/* ─────────────────── Sidebar polish ─────────────────── */
+.hb-sidebar {
+  box-shadow: inset 1px 0 0 var(--hb-hairline), var(--hb-top-sheen);
+}
+.hb-sidebar__nav-link {
+  transition: background-color 160ms var(--hb-ease-out),
+    box-shadow 160ms var(--hb-ease-out),
+    color 160ms var(--hb-ease-out);
+}
+.hb-sidebar__nav-link.is-active {
+  box-shadow: 0 3px 10px -3px color-mix(in srgb, var(--primary) 45%, transparent),
+    inset 0 0 0 0.5px color-mix(in srgb, #fff 16%, transparent);
+}
+.hb-sidebar__logo {
+  box-shadow: var(--hb-top-sheen), 0 2px 6px -2px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+/* ─────────────────── Dashboard cards ─────────────────── */
+/* Dashboard cards are custom absolute panels (not the shadcn Card), so the
+   elevation above doesn't reach them. Apply the same ambient lift via
+   `filter` instead of `box-shadow` — that way it COMPOSES with their own
+   Tailwind shadow-sm / shadow-xl and the drag ring-2 (all box-shadow based)
+   instead of clobbering them. */
+.hb-dash-card {
+  filter: drop-shadow(0 1px 1.5px rgba(15, 17, 21, 0.06))
+    drop-shadow(0 6px 16px rgba(15, 17, 21, 0.07));
+  transition: filter 200ms var(--hb-ease-out), box-shadow 200ms var(--hb-ease-out);
+}
+
+/* ─────────────────── Reduced motion ─────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

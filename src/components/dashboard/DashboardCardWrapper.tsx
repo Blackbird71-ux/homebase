@@ -50,6 +50,7 @@ export function DashboardCardWrapper({
   return (
     <div
       className={cn(
+        'hb-dash-card',
         'absolute rounded-lg border bg-card text-card-foreground shadow-sm',
         'transition-shadow duration-200',
         isDragActive && 'shadow-xl ring-2 ring-primary/20',

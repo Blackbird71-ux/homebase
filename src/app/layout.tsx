@@ -7,6 +7,7 @@ import './apple-theme.css'
 import './pages.css'
 import './enhancements.css'
 import './homebase-trips.css'
+import './premium.css' // Premium polish layer — loaded LAST so it wins source-order ties
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
