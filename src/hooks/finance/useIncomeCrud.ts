@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { todayAU } from '@/lib/utils'
 import { todayBoundsInTz, addLocalDays, addMonthsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
 import { type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
+import { journalHasGstLine } from '@/lib/financeShared'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -102,7 +103,7 @@ export function useIncomeCrud() {
   const timezone = useFamilyTimezone()
   const [entries, setEntries]         = useState<IncomeEntry[]>([])
   const [accounts, setAccounts]       = useState<{ id: string; name: string }[]>([])
-  const [categories, setCategories]   = useState<{ id: string; name: string; type: string; parentId: string | null }[]>([])
+  const [categories, setCategories]   = useState<{ id: string; name: string; type: string; parentId: string | null; gstApplicable?: boolean | null }[]>([])
   const [glAccounts, setGLAccounts]   = useState<GLAccount[]>([])
   const [members, setMembers]         = useState<Member[]>([])
   const [locations, setLocations]     = useState<Location[]>([])
@@ -428,6 +429,20 @@ export function useIncomeCrud() {
           }
         }
 
+        // GST-split guard (audit 2026-06-19, finding #4): see journalHasGstLine.
+        if ((isNewPost || isDraftPersist)
+            && categories.find(c => c.id === form.categoryId)?.gstApplicable
+            && !journalHasGstLine(linesToSubmit, glAccounts)) {
+          if (!confirm(
+            'The selected category is GST-applicable but the journal has no GST line. ' +
+            'Saving now posts the full GST-inclusive amount and claims no GST — the BAS ' +
+            'will understate GST collected / overstate GST-free amounts.\n\n' +
+            'Add a GST line (CR GST Collected) to the journal, or press OK to save without claiming GST.'
+          )) {
+            return
+          }
+        }
+
         const serialisedLines = linesToSubmit.map(l => ({
           glAccountId: l.glAccountId,
           side: l.side,
@@ -478,6 +493,19 @@ export function useIncomeCrud() {
         const crTotal = createLines.filter(l => l.side === 'credit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
         if (Math.abs(drTotal - crTotal) > 0.005) {
           toast.error(`Journal lines are not balanced — debits ${drTotal.toFixed(2)} ≠ credits ${crTotal.toFixed(2)}. Please fix the split before saving.`)
+          return
+        }
+      }
+
+      // GST-split guard (audit 2026-06-19, finding #4): see journalHasGstLine.
+      if (categories.find(c => c.id === form.categoryId)?.gstApplicable
+          && !journalHasGstLine(createLines, glAccounts)) {
+        if (!confirm(
+          'The selected category is GST-applicable but the journal has no GST line. ' +
+          'Saving now posts the full GST-inclusive amount and claims no GST — the BAS ' +
+          'will understate GST collected / overstate GST-free amounts.\n\n' +
+          'Add a GST line (CR GST Collected) to the journal, or press OK to save without claiming GST.'
+        )) {
           return
         }
       }

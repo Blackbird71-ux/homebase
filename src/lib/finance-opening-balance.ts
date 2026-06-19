@@ -810,9 +810,17 @@ export async function createGstJournalEntry(
   try {
     const { exGst, gst } = calcGst(totalAmount, gstRate)
     const { itcId, collectedId } = await ensureGstAccounts(familyId)
-    const cashGlId = glAccountId ?? accountId
+    // Resolve the cash-side GL category: prefer the explicit GL account, else the
+    // selected FinanceAccount's bound 1:1 GL category (Xero bank=GL model). Never
+    // fall back to a raw FinanceAccount.id — a journal line must reference a
+    // FinanceCategory, otherwise the GL silently skips the GST split (audit
+    // 2026-06-19, finding #5).
+    let cashGlId = glAccountId
+    if (!cashGlId && accountId) {
+      cashGlId = await resolveAccountGlCategoryId(accountId, familyId)
+    }
     if (!cashGlId) {
-      console.warn('[gst] No glAccountId or accountId — skipping GST journal for', description)
+      console.warn('[gst] No GL account could be resolved for the cash side — skipping GST journal for', description)
       return null
     }
 

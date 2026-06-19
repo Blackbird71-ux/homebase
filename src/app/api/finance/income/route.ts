@@ -923,7 +923,7 @@ export async function PATCH(request: NextRequest) {
       ].filter((v): v is string => !!v)
       const payslipAccounts = await prisma.financeCategory.findMany({
         where: { id: { in: [...new Set(glIds)] }, familyId: user.familyId },
-        select: { id: true, isTaxPayment: true, memberId: true },
+        select: { id: true, type: true, isTaxPayment: true, memberId: true },
       })
       if (payslipAccounts.length < new Set(glIds).size) {
         return NextResponse.json(
@@ -940,6 +940,13 @@ export async function PATCH(request: NextRequest) {
       const paygAcct = paygGlAccountId ? payslipAccounts.find(a => a.id === paygGlAccountId) : null
       if (paygAcct && !paygAcct.isTaxPayment) {
         console.warn(`[income PATCH] payslip ${id}: PAYG GL account ${paygGlAccountId} is not flagged isTaxPayment — Tax Report will omit this withholding.`)
+      }
+      // PAYG Withheld is a current-asset receivable (DR) — reclaimed at tax-return
+      // time — so its GL account should be type='asset' (audit 2026-06-19, #6).
+      // Account config is the user's call, so warn rather than block (mirrors the
+      // isTaxPayment/memberId soft-warnings above).
+      if (paygAcct && paygAcct.type !== 'asset') {
+        console.warn(`[income PATCH] payslip ${id}: PAYG GL account ${paygGlAccountId} is type '${paygAcct.type}', not 'asset' — PAYG Withheld should be a current-asset (DR) receivable; the balance sheet will mispresent the withheld tax.`)
       }
       const grossAcct = payslipAccounts.find(a => a.id === grossIncomeGlAccountId)
       if (grossAcct && !grossAcct.memberId) {

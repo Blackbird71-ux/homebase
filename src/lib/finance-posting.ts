@@ -8,13 +8,13 @@
 // mutate transactions, does not spawn occurrences. The caller wraps these in a
 // $transaction and orchestrates the surrounding state changes.
 //
-// These helpers are PARALLEL to the in-route posting code in
-//   src/app/api/finance/bills/route.ts        (PATCH Stage 1 / Stage 2 blocks)
-//   src/app/api/finance/income/route.ts       (PATCH Stage 1 / Stage 2 blocks)
-//
-// They use the same primitives and produce equivalent journal entries.
-// They exist as a separate, fresh module so the audited posting logic in the
-// existing routes is not touched. (Block 2 / Approach 2 decision.)
+// These helpers are the SINGLE SOURCE OF TRUTH for GL posting. The finance
+// routes (src/app/api/finance/bills/route.ts, income/route.ts, …) are thin
+// orchestrators: they authenticate, parse input, call these helpers
+// (receiveBillStage1 / receiveIncomeStage1 / recordBillPayment /
+// postPayslipReceiptJournal / postIncomeAccrualJournal / …) and shape the
+// response. There is no duplicate inline posting logic — one implementation,
+// called everywhere (AGENTS.md "shared helpers over inline logic").
 //
 // GL-first invariants (Agent Guide §1.1 / §8.2):
 //   - Every function writes a balanced FinanceJournalEntry with isPosted=true.

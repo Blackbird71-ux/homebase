@@ -1,6 +1,34 @@
 // src/lib/financeShared.ts
 // Client-safe helpers and types — NO prisma imports (avoids better-sqlite3 bundling issues)
 
+// ─── GST-split guard (audit 2026-06-19, finding #4) ────────────────────────
+//
+// The bill/income accrual path does NOT auto-split GST. GST is only claimed/
+// collected when the user authors a GST control-account journal line
+// ("GST Input Tax Credits" / "GST Collected"), or via the quick-add transactions
+// route / the no-draft prepayment path. So a GST-applicable bill or income
+// authored with NO GST line posts the full GST-inclusive gross and claims no
+// GST — understating input tax credits / overstate GST-free amounts on the BAS.
+// These helpers detect that state so the save flow can confirm with the user
+// before posting. Pure + client-safe.
+
+/**
+ * Does any of the given journal lines post to a GST control account? A GST
+ * control account is identified by the word "GST" in its GL account name
+ * (covers both "GST Input Tax Credits" and "GST Collected").
+ */
+export function journalHasGstLine(
+  lines: { glAccountId: string }[] | undefined | null,
+  glAccounts: { id: string; name: string }[] | undefined | null,
+): boolean {
+  if (!lines || !glAccounts) return false
+  return lines.some(l => {
+    if (!l.glAccountId) return false
+    const acct = glAccounts.find(a => a.id === l.glAccountId)
+    return !!acct && acct.name.toUpperCase().includes('GST')
+  })
+}
+
 // ─── Shared Types ─────────────────────────────────────────────────────────
 
 export interface ReportRow {

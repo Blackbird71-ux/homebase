@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { todayAU } from '@/lib/utils'
 import { todayBoundsInTz, addLocalDays, addMonthsInTz, utcMidnightToLocalMidnight } from '@/lib/timezone'
-import { toMonthlyAmount } from '@/lib/financeShared'
+import { toMonthlyAmount, journalHasGstLine } from '@/lib/financeShared'
 import { deriveTaxClassification } from '@/lib/finance-categories'
 import { type JournalFormLine, type GLAccount } from '@/components/finance/JournalLinesEditor'
 import { usePaymentHistory } from '@/hooks/finance/usePaymentHistory'
@@ -55,7 +55,7 @@ export function useBillCrud() {
   const timezone = useFamilyTimezone()
   const [bills, setBills]           = useState<Bill[]>([])
   const [accounts, setAccounts]     = useState<{ id: string; name: string }[]>([])
-  const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null; isTaxPayment?: boolean | null; isTaxDeduction?: boolean | null }[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string; parentId: string | null; isTaxPayment?: boolean | null; isTaxDeduction?: boolean | null; gstApplicable?: boolean | null }[]>([])
   const [glAccounts, setGLAccounts] = useState<GLAccount[]>([])
   const [members, setMembers]       = useState<Member[]>([])
   const [locations, setLocations]   = useState<Location[]>([])
@@ -385,6 +385,24 @@ export function useBillCrud() {
         const crTotal = linesToSubmit.filter(l => l.side === 'credit').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
         if (Math.abs(drTotal - crTotal) > 0.005) {
           toast.error(`Journal lines are not balanced — debits ${drTotal.toFixed(2)} ≠ credits ${crTotal.toFixed(2)}. Please fix the split before saving.`)
+          return
+        }
+      }
+
+      // GST-split guard (audit 2026-06-19, finding #4): a GST-applicable category
+      // authored with no GST control-account line posts the full GST-inclusive
+      // amount and claims no GST (the accrual path does not auto-split). Confirm
+      // with the user before saving so the BAS does not silently understate ITCs.
+      if ((isNewPost || isDraftPersist || isNewDraft)
+          && categories.find(c => c.id === form.categoryId)?.gstApplicable
+          && !journalHasGstLine(linesToSubmit, glAccounts)) {
+        if (!confirm(
+          'The selected category is GST-applicable but the journal has no GST line. ' +
+          'Saving now posts the full GST-inclusive amount and claims no GST — the BAS ' +
+          'will understate input tax credits / overstate GST-free amounts.\n\n' +
+          'Add a GST line (DR GST Input Tax Credits / CR GST Collected) to the journal, ' +
+          'or press OK to save without claiming GST.'
+        )) {
           return
         }
       }
