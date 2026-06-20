@@ -330,6 +330,46 @@ kbd {
 @keyframes hb-vt-fade-out { to { opacity: 0 } }
 @keyframes hb-vt-fade-rise { from { opacity: 0; transform: translateY(10px) } }
 
+/* ─────────────────── Edge back/forward nav bubbles ─────────────────── */
+/* NavBubbles.tsx — tappable half-bubbles flush to each screen edge, 1/5 up
+   from the bottom. Touch-only: hidden unless the primary pointer is coarse, so
+   they never appear on desktop where the browser already has back/forward.
+   z-index sits below the modal/drawer overlays (z-50) so dialogs cover them. */
+.hb-nav-bubbles { display: none; }
+@media (pointer: coarse) {
+  .hb-nav-bubbles { display: block; }
+}
+.hb-nav-bubble {
+  position: fixed;
+  bottom: 20vh;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 52px;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 82%, transparent);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.12);
+  opacity: 0.4;
+  transition: opacity 0.2s ease, scale 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.hb-nav-bubble:active { opacity: 1; scale: 0.9; }
+.hb-nav-bubble--back {
+  left: env(safe-area-inset-left, 0px);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+}
+.hb-nav-bubble--fwd {
+  right: env(safe-area-inset-right, 0px);
+  border-right: 0;
+  border-radius: 999px 0 0 999px;
+}
+
 /* ─────────────────── Reduced motion ─────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

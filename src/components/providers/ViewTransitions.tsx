@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { withViewTransition } from '@/lib/view-transition'
 
 // Route morphs via the native View Transitions API. The App Router does
 // client-side ("soft") navigation, so the CSS `@view-transition` MPA rule never
@@ -43,14 +44,7 @@ export function ViewTransitions() {
 
       e.preventDefault()
       const dest = url.pathname + url.search + url.hash
-      startViewTransition!(() =>
-        // Resolve after React has had a couple of frames to commit the new
-        // route so the transition snapshots fresh content, not the old page.
-        new Promise<void>(resolve => {
-          router.push(dest)
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-        })
-      )
+      withViewTransition(() => router.push(dest))
     }
 
     document.addEventListener('click', onClick)

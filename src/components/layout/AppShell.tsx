@@ -8,6 +8,7 @@ import { CommandPalette } from './CommandPalette'
 import { UniversalFAB } from './UniversalFAB'
 import { OfflineBanner } from './OfflineBanner'
 import { PullToRefresh } from './PullToRefresh'
+import { NavBubbles } from './NavBubbles'
 import { HelpButton } from './HelpButton'
 import { AIAssistant } from '@/components/ai/AIAssistant'
 import { useGlobalOfflineFlush } from '@/hooks/useGlobalOfflineFlush'
@@ -69,6 +70,9 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
           {children}
         </PullToRefresh>
       </main>
+
+      {/* Edge back/forward nav bubbles — touch-only (hidden on desktop via CSS) */}
+      <NavBubbles />
 
       {/* Universal floating action button — visible on all screen sizes */}
       <UniversalFAB hideFinanceModule={hideFinanceModule} />

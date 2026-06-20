@@ -160,6 +160,37 @@ re-run its fetch in place — an opt-in, page-by-page enhancement, not a rewrite
 
 ---
 
+## 6. Edge back/forward nav bubbles
+
+Two tappable half-bubbles sit flush to the left and right screen edges, one-fifth up from the
+bottom — `‹` goes back, `›` goes forward. They give touch users history navigation without a
+swipe gesture (which would collide with Android's OS back-swipe and the horizontal pill rows).
+
+**Pieces**
+
+- [`src/components/layout/NavBubbles.tsx`](../src/components/layout/NavBubbles.tsx) — two
+  `<button>`s (aria-labelled "Go back" / "Go forward") calling `router.back()` / `router.forward()`,
+  each wrapped in `withViewTransition` so history navigation cross-fades like a link click.
+  Mounted once in [`AppShell`](../src/components/layout/AppShell.tsx).
+- `.hb-nav-bubbles` / `.hb-nav-bubble` in premium.css — the half-bubble shapes (`border-radius`
+  rounded only on the inner edge), `bottom: 20vh`, theme-token colours, and safe-area insets.
+
+**Touch-only:** the wrapper is `display: none` and only flips to `block` inside
+`@media (pointer: coarse)`, so desktop (where the browser chrome already has back/forward) never
+sees them. Subtle at rest (`opacity: 0.4`), they brighten and press in on `:active`. `z-index: 30`
+keeps them below the modal/drawer overlays (`z-50`) so dialogs always cover them.
+
+**Forward-history caveat:** browsers don't expose whether a forward entry exists, so the forward
+bubble can't be greyed out when there's nothing ahead — tapping it then is simply a no-op.
+
+**Shared transition helper.** Both this and the link interceptor (§4) need to run a navigation
+inside `document.startViewTransition`, so that logic lives in one place —
+[`src/lib/view-transition.ts`](../src/lib/view-transition.ts) `withViewTransition(navigate)` —
+and both call it (per the shared-helper rule). It falls back to calling `navigate()` directly
+when the API is missing or reduced-motion is on.
+
+---
+
 ## Reduced motion
 
 premium.css ends with a `@media (prefers-reduced-motion: reduce)` block that collapses these
