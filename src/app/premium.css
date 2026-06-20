@@ -269,6 +269,135 @@ kbd {
   background-image: linear-gradient(135deg, oklch(0.60 0.21 276), oklch(0.55 0.23 292));
 }
 
+/* ───────────── Premium colored themes (aurora recipe, own hue) ───────────── */
+/* Azure / Ocean / Forest / Sunset / Plum each get the aurora flourishes —
+   a multi-hue mesh canvas, a frosted-glass sidebar floating over it, and
+   luminous gradient primary buttons + active pill — keyed to their own colour
+   family. Each block is scoped so no other theme is touched. */
+
+/* Azure — vivid blue (#258ef7) */
+.azure body {
+  background-color: oklch(0.99 0.006 245);
+  background-image:
+    radial-gradient(58% 52% at 8% -6%, oklch(0.70 0.16 252 / 0.20) 0%, transparent 60%),
+    radial-gradient(52% 48% at 99% 0%, oklch(0.78 0.13 228 / 0.18) 0%, transparent 58%),
+    radial-gradient(62% 55% at 88% 106%, oklch(0.72 0.15 280 / 0.12) 0%, transparent 60%),
+    radial-gradient(55% 55% at -6% 92%, oklch(0.80 0.12 235 / 0.12) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+.azure .hb-sidebar {
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+.azure [data-slot="button"].bg-primary {
+  background-image: linear-gradient(135deg, oklch(0.64 0.17 250) 0%, oklch(0.60 0.19 258) 52%, oklch(0.62 0.16 235) 100%);
+  border-color: transparent;
+}
+.azure [data-slot="button"].bg-primary:hover {
+  background-image: linear-gradient(135deg, oklch(0.67 0.16 250) 0%, oklch(0.63 0.18 258) 52%, oklch(0.65 0.15 235) 100%);
+}
+.azure .hb-sidebar__nav-link.is-active {
+  background-image: linear-gradient(135deg, oklch(0.64 0.17 250), oklch(0.58 0.19 262));
+}
+
+/* Ocean — cool blue/teal */
+.ocean body {
+  background-color: oklch(0.98 0.02 220);
+  background-image:
+    radial-gradient(58% 52% at 8% -6%, oklch(0.72 0.13 220 / 0.20) 0%, transparent 60%),
+    radial-gradient(52% 48% at 99% 0%, oklch(0.80 0.11 200 / 0.18) 0%, transparent 58%),
+    radial-gradient(62% 55% at 88% 106%, oklch(0.74 0.12 240 / 0.12) 0%, transparent 60%),
+    radial-gradient(55% 55% at -6% 92%, oklch(0.82 0.10 190 / 0.12) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+.ocean .hb-sidebar {
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+.ocean [data-slot="button"].bg-primary {
+  background-image: linear-gradient(135deg, oklch(0.62 0.16 222) 0%, oklch(0.58 0.18 212) 52%, oklch(0.62 0.15 235) 100%);
+  border-color: transparent;
+}
+.ocean [data-slot="button"].bg-primary:hover {
+  background-image: linear-gradient(135deg, oklch(0.65 0.15 222) 0%, oklch(0.61 0.17 212) 52%, oklch(0.65 0.14 235) 100%);
+}
+.ocean .hb-sidebar__nav-link.is-active {
+  background-image: linear-gradient(135deg, oklch(0.62 0.16 222), oklch(0.56 0.17 205));
+}
+
+/* Forest — green/teal */
+.forest body {
+  background-color: oklch(0.98 0.02 140);
+  background-image:
+    radial-gradient(58% 52% at 8% -6%, oklch(0.72 0.13 140 / 0.20) 0%, transparent 60%),
+    radial-gradient(52% 48% at 99% 0%, oklch(0.80 0.11 165 / 0.16) 0%, transparent 58%),
+    radial-gradient(62% 55% at 88% 106%, oklch(0.74 0.12 120 / 0.12) 0%, transparent 60%),
+    radial-gradient(55% 55% at -6% 92%, oklch(0.82 0.10 175 / 0.12) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+.forest .hb-sidebar {
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+.forest [data-slot="button"].bg-primary {
+  background-image: linear-gradient(135deg, oklch(0.58 0.14 145) 0%, oklch(0.54 0.15 135) 52%, oklch(0.58 0.13 160) 100%);
+  border-color: transparent;
+}
+.forest [data-slot="button"].bg-primary:hover {
+  background-image: linear-gradient(135deg, oklch(0.61 0.13 145) 0%, oklch(0.57 0.14 135) 52%, oklch(0.61 0.12 160) 100%);
+}
+.forest .hb-sidebar__nav-link.is-active {
+  background-image: linear-gradient(135deg, oklch(0.58 0.14 145), oklch(0.52 0.14 128));
+}
+
+/* Sunset — orange/amber/pink */
+.sunset body {
+  background-color: oklch(0.98 0.02 70);
+  background-image:
+    radial-gradient(58% 52% at 8% -6%, oklch(0.78 0.15 45 / 0.20) 0%, transparent 60%),
+    radial-gradient(52% 48% at 99% 0%, oklch(0.74 0.16 25 / 0.18) 0%, transparent 58%),
+    radial-gradient(62% 55% at 88% 106%, oklch(0.82 0.13 70 / 0.14) 0%, transparent 60%),
+    radial-gradient(55% 55% at -6% 92%, oklch(0.78 0.13 350 / 0.12) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+.sunset .hb-sidebar {
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+.sunset [data-slot="button"].bg-primary {
+  background-image: linear-gradient(135deg, oklch(0.68 0.18 48) 0%, oklch(0.64 0.21 38) 52%, oklch(0.70 0.16 65) 100%);
+  border-color: transparent;
+}
+.sunset [data-slot="button"].bg-primary:hover {
+  background-image: linear-gradient(135deg, oklch(0.71 0.17 48) 0%, oklch(0.67 0.20 38) 52%, oklch(0.73 0.15 65) 100%);
+}
+.sunset .hb-sidebar__nav-link.is-active {
+  background-image: linear-gradient(135deg, oklch(0.68 0.18 48), oklch(0.62 0.21 30));
+}
+
+/* Plum — magenta/violet on a warm canvas with its signature dark sidebar.
+   The dark sidebar is left opaque (no glass blur — nothing would show through);
+   the premium lift comes from the mesh canvas and the gradient accents. */
+.plum body {
+  background-color: oklch(0.968 0.012 60);
+  background-image:
+    radial-gradient(58% 52% at 8% -6%, oklch(0.72 0.15 330 / 0.16) 0%, transparent 60%),
+    radial-gradient(52% 48% at 99% 0%, oklch(0.70 0.16 300 / 0.14) 0%, transparent 58%),
+    radial-gradient(62% 55% at 88% 106%, oklch(0.78 0.13 350 / 0.12) 0%, transparent 60%),
+    radial-gradient(55% 55% at -6% 92%, oklch(0.68 0.15 285 / 0.10) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+.plum [data-slot="button"].bg-primary {
+  background-image: linear-gradient(135deg, oklch(0.54 0.16 332) 0%, oklch(0.50 0.18 320) 52%, oklch(0.54 0.15 345) 100%);
+  border-color: transparent;
+}
+.plum [data-slot="button"].bg-primary:hover {
+  background-image: linear-gradient(135deg, oklch(0.57 0.15 332) 0%, oklch(0.53 0.17 320) 52%, oklch(0.57 0.14 345) 100%);
+}
+.plum .hb-sidebar__nav-link.is-active {
+  background-image: linear-gradient(135deg, oklch(0.68 0.14 335), oklch(0.62 0.16 320));
+}
+
 /* ─────────────────── Scroll reveal ─────────────────── */
 /* Elements fade + rise as they scroll into view. The useReveal hook adds
    `.is-visible` via one shared IntersectionObserver. Independent `translate`

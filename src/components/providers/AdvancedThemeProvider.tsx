@@ -100,6 +100,7 @@ function buildStyleContent(customTheme: CustomThemeColors | null | undefined): s
     '.glass-dark',
     '.modern',
     '.aurora',
+    '.azure',
     '.apple-grey',
     '.apple-pro',
     '.apple-aqua',

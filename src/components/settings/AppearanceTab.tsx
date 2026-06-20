@@ -30,6 +30,7 @@ const themeOptions = [
   { value: 'system',             label: 'System',          icon: Monitor, swatch: 'bg-gradient-to-br from-white to-zinc-900' },
   { value: 'modern',             label: 'Modern',          icon: Sun,     swatch: 'bg-[#f5f5f7]' },
   { value: 'aurora',              label: 'Aurora',          icon: Sun,     swatch: 'bg-[linear-gradient(135deg,#c4b5fd,#818cf8_55%,#38bdf8)]' },
+  { value: 'azure',               label: 'Azure',           icon: Sun,     swatch: 'bg-[linear-gradient(135deg,#93c5fd,#258ef7_55%,#60a5fa)]' },
   { value: 'midnight',           label: 'Midnight',        icon: Moon,    swatch: 'bg-[#0b0e14]' },
   { value: 'apple-grey',         label: 'Apple',           icon: Sun,     swatch: 'bg-[#f2f2f7]' },
   { value: 'apple-pro',          label: 'Apple Pro',       icon: Moon,    swatch: 'bg-gradient-to-br from-[#0a0e1a] to-[#1a1f35] border border-blue-400/30' },
