@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   DndContext,
   closestCenter,
+  type CollisionDetection,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -28,6 +29,24 @@ import { ListItemRow } from './ListItemRow'
 import { EditItemDialog } from './EditItemDialog'
 import { BarcodeScanner } from './BarcodeScanner'
 import { useShoppingList } from '@/hooks/lists/useShoppingList'
+
+// Items and categories are both sortable inside one DndContext — each category
+// wraps its rows as a droppable. Plain closestCenter lets an item drag resolve
+// onto the category container sitting under the finger, so handleDragEnd can't
+// find the row by id and the reorder silently no-ops (this is why grocery lists
+// wouldn't drag while to-do lists, which have no category droppable, did). Scope
+// each drag to its own kind: an item only collides with rows in its own category,
+// a category only with other categories.
+const collisionDetectionStrategy: CollisionDetection = (args) => {
+  const activeType = args.active.data.current?.type
+  const activeCategory = args.active.data.current?.category
+  const droppableContainers = args.droppableContainers.filter((c) => {
+    if (c.data.current?.type !== activeType) return false
+    if (activeType === 'item') return c.data.current?.category === activeCategory
+    return true
+  })
+  return closestCenter({ ...args, droppableContainers })
+}
 
 interface ShoppingListProps {
   listId: string
@@ -181,7 +200,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
       )}
 
       {viewMode === 'aisle' || !hasRecipeItems ? (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragEnd={handleDragEnd}>
           <SortableContext items={activeCategoryOrder} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-2 sm:gap-4">
               {activeCategoryOrder.map(cat => {

@@ -56,11 +56,11 @@ function SortableItem({
           ref={setActivatorNodeRef}
           {...listeners}
           {...attributes}
-          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground focus:outline-none shrink-0"
+          className="cursor-grab active:cursor-grabbing touch-none p-2.5 text-muted-foreground/50 hover:text-muted-foreground focus:outline-none shrink-0"
           aria-label="Drag to reorder"
           tabIndex={-1}
         >
-          <GripVerticalIcon className="h-4 w-4" />
+          <GripVerticalIcon className="h-5 w-5" />
         </button>
       )}
       <div className="flex-1 min-w-0">
@@ -147,11 +147,11 @@ export function CategoryGroup({
             ref={setActivatorNodeRef}
             {...listeners}
             {...attributes}
-            className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground focus:outline-none shrink-0"
+            className="cursor-grab active:cursor-grabbing touch-none p-2 text-muted-foreground/50 hover:text-muted-foreground focus:outline-none shrink-0"
             aria-label={`Drag ${category} category`}
             tabIndex={-1}
           >
-            <GripVerticalIcon className="h-3.5 w-3.5" />
+            <GripVerticalIcon className="h-4 w-4" />
           </button>
         )}
         <p className="text-xs font-bold text-foreground uppercase tracking-wide">

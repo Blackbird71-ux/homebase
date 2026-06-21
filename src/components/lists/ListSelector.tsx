@@ -201,11 +201,11 @@ function SortableListRow({
         ref={setActivatorNodeRef}
         {...listeners}
         {...attributes}
-        className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground focus:outline-none shrink-0"
+        className="cursor-grab active:cursor-grabbing touch-none p-2 text-muted-foreground/50 hover:text-muted-foreground focus:outline-none shrink-0"
         aria-label={`Drag ${list.name} to reorder`}
         tabIndex={-1}
       >
-        <GripVerticalIcon className="h-3.5 w-3.5" />
+        <GripVerticalIcon className="h-4 w-4" />
       </button>
       <EditableListName
         list={list}
