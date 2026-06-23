@@ -18,9 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Upload, FileText, X, LockIcon } from 'lucide-react'
+import { Upload, FileText, X, LockIcon, Camera } from 'lucide-react'
 import { toast } from 'sonner'
 import type { DocumentData } from './DocumentCard'
+import { DocumentScanner } from './DocumentScanner'
 
 const CATEGORY_LABELS: Record<string, string> = {
   insurance: 'Insurance',
@@ -54,7 +55,13 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
   const [hasPin, setHasPin] = useState(false)
   const [pinCode, setPinCode] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleScanned(scanned: File) {
+    setFile(scanned)
+    if (!title) setTitle(scanned.name.replace(/\.[^/.]+$/, ''))
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0]
@@ -180,13 +187,22 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
                 <p className="text-sm text-muted-foreground">
                   Drop a file here or click to browse
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Select File
-                </Button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Select File
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setScannerOpen(true)}
+                  >
+                    <Camera className="h-4 w-4 mr-1.5" /> Scan with camera
+                  </Button>
+                </div>
               </div>
             )}
             <input
@@ -327,6 +343,12 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
           </Button>
         </DrawerFooter>
       </DrawerContent>
+
+      <DocumentScanner
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onComplete={handleScanned}
+      />
     </Drawer>
   )
 }
