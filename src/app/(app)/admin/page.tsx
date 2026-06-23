@@ -29,6 +29,15 @@ interface SpawnResponse {
   results: SpawnResult[]
 }
 
+interface WarmResponse {
+  asOf: string
+  total: number
+  attempted: number
+  cached: number
+  failed: number
+  remaining: number
+}
+
 interface LogLine {
   ts: string
   level: 'log' | 'info' | 'warn' | 'error'
@@ -170,6 +179,46 @@ function SpawnResultView({ result }: { result: SpawnResponse }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Warm-cache result renderer ────────────────────────────────────────────────
+
+function WarmResultView({ result }: { result: WarmResponse }) {
+  const timezone = useFamilyTimezone()
+  const allDone = result.remaining === 0
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Run at {formatInTz(new Date(result.asOf), timezone, { dateStyle: 'medium', timeStyle: 'medium' })}
+      </p>
+      <div
+        className={cn(
+          'flex items-start gap-3 rounded-md border px-3 py-2.5 text-sm',
+          result.failed > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-emerald-500/30 bg-emerald-500/5'
+        )}
+      >
+        {result.failed > 0
+          ? <XCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          : <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+        }
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            <span><span className="font-medium">{result.cached}</span><span className="text-muted-foreground"> cached</span></span>
+            {result.failed > 0 && (
+              <span className="text-amber-600"><span className="font-medium">{result.failed}</span> failed</span>
+            )}
+            <span><span className="font-medium">{result.attempted}</span><span className="text-muted-foreground"> attempted</span></span>
+            <span><span className="font-medium">{result.remaining}</span><span className="text-muted-foreground"> remaining</span></span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {allDone
+              ? 'All recipe images are cached.'
+              : `${result.remaining} image(s) still uncached — run again to continue.`}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1075,6 +1124,17 @@ export default function AdminPage() {
     return data as SpawnResponse
   }
 
+  async function runWarmCache() {
+    const res = await fetch('/api/images/warm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit: 100 }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Warm failed')
+    return data as WarmResponse
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6 h-full overflow-y-auto">
       <PageHero title="Admin" subtitle="Administrative tools and debugging — visible to admins only." />
@@ -1112,6 +1172,13 @@ export default function AdminPage() {
               buttonLabel="Run Spawn"
               onRun={runSpawnNow}
               renderResult={(r) => <SpawnResultView result={r as SpawnResponse} />}
+            />
+            <ActionCard
+              title="Warm Image Cache"
+              description="Downloads and caches up to 100 uncached recipe images per run. Run again while images remain. Safe to repeat — already-cached images are skipped."
+              buttonLabel="Warm Cache"
+              onRun={runWarmCache}
+              renderResult={(r) => <WarmResultView result={r as WarmResponse} />}
             />
           </section>
 

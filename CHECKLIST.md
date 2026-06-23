@@ -75,7 +75,7 @@ There is no middleware.ts — a route without its own auth check is publicly rea
 - [ ] Every new/touched route starts with `auth()` → 401 if no session; admin routes also check `user.role !== 'admin'` → 403
 - [ ] Every query scoped to `user.familyId` — `findFirst({ where: { id, familyId } })`, never bare `findUnique({ where: { id } })`
 - [ ] No new unauthenticated route without explicit user sign-off; unauthenticated responses leak no paths/versions/raw errors
-- [ ] After touching routes, sweep: `rg --files-without-match "auth\(\)|requireSystemAdmin|ADMIN_RESET_TOKEN" -g "route.ts" src/app/api` — every hit must be on the known-public list (AGENTS.md rule 4)
+- [ ] After touching routes, sweep: `rg --files-without-match "auth\(\)|requireSystemAdmin|ADMIN_RESET_TOKEN|IMAGE_CACHE_TOKEN" -g "route.ts" src/app/api` — every hit must be on the known-public list (AGENTS.md rule 4)
 
 ---
 

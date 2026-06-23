@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { readFile, mkdir, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { imageFetchHeaders } from '@/lib/image-cache'
 
 // Use absolute /data path — process.cwd() in the standalone build is /app, not /data
 const IMAGES_DIR = join(process.env.DATA_DIR ?? '/data', 'images')
@@ -51,10 +52,7 @@ export async function GET(
   try {
     const response = await fetch(originalUrl, {
       signal: AbortSignal.timeout(15_000),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; HomebaseBot/1.0)',
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-      },
+      headers: imageFetchHeaders(originalUrl),
     })
 
     if (!response.ok) {

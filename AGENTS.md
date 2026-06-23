@@ -299,9 +299,9 @@ The app stores sensitive financial and personal data. There is **no `middleware.
 6. **Token-guarded break-glass endpoints (e.g. `admin/reset-password`) must be rate-limited and logged.** Use `checkRateLimit` from `src/lib/rate-limit.ts`, log every attempt with IP, and alert the admin (email) on first exceedance per window.
 7. **After adding or touching routes, sweep for unguarded ones:**
    ```
-   rg --files-without-match "auth\(\)|requireSystemAdmin|ADMIN_RESET_TOKEN" -g "route.ts" src/app/api
+   rg --files-without-match "auth\(\)|requireSystemAdmin|ADMIN_RESET_TOKEN|IMAGE_CACHE_TOKEN" -g "route.ts" src/app/api
    ```
-   Every hit must be on the known-public list in rule 4 — anything else is a missing guard.
+   Every hit must be on the known-public list in rule 4 — anything else is a missing guard. (Token-guarded ops routes like `images/uncached`, gated by `IMAGE_CACHE_TOKEN`, are recognised by the token marker — same as `ADMIN_RESET_TOKEN`.)
 
 ---
 

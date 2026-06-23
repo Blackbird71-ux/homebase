@@ -5,12 +5,18 @@ param(
 )
 
 $BaseUrl = $BaseUrl.TrimEnd('/')
+$CacheToken = $env:IMAGE_CACHE_TOKEN
 Write-Host "Server:     $BaseUrl"
 Write-Host "Images dir: $ImagesDir"
 Write-Host ""
 
+if (-not $CacheToken) {
+    Write-Error "Missing IMAGE_CACHE_TOKEN env var - set it to the same value configured on the server."
+    exit 1
+}
+
 try {
-    $items = Invoke-RestMethod -Uri "$BaseUrl/api/images/uncached" -ErrorAction Stop
+    $items = Invoke-RestMethod -Uri "$BaseUrl/api/images/uncached" -Headers @{ 'x-cache-token' = $CacheToken } -ErrorAction Stop
 } catch {
     Write-Error "Could not reach $BaseUrl/api/images/uncached"
     Write-Host "Make sure the server is running the latest code, then retry."

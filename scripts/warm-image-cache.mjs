@@ -10,6 +10,9 @@
  *   node scripts/warm-image-cache.mjs "\\\\NAS\\homebase\\images"
  *   node scripts/warm-image-cache.mjs "\\\\NAS\\homebase\\images" https://homebase.liddleapps.com
  *   node scripts/warm-image-cache.mjs /mnt/homebase/images http://localhost:3000
+ *
+ * Requires the IMAGE_CACHE_TOKEN env var (must match the server's value) — the
+ * /api/images/uncached endpoint is token-gated.
  */
 
 import { writeFile, mkdir } from 'fs/promises'
@@ -17,6 +20,7 @@ import { join } from 'path'
 
 const imagesDir = process.argv[2]
 const baseUrl = (process.argv[3] ?? 'https://homebase.liddleapps.com').replace(/\/$/, '')
+const cacheToken = process.env.IMAGE_CACHE_TOKEN
 
 if (!imagesDir) {
   console.error('Usage: node scripts/warm-image-cache.mjs <images-dir> [base-url]')
@@ -25,12 +29,19 @@ if (!imagesDir) {
   process.exit(1)
 }
 
+if (!cacheToken) {
+  console.error('Missing IMAGE_CACHE_TOKEN env var — set it to the same value configured on the server.')
+  process.exit(1)
+}
+
 async function main() {
   console.log(`Server:     ${baseUrl}`)
   console.log(`Images dir: ${imagesDir}`)
   console.log()
 
-  const listRes = await fetch(`${baseUrl}/api/images/uncached`)
+  const listRes = await fetch(`${baseUrl}/api/images/uncached`, {
+    headers: { 'x-cache-token': cacheToken },
+  })
   if (!listRes.ok) throw new Error(`Failed to fetch uncached list: ${listRes.status} ${listRes.statusText}`)
   const items = await listRes.json()
 
