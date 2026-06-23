@@ -22,12 +22,13 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Camera } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { sortedCategoryList } from '@/lib/finance-categories'
+import { scanReceipt } from '@/lib/finance-receipt-scan-client'
 import { todayAU } from '@/lib/utils'
 import type { QuickAddFormProps, CategoryMeta, AccountMeta } from './types'
 
@@ -80,12 +81,14 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
   const [accounts, setAccounts]                 = useState<AccountMeta[]>([])
   const [dataLoading, setDataLoading]           = useState(false)
   const [submitting, setSubmitting]             = useState(false)
+  const [scanning, setScanning]                 = useState(false)
 
   // Track whether prefs were applied so we can show the "(remembered)" badge
   const [rememberedExpense, setRememberedExpense] = useState(false)
   const [rememberedPayment, setRememberedPayment] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Load expense categories + accounts, restore last-used prefs ──────────
 
@@ -122,6 +125,39 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
   const expenseCategories = sortedCategoryList(
     allCategories.filter(c => c.type === 'expense')
   )
+
+  // ── Scan receipt → pre-fill ─────────────────────────────────────────────────
+  // Photograph a receipt; the vision AI extracts amount/date/vendor/category and
+  // pre-fills the fields below for the user to review before recording. This is a
+  // suggestion only — nothing posts until the user confirms via Record, through
+  // the unchanged transactions path. The photo itself isn't retained here (the
+  // quick expense register has no attachment viewer); use a bill for a kept
+  // receipt on file.
+  async function handleScanFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''  // allow re-picking the same file
+    if (!file) return
+
+    setScanning(true)
+    try {
+      const data = await scanReceipt(file)
+
+      if (data.total != null) setAmount(String(data.total))
+      if (data.date) setDate(data.date)
+      if (data.vendor) setDescription(data.vendor)
+      // Only apply the matched category if it's a real, loaded expense category.
+      if (data.matchedCategoryId && expenseCategories.some(c => c.id === data.matchedCategoryId)) {
+        setExpenseCategoryId(data.matchedCategoryId)
+        setRememberedExpense(false)
+      }
+
+      toast.success('Receipt scanned — please review the details')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not read the receipt')
+    } finally {
+      setScanning(false)
+    }
+  }
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
@@ -195,6 +231,28 @@ export function ExpenseForm({ onSuccess, onBack }: QuickAddFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 py-2">
+
+      {/* Scan receipt — opens the camera on mobile, file picker on desktop */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleScanFile}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        disabled={scanning || submitting}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {scanning
+          ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          : <Camera className="h-4 w-4 mr-2" />}
+        {scanning ? 'Reading receipt…' : 'Scan receipt'}
+      </Button>
 
       {/* Amount */}
       <div className="space-y-2">

@@ -432,6 +432,9 @@ export function useBillCrud() {
       toast.success(editing ? 'Bill updated' : 'Bill created')
       await syncBudgetRule(savedBill, form.addToBudget)
       closeForm(); load()
+      // Returned so callers (e.g. the receipt-scan flow) can attach the scanned
+      // photo to the freshly-created bill. Existing callers ignore the value.
+      return savedBill
     } catch (err) {
       console.error('[handleSave bills]', err)
       toast.error('An unexpected error occurred. Check the browser console for details.')

@@ -1,11 +1,14 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Bell, Settings2, CheckCircle2, Receipt, CreditCard,
   RefreshCw, Layers, X, Building2,
-  BookmarkCheck, Briefcase, Ban,
+  BookmarkCheck, Briefcase, Ban, Camera, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import { scanReceipt } from '@/lib/finance-receipt-scan-client'
 import { PageHero } from '@/components/shared/PageHero'
 import { sortedCategoryList } from '@/lib/finance-categories'
 import { toMonthlyAmount, formatCurrency } from '@/lib/financeShared'
@@ -62,6 +65,59 @@ export default function BillsPage() {
   } = useBillCrud()
 
   const att = useAttachmentManager('/api/finance/bills')
+
+  // ── Receipt scan → pre-fill the bill form ───────────────────────────────────
+  // Photograph a receipt; the vision AI extracts vendor/amount/date/category and
+  // pre-fills the fields for review. Nothing posts until the user saves through
+  // the unchanged bill-create flow. The photo is held and, on a successful create,
+  // attached to the new bill via the existing attachments route.
+  const receiptInputRef = useRef<HTMLInputElement>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scannedReceipt, setScannedReceipt] = useState<File | null>(null)
+
+  async function handleScanReceipt(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''  // allow re-picking the same file
+    if (!file) return
+
+    setScanning(true)
+    try {
+      const data = await scanReceipt(file)
+
+      setForm(p => ({
+        ...p,
+        name:     data.vendor ?? p.name,
+        amount:   data.total ?? p.amount,
+        billDate: data.date ?? p.billDate,
+      }))
+      // Route category changes through the helper so the journal's first debit
+      // line is re-pointed to match (same as a manual category change).
+      if (data.matchedCategoryId && categories.some(c => c.id === data.matchedCategoryId)) {
+        handleCategoryChange(data.matchedCategoryId)
+      }
+
+      setScannedReceipt(file)
+      toast.success('Receipt scanned — please review the details')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not read the receipt')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  // Save the bill, then attach the scanned photo to the newly-created bill.
+  async function handleSaveWithReceipt() {
+    const saved = await handleSave()
+    if (saved && scannedReceipt) {
+      await att.upload(saved.id, scannedReceipt)
+    }
+    setScannedReceipt(null)
+  }
+
+  function closeFormAndScan() {
+    setScannedReceipt(null)
+    closeForm()
+  }
 
   if (loading) return <div className="p-4 text-muted-foreground">Loading bills&hellip;</div>
 
@@ -174,12 +230,38 @@ export default function BillsPage() {
       )}
 
       {/* Bill form drawer */}
-      <Drawer open={showForm} onOpenChange={open => { if (!open) { closeForm(); } }}>
+      <Drawer open={showForm} onOpenChange={open => { if (!open) { closeFormAndScan(); } }}>
         <DrawerContent className="sm:max-w-[900px]" showCloseButton={true}>
 
           {/* Fixed header */}
           <div className="px-4 pt-4 pb-0 shrink-0">
-            <DrawerHeader className="p-0"><DrawerTitle>{editing ? 'Edit Bill' : 'New Bill'}</DrawerTitle></DrawerHeader>
+            <div className="flex items-center justify-between gap-2">
+              <DrawerHeader className="p-0"><DrawerTitle>{editing ? 'Edit Bill' : 'New Bill'}</DrawerTitle></DrawerHeader>
+              <input
+                ref={receiptInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleScanReceipt}
+              />
+              <button
+                type="button"
+                onClick={() => receiptInputRef.current?.click()}
+                disabled={scanning}
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-60"
+              >
+                {scanning
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Camera className="h-3.5 w-3.5" />}
+                {scanning ? 'Reading…' : 'Scan receipt'}
+              </button>
+            </div>
+            {scannedReceipt && (
+              <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+                <Receipt className="h-3 w-3" /> {scannedReceipt.name} will be attached on save
+              </p>
+            )}
             {Object.keys(errors).length > 0 && (
               <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 mt-3">
                 <p className="text-xs text-red-500 font-medium">Please fix the following errors:</p>
@@ -429,8 +511,8 @@ export default function BillsPage() {
           </div>
 
           <DrawerFooter className="px-4 py-3 border-t border-border shrink-0">
-            <button onClick={closeForm} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
-            <button onClick={handleSave} className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
+            <button onClick={closeFormAndScan} className="w-full sm:w-auto rounded-md border border-border px-4 py-2.5 sm:py-1.5 text-sm">Cancel</button>
+            <button onClick={handleSaveWithReceipt} className="w-full sm:w-auto rounded-md bg-primary text-primary-foreground px-4 py-2.5 sm:py-1.5 text-sm font-medium">
               {editing ? 'Update' : 'Create'}
             </button>
           </DrawerFooter>
