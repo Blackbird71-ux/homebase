@@ -368,6 +368,154 @@ export async function generateTextPdf(
   return doc.save()
 }
 
+// ─── Document builder (ordered sections) ───────────────────────────────────────
+
+export interface PdfBuilderMeta {
+  title: string
+  subtitle?: string
+}
+
+/** An ordered content block in a built-from-scratch document. */
+export type PdfSection =
+  | { type: 'heading'; text: string; level?: 1 | 2 }
+  | { type: 'paragraph'; text: string }
+  | { type: 'divider' }
+  | { type: 'image'; data: string; mimeType: 'image/jpeg' | 'image/png' }
+
+/** Decode a base64 data URL into raw bytes (server-side). */
+function dataUrlToBytes(dataUrl: string): Uint8Array | null {
+  const comma = dataUrl.indexOf(',')
+  if (comma === -1) return null
+  try {
+    return new Uint8Array(Buffer.from(dataUrl.slice(comma + 1), 'base64'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Generate a PDF by composing an ordered list of sections (headings, paragraphs,
+ * dividers, embedded images). This is the "build from scratch" path — richer than
+ * the fixed blank/text templates.
+ */
+export async function generateSectionedPdf(
+  meta: PdfBuilderMeta,
+  sections: PdfSection[],
+): Promise<Uint8Array> {
+  const doc = await PDFDocument.create()
+  const font = await loadFonts(doc)
+  const page = doc.addPage(PageSizes.A4)
+
+  const layout: PageLayout = {
+    doc, font, page,
+    y: PAGE_H - MARGIN - HEADER_H,
+    pageNum: 1,
+  }
+
+  drawHeader(page, 1, font)
+
+  // ── Title ────────────────────────────────────────────────────────────────────
+  layout.y -= 4
+  layout.page.drawText(meta.title, {
+    x: MARGIN, y: layout.y,
+    size: 18, font: font.bold, color: COLORS.black,
+  })
+  layout.y -= 24
+
+  if (meta.subtitle) {
+    layout.page.drawText(meta.subtitle, {
+      x: MARGIN, y: layout.y,
+      size: 10, font: font.regular, color: COLORS.darkGray,
+    })
+    layout.y -= 18
+  }
+
+  layout.y -= 6
+
+  // ── Sections ─────────────────────────────────────────────────────────────────
+  for (const section of sections) {
+    switch (section.type) {
+      case 'heading': {
+        const size = section.level === 2 ? 12 : 14
+        const wrapped = wrapText(section.text, font.bold, size, CONTENT_W)
+        checkPageBreak(layout, wrapped.length * (size + 4) + 10)
+        layout.y -= 6
+        for (const wl of wrapped) {
+          layout.page.drawText(wl, {
+            x: MARGIN, y: layout.y,
+            size, font: font.bold, color: COLORS.black,
+          })
+          layout.y -= size + 4
+        }
+        layout.y -= 2
+        break
+      }
+
+      case 'paragraph': {
+        const size = 10
+        if (!section.text.trim()) {
+          layout.y -= LINE_H
+          break
+        }
+        for (const para of section.text.split('\n')) {
+          const wrapped = wrapText(para, font.regular, size, CONTENT_W)
+          checkPageBreak(layout, wrapped.length * LINE_H + 4)
+          for (const wl of wrapped) {
+            layout.page.drawText(wl, {
+              x: MARGIN, y: layout.y,
+              size, font: font.regular, color: COLORS.black,
+            })
+            layout.y -= LINE_H
+          }
+        }
+        layout.y -= 4
+        break
+      }
+
+      case 'divider': {
+        checkPageBreak(layout, LINE_H)
+        layout.y -= 4
+        layout.page.drawLine({
+          start: { x: MARGIN, y: layout.y },
+          end:   { x: PAGE_W - MARGIN, y: layout.y },
+          thickness: 0.5,
+          color: COLORS.border,
+        })
+        layout.y -= LINE_H
+        break
+      }
+
+      case 'image': {
+        const bytes = dataUrlToBytes(section.data)
+        if (!bytes) break
+        let img
+        try {
+          img = section.mimeType === 'image/png'
+            ? await doc.embedPng(bytes)
+            : await doc.embedJpg(bytes)
+        } catch {
+          break // malformed image data — skip
+        }
+        // Scale to fit content width, and never exceed one page's drawable height.
+        const maxImgH = PAGE_H - MARGIN - HEADER_H - MARGIN - FOOTER_H
+        let scale = Math.min(CONTENT_W / img.width, 1)
+        if (img.height * scale > maxImgH) scale = maxImgH / img.height
+        const w = img.width * scale
+        const h = img.height * scale
+        checkPageBreak(layout, h + 8)
+        layout.y -= h
+        layout.page.drawImage(img, { x: MARGIN, y: layout.y, width: w, height: h })
+        layout.y -= 8
+        break
+      }
+    }
+  }
+
+  drawFooter(layout.page, `HomeBase · ${meta.title}`, font)
+
+  return doc.save()
+}
+
 /**
  * Generate a simple blank-page PDF that acts as a template placeholder.
  * Useful as a starting point for the Generate PDF dialog.

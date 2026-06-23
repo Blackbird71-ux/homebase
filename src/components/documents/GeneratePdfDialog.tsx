@@ -18,10 +18,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { FileText, Loader2 } from 'lucide-react'
+import {
+  FileText,
+  Loader2,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  Heading,
+  Pilcrow,
+  Image as ImageIcon,
+  SeparatorHorizontal,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import type { DocumentData } from './DocumentCard'
+import type { PdfSection } from '@/lib/pdf/generate'
 
 const CATEGORY_LABELS: Record<string, string> = {
   financial: 'Financial',
@@ -30,7 +41,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: 'Other',
 }
 
-type PdfTemplate = 'blank' | 'text' | 'table'
+type PdfTemplate = 'blank' | 'text' | 'table' | 'builder'
 
 interface TemplateOption {
   id: PdfTemplate
@@ -39,6 +50,11 @@ interface TemplateOption {
 }
 
 const TEMPLATES: TemplateOption[] = [
+  {
+    id: 'builder',
+    label: 'Document Builder',
+    description: 'Compose a document from headings, paragraphs, images and dividers.',
+  },
   {
     id: 'blank',
     label: 'Blank Document',
@@ -55,6 +71,19 @@ const TEMPLATES: TemplateOption[] = [
     description: 'Create a structured table report with headers and rows.',
   },
 ]
+
+// A section in the builder, with a client-side id for list management.
+type BuilderSection = PdfSection & { id: string }
+
+function newSection(type: PdfSection['type']): BuilderSection {
+  const id = crypto.randomUUID()
+  switch (type) {
+    case 'heading':   return { id, type: 'heading', text: '', level: 1 }
+    case 'paragraph': return { id, type: 'paragraph', text: '' }
+    case 'divider':   return { id, type: 'divider' }
+    case 'image':     return { id, type: 'image', data: '', mimeType: 'image/jpeg' }
+  }
+}
 
 interface GeneratePdfDialogProps {
   open: boolean
@@ -75,6 +104,7 @@ export function GeneratePdfDialog({ open, onOpenChange, onGenerated, prefill }: 
   const [title, setTitle] = useState(prefill?.meta.title ?? '')
   const [subtitle, setSubtitle] = useState(prefill?.meta.subtitle ?? '')
   const [textContent, setTextContent] = useState('')
+  const [sections, setSections] = useState<BuilderSection[]>([])
   const [category, setCategory] = useState('financial')
   const [saveToVault, setSaveToVault] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -87,11 +117,48 @@ export function GeneratePdfDialog({ open, onOpenChange, onGenerated, prefill }: 
         setTitle('')
         setSubtitle('')
         setTextContent('')
+        setSections([])
         setCategory('financial')
         setSaveToVault(true)
       }
     }
     onOpenChange(open)
+  }
+
+  function addSection(type: PdfSection['type']) {
+    setSections(prev => [...prev, newSection(type)])
+  }
+
+  function updateSection(id: string, patch: Partial<BuilderSection>) {
+    setSections(prev => prev.map(s => (s.id === id ? { ...s, ...patch } as BuilderSection : s)))
+  }
+
+  function removeSection(id: string) {
+    setSections(prev => prev.filter(s => s.id !== id))
+  }
+
+  function moveSection(id: string, dir: -1 | 1) {
+    setSections(prev => {
+      const i = prev.findIndex(s => s.id === id)
+      const j = i + dir
+      if (i === -1 || j < 0 || j >= prev.length) return prev
+      const next = [...prev]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
+    })
+  }
+
+  function handleImageFile(id: string, file: File | undefined) {
+    if (!file) return
+    if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
+      toast.error('Images must be JPEG or PNG')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      updateSection(id, { data: reader.result as string, mimeType: file.type as 'image/jpeg' | 'image/png' })
+    }
+    reader.readAsDataURL(file)
   }
 
   async function handleGenerate() {
@@ -163,6 +230,34 @@ export function GeneratePdfDialog({ open, onOpenChange, onGenerated, prefill }: 
             return
           }
           break
+
+        case 'builder': {
+          if (sections.length === 0) {
+            toast.error('Add at least one section to your document')
+            setGenerating(false)
+            return
+          }
+          const imageMissing = sections.some(s => s.type === 'image' && !s.data)
+          if (imageMissing) {
+            toast.error('Choose a file for every image section, or remove it')
+            setGenerating(false)
+            return
+          }
+          // Strip the client-side id before sending.
+          const apiSections: PdfSection[] = sections.map(({ id: _id, ...rest }) => rest)
+          payload = {
+            type: 'builder',
+            meta: { title: title.trim(), subtitle: subtitle || undefined },
+            sections: apiSections,
+            ...(saveToVault ? {
+              saveToVault: {
+                title: title.trim(),
+                category,
+              },
+            } : {}),
+          }
+          break
+        }
 
         default:
           throw new Error('Invalid template')
@@ -255,8 +350,8 @@ export function GeneratePdfDialog({ open, onOpenChange, onGenerated, prefill }: 
             />
           </div>
 
-          {/* Subtitle (text template only) */}
-          {template === 'text' && (
+          {/* Subtitle (text + builder templates) */}
+          {(template === 'text' || template === 'builder') && (
             <div className="space-y-1.5">
               <Label htmlFor="gen-subtitle">Subtitle (optional)</Label>
               <Input
@@ -265,6 +360,126 @@ export function GeneratePdfDialog({ open, onOpenChange, onGenerated, prefill }: 
                 onChange={e => setSubtitle(e.target.value)}
                 placeholder="A brief description"
               />
+            </div>
+          )}
+
+          {/* Builder: ordered section editor */}
+          {template === 'builder' && (
+            <div className="space-y-2">
+              <Label>Sections</Label>
+
+              {sections.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Add headings, paragraphs, images and dividers — they appear in the order below.
+                </p>
+              )}
+
+              {sections.map((section, idx) => (
+                <div key={section.id} className="rounded-lg border border-border p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium capitalize text-muted-foreground">
+                      {section.type}
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => moveSection(section.id, -1)}
+                        disabled={idx === 0}
+                        title="Move up"
+                        className="p-1 rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSection(section.id, 1)}
+                        disabled={idx === sections.length - 1}
+                        title="Move down"
+                        className="p-1 rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeSection(section.id)}
+                        title="Remove section"
+                        className="p-1 rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {section.type === 'heading' && (
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={String(section.level ?? 1)}
+                        onValueChange={(v) => { if (v) updateSection(section.id, { level: Number(v) as 1 | 2 }) }}
+                      >
+                        <SelectTrigger className="w-24 shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Large</SelectItem>
+                          <SelectItem value="2">Small</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={section.text}
+                        onChange={e => updateSection(section.id, { text: e.target.value })}
+                        placeholder="Heading text"
+                      />
+                    </div>
+                  )}
+
+                  {section.type === 'paragraph' && (
+                    <textarea
+                      value={section.text}
+                      onChange={e => updateSection(section.id, { text: e.target.value })}
+                      placeholder="Paragraph text. Line breaks are preserved."
+                      rows={3}
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  )}
+
+                  {section.type === 'image' && (
+                    <div className="space-y-2">
+                      <Input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={e => handleImageFile(section.id, e.target.files?.[0])}
+                      />
+                      {section.data && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={section.data}
+                          alt="Section preview"
+                          className="max-h-32 rounded border border-border"
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {section.type === 'divider' && (
+                    <div className="border-t border-dashed border-border" />
+                  )}
+                </div>
+              ))}
+
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <Button type="button" variant="outline" size="sm" onClick={() => addSection('heading')}>
+                  <Heading className="h-4 w-4 mr-1" /> Heading
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => addSection('paragraph')}>
+                  <Pilcrow className="h-4 w-4 mr-1" /> Paragraph
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => addSection('image')}>
+                  <ImageIcon className="h-4 w-4 mr-1" /> Image
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => addSection('divider')}>
+                  <SeparatorHorizontal className="h-4 w-4 mr-1" /> Divider
+                </Button>
+              </div>
             </div>
           )}
 

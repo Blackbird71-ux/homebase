@@ -41,15 +41,27 @@ function hexToRgb(hex: string) {
   return rgb(r, g, b)
 }
 
+/** Decode a base64 PNG data URL into raw bytes. */
+function dataUrlToBytes(dataUrl: string): Uint8Array | null {
+  const comma = dataUrl.indexOf(',')
+  if (comma === -1) return null
+  const base64 = dataUrl.slice(comma + 1)
+  try {
+    return new Uint8Array(Buffer.from(base64, 'base64'))
+  } catch {
+    return null
+  }
+}
+
 /**
  * Draw a single annotation on a PDF page.
  */
-function drawAnnotation(
+async function drawAnnotation(
   page: PDFPage,
   annotation: PdfAnnotation,
   pageWidth: number,
   pageHeight: number,
-): void {
+): Promise<void> {
   const r = annotation.rect
   const pad = 2 // 2-point padding for shape tools to avoid clipping
 
@@ -234,6 +246,20 @@ function drawAnnotation(
       }
       break
     }
+
+    case 'signature': {
+      // Embed the drawn signature PNG at the placed rect.
+      if (!annotation.imageData) break
+      const bytes = dataUrlToBytes(annotation.imageData)
+      if (!bytes) break
+      try {
+        const png = await page.doc.embedPng(bytes)
+        page.drawImage(png, { x, y, width: w, height: h, opacity: alpha })
+      } catch {
+        // Malformed image data; skip silently
+      }
+      break
+    }
   }
 }
 
@@ -267,7 +293,7 @@ export async function burnAnnotationsIntoPdf(
     const { width: pageWidth, height: pageHeight } = page.getSize()
 
     for (const annotation of pageAnnotations) {
-      drawAnnotation(page, annotation, pageWidth, pageHeight)
+      await drawAnnotation(page, annotation, pageWidth, pageHeight)
     }
   }
 

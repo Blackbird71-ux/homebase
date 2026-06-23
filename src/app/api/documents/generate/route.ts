@@ -11,8 +11,8 @@ import { randomUUID } from 'crypto'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { createAuditLog } from '@/lib/audit-log'
-import { generateTablePdf, generateTextPdf, generateBlankPdf } from '@/lib/pdf/generate'
-import type { PdfTableColumn, PdfTableRow, PdfReportMeta } from '@/lib/pdf/generate'
+import { generateTablePdf, generateTextPdf, generateBlankPdf, generateSectionedPdf } from '@/lib/pdf/generate'
+import type { PdfTableColumn, PdfTableRow, PdfReportMeta, PdfBuilderMeta, PdfSection } from '@/lib/pdf/generate'
 
 // ─── Request types ────────────────────────────────────────────────────────────
 
@@ -51,7 +51,22 @@ interface GenerateBlankRequest {
   }
 }
 
-type GenerateRequest = GenerateTableRequest | GenerateTextRequest | GenerateBlankRequest
+interface GenerateBuilderRequest {
+  type: 'builder'
+  meta: PdfBuilderMeta
+  sections: PdfSection[]
+  saveToVault?: {
+    title: string
+    category?: string
+    notes?: string
+  }
+}
+
+type GenerateRequest =
+  | GenerateTableRequest
+  | GenerateTextRequest
+  | GenerateBlankRequest
+  | GenerateBuilderRequest
 
 // ─── POST /api/documents/generate ─────────────────────────────────────────────
 
@@ -83,9 +98,20 @@ export async function POST(req: Request) {
         generatedName = body.saveToVault?.title ?? body.title
         break
       }
+      case 'builder': {
+        if (!Array.isArray(body.sections) || body.sections.length === 0) {
+          return NextResponse.json(
+            { error: 'A built document needs at least one section.' },
+            { status: 400 },
+          )
+        }
+        pdfBytes = await generateSectionedPdf(body.meta, body.sections)
+        generatedName = body.saveToVault?.title ?? body.meta.title
+        break
+      }
       default:
         return NextResponse.json(
-          { error: 'Invalid generation type. Must be "table", "text", or "blank".' },
+          { error: 'Invalid generation type. Must be "table", "text", "blank", or "builder".' },
           { status: 400 },
         )
     }

@@ -17,6 +17,8 @@ interface AnnotationCanvasProps {
   pageIndex: number
   /** Called when user clicks to place a text box — gives normalised coordinates */
   onTextClick?: (pos: { x: number; y: number }) => void
+  /** Called when user clicks to place a pending signature — gives normalised coordinates */
+  onSignatureClick?: (pos: { x: number; y: number }) => void
 }
 
 export function AnnotationCanvas({
@@ -30,6 +32,7 @@ export function AnnotationCanvas({
   onSelect,
   onAnnotate,
   onTextClick,
+  onSignatureClick,
   pageIndex,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -169,6 +172,13 @@ export function AnnotationCanvas({
       return
     }
 
+    if (tool === 'signature') {
+      // Signature tool — place the pending signature at the click position
+      const pos = normalise(e)
+      onSignatureClick?.(pos)
+      return
+    }
+
     isDrawing.current = true
     const pos = normalise(e)
     startPoint.current = pos
@@ -177,7 +187,7 @@ export function AnnotationCanvas({
     if (tool === 'draw') {
       // For freeform draw, start immediately
     }
-  }, [tool, normalise, annotations, pageIndex, onSelect, onTextClick])
+  }, [tool, normalise, annotations, pageIndex, onSelect, onTextClick, onSignatureClick])
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing.current) return

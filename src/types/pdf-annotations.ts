@@ -10,6 +10,7 @@ export type AnnotationType =
   | 'rectangle'
   | 'ellipse'
   | 'text'
+  | 'signature'
 
 export interface AnnotationRect {
   x: number       // Normalised (0-1) left position relative to page width
@@ -33,6 +34,8 @@ export interface PdfAnnotation {
   fontSize?: number
   /** Font family for text annotations (default: Helvetica) */
   fontFamily?: string
+  /** PNG data URL for signature annotations (drawn on a pad, embedded on burn) */
+  imageData?: string
   createdAt: string    // ISO 8601
   createdBy: string    // User display name
 }
@@ -45,7 +48,7 @@ export interface PdfAnnotationSet {
 }
 
 /** Tools available in the annotation toolbar */
-export type AnnotationTool = 'pan' | 'highlight' | 'underline' | 'strikethrough' | 'note' | 'draw' | 'rectangle' | 'ellipse' | 'text'
+export type AnnotationTool = 'pan' | 'highlight' | 'underline' | 'strikethrough' | 'note' | 'draw' | 'rectangle' | 'ellipse' | 'text' | 'signature'
 
 export interface AnnotationViewerState {
   tool: AnnotationTool

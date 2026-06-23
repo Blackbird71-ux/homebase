@@ -4,8 +4,9 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { PdfRenderer } from './PdfRenderer'
 import { AnnotationCanvas } from './AnnotationCanvas'
 import { AnnotationToolbar } from './AnnotationToolbar'
+import { SignaturePad } from './SignaturePad'
 import type { PdfAnnotation, PdfAnnotationSet, AnnotationTool } from '@/types/pdf-annotations'
-import { Download, FileOutput, Loader2 } from 'lucide-react'
+import { Download, FileOutput, Loader2, PenTool } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
@@ -42,6 +43,10 @@ export function PdfAnnotationViewer({ pdfUrl, documentId, documentTitle }: PdfAn
     value: string
   } | null>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Signature state: pad open, and a captured-but-not-yet-placed signature
+  const [signaturePadOpen, setSignaturePadOpen] = useState(false)
+  const [pendingSignature, setPendingSignature] = useState<{ dataUrl: string; aspect: number } | null>(null)
 
   // Undo history
   const [history, setHistory] = useState<PdfAnnotation[][]>([])
@@ -142,6 +147,33 @@ export function PdfAnnotationViewer({ pdfUrl, documentId, documentTitle }: PdfAn
 
     setTextInput(null)
   }, [textInput, handleAnnotate, page, color, opacity])
+
+  // Signature captured from the pad — hold it pending and switch to placement mode
+  const handleSignatureApply = useCallback((dataUrl: string, aspect: number) => {
+    setPendingSignature({ dataUrl, aspect })
+    setTool('signature')
+    toast.info('Tap where you want to place your signature')
+  }, [])
+
+  // Place the pending signature at the clicked position on the current page
+  const handleSignatureClick = useCallback((pos: { x: number; y: number }) => {
+    if (!pendingSignature || pageDims.width === 0) return
+    const widthNorm = 0.25 // signature spans 25% of page width
+    // Keep the PNG's aspect ratio: normalised height = widthPx * aspect / pageHeight
+    const heightNorm = (widthNorm * pageDims.width * pendingSignature.aspect) / pageDims.height
+
+    handleAnnotate({
+      type: 'signature',
+      pageIndex: page - 1,
+      color: '#000000',
+      opacity: 1,
+      rect: { x: pos.x, y: pos.y, width: widthNorm, height: heightNorm },
+      imageData: pendingSignature.dataUrl,
+    })
+
+    setPendingSignature(null)
+    setTool('pan')
+  }, [pendingSignature, pageDims, handleAnnotate, page])
 
   // Undo
   const handleUndo = useCallback(() => {
@@ -305,7 +337,19 @@ export function PdfAnnotationViewer({ pdfUrl, documentId, documentTitle }: PdfAn
             <Loader2 className="h-3 w-3 animate-spin" />
             Exporting...
           </div>
-        ) : annotations.length > 0 && (
+        ) : (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => setSignaturePadOpen(true)}
+            title="Draw and place a signature"
+            className="gap-1 h-6 text-[10px]"
+          >
+            <PenTool className="h-3 w-3" />
+            Sign
+          </Button>
+        )}
+        {!exporting && annotations.length > 0 && (
           <>
             <Button
               variant="outline"
@@ -375,7 +419,26 @@ export function PdfAnnotationViewer({ pdfUrl, documentId, documentTitle }: PdfAn
                 onAnnotate={handleAnnotate}
                 pageIndex={page - 1}
                 onTextClick={handleTextClick}
+                onSignatureClick={handleSignatureClick}
               />
+
+              {/* Signature image overlays for the current page (canvas can't draw images synchronously) */}
+              {annotations
+                .filter(a => a.type === 'signature' && a.pageIndex === page - 1 && a.imageData)
+                .map(a => (
+                  <img
+                    key={a.id}
+                    src={a.imageData}
+                    alt="Signature"
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: `${a.rect.x * 100}%`,
+                      top: `${a.rect.y * 100}%`,
+                      width: `${a.rect.width * 100}%`,
+                      height: `${a.rect.height * 100}%`,
+                    }}
+                  />
+                ))}
 
               {/* Text input overlay for the 'text' tool */}
               {textInput && (
@@ -409,6 +472,12 @@ export function PdfAnnotationViewer({ pdfUrl, documentId, documentTitle }: PdfAn
           </div>
         )}
       </div>
+
+      <SignaturePad
+        open={signaturePadOpen}
+        onOpenChange={setSignaturePadOpen}
+        onApply={handleSignatureApply}
+      />
     </div>
   )
 }
