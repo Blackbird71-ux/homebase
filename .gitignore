@@ -69,6 +69,13 @@ next-env.d.ts
 dist/
 .zoomodes.json
 
+# Codebase Memory MCP — local, machine-specific editor configs (absolute extension paths)
+.mcp.json
+.codebase-memory/
+.cursor/
+.zed/
+.vscode/mcp.json
+
 # docker build artifacts
 homebase.tar
 
