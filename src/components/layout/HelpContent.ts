@@ -16,6 +16,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         title: 'Overview',
         items: [
           'The Dashboard is your home base — it shows an overview of what\'s happening today and this week.',
+          'A greeting, the date, and a live weather strip appear at the top of the page.',
           'Cards display today\'s meals, upcoming events, shopping list status, and a weekly summary.',
         ],
       },
@@ -38,6 +39,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         title: 'Quick Actions',
         items: [
           'Use the floating action button (bottom-right) to quickly add items from any page.',
+          'Press Cmd+K (or Ctrl+K) anywhere to open the command palette and search across the whole app.',
+          'From Quick Add, choose Expense → "Scan receipt" to photograph a receipt and have the AI pre-fill an expense.',
           'Click on a meal to view the recipe details.',
           'Use the Bot button (bottom-right, above help) to open the AI assistant — control the whole app with voice or text: meal plan, shopping list, to-do, calendar, chores, notes, recipes, contacts, documents, and birthdays.',
         ],
@@ -52,6 +55,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Plan your family\'s meals for the week. Assign recipes to breakfast, lunch, dinner, or snacks for each day.',
           'Navigate between weeks using the arrow buttons or "Today" button.',
+          'After a meal, use the "Cooked it" button on a slot to mark the recipe\'s pantry items as running low or out.',
         ],
       },
       {
@@ -238,6 +242,44 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       },
     ],
   },
+  '/pantry': {
+    title: 'Pantry',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Track what you have on hand across three locations — Pantry, Fridge, and Freezer.',
+          'Each item shows a coloured status dot: green (Stocked), amber (Running low), or red (Out).',
+          'Items appear automatically when you check off a shopping list — restocked items are marked Stocked.',
+        ],
+      },
+      {
+        title: 'Adding Items',
+        items: [
+          'Type a name in the add box, choose a location, and press add.',
+          'Tap the barcode icon to scan a product — known barcodes fill in the name automatically.',
+          'Scan an unknown barcode, type the name once, and the app remembers that barcode for next time.',
+          'Mark an item as a Staple in its edit drawer so you always keep it stocked.',
+        ],
+      },
+      {
+        title: 'Updating Status',
+        items: [
+          'Tap an item\'s status dot to cycle it: Stocked → Running low → Out → Stocked.',
+          'Turn on Stocktake mode (top-right) to show status pills for faster bulk updating; tap Done when finished.',
+          'Set an optional expiry date on any item via its edit drawer.',
+        ],
+      },
+      {
+        title: 'Restocking',
+        items: [
+          'When items are low or out, use "Add N to shopping" to send them to your Groceries list in one tap.',
+          'After you shop and check items off, they return to Stocked in the pantry automatically.',
+          'In the meal plan, "Cooked it" suggests the recipe\'s pantry items so you can mark what ran low or out.',
+        ],
+      },
+    ],
+  },
   '/calendar': {
     title: 'Calendar',
     sections: [
@@ -291,6 +333,15 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Bill events show as "Bill due: [name]" in red; income events show as "Income: [name]" in green.',
           'Toggle visibility per entry using the "Show on calendar" checkbox in bill, income, and recurring template editors.',
           'These events are read-only (they cannot be edited or deleted from the calendar view).',
+        ],
+      },
+      {
+        title: 'Birthdays, Anniversaries & Maintenance',
+        items: [
+          'Contact birthdays and anniversaries appear automatically as all-day events on their date.',
+          'Maintenance tasks with a due date show on the calendar too, and overdue or expired items are flagged with a colour.',
+          'Open a birthday event and choose "Save as contact" to add that person to your Contacts.',
+          'Event badge colours match the category dots in the sidebar for consistent scanning.',
         ],
       },
       {
@@ -357,6 +408,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click "New Chore" to create a chore with a title, description, and assignment.',
           'Set a due date and optional rotation schedule.',
           'Chores can be assigned to specific family members.',
+          'Set a "Pocket money reward ($)" so whoever completes the chore earns that amount in Pocket Money.',
+          'Give a chore a due time to make it a timed chore.',
         ],
       },
       {
@@ -374,9 +427,44 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Enable "Email Reminder" on a chore to notify the assignee before the due date.',
           'Choose how many days before the due date the reminder should be sent.',
+          'For a chore with a due time, you can instead be reminded a set number of hours before it\'s due.',
           'The reminder is sent to the assigned family member\'s email address.',
           'Reminders are processed automatically every day at 8:00 AM.',
           'SMTP must be configured in Settings → Email for reminders to work.',
+        ],
+      },
+    ],
+  },
+  '/pocket-money': {
+    title: 'Pocket Money',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'Each family member has a pocket money balance shown on their card.',
+          'A streak badge shows how many days in a row they\'ve earned pocket money.',
+          'Completing a chore that has a reward set earns that amount automatically.',
+        ],
+      },
+      {
+        title: 'Adjusting Balances (Admin)',
+        items: [
+          'Admins can tap "Adjust" on a member to change their balance — a positive amount adds, a negative amount deducts.',
+          'Add an optional note to record what the adjustment was for.',
+        ],
+      },
+      {
+        title: 'Redeeming (Admin)',
+        items: [
+          'Tap "Redeem" to deduct pocket money when a member spends it.',
+          'Optionally pick a wishlist item — the amount pre-fills with its estimated price, and the item is marked purchased on the wishlist.',
+        ],
+      },
+      {
+        title: 'Activity History',
+        items: [
+          'The "Recent activity" list shows every earn, adjustment, and redemption with the date.',
+          'Set a chore\'s reward in the chore editor under "Pocket money reward ($)".',
         ],
       },
     ],
@@ -396,6 +484,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Click "Add Contact" to enter a new contact\'s details.',
           'Include phone, email, address, and notes.',
+          'Record a birthday and anniversary — birthdays flow through to the family calendar automatically.',
+          'You can also create a contact directly from a birthday event on the calendar.',
           'Choose from built-in categories (Family, Emergency, Doctor, School, Tradesperson) or create custom ones.',
         ],
       },
@@ -418,6 +508,27 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
       },
     ],
   },
+  '/location': {
+    title: 'Locations',
+    sections: [
+      {
+        title: 'Overview',
+        items: [
+          'See where family members are on a shared map, with a pin for each person who is sharing their location.',
+          'The list below the map shows each member and when their location last updated.',
+          'Other members\' pins refresh automatically about once a minute.',
+        ],
+      },
+      {
+        title: 'Sharing Your Location',
+        items: [
+          'Location sharing is opt-in — turn on "Location Sharing" in Settings → Account to appear on the map.',
+          'If no one is sharing yet, the map stays empty until the first person opts in.',
+          'You can turn sharing off again at any time from the same setting.',
+        ],
+      },
+    ],
+  },
   '/documents': {
     title: 'Documents',
     sections: [
@@ -434,6 +545,31 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Click "Upload" to select files from your computer.',
           'Supported formats: PDF, images, and common document types.',
+        ],
+      },
+      {
+        title: 'Scan with Camera',
+        items: [
+          'In the Upload dialog, click "Scan with camera" to photograph a document with your phone (or pick an image on desktop).',
+          'Drag the four corners to line up the page edges, then apply to deskew and clean it up.',
+          'Capture multiple pages and export them as a single image or combine them into an A4 PDF, ready to save to the Vault.',
+        ],
+      },
+      {
+        title: 'Generate a PDF',
+        items: [
+          'Click "Generate PDF" to build a document in the app without uploading a file.',
+          'Document Builder composes a PDF from headings, paragraphs, images, and dividers you arrange in order.',
+          'Other templates: Blank (title + date), Text (each line becomes a paragraph), and Table reports.',
+          'Save the result straight to the Document Vault, or turn off "Save to Document Vault" to download it as a file.',
+        ],
+      },
+      {
+        title: 'Annotate, Sign & Fill Forms',
+        items: [
+          'Open a PDF and click "Annotate" to highlight, draw, and add a signature — capture your signature on the pad, then tap where to place it.',
+          'If the PDF has fillable form fields, click "Fill Form" to type into them.',
+          'Saved annotations and form entries are written back onto the stored PDF.',
         ],
       },
       {
@@ -1000,6 +1136,14 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         ],
       },
       {
+        title: 'Scan a Receipt',
+        items: [
+          'Use the Quick Add button (bottom-right) → Expense to record a purchase by photographing the receipt.',
+          'Tap "Scan receipt" — the AI reads the amount, date, vendor, and a likely category and pre-fills the form for you to review.',
+          'Nothing is recorded until you tap "Record"; the photo itself isn\'t kept — use a Bill if you need the receipt on file.',
+        ],
+      },
+      {
         title: 'Filtering Transactions',
         items: [
           'Click "Filters" to open the filter panel. You can filter by Type (Expense / Income / Transfer), Member, and Location.',
@@ -1133,12 +1277,14 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Admins can update the family name, timezone, and week start day.',
           'Admins can generate or regenerate the family invite code used to add new members.',
           'The family members list shows everyone with access and their role.',
+          'Turn on "Location Sharing" to appear on the family Locations map — it\'s opt-in and can be turned off again anytime.',
         ],
       },
       {
         title: 'Appearance',
         items: [
           'Choose from 10+ themes including Apple Pro (high-contrast professional), dark, light, and glassmorphism styles.',
+          'Newer presets include the Aurora and Azure light themes plus Paper, Harbour, and Plum, with a premium aurora treatment on Ocean, Forest, Sunset, and Plum.',
           'Adjust font size, font weight, and line height for comfortable reading.',
           'Set the color that completed (done) items appear in shopping and to-do lists.',
           'Choose how PIN-protected cards appear: "Blur" (blurred content) or "Redact" (fully hidden).',
@@ -1218,6 +1364,7 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
           'Click "Enable Notifications" and grant permission when prompted.',
           'Each device/browser must subscribe separately.',
           'Notifications are delivered for chore reminders and other family alerts.',
+          'Enable the Daily Briefing to get a morning push digest of the day\'s meals, events, chores, and reminders.',
         ],
       },
       {
@@ -1806,6 +1953,8 @@ export const HELP_CONTENT: Record<string, HelpPage> = {
         items: [
           'Income vs Expenses — a line chart comparing total income and expenses across the selected period, showing net position over time.',
           'Expense Breakdown — a bar chart showing expense totals by category, making it easy to see which categories consume the most money.',
+          'Budget vs Actual — compares what you budgeted against what you actually spent per category for the period.',
+          'Net Worth Trend — tracks assets minus liabilities over time so you can see your overall position moving.',
           'Hover or tap any data point to see the exact value for that month.',
         ],
       },
