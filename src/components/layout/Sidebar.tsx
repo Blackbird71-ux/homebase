@@ -54,7 +54,7 @@ const GROUP_LABEL: Record<Group, string> = {
   household: 'Household',
 }
 
-const OPEN_GROUP_KEY = 'sidebar_open_group'
+const OPEN_GROUPS_KEY = 'sidebar_open_groups'
 
 function isGroup(v: string | null): v is Group {
   return v === 'schedule' || v === 'kitchen' || v === 'household'
@@ -82,35 +82,44 @@ export function Sidebar({
   const pathname = usePathname()
   const timezone = useFamilyTimezone()
 
-  // Accordion: one group expanded at a time. The active route's group always
-  // expands; on ungrouped routes the last-opened group is restored from
-  // localStorage (read in effects, never in the initializer — SSR safety).
+  // Groups expand independently — any number can be open at once. The active
+  // route's group is always open; the rest of the open set is restored from
+  // localStorage (read in an effect, never in the initializer — SSR safety).
   const activeGroup = navItems.find(
     n => n.group && (pathname === n.href || pathname.startsWith(n.href + '/'))
   )?.group ?? null
-  const [openGroup, setOpenGroup] = useState<Group | null>(activeGroup)
+  const [openGroups, setOpenGroups] = useState<Set<Group>>(
+    () => (activeGroup ? new Set([activeGroup]) : new Set())
+  )
 
   useEffect(() => {
-    if (activeGroup) return
     try {
-      const stored = localStorage.getItem(OPEN_GROUP_KEY)
-      if (isGroup(stored)) setOpenGroup(stored)
+      const stored = localStorage.getItem(OPEN_GROUPS_KEY)
+      const parsed = stored ? JSON.parse(stored) : null
+      if (Array.isArray(parsed)) {
+        const restored = new Set<Group>(parsed.filter(isGroup))
+        if (activeGroup) restored.add(activeGroup)
+        setOpenGroups(restored)
+      }
     } catch { /* ignore */ }
-    // mount only: restore last-opened group when landing on an ungrouped route
+    // mount only: restore the persisted open set
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    if (activeGroup) setOpenGroup(activeGroup)
+    if (activeGroup) {
+      setOpenGroups(prev => (prev.has(activeGroup) ? prev : new Set(prev).add(activeGroup)))
+    }
   }, [activeGroup])
 
   function toggleGroup(group: Group) {
-    const next = openGroup === group ? null : group
-    setOpenGroup(next)
-    try {
-      if (next) localStorage.setItem(OPEN_GROUP_KEY, next)
-      else localStorage.removeItem(OPEN_GROUP_KEY)
-    } catch { /* ignore */ }
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(group)) next.delete(group)
+      else next.add(group)
+      try { localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
   }
 
   const today = new Date()
@@ -158,7 +167,7 @@ export function Sidebar({
     )
     if (items.length === 0) return null
     // Icon-only sidebar mode is exempt from the accordion — all icons stay visible
-    const isOpen = collapsed || openGroup === group
+    const isOpen = collapsed || openGroups.has(group)
     const hasActive = items.some(
       n => pathname === n.href || pathname.startsWith(n.href + '/')
     )
