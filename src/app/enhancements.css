@@ -133,7 +133,7 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent);
+  color: var(--brand);
   font-weight: 700;
   margin-bottom: 22px;
 }
@@ -162,9 +162,9 @@
   border-radius: 999px;
   transition: background 220ms var(--ease);
 }
-.cook-tick.done { background: var(--accent); }
+.cook-tick.done { background: var(--brand); }
 .cook-tick.current {
-  background: var(--accent);
+  background: var(--brand);
   opacity: 0.55;
   animation: cook-pulse 1.6s var(--ease) infinite;
 }
@@ -193,7 +193,7 @@
   transition: background var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
 }
 .inline-edit:hover { background: var(--bg-hover); }
-.inline-edit:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+.inline-edit:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--brand); }
 
 /* ──────── Undo Toast ──────── */
 .undo-toast {
@@ -214,7 +214,7 @@
   z-index: 80;
   animation: toast-in 280ms var(--ease-out);
 }
-[data-theme="midnight"] .undo-toast, [data-theme="forest"] .undo-toast {
+:is(.dark, .midnight, .glass-dark, .apple-graphite, .apple-midnight, .high-contrast-dark, .high-contrast-midnight) .undo-toast {
   background: var(--bg-elev); color: var(--ink);
 }
 @keyframes toast-in {
@@ -230,8 +230,8 @@
   font-weight: 600;
   font-size: 13px;
 }
-[data-theme="midnight"] .undo-btn, [data-theme="forest"] .undo-btn {
-  background: var(--accent-soft); color: var(--accent-ink);
+:is(.dark, .midnight, .glass-dark, .apple-graphite, .apple-midnight, .high-contrast-dark, .high-contrast-midnight) .undo-btn {
+  background: var(--brand-soft); color: var(--brand-ink);
 }
 .undo-btn:hover { background: color-mix(in oklab, var(--bg-elev) 28%, transparent); }
 
