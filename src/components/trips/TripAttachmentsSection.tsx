@@ -23,6 +23,10 @@ function isImage(mimeType: string): boolean {
   return mimeType.startsWith('image/')
 }
 
+function isPdf(mimeType: string): boolean {
+  return mimeType === 'application/pdf'
+}
+
 function AttachmentRow({
   attachment,
   onPreview,
@@ -49,7 +53,7 @@ function AttachmentRow({
         <div className="flex-1 min-w-0">
           <span className="truncate block">{attachment.title}</span>
           <span className="text-xs text-muted-foreground">
-            {attachment.fileName} &middot; {formatSize(attachment.fileSize)}
+            {formatSize(attachment.fileSize)}
           </span>
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -72,14 +76,32 @@ function AttachmentRow({
         </div>
       </div>
 
-      {/* Inline preview for images */}
-      {isPreview && isImage(attachment.mimeType) && (
+      {/* Inline preview */}
+      {isPreview && (
         <div className="px-3 pb-2">
-          <img
-            src={fileUrl}
-            alt={attachment.title}
-            className="max-h-48 rounded border border-border object-contain"
-          />
+          {isImage(attachment.mimeType) ? (
+            <img
+              src={fileUrl}
+              alt={attachment.title}
+              className="max-h-48 rounded border border-border object-contain"
+            />
+          ) : isPdf(attachment.mimeType) ? (
+            <iframe
+              src={fileUrl}
+              title={attachment.title}
+              className="w-full h-96 rounded border border-border"
+            />
+          ) : (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Open in new tab
+            </a>
+          )}
         </div>
       )}
     </>
