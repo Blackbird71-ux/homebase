@@ -21,6 +21,7 @@
 
 import { utcMidnightToLocalMidnight, addLocalDays } from '@/lib/timezone'
 import type { ChoreScheduleDay, ChoreScheduleItem } from '@/types'
+import type { Prisma } from '@prisma/client'
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -409,6 +410,36 @@ export function choreIsCompletable(
   return allowEarlyStart                   // future: only if flag set
 }
 
+// ─── Schedule query filter ────────────────────────────────────────────────────
+
+/**
+ * Prisma `where` selecting the chores that belong on the dashboard / schedule:
+ * active family chores that are due-now (null nextDueDate), overdue, or upcoming
+ * within `days` calendar days. Single source of truth for this filter — it was
+ * previously hand-copied across the dashboard route, schedule route and home
+ * page, and every copy silently omitted the null ("due now") case (schema:
+ * `nextDueDate null = due now`), dropping those chores from the schedule.
+ *
+ * Callers spread the result into `where` and may add their own scoping
+ * (e.g. `currentAssigneeId` for "only my chores").
+ */
+export function choreScheduleWhere(
+  familyId: string,
+  todayStart: Date,
+  days: number,
+  timezone: string
+): Prisma.ChoreWhereInput {
+  return {
+    familyId,
+    isActive: true,
+    OR: [
+      { nextDueDate: null },                                  // due now
+      { nextDueDate: { lt: todayStart } },                    // overdue — always include
+      { nextDueDate: { gte: todayStart, lte: addLocalDays(todayStart, days, timezone) } }, // upcoming
+    ],
+  }
+}
+
 // ─── buildChoreSchedule ───────────────────────────────────────────────────────
 
 type RawChore = {
@@ -448,8 +479,11 @@ export function buildChoreSchedule(
   const schedule: ChoreScheduleDay[] = []
 
   // ── Overdue section ───────────────────────────────────────────────────────
+  // null nextDueDate = "due now" (schema convention) — it has no calendar day to
+  // bucket into, so it belongs here alongside past-due chores. The day-by-day
+  // loop below skips it (its `c.nextDueDate &&` guard fails), so no duplication.
   const overdueChores = chores.filter(
-    (c) => c.nextDueDate && c.nextDueDate < todayStart
+    (c) => !c.nextDueDate || c.nextDueDate < todayStart
   )
   if (overdueChores.length > 0) {
     schedule.push({

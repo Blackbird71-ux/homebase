@@ -1,11 +1,11 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { getLocalImageUrl } from '@/lib/image-cache'
-import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
+import { todayBoundsInTz } from '@/lib/timezone'
 import { mergeDashboardCards, type DashboardCardConfig } from '@/lib/dashboard-cards'
 import { HomeClient } from './HomeClient'
 import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
-import { buildChoreSchedule } from '@/lib/chore-helpers'
+import { buildChoreSchedule, choreScheduleWhere } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { liveBillWhere } from '@/lib/finance-live-filter'
 
@@ -180,16 +180,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       : Promise.resolve([]),
     needsChores
       ? prisma.chore.findMany({
-          where: {
-            familyId,
-            isActive: true,
-            // Include ALL overdue chores (no lower-bound) plus upcoming within 30 days.
-            // Using OR so chores that are past-due always show until completed.
-            OR: [
-              { nextDueDate: { lt: todayStart } },
-              { nextDueDate: { gte: todayStart, lte: addLocalDays(todayStart, 30, timezone) } },
-            ],
-          },
+          where: choreScheduleWhere(familyId, todayStart, 30, timezone),
           select: {
             id: true,
             title: true,

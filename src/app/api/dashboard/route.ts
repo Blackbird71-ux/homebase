@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { getLocalImageUrl } from '@/lib/image-cache'
-import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
-import { buildChoreSchedule } from '@/lib/chore-helpers'
+import { todayBoundsInTz } from '@/lib/timezone'
+import { buildChoreSchedule, choreScheduleWhere } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import type { DashboardData, TodaysMeal } from '@/types'
 import { liveBillWhere } from '@/lib/finance-live-filter'
@@ -162,14 +162,7 @@ export async function GET(request: NextRequest) {
     }),
     // Chore data for chore schedule card — OR ensures overdue chores are always included
     prisma.chore.findMany({
-      where: {
-        familyId: user.familyId,
-        isActive: true,
-        OR: [
-          { nextDueDate: { lt: todayStart } },
-          { nextDueDate: { gte: todayStart, lte: addLocalDays(todayStart, 30, timezone) } },
-        ],
-      },
+      where: choreScheduleWhere(user.familyId, todayStart, 30, timezone),
       include: {
         currentAssignee: { select: { id: true, name: true } },
         completions: {

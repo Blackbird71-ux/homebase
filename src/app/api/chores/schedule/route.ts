@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
-import { todayBoundsInTz, addLocalDays } from '@/lib/timezone'
-import { buildChoreSchedule } from '@/lib/chore-helpers'
+import { todayBoundsInTz } from '@/lib/timezone'
+import { buildChoreSchedule, choreScheduleWhere } from '@/lib/chore-helpers'
 import { jsonWithETag } from '@/lib/http-cache'
 
 export async function GET(request: NextRequest) {
@@ -21,17 +21,10 @@ export async function GET(request: NextRequest) {
   const assignedToMe = searchParams.get('assignedToMe') === 'true'
 
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
-  // DST-correct upper bound that aligns with buildChoreSchedule's last day bucket.
-  const windowEnd = addLocalDays(todayStart, scope, timezone)
 
   const chores = await prisma.chore.findMany({
     where: {
-      familyId: user.familyId,
-      isActive: true,
-      OR: [
-        { nextDueDate: { lt: todayStart } },           // overdue — always include
-        { nextDueDate: { gte: todayStart, lte: windowEnd } }, // upcoming within scope
-      ],
+      ...choreScheduleWhere(user.familyId, todayStart, scope, timezone),
       ...(assignedToMe ? { currentAssigneeId: user.id } : {}),
     },
     include: {
