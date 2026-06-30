@@ -487,15 +487,35 @@ export async function PATCH(request: NextRequest) {
   // (e.g. a reversal that no longer points at its parent). Use the dedicated
   // Reverse / Amend / Void actions for structural changes.
   //
-  // Note: editing an entry that participates in a reversal/amendment pair, or an
-  // auto-generated entry, is allowed but the UI warns the user first — those
-  // changes can unbalance a reversal pair or be overwritten by the originating
-  // module. The period-lock warning is returned (non-blocking) like POST.
+  // Note: an entry that participates in a reversal/void/amendment pair is hard-
+  // blocked below (editing one leg would leave the pair no longer netting to
+  // zero). Editing an auto-generated entry is still allowed but the UI warns
+  // first — it can be overwritten by the originating module. The period-lock
+  // warning is returned (non-blocking) like POST.
 
   if (action === 'edit-posted') {
     if (!existing.isPosted) {
       return NextResponse.json(
         { error: 'This action is for posted entries. Use the draft editor for drafts.' },
+        { status: 400 },
+      )
+    }
+
+    // A posted entry that is part of a reversal/void/amendment pair must not be
+    // edited in place — changing one leg leaves the pair no longer cancelling to
+    // zero, a silent unbalanced correction in the GL. This covers all three roles:
+    //   • a reversal/void leg            → reversalOfId set
+    //   • an amendment correction leg    → amendmentOfId set
+    //   • an original since reversed/voided/amended → isReversed = true
+    // Direct the user to the Reverse / Amend actions, which keep the pair balanced.
+    if (existing.reversalOfId || existing.amendmentOfId || existing.isReversed) {
+      return NextResponse.json(
+        {
+          error:
+            'This entry is part of a reversal, void, or amendment pair and cannot be edited ' +
+            'directly — editing one side would leave the pair no longer cancelling to zero. ' +
+            'Use the Reverse or Amend action instead.',
+        },
         { status: 400 },
       )
     }

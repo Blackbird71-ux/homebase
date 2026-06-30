@@ -19,18 +19,26 @@ function patchReq(body: unknown): NextRequest {
   return { json: async () => body } as unknown as NextRequest
 }
 
-// A posted reversal entry — the worst case for audit-graph preservation, because
-// it carries reversalOfId and must keep its type/links after an in-place edit.
-const existingReversal = {
+// A plain posted manual entry — edit-posted is allowed on it, and the test
+// proves the audit-graph fields survive an in-place edit untouched.
+const existingPosted = {
   id: 'je-1',
   familyId: 'fam-1',
   isPosted: true,
   isReversed: false,
-  type: 'reversal',
-  reversalOfId: 'je-0',
+  type: 'manual',
+  reversalOfId: null,
   amendmentOfId: null,
   reference: 'JE-0020',
   lines: [],
+}
+
+// A posted reversal entry — a member of a reversal/void pair. edit-posted must
+// refuse to touch it (editing one leg desyncs the pair from netting to zero).
+const existingReversal = {
+  ...existingPosted,
+  type: 'reversal',
+  reversalOfId: 'je-0',
 }
 
 const balancedLines = [
@@ -49,11 +57,11 @@ describe('PATCH /api/finance/journals — edit-posted action', () => {
 
   it('replaces lines and updates scalars WITHOUT touching audit-graph fields', async () => {
     const { prisma } = await import('@/lib/prisma')
-    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingReversal)
+    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingPosted)
     ;(prisma.financeCategory.findMany as any).mockResolvedValue([{ id: 'acc-1' }, { id: 'acc-2' }])
     ;(prisma.financeJournalLine.deleteMany as any).mockReturnValue('DELETE_OP')
     ;(prisma.financeJournalEntry.update as any).mockReturnValue('UPDATE_OP')
-    const updated = { id: 'je-1', type: 'reversal', isPosted: true }
+    const updated = { id: 'je-1', type: 'manual', isPosted: true }
     ;(prisma.$transaction as any).mockResolvedValue([{ count: 1 }, updated])
 
     const res = await PATCH(patchReq({
@@ -87,9 +95,26 @@ describe('PATCH /api/finance/journals — edit-posted action', () => {
     expect(data.lines.create).toHaveLength(2)
   })
 
-  it('rejects an unbalanced entry and writes nothing', async () => {
+  it('rejects editing an entry that is part of a reversal/void/amendment pair', async () => {
     const { prisma } = await import('@/lib/prisma')
     ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingReversal)
+
+    const res = await PATCH(patchReq({
+      id: 'je-1', action: 'edit-posted', date: '2026-05-30', description: 'x', lines: balancedLines,
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toMatch(/reversal, void, or amendment pair/i)
+    // Blocked before any validation or write touches the GL.
+    expect(prisma.financeCategory.findMany).not.toHaveBeenCalled()
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(prisma.financeJournalEntry.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unbalanced entry and writes nothing', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingPosted)
 
     const res = await PATCH(patchReq({
       id: 'je-1', action: 'edit-posted', date: '2026-05-30', description: 'x',
@@ -108,7 +133,7 @@ describe('PATCH /api/finance/journals — edit-posted action', () => {
 
   it('refuses to act on a draft (not posted)', async () => {
     const { prisma } = await import('@/lib/prisma')
-    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue({ ...existingReversal, isPosted: false })
+    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue({ ...existingPosted, isPosted: false })
 
     const res = await PATCH(patchReq({
       id: 'je-1', action: 'edit-posted', date: '2026-05-30', description: 'x', lines: balancedLines,
@@ -122,7 +147,7 @@ describe('PATCH /api/finance/journals — edit-posted action', () => {
 
   it('rejects a GL account that does not belong to the family', async () => {
     const { prisma } = await import('@/lib/prisma')
-    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingReversal)
+    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingPosted)
     // Two distinct accounts requested, only one found in this family.
     ;(prisma.financeCategory.findMany as any).mockResolvedValue([{ id: 'acc-1' }])
 
@@ -139,7 +164,7 @@ describe('PATCH /api/finance/journals — edit-posted action', () => {
   it('appends the non-blocking period-lock warning when the date is in a locked period', async () => {
     const { prisma } = await import('@/lib/prisma')
     const { getPeriodLockWarning } = await import('@/lib/finance-period-lock')
-    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingReversal)
+    ;(prisma.financeJournalEntry.findFirst as any).mockResolvedValue(existingPosted)
     ;(prisma.financeCategory.findMany as any).mockResolvedValue([{ id: 'acc-1' }, { id: 'acc-2' }])
     ;(prisma.financeJournalLine.deleteMany as any).mockReturnValue('DELETE_OP')
     ;(prisma.financeJournalEntry.update as any).mockReturnValue('UPDATE_OP')
