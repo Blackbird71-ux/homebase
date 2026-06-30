@@ -129,13 +129,9 @@ export async function POST(
   const actualDate = new Date(paymentDate)
   const paymentAccountId: string | null = accountId ?? bill.accountId ?? null
 
-  // ── Determine GL path ───────────────────────────────────────────────────────
-  //
-  // wasAccrued: stage 1 (DR Expense / CR AP) was already posted.
-  //   true  → this payment clears AP (DR AP / CR Bank-or-Suspense)
-  //   false → no AP outstanding; this payment IS the expense recognition
-  //           (DR Expense / CR Bank-or-Suspense)
-  const wasAccrued = bill.invoiceReceived === true
+  // The GL path (clear_ap vs direct) and the no-category guard are owned by
+  // recordBillPayment — a category-less, never-accrued bill is rejected there
+  // and surfaced as a 422 by the try/catch around the $transaction below.
 
   // Resolve the credit-side cash GL account from the SELECTED FinanceAccount's
   // bound 1:1 GL category (Xero model). Users pick an account, never a raw GL
@@ -157,14 +153,6 @@ export async function POST(
   } else {
     creditGlAccountId = await ensureUndepositedFundsCategory(user.familyId)
     usingSuspense = true
-  }
-
-  // PATH C/D: warn when no expense category — postBillPaymentJournal falls back to AP
-  if (!wasAccrued && !bill.categoryId) {
-    console.warn(
-      `[payments POST] Bill ${bill.id} has no expense category — ` +
-      `using AP as debit fallback. Assign a category for correct P&L reporting.`,
-    )
   }
 
   const newTotalPaid = totalPaidSoFar + amount

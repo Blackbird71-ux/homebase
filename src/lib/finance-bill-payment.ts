@@ -62,12 +62,29 @@ export async function recordBillPayment(
   // clears AP. Otherwise this payment IS the expense recognition.
   const wasAccrued = bill.invoiceReceived === true
 
+  // Guard: a never-accrued bill with no expense category cannot be paid. The
+  // direct path (DR Expense / CR cash) needs an expense account, and there is no
+  // AP to clear because no accrual was ever posted. The old fallback routed this
+  // to clear_ap (DR AP / CR cash), which debited AP with no offsetting accrual
+  // credit (control account goes negative) and recognised NO expense on the P&L.
+  // Block it — like the invoiceReceived-transition guard, a bill must have a
+  // category before it can hit the GL. The caller's $transaction try/catch turns
+  // this into a 422. (Mirrors Xero: you cannot pay a bill line with no account.)
+  if (!wasAccrued && !bill.categoryId) {
+    throw new Error(
+      'This bill has no expense category. Assign one before recording a payment, ' +
+      'otherwise the payment cannot be posted to the General Ledger.',
+    )
+  }
+
   // 1. Post GL journal entry via shared function — handles all four paths:
   //   PATH A: DR AP       / CR Bank             (accrued, bank known)
   //   PATH B: DR AP       / CR Undeposited Funds (accrued, no bank)
   //   PATH C: DR Expense  / CR Bank             (direct pay, bank known)
   //   PATH D: DR Expense  / CR Undeposited Funds (direct pay, no bank)
-  const glPath = wasAccrued || !bill.categoryId ? 'clear_ap' : 'direct'
+  // With the guard above, a category-less bill is always wasAccrued here, so the
+  // clear_ap branch is correct (AP exists to clear); 'direct' always has a category.
+  const glPath = wasAccrued ? 'clear_ap' : 'direct'
   const postResult = await postBillPaymentJournal(tx, {
     familyId,
     description: bill.name,
