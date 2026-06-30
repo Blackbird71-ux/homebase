@@ -624,11 +624,25 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  // Case 4: posted auto_transaction (system-created via income/bill dialogs) — allow direct deletion.
-  // These are never created manually so void-first is not required.
+  // Case 4: posted auto_transaction (system-created via bill/income/payment flows) —
+  // REFUSE direct deletion. These journals are the GL backbone of a bill, income,
+  // or payment: the originating subledger record holds their id (journalEntryId /
+  // sourceTransactionId). Hard-deleting one orphans that record (it still points at
+  // a now-missing entry), erases the GL effect with NO reversal audit trail, and
+  // pushes the AP/AR subledger out of step with the GL — exactly the immutability /
+  // reconciliation breakage QA §4.6 forbids. The correct way to unwind one is from
+  // the originating module (un-receive the bill, void the bill/income, or delete the
+  // transaction) which posts a balanced reversal. Reject here.
   if (existing.isPosted && existing.type === 'auto_transaction') {
-    await prisma.financeJournalEntry.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return NextResponse.json(
+      {
+        error:
+          'This is a system-generated journal for a bill, income, or payment. It cannot be ' +
+          'deleted directly — unwind it from the originating record (un-receive or void the ' +
+          'bill/income, or delete the transaction) so a balanced reversal is posted.',
+      },
+      { status: 400 },
+    )
   }
 
   // Case 5: corrective entry (amendment child) — undo the amendment by:
