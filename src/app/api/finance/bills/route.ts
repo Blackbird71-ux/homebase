@@ -913,8 +913,9 @@ export async function PATCH(request: NextRequest) {
       })
     } catch (err) {
       console.error('[bills PATCH] ATOMIC payment posting failed:', err)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
       return NextResponse.json(
-        { error: 'Failed to record payment in General Ledger. No changes were saved.' },
+        { error: `Failed to record payment in General Ledger. No changes were saved. (${msg})` },
         { status: 422 }
       )
     }
