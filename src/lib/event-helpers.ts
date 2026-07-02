@@ -91,14 +91,21 @@ export function buildEventsQuery(
 
 /**
  * Returns true if the event falls on the given calendar day, using the family's timezone.
- * Synthetic events (meals, chores, bills, etc.) store dates in UTC midnight convention
+ * Synthetic all-day events (meals, chores, bills, etc.) store dates in UTC midnight convention
  * where the UTC date string IS the calendar date — compared directly against the local date string.
+ * Synthetic TIMED events (chores with startTime, trip activities) carry a real UTC instant,
+ * so they bucket by the local calendar day of that start instant — the UTC date-slice would
+ * put a Sydney 9am chore on the previous day. Start-only on purpose: their `end` may be a
+ * fake `T23:59:59Z` (trip activity without endTime), which as a range would spill over.
  * Real events use Intl-based timezone conversion so local midnight is always correct.
  */
 export function eventFallsOnDay(event: CalendarEvent, day: Date, timezone: string): boolean {
   const dayStr = dateStringInTz(day, timezone)
   if (event.source) {
-    // Synthetic: UTC date string is the calendar date by convention
+    if (event.isAllDay === false) {
+      return dayStr === dateStringInTz(new Date(event.start), timezone)
+    }
+    // Synthetic all-day: UTC date string is the calendar date by convention
     return dayStr >= event.start.slice(0, 10) && dayStr <= event.end.slice(0, 10)
   }
   const eventStartStr = dateStringInTz(new Date(event.start), timezone)
