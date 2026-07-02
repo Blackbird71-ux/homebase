@@ -182,6 +182,36 @@ describe('reconcilePostedAccrualOnEdit', () => {
     expect(prisma.financeTransaction.update).not.toHaveBeenCalled()
   })
 
+  it('income-date change (newDate): reverses in the ORIGINAL period, reposts DR AR / CR Income on the NEW date', async () => {
+    const { prisma } = await getMocks()
+    const NEW_DATE = new Date('2026-06-15T00:00:00.000Z')
+    vi.mocked(prisma.financeJournalEntry.findFirst).mockResolvedValue({
+      ...postedBillAccrual(),
+      lines: [
+        { glAccountId: 'gl-ar', side: 'debit', amount: 200, description: 'AR: Salary' },
+        { glAccountId: 'gl-income', side: 'credit', amount: 200, description: 'Salary' },
+      ],
+    } as never)
+
+    await reconcilePostedAccrualOnEdit({
+      kind: 'income',
+      familyId: 'fam-1',
+      journalEntryId: 'je-old',
+      description: 'Salary',
+      amount: 200,
+      glAccountId: 'gl-income',
+      entityId: null,
+      invoiceTxId: null,
+      newDate: NEW_DATE,
+    })
+
+    const createCalls = vi.mocked(prisma.financeJournalEntry.create).mock.calls
+    const reversal = createCalls[0][0] as { data: Record<string, unknown> }
+    expect(reversal.data.date).toBe(ACCRUAL_DATE)
+    const fresh = createCalls[1][0] as { data: Record<string, unknown> }
+    expect(fresh.data.date).toBe(NEW_DATE)
+  })
+
   it('carries per-member attribution from the stale accrual onto the fresh lines', async () => {
     const { prisma } = await getMocks()
     // A member-attributed posted accrual: memberId rides on the source lines.

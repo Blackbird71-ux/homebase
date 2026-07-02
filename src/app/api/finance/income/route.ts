@@ -243,10 +243,19 @@ export async function PUT(request: NextRequest) {
   // block if paid": once cash is received the AR has been cleared, so the accrual
   // cannot be safely reversed here.
   const invoiceReceivedTransition = invoiceReceived === true && !existing.invoiceReceived
+  // An invoice-date change on a posted income moves GL recognition to a new
+  // period — reverse the original accrual and repost on the new date (Xero/MYOB
+  // behaviour), so it is GL-relevant just like category/amount/entity.
+  // invoiceReceivedDate is the tax point: receiveIncomeStage1 posts the accrual
+  // at remittanceDate = invoiceReceivedDate (nextExpectedDate is scheduling only).
+  const incomeDateChanged =
+    invoiceReceivedDate !== undefined &&
+    (invoiceReceivedDate ? new Date(invoiceReceivedDate).getTime() : null) !== (existing.invoiceReceivedDate ? existing.invoiceReceivedDate.getTime() : null)
   const incomeGlFieldChanged =
     (categoryId !== undefined && (categoryId ?? null) !== existing.categoryId) ||
     (entityId !== undefined && (entityId ?? null) !== existing.entityId) ||
-    (amount !== undefined && parseFloat(amount) !== existing.amount)
+    (amount !== undefined && parseFloat(amount) !== existing.amount) ||
+    incomeDateChanged
   const needsAccrualResync =
     incomeGlFieldChanged && existing.invoiceReceived === true && !invoiceReceivedTransition && !!existing.journalEntryId
 
@@ -322,6 +331,11 @@ export async function PUT(request: NextRequest) {
           glAccountId: reconcileCategoryId!,
           entityId: entityId !== undefined ? (entityId ?? null) : existing.entityId,
           invoiceTxId: existing.invoiceTxId ?? null,
+          // An invoice-date change moves recognition to a new period: reverse in
+          // the original period, repost the fresh accrual on the new date
+          // (mirror of bills' billDateChanged). Unchanged date → null → period-
+          // neutral swap (category/amount/entity edits).
+          newDate: incomeDateChanged ? (invoiceReceivedDate ? new Date(invoiceReceivedDate) : existing.invoiceReceivedDate) : null,
         }, tx)
         return tx.financeIncomeEntry.update({
           where: { id },
