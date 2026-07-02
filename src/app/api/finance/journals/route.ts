@@ -320,6 +320,15 @@ export async function PATCH(request: NextRequest) {
     if (existing.isReversed) {
       return NextResponse.json({ error: 'Entry has already been reversed' }, { status: 400 })
     }
+    // Only manual/adjustment entries can be reversed via this flow.
+    // Auto-generated entries (bills, income, opening balances) are managed by their own
+    // modules — reversing one here would desync the AP/AR subledger from the GL.
+    if (!['manual', 'adjustment'].includes(existing.type)) {
+      return NextResponse.json(
+        { error: 'Only manual and adjustment entries can be reversed. Use the originating module to reverse auto-generated entries.' },
+        { status: 400 },
+      )
+    }
 
     const { reversalDate, reversalDescription } = json
 
@@ -347,6 +356,14 @@ export async function PATCH(request: NextRequest) {
     }
     if (existing.isReversed) {
       return NextResponse.json({ error: 'Entry has already been voided / reversed' }, { status: 400 })
+    }
+    // Same type gate as reverse/amend: auto-generated entries must be voided from
+    // their originating module so the subledger stays in step with the GL.
+    if (!['manual', 'adjustment'].includes(existing.type)) {
+      return NextResponse.json(
+        { error: 'Only manual and adjustment entries can be voided. Use the originating module to void auto-generated entries.' },
+        { status: 400 },
+      )
     }
 
     const { voidDate } = json

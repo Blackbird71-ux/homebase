@@ -70,15 +70,15 @@ describe('Stage C-2a — journals reverse/void/amend handlers against a self-see
   let glB: string
   let memberId: string
 
-  // Seed a posted, balanced, member-tagged manual entry directly (not via route).
-  async function seedEntry(): Promise<string> {
+  // Seed a posted, balanced, member-tagged entry directly (not via route).
+  async function seedEntry(type: string = 'manual'): Promise<string> {
     const reference = await nextJournalReference(FAMILY)
     const e = await prisma.financeJournalEntry.create({
       data: {
         reference,
         date: new Date(Date.now() - 20 * 86_400_000),
         description: 'QA Stage C-2a synthetic entry',
-        type: 'manual',
+        type,
         isPosted: true,
         familyId: FAMILY,
         lines: {
@@ -248,6 +248,32 @@ describe('Stage C-2a — journals reverse/void/amend handlers against a self-see
     expect(reReadOriginal.isReversed).toBe(false)
     expect(await prisma.financeJournalEntry.findUnique({ where: { id: correctiveId } })).toBeNull()
     expect(await prisma.financeJournalEntry.findUnique({ where: { id: reversalId } })).toBeNull()
+  })
+
+  it('reverse and void refuse auto_transaction / opening_balance entries (subledger stays with the originating module)', async () => {
+    for (const type of ['auto_transaction', 'opening_balance']) {
+      const id = await seedEntry(type)
+
+      const rev = await PATCH(patchReq({ id, action: 'reverse' }))
+      expect(rev.status).toBe(400)
+      expect((await rev.json()).error).toMatch(/originating module/)
+
+      const voided = await PATCH(patchReq({ id, action: 'void' }))
+      expect(voided.status).toBe(400)
+      expect((await voided.json()).error).toMatch(/originating module/)
+
+      // Entry untouched — still posted, not reversed, no reversal child.
+      const entry = await prisma.financeJournalEntry.findUniqueOrThrow({
+        where: { id },
+        include: { reversals: { select: { id: true } } },
+      })
+      expect(entry.isReversed).toBe(false)
+      expect(entry.reversals.length).toBe(0)
+
+      // Clean up so the closing integrity audit sees the same ledger as baseline.
+      await prisma.financeJournalLine.deleteMany({ where: { journalEntryId: id } })
+      await prisma.financeJournalEntry.delete({ where: { id } })
+    }
   })
 
   it('integrity audit gains no new critical/warning and the trial balance still balances', async () => {
