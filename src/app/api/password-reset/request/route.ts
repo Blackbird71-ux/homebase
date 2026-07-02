@@ -3,8 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { generatePasswordResetToken } from '@/lib/password-reset-token'
 import { sendEmail } from '@/lib/email'
 import { passwordResetHtml } from '@/lib/email-templates'
+import { enforceIpRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  const limited = enforceIpRateLimit(req, 'password-reset-request', 5, 15 * 60 * 1000)
+  if (limited) return limited
+
   try {
     const { email } = await req.json()
     if (!email || typeof email !== 'string') {

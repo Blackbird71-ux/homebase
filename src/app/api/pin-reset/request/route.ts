@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generatePinResetToken } from '@/lib/pin-reset-token'
 import { sendEmail } from '@/lib/email'
+import { enforceIpRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  const limited = enforceIpRateLimit(req, 'pin-reset-request', 5, 15 * 60 * 1000)
+  if (limited) return limited
+
   try {
     const body = await req.json()
     const { entityType, entityId, userEmail } = body

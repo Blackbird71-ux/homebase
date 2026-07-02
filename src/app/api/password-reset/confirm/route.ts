@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyPasswordResetToken } from '@/lib/password-reset-token'
 import bcrypt from 'bcryptjs'
+import { enforceIpRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  const limited = enforceIpRateLimit(req, 'password-reset-confirm', 10, 15 * 60 * 1000)
+  if (limited) return limited
+
   try {
     const { token, password } = await req.json()
 

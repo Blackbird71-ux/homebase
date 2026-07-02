@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyPinResetToken } from '@/lib/pin-reset-token'
 import { hashPin } from '@/lib/secure-unlock'
+import { enforceIpRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  const limited = enforceIpRateLimit(req, 'pin-reset-confirm', 10, 15 * 60 * 1000)
+  if (limited) return limited
+
   try {
     const body = await req.json()
     const { token, newPin } = body

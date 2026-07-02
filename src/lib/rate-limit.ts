@@ -2,6 +2,8 @@
 // (e.g. "reset-password:1.2.3.4"). Suitable for the single-container deployment;
 // counts reset on app restart.
 
+import { NextResponse } from 'next/server'
+
 const windows = new Map<string, { count: number; resetAt: number }>()
 
 /**
@@ -32,4 +34,28 @@ export function checkRateLimit(
     }
   }
   return { ok: true }
+}
+
+/**
+ * Per-IP fixed-window rate limit for an unauthenticated route. Logs the
+ * exceedance and returns the generic 429 response to send, or null when the
+ * request is within the limit. The response shape is deliberately generic —
+ * it must not reveal whether the underlying email/token/code was valid.
+ */
+export function enforceIpRateLimit(
+  req: Request,
+  route: string,
+  max: number,
+  windowMs: number
+): NextResponse | null {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const limit = checkRateLimit(`${route}:${ip}`, max, windowMs)
+  if (!limit.ok) {
+    console.warn(`[${route}] Rate limit exceeded from ${ip}`)
+    return NextResponse.json(
+      { error: 'Too many attempts. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    )
+  }
+  return null
 }

@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { enforceIpRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  const limited = enforceIpRateLimit(req, 'register', 5, 15 * 60 * 1000)
+  if (limited) return limited
+
   const { email, password, name, familyName, inviteCode } = await req.json()
 
   if (!email || !password || !name) {
