@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyCompleteToken } from '@/lib/complete-token'
 import { completeChore } from '@/lib/chore-completion'
-import { formatCurrency } from '@/lib/financeShared'
 
 function htmlPage(title: string, heading: string, body: string, success: boolean): Response {
   const color = success ? '#16a34a' : '#dc2626'
@@ -109,34 +108,17 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   if (payload.type === 'bill') {
-    const bill = await prisma.financeRecurringBill.findFirst({
-      where: { id: payload.id },
-      include: { family: { select: { name: true } } },
-    })
+    const bill = await prisma.financeRecurringBill.findFirst({ where: { id: payload.id } })
     if (!bill) {
       return htmlPage('Not found', 'Bill not found', 'This bill no longer exists.', false)
     }
-    if (bill.paid) {
-      return htmlPage(
-        'Already paid',
-        'Already marked as paid',
-        `"${bill.name}" has already been marked as paid.`,
-        true
-      )
-    }
 
-    await prisma.financeRecurringBill.update({
-      where: { id: payload.id },
-      data: { paid: true, paidDate: new Date() },
-    })
-
-    const amount = formatCurrency(bill.amount)
-    return htmlPage(
-      'Paid!',
-      'Marked as paid!',
-      `"${bill.name}" (${amount}) has been marked as paid. Log in to HomeBase to record the payment against an account for full transaction tracking.`,
-      true
-    )
+    // The email link must NOT flip payment state: setting paid=true here bypassed
+    // the payment lifecycle (no payment transaction, no GL clearing of AP), leaving
+    // the subledger out of step with the GL. Instead, send the user into the app
+    // where the bill is paid through the full recordBillPayment flow.
+    const appUrl = process.env.NEXTAUTH_URL || new URL(req.url).origin
+    return NextResponse.redirect(new URL('/finance/bills', appUrl))
   }
 
   return htmlPage('Unknown', 'Unknown item type', 'This link type is not supported.', false)

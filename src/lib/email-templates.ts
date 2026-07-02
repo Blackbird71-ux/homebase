@@ -173,10 +173,10 @@ export function billReminderHtml(bill: {
     </div>
 
     <div style="text-align:center;margin:0 0 24px">
-      <a href="${completeUrl}" style="display:inline-block;padding:14px 28px;background:#16a34a;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">✓ Mark as Paid</a>
+      <a href="${completeUrl}" style="display:inline-block;padding:14px 28px;background:#16a34a;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">View Bill in HomeBase</a>
     </div>
 
-    <p style="margin:0;color:#94a3b8;font-size:13px">Or log in to HomeBase to record the full payment details.</p>
+    <p style="margin:0;color:#94a3b8;font-size:13px">The link opens HomeBase, where you can record the payment against an account.</p>
   `
   return baseLayout('Bill Reminder', body)
 }
