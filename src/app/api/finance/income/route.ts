@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
-import { getTemplate, computeNextOccurrenceDate, type OccurrenceTemplate } from '@/lib/finance-recurring-template-service'
-import { spawnNextTemplatedOccurrence } from '@/lib/finance-draft-spawn-service'
-import { utcMidnight } from '@/lib/timezone'
+import { spawnNextIncomeOnReceipt } from '@/lib/finance-draft-spawn-service'
 import { ensureAccountsReceivableCategory, resolveAccountGlCategoryId } from '@/lib/finance-opening-balance'
 import { nextJournalReference, nextNJournalReferences } from '@/lib/finance-journal-ref'
 import { postPayslipReceiptJournal, postIncomeReceiptJournal, postIncomeAccrualJournal, upsertDraftJournal, reconcilePostedAccrualOnEdit, reverseJournalEntry, AccrualReconcileBlockedError, type ReversibleJournalEntry } from '@/lib/finance-posting'
@@ -1231,6 +1229,14 @@ export async function PATCH(request: NextRequest) {
             data: { ...receiptStatusData, receiptTxId: newTx.id, transactionId: newTx.id },
           })
         }
+
+        // Spawn the next occurrence for recurring income — INSIDE this
+        // $transaction (mirrors recordBillPayment step 6): if the spawn fails
+        // the entire receipt rolls back. A committed receipt with no successor
+        // silently ends the recurring series — unrecoverable.
+        if (existing.incomeType !== 'one-off') {
+          await spawnNextIncomeOnReceipt(tx, existing, user.familyId)
+        }
       })
     } catch (err) {
       console.error('[income PATCH] ATOMIC cash-receipt GL posting failed:', err)
@@ -1238,85 +1244,6 @@ export async function PATCH(request: NextRequest) {
         { error: err instanceof Error ? err.message : 'Failed to post cash receipt to General Ledger. No changes were saved.' },
         { status: 422 }
       )
-    }
-
-    // Spawn the next occurrence for recurring income — outside the transaction
-    // so a spawn failure does not roll back the committed cash receipt.
-    // ALWAYS spawns using entry.amount (template) not actualAmount for stable forecasting.
-    if (existing.incomeType !== 'one-off') {
-      try {
-        if (existing.templateId) {
-          // ── Templated: spawn the next occurrence through the shared clean
-          // path (the identical draft the cron worker produces — clean
-          // UTC-midnight dates, draft journal, snapshot hash, payslip). Step
-          // cadence from the template schedule, anchored at the current
-          // occurrence date. Cursor/counter semantics (monotonic advance,
-          // decrement-at-spawn) live in spawnNextTemplatedOccurrence — shared
-          // with the bills payment path.
-          const template = await getTemplate(user.familyId, existing.templateId)
-          if (template) {
-            await prisma.$transaction(async (tx) => {
-              await spawnNextTemplatedOccurrence(tx, template, existing.nextExpectedDate, existing.id)
-            })
-          }
-        } else {
-          // ── Template-less recurring entry: no template drives cadence, so
-          // step from the entry's own schedule using the same clean cadence
-          // function, normalised to UTC midnight (no wall-clock pollution).
-          const occTemplate: OccurrenceTemplate = {
-            frequency: existing.frequency,
-            interval: parseInt(existing.recurrenceInterval ?? '1') || 1,
-            dayOfMonth: existing.dayOfMonth,
-            monthOfYear: existing.monthOfYear,
-            startDate: existing.nextExpectedDate,
-            endMode: 'never',
-            endDate: existing.endDate,
-            totalOccurrences: null,
-            occurrencesRemaining: null,
-          }
-          const next = computeNextOccurrenceDate(occTemplate, utcMidnight(existing.nextExpectedDate))
-          const newExpectedDate = next ? utcMidnight(next) : null
-          if (newExpectedDate && (!existing.endDate || newExpectedDate <= existing.endDate)) {
-            await prisma.financeIncomeEntry.create({
-              data: {
-                name: existing.name,
-                amount: existing.amount,  // template amount for forecasting
-                accountId: existing.accountId,
-                categoryId: existing.categoryId,
-                vendorId: existing.vendorId,
-                frequency: existing.frequency,
-                incomeType: existing.incomeType,
-                nextExpectedDate: newExpectedDate,
-                endDate: existing.endDate,
-                isActive: existing.isActive,
-                received: false,
-                receivedDate: null,
-                autoPay: existing.autoPay,
-                emailReminder: existing.emailReminder,
-                reminderDays: existing.reminderDays,
-                dayOfMonth: existing.dayOfMonth,
-                monthOfYear: existing.monthOfYear,
-                recurrenceInterval: existing.recurrenceInterval,
-                invoiceReceived: false,
-                invoiceReceivedDate: null,
-                notes: existing.notes,
-                memberId: existing.memberId,
-                locationId: existing.locationId,
-                entityId: existing.entityId,
-                taxClassification: existing.taxClassification,
-                isTaxTracked: existing.isTaxTracked,
-                taxRate: existing.taxRate,
-                parentIncomeId: existing.id,
-                templateId: null,
-                status: 'draft',
-                familyId: user.familyId,
-              },
-            })
-          }
-        }
-      } catch (err) {
-        console.error('[income PATCH] Failed to spawn next occurrence — receipt was committed:', err)
-      }
     }
   }
 

@@ -35,7 +35,7 @@
 // mid-catch-up cannot leave the cursor ahead of the drafts actually written.
 // =============================================================================
 
-import type { Prisma, FinanceRecurringBill } from '@prisma/client'
+import type { Prisma, FinanceRecurringBill, FinanceIncomeEntry } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit-log'
 import { utcMidnight, addUtcDays } from '@/lib/timezone'
@@ -894,6 +894,99 @@ export async function spawnNextBillOnPayment(
     return { spawnedBillId: spawned.id, spawnedBillDueDate: newDueDate }
   }
   return null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// spawnNextIncomeOnReceipt
+//
+// The income mirror of spawnNextBillOnPayment: single source of truth for
+// spawning a recurring income entry's NEXT occurrence once the current one is
+// received. ALWAYS spawns using entry.amount (template) not the actual amount
+// received, for stable forecasting.
+//
+// MUST run inside the caller's $transaction: a spawn failure has to roll back
+// the receipt, or a committed receipt with no successor silently ends the
+// recurring series.
+//
+// Templated entries advance via the shared cron path (createOccurrenceDraft +
+// cursor). Template-less entries are created here; unlike bills there is no
+// draft journal to copy afterwards, so nothing is returned.
+//
+// Cadence is strict-next: stepped from the entry's own nextExpectedDate
+// (matching the templates and the cron) — never an overdue "jump past today".
+// ─────────────────────────────────────────────────────────────────────────────
+export async function spawnNextIncomeOnReceipt(
+  tx: Prisma.TransactionClient,
+  entry: FinanceIncomeEntry,
+  familyId: string,
+): Promise<void> {
+  if (entry.templateId) {
+    // ── Templated: spawn the next occurrence through the shared clean path
+    // (the identical draft the cron worker produces — clean UTC-midnight
+    // dates, draft journal, snapshot hash, payslip). Step cadence from the
+    // template schedule, anchored at the current occurrence date.
+    // Cursor/counter semantics (monotonic advance, decrement-at-spawn) live
+    // in spawnNextTemplatedOccurrence — shared with the bills payment path.
+    const template = await getTemplate(familyId, entry.templateId)
+    if (template) {
+      await spawnNextTemplatedOccurrence(tx, template, entry.nextExpectedDate, entry.id)
+    }
+    return
+  }
+
+  // ── Template-less recurring entry: no template drives cadence, so step from
+  // the entry's own schedule using the same clean cadence function, normalised
+  // to UTC midnight (no wall-clock pollution).
+  const occTemplate: OccurrenceTemplate = {
+    frequency: entry.frequency,
+    interval: parseInt(entry.recurrenceInterval ?? '1') || 1,
+    dayOfMonth: entry.dayOfMonth,
+    monthOfYear: entry.monthOfYear,
+    startDate: entry.nextExpectedDate,
+    endMode: 'never',
+    endDate: entry.endDate,
+    totalOccurrences: null,
+    occurrencesRemaining: null,
+  }
+  const next = computeNextOccurrenceDate(occTemplate, utcMidnight(entry.nextExpectedDate))
+  const newExpectedDate = next ? utcMidnight(next) : null
+  if (newExpectedDate && (!entry.endDate || newExpectedDate <= entry.endDate)) {
+    await tx.financeIncomeEntry.create({
+      data: {
+        name: entry.name,
+        amount: entry.amount,  // template amount for forecasting
+        accountId: entry.accountId,
+        categoryId: entry.categoryId,
+        vendorId: entry.vendorId,
+        frequency: entry.frequency,
+        incomeType: entry.incomeType,
+        nextExpectedDate: newExpectedDate,
+        endDate: entry.endDate,
+        isActive: entry.isActive,
+        received: false,
+        receivedDate: null,
+        autoPay: entry.autoPay,
+        emailReminder: entry.emailReminder,
+        reminderDays: entry.reminderDays,
+        dayOfMonth: entry.dayOfMonth,
+        monthOfYear: entry.monthOfYear,
+        recurrenceInterval: entry.recurrenceInterval,
+        invoiceReceived: false,
+        invoiceReceivedDate: null,
+        notes: entry.notes,
+        memberId: entry.memberId,
+        locationId: entry.locationId,
+        entityId: entry.entityId,
+        taxClassification: entry.taxClassification,
+        isTaxTracked: entry.isTaxTracked,
+        taxRate: entry.taxRate,
+        parentIncomeId: entry.id,
+        templateId: null,
+        status: 'draft',
+        familyId,
+      },
+    })
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
