@@ -37,8 +37,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Email and name are required' }, { status: 400 })
   }
 
-  // Find existing user by email — if they already belong to this family, skip
-  const existing = await prisma.user.findUnique({ where: { email } })
+  // Find existing user by email (stored lowercased — see register route) —
+  // if they already belong to this family, skip
+  const normalizedEmail = String(email).toLowerCase().trim()
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (existing && existing.familyId === user.familyId) {
     return NextResponse.json({ error: 'Member already exists in this family' }, { status: 409 })
   }
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
   // If user exists without a family, assign them
   if (existing && !existing.familyId) {
     const member = await prisma.user.update({
-      where: { email },
+      where: { email: normalizedEmail },
       data: { familyId: user.familyId, name },
       select: { id: true, name: true, email: true },
     })

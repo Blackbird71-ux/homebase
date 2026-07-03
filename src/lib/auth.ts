@@ -15,8 +15,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
+        // Emails are stored lowercased (see register route); normalise the
+        // login lookup the same way so mixed-case sign-ins still match.
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: (credentials.email as string).toLowerCase().trim() },
           include: { family: { select: { timezone: true } } },
         })
 

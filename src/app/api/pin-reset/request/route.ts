@@ -26,9 +26,9 @@ export async function POST(req: Request) {
       )
     }
 
-    // Find user by email
+    // Find user by email (stored lowercased — see register route)
     const user = await prisma.user.findUnique({
-      where: { email: userEmail },
+      where: { email: String(userEmail).toLowerCase().trim() },
       select: { id: true, email: true, name: true, familyId: true },
     })
 

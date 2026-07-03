@@ -59,14 +59,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'email and password (min 8 chars) required' }, { status: 400 })
   }
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  // Emails are stored lowercased (see register route)
+  const normalizedEmail = String(email).toLowerCase().trim()
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (!user) {
     console.warn(`[admin-reset-password] Valid token but unknown user "${email}" from ${ip}`)
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
   const hashed = await bcrypt.hash(password, 12)
-  await prisma.user.update({ where: { email }, data: { password: hashed } })
+  await prisma.user.update({ where: { email: normalizedEmail }, data: { password: hashed } })
 
   console.log(`[admin-reset-password] Password reset for ${email} from ${ip}`)
   return NextResponse.json({ ok: true, message: `Password reset for ${email}` })
