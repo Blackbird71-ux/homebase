@@ -54,35 +54,40 @@ export async function POST(
     // Extract tag IDs from recipeTags
     const tagIds = sourceRecipe.recipeTags?.map((rt: any) => rt.tagId) || []
 
-    // Create new recipe with "(Copy)" suffix in title
-    const newRecipe = await prisma.recipe.create({
-      data: {
-        title: `${sourceRecipe.title} (Copy)`,
-        description: sourceRecipe.description,
-        ingredients: JSON.stringify(ingredients),
-        instructions: JSON.stringify(instructions),
-        tags: sourceRecipe.tags, // Keep legacy tags field
-        prepTime: sourceRecipe.prepTime,
-        cookTime: sourceRecipe.cookTime,
-        servings: sourceRecipe.servings,
-        sourceUrl: sourceRecipe.sourceUrl,
-        image: sourceRecipe.image,
-        bookId: sourceRecipe.bookId,
-        createdBy: user.id,
-        familyId: user.familyId,
-      },
-    })
-
-    // Copy recipe-tag relationships if they exist
-    if (tagIds.length > 0) {
-      await (prisma as any).recipeTag.createMany({
-        data: tagIds.map((tagId: string) => ({
-          recipeId: newRecipe.id,
-          tagId,
-        })),
-        skipDuplicates: true,
+    // Create new recipe with "(Copy)" suffix in title.
+    // Transaction: a tag-link failure must not leave a half-copied recipe behind.
+    // Note: skipDuplicates is not supported on SQLite; source tagIds are unique via the RecipeTag PK.
+    const newRecipe = await prisma.$transaction(async (tx) => {
+      const created = await tx.recipe.create({
+        data: {
+          title: `${sourceRecipe.title} (Copy)`,
+          description: sourceRecipe.description,
+          ingredients: JSON.stringify(ingredients),
+          instructions: JSON.stringify(instructions),
+          tags: sourceRecipe.tags, // Keep legacy tags field
+          prepTime: sourceRecipe.prepTime,
+          cookTime: sourceRecipe.cookTime,
+          servings: sourceRecipe.servings,
+          sourceUrl: sourceRecipe.sourceUrl,
+          image: sourceRecipe.image,
+          bookId: sourceRecipe.bookId,
+          createdBy: user.id,
+          familyId: user.familyId,
+        },
       })
-    }
+
+      // Copy recipe-tag relationships if they exist
+      if (tagIds.length > 0) {
+        await tx.recipeTag.createMany({
+          data: tagIds.map((tagId: string) => ({
+            recipeId: created.id,
+            tagId,
+          })),
+        })
+      }
+
+      return created
+    })
 
     // Fetch the new recipe with tags for response
     const createdRecipe = await getRecipeWithRelations(newRecipe.id, user.familyId)

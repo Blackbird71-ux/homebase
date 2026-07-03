@@ -109,9 +109,9 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: scrapeUrl.trim() }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setScrapeError(data.error ?? 'Failed to scrape')
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data) {
+        setScrapeError(data?.error ?? 'Failed to scrape')
         return
       }
       setTitle(data.title ?? '')
@@ -155,8 +155,8 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
             const uploadData = await uploadRes.json()
             finalImageUrl = uploadData.imageUrl
           } else {
-            const errorData = await uploadRes.json()
-            throw new Error(errorData.error || 'Failed to upload image')
+            const errorData = await uploadRes.json().catch(() => null)
+            throw new Error(errorData?.error || 'Failed to upload image')
           }
         } finally {
           setUploadingImage(false)
@@ -189,8 +189,9 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
           sodiumContent: sodiumContent.trim() || null,
         }),
       })
-      const data = await res.json()
-      if (res.ok) {
+      // Error responses may have an empty/non-JSON body — never let that surface as a raw parse error
+      const data = await res.json().catch(() => null)
+      if (res.ok && data) {
         // For new recipes, upload the image file now that we have the recipe ID
         if (!editMode && imageFile && data.id) {
           setUploadingImage(true)
@@ -218,7 +219,7 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
         }
         onOpenChange(false)
       } else {
-        setSaveError(data.error ?? 'Failed to save recipe')
+        setSaveError(data?.error ?? 'Something went wrong saving the recipe. Please try again.')
       }
     } catch (error: any) {
       setSaveError(error.message || 'Failed to save recipe')

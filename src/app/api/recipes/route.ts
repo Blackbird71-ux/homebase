@@ -83,26 +83,30 @@ async function processTagsInput(tagsInput: any, familyId: string, userId: string
 
 // Helper function to create recipe with tags
 async function createRecipeWithTags(data: any, tagIds: string[]) {
-  const recipe = await prisma.recipe.create({
-    data: {
-      ...data,
-      // Keep legacy tags field for backward compatibility
-      tags: tagIds.length > 0 ? 'legacy-tags' : null,
-    },
-  })
+  // Dedupe — RecipeTag PK is [recipeId, tagId]; skipDuplicates is not supported on SQLite
+  const uniqueTagIds = [...new Set(tagIds)]
 
-  // Create recipe-tag relationships
-  if (tagIds.length > 0) {
-    await (prisma as any).recipeTag.createMany({
-      data: tagIds.map((tagId) => ({
-        recipeId: recipe.id,
-        tagId,
-      })),
-      skipDuplicates: true,
+  // Transaction: a tag-link failure must not leave an orphan recipe behind
+  return prisma.$transaction(async (tx) => {
+    const recipe = await tx.recipe.create({
+      data: {
+        ...data,
+        // Keep legacy tags field for backward compatibility
+        tags: uniqueTagIds.length > 0 ? 'legacy-tags' : null,
+      },
     })
-  }
 
-  return recipe
+    if (uniqueTagIds.length > 0) {
+      await tx.recipeTag.createMany({
+        data: uniqueTagIds.map((tagId) => ({
+          recipeId: recipe.id,
+          tagId,
+        })),
+      })
+    }
+
+    return recipe
+  })
 }
 
 // Helper function to get recipe with tags
@@ -204,6 +208,7 @@ export async function POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
   const body = await req.json()
   const { title, description, notes, ingredients, instructions, tags, prepTime, cookTime, servings, sourceUrl, image, bookId, calories, fatContent, proteinContent, carbContent, sodiumContent } = body
 
@@ -251,4 +256,8 @@ export async function POST(req: Request) {
   )
 
   return NextResponse.json(fullRecipe, { status: 201 })
+  } catch (error) {
+    console.error('POST /api/recipes - Recipe create error:', error)
+    return NextResponse.json({ error: 'Failed to save recipe' }, { status: 500 })
+  }
 }
