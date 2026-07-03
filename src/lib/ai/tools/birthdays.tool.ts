@@ -61,8 +61,10 @@ async function queryBirthdaysHandler(args: Record<string, unknown>, ctx: Handler
 
   const timezone = ctx.timezone ?? 'UTC'
   const nowStr = todayStringInTz(timezone)
+  // UTC midnight of the user's local calendar date. All date math below stays
+  // in UTC date-keys so it never depends on the server's OS timezone.
   const today = new Date(nowStr)
-  const currentYear = today.getFullYear()
+  const currentYear = today.getUTCFullYear()
 
   // Enrich with next occurrence and days until
   const enriched = birthdayList
@@ -70,8 +72,8 @@ async function queryBirthdaysHandler(args: Record<string, unknown>, ctx: Handler
       const parts = b.date.split('-')
       const month = parseInt(parts[parts.length - 2]) - 1 // 0-indexed
       const day = parseInt(parts[parts.length - 1])
-      let next = new Date(currentYear, month, day)
-      if (next < today) next = new Date(currentYear + 1, month, day)
+      let next = new Date(Date.UTC(currentYear, month, day))
+      if (next < today) next = new Date(Date.UTC(currentYear + 1, month, day))
       const daysUntil = Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
       return { ...b, next, daysUntil }
     })
@@ -83,7 +85,7 @@ async function queryBirthdaysHandler(args: Record<string, unknown>, ctx: Handler
     const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
     const monthIdx = monthNames.findIndex(m => m.startsWith(lower))
     if (monthIdx >= 0) {
-      filtered = enriched.filter(b => b.next.getMonth() === monthIdx)
+      filtered = enriched.filter(b => b.next.getUTCMonth() === monthIdx)
     } else {
       filtered = enriched.filter(b => b.name.toLowerCase().includes(lower))
     }
@@ -97,7 +99,8 @@ async function queryBirthdaysHandler(args: Record<string, unknown>, ctx: Handler
   }
 
   const lines = filtered.map(b => {
-    const dateStr = formatInTz(b.next, timezone, { day: 'numeric', month: 'long' })
+    // b.next is a UTC-midnight date-key — format in UTC to read it back as-is
+    const dateStr = formatInTz(b.next, 'UTC', { day: 'numeric', month: 'long' })
     const countdown = b.daysUntil === 0 ? ' — TODAY!' : b.daysUntil === 1 ? ' — tomorrow!' : ` — in ${b.daysUntil} days`
     return `• ${b.name} (${b.type}) — ${dateStr}${countdown}`
   })

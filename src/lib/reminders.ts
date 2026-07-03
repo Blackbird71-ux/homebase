@@ -8,10 +8,6 @@ import { generateCompleteToken } from '@/lib/complete-token'
 import { dateStringInTz, todayStringInTz, localMidnightToUtc, DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { liveBillWhere } from '@/lib/finance-live-filter'
 
-function todayKey(): string {
-  return new Date().toISOString().split('T')[0]
-}
-
 /**
  * The local calendar date (YYYY-MM-DD, in the family's timezone) on which a
  * reminder should fire: `daysBefore` days before the entity's due/expiry date.

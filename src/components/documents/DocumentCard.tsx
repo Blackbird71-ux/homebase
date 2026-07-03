@@ -90,9 +90,13 @@ function formatFileSize(bytes: number): string {
 }
 
 function getDaysUntilExpiry(expiryDate: string): number {
+  // expiryDate is a calendar date-key stored as UTC midnight (the documents
+  // API parses the form's YYYY-MM-DD with new Date()). Diff whole calendar
+  // days against the client's local today so the count always agrees with
+  // the UTC-formatted "Expires:" label below.
   const now = new Date()
-  const expiry = new Date(expiryDate)
-  return Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const todayKey = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((new Date(expiryDate).getTime() - todayKey) / (1000 * 60 * 60 * 24))
 }
 
 interface DocumentCardProps {
