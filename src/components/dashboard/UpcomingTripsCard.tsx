@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Plane, MapPin, Calendar, Package, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { daysUntilDateKeyLocal } from '@/lib/timezone'
 
 interface TripSummaryShape {
   id: string
@@ -17,18 +18,18 @@ interface TripSummaryShape {
 }
 
 export function UpcomingTripsCard({ trips }: { trips: TripSummaryShape[] }) {
-  const now = new Date()
-
+  // Trip dates are calendar date-keys stored as UTC midnight; compare whole
+  // calendar days so the cutoff and countdown agree with the UTC-formatted
+  // dates below.
   const upcoming = trips
     .filter((t) => {
       if (t.status === 'cancelled' || t.status === 'completed') return false
-      return new Date(t.endDate) >= now
+      return daysUntilDateKeyLocal(t.endDate) >= 0
     })
     .slice(0, 5)
 
   function daysUntil(date: string): string {
-    const d = new Date(date)
-    const diff = Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    const diff = daysUntilDateKeyLocal(date)
     if (diff < 0) return `${Math.abs(diff)}d ago`
     if (diff === 0) return 'Today!'
     if (diff === 1) return 'Tomorrow'

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { CloudSun, Loader2, MapPin, Thermometer, Droplets, Wind, Calendar } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { daysUntilDateKeyLocal } from '@/lib/timezone'
 
 interface TripWeatherSectionProps {
   destination: string
@@ -185,11 +186,7 @@ export function TripWeatherSection({
   }
 
   function isDateInForecast(dateStr: string): boolean {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const target = new Date(dateStr)
-    target.setHours(0, 0, 0, 0)
-    const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const diffDays = daysUntilDateKeyLocal(dateStr)
     return diffDays >= 0 && diffDays <= 5
   }
 

@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/select'
 import { FileText, Download, Trash2, Edit3, AlertTriangle, Calendar, ShieldCheckIcon, LockIcon, UnlockIcon, Eye } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatInTz } from '@/lib/timezone'
+import { formatInTz, daysUntilDateKeyLocal } from '@/lib/timezone'
 import { SecureUnlockDialog } from '@/components/shared/SecureUnlockDialog'
 import { DocumentViewer } from './DocumentViewer'
 
@@ -91,12 +91,9 @@ function formatFileSize(bytes: number): string {
 
 function getDaysUntilExpiry(expiryDate: string): number {
   // expiryDate is a calendar date-key stored as UTC midnight (the documents
-  // API parses the form's YYYY-MM-DD with new Date()). Diff whole calendar
-  // days against the client's local today so the count always agrees with
-  // the UTC-formatted "Expires:" label below.
-  const now = new Date()
-  const todayKey = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
-  return Math.round((new Date(expiryDate).getTime() - todayKey) / (1000 * 60 * 60 * 24))
+  // API parses the form's YYYY-MM-DD with new Date()). Whole-calendar-day
+  // diff keeps the count in agreement with the UTC-formatted label below.
+  return daysUntilDateKeyLocal(expiryDate)
 }
 
 interface DocumentCardProps {

@@ -282,6 +282,21 @@ export function dateStringInTz(date: Date, timezone: string): string {
 }
 
 /**
+ * Whole calendar days from the runtime's local today to a calendar date-key
+ * stored as UTC midnight (documents expiryDate, trip start/end dates).
+ * Negative = in the past; 0 = today.
+ *
+ * CLIENT-ONLY: "today" comes from the JS runtime timezone, which is the
+ * user's browser zone in client components. On the server the runtime is
+ * UTC — use dateStringInTz/todayStringInTz with an explicit timezone there.
+ */
+export function daysUntilDateKeyLocal(dateKey: Date | string): number {
+  const now = new Date()
+  const todayKey = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((new Date(dateKey).getTime() - todayKey) / (1000 * 60 * 60 * 24))
+}
+
+/**
  * Extract the hour (0–23) and minute (0–59) from a UTC ISO string
  * as they appear in the given local timezone.
  * Never use new Date(iso).getHours() — that returns the JS runtime timezone
