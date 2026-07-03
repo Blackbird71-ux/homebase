@@ -24,6 +24,7 @@ import {
   dateStringInTz,
   localMidnightToUtc,
   endOfLocalDayUtc,
+  shiftEndToPreserveDuration,
 } from '@/lib/timezone'
 
 interface CategoryOption {
@@ -404,7 +405,11 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Start</Label>
-                    <Input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} />
+                    <Input type="datetime-local" value={start} onChange={e => {
+                      // Outlook behaviour: moving the start drags the end along, preserving the duration.
+                      setEnd(shiftEndToPreserveDuration(start, end, e.target.value))
+                      setStart(e.target.value)
+                    }} />
                   </div>
                   <div className="space-y-1">
                     <Label>End</Label>

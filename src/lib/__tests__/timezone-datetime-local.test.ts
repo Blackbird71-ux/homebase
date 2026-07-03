@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toDateTimeLocalInTz, dateTimeLocalToUtc } from '@/lib/timezone'
+import { toDateTimeLocalInTz, dateTimeLocalToUtc, shiftEndToPreserveDuration } from '@/lib/timezone'
 
 // The datetime-local round-trip helpers power the event editor (EventModal):
 // a UTC instant is rendered as a "YYYY-MM-DDTHH:mm" value in the family's tz,
@@ -67,4 +67,40 @@ describe('round-trip — toDateTimeLocalInTz ∘ dateTimeLocalToUtc is the ident
       expect(toMinute(back)).toBe(toMinute(instant))
     })
   }
+})
+
+describe('shiftEndToPreserveDuration — end follows start, keeping the duration (Outlook behaviour)', () => {
+  it('preserves a 1-hour duration when the start time moves', () => {
+    expect(shiftEndToPreserveDuration('2026-07-10T09:00', '2026-07-10T10:00', '2026-07-10T14:00'))
+      .toBe('2026-07-10T15:00')
+  })
+
+  it('preserves a 90-minute duration across a day boundary', () => {
+    expect(shiftEndToPreserveDuration('2026-07-10T09:00', '2026-07-10T10:30', '2026-07-10T23:00'))
+      .toBe('2026-07-11T00:30')
+  })
+
+  it('preserves the duration when the start DATE moves', () => {
+    expect(shiftEndToPreserveDuration('2026-07-10T09:00', '2026-07-10T10:00', '2026-08-01T09:00'))
+      .toBe('2026-08-01T10:00')
+  })
+
+  it('preserves a multi-day duration', () => {
+    expect(shiftEndToPreserveDuration('2026-07-10T09:00', '2026-07-12T17:00', '2026-07-20T09:00'))
+      .toBe('2026-07-22T17:00')
+  })
+
+  it('falls back to 60 minutes when the previous pair is inverted', () => {
+    expect(shiftEndToPreserveDuration('2026-07-10T10:00', '2026-07-10T09:00', '2026-07-10T14:00'))
+      .toBe('2026-07-10T15:00')
+  })
+
+  it('falls back to 60 minutes when the previous values are empty', () => {
+    expect(shiftEndToPreserveDuration('', '', '2026-07-10T14:00')).toBe('2026-07-10T15:00')
+  })
+
+  it('leaves the end unchanged when the new start is unparseable (input cleared mid-edit)', () => {
+    expect(shiftEndToPreserveDuration('2026-07-10T09:00', '2026-07-10T10:00', ''))
+      .toBe('2026-07-10T10:00')
+  })
 })

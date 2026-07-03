@@ -479,6 +479,39 @@ export function dateTimeLocalToUtc(localStr: string, timezone: string): Date {
   return resolveLocalWallClock(y, mo, d, h ?? 0, mi ?? 0, 0, 0, timezone)
 }
 
+/**
+ * When the START of a `<input type="datetime-local">` pair changes, return the
+ * new END value that preserves the existing start→end duration (Outlook
+ * behaviour). Pure wall-clock arithmetic on "YYYY-MM-DDTHH:mm" strings — no
+ * timezone is involved because both values are wall-clock in the same (family)
+ * zone; the UTC conversion happens at save via dateTimeLocalToUtc.
+ *
+ * Falls back to a 60-minute duration when the previous pair doesn't form a
+ * positive duration, and returns `prevEnd` unchanged when `newStart` is
+ * unparseable (e.g. the input was cleared mid-edit).
+ */
+export function shiftEndToPreserveDuration(prevStart: string, prevEnd: string, newStart: string): string {
+  // Parse as UTC purely as a neutral calendar for the subtraction — the values
+  // are wall-clock strings, not instants.
+  const parse = (v: string): number => {
+    const [datePart, timePart] = v.split('T')
+    if (!datePart || !timePart) return NaN
+    const [y, mo, d] = datePart.split('-').map(Number)
+    const [h, mi] = timePart.split(':').map(Number)
+    return Date.UTC(y, mo - 1, d, h, mi)
+  }
+  const newStartMs = parse(newStart)
+  if (isNaN(newStartMs)) return prevEnd
+  const prevStartMs = parse(prevStart)
+  const prevEndMs = parse(prevEnd)
+  const durationMs = !isNaN(prevStartMs) && !isNaN(prevEndMs) && prevEndMs > prevStartMs
+    ? prevEndMs - prevStartMs
+    : 60 * 60 * 1000
+  const end = new Date(newStartMs + durationMs)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${end.getUTCFullYear()}-${pad(end.getUTCMonth() + 1)}-${pad(end.getUTCDate())}T${pad(end.getUTCHours())}:${pad(end.getUTCMinutes())}`
+}
+
 /** Add `n` calendar days to `instant`, preserving its local time-of-day in `timezone`. */
 export function addLocalDaysPreservingTime(instant: Date, n: number, timezone: string): Date {
   const { y, mo, d, h, mi, s, ms } = localPartsInTz(instant, timezone)
