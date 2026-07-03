@@ -31,14 +31,14 @@ describe('GET /api/recipe-books', () => {
   it('returns books with recipeCount', async () => {
     const { prisma } = await import('@/lib/prisma')
     vi.mocked(prisma.recipeBook.findMany).mockResolvedValue([
-      { id: 'book-1', name: 'Soups', familyId: 'family-1', createdAt: new Date(), _count: { recipes: 11 } },
+      { id: 'book-1', name: 'Soups', hidden: false, familyId: 'family-1', createdAt: new Date(), _count: { recipes: 11 } },
     ] as never)
 
     const res = await GET()
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body).toEqual([{ id: 'book-1', name: 'Soups', recipeCount: 11 }])
+    expect(body).toEqual([{ id: 'book-1', name: 'Soups', hidden: false, recipeCount: 11 }])
   })
 })
 

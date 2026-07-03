@@ -411,6 +411,7 @@ model BarcodeMapping {
 model RecipeBook {
   id        String   @id @default(cuid())
   name      String
+  hidden    Boolean  @default(false)
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
   recipes   Recipe[]

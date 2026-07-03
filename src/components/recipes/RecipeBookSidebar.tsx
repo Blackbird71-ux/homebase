@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 export interface RecipeBook {
   id: string
   name: string
+  hidden: boolean
   recipeCount: number
 }
 
@@ -49,7 +50,7 @@ export function RecipeBookSidebar({
       })
       if (res.ok) {
         const book = await res.json() as { id: string; name: string }
-        onBookCreated({ ...book, recipeCount: 0 })
+        onBookCreated({ ...book, hidden: false, recipeCount: 0 })
         setNewName('')
         setCreating(false)
       }

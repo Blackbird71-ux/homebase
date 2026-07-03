@@ -86,6 +86,7 @@ async function getData(familyId: string, userId: string) {
     books: bookRows.map((b) => ({
       id: b.id,
       name: b.name,
+      hidden: b.hidden,
       recipeCount: b._count.recipes,
     })),
   }

@@ -188,7 +188,11 @@ function SectionGrid({
 export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBookId, tagColors }: RecipesClientProps) {
   const [recipes, setRecipes]       = useState(initialRecipes)
   const [books, setBooks]           = useState(initialBooks)
-  const [activeBookId, setActiveBookId]   = useState<string | null>(initialFavoriteBookId ?? null)
+  const [activeBookId, setActiveBookId]   = useState<string | null>(() => {
+    // Don't open on the favourite book if it has been hidden in Settings
+    const fav = initialFavoriteBookId ?? null
+    return fav && initialBooks.some(b => b.id === fav && !b.hidden) ? fav : null
+  })
   const [favoriteBookId, setFavoriteBookId] = useState<string | null>(initialFavoriteBookId ?? null)
   const [search, setSearch]         = useState('')
   const [activeTag, setActiveTag]   = useState<string | null>(null)
@@ -248,6 +252,8 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
     for (const r of base) r.tags.forEach(t => tagSet.add(t))
     return Array.from(tagSet).sort()
   }, [recipes, activeBookId])
+
+  const visibleBooks = useMemo(() => books.filter(b => !b.hidden), [books])
 
   const counts = useMemo(() => ({
     all:       baseRecipes.length,
@@ -363,7 +369,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
       {/* Desktop sidebar */}
       <div className="hidden md:flex flex-col w-48 border-r border-border p-3 shrink-0 overflow-y-auto">
         <RecipeBookSidebar
-          books={books}
+          books={visibleBooks}
           activeBookId={activeBookId}
           onSelect={(id) => { setActiveBookId(id); setActiveTag(null) }}
           onBookCreated={handleBookCreated}
@@ -378,7 +384,7 @@ export function RecipesClient({ initialRecipes, initialBooks, initialFavoriteBoo
         {/* Mobile book tabs */}
         <div className="md:hidden">
           <RecipeBookSidebar
-            books={books}
+            books={visibleBooks}
             activeBookId={activeBookId}
             onSelect={(id) => { setActiveBookId(id); setActiveTag(null) }}
             onBookCreated={handleBookCreated}

@@ -5,7 +5,7 @@ import { PillNav } from '@/components/shared/PillNav'
 import {
   User, Palette, Plug, Database, Upload, Tag, FolderOpen,
   CalendarDays, Soup, DollarSign, Bell, ActivitySquare, Bot,
-  MonitorPlay, Mail,
+  MonitorPlay, Mail, BookOpen,
 } from 'lucide-react'
 import { AccountTab } from '@/components/settings/AccountTab'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
@@ -15,6 +15,7 @@ import { ImportTab } from '@/components/settings/ImportTab'
 import { TagManager } from '@/components/tags/TagManager'
 import { CategoryManager } from '@/components/categories/CategoryManager'
 import { IngredientMappingsTab } from '@/components/settings/IngredientMappingsTab'
+import { RecipeBookManager } from '@/components/recipes/RecipeBookManager'
 import { EventCategoryManager } from '@/components/calendar/EventCategoryManager'
 import { NotificationSettings } from '@/components/settings/NotificationSettings'
 import { ActivityLogTab } from '@/components/settings/ActivityLogTab'
@@ -35,6 +36,7 @@ const BASE_TABS = [
   { id: 'categories',           label: 'Categories',          icon: FolderOpen },
   { id: 'event-categories',     label: 'Event Categories',    icon: CalendarDays },
   { id: 'ingredient-mappings',  label: 'Ingredients',         icon: Soup },
+  { id: 'recipe-books',         label: 'Recipe Books',        icon: BookOpen },
   { id: 'finance',              label: 'Finance',             icon: DollarSign },
   { id: 'notifications',        label: 'Notifications',       icon: Bell },
   { id: 'activity',             label: 'Activity Log',        icon: ActivitySquare },
@@ -169,6 +171,7 @@ export function SettingsClient({ isAdmin, user, coziImports, supportedTimezones 
         {activeTab === 'categories'         && <CategoryManager />}
         {activeTab === 'event-categories'   && <EventCategoryManager />}
         {activeTab === 'ingredient-mappings'&& <IngredientMappingsTab />}
+        {activeTab === 'recipe-books'       && <RecipeBookManager />}
         {activeTab === 'finance'            && <FinanceTab />}
         {activeTab === 'notifications'      && <NotificationSettings />}
         {activeTab === 'activity'           && <ActivityLogTab />}

@@ -14,7 +14,7 @@ export async function GET() {
     include: { _count: { select: { recipes: true } } },
   })
   return NextResponse.json(
-    books.map((b) => ({ id: b.id, name: b.name, recipeCount: b._count.recipes }))
+    books.map((b) => ({ id: b.id, name: b.name, hidden: b.hidden, recipeCount: b._count.recipes }))
   )
 }
 
