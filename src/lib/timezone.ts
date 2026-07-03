@@ -117,28 +117,15 @@ export function setUtcDayOfMonth(d: Date, day: number): Date {
  * Convert a YYYY-MM-DD string (interpreted as midnight in the given timezone) to a UTC Date.
  */
 export function localMidnightToUtc(dateStr: string, timezone: string): Date {
-  // Use Intl to find the UTC offset at this date in this timezone
-  // Strategy: format epoch 0 in the target timezone, parse offset
-  const testDate = new Date(`${dateStr}T12:00:00Z`) // Use noon UTC to avoid DST edge cases at midnight
-  const utcParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  }).formatToParts(testDate)
-  const localParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  }).formatToParts(testDate)
-
-  function partsToMs(parts: Intl.DateTimeFormatPart[]): number {
-    const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value ?? '0')
-    return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'))
-  }
-
-  const offsetMs = partsToMs(localParts) - partsToMs(utcParts)
-  // Midnight UTC of the given date, adjusted for timezone offset
-  return new Date(new Date(`${dateStr}T00:00:00Z`).getTime() - offsetMs)
+  // Two-pass wall-clock resolution (see resolveLocalWallClock). The previous
+  // implementation sampled the zone offset at NOON UTC of the target day; on the
+  // Australian spring-forward day (transition at 2am local, between local
+  // midnight and noon UTC for UTC+10/+11) that read the post-transition offset
+  // and returned 23:00 of the PREVIOUS local day — which made addLocalDays
+  // unable to step past the day before the transition and eachDayInTz loop
+  // forever (calendar freeze navigating to Sep/Oct 2026).
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  return resolveLocalWallClock(y, mo, d, 0, 0, 0, 0, timezone)
 }
 
 /**
