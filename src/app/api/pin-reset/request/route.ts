@@ -84,12 +84,11 @@ export async function POST(req: Request) {
       `,
     })
 
+    // Log but still return the generic body: a send-failure response here
+    // would only appear for VALID user+entity combos, breaking enumeration
+    // safety (the sibling password-reset/request behaves the same way).
     if (!result.success) {
       console.error('[pin-reset] Failed to send email:', result.error)
-      return NextResponse.json(
-        { error: 'Failed to send reset email. Email may not be configured.' },
-        { status: 500 }
-      )
     }
 
     return NextResponse.json({ success: true, message: 'If the email matches, a reset link has been sent.' })
