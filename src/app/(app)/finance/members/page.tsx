@@ -58,8 +58,8 @@ export default function FinanceMembersPage() {
       setEditing(null)
       load()
     } else {
-      const err = await res.json()
-      toast.error(err.error ?? 'Failed to save member')
+      const err = await res.json().catch(() => null)
+      toast.error(err?.error ?? 'Failed to save member')
     }
   }
 
@@ -70,8 +70,8 @@ export default function FinanceMembersPage() {
       toast.success('Member removed')
       load()
     } else {
-      const err = await res.json()
-      toast.error(err.error ?? 'Failed to remove')
+      const err = await res.json().catch(() => null)
+      toast.error(err?.error ?? 'Failed to remove')
     }
   }
 

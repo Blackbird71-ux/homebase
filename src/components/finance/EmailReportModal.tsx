@@ -45,8 +45,8 @@ export default function EmailReportModal({ open, onClose }: EmailReportModalProp
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Failed to send email')
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || 'Failed to send email')
       }
 
       const data = await res.json()

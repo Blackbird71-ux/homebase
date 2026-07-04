@@ -85,8 +85,8 @@ export default function VendorsPage() {
       toast.success(editing ? 'Contact updated' : 'Contact created')
       setShowForm(false); setEditing(null); load()
     } else {
-      const err = await res.json()
-      toast.error(err.error ?? 'Failed to save')
+      const err = await res.json().catch(() => null)
+      toast.error(err?.error ?? 'Failed to save')
     }
   }
 

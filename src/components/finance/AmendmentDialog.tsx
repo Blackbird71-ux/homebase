@@ -187,8 +187,8 @@ export function AmendmentDialog({ amendment, glAccounts, entities, onClose, onSa
         onClose()
         onSaved()
       } else {
-        const err = await res.json()
-        toast.error(err.error ?? 'Failed to amend entry')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Failed to amend entry')
         setConfirmed(false)
       }
     } finally {

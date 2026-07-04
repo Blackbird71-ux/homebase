@@ -109,8 +109,8 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
         body:    JSON.stringify(payload),
       })
       if (!res.ok) {
-        const err = await res.json()
-        toast.error(err.error ?? 'Failed to save journal entry')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Failed to save journal entry')
         return
       }
       toast.success(postImmediately ? 'Journal entry saved and posted' : editing ? 'Draft updated' : 'Draft saved')
@@ -150,8 +150,8 @@ export function JournalEntryForm({ open, editing, glAccounts, entities, onClose,
         }),
       })
       if (!res.ok) {
-        const err = await res.json()
-        toast.error(err.error ?? 'Failed to update posted entry')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Failed to update posted entry')
         return
       }
       const result = await res.json()

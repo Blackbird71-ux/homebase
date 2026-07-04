@@ -38,8 +38,8 @@ export function VoidDialog({ entry, onClose, onSaved }: Props) {
         onClose()
         onSaved()
       } else {
-        const err = await res.json()
-        toast.error(err.error ?? 'Failed to void entry')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Failed to void entry')
       }
     } finally {
       setSaving(false)

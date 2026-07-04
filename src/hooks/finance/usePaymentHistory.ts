@@ -137,10 +137,10 @@ export function usePaymentHistory(onRefresh: () => void) {
         }),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
 
       if (!res.ok) {
-        toast.error(data.error ?? `Failed to record payment (${res.status})`)
+        toast.error(data?.error ?? `Failed to record payment (${res.status})`)
         return
       }
 

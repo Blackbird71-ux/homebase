@@ -111,8 +111,8 @@ export default function AccountsPage() {
         setObEdit(null)
         load()
       } else {
-        const err = await res.json()
-        toast.error(err.error ?? 'Failed to update opening balance')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Failed to update opening balance')
       }
     } finally {
       setObSaving(false)

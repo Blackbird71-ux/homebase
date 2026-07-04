@@ -43,8 +43,8 @@ export function ReversalDialog({ reversal, onClose, onSaved }: Props) {
         onClose()
         onSaved()
       } else {
-        const err = await res.json()
-        toast.error(err.error ?? 'Failed to create reversal')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Failed to create reversal')
       }
     } finally {
       setSaving(false)

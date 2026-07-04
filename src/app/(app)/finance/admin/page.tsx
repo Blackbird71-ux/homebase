@@ -269,15 +269,15 @@ function IntegrityResultView({ result }: { result: IntegrityResponse }) {
 export default function FinanceAdminPage() {
   async function runSpawnNow() {
     const res = await fetch('/api/admin/spawn-now', { method: 'POST' })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? 'Spawn failed')
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(data?.error ?? 'Spawn failed')
     return data as SpawnResponse
   }
 
   async function runIntegrityAudit() {
     const res = await fetch('/api/finance/integrity')
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? 'Audit failed')
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(data?.error ?? 'Audit failed')
     return data as IntegrityResponse
   }
 

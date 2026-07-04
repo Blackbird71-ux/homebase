@@ -119,7 +119,7 @@ export default function JournalsPage() {
       )) return
       const res = await fetch(`/api/finance/journals?id=${entry.id}`, { method: 'DELETE' })
       if (res.ok) { toast.success('Amendment undone — original entry restored'); load() }
-      else { const err = await res.json(); toast.error(err.error ?? 'Failed to delete') }
+      else { const err = await res.json().catch(() => null); toast.error(err?.error ?? 'Failed to delete') }
       return
     }
 

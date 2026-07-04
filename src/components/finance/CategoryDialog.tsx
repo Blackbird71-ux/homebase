@@ -95,8 +95,8 @@ export function CategoryDialog({ open, onOpenChange, editing, availableParents, 
         onOpenChange(false)
         onSaved()
       } else {
-        const err = await res.json()
-        toast.error(err.error ?? 'Failed to save account')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error ?? 'Failed to save account')
       }
     } finally {
       setSaving(false)

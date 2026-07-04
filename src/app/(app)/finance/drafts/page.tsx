@@ -815,8 +815,8 @@ export default function DraftsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Bulk approve failed')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Bulk approve failed')
       const { approved, candidatesFound, failures } = data
       if (failures?.length > 0) {
         toast(`Approved ${approved}/${candidatesFound} — ${failures.length} failed`)

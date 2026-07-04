@@ -136,8 +136,8 @@ export function useTemplatesCrud() {
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const data = await res.json()
-        toast.error(data.error ?? 'Save failed')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error ?? 'Save failed')
         return
       }
       toast.success(editId ? 'Template updated' : 'Template created')
