@@ -279,8 +279,8 @@ function CreateTripDialog({
         }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error ?? 'Failed to create trip')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? 'Failed to create trip')
       }
       const trip = await res.json()
       onCreated(trip)

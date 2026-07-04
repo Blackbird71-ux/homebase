@@ -91,8 +91,8 @@ export function TemplateDialog({
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Failed to save template')
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || 'Failed to save template')
       }
 
       toast.success('Template saved')

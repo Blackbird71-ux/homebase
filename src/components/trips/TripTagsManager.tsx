@@ -140,8 +140,8 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
         setNewEmoji('')
         setNewColor('#3b82f6')
       } else {
-        const d = await res.json()
-        setError(d.error ?? 'Failed to create tag')
+        const d = await res.json().catch(() => null)
+        setError(d?.error ?? 'Failed to create tag')
       }
     } finally {
       setSaving(false)

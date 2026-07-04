@@ -173,8 +173,8 @@ export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin,
         router.push(`/recipes/${newRecipe.id}`)
         router.refresh()
       } else {
-        const data = await res.json()
-        alert(data.error ?? 'Failed to duplicate recipe')
+        const data = await res.json().catch(() => null)
+        alert(data?.error ?? 'Failed to duplicate recipe')
       }
     } catch {
       alert('Network error')
@@ -215,8 +215,8 @@ export function RecipeDetail({ recipe, tagColors, books, currentUserId, isAdmin,
         setShareEmails('')
         setShareMessage('')
       } else {
-        const data = await res.json()
-        setShareResult(data.error ?? 'Failed to send email')
+        const data = await res.json().catch(() => null)
+        setShareResult(data?.error ?? 'Failed to send email')
       }
     } catch {
       setShareResult('Network error — could not send email')

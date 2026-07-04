@@ -233,8 +233,8 @@ export function AdvancedThemingTab({ initialCustomTheme }: AdvancedThemingTabPro
         // Notify ThemeProvider to re-fetch — no full page reload needed
         window.dispatchEvent(new Event('advanced-theme-updated'))
       } else {
-        const data = await res.json()
-        setStatus({ type: 'error', message: data.error ?? 'Failed to save custom theme.' })
+        const data = await res.json().catch(() => null)
+        setStatus({ type: 'error', message: data?.error ?? 'Failed to save custom theme.' })
       }
     } catch {
       setStatus({ type: 'error', message: 'Network error.' })

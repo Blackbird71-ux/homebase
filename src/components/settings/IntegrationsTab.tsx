@@ -132,9 +132,9 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
       const form = new FormData()
       form.append('ics', icsFile)
       const res = await fetch('/api/import/cozi', { method: 'POST', body: form })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        setImportResult({ success: false, error: data.error ?? 'Import failed' })
+        setImportResult({ success: false, error: data?.error ?? 'Import failed' })
       } else {
         setImportResult({ success: true, eventCount: data.eventCount, message: data.message })
       }
@@ -174,9 +174,9 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
           data: parsed,
         }),
       })
-      const result = await res.json()
+      const result = await res.json().catch(() => null)
       if (!res.ok) {
-        setRecipeImportResult({ success: false, error: result.error ?? 'Import failed' })
+        setRecipeImportResult({ success: false, error: result?.error ?? 'Import failed' })
       } else {
         setRecipeImportResult(result)
         if (result.imported > 0 || result.updated > 0) {
@@ -205,8 +205,8 @@ export function IntegrationsTab({ isAdmin, initialUmamiScriptUrl, initialUmamiSi
       if (res.ok) {
         setUmamiStatus({ type: 'success', message: 'Umami settings saved. Analytics will load on next page visit.' })
       } else {
-        const data = await res.json()
-        setUmamiStatus({ type: 'error', message: data.error ?? 'Failed to save.' })
+        const data = await res.json().catch(() => null)
+        setUmamiStatus({ type: 'error', message: data?.error ?? 'Failed to save.' })
       }
     } catch {
       setUmamiStatus({ type: 'error', message: 'Network error.' })

@@ -221,8 +221,8 @@ function ScrapeRecipeForm({
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        toast.error(err.error || 'Failed to scrape recipe')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error || 'Failed to scrape recipe')
         return
       }
 

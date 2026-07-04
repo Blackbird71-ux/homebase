@@ -113,13 +113,13 @@ export function AIAssistant({ open, onOpenChange }: AIAssistantProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text.trim() }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
 
       if (!res.ok) {
         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
           role: 'error',
-          text: data.error ?? 'Something went wrong.',
+          text: data?.error ?? 'Something went wrong.',
         }])
       } else {
         setMessages(prev => [...prev, {

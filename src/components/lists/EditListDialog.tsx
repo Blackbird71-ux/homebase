@@ -54,8 +54,8 @@ export function EditListDialog({
         toast.success(`"${list.name}" owner updated`)
         onOpenChange(false)
       } else {
-        const err = await res.json()
-        toast.error(err.error || 'Failed to update list')
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error || 'Failed to update list')
       }
     } finally {
       setLoading(false)

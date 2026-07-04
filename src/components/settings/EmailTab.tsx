@@ -91,7 +91,7 @@ export function EmailTab() {
     setReminderResult(null)
     try {
       const res = await fetch('/api/reminders/process', { method: 'POST' })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
       if (res.ok) {
         const { sent } = data as { sent: { chores: number; events: number; documents: number } }
         setReminderResult({
@@ -99,7 +99,7 @@ export function EmailTab() {
           message: `Sent ${sent.chores} chore, ${sent.events} event, and ${sent.documents} document reminder(s).`,
         })
       } else {
-        setReminderResult({ success: false, message: data.error ?? 'Failed to process reminders' })
+        setReminderResult({ success: false, message: data?.error ?? 'Failed to process reminders' })
       }
     } catch {
       setReminderResult({ success: false, message: 'Network error' })
@@ -122,10 +122,10 @@ export function EmailTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: testEmail }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
       setTestResult({
         success: res.ok,
-        message: data.message || data.error || 'Test completed',
+        message: data?.message || data?.error || 'Test completed',
       })
     } catch {
       setTestResult({ success: false, message: 'Network error' })

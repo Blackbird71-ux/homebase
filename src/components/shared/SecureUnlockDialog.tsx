@@ -59,12 +59,12 @@ export function SecureUnlockDialog({
       })
 
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => null)
         setAttempts((a) => a + 1)
         if (res.status === 403) {
           setError('Incorrect PIN. Please try again.')
         } else {
-          setError(data.error ?? 'Failed to unlock')
+          setError(data?.error ?? 'Failed to unlock')
         }
         return
       }

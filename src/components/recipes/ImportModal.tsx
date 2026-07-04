@@ -54,7 +54,7 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
       const fd = new FormData()
       files.forEach((f) => fd.append('files', f))
       const res = await fetch('/api/recipes/import', { method: 'POST', body: fd })
-      const data = await res.json() as { books?: BookResult[]; error?: string }
+      const data = (await res.json().catch(() => null) ?? {}) as { books?: BookResult[]; error?: string }
       if (!res.ok) {
         setError(data.error ?? 'Import failed')
         setStatus('idle')

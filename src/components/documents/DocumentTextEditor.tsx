@@ -48,8 +48,8 @@ export function DocumentTextEditor({
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error ?? 'Failed to save')
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error ?? 'Failed to save')
       }
 
       onContentSaved(editContent)

@@ -214,8 +214,8 @@ export function CategoryManager() {
         body: JSON.stringify({ key, category: trimmed, color: newCategoryColor }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to create category')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to create category')
       }
       const apiResponse = await res.json()
       const newCategory: Category = {
@@ -257,8 +257,8 @@ export function CategoryManager() {
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update category')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to update category')
       }
       const apiResponse = await res.json()
       const updatedCategory: Category = {
@@ -291,8 +291,8 @@ export function CategoryManager() {
         method: 'DELETE',
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to delete category')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to delete category')
       }
       setCategories(categories.filter(cat => cat.id !== selectedCategory.id))
       setDeleteOpen(false)

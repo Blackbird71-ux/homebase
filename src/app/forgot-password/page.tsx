@@ -24,8 +24,8 @@ export default function ForgotPasswordPage() {
           body: JSON.stringify({ email }),
         })
         if (!res.ok) {
-          const data = await res.json()
-          setError(data.error ?? 'Something went wrong. Please try again.')
+          const data = await res.json().catch(() => null)
+          setError(data?.error ?? 'Something went wrong. Please try again.')
           return
         }
         setSubmitted(true)

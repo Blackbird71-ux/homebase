@@ -31,7 +31,7 @@ export function GoogleCalendarCard({ googleConnected, googleEmail }: GoogleCalen
     setSyncing(true)
     try {
       const res = await fetch('/api/google-calendar/sync', { method: 'POST' })
-      const data = await res.json() as { synced?: number; skipped?: number; error?: string }
+      const data = (await res.json().catch(() => null) ?? {}) as { synced?: number; skipped?: number; error?: string }
       if (!res.ok) {
         toast.error(data.error ?? 'Sync failed. Please try again.')
       } else {

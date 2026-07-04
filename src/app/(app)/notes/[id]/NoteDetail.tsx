@@ -85,8 +85,8 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
       })
 
       if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || 'Incorrect PIN')
+        const err = await response.json().catch(() => null)
+        throw new Error(err?.error || 'Incorrect PIN')
       }
 
       setIsLocked(false)

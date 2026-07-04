@@ -36,8 +36,8 @@ export function FamilySettingsClient({
       if (res.ok) {
         toast.success('Settings saved. Sign out and back in to apply timezone changes.')
       } else {
-        const data = await res.json()
-        toast.error(data.error ?? 'Failed to save')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error ?? 'Failed to save')
       }
     } finally {
       setSaving(false)

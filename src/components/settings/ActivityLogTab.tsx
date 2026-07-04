@@ -101,9 +101,9 @@ export function ActivityLogTab() {
     setUndoing(entryId)
     try {
       const res = await fetch(`/api/audit-log/${entryId}`, { method: 'POST' })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        toast.error(data.error ?? 'Failed to undo')
+        toast.error(data?.error ?? 'Failed to undo')
       } else {
         toast.success(data.message)
         fetchLogs()
@@ -125,10 +125,10 @@ export function ActivityLogTab() {
     setBackingUp(true)
     try {
       const res = await fetch('/api/audit-log/backup', { method: 'POST' })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
 
       if (!res.ok) {
-        toast.error(data.error ?? 'Failed to backup audit log')
+        toast.error(data?.error ?? 'Failed to backup audit log')
         return
       }
 

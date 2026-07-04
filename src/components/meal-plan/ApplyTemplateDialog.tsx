@@ -79,8 +79,8 @@ export function ApplyTemplateDialog({
         onApplied()
         onOpenChange(false)
       } else {
-        const data = await res.json()
-        toast.error(data.error || 'Failed to apply template')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || 'Failed to apply template')
       }
     } catch {
       toast.error('Network error applying template')

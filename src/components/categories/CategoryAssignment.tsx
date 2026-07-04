@@ -104,8 +104,8 @@ export function CategoryAssignment({ ingredients, onAssignmentComplete }: Catego
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to save assignments')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to save assignments')
       }
 
       toast.success('Category assignments saved successfully')

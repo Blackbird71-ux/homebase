@@ -63,8 +63,8 @@ export function EventCategoryManager() {
         body: JSON.stringify({ name: newCategoryName.trim(), color: newCategoryColor }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to create category')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to create category')
       }
       const created = await res.json()
       setCategories([...categories, created])
@@ -93,8 +93,8 @@ export function EventCategoryManager() {
         body: JSON.stringify({ name: editCategoryName.trim(), color: editCategoryColor }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update category')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to update category')
       }
       const updated = await res.json()
       setCategories(categories.map(c => c.id === selectedCategory.id ? updated : c))
@@ -117,8 +117,8 @@ export function EventCategoryManager() {
         method: 'DELETE',
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to delete category')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to delete category')
       }
       setCategories(categories.filter(c => c.id !== selectedCategory.id))
       setDeleteOpen(false)

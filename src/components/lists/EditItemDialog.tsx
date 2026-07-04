@@ -142,8 +142,8 @@ export function EditItemDialog({
         onOpenChange(false)
         toast.success('Item updated')
       } else {
-        const data = await res.json()
-        toast.error(data.error || 'Failed to update item')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || 'Failed to update item')
       }
     } catch (error) {
       toast.error('Failed to update item')

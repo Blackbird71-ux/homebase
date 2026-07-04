@@ -124,8 +124,8 @@ export function FinanceTab() {
       if (res.ok) {
         toast.success('Financial year start month updated')
       } else {
-        const data = await res.json()
-        toast.error(data.error ?? 'Failed to save')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error ?? 'Failed to save')
       }
     } finally {
       setSavingFy(false)
@@ -143,8 +143,8 @@ export function FinanceTab() {
       if (res.ok) {
         toast.success(periodLockedUntil ? `Period locked until ${periodLockedUntil}` : 'Period lock cleared')
       } else {
-        const data = await res.json()
-        toast.error(data.error ?? 'Failed to save')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error ?? 'Failed to save')
       }
     } finally {
       setSavingLock(false)

@@ -479,8 +479,8 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
               body: JSON.stringify({ action: 'clone', templateId, listName }),
             })
             if (!res.ok) {
-              const err = await res.json()
-              throw new Error(err.error || 'Failed to clone template')
+              const err = await res.json().catch(() => null)
+              throw new Error(err?.error || 'Failed to clone template')
             }
             const newList = await res.json()
             handleCreated({ id: newList.id, name: newList.name, type: newList.type })

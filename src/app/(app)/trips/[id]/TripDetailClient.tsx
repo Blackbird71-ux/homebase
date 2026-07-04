@@ -525,8 +525,8 @@ function EditTripDialog({
         }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error ?? 'Failed to update trip')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? 'Failed to update trip')
       }
       const updated = await res.json()
       onUpdated({ ...trip, ...updated, packingList: trip.packingList, packingEntries: trip.packingEntries })

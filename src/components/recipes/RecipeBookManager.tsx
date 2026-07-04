@@ -58,8 +58,8 @@ export function RecipeBookManager() {
         body: JSON.stringify({ name: newBookName.trim() }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to create book')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to create book')
       }
       const book = await res.json() as { id: string; name: string }
       setBooks((prev) => [...prev, { ...book, hidden: false, recipeCount: 0 }].sort((a, b) => a.name.localeCompare(b.name)))
@@ -86,8 +86,8 @@ export function RecipeBookManager() {
         body: JSON.stringify({ name: editBookName.trim() }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to rename book')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to rename book')
       }
       const updated = await res.json() as { id: string; name: string }
       setBooks((prev) =>
@@ -127,8 +127,8 @@ export function RecipeBookManager() {
     try {
       const res = await fetch(`/api/recipe-books/${selectedBook.id}`, { method: 'DELETE' })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to delete book')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to delete book')
       }
       setBooks((prev) => prev.filter((b) => b.id !== selectedBook.id))
       setDeleteOpen(false)

@@ -95,8 +95,8 @@ export function AISettingsTab() {
         }
         setStatus({ type: 'success', message: 'AI settings saved.' })
       } else {
-        const data = await res.json()
-        setStatus({ type: 'error', message: data.error ?? 'Failed to save.' })
+        const data = await res.json().catch(() => null)
+        setStatus({ type: 'error', message: data?.error ?? 'Failed to save.' })
       }
     } catch {
       setStatus({ type: 'error', message: 'Network error.' })

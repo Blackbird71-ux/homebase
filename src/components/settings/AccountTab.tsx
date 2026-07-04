@@ -108,8 +108,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
       if (res.ok) {
         setNameStatus({ type: 'success', message: 'Name updated.' })
       } else {
-        const data = await res.json()
-        setNameStatus({ type: 'error', message: data.error ?? 'Failed to update name.' })
+        const data = await res.json().catch(() => null)
+        setNameStatus({ type: 'error', message: data?.error ?? 'Failed to update name.' })
       }
     } catch {
       setNameStatus({ type: 'error', message: 'Network error.' })
@@ -137,8 +137,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         })
       } else {
         setShareLocation(!next)
-        const data = await res.json()
-        setLocationStatus({ type: 'error', message: data.error ?? 'Failed to update location sharing.' })
+        const data = await res.json().catch(() => null)
+        setLocationStatus({ type: 'error', message: data?.error ?? 'Failed to update location sharing.' })
       }
     } catch {
       setShareLocation(!next)
@@ -175,8 +175,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         setNewPassword('')
         setConfirmPassword('')
       } else {
-        const data = await res.json()
-        setPasswordStatus({ type: 'error', message: data.error ?? 'Failed to update password.' })
+        const data = await res.json().catch(() => null)
+        setPasswordStatus({ type: 'error', message: data?.error ?? 'Failed to update password.' })
       }
     } catch {
       setPasswordStatus({ type: 'error', message: 'Network error.' })
@@ -198,8 +198,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
       if (res.ok) {
         setFamilyNameStatus({ type: 'success', message: 'Family name updated.' })
       } else {
-        const data = await res.json()
-        setFamilyNameStatus({ type: 'error', message: data.error ?? 'Failed to update family name.' })
+        const data = await res.json().catch(() => null)
+        setFamilyNameStatus({ type: 'error', message: data?.error ?? 'Failed to update family name.' })
       }
     } catch {
       setFamilyNameStatus({ type: 'error', message: 'Network error.' })
@@ -221,8 +221,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         router.refresh()
         setTimezoneStatus({ type: 'success', message: 'Timezone updated. All date/time displays now use the new timezone.' })
       } else {
-        const data = await res.json()
-        setTimezoneStatus({ type: 'error', message: data.error ?? 'Failed to update timezone.' })
+        const data = await res.json().catch(() => null)
+        setTimezoneStatus({ type: 'error', message: data?.error ?? 'Failed to update timezone.' })
       }
     } catch {
       setTimezoneStatus({ type: 'error', message: 'Network error.' })
@@ -300,8 +300,8 @@ export function AccountTab({ user, supportedTimezones }: AccountTabProps) {
         setResetPassword('')
         setTimeout(() => { setResetTarget(null); setResetStatus(null) }, 2000)
       } else {
-        const data = await res.json()
-        setResetStatus({ type: 'error', message: data.error ?? 'Failed to reset password.' })
+        const data = await res.json().catch(() => null)
+        setResetStatus({ type: 'error', message: data?.error ?? 'Failed to reset password.' })
       }
     } catch {
       setResetStatus({ type: 'error', message: 'Network error.' })

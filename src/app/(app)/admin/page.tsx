@@ -401,7 +401,7 @@ function DockerLogViewer() {
   const fetchDockerLogs = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/docker-logs?n=${n}`)
-      const data = await res.json() as { lines?: string; error?: string }
+      const data = (await res.json().catch(() => null) ?? {}) as { lines?: string; error?: string }
       if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
       setText(data.lines ?? '')
       setError('')
@@ -550,7 +550,7 @@ function NasLogViewer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ host, username, password, port: Number(port) || 22, n }),
       })
-      const data = await res.json() as { output?: string; error?: string }
+      const data = (await res.json().catch(() => null) ?? {}) as { output?: string; error?: string }
       if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
       setOutput(data.output ?? '')
       // Scroll to bottom after load
@@ -719,8 +719,8 @@ function CreateFamilyDialog({
           copyRecipesFromFamilyId: copyRecipes ? myFamilyId : undefined,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Failed')
       setResult({ inviteCode: data.inviteCode, recipesCopied: data.recipesCopied })
       onCreated()
     } catch (e) {
@@ -825,8 +825,8 @@ function FamilyCard({ family }: { family: FamilyRow }) {
     setLoadingUsers(true)
     try {
       const res = await fetch(`/api/admin/families/${family.id}/users`)
-      const data = await res.json()
-      setUsers(data)
+      const data = await res.json().catch(() => null)
+      setUsers(Array.isArray(data) ? data : [])
     } finally {
       setLoadingUsers(false)
     }
@@ -842,8 +842,8 @@ function FamilyCard({ family }: { family: FamilyRow }) {
     setGeneratingInvite(true)
     try {
       const res = await fetch(`/api/admin/families/${family.id}/invite`, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Failed')
       setInviteCode(data.inviteCode)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to generate invite')
@@ -864,8 +864,8 @@ function FamilyCard({ family }: { family: FamilyRow }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newPassword }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Failed')
       toast.success('Password reset successfully')
       setResetTargetId(null)
       setNewPassword('')
@@ -982,9 +982,9 @@ function FamiliesTab() {
         fetch('/api/auth/session'),
       ])
       if (familiesRes.status === 403) { setForbidden(true); return }
-      const data = await familiesRes.json()
-      setFamilies(data)
-      const session = await sessionRes.json()
+      const data = await familiesRes.json().catch(() => null)
+      setFamilies(Array.isArray(data) ? data : [])
+      const session = await sessionRes.json().catch(() => null)
       setMyFamilyId(session?.user?.familyId ?? null)
     } finally {
       setLoading(false)
@@ -1040,8 +1040,8 @@ function PrivateEventsPanel() {
     setError(null)
     try {
       const res = await fetch('/api/admin/events/private')
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Failed')
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error ?? 'Failed')
       setData(json)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
@@ -1119,8 +1119,8 @@ export default function AdminPage() {
 
   async function runSpawnNow() {
     const res = await fetch('/api/admin/spawn-now', { method: 'POST' })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? 'Spawn failed')
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(data?.error ?? 'Spawn failed')
     return data as SpawnResponse
   }
 
@@ -1130,8 +1130,8 @@ export default function AdminPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ limit: 100 }),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? 'Warm failed')
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(data?.error ?? 'Warm failed')
     return data as WarmResponse
   }
 

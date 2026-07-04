@@ -90,9 +90,9 @@ export function PantryClient({ initialItems }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, location: addLocation }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        toast.error(data.error ?? 'Failed to add item')
+        toast.error(data?.error ?? 'Failed to add item')
         return
       }
       setItems(prev => [...prev, { ...data, expiryDate: data.expiryDate ?? null }])
@@ -136,8 +136,8 @@ export function PantryClient({ initialItems }: Props) {
         body: JSON.stringify(patch),
       })
       if (!res.ok) {
-        const data = await res.json()
-        toast.error(data.error ?? 'Failed to update')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error ?? 'Failed to update')
         return false
       }
       return true

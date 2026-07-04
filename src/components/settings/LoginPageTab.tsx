@@ -28,8 +28,8 @@ export function LoginPageTab({ initialTagline, initialVersion }: LoginPageTabPro
       if (res.ok) {
         toast.success('Login page updated.')
       } else {
-        const data = await res.json()
-        toast.error(data.error ?? 'Failed to save')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error ?? 'Failed to save')
       }
     } finally {
       setSaving(false)

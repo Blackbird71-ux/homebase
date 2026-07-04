@@ -179,8 +179,8 @@ export function TagManager() {
         }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to create tag')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to create tag')
       }
       const newTag = await res.json()
       setTags(prev => [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name)))
@@ -215,8 +215,8 @@ export function TagManager() {
         }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update tag')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to update tag')
       }
       const updatedTag = await res.json()
       setTags(tags.map(tag => tag.id === selectedTag.id
@@ -241,8 +241,8 @@ export function TagManager() {
         method: 'DELETE',
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to delete tag')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to delete tag')
       }
       setTags(tags.filter(tag => tag.id !== selectedTag.id))
       setDeleteOpen(false)

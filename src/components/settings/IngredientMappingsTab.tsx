@@ -82,8 +82,8 @@ export function IngredientMappingsTab() {
         setNewMapping({ ingredient: '', category: categories[0]?.category || '' })
         toast.success('Mapping added')
       } else {
-        const error = await res.json()
-        toast.error(error.error || 'Failed to add mapping')
+        const error = await res.json().catch(() => null)
+        toast.error(error?.error || 'Failed to add mapping')
       }
     } catch (error) {
       toast.error('Failed to add mapping')

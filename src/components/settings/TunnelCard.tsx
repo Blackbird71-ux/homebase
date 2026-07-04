@@ -92,8 +92,8 @@ export function TunnelCard() {
     try {
       const res = await fetch('/api/tunnel/status')
       if (!res.ok) {
-        const data = await res.json()
-        setError(data.error ?? 'Failed to load tunnel status')
+        const data = await res.json().catch(() => null)
+        setError(data?.error ?? 'Failed to load tunnel status')
         return null
       }
       const data: TunnelStatus = await res.json()
@@ -116,8 +116,8 @@ export function TunnelCard() {
     setError(null)
     try {
       const res = await fetch('/api/tunnel/login', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error); return }
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setError(data?.error ?? 'Something went wrong'); return }
       setLoginUrl(data.url)
       setLoginPolling(true)
       pollForLogin()
@@ -146,8 +146,8 @@ export function TunnelCard() {
     setError(null)
     try {
       const res = await fetch('/api/tunnel/create', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error); return }
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setError(data?.error ?? 'Something went wrong'); return }
       setCreatedTunnelId(data.tunnelId)
       setTunnelIdInput(data.tunnelId)
       await fetchStatus()
@@ -167,8 +167,8 @@ export function TunnelCard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tunnelId: tunnelIdInput.trim(), hostname }),
       })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error); return }
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setError(data?.error ?? 'Something went wrong'); return }
       await fetchStatus()
     } catch {
       setError('Network error')
@@ -183,8 +183,8 @@ export function TunnelCard() {
     setError(null)
     try {
       const res = await fetch('/api/tunnel/restart', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error); return }
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setError(data?.error ?? 'Something went wrong'); return }
       setRestartDone(true)
       await fetchStatus()
     } catch {

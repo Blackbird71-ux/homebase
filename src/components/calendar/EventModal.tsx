@@ -251,8 +251,8 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
 
       setLoading(false)
       if (!res.ok) {
-        const data = await res.json()
-        setError(data.error ?? 'Failed to save event')
+        const data = await res.json().catch(() => null)
+        setError(data?.error ?? 'Failed to save event')
       } else {
         await onSave()
         onClose()
@@ -317,8 +317,8 @@ export function EventModal({ event, defaultDate, open, currentUserId, onClose, o
       const res = await fetch(url, { method: 'DELETE' })
       setLoading(false)
       if (!res.ok) {
-        const data = await res.json()
-        setError(data.error ?? 'Failed to delete event')
+        const data = await res.json().catch(() => null)
+        setError(data?.error ?? 'Failed to delete event')
         return
       }
       setShowDeleteConfirm(false)

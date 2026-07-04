@@ -72,8 +72,8 @@ export function TripBudgetSection({
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error ?? 'Failed to update budget')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? 'Failed to update budget')
       }
 
       onBudgetUpdated(estBudget || null, actualCost, JSON.stringify(breakdown))

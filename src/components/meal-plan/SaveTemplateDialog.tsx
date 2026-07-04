@@ -47,8 +47,8 @@ export function SaveTemplateDialog({
         setName('')
         onOpenChange(false)
       } else {
-        const data = await res.json()
-        toast.error(data.error || 'Failed to save template')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || 'Failed to save template')
       }
     } catch {
       toast.error('Network error saving template')

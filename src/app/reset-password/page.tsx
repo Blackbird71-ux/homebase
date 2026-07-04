@@ -45,9 +45,9 @@ function ResetPasswordForm() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token, password }),
         })
-        const data = await res.json()
+        const data = await res.json().catch(() => null)
         if (!res.ok) {
-          setError(data.error ?? 'Something went wrong. Please try again.')
+          setError(data?.error ?? 'Something went wrong. Please try again.')
           return
         }
         router.push('/login?reset=1')

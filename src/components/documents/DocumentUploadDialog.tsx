@@ -115,8 +115,8 @@ export function DocumentUploadDialog({ open, onOpenChange, onUploaded }: Documen
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error ?? 'Upload failed')
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error ?? 'Upload failed')
       }
 
       const doc = await res.json()

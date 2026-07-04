@@ -53,10 +53,10 @@ function ResetPinForm() {
         body: JSON.stringify({ token, newPin: pin }),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
 
       if (!res.ok) {
-        setError(data.error || 'Failed to reset PIN')
+        setError(data?.error || 'Failed to reset PIN')
         return
       }
 

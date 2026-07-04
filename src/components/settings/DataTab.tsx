@@ -198,8 +198,8 @@ export function DataTab({ coziImports, userEmail }: DataTabProps) {
       if (res.ok) {
         router.push('/login')
       } else {
-        const data = await res.json()
-        setDeleteError(data.error ?? 'Failed to delete account.')
+        const data = await res.json().catch(() => null)
+        setDeleteError(data?.error ?? 'Failed to delete account.')
       }
     } catch {
       setDeleteError('Network error.')

@@ -31,10 +31,10 @@ function RegisterForm() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password, familyName, inviteCode }),
     })
-    const data = await res.json()
+    const data = await res.json().catch(() => null)
     setLoading(false)
     if (!res.ok) {
-      setError(data.error ?? 'Registration failed')
+      setError(data?.error ?? 'Registration failed')
     } else {
       router.push('/login?registered=1')
     }

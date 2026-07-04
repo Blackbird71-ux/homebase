@@ -234,8 +234,8 @@ export function AppearanceTab({
         window.dispatchEvent(new Event('appearance-updated'))
         setStatus({ type: 'success', message: 'Settings saved.' })
       } else {
-        const data = await res.json()
-        setStatus({ type: 'error', message: data.error ?? 'Failed to save.' })
+        const data = await res.json().catch(() => null)
+        setStatus({ type: 'error', message: data?.error ?? 'Failed to save.' })
       }
     } catch {
       setStatus({ type: 'error', message: 'Network error.' })
