@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -6,7 +7,7 @@ import { todayStringInTz, formatInTz } from '@/lib/timezone'
 import { monthRangeInTz } from '@/lib/finance-fy'
 import { postedNonReversedWhere } from '@/lib/finance-journal-filters'
 
-export async function GET(req: Request) {
+async function _GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -119,3 +120,5 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ monthly, categoryBreakdown })
 }
+
+export const GET = withRouteErrors(_GET)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -24,7 +25,7 @@ import { postAmortisationPeriod } from '@/lib/finance-prepayment'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-export async function GET(_request: NextRequest) {
+async function _GET(_request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -101,7 +102,7 @@ export async function GET(_request: NextRequest) {
   })
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -145,3 +146,6 @@ export async function POST(request: NextRequest) {
   const message = lastErr instanceof Error ? lastErr.message : 'Reference collision — please retry'
   return NextResponse.json({ error: message }, { status: 409 })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

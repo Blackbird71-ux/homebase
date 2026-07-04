@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,7 +27,7 @@ export async function GET() {
   return NextResponse.json(enriched)
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
   )
 }
 
-export async function PUT(request: NextRequest) {
+async function _PUT(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -94,3 +95,7 @@ export async function PUT(request: NextRequest) {
 
   return NextResponse.json(member)
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)
+export const PUT = withRouteErrors(_PUT)

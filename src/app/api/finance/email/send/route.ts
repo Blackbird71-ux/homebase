@@ -1,6 +1,7 @@
 // src/app/api/finance/email/send/route.ts
 // POST — manually send a report email (with optional snapshot persistence)
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -10,7 +11,7 @@ import { currentFyContextInTz, fyLabel } from '@/lib/finance-fy'
 import { sendReportEmail } from '@/lib/emailReportService'
 import { DEFAULT_TIMEZONE, todayStringInTz } from '@/lib/timezone'
 
-export async function POST(request: Request) {
+async function _POST(request: Request) {
   try {
     const session = await auth()
     const user = session?.user as SessionUser | undefined
@@ -134,3 +135,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

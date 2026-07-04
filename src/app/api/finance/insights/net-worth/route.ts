@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -13,7 +14,7 @@ import { computeBalanceSheet } from '@/lib/finance-balance-sheet'
 // past months as at their local month-end, the current month as at today so
 // the latest point always matches the Balance Sheet headline.
 
-export async function GET(req: Request) {
+async function _GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -47,3 +48,5 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ points })
 }
+
+export const GET = withRouteErrors(_GET)

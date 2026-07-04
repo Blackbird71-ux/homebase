@@ -1,12 +1,13 @@
 // src/app/api/finance/snapshots/[id]/route.ts
 // GET — retrieve a single finance snapshot with full report data
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(
+async function _GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -48,3 +49,5 @@ export async function GET(
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)

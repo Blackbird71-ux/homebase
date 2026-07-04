@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -41,7 +42,7 @@ function mapFrequency(freq: string): IncomeStream['frequency'] {
  * returned — i.e. we deduplicate by (name + entityId) so recurring series
  * appear as a single stream rather than every occurrence.
  */
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -115,7 +116,7 @@ export async function GET() {
  * FinanceIncomeEntry via GET above. We keep the endpoint so existing client
  * code that calls PUT doesn't break; it returns the current stream list.
  */
-export async function PUT(_request: NextRequest) {
+async function _PUT(_request: NextRequest) {
   // Re-read and return the current live list (ignore the request body)
   const session = await auth()
   const user = session?.user as SessionUser | undefined
@@ -146,3 +147,6 @@ export async function PUT(_request: NextRequest) {
   }))
   return NextResponse.json(streams)
 }
+
+export const GET = withRouteErrors(_GET)
+export const PUT = withRouteErrors(_PUT)

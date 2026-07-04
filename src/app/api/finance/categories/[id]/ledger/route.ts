@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -81,7 +82,7 @@ function tzMidnight(dateStr: string, tz: string): Date {
 // FinanceTransaction is the cache for the transactions page only.
 // Single source of truth = GL.
 
-export async function GET(
+async function _GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -227,3 +228,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to load ledger' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)

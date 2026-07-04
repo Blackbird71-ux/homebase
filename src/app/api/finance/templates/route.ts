@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -15,7 +16,7 @@ function parseDates(body: Record<string, unknown>) {
   }
 }
 
-export async function GET(req: NextRequest) {
+async function _GET(req: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(templates)
 }
 
-export async function POST(req: NextRequest) {
+async function _POST(req: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -41,3 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 422 })
   }
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

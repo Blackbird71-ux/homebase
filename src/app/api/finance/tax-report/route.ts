@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -31,7 +32,7 @@ import { deriveGlActualTaxFields } from '@/lib/finance-tax-report'
 // "glActuals" (from FinanceJournalLine). The page component must use
 // glActuals for all statutory figures.
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -290,3 +291,5 @@ export async function GET(request: NextRequest) {
     source: 'gl',  // confirms this response is GL-sourced — useful for debugging
   })
 }
+
+export const GET = withRouteErrors(_GET)

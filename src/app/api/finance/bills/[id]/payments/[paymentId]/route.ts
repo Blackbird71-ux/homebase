@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -22,7 +23,7 @@ import { reverseJournalEntry } from '@/lib/finance-posting'
  * 20260543 have journalEntryId=NULL. In that case the reversal step is skipped
  * — existing behaviour preserved, no regression for old data.
  */
-export async function DELETE(
+async function _DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; paymentId: string }> },
 ) {
@@ -130,3 +131,5 @@ export async function DELETE(
     )
   }
 }
+
+export const DELETE = withRouteErrors(_DELETE)

@@ -1,6 +1,7 @@
 // src/app/api/finance/export/excel/route.ts
 // Excel download — uses SheetJS (xlsx) to build multi-sheet workbook
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -18,7 +19,7 @@ const GRAND_TOTAL_BG = 'BDD7EE'
 const GREEN_FONT = '375623'
 const RED_FONT = 'C00000'
 
-export async function GET(req: NextRequest) {
+async function _GET(req: NextRequest) {
   try {
     const session = await auth()
     const user = session?.user as SessionUser | undefined
@@ -299,3 +300,5 @@ function applyNettStyles(ws: XLSX.WorkSheet, data: any[][], monthCount: number) 
     }
   }
 }
+
+export const GET = withRouteErrors(_GET)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -7,7 +8,7 @@ import { createAuditLog } from '@/lib/audit-log'
 // PATCH /api/finance/drafts/[id]
 // Edits a draft's basic fields and nulls spawnedSnapshotHash so the draft
 // is treated as "changed" by bulkApproveUnchanged.
-export async function PATCH(
+async function _PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -176,3 +177,5 @@ export async function PATCH(
     return NextResponse.json({ error: message }, { status: 422 })
   }
 }
+
+export const PATCH = withRouteErrors(_PATCH)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -63,7 +64,7 @@ function currentBasQuarter(fyStartMonth: number, tz: string) {
   return basQuarterRange(fyYear, fyStartMonth, qIdx, tz)
 }
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -230,3 +231,5 @@ export async function GET(request: NextRequest) {
     entityId: entityId ?? null,
   })
 }
+
+export const GET = withRouteErrors(_GET)

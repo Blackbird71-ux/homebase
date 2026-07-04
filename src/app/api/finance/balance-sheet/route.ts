@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -10,7 +11,7 @@ import { computeBalanceSheet } from '@/lib/finance-balance-sheet'
 // Balance Sheet as at a specific date. All computation lives in
 // src/lib/finance-balance-sheet.ts (shared with the net-worth trend report).
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -37,3 +38,5 @@ export async function GET(request: NextRequest) {
     ...balanceSheet,
   })
 }
+
+export const GET = withRouteErrors(_GET)

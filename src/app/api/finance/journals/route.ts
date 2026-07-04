@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -88,7 +89,7 @@ async function reverseEntryWithRetry(
 //               'all'    = no type restriction — forensic catch-all including
 //                          auto_transaction, opening_balance, and orphaned entries.
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
 // ── POST /api/finance/journals ────────────────────────────────────────────────
 // Create a new journal entry (draft or post immediately)
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -198,7 +199,7 @@ export async function POST(request: NextRequest) {
 // ── PUT /api/finance/journals ─────────────────────────────────────────────────
 // Update a draft entry (posted entries cannot be edited)
 
-export async function PUT(request: NextRequest) {
+async function _PUT(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -271,7 +272,7 @@ export async function PUT(request: NextRequest) {
 // action: 'post' — post a draft to the ledger
 // action: 'reverse' — create a reversal of a posted entry
 
-export async function PATCH(request: NextRequest) {
+async function _PATCH(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -604,7 +605,7 @@ export async function PATCH(request: NextRequest) {
 //
 // Posted entries that are not voided and not reversals cannot be deleted.
 
-export async function DELETE(request: NextRequest) {
+async function _DELETE(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -720,3 +721,9 @@ export async function DELETE(request: NextRequest) {
     { status: 400 },
   )
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)
+export const PUT = withRouteErrors(_PUT)
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

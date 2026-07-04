@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -15,7 +16,7 @@ const ENTRY_INCLUDE = {
 }
 
 // GET /api/finance/journals/[id]
-export async function GET(
+async function _GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -32,3 +33,5 @@ export async function GET(
   }
   return NextResponse.json(entry)
 }
+
+export const GET = withRouteErrors(_GET)

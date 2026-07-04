@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -7,7 +8,7 @@ import { setOpeningBalance } from '@/lib/finance-opening-balance'
 // POST /api/finance/accounts/opening-balance
 // Set or update the opening balance for an existing account.
 // amount = null or 0 → clears the opening balance transaction.
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -54,3 +55,5 @@ export async function POST(request: NextRequest) {
       : `Opening balance set to ${parsedAmount}`,
   })
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -18,7 +19,7 @@ export async function GET() {
   return NextResponse.json(vendors)
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(vendor, { status: 201 })
 }
 
-export async function PUT(request: NextRequest) {
+async function _PUT(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -79,7 +80,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json(vendor)
 }
 
-export async function DELETE(request: NextRequest) {
+async function _DELETE(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -95,3 +96,8 @@ export async function DELETE(request: NextRequest) {
   await prisma.financeVendor.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)
+export const PUT = withRouteErrors(_PUT)
+export const DELETE = withRouteErrors(_DELETE)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -25,7 +26,7 @@ import { getPeriodBounds, type PeriodMode } from '@/lib/finance-period'
 // the same helper the client useProfitLoss hook uses, so server and client agree on
 // the period for any anchor (including back-navigated FYs).
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -155,3 +156,5 @@ export async function GET(request: NextRequest) {
     source: 'gl',   // Confirms this is GL-only data — useful for debugging
   })
 }
+
+export const GET = withRouteErrors(_GET)

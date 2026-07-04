@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -25,7 +26,7 @@ import { sumControlAccountLines } from '@/lib/finance-subledger'
 // even when a journal carries a custom split (§12.10). The nominal amount is
 // used only as a fallback for legacy records with no journal.
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -380,3 +381,5 @@ async function buildArStatement(
     closingBalance,
   })
 }
+
+export const GET = withRouteErrors(_GET)

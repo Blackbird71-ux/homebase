@@ -1,12 +1,13 @@
 // src/app/api/finance/snapshots/route.ts
 // GET — list finance snapshots for the current family
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const session = await auth()
     const user = session?.user as SessionUser | undefined
@@ -42,3 +43,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)

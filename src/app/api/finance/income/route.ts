@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -65,7 +66,7 @@ async function upsertIncomeJournalEntry(
   })
 }
 
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -84,7 +85,7 @@ export async function GET() {
   return NextResponse.json(entries)
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -210,7 +211,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(entry, { status: 201 })
 }
 
-export async function PUT(request: NextRequest) {
+async function _PUT(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -442,7 +443,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json(finalEntry ?? entry)
 }
 
-export async function DELETE(request: NextRequest) {
+async function _DELETE(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -525,7 +526,7 @@ export async function DELETE(request: NextRequest) {
   return NextResponse.json({ success: true })
 }
 
-export async function PATCH(request: NextRequest) {
+async function _PATCH(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -1263,3 +1264,9 @@ export async function PATCH(request: NextRequest) {
   const incomeResult = finalEntry ?? entry
   return NextResponse.json(incomePeriodWarning ? { ...incomeResult, periodWarning: incomePeriodWarning } : incomeResult)
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)
+export const PUT = withRouteErrors(_PUT)
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

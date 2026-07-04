@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -11,7 +12,7 @@ import { setCategoryOpeningBalance } from '@/lib/finance-opening-balance'
 // amount = null or 0 clears the opening balance.
 // amount > 0 = normal balance (asset with funds, liability with debt owed, equity in credit)
 // amount < 0 = abnormal balance (rare; e.g. an asset that is overdrawn)
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -72,3 +73,5 @@ export async function POST(request: NextRequest) {
       : `Opening balance set to ${parsedAmount} for ${category.name}`,
   })
 }
+
+export const POST = withRouteErrors(_POST)

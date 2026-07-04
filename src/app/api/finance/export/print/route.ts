@@ -1,6 +1,7 @@
 // src/app/api/finance/export/print/route.ts
 // Self-contained HTML page suitable for printing — no external CSS/JS
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -14,7 +15,7 @@ function fmt(n: number): string {
   return formatCurrency(n)
 }
 
-export async function GET(req: NextRequest) {
+async function _GET(req: NextRequest) {
   try {
     const session = await auth()
     const user = session?.user as SessionUser | undefined
@@ -225,3 +226,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)

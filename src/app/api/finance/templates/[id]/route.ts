@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -7,7 +8,7 @@ import {
   listTemplates,
 } from '@/lib/finance-recurring-template-service'
 
-export async function GET(
+async function _GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -37,7 +38,7 @@ function parseDates(body: Record<string, unknown>) {
   return out
 }
 
-export async function PATCH(
+async function _PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -55,7 +56,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function _DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -71,3 +72,7 @@ export async function DELETE(
     return NextResponse.json({ error: message }, { status: 422 })
   }
 }
+
+export const GET = withRouteErrors(_GET)
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

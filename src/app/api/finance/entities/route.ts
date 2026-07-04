@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(entities)
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(entity, { status: 201 })
 }
 
-export async function PUT(request: NextRequest) {
+async function _PUT(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -114,7 +115,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json(entity)
 }
 
-export async function DELETE(request: NextRequest) {
+async function _DELETE(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -132,3 +133,8 @@ export async function DELETE(request: NextRequest) {
   await prisma.financeEntity.update({ where: { id }, data: { isActive: false } })
   return NextResponse.json({ success: true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)
+export const PUT = withRouteErrors(_PUT)
+export const DELETE = withRouteErrors(_DELETE)

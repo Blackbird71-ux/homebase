@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -71,7 +72,7 @@ async function upsertBillDraftJournal(
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -96,7 +97,7 @@ export async function GET() {
 }
 
 // ── POST ──────────────────────────────────────────────────────────────────────
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -259,7 +260,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ── PUT ───────────────────────────────────────────────────────────────────────
-export async function PUT(request: NextRequest) {
+async function _PUT(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -515,7 +516,7 @@ export async function PUT(request: NextRequest) {
 }
 
 // ── DELETE ────────────────────────────────────────────────────────────────────
-export async function DELETE(request: NextRequest) {
+async function _DELETE(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -606,7 +607,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
-export async function PATCH(request: NextRequest) {
+async function _PATCH(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -998,3 +999,9 @@ export async function PATCH(request: NextRequest) {
   const bill = await prisma.financeRecurringBill.update({ where: { id }, data: updateData, include: BILL_INCLUDE })
   return NextResponse.json({ ...bill, isGlPosted: (bill as any).journalEntry?.isPosted === true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)
+export const PUT = withRouteErrors(_PUT)
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

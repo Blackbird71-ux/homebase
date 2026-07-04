@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -39,7 +40,7 @@ const PAYMENT_INCLUDE = {
  * GET /api/finance/bills/[id]/payments
  * Returns all payments for a bill, ordered by paymentDate desc.
  */
-export async function GET(
+async function _GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -81,7 +82,7 @@ export async function GET(
  *                         (suspense) to allocate to a real account later.
  *   notes        string?
  */
-export async function POST(
+async function _POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -212,3 +213,6 @@ export async function POST(
     { status: 201 },
   )
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

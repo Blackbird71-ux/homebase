@@ -5,6 +5,7 @@
 // bill/expense form. The actual ledger write goes through the existing posting
 // helpers unchanged.
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -15,7 +16,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 
 const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -82,3 +83,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json(result.data)
 }
+
+export const POST = withRouteErrors(_POST)

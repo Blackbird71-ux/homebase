@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -15,7 +16,7 @@ import { localMidnightToUtc } from '@/lib/timezone'
 //   to        ISO date string for the last day of the range  (e.g. "2026-06-30")
 //   entityId  optional — filter to a specific entity
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -138,3 +139,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(result)
 }
+
+export const GET = withRouteErrors(_GET)

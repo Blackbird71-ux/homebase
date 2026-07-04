@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { cancelDraft } from '@/lib/finance-draft-approval-service'
 import type { TemplateKind } from '@/lib/finance-recurring-template-service'
 
-export async function POST(
+async function _POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -26,3 +27,5 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 422 })
   }
 }
+
+export const POST = withRouteErrors(_POST)
