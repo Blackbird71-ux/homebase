@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic'
  * we must NOT spawn our own cloudflared here, or two instances would run (the
  * supervisor would start one too). Just signal the PID and let it come back.
  */
-export async function POST() {
+async function _POST() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -53,3 +54,5 @@ export async function POST() {
     readyConnections: ready.readyConnections,
   })
 }
+
+export const POST = withRouteErrors(_POST)

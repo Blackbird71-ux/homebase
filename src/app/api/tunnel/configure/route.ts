@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { writeFileSync } from 'fs'
 import { auth } from '@/lib/auth'
@@ -5,7 +6,7 @@ import type { SessionUser } from '@/types'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,3 +37,5 @@ ingress:
     return NextResponse.json({ error: `Failed to write config: ${message}` }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

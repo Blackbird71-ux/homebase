@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
-export async function DELETE(
+async function _DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -30,3 +31,5 @@ export async function DELETE(
   
   return NextResponse.json({ success: true })
 }
+
+export const DELETE = withRouteErrors(_DELETE)

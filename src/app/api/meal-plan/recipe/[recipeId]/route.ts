@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
-export async function DELETE(
+async function _DELETE(
   _req: Request,
   { params }: { params: Promise<{ recipeId: string }> }
 ) {
@@ -33,3 +34,5 @@ export async function DELETE(
   await prisma.mealPlanRecipe.delete({ where: { id: recipeId } })
   return NextResponse.json({ mealPlanDeleted: false, mealPlanId })
 }
+
+export const DELETE = withRouteErrors(_DELETE)

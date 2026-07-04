@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -6,7 +7,7 @@ import { restockPantryItems } from '@/lib/pantry'
 // Bulk "we just bought these": flips matching pantry items to stocked and
 // creates new stocked items for the rest. Called from the shopping-list
 // checkoff prompt.
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -20,3 +21,5 @@ export async function POST(req: Request) {
   const result = await restockPantryItems(user.familyId, names)
   return NextResponse.json(result)
 }
+
+export const POST = withRouteErrors(_POST)

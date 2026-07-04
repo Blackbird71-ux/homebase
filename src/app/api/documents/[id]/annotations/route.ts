@@ -2,6 +2,7 @@
 // API routes for reading and writing PDF annotation data.
 // Annotations are stored as sidecar JSON files alongside the PDF on disk.
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -44,7 +45,7 @@ async function checkAccess(documentId: string, user: SessionUser): Promise<{ ok:
 // ─── GET /api/documents/[id]/annotations ─────────────────────────────────────
 // Returns the annotation set for a document. Returns empty set if none exist.
 
-export async function GET(
+async function _GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -78,7 +79,7 @@ export async function GET(
 // ─── PUT /api/documents/[id]/annotations ─────────────────────────────────────
 // Saves (overwrites) the annotation set for a document.
 
-export async function PUT(
+async function _PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -129,3 +130,6 @@ export async function PUT(
     return NextResponse.json({ error: 'Failed to save annotations' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)
+export const PUT = withRouteErrors(_PUT)

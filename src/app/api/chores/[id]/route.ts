@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -6,7 +7,7 @@ import { createAuditLog } from '@/lib/audit-log'
 import { calculateNextDueDateFromNow } from '@/lib/chore-helpers'
 import { todayBoundsInTz } from '@/lib/timezone'
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function _PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -118,7 +119,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   })
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function _DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -144,3 +145,6 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   return NextResponse.json({ message: 'Deleted' })
 }
+
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -6,7 +7,7 @@ import { execSync } from 'child_process'
 const BACKUP_DIR = process.env.BACKUP_DIR || '/data/backups'
 const BACKUP_SCRIPT = process.env.BACKUP_SCRIPT || '/app/scripts/backup-db.sh'
 
-export async function POST() {
+async function _POST() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -27,3 +28,5 @@ export async function POST() {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -6,7 +7,7 @@ import { todayBoundsInTz } from '@/lib/timezone'
 import { buildChoreSchedule, choreScheduleWhere } from '@/lib/chore-helpers'
 import { jsonWithETag } from '@/lib/http-cache'
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -42,3 +43,5 @@ export async function GET(request: NextRequest) {
 
   return jsonWithETag(request, { schedule, today: todayStart.toISOString() })
 }
+
+export const GET = withRouteErrors(_GET)

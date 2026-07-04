@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
 // GET /api/trips/[id] — get a single trip
-export async function GET(
+async function _GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -50,7 +51,7 @@ export async function GET(
 }
 
 // PATCH /api/trips/[id] — update a trip
-export async function PATCH(
+async function _PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -114,7 +115,7 @@ export async function PATCH(
 }
 
 // DELETE /api/trips/[id] — delete a trip
-export async function DELETE(
+async function _DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -134,3 +135,7 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

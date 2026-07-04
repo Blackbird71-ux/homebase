@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { readFile, mkdir, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
@@ -14,7 +15,7 @@ const IMAGES_DIR = join(process.env.DATA_DIR ?? '/data', 'images')
  * On first request, fetches from the original URL, caches to disk, and serves.
  * Subsequent requests are served directly from disk.
  */
-export async function GET(
+async function _GET(
   req: Request,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
@@ -100,3 +101,5 @@ function getContentType(ext: string | undefined): string {
     default: return 'image/jpeg'
   }
 }
+
+export const GET = withRouteErrors(_GET)

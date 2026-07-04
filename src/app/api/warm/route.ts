@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -28,7 +29,7 @@ import { scopeDateRange } from '@/hooks/meal-plan/types'
  *   apiUrls: string[]             // Data API URLs to warm into the SW API cache
  * }
  */
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
 
@@ -108,3 +109,5 @@ export async function GET() {
     apiUrls,
   })
 }
+
+export const GET = withRouteErrors(_GET)

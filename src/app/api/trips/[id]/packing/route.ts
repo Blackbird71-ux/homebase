@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -5,7 +6,7 @@ import type { SessionUser } from '@/types'
 
 // POST /api/trips/[id]/packing — create a packing list for the trip
 // Optionally clone from a template: ?templateId=xxx
-export async function POST(
+async function _POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -96,7 +97,7 @@ export async function POST(
 
 // DELETE /api/trips/[id]/packing — unlink the packing list from the trip
 // Query param ?deleteList=true to also delete the list itself
-export async function DELETE(
+async function _DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -133,3 +134,6 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+
+export const POST = withRouteErrors(_POST)
+export const DELETE = withRouteErrors(_DELETE)

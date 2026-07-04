@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyCompleteToken } from '@/lib/complete-token'
@@ -39,7 +40,7 @@ function htmlPage(title: string, heading: string, body: string, success: boolean
   })
 }
 
-export async function GET(req: Request): Promise<Response> {
+async function _GET(req: Request): Promise<Response> {
   const { searchParams } = new URL(req.url)
   const token = searchParams.get('token')
 
@@ -123,3 +124,5 @@ export async function GET(req: Request): Promise<Response> {
 
   return htmlPage('Unknown', 'Unknown item type', 'This link type is not supported.', false)
 }
+
+export const GET = withRouteErrors(_GET)

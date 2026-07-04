@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
 // GET /api/trips/tags — list all trip-scoped tags for the family
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,7 +27,7 @@ export async function GET() {
 }
 
 // POST /api/trips/tags — create a new trip-scoped tag
-export async function POST(req: NextRequest) {
+async function _POST(req: NextRequest) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -71,3 +72,6 @@ export async function POST(req: NextRequest) {
     usageCount: 0,
   }, { status: 201 })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

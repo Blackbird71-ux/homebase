@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
@@ -5,7 +6,7 @@ import { auth } from '@/lib/auth'
 import { clearUserLocation } from '@/lib/location'
 import type { SessionUser } from '@/types'
 
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -47,7 +48,7 @@ export async function GET() {
   return NextResponse.json(parsedUser)
 }
 
-export async function PATCH(req: Request) {
+async function _PATCH(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -206,7 +207,7 @@ export async function PATCH(req: Request) {
   return NextResponse.json(parsedUpdated)
 }
 
-export async function DELETE() {
+async function _DELETE() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -229,3 +230,7 @@ export async function DELETE() {
   await prisma.user.delete({ where: { id: user.id } })
   return NextResponse.json({ success: true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

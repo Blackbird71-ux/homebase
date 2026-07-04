@@ -1,8 +1,9 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { processAllReminders } from '@/lib/reminders'
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   // Allow admin session OR a valid CRON_SECRET header
   const cronSecret = process.env.CRON_SECRET
   const headerSecret = req.headers.get('x-cron-secret')
@@ -28,3 +29,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to process reminders' }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

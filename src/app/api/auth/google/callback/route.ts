@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
-export async function GET(req: Request) {
+async function _GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -72,3 +73,5 @@ export async function GET(req: Request) {
   response.cookies.delete('google_oauth_state')
   return response
 }
+
+export const GET = withRouteErrors(_GET)

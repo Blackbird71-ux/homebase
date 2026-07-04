@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSystemAdmin } from '@/lib/auth-helpers'
 import { generateCode } from '@/lib/invite'
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function _POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const check = await requireSystemAdmin()
   if (check instanceof NextResponse) return check
 
@@ -22,3 +23,5 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   return NextResponse.json({ inviteCode: code })
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -43,7 +44,7 @@ function serializeActivity(activity: {
 }
 
 // PATCH /api/trips/[id]/days/[dayId]/activities/[activityId]
-export async function PATCH(
+async function _PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string; activityId: string }> },
 ) {
@@ -96,7 +97,7 @@ export async function PATCH(
 }
 
 // DELETE /api/trips/[id]/days/[dayId]/activities/[activityId]
-export async function DELETE(
+async function _DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string; activityId: string }> },
 ) {
@@ -119,3 +120,6 @@ export async function DELETE(
   await prisma.tripActivity.delete({ where: { id: activityId } })
   return NextResponse.json({ success: true })
 }
+
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

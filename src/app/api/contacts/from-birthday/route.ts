@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -8,7 +9,7 @@ import { convertBirthdayToContact } from '@/lib/birthday-contact'
 // Creates a contact from a calendar birthday — a Family.birthdays entry, or
 // a real Event when eventId is given — and removes that source, so the
 // birthday's single source of truth becomes the contact.
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -38,3 +39,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json(contact, { status: reusedExisting ? 200 : 201 })
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generatePinResetToken } from '@/lib/pin-reset-token'
 import { sendEmail } from '@/lib/email'
 import { enforceIpRateLimit } from '@/lib/rate-limit'
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const limited = enforceIpRateLimit(req, 'pin-reset-request', 5, 15 * 60 * 1000)
   if (limited) return limited
 
@@ -97,3 +98,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

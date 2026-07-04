@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -6,7 +7,7 @@ import { resolveBarcode, teachBarcode } from '@/lib/pantry'
 // GET: resolve a scanned barcode to a product name (learned mapping first,
 // then Open Food Facts). 404 body { resolved: false } means "ask the user
 // to name it once", then POST the name back here to teach it.
-export async function GET(
+async function _GET(
   req: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
@@ -24,7 +25,7 @@ export async function GET(
   return NextResponse.json({ resolved: true, ...result })
 }
 
-export async function POST(
+async function _POST(
   req: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
@@ -45,3 +46,6 @@ export async function POST(
   const mapping = await teachBarcode(user.familyId, code, productName)
   return NextResponse.json(mapping)
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

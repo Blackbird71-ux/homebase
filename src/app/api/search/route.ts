@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { globalSearch } from '@/lib/global-search'
 import type { SessionUser } from '@/types'
 
-export async function GET(req: Request) {
+async function _GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id || !user.familyId) {
@@ -14,3 +15,5 @@ export async function GET(req: Request) {
   const results = await globalSearch(user.familyId, user.id, q)
   return NextResponse.json({ results })
 }
+
+export const GET = withRouteErrors(_GET)

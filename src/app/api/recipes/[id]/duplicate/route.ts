@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -27,7 +28,7 @@ function safeParseArray(json: string): string[] {
   }
 }
 
-export async function POST(
+async function _POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -119,3 +120,5 @@ export async function POST(
     )
   }
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   try {
     const session = await auth()
   const user = session?.user as SessionUser | undefined
@@ -139,3 +140,5 @@ export async function POST(req: Request) {
     )
   }
 }
+
+export const POST = withRouteErrors(_POST)

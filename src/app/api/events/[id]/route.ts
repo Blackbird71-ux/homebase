@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -8,7 +9,7 @@ import { pushEventToGoogle } from '@/lib/google-sync'
 import { getAccessToken, deleteGoogleEvent } from '@/lib/google-calendar'
 import { createAuditLog } from '@/lib/audit-log'
 
-export async function GET(
+async function _GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -23,7 +24,7 @@ export async function GET(
   return NextResponse.json(maskPersonalEvent(event, user.id))
 }
 
-export async function PUT(
+async function _PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -93,7 +94,7 @@ export async function PUT(
   return NextResponse.json(maskPersonalEvent(updated, user.id))
 }
 
-export async function DELETE(
+async function _DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -238,3 +239,7 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const PUT = withRouteErrors(_PUT)
+export const DELETE = withRouteErrors(_DELETE)

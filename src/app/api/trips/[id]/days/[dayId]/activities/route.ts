@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -41,7 +42,7 @@ function serializeActivity(activity: {
 }
 
 // POST /api/trips/[id]/days/[dayId]/activities — create an activity
-export async function POST(
+async function _POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string }> },
 ) {
@@ -87,3 +88,5 @@ export async function POST(
 
   return NextResponse.json(serializeActivity(activity), { status: 201 })
 }
+
+export const POST = withRouteErrors(_POST)

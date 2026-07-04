@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import AdmZip from 'adm-zip'
 import { prisma } from '@/lib/prisma'
@@ -6,7 +7,7 @@ import type { SessionUser } from '@/types'
 import { parseUmamiRecipe, type UmamiJson } from '@/lib/umami-parser'
 import { cacheImage, getLocalImageUrl } from '@/lib/image-cache'
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -160,3 +161,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ books: results })
 }
+
+export const POST = withRouteErrors(_POST)

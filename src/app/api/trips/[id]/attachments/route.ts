@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -7,7 +8,7 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 
 // GET /api/trips/[id]/attachments — list trip-level attachments (dayId is null)
-export async function GET(
+async function _GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -31,7 +32,7 @@ export async function GET(
 }
 
 // POST /api/trips/[id]/attachments — upload a trip-level attachment
-export async function POST(
+async function _POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -83,3 +84,6 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to upload attachment' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

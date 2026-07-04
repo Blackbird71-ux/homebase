@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { DEFAULT_ITEMS } from '@/components/budget-planner/defaultItems'
 
-export async function POST() {
+async function _POST() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -35,3 +36,5 @@ export async function POST() {
 
   return NextResponse.json(createdItems)
 }
+
+export const POST = withRouteErrors(_POST)

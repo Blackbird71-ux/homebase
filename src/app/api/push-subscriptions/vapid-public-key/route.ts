@@ -1,6 +1,7 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+async function _GET() {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
   if (!publicKey) {
@@ -12,3 +13,5 @@ export async function GET() {
 
   return NextResponse.json({ publicKey })
 }
+
+export const GET = withRouteErrors(_GET)

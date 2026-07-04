@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -7,7 +8,7 @@ import { getLocalImageUrl } from '@/lib/image-cache'
 import { createAuditLog } from '@/lib/audit-log'
 import { jsonWithETag } from '@/lib/http-cache'
 
-export async function GET(req: Request) {
+async function _GET(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -70,7 +71,7 @@ export async function GET(req: Request) {
   )
 }
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -284,3 +285,6 @@ export async function POST(req: Request) {
     { status: 201 }
   )
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

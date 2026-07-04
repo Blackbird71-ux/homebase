@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSystemAdmin } from '@/lib/auth-helpers'
 import bcrypt from 'bcryptjs'
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string; userId: string }> }) {
+async function _POST(req: Request, { params }: { params: Promise<{ id: string; userId: string }> }) {
   const check = await requireSystemAdmin()
   if (check instanceof NextResponse) return check
 
@@ -27,3 +28,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   return NextResponse.json({ success: true })
 }
+
+export const POST = withRouteErrors(_POST)

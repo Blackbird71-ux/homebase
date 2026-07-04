@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -8,7 +9,7 @@ import { warmRecipeImageCache } from '@/lib/image-cache'
 // Requires an admin session — this is the logged-in replacement for the
 // token-gated warm-image-cache ops script. Accepts an optional { limit } to cap
 // how many images are attempted per call; re-run while `remaining > 0`.
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -30,3 +31,5 @@ export async function POST(req: Request) {
   const result = await warmRecipeImageCache(limit)
   return NextResponse.json({ asOf, ...result })
 }
+
+export const POST = withRouteErrors(_POST)

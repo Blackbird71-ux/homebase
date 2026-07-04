@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -5,7 +6,7 @@ import type { SessionUser } from '@/types'
 
 // POST /api/trips/[id]/days/[dayId]/tags
 // Body: { tagId } — toggles the tag on/off the day
-export async function POST(
+async function _POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string }> },
 ) {
@@ -65,3 +66,5 @@ export async function POST(
     }))
   )
 }
+
+export const POST = withRouteErrors(_POST)

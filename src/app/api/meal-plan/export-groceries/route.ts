@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
@@ -14,7 +15,7 @@ interface ExportItem {
 }
 
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -71,3 +72,5 @@ export async function POST(req: Request) {
   revalidatePath('/lists')
   return NextResponse.json({ listId: resolvedList.id, itemCount: items.length })
 }
+
+export const POST = withRouteErrors(_POST)

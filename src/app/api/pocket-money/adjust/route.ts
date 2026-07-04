@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -5,7 +6,7 @@ import type { SessionUser } from '@/types'
 import { adjustPocketMoney } from '@/lib/pocket-money'
 
 // Manual top-up or deduction — admin only.
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,3 +34,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json(entry, { status: 201 })
 }
+
+export const POST = withRouteErrors(_POST)

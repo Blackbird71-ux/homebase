@@ -2,6 +2,7 @@
 // Burns annotations into a PDF and returns the annotated PDF for download,
 // or saves it as a new document in the vault.
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -15,7 +16,7 @@ import { burnAnnotationsIntoPdf } from '@/lib/pdf/burn-annotations'
 import type { PdfAnnotationSet } from '@/types/pdf-annotations'
 import { createAuditLog } from '@/lib/audit-log'
 
-export async function POST(
+async function _POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -134,3 +135,5 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to export annotated PDF' }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

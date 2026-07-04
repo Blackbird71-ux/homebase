@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSystemAdmin } from '@/lib/auth-helpers'
 import { generateCode } from '@/lib/invite'
 
-export async function GET() {
+async function _GET() {
   const check = await requireSystemAdmin()
   if (check instanceof NextResponse) return check
 
@@ -27,7 +28,7 @@ export async function GET() {
   )
 }
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const check = await requireSystemAdmin()
   if (check instanceof NextResponse) return check
 
@@ -93,3 +94,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ family, inviteCode: code, recipesCopied })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

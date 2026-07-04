@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { getUnlockCookieName } from '@/lib/secure-unlock'
 
-export async function POST(
+async function _POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -27,3 +28,5 @@ export async function POST(
 
   return NextResponse.json({ success: true, message: 'Contact locked' })
 }
+
+export const POST = withRouteErrors(_POST)

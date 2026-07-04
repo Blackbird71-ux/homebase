@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
 
-export async function PATCH(
+async function _PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -65,3 +66,5 @@ export async function PATCH(
     updatedAt: note.updatedAt.toISOString(),
   })
 }
+
+export const PATCH = withRouteErrors(_PATCH)

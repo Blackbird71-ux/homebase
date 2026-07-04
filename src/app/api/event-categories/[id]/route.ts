@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
-export async function PUT(
+async function _PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -40,7 +41,7 @@ export async function PUT(
   return NextResponse.json(updated)
 }
 
-export async function DELETE(
+async function _DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -64,3 +65,6 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+
+export const PUT = withRouteErrors(_PUT)
+export const DELETE = withRouteErrors(_DELETE)

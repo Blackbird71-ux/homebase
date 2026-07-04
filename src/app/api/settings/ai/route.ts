@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -8,7 +9,7 @@ const VALID_MODELS: Record<string, string[]> = {
   deepseek: ['deepseek-chat'],
 }
 
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -28,7 +29,7 @@ export async function GET() {
   })
 }
 
-export async function PUT(req: Request) {
+async function _PUT(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -62,3 +63,6 @@ export async function PUT(req: Request) {
 
   return NextResponse.json({ success: true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const PUT = withRouteErrors(_PUT)

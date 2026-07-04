@@ -2,6 +2,7 @@
 // Refactored to use the AI Tool Registry orchestrator.
 // This file is now a thin HTTP adapter — all business logic lives in tool modules.
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -20,7 +21,7 @@ registerAllTools()
 
 // ── POST handler ────────────────────────────────────────────────────────────
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
 
 // ── GET handler: diagnostic endpoint to list registered tools ───────────────
 
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -115,3 +116,6 @@ export async function GET() {
     actionEvents: eventMap,
   })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -64,7 +65,7 @@ function serializeDay(day: {
 }
 
 // GET /api/trips/[id]/days
-export async function GET(
+async function _GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -95,7 +96,7 @@ export async function GET(
 }
 
 // POST /api/trips/[id]/days
-export async function POST(
+async function _POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -150,3 +151,6 @@ export async function POST(
 
   return NextResponse.json(serializeDay(day), { status: 201 })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

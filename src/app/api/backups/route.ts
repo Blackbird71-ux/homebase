@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -6,7 +7,7 @@ import { join } from 'path'
 
 const BACKUP_DIR = process.env.BACKUP_DIR || '/data/backups'
 
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,3 +35,5 @@ export async function GET() {
     return NextResponse.json({ backups: [] })
   }
 }
+
+export const GET = withRouteErrors(_GET)

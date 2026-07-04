@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { listUncachedRecipeImages } from '@/lib/image-cache'
 
@@ -14,7 +15,7 @@ import { listUncachedRecipeImages } from '@/lib/image-cache'
  * sends the token in the x-cache-token header. Fails closed if the token is
  * absent or mismatched, including when the env var is unset.
  */
-export async function GET(req: Request) {
+async function _GET(req: Request) {
   const token = req.headers.get('x-cache-token')
   if (!token || token !== process.env.IMAGE_CACHE_TOKEN) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -25,3 +26,5 @@ export async function GET(req: Request) {
   const uncached = await listUncachedRecipeImages()
   return NextResponse.json(uncached)
 }
+
+export const GET = withRouteErrors(_GET)

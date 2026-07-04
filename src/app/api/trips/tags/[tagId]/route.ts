@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
 // PATCH /api/trips/tags/[tagId] — update a trip-scoped tag
-export async function PATCH(
+async function _PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ tagId: string }> },
 ) {
@@ -42,7 +43,7 @@ export async function PATCH(
 }
 
 // DELETE /api/trips/tags/[tagId] — delete a trip-scoped tag (cascades off activities/days)
-export async function DELETE(
+async function _DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ tagId: string }> },
 ) {
@@ -59,3 +60,6 @@ export async function DELETE(
   await prisma.tag.delete({ where: { id: tagId } })
   return NextResponse.json({ success: true })
 }
+
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

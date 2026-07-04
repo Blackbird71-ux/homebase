@@ -1,6 +1,7 @@
 // src/app/api/documents/[id]/form-data/route.ts
 // Saves filled form data back into a PDF, optionally saving as a new document.
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -14,7 +15,7 @@ import { fillFormFields } from '@/lib/pdf/form-fields'
 import type { FormFieldValues } from '@/lib/pdf/form-fields'
 import { createAuditLog } from '@/lib/audit-log'
 
-export async function POST(
+async function _POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -126,3 +127,5 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to fill form' }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -7,7 +8,7 @@ import { getUnlockCookieName, isUnlockTokenValid } from '@/lib/secure-unlock'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 
-export async function GET(
+async function _GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -59,3 +60,5 @@ export async function GET(
     return NextResponse.json({ error: 'File not found on disk' }, { status: 404 })
   }
 }
+
+export const GET = withRouteErrors(_GET)

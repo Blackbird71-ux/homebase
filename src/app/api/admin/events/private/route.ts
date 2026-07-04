@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
@@ -6,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 // GET /api/admin/events/private
 // Returns all personal events for the admin's family, unmasked.
 // Used for diagnostic purposes to identify unexpected private events.
-export async function GET() {
+async function _GET() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -54,3 +55,5 @@ export async function GET() {
 
   return NextResponse.json({ total: result.length, events: result })
 }
+
+export const GET = withRouteErrors(_GET)

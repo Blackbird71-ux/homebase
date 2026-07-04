@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { getAccessToken, createGoogleEvent } from '@/lib/google-calendar'
 
-export async function POST(_req: Request) {
+async function _POST(_req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -87,3 +88,5 @@ export async function POST(_req: Request) {
 
   return NextResponse.json({ synced: created.length, skipped })
 }
+
+export const POST = withRouteErrors(_POST)

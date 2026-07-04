@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
 // PATCH /api/trips/[id]/days/[dayId] — update a day
-export async function PATCH(
+async function _PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string }> },
 ) {
@@ -73,7 +74,7 @@ export async function PATCH(
 }
 
 // DELETE /api/trips/[id]/days/[dayId] — delete a day (cascades activities)
-export async function DELETE(
+async function _DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string }> },
 ) {
@@ -101,3 +102,6 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

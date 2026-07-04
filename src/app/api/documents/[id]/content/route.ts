@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -30,7 +31,7 @@ async function getXLSX() {
  * Returns parsed content for in-browser viewing.
  * For .docx → HTML, .xlsx → HTML table, .txt/.md → text
  */
-export async function GET(
+async function _GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -141,7 +142,7 @@ export async function GET(
  * PATCH /api/documents/[id]/content
  * Saves edited text content back to the file (text files only).
  */
-export async function PATCH(
+async function _PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -216,3 +217,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Failed to save document' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)
+export const PATCH = withRouteErrors(_PATCH)

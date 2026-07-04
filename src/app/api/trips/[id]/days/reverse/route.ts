@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -65,7 +66,7 @@ function serializeDay(day: {
 
 // POST /api/trips/[id]/days/reverse
 // Reverses the content (labels, notes, activities, tags) of all days while keeping dates fixed.
-export async function POST(
+async function _POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -141,3 +142,5 @@ export async function POST(
 
   return NextResponse.json(updatedDays.map(serializeDay))
 }
+
+export const POST = withRouteErrors(_POST)

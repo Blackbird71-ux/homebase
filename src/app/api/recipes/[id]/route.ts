@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -190,7 +191,7 @@ async function getRecipeWithTags(id: string, familyId: string) {
   }
 }
 
-export async function GET(
+async function _GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -205,7 +206,7 @@ export async function GET(
   return NextResponse.json(recipe)
 }
 
-export async function PUT(
+async function _PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -325,7 +326,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function _DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -352,3 +353,7 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+
+export const GET = withRouteErrors(_GET)
+export const PUT = withRouteErrors(_PUT)
+export const DELETE = withRouteErrors(_DELETE)

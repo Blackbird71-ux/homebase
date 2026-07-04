@@ -1,6 +1,7 @@
 // src/app/api/documents/[id]/form-fields/route.ts
 // Detects and returns AcroForm fields in a PDF document.
 
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -11,7 +12,7 @@ import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { detectFormFields } from '@/lib/pdf/form-fields'
 
-export async function GET(
+async function _GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -57,3 +58,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to detect form fields' }, { status: 500 })
   }
 }
+
+export const GET = withRouteErrors(_GET)

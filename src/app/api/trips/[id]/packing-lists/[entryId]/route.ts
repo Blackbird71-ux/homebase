@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
 // PATCH /api/trips/[id]/packing-lists/[entryId] — rename the label
-export async function PATCH(
+async function _PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; entryId: string }> },
 ) {
@@ -39,7 +40,7 @@ export async function PATCH(
 }
 
 // DELETE /api/trips/[id]/packing-lists/[entryId]?deleteList=true|false
-export async function DELETE(
+async function _DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; entryId: string }> },
 ) {
@@ -75,3 +76,6 @@ export async function DELETE(
 
   return NextResponse.json({ success: true })
 }
+
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

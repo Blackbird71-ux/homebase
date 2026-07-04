@@ -1,9 +1,10 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 
-export async function GET(
+async function _GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -34,7 +35,7 @@ export async function GET(
   })
 }
 
-export async function PUT(
+async function _PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -136,7 +137,7 @@ export async function PUT(
   })
 }
 
-export async function DELETE(
+async function _DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -174,3 +175,7 @@ export async function DELETE(
     message: `Category "${category.category}" has been deleted`,
   })
 }
+
+export const GET = withRouteErrors(_GET)
+export const PUT = withRouteErrors(_PUT)
+export const DELETE = withRouteErrors(_DELETE)

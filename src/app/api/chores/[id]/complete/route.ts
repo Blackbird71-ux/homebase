@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -5,7 +6,7 @@ import type { SessionUser } from '@/types'
 import { todayBoundsInTz } from '@/lib/timezone'
 import { completeChore } from '@/lib/chore-completion'
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function _POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -56,3 +57,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     },
   })
 }
+
+export const POST = withRouteErrors(_POST)

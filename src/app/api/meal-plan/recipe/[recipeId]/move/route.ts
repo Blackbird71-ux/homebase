@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -6,7 +7,7 @@ import { MEAL_TYPES } from '@/lib/meal-types'
 import { getLocalImageUrl } from '@/lib/image-cache'
 import { createAuditLog } from '@/lib/audit-log'
 
-export async function PATCH(
+async function _PATCH(
   _req: Request,
   { params }: { params: Promise<{ recipeId: string }> }
 ) {
@@ -208,3 +209,5 @@ export async function PATCH(
       : null,
   })
 }
+
+export const PATCH = withRouteErrors(_PATCH)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -5,7 +6,7 @@ import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { verifyPin, generateUnlockToken, getUnlockCookieName } from '@/lib/secure-unlock'
 
-export async function POST(
+async function _POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -74,3 +75,5 @@ export async function POST(
 
   return NextResponse.json({ success: true, message: 'Contact unlocked' })
 }
+
+export const POST = withRouteErrors(_POST)

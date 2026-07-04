@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
 import { auth } from '@/lib/auth'
@@ -16,7 +17,7 @@ function errOutput(e: unknown): string {
   return err.stdout ?? err.stderr ?? err.message ?? String(e)
 }
 
-export async function POST() {
+async function _POST() {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -48,3 +49,5 @@ export async function POST() {
     return NextResponse.json({ error: createMsg }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

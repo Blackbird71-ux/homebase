@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
@@ -33,7 +34,7 @@ async function notifyAdmin(ip: string) {
 // Break-glass password reset, guarded by the ADMIN_RESET_TOKEN secret.
 // Every attempt is rate-limited per IP and logged (logs are visible in the
 // admin log viewer and docker logs).
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
 
   const limit = checkRateLimit(`admin-reset-password:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MINUTES * 60 * 1000)
@@ -73,3 +74,5 @@ export async function POST(req: Request) {
   console.log(`[admin-reset-password] Password reset for ${email} from ${ip}`)
   return NextResponse.json({ ok: true, message: `Password reset for ${email}` })
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { sendDailyBriefings } from '@/lib/daily-briefing'
@@ -5,7 +6,7 @@ import { sendDailyBriefings } from '@/lib/daily-briefing'
 // Manual trigger for the daily briefing push (the 7am cron in scheduler.ts
 // is the normal path). Mirrors /api/reminders/process: admin session OR a
 // valid CRON_SECRET header.
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const cronSecret = process.env.CRON_SECRET
   const headerSecret = req.headers.get('x-cron-secret')
 
@@ -29,3 +30,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to send briefings' }, { status: 500 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

@@ -1,10 +1,11 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
 import { PANTRY_STATUSES, PANTRY_LOCATIONS } from '@/lib/pantry-helpers'
 
-export async function PATCH(
+async function _PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -39,7 +40,7 @@ export async function PATCH(
   return NextResponse.json(updated)
 }
 
-export async function DELETE(
+async function _DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -56,3 +57,6 @@ export async function DELETE(
   await prisma.pantryItem.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }
+
+export const PATCH = withRouteErrors(_PATCH)
+export const DELETE = withRouteErrors(_DELETE)

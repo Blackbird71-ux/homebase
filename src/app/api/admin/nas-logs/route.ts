@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { Client } from 'ssh2'
@@ -7,7 +8,7 @@ import type { SessionUser } from '@/types'
 // Connects to the NAS host via SSH and runs `docker logs homebase-app --tail N`.
 // Credentials are passed in the request body and never persisted server-side.
 // Admin only. Uses auth() directly (not requireSession) to avoid redirect throws in API routes.
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -54,3 +55,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 502 })
   }
 }
+
+export const POST = withRouteErrors(_POST)

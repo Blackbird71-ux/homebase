@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -5,7 +6,7 @@ import type { SessionUser } from '@/types'
 import { createAuditLog } from '@/lib/audit-log'
 import { jsonWithETag } from '@/lib/http-cache'
 
-export async function GET(
+async function _GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -24,7 +25,7 @@ export async function GET(
   return jsonWithETag(req, list.items)
 }
 
-export async function POST(
+async function _POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -95,3 +96,6 @@ export async function POST(
 
   return NextResponse.json(item, { status: 201 })
 }
+
+export const GET = withRouteErrors(_GET)
+export const POST = withRouteErrors(_POST)

@@ -1,3 +1,4 @@
+import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { Prisma } from '@prisma/client'
@@ -6,7 +7,7 @@ import { enforceIpRateLimit } from '@/lib/rate-limit'
 
 class InviteAlreadyUsedError extends Error {}
 
-export async function POST(req: Request) {
+async function _POST(req: Request) {
   const limited = enforceIpRateLimit(req, 'register', 5, 15 * 60 * 1000)
   if (limited) return limited
 
@@ -85,3 +86,5 @@ export async function POST(req: Request) {
     throw err
   }
 }
+
+export const POST = withRouteErrors(_POST)
