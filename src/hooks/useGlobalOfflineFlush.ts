@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { flushQueuedMutations, broadcastQueueCount, OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
+import { flushQueuedMutations, broadcastQueueCount, OFFLINE_QUEUE_FLUSHED, OFFLINE_QUEUE_SYNC_ISSUE } from '@/lib/offline-queue'
 
 /**
  * Global offline-queue flusher — mounted once in AppShell so queued mutations
@@ -13,11 +13,14 @@ import { flushQueuedMutations, broadcastQueueCount, OFFLINE_QUEUE_FLUSHED } from
  */
 export function useGlobalOfflineFlush() {
   const flushAndNotify = useCallback(async () => {
-    const listIds = await flushQueuedMutations()
+    const { listIds, authRequired, dropped } = await flushQueuedMutations()
     await broadcastQueueCount()
     if (listIds.length > 0) {
       window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_FLUSHED, { detail: { listIds } }))
     }
+    // Always dispatched (even all-clear) so OfflineBanner can clear a stale
+    // "sign in to sync" state after a successful re-auth flush.
+    window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_SYNC_ISSUE, { detail: { authRequired, dropped } }))
   }, [])
 
   useEffect(() => {

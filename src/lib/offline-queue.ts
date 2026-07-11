@@ -14,6 +14,10 @@ export const OFFLINE_QUEUE_FLUSHED = 'offline-queue-flushed'
     detail: { count: number } — consumed by OfflineBanner. */
 export const OFFLINE_QUEUE_UPDATE = 'offline-queue-update'
 
+/** window CustomEvent fired after every flush attempt.
+    detail: { authRequired: boolean, dropped: number } — consumed by OfflineBanner. */
+export const OFFLINE_QUEUE_SYNC_ISSUE = 'offline-queue-sync-issue'
+
 export interface QueuedMutation {
   id: string
   endpoint: string
@@ -130,24 +134,35 @@ export async function queueOfflineMutation(mutation: QueuedMutation): Promise<vo
 
 let isFlushing = false
 
+export interface FlushResult {
+  /** Collection keys whose mutations were resolved (synced or permanently rejected). */
+  listIds: string[]
+  /** True when the flush stopped on a 401 — the queue is preserved until the user signs in again. */
+  authRequired: boolean
+  /** Number of mutations permanently rejected (4xx) and removed this flush. */
+  dropped: number
+}
+
+const EMPTY_FLUSH: FlushResult = { listIds: [], authRequired: false, dropped: 0 }
+
 /**
  * Replay the entire queue in queuedAt order. Returns the listIds whose
  * mutations were resolved (synced or permanently rejected) so listeners can
- * refetch affected collections. Re-entrant calls are no-ops — only one flush
- * runs at a time.
+ * refetch affected collections, plus flags for sync problems. Re-entrant
+ * calls are no-ops — only one flush runs at a time.
  */
-export async function flushQueuedMutations(): Promise<string[]> {
-  if (isFlushing) return []
+export async function flushQueuedMutations(): Promise<FlushResult> {
+  if (isFlushing) return EMPTY_FLUSH
   isFlushing = true
   try {
     let mutations: QueuedMutation[]
     try {
       mutations = await getAllMutations()
     } catch {
-      return []
+      return EMPTY_FLUSH
     }
     const pending = mutations.sort((a, b) => a.queuedAt - b.queuedAt)
-    if (pending.length === 0) return []
+    if (pending.length === 0) return EMPTY_FLUSH
 
     // Maps tmp_ IDs of offline-created items to the real IDs the server assigned
     // when their POST replayed earlier in this flush. Later mutations queued
@@ -155,6 +170,8 @@ export async function flushQueuedMutations(): Promise<string[]> {
     // being sent.
     const idMap = new Map<string, string>()
     const resolved = new Set<string>()
+    let authRequired = false
+    let dropped = 0
 
     for (const mutation of pending) {
       let endpoint = mutation.endpoint
@@ -179,12 +196,23 @@ export async function flushQueuedMutations(): Promise<string[]> {
           }
           await removeMutation(mutation.id)
           resolved.add(mutation.listId)
+        } else if (res.status === 401) {
+          // Session invalid/expired — every remaining replay would also 401
+          // and the whole queue would be dropped as "permanent" below.
+          // Preserve the queue and stop; the banner tells the user to sign
+          // in, and the next flush (after re-auth) replays from here.
+          authRequired = true
+          break
+        } else if (res.status === 408 || res.status === 429) {
+          break // Timeout / rate-limited — retryable; preserve order and retry next flush
         } else if (res.status >= 400 && res.status < 500) {
-          // Permanent rejection (validation, deleted elsewhere, locked) —
+          // Permanent rejection (validation, deleted elsewhere, locked, 403) —
           // retrying can never succeed, so drop it instead of wedging the queue.
           // Still counts as resolved: the refetch re-aligns optimistic state.
+          console.warn(`[offline-queue] dropped queued ${mutation.method} ${endpoint} — server rejected with ${res.status}`)
           await removeMutation(mutation.id)
           resolved.add(mutation.listId)
+          dropped++
         } else {
           break // 5xx — server trouble; preserve order and retry next flush
         }
@@ -193,7 +221,7 @@ export async function flushQueuedMutations(): Promise<string[]> {
       }
     }
 
-    return [...resolved]
+    return { listIds: [...resolved], authRequired, dropped }
   } finally {
     isFlushing = false
   }
