@@ -1,0 +1,93 @@
+================================================================================
+  HOMEBASE — PRE-TRIP OFFLINE READINESS CHECKLIST
+  Run through this BEFORE you leave internet coverage.
+================================================================================
+
+PREREQUISITES
+-------------
+[ ] Phone/tablet is charged (or charger packed)
+[ ] HomeBase PWA is installed to the home screen (Settings → Add to Home Screen)
+[ ] You are connected to the internet (home Wi-Fi or mobile data)
+[ ] The NAS at home is powered on and HomeBase is running
+[ ] Data Saver is OFF on your browser (the SW skips page/image warm with it on)
+
+STEP 1 — WARM THE CACHE (do this ONCE online before leaving)
+-------------------------------------------------------------
+Open each page below in your PWA while connected. Wait for each to fully load.
+
+[ ] /home          — Dashboard with all cards visible
+[ ] /calendar      — Navigate to the months you'll need while away
+[ ] /chores        — Scroll through the chore list
+[ ] /lists         — Open each shopping list and todo list you use
+[ ] /meal-plan     — Navigate to every week you'll be away
+[ ] /recipes       — Scroll the full recipe list; open key recipe detail pages
+[ ] /contacts      — View the contacts list
+[ ] /finance       — Load the overview, bills, and income pages (read-only offline)
+[ ] /notes         — Open any notes you'll need
+[ ] /documents     — Load the documents list (actual files won't cache)
+[ ] /trips         — Open the trip you're going on!
+[ ] /wishlists     — View wishlists
+[ ] /maintenance   — View maintenance items
+
+STEP 2 — OFFLINE SIMULATION TEST
+----------------------------------
+On Chrome/Edge (Android) or Safari (iOS):
+  Chrome: DevTools (F12) → Application → Service Workers → check "Offline"
+  Or: DevTools → Network tab → dropdown "No throttling" → "Offline"
+
+[ ] Navigate to /home — loads from cache (no spinner, no error)
+[ ] Navigate to /calendar — shows events for the current month
+[ ] Navigate to /meal-plan — shows this week's plan
+[ ] Navigate to /lists — shows your lists
+[ ] Open a shopping list — items visible
+[ ] Add a test item to the shopping list — appears immediately
+[ ] Toggle a test item — strikethrough appears
+[ ] OfflineBanner appears at top — amber bar with pending count
+[ ] Navigate to /recipes — recipe list loads
+[ ] Open a recipe detail — loads with image
+[ ] Navigate to /chores — schedule loads
+[ ] Complete a test chore — confirms, banner count increases
+
+After testing:
+[ ] Un-check "Offline" in DevTools
+[ ] OfflineBanner shows "Syncing..." spinner then disappears
+[ ] Verify test items synced (refresh, check IDs are real not tmp_)
+[ ] Delete test items you added
+
+STEP 3 — CRITICAL "DO NOT CLOSE" RULES
+----------------------------------------
+[ ] DO NOT force-close the browser/PWA app — the session cookie must persist
+[ ] DO NOT clear browser data/cookies while offline
+[ ] DO NOT sign out while offline (you can't sign back in)
+[ ] DO NOT attempt to change settings offline (dashboard layout, preferences)
+[ ] If possible, keep one tab open with the PWA at all times
+
+STEP 4 — KNOW YOUR LIMITS
+---------------------------
+These WILL work offline:
+  ✓ Shopping/todo lists — add, toggle, delete, reorder items
+  ✓ Calendar — view, create, edit, delete events
+  ✓ Chores — view schedule, mark complete
+  ✓ Meal plan — view, assign/remove recipes from slots
+  ✓ Recipes — view list and details (top 200 cached)
+  ✓ All pages — view cached content from any nav route
+
+These will NOT work offline:
+  ✗ Login / sign out — needs the server
+  ✗ Finance mutations — create/edit bills, record payments, post journals
+  ✗ Recipe creation/editing/scraping
+  ✗ Chore creation/editing/deletion/rotation
+  ✗ Document uploads/viewing content
+  ✗ Settings changes (preferences, admin, family)
+  ✗ AI assistant
+  ✗ Location sharing
+  ✗ Adding new shopping list categories
+  ✗ Clearing the entire meal plan
+  ✗ New recipe imports
+  ✗ Google Calendar sync
+  ✗ Any admin operations
+
+================================================================================
+  Re-run this checklist after any major online session during your trip.
+  The SW re-warms the cache every 12 hours when you reconnect.
+================================================================================

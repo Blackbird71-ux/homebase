@@ -55,18 +55,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     // Re-read mutable fields from DB on every auth() call so that
     // admin changes take effect without requiring sign-out.
+    // Falls back to JWT token values when the DB is unreachable (SQLite lock,
+    // disk full, etc.) so the app degrades gracefully instead of 500-ing
+    // every page and API route. Token values may be stale, but stale auth
+    // is better than no auth.
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string
         session.user.role = token.role as string
-        // Always fetch mutable fields fresh from DB (familyId can change if a user is moved between families)
-        const fresh = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          select: { familyId: true, weekStartsOn: true, family: { select: { timezone: true } } },
-        })
-        session.user.familyId = fresh?.familyId ?? (token.familyId as string)
-        session.user.timezone = fresh?.family.timezone ?? (token.timezone as string)
-        session.user.weekStartsOn = fresh?.weekStartsOn ?? (token.weekStartsOn as number)
+        try {
+          const fresh = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { familyId: true, weekStartsOn: true, family: { select: { timezone: true } } },
+          })
+          session.user.familyId = fresh?.familyId ?? (token.familyId as string)
+          session.user.timezone = fresh?.family.timezone ?? (token.timezone as string)
+          session.user.weekStartsOn = fresh?.weekStartsOn ?? (token.weekStartsOn as number)
+        } catch {
+          // DB unreachable — fall back to JWT token values (set at login)
+          session.user.familyId = token.familyId as string
+          session.user.timezone = token.timezone as string
+          session.user.weekStartsOn = token.weekStartsOn as number
+        }
       }
       return session
     },
