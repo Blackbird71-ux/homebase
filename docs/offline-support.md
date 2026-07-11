@@ -141,10 +141,15 @@ optimistic state refetch affected collections via the `OFFLINE_QUEUE_FLUSHED` cu
 
 ## Authentication offline
 
-The NextAuth v5 JWT session has a 30-day default maxAge. The `session` callback in
-`auth.ts` wraps its DB read in try/catch — if the DB is unreachable, it falls back
-to JWT token values (set at login). This prevents every page and API route from 500-ing
-when SQLite is locked or unavailable.
+The NextAuth v5 JWT session maxAge is set to 90 days (default 30) so expiry mid-trip
+is effectively impossible. The `session` callback in `auth.ts` wraps its DB read in
+try/catch — if the DB is unreachable, it falls back to JWT token values (set at login).
+This prevents every page and API route from 500-ing when SQLite is locked or unavailable.
+
+If the session IS invalid on reconnect, queued mutations replay to 401s. The flush
+treats 401 specially: it stops and preserves the queue (instead of dropping everything
+as "permanently rejected"), and the banner shows "Sign in to sync N pending changes".
+After re-auth, the next flush replays from where it stopped.
 
 When the PWA client is completely offline (no network to the server), the service worker
 serves cached HTML directly — `auth()` is never called. The risk is: if the browser
@@ -162,6 +167,8 @@ server is unreachable, the cached page is still served via `offlineNavigationFal
 | Offline, no pending changes | "You're offline — changes will sync when you reconnect" |
 | Offline, N pending changes | "Offline — N changes pending sync" |
 | Online, syncing | "Syncing N changes…" (with spinner) |
+| Online, flush blocked by 401 | "Sign in to sync N pending changes" (queue preserved) |
+| Online, mutations rejected by server | "N offline changes couldn't be synced" (shown ~10s) |
 
 Queue count is broadcast via `window.dispatchEvent(new CustomEvent('offline-queue-update', …))`.
 

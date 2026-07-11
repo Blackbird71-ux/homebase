@@ -83,6 +83,12 @@ Pages load from cache. No offline mutation support for any of these modules. Doc
 
 The `session` callback in `auth.ts:58` always calls `prisma.user.findUnique()` — it has no fallback. If the browser tries server-side rendering instead of using the SW cache, `requireSession()` fails and redirects to `/login`, which also fails. NextAuth v5 JWT default maxAge is 30 days, so expiry during a typical trip is unlikely.
 
+> **Update (11 Jul 2026):** All three auth risks above have since been mitigated: the
+> session callback now falls back to JWT token values when the DB is unreachable
+> (`756cd71`), maxAge is extended to 90 days (`1ef267f`), and a 401 during queue flush
+> preserves the queue and prompts sign-in instead of silently dropping all offline
+> edits (`0768eec`).
+
 ---
 
 ## What's Changed Since `offline-support.md`
