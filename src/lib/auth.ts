@@ -93,5 +93,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: {
     signIn: '/login',
   },
-  session: { strategy: 'jwt' },
+  // 90 days (default is 30) so the JWT can't expire mid-trip while the app
+  // is offline — expiry offline means lockout, since login needs the server.
+  session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 90 },
 })
