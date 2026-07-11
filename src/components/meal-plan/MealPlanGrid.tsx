@@ -38,6 +38,7 @@ interface MealPlanGridProps {
   initialEntries: MealPlanEntry[]
   timezone: string
   mealPlanLayout?: 'single' | 'multi'
+  pantryPromptsEnabled?: boolean
 }
 
 export function MealPlanGrid({
@@ -46,6 +47,7 @@ export function MealPlanGrid({
   initialEntries,
   timezone,
   mealPlanLayout: initialLayout = 'multi',
+  pantryPromptsEnabled = true,
 }: MealPlanGridProps) {
   const mealData = useMealPlanData(initialWeekStart, initialEntries, timezone)
   const { weekStart, entries, setEntries, loading, scope, setScope, navWeek, goToday, refresh, assign, remove, removeRecipe, clearPeriod } = mealData
@@ -307,7 +309,7 @@ export function MealPlanGrid({
                         onMealClear={remove}
                         onRemoveRecipe={removeRecipe}
                         onMealAddToGroceries={(entryId) => { setExportMealPlanIds([entryId]); setExportOpen(true) }}
-                        onMealCooked={handleMealCooked}
+                        onMealCooked={pantryPromptsEnabled ? handleMealCooked : undefined}
                         onViewRecipe={handleViewRecipe}
                         selectMode={selectMode}
                         selectedMealIds={selectedMealIds}

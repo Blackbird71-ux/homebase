@@ -17,12 +17,21 @@ export default async function AppLayout({
     }),
     prisma.user.findUnique({
       where: { id: session.id },
-      select: { shareLocation: true },
+      select: { shareLocation: true, uiPreferences: true },
     }),
   ])
 
+  // Per-user main nav visibility from uiPreferences (href → false hides the item)
+  let mainNav: Record<string, boolean> = {}
+  if (dbUser?.uiPreferences) {
+    try {
+      const prefs = JSON.parse(dbUser.uiPreferences)
+      if (prefs?.mainNav && typeof prefs.mainNav === 'object') mainNav = prefs.mainNav
+    } catch { /* ignore */ }
+  }
+
   return (
-    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule} familyName={family?.name} memberName={session.name} memberRole={session.role} shareLocation={!!dbUser?.shareLocation}>
+    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule} familyName={family?.name} memberName={session.name} memberRole={session.role} shareLocation={!!dbUser?.shareLocation} mainNav={mainNav}>
       {children}
     </AppShell>
   )

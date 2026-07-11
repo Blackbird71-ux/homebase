@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { formatInTz } from '@/lib/timezone'
+import { isMainNavVisible } from '@/lib/mainNavKeys'
 
 type Group = 'schedule' | 'kitchen' | 'household'
 
@@ -68,6 +69,7 @@ interface SidebarProps {
   memberName?: string
   memberRole?: string
   counts?: Partial<Record<string, number>>
+  mainNav?: Record<string, boolean>
 }
 
 export function Sidebar({
@@ -78,6 +80,7 @@ export function Sidebar({
   memberName = '',
   memberRole = 'Member',
   counts = {},
+  mainNav = {},
 }: SidebarProps) {
   const pathname = usePathname()
   const timezone = useFamilyTimezone()
@@ -163,7 +166,8 @@ export function Sidebar({
   const renderGroup = (group: Group) => {
     const items = navItems.filter(n =>
       n.group === group &&
-      !(hideFinanceModule && n.href === '/finance')
+      !(hideFinanceModule && n.href === '/finance') &&
+      isMainNavVisible(mainNav, n.href)
     )
     if (items.length === 0) return null
     // Icon-only sidebar mode is exempt from the accordion — all icons stay visible
@@ -246,7 +250,7 @@ export function Sidebar({
         {renderGroup('schedule')}
         {renderGroup('kitchen')}
         {renderGroup('household')}
-        {hideFinanceModule && renderItem({
+        {hideFinanceModule && isMainNavVisible(mainNav, '/finance') && renderItem({
           href:  '/finance/simple-budget-planner',
           label: 'Budget Planner',
           icon:  Calculator,

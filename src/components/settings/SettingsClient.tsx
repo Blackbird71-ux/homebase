@@ -5,7 +5,7 @@ import { PillNav } from '@/components/shared/PillNav'
 import {
   User, Palette, Plug, Database, Upload, Tag, FolderOpen,
   CalendarDays, Soup, DollarSign, Bell, ActivitySquare, Bot,
-  MonitorPlay, Mail, BookOpen,
+  MonitorPlay, Mail, BookOpen, PanelLeft,
 } from 'lucide-react'
 import { AccountTab } from '@/components/settings/AccountTab'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
@@ -23,12 +23,14 @@ import { EmailTab } from '@/components/settings/EmailTab'
 import { AISettingsTab } from '@/components/settings/AISettingsTab'
 import { LoginPageTab } from '@/components/settings/LoginPageTab'
 import { FinanceTab } from '@/components/settings/FinanceTab'
+import { MenuTab } from '@/components/settings/MenuTab'
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
 
 const BASE_TABS = [
   { id: 'account',              label: 'Account',             icon: User },
   { id: 'appearance',           label: 'Appearance',          icon: Palette },
+  { id: 'menu',                 label: 'Menu & Features',     icon: PanelLeft },
   { id: 'integrations',         label: 'Integrations',        icon: Plug },
   { id: 'data',                 label: 'Data',                icon: Database },
   { id: 'import',               label: 'Import',              icon: Upload },
@@ -166,6 +168,7 @@ export function SettingsClient({ isAdmin, user, coziImports, supportedTimezones 
             userEmail={user.email}
           />
         )}
+        {activeTab === 'menu'               && <MenuTab />}
         {activeTab === 'import'             && <ImportTab />}
         {activeTab === 'tags'               && <TagManager />}
         {activeTab === 'categories'         && <CategoryManager />}

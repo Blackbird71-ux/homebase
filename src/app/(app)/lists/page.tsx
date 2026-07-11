@@ -29,14 +29,16 @@ export default async function ListsPage() {
     }),
   ])
 
-  // Parse defaultListId and listOrder from uiPreferences
+  // Parse defaultListId, listOrder and hidePantryPrompts from uiPreferences
   let defaultListId: string | null = null
   let listOrder: string[] | null = null
+  let pantryPromptsEnabled = true
   if (user?.uiPreferences) {
     try {
       const prefs = JSON.parse(user.uiPreferences)
       defaultListId = prefs.defaultListId ?? null
       listOrder = Array.isArray(prefs.listOrder) ? prefs.listOrder : null
+      if (prefs?.hidePantryPrompts === true) pantryPromptsEnabled = false
     } catch {
       // ignore parse errors
     }
@@ -71,7 +73,7 @@ export default async function ListsPage() {
 
   return (
     <Suspense>
-      <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} members={members} timezone={session.timezone ?? 'UTC'} />
+      <ListsClient initialLists={serialized} defaultListId={defaultListId} currentUserId={session.id} members={members} timezone={session.timezone ?? 'UTC'} pantryPromptsEnabled={pantryPromptsEnabled} />
     </Suspense>
   )
 }

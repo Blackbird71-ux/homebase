@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { SearchResult, SearchResultType } from '@/lib/global-search'
+import { isMainNavVisible } from '@/lib/mainNavKeys'
 
 interface PageEntry {
   label: string
@@ -53,7 +54,7 @@ type PaletteItem =
   | { kind: 'result'; result: SearchResult }
   | { kind: 'action'; action: QuickAction }
 
-export function CommandPalette({ isAdmin = false, hideFinanceModule = false }: { isAdmin?: boolean; hideFinanceModule?: boolean }) {
+export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mainNav = {} }: { isAdmin?: boolean; hideFinanceModule?: boolean; mainNav?: Record<string, boolean> }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -90,7 +91,7 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false }: {
     { label: 'Maintenance',    url: '/maintenance',    icon: <Wrench className="h-4 w-4" /> },
     { label: 'Settings',       url: '/settings',       icon: <Settings className="h-4 w-4" /> },
     ...(isAdmin ? [{ label: 'Admin', url: '/admin', icon: <Shield className="h-4 w-4" /> }] : []),
-  ]
+  ].filter(p => isMainNavVisible(mainNav, p.url))
 
   const createMode = query.startsWith('>')
   const term = (createMode ? query.slice(1) : query).trim()

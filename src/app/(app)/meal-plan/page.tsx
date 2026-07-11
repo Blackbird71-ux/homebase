@@ -84,12 +84,14 @@ export default async function MealPlanPage() {
         : [],
   }))
 
-  // Read mealPlanLayout from uiPreferences JSON column
+  // Read mealPlanLayout and hidePantryPrompts from uiPreferences JSON column
   let mealPlanLayout: 'single' | 'multi' = 'multi'
+  let pantryPromptsEnabled = true
   if (user.uiPreferences) {
     try {
       const prefs = JSON.parse(user.uiPreferences as string)
       if (prefs?.mealPlanLayout === 'single') mealPlanLayout = 'single'
+      if (prefs?.hidePantryPrompts === true) pantryPromptsEnabled = false
     } catch { /* ignore */ }
   }
 
@@ -100,6 +102,7 @@ export default async function MealPlanPage() {
       initialEntries={serialized}
       timezone={user.family.timezone}
       mealPlanLayout={mealPlanLayout}
+      pantryPromptsEnabled={pantryPromptsEnabled}
     />
   )
 }

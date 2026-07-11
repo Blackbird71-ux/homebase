@@ -31,6 +31,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isMainNavVisible } from '@/lib/mainNavKeys'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'pantry-item' | 'ai' | 'help'
 
@@ -72,9 +73,10 @@ interface UniversalFABProps {
   /** Called when the user picks a quick action on desktop (opens QuickAdd dialog) */
   onQuickAction?: (action: QuickAction) => void
   hideFinanceModule?: boolean
+  mainNav?: Record<string, boolean>
 }
 
-export function UniversalFAB({ onQuickAction, hideFinanceModule = false }: UniversalFABProps) {
+export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav = {} }: UniversalFABProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -203,7 +205,7 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false }: Unive
                 Navigate
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {navItems.filter(({ href }) => !(hideFinanceModule && href === '/finance')).map(({ href, label, icon: Icon }) => {
+                {navItems.filter(({ href }) => !(hideFinanceModule && href === '/finance') && isMainNavVisible(mainNav, href)).map(({ href, label, icon: Icon }) => {
                   const isActive = pathname === href || pathname.startsWith(href + '/')
                   return (
                     <Link

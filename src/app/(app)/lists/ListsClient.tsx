@@ -61,9 +61,10 @@ interface ListsClientProps {
   currentUserId: string
   members: { id: string; name: string }[]
   timezone: string
+  pantryPromptsEnabled?: boolean
 }
 
-export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId, members, timezone }: ListsClientProps) {
+export function ListsClient({ initialLists, defaultListId: initialDefaultListId, currentUserId, members, timezone, pantryPromptsEnabled = true }: ListsClientProps) {
   const searchParams = useSearchParams()
 
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
@@ -384,6 +385,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
               onNonCompletedCountChange={(count) =>
                 setLists(prev => prev.map(l => l.id === activeList.id ? { ...l, _count: { items: count } } : l))
               }
+              pantryPromptsEnabled={pantryPromptsEnabled}
             />
           </>
         ) : (

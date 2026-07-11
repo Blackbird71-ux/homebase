@@ -53,9 +53,10 @@ interface ShoppingListProps {
   initialItems: ListItemShape[]
   initialCategoryOrder: string[] | null
   onNonCompletedCountChange?: (count: number) => void
+  pantryPromptsEnabled?: boolean
 }
 
-export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNonCompletedCountChange }: ShoppingListProps) {
+export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNonCompletedCountChange, pantryPromptsEnabled = true }: ShoppingListProps) {
   const {
     items,
     viewMode, setViewMode,
@@ -97,7 +98,8 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
 
   // Checked-off items are what was just bought — clearing them is the natural
   // moment to flip the pantry to stocked (matched items) / add new ones.
-  const [restockPantry, setRestockPantry] = useState(true)
+  // Suppressed entirely when the user has turned pantry prompts off in Settings.
+  const [restockPantry, setRestockPantry] = useState(pantryPromptsEnabled)
 
   async function restockFromCompleted() {
     const names = completedItems.map(i => i.content)
@@ -194,7 +196,7 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
       </div>
 
       {completedItems.length > 0 && (
-        <Button variant="ghost" size="sm" onClick={() => { setRestockPantry(true); setShowClearConfirm(true) }} className="self-end text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={() => { setRestockPantry(pantryPromptsEnabled); setShowClearConfirm(true) }} className="self-end text-muted-foreground">
           Clear {completedItems.length} completed
         </Button>
       )}
@@ -248,10 +250,12 @@ export function ShoppingList({ listId, initialItems, initialCategoryOrder, onNon
               Are you sure you want to clear all {completedItems.length} completed item{completedItems.length !== 1 ? 's' : ''}? Locked items will be kept.
             </DialogDescription>
           </DialogHeader>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={restockPantry} onChange={e => setRestockPantry(e.target.checked)} className="h-4 w-4" />
-            Add {completedItems.length === 1 ? 'this item' : 'these items'} to the pantry as stocked
-          </label>
+          {pantryPromptsEnabled && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={restockPantry} onChange={e => setRestockPantry(e.target.checked)} className="h-4 w-4" />
+              Add {completedItems.length === 1 ? 'this item' : 'these items'} to the pantry as stocked
+            </label>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
             <Button variant="default" onClick={() => { setShowClearConfirm(false); if (restockPantry) restockFromCompleted(); clearCompleted() }}>Clear</Button>

@@ -14,7 +14,7 @@ import { AIAssistant } from '@/components/ai/AIAssistant'
 import { useGlobalOfflineFlush } from '@/hooks/useGlobalOfflineFlush'
 import { useLocationReporter } from '@/hooks/useLocationReporter'
 
-export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole, shareLocation = false }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string; shareLocation?: boolean }) {
+export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole, shareLocation = false, mainNav = {} }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string; shareLocation?: boolean; mainNav?: Record<string, boolean> }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sidebar-collapsed') === 'true'
@@ -52,7 +52,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
     <div className="flex h-screen-dvh w-screen overflow-hidden">
       <OfflineBanner />
       <div className="relative shrink-0 hidden md:block">
-        <Sidebar collapsed={sidebarCollapsed} isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} familyName={familyName} memberName={memberName} memberRole={memberRole} />
+        <Sidebar collapsed={sidebarCollapsed} isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} familyName={familyName} memberName={memberName} memberRole={memberRole} mainNav={mainNav} />
         <button
           type="button"
           onClick={toggleSidebar}
@@ -75,13 +75,13 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       <NavBubbles />
 
       {/* Universal floating action button — visible on all screen sizes */}
-      <UniversalFAB hideFinanceModule={hideFinanceModule} />
+      <UniversalFAB hideFinanceModule={hideFinanceModule} mainNav={mainNav} />
 
       {/* Quick-add dialog — triggered by FAB, sidebar button, or the palette's > actions */}
       <QuickAdd />
 
       {/* ⌘K command palette — global search, navigation, and quick-add launcher */}
-      <CommandPalette isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} />
+      <CommandPalette isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} mainNav={mainNav} />
 
       {/* Context-sensitive help dialog */}
       <HelpButton open={helpOpen} onOpenChange={setHelpOpen} />
