@@ -90,6 +90,15 @@ COPY --from=builder /app/package.json ./package.json
 # Prisma schema + ALL migration files so `prisma migrate deploy` can run at startup
 COPY --from=builder /app/prisma ./prisma
 
+# Test suite — sources + vitest config so the Admin → "Run Test Suite" panel can
+# execute the full automated suite inside the container (vitest itself ships in
+# the full node_modules below; tsconfig.json is needed for @/ path resolution).
+# Tests run against a throwaway temp DB and never touch /data.
+COPY --from=builder /app/src              ./src
+COPY --from=builder /app/vitest.config.ts ./vitest.config.ts
+COPY --from=builder /app/vitest.setup.ts  ./vitest.setup.ts
+COPY --from=builder /app/tsconfig.json    ./tsconfig.json
+
 # Full node_modules from builder — includes the prisma CLI (devDep) needed for
 # `migrate deploy` at startup, plus all serverExternalPackages and their deps.
 COPY --from=builder /app/node_modules ./node_modules

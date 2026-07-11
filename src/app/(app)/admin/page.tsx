@@ -5,7 +5,7 @@ import {
   ShieldAlert, Play, RefreshCw, CheckCircle2, XCircle,
   ChevronDown, ChevronUp, Terminal, Trash2, Pause, CirclePlay,
   Container, Users, Plus, Copy, Check, KeyRound, ChevronRight,
-  Info, Network, Eye, EyeOff,
+  Info, Network, Eye, EyeOff, FlaskConical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -56,6 +56,33 @@ interface FamilyUser {
   email: string
   role: string
   createdAt: string
+}
+
+interface TestFailure {
+  file: string
+  test: string
+  messages: string[]
+}
+
+interface TestRunResult {
+  suite: 'all' | 'finance'
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+  success: boolean
+  files: number
+  tests: { total: number; passed: number; failed: number; skipped: number }
+  failures: TestFailure[]
+  error?: string
+}
+
+interface TestRunnerState {
+  available: boolean
+  reason?: string
+  status: 'idle' | 'running' | 'done'
+  suite?: 'all' | 'finance'
+  startedAt?: string
+  lastResult?: TestRunResult
 }
 
 // ── Action Card ───────────────────────────────────────────────────────────────
@@ -1110,6 +1137,199 @@ function PrivateEventsPanel() {
   )
 }
 
+// ── Test Suite Panel ──────────────────────────────────────────────────────────
+// Runs the repo's automated test suite (the same thing as `npm test`) via
+// POST /api/admin/tests and polls GET /api/admin/tests until the run finishes.
+// Tests run in a child process against a throwaway database — they NEVER touch
+// live data. This validates the CODE; the finance Integrity Audit (Finance →
+// Admin) validates the live LEDGER DATA. Run both when diagnosing a problem.
+
+function TestSuitePanel() {
+  const timezone = useFamilyTimezone()
+  const [state, setState] = useState<TestRunnerState | null>(null)
+  const [error, setError] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+
+  const fetchState = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/tests')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setState(data as TestRunnerState)
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed')
+    }
+  }, [])
+
+  useEffect(() => { fetchState() }, [fetchState])
+
+  const running = state?.status === 'running'
+
+  // Poll while a run is in progress; tick an elapsed counter for feedback.
+  useEffect(() => {
+    if (!running) return
+    const poll = setInterval(fetchState, 3000)
+    const tick = setInterval(() => {
+      if (state?.startedAt) setElapsed(Math.round((Date.now() - Date.parse(state.startedAt)) / 1000))
+    }, 1000)
+    return () => { clearInterval(poll); clearInterval(tick) }
+  }, [running, fetchState, state?.startedAt])
+
+  async function start(suite: 'all' | 'finance') {
+    setError('')
+    try {
+      const res = await fetch('/api/admin/tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suite }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      setState(data as TestRunnerState)
+      setElapsed(0)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start')
+    }
+  }
+
+  const result = state?.lastResult
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
+        <div className="flex items-center gap-2">
+          <FlaskConical className="h-4 w-4 text-primary shrink-0" />
+          <div>
+            <p className="font-semibold text-sm">Run Test Suite</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Runs the automated tests (same as <code className="font-mono">npm test</code>) against a throwaway
+              database — never touches live data. Finance = accounting invariants only (~1 min); All = every test (~2–10 min).
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-4">
+          <button
+            onClick={() => start('finance')}
+            disabled={running || !state?.available}
+            className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/40 disabled:opacity-50 transition-colors"
+          >
+            {running && state?.suite === 'finance' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            Finance Tests
+          </button>
+          <button
+            onClick={() => start('all')}
+            disabled={running || !state?.available}
+            className="flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            {running && state?.suite === 'all' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            All Tests
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 flex items-start gap-2 border-t border-border bg-blue-500/5 text-xs text-blue-400/80">
+        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+        <span>
+          This checks the <strong>code</strong> is still correct (DR=CR, subledger↔GL, lifecycle journals).
+          To check the <strong>live ledger data</strong>, use Finance → Admin → <strong>Run Integrity Audit</strong>.
+          If tests fail after an update, roll back to the previous image (see the build &amp; deploy guide).
+        </span>
+      </div>
+
+      <div className="border-t border-border px-4 py-3 space-y-3">
+        {state && !state.available && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+            {state.reason}
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        {running && (
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/20 px-3 py-2.5 text-sm">
+            <RefreshCw className="h-4 w-4 animate-spin text-primary shrink-0" />
+            <span>
+              Running {state?.suite === 'finance' ? 'finance' : 'all'} tests… {elapsed}s elapsed.
+              This page keeps checking automatically — a full run can take several minutes.
+            </span>
+          </div>
+        )}
+
+        {!running && !result && state?.available && !error && (
+          <p className="text-xs text-muted-foreground italic">No test run yet this session.</p>
+        )}
+
+        {!running && result && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {result.suite === 'finance' ? 'Finance suite' : 'Full suite'} · finished{' '}
+              {formatInTz(new Date(result.finishedAt), timezone, { dateStyle: 'medium', timeStyle: 'medium' })}{' '}
+              · {Math.round(result.durationMs / 1000)}s
+            </p>
+
+            {result.error ? (
+              <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2.5 text-sm text-destructive whitespace-pre-wrap break-all">
+                {result.error}
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2 text-sm">
+                  <span className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1">
+                    <span className="font-semibold">{result.tests.passed}</span> <span className="text-muted-foreground">passed</span>
+                  </span>
+                  <span className={cn(
+                    'rounded-md border px-2.5 py-1',
+                    result.tests.failed > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-muted/20'
+                  )}>
+                    <span className="font-semibold">{result.tests.failed}</span> <span className="text-muted-foreground">failed</span>
+                  </span>
+                  {result.tests.skipped > 0 && (
+                    <span className="rounded-md border border-border bg-muted/20 px-2.5 py-1">
+                      <span className="font-semibold">{result.tests.skipped}</span> <span className="text-muted-foreground">skipped</span>
+                    </span>
+                  )}
+                  <span className="rounded-md border border-border bg-muted/20 px-2.5 py-1">
+                    <span className="font-semibold">{result.files}</span> <span className="text-muted-foreground">test files</span>
+                  </span>
+                </div>
+
+                {result.success ? (
+                  <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    All tests passed — the code is behaving as specified.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+                      <XCircle className="h-4 w-4 shrink-0" />
+                      {result.failures.length} failure{result.failures.length !== 1 ? 's' : ''} — details below.
+                      Each message names the file, test, and what diverged.
+                    </div>
+                    {result.failures.map((f, i) => (
+                      <div key={i} className="rounded-md border border-border bg-card px-3 py-2.5 text-sm space-y-1">
+                        <p className="font-medium">{f.test}</p>
+                        <p className="text-[11px] text-muted-foreground font-mono">{f.file}</p>
+                        <pre className="mt-1 max-h-48 overflow-y-auto rounded bg-[#0d1117] p-2 font-mono text-xs text-slate-300 whitespace-pre-wrap break-all leading-5">
+                          {f.messages.join('\n\n')}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 type Tab = 'operations' | 'families'
@@ -1180,6 +1400,11 @@ export default function AdminPage() {
               onRun={runWarmCache}
               renderResult={(r) => <WarmResultView result={r as WarmResponse} />}
             />
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">Test Suite — Code Verification</h2>
+            <TestSuitePanel />
           </section>
 
           <section className="space-y-3">

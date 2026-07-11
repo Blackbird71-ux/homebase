@@ -64,6 +64,41 @@ cp /data/backups/homebase.db.pre-deploy.<timestamp> /data/homebase.db
 
 ---
 
+## 🧪 Running & Diagnosing the Test Suite
+
+The app ships its own automated test suite (vitest). Two ways to run it:
+
+### From the app (preferred — no dev environment needed)
+**Admin → Operations tab → "Test Suite — Code Verification" panel.** Admin-only.
+
+- **All Tests** — every test file (~2–10 min).
+- **Finance Tests** — accounting-invariant suites only (~1 min): DR=CR, subledger↔GL, lifecycle journals.
+
+The panel polls while the run is in progress and then shows passed/failed/skipped counts. Each failure is shown as a card with the test name, file path, and full error message — that is the diagnosis; no log digging required.
+
+This works **inside the production container** too: the Dockerfile copies `src/`, `vitest.config.ts`, `vitest.setup.ts`, and `tsconfig.json` into the runner image, and vitest is already present in the full `node_modules`. If the panel says the tooling is not present, the running image predates this feature — rebuild and redeploy.
+
+### From the CLI (dev checkout)
+```
+npm test                 # full suite
+npx vitest run finance   # finance suites only
+```
+
+### Safety — tests can never touch live data
+The runner executes vitest as a child process with `DATABASE_URL` pointed at an **empty throwaway file in the OS temp dir** — never `/data/homebase.db`. Suites that need a database (the finance integration tests) build their own temp DB from `prisma/schema.prisma` and delete it afterwards. Any test that accidentally reached for the ambient database would hit an empty schema and fail loudly.
+
+### Test suite vs. Integrity Audit — two different checks
+| Check | What it validates | Where |
+|-------|-------------------|-------|
+| **Test Suite** | The **code** is still correct (posting logic, invariants) — runs on a throwaway DB | Admin → Operations → Test Suite |
+| **Integrity Audit** | The **live ledger data** is internally consistent | Finance → Admin → Run Integrity Audit |
+
+### If tests fail after a deploy
+1. Read the failure cards — the file + test name pinpoint the broken behaviour.
+2. If the failure appeared with a new image, **roll back** to the previous image / pre-deploy DB backup (see §4 Rollback above) and investigate in the dev checkout.
+
+---
+
 ## ⏰ Timezone Requirement — Australia/Sydney
 
 The application **must** run in the `Australia/Sydney` timezone for correct operation. Without proper timezone configuration:
