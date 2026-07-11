@@ -4,6 +4,10 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import type { SessionUser } from '@/types'
 
+// Throttle for session-callback DB-failure logging: the callback runs on every
+// request, so during an outage we log at most once per minute instead of per hit.
+let lastSessionDbErrorLogAt = 0
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
@@ -71,7 +75,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.familyId = fresh?.familyId ?? (token.familyId as string)
           session.user.timezone = fresh?.family.timezone ?? (token.timezone as string)
           session.user.weekStartsOn = fresh?.weekStartsOn ?? (token.weekStartsOn as number)
-        } catch {
+        } catch (err) {
+          const now = Date.now()
+          if (now - lastSessionDbErrorLogAt > 60_000) {
+            lastSessionDbErrorLogAt = now
+            console.error('[auth] session callback DB read failed; falling back to JWT token values:', err)
+          }
           // DB unreachable — fall back to JWT token values (set at login)
           session.user.familyId = token.familyId as string
           session.user.timezone = token.timezone as string
