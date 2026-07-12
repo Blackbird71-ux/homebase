@@ -22,7 +22,7 @@
  * Standing rule honoured: this never touches data/homebase.db — it creates its own
  * database from the schema.
  */
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -53,11 +53,24 @@ export async function setupFinanceTestDb(prefix = 'hb-fin-'): Promise<FinanceTes
   // Materialise the schema in the throwaway DB. --accept-data-loss makes it
   // non-interactive against the empty file. DATABASE_URL must be present in env
   // because prisma.config.ts resolves env('DATABASE_URL') at config-load time.
-  execSync('npx prisma db push --accept-data-loss', {
-    cwd: REPO,
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: 'ignore',
-  })
+  // Invoke the prisma CLI directly (no shell, no npx): with parallel workers,
+  // concurrent npx wrappers race on the shared npx cache and flake; and on
+  // failure the prisma output must reach the error, not be swallowed.
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(REPO, 'node_modules', 'prisma', 'build', 'index.js'), 'db', 'push', '--accept-data-loss'],
+      {
+        cwd: REPO,
+        env: { ...process.env, DATABASE_URL: url },
+        stdio: 'pipe',
+      },
+    )
+  } catch (e) {
+    const err = e as { message?: string; stdout?: Buffer; stderr?: Buffer }
+    const output = `${err.stdout?.toString() ?? ''}\n${err.stderr?.toString() ?? ''}`.trim()
+    throw new Error(`prisma db push failed for the throwaway test DB: ${err.message}\n${output}`)
+  }
 
   // Bind the prisma singleton to the throwaway DB before it is first imported.
   process.env.DATABASE_URL = url

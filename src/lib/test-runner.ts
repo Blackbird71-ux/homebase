@@ -106,7 +106,7 @@ export function getTestRunnerState(): TestRunnerState {
   }
 }
 
-function parseReport(raw: string, suite: TestSuite, startedAt: string): TestRunResult {
+function parseReport(raw: string, suite: TestSuite, startedAt: string, outputTail: string): TestRunResult {
   const report = JSON.parse(raw) as VitestJsonReport
   const failures: TestFailure[] = []
   for (const file of report.testResults) {
@@ -119,12 +119,17 @@ function parseReport(raw: string, suite: TestSuite, startedAt: string): TestRunR
         messages: a.failureMessages.map(m => m.replace(ANSI_RE, '')),
       })
     }
-    // File-level failure with no per-test detail (e.g. a collection/import error)
+    // File-level failure with no per-test detail (a collection/import error, or a
+    // beforeAll that threw — the JSON reporter leaves `message` EMPTY for hook
+    // failures, so fall back to the captured console output from the default
+    // reporter, which prints the real error. The file's tests are reported as
+    // skipped by vitest, which is why the counts show skipped rather than failed.
     if (file.status === 'failed' && failed.length === 0) {
+      const detail = (file.message ?? '').replace(ANSI_RE, '').trim()
       failures.push({
         file: fileLabel,
-        test: '(suite failed to load)',
-        messages: [file.message?.replace(ANSI_RE, '') ?? 'Unknown collection error'],
+        test: '(suite failed to load — its tests are counted as skipped)',
+        messages: [detail || outputTail || 'Unknown collection error — vitest reported no detail.'],
       })
     }
   }
@@ -160,19 +165,29 @@ export function startTestRun(suite: TestSuite): boolean {
   const guardDb = join(workDir, 'guard.db')
 
   // Fixed argument list — no user input ever reaches the command line.
-  const args = [vitestEntry(), 'run', '--reporter=json', `--outputFile=${outFile}`, '--maxWorkers=2']
+  // The default reporter runs alongside the JSON one: its stdout carries the
+  // human-readable error for setup/collection failures that the JSON report
+  // omits (empty file.message for hook errors).
+  const args = [
+    vitestEntry(), 'run',
+    '--reporter=json', `--outputFile.json=${outFile}`,
+    '--reporter=default',
+    '--maxWorkers=2',
+  ]
   if (suite === 'finance') args.push('finance')
 
   const child = spawn(process.execPath, args, {
     cwd: process.cwd(),
     env: { ...process.env, NODE_ENV: 'test', DATABASE_URL: `file:${guardDb}` },
-    stdio: ['ignore', 'ignore', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
 
-  let stderrTail = ''
-  child.stderr.on('data', (chunk: Buffer) => {
-    stderrTail = (stderrTail + chunk.toString()).slice(-4000)
-  })
+  let outputTail = ''
+  const keepTail = (chunk: Buffer) => {
+    outputTail = (outputTail + chunk.toString()).slice(-8000)
+  }
+  child.stdout.on('data', keepTail)
+  child.stderr.on('data', keepTail)
 
   const timeout = setTimeout(() => {
     child.kill()
@@ -206,9 +221,10 @@ export function startTestRun(suite: TestSuite): boolean {
   child.on('close', () => {
     // vitest exits non-zero when tests fail but still writes the JSON report —
     // parse the report regardless of exit code and let it tell the story.
+    const cleanTail = outputTail.replace(ANSI_RE, '').trim()
     try {
       const raw = readFileSync(outFile, 'utf8')
-      finish(parseReport(raw, suite, startedAt))
+      finish(parseReport(raw, suite, startedAt, cleanTail))
     } catch {
       finish({
         suite,
@@ -221,7 +237,7 @@ export function startTestRun(suite: TestSuite): boolean {
         failures: [],
         error:
           'Test run produced no report (crashed or timed out after 10 minutes). ' +
-          `Last output: ${stderrTail.replace(ANSI_RE, '').trim() || '(none)'}`,
+          `Last output: ${cleanTail || '(none)'}`,
       })
     }
   })
