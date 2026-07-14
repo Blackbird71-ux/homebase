@@ -169,6 +169,7 @@ export function TunnelCard() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) { setError(data?.error ?? 'Something went wrong'); return }
+      if (data?.dnsWarning) setError(data.dnsWarning)
       await fetchStatus()
     } catch {
       setError('Network error')
@@ -326,8 +327,8 @@ export function TunnelCard() {
                 {configLoading ? <><Loader2 className="h-3 w-3 mr-2 animate-spin" />Saving...</> : 'Save Config'}
               </Button>
               <p className="text-xs text-muted-foreground">
-                After saving, update your Cloudflare DNS CNAME for <strong>{hostname}</strong> to point to{' '}
-                <code className="font-mono">{tunnelIdInput || '<tunnel-id>'}.cfargotunnel.com</code>
+                Saving also creates the Cloudflare DNS record for <strong>{hostname}</strong> automatically —
+                no dashboard step needed.
               </p>
             </div>
           )}
