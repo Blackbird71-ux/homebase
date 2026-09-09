@@ -242,7 +242,7 @@ model ListItem {
   assignedToUserId String?
   assignedToUser   User?     @relation("ListItemAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   listId           String
-  list             List      @relation(fields: [listId], references: [id])
+  list             List      @relation(fields: [listId], references: [id], onDelete: Cascade)
   createdAt        DateTime  @default(now())
   // De-dupe key for offline POST replay: a re-sent create with the same id is a no-op.
   clientMutationId String?   @unique
