@@ -12,7 +12,7 @@ import { TemplateDialog } from '@/components/lists/TemplateDialog'
 import { ListPresence } from '@/components/lists/ListPresence'
 import type { ListItemShape } from '@/lib/list-helpers'
 import { toast } from 'sonner'
-import { ListIcon, CalendarDays, Users, User } from 'lucide-react'
+import { ListIcon, CalendarDays, Users, User, Trash2Icon } from 'lucide-react'
 import { PillNav } from '@/components/shared/PillNav'
 
 interface SerializedItem {
@@ -152,6 +152,9 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     if (res.ok) {
       setLists((prev) => prev.filter((l) => l.id !== id))
       if (activeListId === id) setActiveListId(lists.find((l) => l.id !== id)?.id ?? null)
+    } else {
+      const body = await res.json().catch(() => null)
+      toast.error(body?.error ?? 'Could not delete the list — please try again.')
     }
   }
 
@@ -308,6 +311,17 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
           >
             + New
           </button>
+          {activeListId && (
+            <button
+              type="button"
+              onClick={() => handleDeleteList(activeListId)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs whitespace-nowrap shrink-0 border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
+              aria-label="Delete the selected list"
+            >
+              <Trash2Icon className="h-3 w-3" />
+              Delete
+            </button>
+          )}
         </div>
       </div>
 

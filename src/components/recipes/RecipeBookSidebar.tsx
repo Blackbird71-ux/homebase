@@ -114,7 +114,7 @@ export function RecipeBookSidebar({
           <button
             onClick={() => onSelect(book.id)}
             className={cn(
-              'flex items-center justify-between flex-1 px-2 py-1.5 rounded-md text-sm text-left transition-colors',
+              'flex items-center justify-between flex-1 min-w-0 px-2 py-1.5 rounded-md text-sm text-left transition-colors',
               activeBookId === book.id
                 ? 'bg-primary text-primary-foreground'
                 : 'hover:bg-muted text-foreground'
@@ -132,7 +132,7 @@ export function RecipeBookSidebar({
             <button
               onClick={() => onSetFavorite(favoriteBookId === book.id ? null : book.id)}
               className={cn(
-                'p-1 rounded transition-all',
+                'p-1 rounded shrink-0 transition-all',
                 favoriteBookId === book.id
                   ? 'text-amber-400 hover:text-amber-300'
                   : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-amber-400'
@@ -147,7 +147,7 @@ export function RecipeBookSidebar({
           )}
           <button
             onClick={() => handleDelete(book)}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
+            className="opacity-0 group-hover:opacity-100 shrink-0 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
             title="Delete book"
           >
             <Trash2Icon className="h-3 w-3" />

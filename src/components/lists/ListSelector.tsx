@@ -107,7 +107,7 @@ function EditableListName({
 
   if (editing) {
     return (
-      <div className="flex items-center gap-1 flex-1">
+      <div className="flex items-center gap-1 flex-1 min-w-0">
         <input
           ref={inputRef}
           type="text"
@@ -136,11 +136,11 @@ function EditableListName({
   }
 
   return (
-    <div className="flex-1 flex items-center gap-1 group/name">
+    <div className="flex-1 min-w-0 flex items-center gap-1 group/name">
       <button
         onClick={() => onSelect(list.id)}
         onDoubleClick={() => setEditing(true)}
-        className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
+        className={`flex-1 min-w-0 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
           activeListId === list.id
             ? 'bg-primary text-primary-foreground'
             : 'hover:bg-muted'
@@ -213,11 +213,11 @@ function SortableListRow({
         onSelect={onSelect}
         onNameChanged={(id, newName) => onRename?.(id, newName)}
       />
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5 shrink-0">
         {onEditList && (
           <button
             onClick={() => onEditList(list.id)}
-            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0 hidden group-hover:inline-flex"
+            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
             title="Edit list (change owner)"
           >
             <PencilIcon className="h-3 w-3" />
@@ -226,7 +226,7 @@ function SortableListRow({
         {onConvert && (
           <button
             onClick={() => onConvert(list.id, list.type === 'SHOPPING' ? 'TODO' : 'SHOPPING')}
-            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0 hidden group-hover:inline-flex"
+            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
             title={list.type === 'SHOPPING' ? 'Convert to Todo list' : 'Convert to Shopping list'}
           >
             <ArrowLeftRightIcon className="h-3 w-3" />
@@ -238,7 +238,7 @@ function SortableListRow({
             className={`p-1 rounded transition-colors shrink-0 ${
               isDefault
                 ? 'text-yellow-500 hover:text-yellow-600'
-                : 'text-muted-foreground/30 hover:text-muted-foreground/60 hidden group-hover:inline-flex'
+                : 'text-muted-foreground/30 hover:text-muted-foreground/60'
             }`}
             title={isDefault ? 'Remove as default' : 'Set as default list'}
           >
@@ -248,7 +248,7 @@ function SortableListRow({
         {onDeleteList && (
           <button
             onClick={() => onDeleteList(list.id)}
-            className="p-1 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0 hidden group-hover:inline-flex"
+            className="p-1 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
             title="Delete list"
           >
             <Trash2Icon className="h-3 w-3" />
