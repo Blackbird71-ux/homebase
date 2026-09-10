@@ -193,7 +193,60 @@ deploy-build.bat
 sudo sh /volume1/docker/homebase/deploy-nas.sh
 ```
 
-That's it. The script stops the old container, loads the new image, restarts it, and prunes the old image. The tunnel restarts automatically because `config.yml` is already in place.
+That's it. The script verifies the tar and `.env.local` are present, loads the new image, stops the old container, restarts it, and prunes the old image. The tunnel restarts automatically because `config.yml` is already in place.
+
+> The script loads the image **before** stopping the container, so a missing or corrupt
+> tar aborts while the old container is still serving traffic.
+
+### If you must run the steps by hand
+
+Prefer the two scripts above — they are the source of truth. If you do run commands manually,
+these are the exact equivalents. Four details bite every time:
+
+- The **image** is `homebase:latest`. `homebase-app` is the **container** name — `docker image rm homebase-app:latest` is a silent no-op.
+- The NAS path is lowercase `/volume1/docker/homebase/`. The filesystem is case-sensitive; `Homebase` does not exist.
+- The NAS port is **3001**, not 3000 — 3000 belongs to the Memories app.
+- The `-v cloudflared` mount and the `-e` vars are not optional: without the mount the tunnel never starts, and without `DATABASE_URL` the app cannot find the database.
+
+**On the PC** (build only — do not `docker-compose up` on Windows; see note below):
+
+```bat
+cd /d C:\Appdev\HomeBase
+docker build --no-cache -t homebase:latest --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<key from .env.local> .
+docker save homebase:latest -o homebase.tar
+scp homebase.tar deploy-nas.sh .env.local admin@sovereign-main:/volume1/docker/homebase/
+```
+
+**On the NAS:**
+
+```bash
+sudo -i
+docker load -i /volume1/docker/homebase/homebase.tar
+docker stop homebase-app && docker rm -f homebase-app
+docker network create homebase-network 2>/dev/null || true
+docker run -d \
+  --name homebase-app \
+  --restart unless-stopped \
+  --network homebase-network \
+  -p 3001:3000 \
+  -v /volume1/docker/homebase/Data:/data \
+  -v /volume1/docker/homebase/cloudflared:/etc/cloudflared \
+  --env-file /volume1/docker/homebase/.env.local \
+  -e DATABASE_URL=file:/data/homebase.db \
+  -e NODE_ENV=production \
+  -e TZ=Australia/Sydney \
+  -e AUTH_URL=https://homebase.liddleapps.com \
+  -e NEXTAUTH_URL=https://homebase.liddleapps.com \
+  homebase:latest
+docker logs homebase-app --tail 50
+docker image prune -f
+```
+
+> **Never `docker-compose up` on Windows.** `docker-compose.yml` bind-mounts the Synology path
+> `/volume1/docker/homebase/Data`. On Windows, Docker Desktop silently creates that as an empty
+> directory, so the container finds no database, replays every migration from scratch, and
+> crash-loops. The build itself is fine — only starting the container locally is the problem.
+> `deploy-build.bat` deliberately builds without starting for this reason.
 
 ---
 
@@ -301,7 +354,7 @@ node node_modules/prisma/build/index.js migrate status --schema=./prisma/schema.
 ## Local Development
 
 ```bash
-cd "C:\Users\liddlem\Downloads\Claude Apps\HomeBase\homebase"
+cd "C:\Appdev\HomeBase"
 npm run dev
 # Runs at http://localhost:3300
 ```
