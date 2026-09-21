@@ -14,11 +14,11 @@ async function _PATCH(
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
   const body = await req.json()
-  const { isArchived } = body
+  const { isPinned } = body
 
-  if (typeof isArchived !== 'boolean') {
+  if (typeof isPinned !== 'boolean') {
     return NextResponse.json(
-      { error: 'isArchived (boolean) is required' },
+      { error: 'isPinned (boolean) is required' },
       { status: 400 }
     )
   }
@@ -38,9 +38,17 @@ async function _PATCH(
     )
   }
 
+  // Never let one user pin another user's private note
+  if (existingNote.isPrivate && existingNote.createdBy !== user.id) {
+    return NextResponse.json(
+      { error: 'Note not found' },
+      { status: 404 }
+    )
+  }
+
   const note = await prisma.note.update({
     where: { id },
-    data: { isArchived },
+    data: { isPinned },
   })
 
   void createAuditLog(
@@ -48,8 +56,8 @@ async function _PATCH(
     'update',
     'note',
     id,
-    `${isArchived ? 'Archived' : 'Unarchived'} note "${existingNote.title}"`,
-    { note: { title: existingNote.title, isArchived } }
+    `${isPinned ? 'Pinned' : 'Unpinned'} note "${existingNote.title}"`,
+    { note: { title: existingNote.title, isPinned } }
   )
 
   return NextResponse.json({

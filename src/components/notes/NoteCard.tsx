@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, ArchiveRestoreIcon } from 'lucide-react'
+import { CalendarIcon, TagIcon, FolderIcon, Trash2Icon, EditIcon, LockIcon, UsersIcon, ShieldCheckIcon, ArchiveIcon, ArchiveRestoreIcon, PinIcon, PinOffIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatInTz } from '@/lib/timezone'
@@ -17,11 +17,13 @@ interface NoteCardProps {
   isPrivate?: boolean
   isSecured?: boolean
   isArchived?: boolean
+  isPinned?: boolean
   createdAt: string
   updatedAt: string
   onDelete?: (id: string) => void
   onEdit?: (id: string) => void
   onArchive?: (id: string, isArchived: boolean) => void
+  onPin?: (id: string, isPinned: boolean) => void
 }
 
 export function NoteCard({
@@ -34,11 +36,13 @@ export function NoteCard({
   isPrivate = false,
   isSecured = false,
   isArchived = false,
+  isPinned = false,
   createdAt,
   updatedAt,
   onDelete,
   onEdit,
   onArchive,
+  onPin,
 }: NoteCardProps) {
   const tz = useFamilyTimezone()
   const formattedDate = formatInTz(new Date(updatedAt), tz, { day: 'numeric', month: 'short', year: 'numeric' })
@@ -59,6 +63,11 @@ export function NoteCard({
                 {isArchived && (
                   <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-400 px-1.5 py-0.5 rounded-full">
                     <ArchiveIcon className="h-2.5 w-2.5" /> Archived
+                  </span>
+                )}
+                {isPinned && !isArchived && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                    <PinIcon className="h-2.5 w-2.5" /> Pinned
                   </span>
                 )}
                 {isSecured && !isArchived && (
@@ -151,6 +160,25 @@ export function NoteCard({
       </Link>
       
       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        {onPin && !isArchived && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+            title={isPinned ? 'Unpin from dashboard' : 'Pin to dashboard'}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onPin(id, !isPinned)
+            }}
+          >
+            {isPinned ? (
+              <PinOffIcon className="h-3 w-3" />
+            ) : (
+              <PinIcon className="h-3 w-3" />
+            )}
+          </Button>
+        )}
         {onArchive && (
           <Button
             variant="ghost"

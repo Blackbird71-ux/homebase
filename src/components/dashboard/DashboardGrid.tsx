@@ -15,6 +15,7 @@ import { WeeklySummaryCard } from './WeeklySummaryCard'
 import { ChoreScheduleCard } from './ChoreScheduleCard'
 import { BillsToPayCard } from './BillsToPayCard'
 import { UpcomingTripsCard } from './UpcomingTripsCard'
+import { PinnedNotesCard } from './PinnedNotesCard'
 import { WeatherCard } from './WeatherCard'
 
 type ScopeDays = 7 | 14 | 30
@@ -206,6 +207,8 @@ function renderCard(
       return <BillsToPayCard key={card.id} bills={data.billsToPay} />
     case 'upcoming-trips':
       return <UpcomingTripsCard key={card.id} trips={data.trips} />
+    case 'pinned-notes':
+      return <PinnedNotesCard key={card.id} notes={data.pinnedNotes} timezone={timezone} />
     case 'current-weather':
       return <WeatherCard key={card.id} />
     default:

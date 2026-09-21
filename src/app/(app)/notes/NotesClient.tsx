@@ -21,6 +21,7 @@ interface Note {
   tags: string[]
   isPrivate: boolean
   isArchived?: boolean
+  isPinned?: boolean
   isSecured?: boolean
   createdBy: string
   createdAt: string
@@ -57,6 +58,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
               ...note,
               isPrivate: (note as { isPrivate?: boolean }).isPrivate ?? false,
               isArchived: (note as { isArchived?: boolean }).isArchived ?? false,
+              isPinned: (note as { isPinned?: boolean }).isPinned ?? false,
             })) as Note[])
           }
         })
@@ -259,6 +261,27 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
     }
   }
 
+  const handlePinNote = async (id: string, isPinned: boolean) => {
+    try {
+      const response = await fetch(`/api/notes/${id}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update pin status')
+      }
+
+      const updatedNote = await response.json()
+      setNotes(notes.map(note => note.id === updatedNote.id ? { ...updatedNote, isPrivate: updatedNote.isPrivate ?? false, isArchived: updatedNote.isArchived ?? false, isPinned: updatedNote.isPinned ?? false } : note))
+      toast.success(isPinned ? 'Pinned to dashboard' : 'Unpinned from dashboard')
+    } catch (error) {
+      console.error('Error pinning note:', error)
+      toast.error('Failed to update pin status')
+    }
+  }
+
   const handleEditorSubmit = (data: {
     title: string
     content: string
@@ -436,6 +459,7 @@ export function NotesClient({ initialNotes, initialCategories, currentUserId, ta
               onDelete={handleDeleteNote}
               onEdit={handleEditNote}
               onArchive={handleArchiveNote}
+              onPin={handlePinNote}
             />
           ))}
         </div>

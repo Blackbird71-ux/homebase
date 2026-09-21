@@ -483,6 +483,7 @@ model Note {
   tags       String?  // JSON array of tags
   isPrivate  Boolean  @default(false)  // private = only visible to creator
   isArchived Boolean  @default(false)  // archived = hidden from main view, kept for reference
+  isPinned   Boolean  @default(false)  // pinned = surfaced on the dashboard Notes card
   pinHash    String?  // bcrypt hash of PIN for secure notes (null = not secured)
   createdBy  String
   familyId   String

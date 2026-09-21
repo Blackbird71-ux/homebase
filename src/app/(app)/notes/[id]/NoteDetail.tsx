@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NoteEditor } from '@/components/notes/NoteEditor'
-import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon, ShieldCheckIcon, UnlockIcon, ArchiveIcon, ArchiveRestoreIcon } from 'lucide-react'
+import { CalendarIcon, FolderIcon, TagIcon, EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, UsersIcon, ShieldCheckIcon, UnlockIcon, ArchiveIcon, ArchiveRestoreIcon, PinIcon, PinOffIcon } from 'lucide-react'
 import { formatInTz } from '@/lib/timezone'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { toast } from 'sonner'
@@ -22,6 +22,7 @@ interface NoteDetailProps {
     tags: string[]
     isPrivate: boolean
     isArchived?: boolean
+    isPinned?: boolean
     isSecured?: boolean
     isLocked?: boolean
     pinHash?: string | null
@@ -186,6 +187,30 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
     }
   }
 
+  const handlePin = async () => {
+    const newPinned = !note.isPinned
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/notes/${note.id}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned: newPinned }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update pin status')
+      }
+
+      toast.success(newPinned ? 'Pinned to dashboard' : 'Unpinned from dashboard')
+      router.refresh()
+    } catch (error) {
+      console.error('Error pinning note:', error)
+      toast.error('Failed to update pin status')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const formattedCreatedAt = formatInTz(new Date(note.createdAt), tz, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
   const formattedUpdatedAt = formatInTz(new Date(note.updatedAt), tz, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
   const isRecentlyUpdated = new Date(note.updatedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
@@ -289,6 +314,11 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
                 className="text-2xl font-bold"
                 dangerouslySetInnerHTML={{ __html: note.title }}
               />
+              {note.isPinned && (
+                <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  <PinIcon className="h-3 w-3" /> Pinned
+                </span>
+              )}
               {note.isSecured && (
                 <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded-full">
                   <ShieldCheckIcon className="h-3 w-3" /> Secure
@@ -323,6 +353,20 @@ export function NoteDetail({ note, tagColors }: NoteDetailProps) {
         </div>
         
         <div className="flex gap-2">
+          {!note.isArchived && (
+            <Button
+              variant="outline"
+              onClick={handlePin}
+              disabled={isLoading || isDeleting}
+              title={note.isPinned ? 'Unpin from dashboard' : 'Pin to dashboard'}
+            >
+              {note.isPinned ? (
+                <><PinOffIcon className="h-4 w-4 mr-2" /> Unpin</>
+              ) : (
+                <><PinIcon className="h-4 w-4 mr-2" /> Pin</>
+              )}
+            </Button>
+          )}
           {note.isSecured && (
             <Button
               variant="outline"

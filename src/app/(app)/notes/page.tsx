@@ -21,6 +21,7 @@ async function getData(familyId: string, userId: string) {
       tags: true,
       isPrivate: true,
       isArchived: true,
+      isPinned: true,
       pinHash: true,
       createdBy: true,
       createdAt: true,
@@ -50,6 +51,7 @@ async function getData(familyId: string, userId: string) {
       category: note.category,
       isPrivate: note.isPrivate,
       isArchived: note.isArchived,
+      isPinned: note.isPinned,
       isSecured: !!note.pinHash,
       tags: (() => {
         if (!note.tags) return []

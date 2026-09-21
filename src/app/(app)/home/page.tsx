@@ -8,6 +8,7 @@ import type { DashboardData, TodaysMeal, WeeklySummaryData } from '@/types'
 import { buildChoreSchedule, choreScheduleWhere } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { liveBillWhere } from '@/lib/finance-live-filter'
+import { getPinnedNotes } from '@/lib/pinned-notes'
 
 /**
  * Normalize a date string to midnight UTC for meal plan queries.
@@ -46,6 +47,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const needsChores = visibleCardIds.has('chore-schedule')
   const needsBills  = visibleCardIds.has('bills-to-pay')
   const needsTrips  = visibleCardIds.has('upcoming-trips')
+  const needsNotes  = visibleCardIds.has('pinned-notes')
 
   // Compute rolling scope-day window from today (uses todayStart which is already tz-aware)
   const weekStartUtc = new Date(todayStart)
@@ -56,7 +58,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
     new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(ymd + 'T00:00:00Z'))
   const weekLabel = `${fmtShort(todayStr2)} – ${fmtShort(weekEndStr)}`
 
-  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData, pinnedNotesData] = await Promise.all([
     needsEvents
       ? prisma.event.findMany({
           where: {
@@ -229,6 +231,9 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
           },
         })
       : Promise.resolve([]),
+    needsNotes && userId
+      ? getPinnedNotes(familyId, userId)
+      : Promise.resolve([]),
   ])
 
   // Map each meal type from a set of meal plans.
@@ -371,6 +376,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
         autoPay: bill.autoPay,
       }
     }),
+    pinnedNotes: pinnedNotesData,
     trips: tripsData.map(t => ({
       id: t.id,
       title: t.title,

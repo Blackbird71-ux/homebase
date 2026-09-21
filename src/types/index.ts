@@ -40,6 +40,16 @@ export interface BillSummaryItem {
   remainingBalance?: number
 }
 
+export interface PinnedNoteSummary {
+  id: string
+  title: string
+  content: string
+  category: string | null
+  isPrivate: boolean
+  isSecured: boolean
+  updatedAt: string
+}
+
 export interface DashboardData {
   weeklySummary: WeeklySummaryData | null
   upcomingEvents: UpcomingEvent[]
@@ -50,6 +60,7 @@ export interface DashboardData {
   todoSummary: TodoSummary | null
   choreSchedule: ChoreScheduleDay[]
   billsToPay: BillSummaryItem[]
+  pinnedNotes: PinnedNoteSummary[]
   trips: {
     id: string
     title: string
