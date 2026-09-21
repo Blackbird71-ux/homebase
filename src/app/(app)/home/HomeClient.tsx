@@ -87,6 +87,11 @@ export function HomeClient({
 
   function handleSaved(savedCards: DashboardCardConfig[]) {
     setCards(savedCards)
+    // The server only fetches data for cards that were visible when the page
+    // rendered (the needsEvents/needsNotes/... gates in home/page.tsx), so a card
+    // just switched on in Customise would show its empty state until the next
+    // navigation. /api/dashboard is ungated, so refetching fills it in.
+    void fetchDashboard(scope, currentTodoListId, currentShoppingListId)
   }
 
   const fetchDashboard = useCallback(async (newScope: ScopeDays, todoListId: string | null, shoppingListId: string | null) => {
