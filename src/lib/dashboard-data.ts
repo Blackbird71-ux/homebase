@@ -293,15 +293,14 @@ export async function getDashboardData({
     })
     .filter(e => e.start >= weekStartUtc && e.start < weekEndUtc)
     .sort((a, b) => a.start.getTime() - b.start.getTime())
-    .slice(0, 3)
 
   const weeklySummary: WeeklySummaryData | null = needsWeekly
     ? {
         weekLabel,
-        eventCount: expandedWeekEvents.length,
+        eventCount: expandedWeekEvents.length, // full count; only the first 3 are listed
         mealCount: weekMealPlans.length,
         pendingTodoCount: weekTodoLists[0]?._count?.items ?? 0,
-        topEvents: expandedWeekEvents.map(e => ({
+        topEvents: expandedWeekEvents.slice(0, 3).map(e => ({
           id: e.id,
           title: e.title,
           start: e.start.toISOString(),
