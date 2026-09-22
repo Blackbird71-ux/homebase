@@ -5,7 +5,7 @@ import type { DashboardCardLayout } from '@/lib/dashboard-cards'
 
 export const MIN_WIDTH_PCT = 25
 const MIN_HEIGHT_PX = 150
-const GAP_PX = 16
+const GAP_PX = 8
 // Estimated height used for collision detection when height is 'auto'
 const AUTO_HEIGHT_EST_PX = 280
 
@@ -43,37 +43,40 @@ export function isStalePercentageY(layout: DashboardCardLayout): boolean {
   return layout.height === 'auto' && layout.y > 0 && layout.y < 150
 }
 
-/**
- * Push any overlapping cards downward so the initial layout has no collisions.
- * Uses a fixed container width estimate — good enough for load-time correction.
- */
-function compactLayouts(layouts: CardLayoutMap, containerW = 1200): CardLayoutMap {
-  const result: CardLayoutMap = JSON.parse(JSON.stringify(layouts))
-  const ids = Object.keys(result).sort((a, b) => result[a].y - result[b].y)
+/** Card height in px: the rendered height when measured, else the stored/estimated height. */
+function cardHeight(id: string, layout: DashboardCardLayout, measured: Record<string, number>): number {
+  return measured[id] ?? (layout.height === 'auto' ? AUTO_HEIGHT_EST_PX : layout.height)
+}
 
-  for (let i = 0; i < ids.length; i++) {
-    const id = ids[i]
-    const layout = result[id]
-    const hPx = layout.height === 'auto' ? AUTO_HEIGHT_EST_PX : (layout.height as number)
+/**
+ * Float every card up so it sits GAP_PX below the lowest card above it that
+ * shares any of its horizontal span (top-to-bottom order is preserved). Removes
+ * overlaps and leftover gaps alike. Returns the same object when nothing moved.
+ */
+function compactLayouts(layouts: CardLayoutMap, containerW = 1200, measured: Record<string, number> = {}): CardLayoutMap {
+  const ids = Object.keys(layouts).sort((a, b) => layouts[a].y - layouts[b].y || layouts[a].x - layouts[b].x)
+  const result: CardLayoutMap = {}
+  let changed = false
+
+  for (const id of ids) {
+    const layout = layouts[id]
     const left = (layout.x / 100) * containerW
     const right = left + (layout.width / 100) * containerW
 
-    let minY = layout.y
-    for (let j = 0; j < i; j++) {
-      const other = result[ids[j]]
-      const otherH = other.height === 'auto' ? AUTO_HEIGHT_EST_PX : (other.height as number)
+    let y = 0
+    for (const placedId of Object.keys(result)) {
+      const other = result[placedId]
       const otherLeft = (other.x / 100) * containerW
       const otherRight = otherLeft + (other.width / 100) * containerW
-
-      // Only push down if horizontally overlapping
       if (left < otherRight && right > otherLeft) {
-        minY = Math.max(minY, other.y + otherH + GAP_PX)
+        y = Math.max(y, other.y + cardHeight(placedId, other, measured) + GAP_PX)
       }
     }
-    layout.y = minY
+    if (y !== layout.y) changed = true
+    result[id] = { ...layout, y }
   }
 
-  return result
+  return changed ? result : layouts
 }
 
 function buildDefaultLayouts(cardIds: string[], base: CardLayoutMap = {}): CardLayoutMap {
@@ -141,6 +144,27 @@ export function useCardLayout(
 
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Rendered card heights (px), reported by each card. Auto-height cards vary a
+  // lot, so layout math must use real heights rather than a fixed estimate.
+  const [measuredHeights, setMeasuredHeights] = useState<Record<string, number>>({})
+  const measuredRef = useRef(measuredHeights)
+  measuredRef.current = measuredHeights
+
+  const reportHeight = useCallback((cardId: string, height: number) => {
+    if (height <= 0) return // hidden (e.g. mobile breakpoint)
+    setMeasuredHeights(prev =>
+      prev[cardId] !== undefined && Math.abs(prev[cardId] - height) < 1 ? prev : { ...prev, [cardId]: height }
+    )
+  }, [])
+
+  // Keep cards packed against the card above them. Skipped mid-drag/resize so
+  // the card under the pointer isn't yanked around; runs again when it ends.
+  useEffect(() => {
+    if (isDragging || isResizing) return
+    const cw = containerRef.current?.getBoundingClientRect().width || 1200
+    setLayouts(prev => compactLayouts(prev, cw, measuredHeights))
+  }, [measuredHeights, isDragging, isResizing, cardIdsKey])
+
   // Persist debounced
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const layoutsRef = useRef(layouts)
@@ -167,9 +191,9 @@ export function useCardLayout(
 
   // y is always in pixels. x and width are percentages of container width.
   const getBoundingBox = useCallback(
-    (layout: DashboardCardLayout, containerW: number) => {
+    (id: string, layout: DashboardCardLayout, containerW: number) => {
       const wPx = (layout.width / 100) * containerW
-      const hPx = layout.height === 'auto' ? AUTO_HEIGHT_EST_PX : layout.height
+      const hPx = cardHeight(id, layout, measuredRef.current)
       return {
         left: (layout.x / 100) * containerW,
         top: layout.y,
@@ -209,13 +233,13 @@ export function useCardLayout(
         hasOverlap = false
         iteration++
 
-        const movedBox = getBoundingBox(movedLayout, containerW)
+        const movedBox = getBoundingBox(movedCardId, movedLayout, containerW)
 
         for (const id of ids) {
           const otherLayout = result[id]
           if (!otherLayout) continue
 
-          const otherBox = getBoundingBox(otherLayout, containerW)
+          const otherBox = getBoundingBox(id, otherLayout, containerW)
 
           if (rectsOverlap(movedBox, otherBox)) {
             // Push the other card down below the moved card (y is always pixels)
@@ -223,12 +247,12 @@ export function useCardLayout(
             otherLayout.y = Math.max(0, otherLayout.y + pushAmount)
             hasOverlap = true
 
-            const newOtherBox = getBoundingBox(otherLayout, containerW)
+            const newOtherBox = getBoundingBox(id, otherLayout, containerW)
             for (const otherId of ids) {
               if (otherId === id) continue
               const thirdLayout = result[otherId]
               if (!thirdLayout) continue
-              const thirdBox = getBoundingBox(thirdLayout, containerW)
+              const thirdBox = getBoundingBox(otherId, thirdLayout, containerW)
               if (rectsOverlap(newOtherBox, thirdBox)) {
                 const push2 = newOtherBox.bottom - thirdBox.top + GAP_PX
                 thirdLayout.y = Math.max(0, thirdLayout.y + push2)
@@ -236,8 +260,8 @@ export function useCardLayout(
               }
             }
 
-            const updatedMovedBox = getBoundingBox(movedLayout, containerW)
-            const pushedBox = getBoundingBox(otherLayout, containerW)
+            const updatedMovedBox = getBoundingBox(movedCardId, movedLayout, containerW)
+            const pushedBox = getBoundingBox(id, otherLayout, containerW)
             if (rectsOverlap(updatedMovedBox, pushedBox)) {
               const pushAgain = updatedMovedBox.bottom - pushedBox.top + GAP_PX
               otherLayout.y = Math.max(0, otherLayout.y + pushAgain)
@@ -245,11 +269,11 @@ export function useCardLayout(
           }
         }
 
-        const updatedMoved = getBoundingBox(movedLayout, containerW)
+        const updatedMoved = getBoundingBox(movedCardId, movedLayout, containerW)
         for (const id of ids) {
           const otherLayout = result[id]
           if (!otherLayout) continue
-          const otherBox = getBoundingBox(otherLayout, containerW)
+          const otherBox = getBoundingBox(id, otherLayout, containerW)
           if (rectsOverlap(updatedMoved, otherBox)) {
             hasOverlap = true
           }
@@ -484,9 +508,16 @@ export function useCardLayout(
     [resolveCollisions]
   )
 
+  const containerHeight = Object.entries(layouts).reduce(
+    (max, [id, l]) => Math.max(max, l.y + cardHeight(id, l, measuredHeights) + GAP_PX),
+    0
+  )
+
   return {
     layouts,
     setLayouts,
+    containerHeight,
+    reportHeight,
     containerRef,
     isDragging,
     dragCardId,

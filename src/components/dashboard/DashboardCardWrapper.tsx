@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { DashboardCardLayout } from '@/lib/dashboard-cards'
 import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
 import { GripVertical, Maximize2, Minimize2 } from 'lucide-react'
@@ -20,6 +20,8 @@ interface DashboardCardWrapperProps {
   onToggleWidth: (cardId: string) => void
   containerWidth: number
   allLayouts: CardLayoutMap
+  /** Reports the card's rendered height (px) so the layout can pack cards against it */
+  onHeightChange: (cardId: string, height: number) => void
 }
 
 export function DashboardCardWrapper({
@@ -32,7 +34,20 @@ export function DashboardCardWrapper({
   onResizeStart,
   onToggleWidth,
   containerWidth,
+  onHeightChange,
 }: DashboardCardWrapperProps) {
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+    const report = () => onHeightChange(cardId, el.offsetHeight)
+    report()
+    const observer = new ResizeObserver(report)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [cardId, onHeightChange])
+
   const leftPx = (layout.x / 100) * (containerWidth || 800)
   const widthPx = (layout.width / 100) * (containerWidth || 800)
   // y is always in pixels
@@ -47,6 +62,7 @@ export function DashboardCardWrapper({
 
   return (
     <div
+      ref={cardRef}
       className={cn(
         'hb-dash-card',
         'absolute rounded-lg border bg-card text-card-foreground shadow-sm',

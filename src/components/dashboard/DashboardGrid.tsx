@@ -103,6 +103,8 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
     handleResizeStart,
     toggleWidth,
     resetLayouts,
+    containerHeight,
+    reportHeight,
   } = useCardLayout(initialLayouts, cardIds, onLayoutsChange)
 
   useImperativeHandle(ref, () => ({ resetLayouts }), [resetLayouts])
@@ -130,7 +132,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
   return (
     <div className="relative pb-4">
       {/* Mobile layout: single column stacked */}
-      <div className="grid grid-cols-1 gap-4 md:hidden">
+      <div className="grid grid-cols-1 gap-2 md:hidden [&_[data-slot=card]]:gap-2 [&_[data-slot=card]]:py-3 [&_[data-slot=card-header]]:px-3 [&_[data-slot=card-content]]:px-3">
         {visibleCards.map((card) => (
           <div key={card.id}>{renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange, choreShowOnlyMine, onChoreShowOnlyMineChange, availableShoppingLists, selectedShoppingListId, onShoppingListChange)}</div>
         ))}
@@ -144,7 +146,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
         )}
         style={{
           userSelect: isDragging || isResizing ? 'none' : undefined,
-          minHeight: Math.max(600, ...Object.values(layouts).map(l => l.y + (l.height === 'auto' ? 300 : (l.height as number)) + 16)) + 'px',
+          minHeight: Math.max(600, containerHeight) + 'px',
         }}
       >
         {visibleCards.map((card) => {
@@ -165,6 +167,7 @@ export const DashboardGrid = forwardRef<DashboardGridHandle, DashboardGridProps>
               onToggleWidth={toggleWidth}
               containerWidth={containerWidth}
               allLayouts={layouts}
+              onHeightChange={reportHeight}
             >
               {renderCard(card, data, timezone, scope, onScopeChange, availableTodoLists, selectedTodoListId, onTodoListChange, choreShowOnlyMine, onChoreShowOnlyMineChange, availableShoppingLists, selectedShoppingListId, onShoppingListChange)}
             </DashboardCardWrapper>
