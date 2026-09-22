@@ -27,7 +27,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { DASHBOARD_CARDS, type DashboardCardConfig } from '@/lib/dashboard-cards'
+import { DASHBOARD_CARDS, getCardVariant, type DashboardCardConfig, type DashboardCardVariant } from '@/lib/dashboard-cards'
 
 interface DashboardCustomiserProps {
   open: boolean
@@ -39,11 +39,15 @@ interface DashboardCustomiserProps {
 function SortableCard({
   card,
   label,
+  variants,
   onToggle,
+  onVariantChange,
 }: {
   card: DashboardCardConfig
   label: string
+  variants?: DashboardCardVariant[]
   onToggle: () => void
+  onVariantChange: (variant: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -72,6 +76,18 @@ function SortableCard({
         <GripVerticalIcon className="h-5 w-5" />
       </button>
       <span className="flex-1 text-sm font-medium">{label}</span>
+      {variants && variants.length > 0 && (
+        <select
+          value={getCardVariant(card)}
+          onChange={(e) => onVariantChange(e.target.value)}
+          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+          aria-label={`${label} display option`}
+        >
+          {variants.map((v) => (
+            <option key={v.value} value={v.value}>{v.label}</option>
+          ))}
+        </select>
+      )}
       <button
         onClick={onToggle}
         className={`p-1.5 rounded-md transition-colors ${
@@ -121,6 +137,12 @@ export function DashboardCustomiser({
     )
   }
 
+  function handleVariantChange(id: string, variant: string) {
+    setCards((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, variant } : c))
+    )
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
@@ -138,7 +160,7 @@ export function DashboardCustomiser({
     }
   }
 
-  const cardLabels = new Map(DASHBOARD_CARDS.map((c) => [c.id, c.label]))
+  const cardDefs = new Map(DASHBOARD_CARDS.map((c) => [c.id, c]))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -147,7 +169,7 @@ export function DashboardCustomiser({
           <DialogTitle>Customise Dashboard</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Drag to reorder cards. Toggle visibility with the eye icon.
+          Drag to reorder cards. Toggle visibility with the eye icon, and pick a display option where offered.
         </p>
         <DndContext
           sensors={sensors}
@@ -163,8 +185,10 @@ export function DashboardCustomiser({
                 <SortableCard
                   key={card.id}
                   card={card}
-                  label={cardLabels.get(card.id) ?? card.id}
+                  label={cardDefs.get(card.id)?.label ?? card.id}
+                  variants={cardDefs.get(card.id)?.variants}
                   onToggle={() => handleToggle(card.id)}
+                  onVariantChange={(v) => handleVariantChange(card.id, v)}
                 />
               ))}
             </div>

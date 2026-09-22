@@ -32,6 +32,7 @@ model Family {
   ingredientMappings   IngredientMapping[]
   tags                 Tag[]
   notes                Note[]
+  stickyNotes          StickyNote[]
   eventCategories      EventCategory[]
   mealPlanTemplates    MealPlanTemplate[]
   chores               Chore[]
@@ -492,6 +493,20 @@ model Note {
   updatedAt  DateTime @updatedAt
 
   @@index([familyId])
+}
+
+// Dashboard sticky note: free text, one shared note per family plus one personal note per user
+model StickyNote {
+  id          String   @id @default(cuid())
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id])
+  ownerKey    String   // 'shared' = whole family; otherwise the owning user's id (personal)
+  content     String   @default("")
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([familyId, ownerKey])
 }
 
 model Chore {

@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { DashboardData } from '@/types'
-import type { DashboardCardConfig } from '@/lib/dashboard-cards'
+import { getCardVariant, type DashboardCardConfig } from '@/lib/dashboard-cards'
 import type { CardLayoutMap } from '@/lib/hooks/useCardLayout'
 import { useCardLayout } from '@/lib/hooks/useCardLayout'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,8 @@ import { BillsToPayCard } from './BillsToPayCard'
 import { UpcomingTripsCard } from './UpcomingTripsCard'
 import { PinnedNotesCard } from './PinnedNotesCard'
 import { WeatherCard } from './WeatherCard'
+import { CalendarWeekCard } from './CalendarWeekCard'
+import { StickyNoteCard } from './StickyNoteCard'
 
 type ScopeDays = 7 | 14 | 30
 
@@ -190,7 +192,7 @@ function renderCard(
 ) {
   switch (card.id) {
     case 'weekly-summary':
-      return <WeeklySummaryCard key={card.id} data={data.weeklySummary} scope={scope} onScopeChange={onScopeChange} availableLists={availableTodoLists} selectedListId={selectedTodoListId} onListChange={onTodoListChange} />
+      return <WeeklySummaryCard key={card.id} data={data.weeklySummary} scope={scope} onScopeChange={onScopeChange} availableLists={availableTodoLists} selectedListId={selectedTodoListId} onListChange={onTodoListChange} variant={getCardVariant(card)} todaysMeals={data.todaysMeals} tomorrowsMeals={data.tomorrowsMeals} />
     case 'upcoming-events':
       return <UpcomingEventsCard key={card.id} events={data.upcomingEvents} timezone={timezone} />
     case 'todays-meals':
@@ -202,7 +204,7 @@ function renderCard(
     case 'todo-summary':
       return <TodoCard key={card.id} todo={data.todoSummary} />
     case 'chore-schedule':
-      return <ChoreScheduleCard key={card.id} data={data.choreSchedule} timezone={timezone} scope={scope} onScopeChange={onScopeChange} showOnlyMine={choreShowOnlyMine} onShowOnlyMineChange={onChoreShowOnlyMineChange} />
+      return <ChoreScheduleCard key={card.id} data={data.choreSchedule} timezone={timezone} scope={scope} onScopeChange={onScopeChange} showOnlyMine={choreShowOnlyMine} onShowOnlyMineChange={onChoreShowOnlyMineChange} variant={getCardVariant(card)} />
     case 'bills-to-pay':
       return <BillsToPayCard key={card.id} bills={data.billsToPay} />
     case 'upcoming-trips':
@@ -211,6 +213,12 @@ function renderCard(
       return <PinnedNotesCard key={card.id} notes={data.pinnedNotes} timezone={timezone} />
     case 'current-weather':
       return <WeatherCard key={card.id} />
+    case 'calendar-week':
+      return <CalendarWeekCard key={card.id} events={data.calendarWeek} />
+    case 'sticky-note':
+      return <StickyNoteCard key={card.id} note={data.stickyNotes.shared} scope="shared" />
+    case 'sticky-note-personal':
+      return <StickyNoteCard key={card.id} note={data.stickyNotes.personal} scope="personal" />
     default:
       return null
   }

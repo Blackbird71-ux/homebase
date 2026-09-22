@@ -13,7 +13,7 @@ import { eventColor } from '@/lib/event-color'
 import { toast } from 'sonner'
 import { OFFLINE_QUEUE_FLUSHED } from '@/lib/offline-queue'
 import { MEAL_PLAN_SCOPE, queueMealPlanSlotState } from '@/lib/meal-plan-offline'
-import type { WeatherData } from '@/types'
+import type { WeatherData, TodaysMeals, TodaysMeal } from '@/types'
 
 export interface WeeklySummaryData {
   weekLabel: string
@@ -27,6 +27,13 @@ export interface WeeklySummaryData {
 
 type ScopeDays = 7 | 14 | 30
 
+const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snacks'] as const
+
+function listMeals(meals: TodaysMeals | undefined): TodaysMeal[] {
+  if (!meals) return []
+  return MEAL_ORDER.map((t) => meals[t]).filter((m): m is TodaysMeal => m !== null)
+}
+
 function todayLocal(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -39,6 +46,9 @@ export function WeeklySummaryCard({
   availableLists,
   selectedListId,
   onListChange,
+  variant,
+  todaysMeals,
+  tomorrowsMeals,
 }: {
   data: WeeklySummaryData | null
   scope?: ScopeDays
@@ -46,6 +56,10 @@ export function WeeklySummaryCard({
   availableLists?: { id: string; name: string }[]
   selectedListId?: string | null
   onListChange?: (listId: string) => void
+  /** 'today-tomorrow' replaces the Meals column with today's and tomorrow's meals + descriptions */
+  variant?: string
+  todaysMeals?: TodaysMeals
+  tomorrowsMeals?: TodaysMeals
 }) {
   const router = useRouter()
   const [weatherOpen, setWeatherOpen] = useState(false)
@@ -272,24 +286,56 @@ export function WeeklySummaryCard({
                 <Plus className="h-3.5 w-3.5" />
               </button>
             </div>
-            <Link href="/meal-plan" className="block hover:opacity-80 transition-opacity">
-              <p className="text-lg font-bold">{data.mealCount}</p>
-              <p className="text-xs text-muted-foreground">planned meals</p>
-              {data.topMeals.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {data.topMeals.map((m, i) => (
-                    <div key={i}>
-                      <p className="text-xs truncate">
-                        <span className="text-muted-foreground">{m.day}:</span> {m.meal}
-                      </p>
-                      {m.note && (
-                        <p className="text-xs text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
+            {variant === 'today-tomorrow' ? (
+              <Link href="/meal-plan" className="block hover:opacity-80 transition-opacity">
+                {([['Today', todaysMeals], ['Tomorrow', tomorrowsMeals]] as const).map(([label, meals]) => {
+                  const list = listMeals(meals)
+                  return (
+                    <div key={label} className="mt-2 first:mt-1">
+                      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+                      {list.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/60">Nothing planned</p>
+                      ) : (
+                        <div className="space-y-1 mt-0.5">
+                          {list.map((m) => (
+                            <div key={m.mealPlanId}>
+                              <p className="text-xs truncate">
+                                <span className="text-muted-foreground capitalize">{m.mealType}:</span> {m.recipeName ?? m.note ?? '—'}
+                              </p>
+                              {m.recipeDescription && (
+                                <p className="text-xs text-muted-foreground/70 pl-3 leading-tight line-clamp-2">{m.recipeDescription}</p>
+                              )}
+                              {m.recipeName && m.note && (
+                                <p className="text-xs text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </Link>
+                  )
+                })}
+              </Link>
+            ) : (
+              <Link href="/meal-plan" className="block hover:opacity-80 transition-opacity">
+                <p className="text-lg font-bold">{data.mealCount}</p>
+                <p className="text-xs text-muted-foreground">planned meals</p>
+                {data.topMeals.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {data.topMeals.map((m, i) => (
+                      <div key={i}>
+                        <p className="text-xs truncate">
+                          <span className="text-muted-foreground">{m.day}:</span> {m.meal}
+                        </p>
+                        {m.note && (
+                          <p className="text-xs text-muted-foreground/70 truncate pl-3 leading-tight">{m.note}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Link>
+            )}
           </div>
 
           {/* To-dos summary */}

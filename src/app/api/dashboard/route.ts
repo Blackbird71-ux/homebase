@@ -10,6 +10,8 @@ import { generateRecurrenceInstances } from '@/lib/recurrence'
 import type { DashboardData, TodaysMeal } from '@/types'
 import { liveBillWhere } from '@/lib/finance-live-filter'
 import { getPinnedNotes } from '@/lib/pinned-notes'
+import { getCalendarWeekEvents } from '@/lib/calendar-week'
+import { getStickyNotes } from '@/lib/sticky-note'
 
 function normalizeToUtcMidnight(dateStr: string): Date {
   const d = new Date(dateStr + 'T00:00:00Z')
@@ -66,6 +68,8 @@ async function _GET(request: NextRequest) {
     billsData,
     tripsData,
     pinnedNotesData,
+    calendarWeekData,
+    stickyNotesData,
   ] = await Promise.all([
     prisma.event.findMany({
       where: {
@@ -210,6 +214,10 @@ async function _GET(request: NextRequest) {
     }),
     // Pinned notes — dashboard Notes card
     getPinnedNotes(user.familyId, user.id),
+    // Next 7 Days calendar card
+    getCalendarWeekEvents(user.familyId, timezone),
+    // Sticky note card (shared + this user's personal note)
+    getStickyNotes(user.familyId, user.id),
   ])
 
   function mealByType(plans: typeof todayMealPlans, type: string): TodaysMeal | null {
@@ -336,6 +344,8 @@ async function _GET(request: NextRequest) {
       : null,
     choreSchedule: buildChoreSchedule(choreData, todayStart, todayEnd, timezone, 30),
     pinnedNotes: pinnedNotesData,
+    calendarWeek: calendarWeekData,
+    stickyNotes: stickyNotesData,
     trips: tripsData.map((trip) => ({
       id: trip.id,
       title: trip.title,

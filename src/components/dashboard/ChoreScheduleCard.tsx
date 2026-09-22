@@ -20,6 +20,7 @@ export function ChoreScheduleCard({
   onScopeChange,
   showOnlyMine: externalShowOnlyMine,
   onShowOnlyMineChange,
+  variant,
 }: {
   data: ChoreScheduleDay[] | null | undefined
   timezone?: string
@@ -27,6 +28,8 @@ export function ChoreScheduleCard({
   onScopeChange?: (scope: ScopeDays) => void
   showOnlyMine?: boolean
   onShowOnlyMineChange?: (onlyMine: boolean) => void
+  /** 'overdue-today' shows only the Overdue section and today's chores */
+  variant?: string
 }) {
   const router = useRouter()
   const [internalScope, setInternalScope] = useState<ScopeDays>(7)
@@ -48,8 +51,10 @@ export function ChoreScheduleCard({
   const [members, setMembers] = useState<{ id: string; name: string }[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
 
-  // Use parent scope if provided, otherwise fall back to internal state
-  const scope = parentScope ?? internalScope
+  const overdueTodayOnly = variant === 'overdue-today'
+  // Use parent scope if provided, otherwise fall back to internal state.
+  // Overdue + Today mode only needs the shortest window.
+  const scope: ScopeDays = overdueTodayOnly ? 7 : (parentScope ?? internalScope)
 
   const fetchSchedule = useCallback(async (s: ScopeDays, onlyMine: boolean) => {
     if (!timezone) return
@@ -191,21 +196,23 @@ export function ChoreScheduleCard({
   // Compute today's YMD for highlighting
   const today = timezone ? todayStringInTz(timezone) : new Date().toISOString().slice(0, 10)
 
-  const isEmpty = !data || data.every((d) => d.chores.length === 0)
-
   // If there's an overdue section (day === 'Overdue'), include it plus scope regular days
   const rawDays = data ?? []
   const hasOverdueSection = rawDays.length > 0 && rawDays[0].day === 'Overdue'
-  const displayDays = hasOverdueSection
-    ? rawDays.slice(0, scope + 1)  // Overdue section + scope days
-    : rawDays.slice(0, scope)
+  const displayDays = overdueTodayOnly
+    ? rawDays.filter((d) => d.day === 'Overdue' || d.date.slice(0, 10) === today)
+    : hasOverdueSection
+      ? rawDays.slice(0, scope + 1)  // Overdue section + scope days
+      : rawDays.slice(0, scope)
+
+  const isEmpty = displayDays.every((d) => d.chores.length === 0)
 
   return (
     <Card className="flex flex-col h-full">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-            <ClipboardList className="h-4 w-4 shrink-0" /> Chore Schedule
+            <ClipboardList className="h-4 w-4 shrink-0" /> {overdueTodayOnly ? 'Chores — Overdue + Today' : 'Chore Schedule'}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); handleOpenChoreDialog() }}
@@ -232,6 +239,7 @@ export function ChoreScheduleCard({
               <UsersIcon className="h-3 w-3" />
               <span>{showOnlyMine ? 'Mine' : 'All'}</span>
             </button>
+            {!overdueTodayOnly && (
             <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-muted/30">
               {([7, 14, 30] as ScopeDays[]).map((d) => (
                 <button
@@ -252,6 +260,7 @@ export function ChoreScheduleCard({
                 </button>
               ))}
             </div>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -261,7 +270,7 @@ export function ChoreScheduleCard({
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <CheckIcon className="h-8 w-8 text-green-500/60" />
               <p className="text-sm font-medium text-muted-foreground">You&apos;re all caught up!</p>
-              <p className="text-xs text-muted-foreground/60">No outstanding chores in this period.</p>
+              <p className="text-xs text-muted-foreground/60">{overdueTodayOnly ? 'Nothing overdue or due today.' : 'No outstanding chores in this period.'}</p>
             </div>
           ) : displayDays.map((day) => {
             // The "Overdue" section has day.day === 'Overdue' and day.date === '' —

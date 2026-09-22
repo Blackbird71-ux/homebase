@@ -61,6 +61,8 @@ export interface DashboardData {
   choreSchedule: ChoreScheduleDay[]
   billsToPay: BillSummaryItem[]
   pinnedNotes: PinnedNoteSummary[]
+  calendarWeek: CalendarWeekEvent[]
+  stickyNotes: StickyNotes
   trips: {
     id: string
     title: string
@@ -83,6 +85,33 @@ export interface WeeklySummaryData {
   topEvents: { id: string; title: string; start: string; color: string | null; dayLabel: string }[]
   topMeals: { day: string; meal: string; note?: string | null }[]
   topTodos: string[]
+}
+
+/** One line of the dashboard "Next 7 Days" card, e.g. "22/9 Tuesday - 3:30pm Dentist". */
+export interface CalendarWeekEvent {
+  /** Unique per occurrence (recurring series share eventId) */
+  key: string
+  eventId: string
+  title: string
+  /** e.g. "22/9 Tuesday" in the user's timezone */
+  dateLabel: string
+  /** e.g. "3:30pm"; null for all-day / already-in-progress events */
+  timeLabel: string | null
+  color: string | null
+  category: string | null
+}
+
+export type StickyNoteScope = 'shared' | 'personal'
+
+export interface StickyNoteData {
+  content: string
+  /** ISO timestamp of the last save; null if never written */
+  updatedAt: string | null
+}
+
+export interface StickyNotes {
+  shared: StickyNoteData
+  personal: StickyNoteData
 }
 
 export interface UpcomingEvent {

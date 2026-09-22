@@ -9,6 +9,8 @@ import { buildChoreSchedule, choreScheduleWhere } from '@/lib/chore-helpers'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { liveBillWhere } from '@/lib/finance-live-filter'
 import { getPinnedNotes } from '@/lib/pinned-notes'
+import { getCalendarWeekEvents } from '@/lib/calendar-week'
+import { getStickyNotes, EMPTY_STICKY_NOTES } from '@/lib/sticky-note'
 
 /**
  * Normalize a date string to midnight UTC for meal plan queries.
@@ -48,6 +50,8 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
   const needsBills  = visibleCardIds.has('bills-to-pay')
   const needsTrips  = visibleCardIds.has('upcoming-trips')
   const needsNotes  = visibleCardIds.has('pinned-notes')
+  const needsCalendarWeek = visibleCardIds.has('calendar-week')
+  const needsStickyNote   = visibleCardIds.has('sticky-note') || visibleCardIds.has('sticky-note-personal')
 
   // Compute rolling scope-day window from today (uses todayStart which is already tz-aware)
   const weekStartUtc = new Date(todayStart)
@@ -58,7 +62,7 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
     new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(ymd + 'T00:00:00Z'))
   const weekLabel = `${fmtShort(todayStr2)} – ${fmtShort(weekEndStr)}`
 
-  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData, pinnedNotesData] = await Promise.all([
+  const [upcomingEvents, todayMealPlans, tomorrowMealPlans, shoppingLists, todoLists, myTasksCountResult, weekEvents, weekMealPlans, weekTodoLists, choreData, billsData, tripsData, pinnedNotesData, calendarWeekData, stickyNotesData] = await Promise.all([
     needsEvents
       ? prisma.event.findMany({
           where: {
@@ -234,6 +238,12 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
     needsNotes && userId
       ? getPinnedNotes(familyId, userId)
       : Promise.resolve([]),
+    needsCalendarWeek
+      ? getCalendarWeekEvents(familyId, timezone)
+      : Promise.resolve([]),
+    needsStickyNote && userId
+      ? getStickyNotes(familyId, userId)
+      : Promise.resolve(EMPTY_STICKY_NOTES),
   ])
 
   // Map each meal type from a set of meal plans.
@@ -377,6 +387,8 @@ async function getDashboardData(familyId: string, timezone: string, cards: Dashb
       }
     }),
     pinnedNotes: pinnedNotesData,
+    calendarWeek: calendarWeekData,
+    stickyNotes: stickyNotesData,
     trips: tripsData.map(t => ({
       id: t.id,
       title: t.title,
