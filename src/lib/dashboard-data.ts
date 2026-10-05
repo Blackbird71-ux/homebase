@@ -29,6 +29,33 @@ export interface DashboardDataOptions {
 }
 
 /**
+ * The single list a dashboard card shows. The chosen list is only usable while
+ * it is still an active list in this family; if none was chosen, or it was
+ * archived/deleted, fall back to the default list (most recent shopping list,
+ * oldest to-do list). Resolving to one concrete id keeps every query for a card
+ * (list, counts) pointed at the same list. Null only if the family has none.
+ */
+async function resolveDashboardListId(
+  familyId: string,
+  type: 'SHOPPING' | 'TODO',
+  listId: string | null | undefined
+): Promise<string | null> {
+  if (listId) {
+    const chosen = await prisma.list.findFirst({
+      where: { id: listId, familyId, type, isActive: true },
+      select: { id: true },
+    })
+    if (chosen) return chosen.id
+  }
+  const fallback = await prisma.list.findFirst({
+    where: { familyId, type, isActive: true },
+    orderBy: { createdAt: type === 'SHOPPING' ? 'desc' : 'asc' },
+    select: { id: true },
+  })
+  return fallback?.id ?? null
+}
+
+/**
  * Build the home dashboard data. The single source of truth for both the SSR
  * home page (first paint) and GET /api/dashboard (client refresh), so a card
  * looks the same before and after a refresh.
@@ -40,10 +67,14 @@ export async function getDashboardData({
   userId,
   timezone,
   scope,
-  dashboardShoppingListId,
-  dashboardTodoListId,
+  dashboardShoppingListId: requestedShoppingListId,
+  dashboardTodoListId: requestedTodoListId,
   visibleCardIds,
 }: DashboardDataOptions): Promise<DashboardData> {
+  const [dashboardShoppingListId, dashboardTodoListId] = await Promise.all([
+    resolveDashboardListId(familyId, 'SHOPPING', requestedShoppingListId),
+    resolveDashboardListId(familyId, 'TODO', requestedTodoListId),
+  ])
   const wants = (...ids: string[]) => !visibleCardIds || ids.some((id) => visibleCardIds.has(id))
   const needsWeekly = wants('weekly-summary')
   const needsEvents = wants('upcoming-events', 'weekly-summary')
