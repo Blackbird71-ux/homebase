@@ -141,15 +141,15 @@ function EditableListName({
       <button
         onClick={() => onSelect(list.id)}
         onDoubleClick={() => setEditing(true)}
-        className={`flex-1 min-w-0 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
+        className={`flex-1 min-w-0 text-left px-2 py-0.5 rounded-md text-sm transition-colors ${
           activeListId === list.id
             ? 'bg-primary text-primary-foreground'
             : 'hover:bg-muted'
         }`}
         title="Click to select, double-click to rename"
       >
-        <span className="truncate block">{list.name}</span>
-        <span className="text-xs opacity-70">{list._count.items} items</span>
+        <span className="block break-normal leading-tight">{list.name}</span>
+        <span className="block text-xs leading-tight opacity-70">{list._count.items} items</span>
       </button>
     </div>
   )
@@ -199,28 +199,29 @@ function SortableListRow({
   const isDefault = defaultListId === list.id
 
   return (
-    <div ref={setNodeRef} style={style} className="group flex items-center gap-0.5 px-1">
+    <div ref={setNodeRef} style={style} className="group flex items-start gap-0.5 px-1">
       <button
         ref={setActivatorNodeRef}
         {...listeners}
         {...attributes}
-        className="cursor-grab active:cursor-grabbing touch-none p-2 text-muted-foreground/50 hover:text-muted-foreground focus:outline-none shrink-0"
+        className="cursor-grab active:cursor-grabbing touch-none p-1.5 mt-0.5 text-muted-foreground/50 hover:text-muted-foreground focus:outline-none shrink-0"
         aria-label={`Drag ${list.name} to reorder`}
         tabIndex={-1}
       >
         <GripVerticalIcon className="h-4 w-4" />
       </button>
+      <div className="flex-1 min-w-0 flex flex-col">
       <EditableListName
         list={list}
         activeListId={activeListId}
         onSelect={onSelect}
         onNameChanged={(id, newName) => onRename?.(id, newName)}
       />
-      <div className="flex items-center gap-0.5 shrink-0">
+      <div className="flex items-center gap-0.5 px-1 pb-0.5">
         {onEditList && (
           <button
             onClick={() => onEditList(list.id)}
-            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            className="p-0.5 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
             title="Edit list (change owner)"
           >
             <PencilIcon className="h-3 w-3" />
@@ -229,7 +230,7 @@ function SortableListRow({
         {onConvert && (
           <button
             onClick={() => onConvert(list.id, list.type === 'SHOPPING' ? 'TODO' : 'SHOPPING')}
-            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            className="p-0.5 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
             title={list.type === 'SHOPPING' ? 'Convert to Todo list' : 'Convert to Shopping list'}
           >
             <ArrowLeftRightIcon className="h-3 w-3" />
@@ -238,7 +239,7 @@ function SortableListRow({
         {onSetDefault && (
           <button
             onClick={() => onSetDefault(isDefault ? '' : list.id)}
-            className={`p-1 rounded transition-colors shrink-0 ${
+            className={`p-0.5 rounded transition-colors shrink-0 ${
               isDefault
                 ? 'text-yellow-500 hover:text-yellow-600'
                 : 'text-muted-foreground/30 hover:text-muted-foreground/60'
@@ -251,7 +252,7 @@ function SortableListRow({
         {onArchiveList && (
           <button
             onClick={() => onArchiveList(list.id)}
-            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            className="p-0.5 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
             title="Archive list"
           >
             <ArchiveIcon className="h-3 w-3" />
@@ -260,12 +261,13 @@ function SortableListRow({
         {onDeleteList && (
           <button
             onClick={() => onDeleteList(list.id)}
-            className="p-1 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+            className="p-0.5 rounded text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
             title="Delete list"
           >
             <Trash2Icon className="h-3 w-3" />
           </button>
         )}
+      </div>
       </div>
     </div>
   )
@@ -355,7 +357,7 @@ export function ListSelector({
   }
 
   return (
-    <div className="flex flex-col gap-1 py-2">
+    <div className="flex flex-col gap-0.5 py-1">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

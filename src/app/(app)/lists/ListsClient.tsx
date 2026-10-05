@@ -15,6 +15,7 @@ import type { ListItemShape } from '@/lib/list-helpers'
 import { toast } from 'sonner'
 import { ListIcon, CalendarDays, Users, User, Trash2Icon, ArchiveIcon } from 'lucide-react'
 import { PillNav } from '@/components/shared/PillNav'
+import { useResizableWidth } from '@/hooks/useResizableWidth'
 
 interface SerializedItem {
   id: string
@@ -73,6 +74,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   const [listFilter, setListFilter] = useState<'all' | 'mine' | 'archived'>('mine')
   const [archivedLists, setArchivedLists] = useState<ArchivedListMeta[]>([])
   const [archivedLoading, setArchivedLoading] = useState(false)
+  const { width: sidebarWidth, handleProps: sidebarResizeProps } = useResizableWidth('lists-sidebar-width', 300, 220, 520)
   const [todoView, setTodoView] = useState<'list' | 'calendar'>('list')
 
   const showingArchived = listFilter === 'archived'
@@ -427,7 +429,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       </div>
 
       {/* ── Desktop: sidebar ── */}
-      <aside className="hidden md:flex md:flex-col w-[240px] shrink-0 border-r border-border overflow-y-auto">
+      <aside style={{ width: sidebarWidth }} className="hidden md:flex md:flex-col shrink-0 border-r border-border overflow-y-auto">
         <div className="px-3 py-2 border-b border-border">
           {filterNav}
         </div>
@@ -454,6 +456,13 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
           )}
         </div>
       </aside>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize (double-click to reset)"
+        {...sidebarResizeProps}
+        className="hidden md:block w-1 -ml-0.5 shrink-0 cursor-col-resize touch-none hover:bg-primary/40 active:bg-primary/60 transition-colors"
+      />
 
       {/* ── Main content panel ── */}
       <main className="flex-1 overflow-y-auto p-2 sm:p-4 md:p-6">
