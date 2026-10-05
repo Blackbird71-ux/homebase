@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { clearUserLocation } from '@/lib/location'
+import { normalizePins } from '@/lib/mobile-pins'
 import type { SessionUser } from '@/types'
 
 async function _GET() {
@@ -142,6 +143,7 @@ async function _PATCH(req: Request) {
       }
     }
     const incoming = typeof uiPreferences === 'string' ? JSON.parse(uiPreferences) : uiPreferences
+    if ('mobilePins' in incoming) incoming.mobilePins = normalizePins(incoming.mobilePins)
     merged = { ...merged, ...incoming }
     updateData.uiPreferences = JSON.stringify(merged)
   }

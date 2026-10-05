@@ -24,6 +24,16 @@ async function _GET(req: NextRequest) {
     where.OR = [{ createdBy: user.id }, { createdBy: '' }]
   }
 
+  // ?meta=true: id/name/type only (pin picker + pinned shortcuts), no items
+  if (searchParams.get('meta') === 'true') {
+    const metas = await prisma.list.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, type: true },
+    })
+    return NextResponse.json(metas)
+  }
+
   const lists = await prisma.list.findMany({
     where,
     orderBy: { createdAt: 'desc' },

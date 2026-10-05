@@ -29,9 +29,12 @@ import {
   Gift,
   PiggyBank,
   Wrench,
+  PencilIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isMainNavVisible } from '@/lib/mainNavKeys'
+import { pinHref, type Pin } from '@/lib/mobile-pins'
+import { PinsDrawer, type PinnableList } from './PinsDrawer'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'pantry-item' | 'ai' | 'help'
 
@@ -74,11 +77,38 @@ interface UniversalFABProps {
   onQuickAction?: (action: QuickAction) => void
   hideFinanceModule?: boolean
   mainNav?: Record<string, boolean>
+  /** The user's pinned shortcuts (uiPreferences.mobilePins) */
+  pins?: Pin[]
 }
 
-export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav = {} }: UniversalFABProps) {
+export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav = {}, pins: initialPins = [] }: UniversalFABProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const [pins, setPins] = useState<Pin[]>(initialPins)
+  const [pinsOpen, setPinsOpen] = useState(false)
+  const [lists, setLists] = useState<PinnableList[]>([])
+
+  // Active lists (id/name/type only) are fetched each time the sheet opens, so pinned
+  // lists show current names and a pin to an archived/deleted list simply drops out.
+  useEffect(() => {
+    if (!open && !pinsOpen) return
+    let cancelled = false
+    fetch('/api/lists?meta=true')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: PinnableList[]) => { if (!cancelled) setLists(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [open, pinsOpen])
+
+  const visibleNavItems = navItems.filter(({ href }) => !(hideFinanceModule && href === '/finance') && isMainNavVisible(mainNav, href))
+  const shownPins = pins.flatMap((pin): { pin: Pin; label: string; icon: React.ComponentType<{ className?: string }> }[] => {
+    if (pin.type === 'page') {
+      const item = visibleNavItems.find((n) => n.href === pin.href)
+      return item ? [{ pin, label: item.label, icon: item.icon }] : []
+    }
+    const list = lists.find((l) => l.id === pin.id)
+    return list ? [{ pin, label: list.name, icon: list.type === 'SHOPPING' ? ShoppingCart : CheckSquare }] : []
+  })
 
   // ⌘K is owned by CommandPalette; Escape still closes the mobile sheet
   useEffect(() => {
@@ -176,8 +206,40 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
 
+            {/* Pinned shortcuts */}
+            <div className="px-4 pt-1 pb-3">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pinned</p>
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); setPinsOpen(true) }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <PencilIcon className="h-3 w-3" />
+                  Edit
+                </button>
+              </div>
+              {shownPins.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Pin your most-used lists and pages for one-tap access.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {shownPins.map(({ pin, label, icon: Icon }) => (
+                    <Link
+                      key={pinHref(pin)}
+                      href={pinHref(pin)}
+                      onClick={() => setOpen(false)}
+                      className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border hover:bg-accent active:scale-95 transition-all"
+                    >
+                      <Icon className="h-5 w-5 text-primary" />
+                      <span className="text-xs font-medium text-center leading-tight line-clamp-2">{label}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Quick Add */}
-            <div className="px-4 pt-1 pb-4">
+            <div className="px-4 pt-3 pb-4 border-t border-border">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 Quick Add
               </p>
@@ -205,7 +267,7 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
                 Navigate
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {navItems.filter(({ href }) => !(hideFinanceModule && href === '/finance') && isMainNavVisible(mainNav, href)).map(({ href, label, icon: Icon }) => {
+                {visibleNavItems.map(({ href, label, icon: Icon }) => {
                   const isActive = pathname === href || pathname.startsWith(href + '/')
                   return (
                     <Link
@@ -238,6 +300,15 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
           </div>
         </>
       )}
+
+      <PinsDrawer
+        open={pinsOpen}
+        onOpenChange={setPinsOpen}
+        pins={pins}
+        pages={visibleNavItems.map(({ href, label }) => ({ href, label }))}
+        lists={lists}
+        onSaved={setPins}
+      />
     </>
   )
 }

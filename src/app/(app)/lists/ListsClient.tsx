@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ListSelector } from '@/components/lists/ListSelector'
 import { ArchivedLists, type ArchivedListMeta } from '@/components/lists/ArchivedLists'
@@ -91,6 +91,19 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   const [activeListId, setActiveListId] = useState<string | null>(initialActiveId)
 
   // While browsing the Archived roster no list is open; activeListId is kept so leaving the filter restores it
+  // A pinned-list link (/lists?list=ID) tapped while already on this page changes the
+  // URL without remounting, so follow it: open that list, switching filter if needed.
+  const urlListId = searchParams.get('list')
+  useEffect(() => {
+    if (!urlListId) return
+    const target = lists.find((l) => l.id === urlListId)
+    if (!target) return
+    setActiveListId(target.id)
+    setListFilter(!target.createdBy || target.createdBy === currentUserId ? 'mine' : 'all')
+    // only react to the URL changing, not to every list edit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlListId])
+
   const activeList = showingArchived ? null : (lists.find((l) => l.id === activeListId) ?? null)
 
   const [dialogOpen, setDialogOpen] = useState(false)

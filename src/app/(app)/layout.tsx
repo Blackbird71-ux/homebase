@@ -1,6 +1,7 @@
 import { requireSession } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { AppShell } from '@/components/layout/AppShell'
+import { normalizePins, type Pin } from '@/lib/mobile-pins'
 
 export default async function AppLayout({
   children,
@@ -23,15 +24,17 @@ export default async function AppLayout({
 
   // Per-user main nav visibility from uiPreferences (href → false hides the item)
   let mainNav: Record<string, boolean> = {}
+  let mobilePins: Pin[] = []
   if (dbUser?.uiPreferences) {
     try {
       const prefs = JSON.parse(dbUser.uiPreferences)
       if (prefs?.mainNav && typeof prefs.mainNav === 'object') mainNav = prefs.mainNav
+      mobilePins = normalizePins(prefs?.mobilePins)
     } catch { /* ignore */ }
   }
 
   return (
-    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule} familyName={family?.name} memberName={session.name} memberRole={session.role} shareLocation={!!dbUser?.shareLocation} mainNav={mainNav}>
+    <AppShell isAdmin={isAdmin} hideFinanceModule={!!family?.hideFinanceModule} familyName={family?.name} memberName={session.name} memberRole={session.role} shareLocation={!!dbUser?.shareLocation} mainNav={mainNav} mobilePins={mobilePins}>
       {children}
     </AppShell>
   )

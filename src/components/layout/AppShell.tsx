@@ -6,6 +6,7 @@ import { Sidebar } from './Sidebar'
 import { QuickAdd } from './QuickAdd'
 import { CommandPalette } from './CommandPalette'
 import { UniversalFAB } from './UniversalFAB'
+import type { Pin } from '@/lib/mobile-pins'
 import { OfflineBanner } from './OfflineBanner'
 import { PullToRefresh } from './PullToRefresh'
 import { NavBubbles } from './NavBubbles'
@@ -14,7 +15,7 @@ import { AIAssistant } from '@/components/ai/AIAssistant'
 import { useGlobalOfflineFlush } from '@/hooks/useGlobalOfflineFlush'
 import { useLocationReporter } from '@/hooks/useLocationReporter'
 
-export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole, shareLocation = false, mainNav = {} }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string; shareLocation?: boolean; mainNav?: Record<string, boolean> }) {
+export function AppShell({ children, isAdmin = false, hideFinanceModule = false, familyName, memberName, memberRole, shareLocation = false, mainNav = {}, mobilePins = [] }: { children: React.ReactNode; isAdmin?: boolean; hideFinanceModule?: boolean; familyName?: string; memberName?: string; memberRole?: string; shareLocation?: boolean; mainNav?: Record<string, boolean>; mobilePins?: Pin[] }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sidebar-collapsed') === 'true'
@@ -75,7 +76,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       <NavBubbles />
 
       {/* Universal floating action button — visible on all screen sizes */}
-      <UniversalFAB hideFinanceModule={hideFinanceModule} mainNav={mainNav} />
+      <UniversalFAB hideFinanceModule={hideFinanceModule} mainNav={mainNav} pins={mobilePins} />
 
       {/* Quick-add dialog — triggered by FAB, sidebar button, or the palette's > actions */}
       <QuickAdd />
