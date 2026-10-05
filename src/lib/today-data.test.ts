@@ -5,6 +5,7 @@ const m = vi.hoisted(() => ({
   chore: vi.fn(),
   listItem: vi.fn(),
   mealPlan: vi.fn(),
+  habit: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -13,6 +14,7 @@ vi.mock('@/lib/prisma', () => ({
     chore: { findMany: m.chore },
     listItem: { findMany: m.listItem },
     mealPlan: { findMany: m.mealPlan },
+    habit: { findMany: m.habit },
   },
 }))
 vi.mock('@/lib/image-cache', () => ({ getLocalImageUrl: (v: string | null) => v }))
@@ -29,6 +31,7 @@ beforeEach(() => {
   m.chore.mockResolvedValue([])
   m.listItem.mockResolvedValue([])
   m.mealPlan.mockResolvedValue([])
+  m.habit.mockResolvedValue([])
 })
 
 describe('getTodayData', () => {
@@ -61,6 +64,13 @@ describe('getTodayData', () => {
     const data = await getTodayData({ ...base, scope: 'family' })
     expect(data.chores.map((c) => c.isOverdue)).toEqual([true, false, true])
     expect(data.todos.map((t) => t.isOverdue)).toEqual([true, false])
+  })
+
+  it('always returns only the users own active habits, even for "family"', async () => {
+    m.habit.mockResolvedValue([{ id: 'h1', name: 'Walk', targetPerWeek: 7, isActive: true, checkIns: [] }])
+    const data = await getTodayData({ ...base, scope: 'family' })
+    expect(m.habit.mock.calls[0][0].where).toEqual({ familyId: 'fam', userId: 'u1', isActive: true })
+    expect(data.habits).toMatchObject([{ id: 'h1', doneToday: false, weekTarget: 7 }])
   })
 
   it('keeps events on today (local) and drops ones that ended before local midnight', async () => {

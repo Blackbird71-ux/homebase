@@ -3,6 +3,8 @@ import { getLocalImageUrl } from '@/lib/image-cache'
 import { todayBoundsInTz, todayStringInTz } from '@/lib/timezone'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { eventFallsOnDay } from '@/lib/event-helpers'
+import { listHabits } from '@/lib/habits'
+import type { HabitView } from '@/lib/habit-helpers'
 import type { CalendarEvent } from '@/types'
 
 export type TodayScope = 'mine' | 'family'
@@ -49,6 +51,8 @@ export interface TodayData {
   chores: TodayChore[]
   todos: TodayTodo[]
   meals: TodayMeal[]
+  /** The user's own active habits; always personal, whatever the scope. */
+  habits: HabitView[]
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -67,11 +71,13 @@ export async function getTodayData({
   userId,
   timezone,
   scope,
+  weekStartsOn = 0,
 }: {
   familyId: string
   userId: string
   timezone: string
   scope: TodayScope
+  weekStartsOn?: 0 | 1
 }): Promise<TodayData> {
   const mine = scope === 'mine'
   const { start: todayStart, end: todayEnd } = todayBoundsInTz(timezone)
@@ -79,7 +85,7 @@ export async function getTodayData({
   const todayKey = new Date(todayStr + 'T00:00:00Z')
   const tomorrowKey = new Date(todayKey.getTime() + DAY_MS)
 
-  const [events, chores, todoItems, mealPlans] = await Promise.all([
+  const [events, chores, todoItems, mealPlans, habits] = await Promise.all([
     prisma.event.findMany({
       where: {
         familyId,
@@ -139,6 +145,7 @@ export async function getTodayData({
         },
       },
     }),
+    listHabits({ familyId, userId, timezone, weekStartsOn }),
   ])
 
   const todayEvents = events
@@ -188,6 +195,7 @@ export async function getTodayData({
       isOverdue: !!i.dueDate && i.dueDate < todayStart,
       assigneeName: i.assignedToUser?.name ?? null,
     })),
+    habits,
     meals: [...mealPlans]
       .sort((a, b) => MEAL_ORDER.indexOf(a.mealType) - MEAL_ORDER.indexOf(b.mealType))
       .map((m): TodayMeal => {

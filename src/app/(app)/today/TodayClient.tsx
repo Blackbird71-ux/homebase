@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { formatInTz } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
+import { HabitList } from '@/components/habits/HabitList'
+import type { HabitView } from '@/lib/habit-helpers'
 import type { TodayData, TodayScope } from '@/lib/today-data'
 
 interface TodayClientProps {
@@ -41,6 +43,8 @@ export function TodayClient({ initialData, timezone }: TodayClientProps) {
       setLoading(false)
     }
   }
+
+  const setHabits = (habits: HabitView[]) => setData((d) => ({ ...d, habits }))
 
   const time = (iso: string) => formatInTz(new Date(iso), timezone, { hour: 'numeric', minute: '2-digit' })
 
@@ -100,6 +104,12 @@ export function TodayClient({ initialData, timezone }: TodayClientProps) {
               </li>
             ))}
           </ul>
+        )}
+      </Section>
+
+      <Section title="Habits" href="/habits" count={data.habits.filter((h) => !h.doneToday).length}>
+        {data.habits.length === 0 ? <Empty>No habits yet.</Empty> : (
+          <HabitList habits={data.habits} onHabitsChange={setHabits} />
         )}
       </Section>
 

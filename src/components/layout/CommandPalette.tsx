@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Home, Calendar, ListChecks, Utensils, ChefHat, CheckSquare, DollarSign,
   Users, FileText, Plane, StickyNote, Gift, Sun, Wrench, Settings, Shield,
-  Search, CornerDownLeft, Plus, Loader2, ShoppingBasket, PiggyBank,
+  Search, CornerDownLeft, Plus, Loader2, ShoppingBasket, PiggyBank, Target,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { SearchResult, SearchResultType } from '@/lib/global-search'
@@ -76,6 +76,7 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mai
   const pages: PageEntry[] = [
     { label: 'Home',           url: '/home',           icon: <Home className="h-4 w-4" /> },
     { label: 'Today',          url: '/today',          icon: <Sun className="h-4 w-4" /> },
+    { label: 'Habits',         url: '/habits',         icon: <Target className="h-4 w-4" /> },
     { label: 'Calendar',       url: '/calendar',       icon: <Calendar className="h-4 w-4" /> },
     { label: 'Lists',          url: '/lists',          icon: <ListChecks className="h-4 w-4" /> },
     { label: 'Meal Plan',      url: '/meal-plan',      icon: <Utensils className="h-4 w-4" /> },

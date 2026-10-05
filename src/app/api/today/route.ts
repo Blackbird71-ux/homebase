@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { withRouteErrors } from '@/lib/route-errors'
 import { getTodayData } from '@/lib/today-data'
+import { normalizeWeekStart } from '@/lib/habit-helpers'
 import type { SessionUser } from '@/types'
 
 async function _GET(req: NextRequest) {
@@ -15,6 +16,7 @@ async function _GET(req: NextRequest) {
     userId: user.id,
     timezone: user.timezone ?? 'UTC',
     scope,
+    weekStartsOn: normalizeWeekStart(user.weekStartsOn),
   })
   return NextResponse.json(data)
 }

@@ -33,6 +33,7 @@ model Family {
   tags                 Tag[]
   notes                Note[]
   stickyNotes          StickyNote[]
+  habits               Habit[]
   eventCategories      EventCategory[]
   mealPlanTemplates    MealPlanTemplate[]
   chores               Chore[]
@@ -77,6 +78,7 @@ model User {
   theme               String                @default("dark")
   fontSize            String                @default("base")
   weekStartsOn        Int                   @default(0)
+  habits              Habit[]
   shareLocation       Boolean               @default(false)
   location            UserLocation?
   doneItemColor       String                @default("RED")
@@ -507,6 +509,33 @@ model StickyNote {
   updatedAt   DateTime @updatedAt
 
   @@unique([familyId, ownerKey])
+}
+
+// Personal habit with a weekly target (7 = daily). Check-ins are one row per local calendar day.
+model Habit {
+  id            String         @id @default(cuid())
+  familyId      String
+  family        Family         @relation(fields: [familyId], references: [id])
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  targetPerWeek Int            @default(7)
+  isActive      Boolean        @default(true)
+  sortOrder     Int            @default(0)
+  createdAt     DateTime       @default(now())
+  checkIns      HabitCheckIn[]
+
+  @@index([familyId, userId])
+}
+
+model HabitCheckIn {
+  id        String   @id @default(cuid())
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD in the user's local timezone at check-in time
+  createdAt DateTime @default(now())
+
+  @@unique([habitId, date])
 }
 
 model Chore {
