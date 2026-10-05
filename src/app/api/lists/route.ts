@@ -14,7 +14,9 @@ async function _GET(req: NextRequest) {
   const type = searchParams.get('type')
   const filter = searchParams.get('filter') // 'mine' | null (family)
 
-  const where: Record<string, unknown> = { familyId: user.familyId, isActive: true }
+  const archived = searchParams.get('archived') === 'true'
+
+  const where: Record<string, unknown> = { familyId: user.familyId, isActive: !archived }
   if (type === 'SHOPPING' || type === 'TODO') {
     where.type = type
   }
@@ -27,7 +29,8 @@ async function _GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { items: { where: { isCompleted: false } } } },
-      items: { orderBy: { sortOrder: 'asc' } },
+      // Archived lists are only shown as a restore/delete roster — no item payload needed
+      ...(archived ? {} : { items: { orderBy: { sortOrder: 'asc' as const } } }),
     },
   })
   return jsonWithETag(req, lists)

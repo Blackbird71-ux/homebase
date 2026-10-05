@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ListSelector } from '@/components/lists/ListSelector'
+import { ArchivedLists, type ArchivedListMeta } from '@/components/lists/ArchivedLists'
 import { ShoppingList } from '@/components/lists/ShoppingList'
 import { TodoList } from '@/components/lists/TodoList'
 import { TodoCalendarView } from '@/components/lists/TodoCalendarView'
@@ -12,7 +13,7 @@ import { TemplateDialog } from '@/components/lists/TemplateDialog'
 import { ListPresence } from '@/components/lists/ListPresence'
 import type { ListItemShape } from '@/lib/list-helpers'
 import { toast } from 'sonner'
-import { ListIcon, CalendarDays, Users, User, Trash2Icon } from 'lucide-react'
+import { ListIcon, CalendarDays, Users, User, Trash2Icon, ArchiveIcon } from 'lucide-react'
 import { PillNav } from '@/components/shared/PillNav'
 
 interface SerializedItem {
@@ -69,12 +70,17 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
 
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
-  const [listFilter, setListFilter] = useState<'all' | 'mine'>('mine')
+  const [listFilter, setListFilter] = useState<'all' | 'mine' | 'archived'>('mine')
+  const [archivedLists, setArchivedLists] = useState<ArchivedListMeta[]>([])
+  const [archivedLoading, setArchivedLoading] = useState(false)
   const [todoView, setTodoView] = useState<'list' | 'calendar'>('list')
 
-  const visibleLists = listFilter === 'mine'
-    ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
-    : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
+  const showingArchived = listFilter === 'archived'
+  const visibleLists = showingArchived
+    ? []
+    : listFilter === 'mine'
+      ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
+      : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
 
   const initialActiveId = (() => {
     const urlListId = searchParams.get('list')
@@ -84,7 +90,8 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   })()
   const [activeListId, setActiveListId] = useState<string | null>(initialActiveId)
 
-  const activeList = lists.find((l) => l.id === activeListId) ?? null
+  // While browsing the Archived roster no list is open; activeListId is kept so leaving the filter restores it
+  const activeList = showingArchived ? null : (lists.find((l) => l.id === activeListId) ?? null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
@@ -158,6 +165,65 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     }
   }
 
+  async function loadArchived() {
+    setArchivedLoading(true)
+    try {
+      const res = await fetch('/api/lists?archived=true')
+      if (res.ok) setArchivedLists(await res.json())
+      else toast.error('Could not load archived lists')
+    } finally {
+      setArchivedLoading(false)
+    }
+  }
+
+  async function handleArchiveList(id: string) {
+    const list = lists.find((l) => l.id === id)
+    if (!list) return
+    const res = await fetch(`/api/lists/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: false }),
+    })
+    if (!res.ok) {
+      toast.error('Could not archive the list — please try again.')
+      return
+    }
+    setLists((prev) => prev.filter((l) => l.id !== id))
+    if (defaultListId === id) void handleSetDefault('')
+    if (activeListId === id) setActiveListId(lists.find((l) => l.id !== id)?.id ?? null)
+    toast.success(`"${list.name}" archived`)
+  }
+
+  async function handleRestoreList(id: string) {
+    const res = await fetch(`/api/lists/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: true }),
+    })
+    if (!res.ok) {
+      toast.error('Could not restore the list — please try again.')
+      return
+    }
+    const restored = await fetch('/api/lists').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    const full = (restored as SerializedList[] | null)?.find((l) => l.id === id)
+    if (full) setLists((prev) => [...prev, full])
+    setArchivedLists((prev) => prev.filter((l) => l.id !== id))
+    toast.success('List restored')
+  }
+
+  async function handleDeleteArchived(id: string) {
+    const list = archivedLists.find((l) => l.id === id)
+    if (!list) return
+    if (!confirm(`Delete "${list.name}" permanently? This cannot be undone.`)) return
+    const res = await fetch(`/api/lists/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setArchivedLists((prev) => prev.filter((l) => l.id !== id))
+    } else {
+      const body = await res.json().catch(() => null)
+      toast.error(body?.error ?? 'Could not delete the list — please try again.')
+    }
+  }
+
   async function handleSetDefault(listId: string) {
     const list = listId ? lists.find((l) => l.id === listId) : null
     const uiPrefs: Record<string, string | null> = { defaultListId: listId || null }
@@ -213,8 +279,12 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     createdBy: l.createdBy,
   }))
 
-  function handleFilterChange(filter: 'all' | 'mine') {
+  function handleFilterChange(filter: 'all' | 'mine' | 'archived') {
     setListFilter(filter)
+    if (filter === 'archived') {
+      void loadArchived()
+      return
+    }
     const newVisible = filter === 'mine'
       ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
       : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
@@ -231,9 +301,10 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       items={[
         { id: 'mine',   label: 'Mine',   icon: User },
         { id: 'all',    label: 'Family', icon: Users },
+        { id: 'archived', label: 'Archived', icon: ArchiveIcon },
       ]}
       active={listFilter}
-      onChange={(id) => handleFilterChange(id as 'all' | 'mine')}
+      onChange={(id) => handleFilterChange(id as 'all' | 'mine' | 'archived')}
       size="sm"
     />
   )
@@ -263,6 +334,11 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
         </div>
 
         {/* Horizontal list chips — long-press to rename */}
+        {showingArchived ? (
+          <div className="max-h-48 overflow-y-auto">
+            <ArchivedLists lists={archivedLists} loading={archivedLoading} onRestore={handleRestoreList} onDelete={handleDeleteArchived} />
+          </div>
+        ) : (
         <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto scroll-smooth">
           {listsMeta.map((list) =>
             renamingListId === list.id ? (
@@ -314,6 +390,17 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
           {activeListId && (
             <button
               type="button"
+              onClick={() => handleArchiveList(activeListId)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs whitespace-nowrap shrink-0 border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+              aria-label="Archive the selected list"
+            >
+              <ArchiveIcon className="h-3 w-3" />
+              Archive
+            </button>
+          )}
+          {activeListId && (
+            <button
+              type="button"
               onClick={() => handleDeleteList(activeListId)}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs whitespace-nowrap shrink-0 border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
               aria-label="Delete the selected list"
@@ -323,6 +410,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             </button>
           )}
         </div>
+        )}
       </div>
 
       {/* ── Desktop: sidebar ── */}
@@ -331,6 +419,9 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
           {filterNav}
         </div>
         <div className="flex-1 overflow-y-auto">
+          {showingArchived ? (
+            <ArchivedLists lists={archivedLists} loading={archivedLoading} onRestore={handleRestoreList} onDelete={handleDeleteArchived} />
+          ) : (
           <ListSelector
             lists={listsMeta}
             activeListId={activeListId}
@@ -345,7 +436,9 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             onReorder={handleReorder}
             onConvert={handleConvert}
             onEditList={members.length > 1 ? handleOpenEditList : undefined}
+            onArchiveList={handleArchiveList}
           />
+          )}
         </div>
       </aside>
 
@@ -353,7 +446,11 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
       <main className="flex-1 overflow-y-auto p-2 sm:p-4 md:p-6">
         {activeList === null ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <p className="text-sm">No lists yet. Create one to get started.</p>
+            <p className="text-sm">
+              {showingArchived
+                ? 'Archived lists are read-only here. Restore one to use it again.'
+                : 'No lists yet. Create one to get started.'}
+            </p>
           </div>
         ) : activeList.type === 'SHOPPING' ? (
           <>

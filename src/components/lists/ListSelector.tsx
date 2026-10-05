@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
-import { PlusIcon, StarIcon, Trash2Icon, CheckIcon, XIcon, GripVerticalIcon, ArrowLeftRightIcon, PencilIcon } from 'lucide-react'
+import { PlusIcon, StarIcon, Trash2Icon, CheckIcon, XIcon, GripVerticalIcon, ArrowLeftRightIcon, PencilIcon, ArchiveIcon } from 'lucide-react'
 
 interface ListMeta {
   id: string
@@ -41,6 +41,7 @@ interface ListSelectorProps {
   onReorder?: (orderedIds: string[]) => void
   onConvert?: (id: string, newType: 'SHOPPING' | 'TODO') => void
   onEditList?: (id: string) => void
+  onArchiveList?: (id: string) => void
 }
 
 function EditableListName({
@@ -164,6 +165,7 @@ interface SortableListRowProps {
   onRename?: (id: string, newName: string) => void
   onConvert?: (id: string, newType: 'SHOPPING' | 'TODO') => void
   onEditList?: (id: string) => void
+  onArchiveList?: (id: string) => void
 }
 
 function SortableListRow({
@@ -176,6 +178,7 @@ function SortableListRow({
   onRename,
   onConvert,
   onEditList,
+  onArchiveList,
 }: SortableListRowProps) {
   const {
     attributes,
@@ -245,6 +248,15 @@ function SortableListRow({
             <StarIcon className={`h-3 w-3 ${isDefault ? 'fill-yellow-500' : ''}`} />
           </button>
         )}
+        {onArchiveList && (
+          <button
+            onClick={() => onArchiveList(list.id)}
+            className="p-1 rounded text-muted-foreground/30 hover:bg-muted hover:text-muted-foreground transition-colors shrink-0"
+            title="Archive list"
+          >
+            <ArchiveIcon className="h-3 w-3" />
+          </button>
+        )}
         {onDeleteList && (
           <button
             onClick={() => onDeleteList(list.id)}
@@ -271,6 +283,7 @@ export function ListSelector({
   onReorder,
   onConvert,
   onEditList,
+  onArchiveList,
 }: ListSelectorProps) {
   const shopping = lists.filter((l) => l.type === 'SHOPPING')
   const todo = lists.filter((l) => l.type === 'TODO')
@@ -333,6 +346,7 @@ export function ListSelector({
               onRename={onRename}
               onConvert={onConvert}
               onEditList={onEditList}
+              onArchiveList={onArchiveList}
             />
           ))}
         </SortableContext>
