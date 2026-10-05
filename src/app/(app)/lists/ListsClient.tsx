@@ -74,6 +74,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
   const [listFilter, setListFilter] = useState<'all' | 'mine' | 'archived'>('mine')
   const [archivedLists, setArchivedLists] = useState<ArchivedListMeta[]>([])
   const [archivedLoading, setArchivedLoading] = useState(false)
+  const activeChipRef = useRef<HTMLButtonElement | null>(null)
   const { width: sidebarWidth, handleProps: sidebarResizeProps } = useResizableWidth('lists-sidebar-width', 300, 220, 520)
   const [todoView, setTodoView] = useState<'list' | 'calendar'>('list')
 
@@ -105,6 +106,11 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     // only react to the URL changing, not to every list edit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlListId])
+
+  // Mobile chip bar: keep the selected list's chip in view (e.g. after tapping a pinned list)
+  useEffect(() => {
+    activeChipRef.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+  }, [activeListId])
 
   const activeList = showingArchived ? null : (lists.find((l) => l.id === activeListId) ?? null)
 
@@ -375,6 +381,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
             ) : (
               <button
                 key={list.id}
+                ref={activeListId === list.id ? activeChipRef : undefined}
                 type="button"
                 onClick={() => setActiveListId(list.id)}
                 onTouchStart={() => {
