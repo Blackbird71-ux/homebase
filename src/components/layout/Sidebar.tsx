@@ -9,7 +9,7 @@ import {
   Settings, LogOut, StickyNote, ListChecks, BookUser,
   Plus, FileText, DollarSign, Search, ChevronDown,
   Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench, PiggyBank,
-  ShoppingBasket, MapPin,
+  ShoppingBasket, MapPin, Sun,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
@@ -30,6 +30,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/home',      label: 'Home',      icon: Home,         cat: 'var(--accent)' },
   // Schedule
+  { href: '/today',     label: 'Today',     icon: Sun,          group: 'schedule', cat: 'var(--cat-calendar)' },
   { href: '/calendar',  label: 'Calendar',  icon: Calendar,     group: 'schedule', cat: 'var(--cat-calendar)' },
   { href: '/chores',    label: 'Chores',    icon: ListChecks,   group: 'schedule', cat: 'var(--cat-chores)' },
   { href: '/lists',     label: 'Lists',     icon: CheckSquare,  group: 'schedule', cat: 'var(--cat-lists)' },

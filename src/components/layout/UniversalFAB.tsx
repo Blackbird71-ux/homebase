@@ -30,6 +30,7 @@ import {
   PiggyBank,
   Wrench,
   PencilIcon,
+  Sun,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isMainNavVisible } from '@/lib/mainNavKeys'
@@ -42,6 +43,7 @@ type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list'
 
 const navItems = [
   { href: '/home',         label: 'Home',         icon: Home },
+  { href: '/today',        label: 'Today',        icon: Sun },
   { href: '/calendar',     label: 'Calendar',     icon: Calendar },
   { href: '/chores',       label: 'Chores',       icon: ListChecks },
   { href: '/lists',        label: 'Lists',        icon: CheckSquare },

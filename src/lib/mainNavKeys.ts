@@ -8,6 +8,7 @@ export interface MainNavKeyDef {
 // Finance is additionally subject to the family-level hideFinanceModule setting.
 // Keyed by href — the shared identifier across Sidebar, UniversalFAB, and CommandPalette.
 export const MAIN_NAV_KEYS: MainNavKeyDef[] = [
+  { href: '/today',        label: 'Today',        group: 'Schedule'  },
   { href: '/calendar',     label: 'Calendar',     group: 'Schedule'  },
   { href: '/chores',       label: 'Chores',       group: 'Schedule'  },
   { href: '/lists',        label: 'Lists',        group: 'Schedule'  },
