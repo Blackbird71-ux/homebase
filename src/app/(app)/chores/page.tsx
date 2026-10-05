@@ -36,7 +36,9 @@ export default async function ChoresPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <PageHero title="Chores" subtitle="Manage recurring household tasks and assignments." />
+      <div className="pt-4">
+        <PageHero title="Chores" subtitle="Manage recurring household tasks and assignments." />
+      </div>
       <div className="flex-1 overflow-y-auto p-6 pt-4">
         <ChoresClient
           currentUserId={user.id}
