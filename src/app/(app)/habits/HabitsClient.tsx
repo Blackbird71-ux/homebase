@@ -125,11 +125,17 @@ export function HabitsClient({ initialHabits }: { initialHabits: HabitView[] }) 
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Every day builds a daily streak. Fewer than 7 builds a weekly streak: each week you hit the target keeps it going.
+              </p>
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="habit-active">Active (untick to pause)</Label>
               <Switch id="habit-active" checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} />
             </div>
+            <p className="text-xs text-muted-foreground">
+              Paused habits are hidden from Today and keep their history.
+            </p>
           </div>
           <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
             {editingId && (
