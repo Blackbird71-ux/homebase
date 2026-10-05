@@ -5,16 +5,21 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import {
-  Home, Calendar, CheckSquare, ChefHat, CalendarDays,
-  Settings, LogOut, StickyNote, ListChecks, BookUser,
-  Plus, FileText, DollarSign, Search, ChevronDown,
-  Plane, ShieldAlert, Calculator, MoreHorizontal, Gift, Wrench, PiggyBank,
-  ShoppingBasket, MapPin, Sun, Target,
+  Home,
+  Settings,
+  LogOut,
+  Plus,
+  Search,
+  ChevronDown,
+  ShieldAlert,
+  Calculator,
+  MoreHorizontal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFamilyTimezone } from '@/hooks/useFamilyTimezone'
 import { formatInTz } from '@/lib/timezone'
 import { isMainNavVisible } from '@/lib/mainNavKeys'
+import { NAV_ITEMS } from '@/lib/nav-items'
 
 type Group = 'schedule' | 'kitchen' | 'household'
 
@@ -28,27 +33,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: '/home',      label: 'Home',      icon: Home,         cat: 'var(--accent)' },
-  // Schedule
-  { href: '/today',     label: 'Today',     icon: Sun,          group: 'schedule', cat: 'var(--cat-calendar)' },
-  { href: '/habits',    label: 'Habits',    icon: Target,       group: 'schedule', cat: 'var(--cat-calendar)' },
-  { href: '/calendar',  label: 'Calendar',  icon: Calendar,     group: 'schedule', cat: 'var(--cat-calendar)' },
-  { href: '/chores',    label: 'Chores',    icon: ListChecks,   group: 'schedule', cat: 'var(--cat-chores)' },
-  { href: '/lists',     label: 'Lists',     icon: CheckSquare,  group: 'schedule', cat: 'var(--cat-lists)' },
-  // Kitchen
-  { href: '/recipes',   label: 'Recipes',   icon: ChefHat,      group: 'kitchen',  cat: 'var(--cat-recipes)' },
-  { href: '/meal-plan', label: 'Meal Plan', icon: CalendarDays, group: 'kitchen',  cat: 'var(--cat-mealplan)' },
-  { href: '/pantry',    label: 'Pantry',    icon: ShoppingBasket, group: 'kitchen', cat: 'var(--cat-pantry)' },
-  // Household
-  { href: '/finance',   label: 'Finance',   icon: DollarSign,   group: 'household', cat: 'var(--cat-finance)' },
-  { href: '/contacts',  label: 'Contacts',  icon: BookUser,     group: 'household', cat: 'var(--cat-contacts)' },
-  { href: '/documents', label: 'Documents', icon: FileText,     group: 'household', cat: 'var(--cat-documents)' },
-  { href: '/trips',     label: 'Trips',     icon: Plane,        group: 'household', cat: 'var(--cat-trips)' },
-  { href: '/notes',      label: 'Notes',     icon: StickyNote,   group: 'household', cat: 'var(--cat-notes)' },
-  { href: '/wishlists',    label: 'Wishlist',     icon: Gift,    group: 'household', cat: 'var(--cat-contacts)' },
-  { href: '/pocket-money', label: 'Pocket Money', icon: PiggyBank, group: 'household', cat: 'var(--cat-chores)' },
-  { href: '/maintenance',  label: 'Maintenance',  icon: Wrench,  group: 'household', cat: 'var(--cat-maintenance)' },
-  { href: '/location',     label: 'Locations',    icon: MapPin,  group: 'household', cat: 'var(--cat-contacts)' },
+  { href: '/home', label: 'Home', icon: Home, cat: 'var(--accent)' },
+  ...NAV_ITEMS.map(({ href, label, icon, group, cat }): NavItem => ({
+    href, label, icon, cat, group: group.toLowerCase() as Group,
+  })),
 ]
 
 const GROUP_LABEL: Record<Group, string> = {

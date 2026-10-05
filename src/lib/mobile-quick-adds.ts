@@ -4,7 +4,7 @@
 
 export const QUICK_ADD_IDS = [
   'event', 'chore', 'expense', 'list-item', 'shopping-list', 'todo-list',
-  'recipe', 'meal', 'note', 'pantry-item', 'ai', 'help',
+  'recipe', 'meal', 'note', 'pantry-item', 'habits', 'ai', 'help',
 ] as const
 
 export type QuickAddId = (typeof QUICK_ADD_IDS)[number]

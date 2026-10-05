@@ -11,10 +11,7 @@ import {
   StickyNote,
   Plus,
   Home,
-  Calendar,
   CheckSquare,
-  CalendarDays,
-  BookUser,
   ListChecks,
   Settings,
   LogOut,
@@ -23,47 +20,30 @@ import {
   Utensils,
   Bot,
   HelpCircle,
-  Plane,
   ShoppingBasket,
-  FileText,
-  Gift,
-  PiggyBank,
-  Wrench,
   PencilIcon,
-  Sun,
   Target,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isMainNavVisible } from '@/lib/mainNavKeys'
+import { NAV_ITEMS } from '@/lib/nav-items'
 import { pinHref, type Pin } from '@/lib/mobile-pins'
 import { PinsDrawer, type PinnableList } from './PinsDrawer'
 import { splitQuickAdds, type QuickAddId } from '@/lib/mobile-quick-adds'
+import type { HabitView } from '@/lib/habit-helpers'
+import { HabitList } from '@/components/habits/HabitList'
 import { QuickAddDrawer } from './QuickAddDrawer'
 
-type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'pantry-item' | 'ai' | 'help'
+// Actions that open a QuickAdd form; 'habits' is handled inline in the sheet.
+type QuickAction = Exclude<QuickAddId, 'habits'>
 
 const navItems = [
-  { href: '/home',         label: 'Home',         icon: Home },
-  { href: '/today',        label: 'Today',        icon: Sun },
-  { href: '/habits',       label: 'Habits',       icon: Target },
-  { href: '/calendar',     label: 'Calendar',     icon: Calendar },
-  { href: '/chores',       label: 'Chores',       icon: ListChecks },
-  { href: '/lists',        label: 'Lists',        icon: CheckSquare },
-  { href: '/recipes',      label: 'Recipes',      icon: ChefHat },
-  { href: '/meal-plan',    label: 'Meals',        icon: CalendarDays },
-  { href: '/pantry',       label: 'Pantry',       icon: ShoppingBasket },
-  { href: '/finance',      label: 'Finance',      icon: DollarSign },
-  { href: '/contacts',     label: 'Contacts',     icon: BookUser },
-  { href: '/documents',    label: 'Documents',    icon: FileText },
-  { href: '/trips',        label: 'Trips',        icon: Plane },
-  { href: '/notes',        label: 'Notes',        icon: StickyNote },
-  { href: '/wishlists',    label: 'Wishlist',     icon: Gift },
-  { href: '/pocket-money', label: 'Pocket Money', icon: PiggyBank },
-  { href: '/maintenance',  label: 'Maintenance',  icon: Wrench },
-  { href: '/settings',     label: 'Settings',     icon: Settings },
+  { href: '/home', label: 'Home', icon: Home },
+  ...NAV_ITEMS.map(({ href, label, shortLabel, icon }) => ({ href, label: shortLabel ?? label, icon })),
+  { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const quickActions: { id: QuickAction; label: string; icon: React.ReactNode; description: string }[] = [
+const quickActions: { id: QuickAddId; label: string; icon: React.ReactNode; description: string }[] = [
   { id: 'event',         label: 'Event',         icon: <CalendarPlus className="h-5 w-5" />,  description: 'Add a calendar event' },
   { id: 'chore',         label: 'Chore',         icon: <ListChecks className="h-5 w-5" />,    description: 'Add a new chore' },
   { id: 'expense',       label: 'Expense',       icon: <DollarSign className="h-5 w-5" />,    description: 'Log a transaction' },
@@ -74,6 +54,7 @@ const quickActions: { id: QuickAction; label: string; icon: React.ReactNode; des
   { id: 'meal',          label: 'Meal',          icon: <Utensils className="h-5 w-5" />,      description: 'Plan a meal' },
   { id: 'note',          label: 'Note',          icon: <StickyNote className="h-5 w-5" />,    description: 'Write a note' },
   { id: 'pantry-item',   label: 'Pantry Item',   icon: <ShoppingBasket className="h-5 w-5" />, description: 'Add to the pantry' },
+  { id: 'habits',        label: 'Tick a Habit',  icon: <Target className="h-5 w-5" />,       description: 'Check in on today' },
   { id: 'ai',            label: 'AI Assistant',  icon: <Bot className="h-5 w-5" />,           description: 'Voice or chat commands' },
   { id: 'help',          label: 'Help',           icon: <HelpCircle className="h-5 w-5" />,   description: 'How to use this page' },
 ]
@@ -98,6 +79,8 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
   const [quickAddsOpen, setQuickAddsOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [lists, setLists] = useState<PinnableList[]>([])
+  const [habitsOpen, setHabitsOpen] = useState(false)
+  const [habits, setHabits] = useState<HabitView[] | null>(null)
 
   // Active lists (id/name/type only) are fetched each time the sheet opens, so pinned
   // lists show current names and a pin to an archived/deleted list simply drops out.
@@ -110,6 +93,17 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
       .catch(() => {})
     return () => { cancelled = true }
   }, [open, pinsOpen])
+
+  // Habits load only when the user opens the inline checklist in the sheet.
+  useEffect(() => {
+    if (!open || !habitsOpen) return
+    let cancelled = false
+    fetch('/api/habits')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: HabitView[]) => { if (!cancelled) setHabits(data) })
+      .catch(() => { if (!cancelled) setHabits([]) })
+    return () => { cancelled = true }
+  }, [open, habitsOpen])
 
   const visibleNavItems = navItems.filter(({ href }) => !(hideFinanceModule && href === '/finance') && isMainNavVisible(mainNav, href))
   const shownPins = pins.flatMap((pin): { pin: Pin; label: string; icon: React.ComponentType<{ className?: string }> }[] => {
@@ -153,7 +147,11 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
     }
   }
 
-  function handleActionSelect(action: QuickAction) {
+  function handleActionSelect(action: QuickAddId) {
+    if (action === 'habits') {
+      setHabitsOpen((prev) => !prev)
+      return
+    }
     // AI and Help are modal/dialog-only actions â€” dispatch directly
     if (action === 'ai' || action === 'help') {
       setOpen(false)
@@ -280,6 +278,17 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
                   </button>
                 ))}
               </div>
+              {habitsOpen && (
+                <div className="mt-3 rounded-xl border border-border p-3">
+                  {habits === null ? (
+                    <p className="text-xs text-muted-foreground">Loading…</p>
+                  ) : habits.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No habits yet. Add one on the Habits page.</p>
+                  ) : (
+                    <HabitList habits={habits} onHabitsChange={setHabits} />
+                  )}
+                </div>
+              )}
               {moreActions.length > 0 && (
                 <button
                   type="button"

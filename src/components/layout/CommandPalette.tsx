@@ -3,13 +3,26 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Home, Calendar, ListChecks, Utensils, ChefHat, CheckSquare, DollarSign,
-  Users, FileText, Plane, StickyNote, Gift, Sun, Wrench, Settings, Shield,
-  Search, CornerDownLeft, Plus, Loader2, ShoppingBasket, PiggyBank, Target,
+  Home,
+  Calendar,
+  ListChecks,
+  ChefHat,
+  Users,
+  FileText,
+  Plane,
+  StickyNote,
+  Wrench,
+  Settings,
+  Shield,
+  Search,
+  CornerDownLeft,
+  Plus,
+  Loader2,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { SearchResult, SearchResultType } from '@/lib/global-search'
 import { isMainNavVisible } from '@/lib/mainNavKeys'
+import { NAV_ITEMS } from '@/lib/nav-items'
 
 interface PageEntry {
   label: string
@@ -74,24 +87,11 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mai
   }, [open])
 
   const pages: PageEntry[] = [
-    { label: 'Home',           url: '/home',           icon: <Home className="h-4 w-4" /> },
-    { label: 'Today',          url: '/today',          icon: <Sun className="h-4 w-4" /> },
-    { label: 'Habits',         url: '/habits',         icon: <Target className="h-4 w-4" /> },
-    { label: 'Calendar',       url: '/calendar',       icon: <Calendar className="h-4 w-4" /> },
-    { label: 'Lists',          url: '/lists',          icon: <ListChecks className="h-4 w-4" /> },
-    { label: 'Meal Plan',      url: '/meal-plan',      icon: <Utensils className="h-4 w-4" /> },
-    { label: 'Recipes',        url: '/recipes',        icon: <ChefHat className="h-4 w-4" /> },
-    { label: 'Pantry',         url: '/pantry',         icon: <ShoppingBasket className="h-4 w-4" /> },
-    { label: 'Chores',         url: '/chores',         icon: <CheckSquare className="h-4 w-4" /> },
-    ...(!hideFinanceModule ? [{ label: 'Finance', url: '/finance', icon: <DollarSign className="h-4 w-4" /> }] : []),
-    { label: 'Contacts',       url: '/contacts',       icon: <Users className="h-4 w-4" /> },
-    { label: 'Documents',      url: '/documents',      icon: <FileText className="h-4 w-4" /> },
-    { label: 'Trips',          url: '/trips',          icon: <Plane className="h-4 w-4" /> },
-    { label: 'Notes',          url: '/notes',          icon: <StickyNote className="h-4 w-4" /> },
-    { label: 'Wishlist',       url: '/wishlists',      icon: <Gift className="h-4 w-4" /> },
-    { label: 'Pocket Money',   url: '/pocket-money',   icon: <PiggyBank className="h-4 w-4" /> },
-    { label: 'Maintenance',    url: '/maintenance',    icon: <Wrench className="h-4 w-4" /> },
-    { label: 'Settings',       url: '/settings',       icon: <Settings className="h-4 w-4" /> },
+    { label: 'Home', url: '/home', icon: <Home className="h-4 w-4" /> },
+    ...NAV_ITEMS
+      .filter(n => !(hideFinanceModule && n.href === '/finance'))
+      .map(({ href, label, icon: Icon }) => ({ label, url: href, icon: <Icon className="h-4 w-4" /> })),
+    { label: 'Settings', url: '/settings', icon: <Settings className="h-4 w-4" /> },
     ...(isAdmin ? [{ label: 'Admin', url: '/admin', icon: <Shield className="h-4 w-4" /> }] : []),
   ].filter(p => isMainNavVisible(mainNav, p.url))
 
