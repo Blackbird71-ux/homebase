@@ -9,7 +9,7 @@ export default async function HabitsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="pt-4">
+      <div className="px-4 sm:px-6 pt-4">
         <PageHero title="Habits" subtitle="Daily and weekly habits, with streaks." />
       </div>
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-4">

@@ -33,7 +33,9 @@ export default function CategoriesSettingsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <PageHero title="Ingredient Categories" subtitle="Manage categories and assign ingredients for better organization in shopping lists." />
+      <div className="px-6 pt-4">
+        <PageHero title="Ingredient Categories" subtitle="Manage categories and assign ingredients for better organization in shopping lists." />
+      </div>
 
       <div className="flex-1 p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

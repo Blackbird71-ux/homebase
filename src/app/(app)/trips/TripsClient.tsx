@@ -91,22 +91,24 @@ export function TripsClient({ initialTrips }: TripsClientProps) {
 
   return (
     <div className="hb-trips flex flex-col h-full overflow-hidden">
-      <PageHero
-        title="Trips"
-        subtitle={`${activeTrips.length} active trip${activeTrips.length !== 1 ? 's' : ''}`}
-        actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowTagManager(true)} className="hb-btn hb-btn--outline hb-btn--sm">
-              <Tag size={14} />
-              <span className="hidden sm:inline">Tags</span>
-            </button>
-            <button onClick={() => setShowCreateDialog(true)} className="hb-btn hb-btn--primary">
-              <Plus size={16} />
-              New Trip
-            </button>
-          </div>
-        }
-      />
+      <div className="px-4 sm:px-6 pt-4">
+        <PageHero
+          title="Trips"
+          subtitle={`${activeTrips.length} active trip${activeTrips.length !== 1 ? 's' : ''}`}
+          actions={
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowTagManager(true)} className="hb-btn hb-btn--outline hb-btn--sm">
+                <Tag size={14} />
+                <span className="hidden sm:inline">Tags</span>
+              </button>
+              <button onClick={() => setShowCreateDialog(true)} className="hb-btn hb-btn--primary">
+                <Plus size={16} />
+                New Trip
+              </button>
+            </div>
+          }
+        />
+      </div>
 
       {/* Body */}
       <div className="hb-page__body space-y-8">

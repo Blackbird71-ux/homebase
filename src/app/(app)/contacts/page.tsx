@@ -13,7 +13,9 @@ export default async function ContactsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <PageHero title="Contacts" subtitle="Family address book for doctors, schools, tradespeople, and more." />
+      <div className="px-6 pt-4">
+        <PageHero title="Contacts" subtitle="Family address book for doctors, schools, tradespeople, and more." />
+      </div>
       <div className="flex-1 overflow-y-auto p-6 pt-4">
         <ContactsClient
           initialContacts={contacts.map((c) => ({
