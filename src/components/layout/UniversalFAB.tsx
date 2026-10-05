@@ -281,7 +281,7 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
               {habitsOpen && (
                 <div className="mt-3 rounded-xl border border-border p-3">
                   {habits === null ? (
-                    <p className="text-xs text-muted-foreground">Loading…</p>
+                    <p className="text-xs text-muted-foreground">Loading...</p>
                   ) : habits.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No habits yet. Add one on the Habits page.</p>
                   ) : (
