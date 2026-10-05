@@ -35,6 +35,8 @@ import { cn } from '@/lib/utils'
 import { isMainNavVisible } from '@/lib/mainNavKeys'
 import { pinHref, type Pin } from '@/lib/mobile-pins'
 import { PinsDrawer, type PinnableList } from './PinsDrawer'
+import { splitQuickAdds, type QuickAddId } from '@/lib/mobile-quick-adds'
+import { QuickAddDrawer } from './QuickAddDrawer'
 
 type QuickAction = 'event' | 'chore' | 'expense' | 'list-item' | 'shopping-list' | 'todo-list' | 'recipe' | 'meal' | 'note' | 'pantry-item' | 'ai' | 'help'
 
@@ -79,13 +81,18 @@ interface UniversalFABProps {
   mainNav?: Record<string, boolean>
   /** The user's pinned shortcuts (uiPreferences.mobilePins) */
   pins?: Pin[]
+  /** The user's chosen Quick Add actions (uiPreferences.mobileQuickAdds); null = show all */
+  quickAdds?: QuickAddId[] | null
 }
 
-export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav = {}, pins: initialPins = [] }: UniversalFABProps) {
+export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav = {}, pins: initialPins = [], quickAdds: initialQuickAdds = null }: UniversalFABProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [pins, setPins] = useState<Pin[]>(initialPins)
   const [pinsOpen, setPinsOpen] = useState(false)
+  const [quickAdds, setQuickAdds] = useState<QuickAddId[] | null>(initialQuickAdds)
+  const [quickAddsOpen, setQuickAddsOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [lists, setLists] = useState<PinnableList[]>([])
 
   // Active lists (id/name/type only) are fetched each time the sheet opens, so pinned
@@ -109,6 +116,8 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
     const list = lists.find((l) => l.id === pin.id)
     return list ? [{ pin, label: list.name, icon: list.type === 'SHOPPING' ? ShoppingCart : CheckSquare }] : []
   })
+
+  const { shown: shownActions, more: moreActions } = splitQuickAdds(quickActions, quickAdds)
 
   // ⌘K is owned by CommandPalette; Escape still closes the mobile sheet
   useEffect(() => {
@@ -240,11 +249,19 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
 
             {/* Quick Add */}
             <div className="px-4 pt-3 pb-4 border-t border-border">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Quick Add
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick Add</p>
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); setQuickAddsOpen(true) }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <PencilIcon className="h-3 w-3" />
+                  Edit
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-2">
-                {quickActions.map((action) => (
+                {[...shownActions, ...(moreOpen ? moreActions : [])].map((action) => (
                   <button
                     key={action.id}
                     type="button"
@@ -259,6 +276,15 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
                   </button>
                 ))}
               </div>
+              {moreActions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((prev) => !prev)}
+                  className="mt-2 w-full py-2 rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  {moreOpen ? 'Show less' : `More (${moreActions.length})`}
+                </button>
+              )}
             </div>
 
             {/* Navigate */}
@@ -308,6 +334,14 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
         pages={visibleNavItems.map(({ href, label }) => ({ href, label }))}
         lists={lists}
         onSaved={setPins}
+      />
+
+      <QuickAddDrawer
+        open={quickAddsOpen}
+        onOpenChange={setQuickAddsOpen}
+        options={quickActions.map(({ id, label }) => ({ id, label }))}
+        chosen={quickAdds}
+        onSaved={setQuickAdds}
       />
     </>
   )
