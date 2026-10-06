@@ -24,9 +24,17 @@ export interface HabitInput {
   name?: unknown
   targetPerWeek?: unknown
   isActive?: unknown
+  emailReminder?: unknown
+  reminderHour?: unknown
 }
 
-export type ParsedHabit = { name?: string; targetPerWeek?: number; isActive?: boolean }
+export type ParsedHabit = {
+  name?: string
+  targetPerWeek?: number
+  isActive?: boolean
+  emailReminder?: boolean
+  reminderHour?: number
+}
 
 /** Validates editable fields; returns an error string or the cleaned partial. */
 export function parseHabitInput(input: HabitInput, requireName: boolean): { error: string } | { data: ParsedHabit } {
@@ -46,6 +54,15 @@ export function parseHabitInput(input: HabitInput, requireName: boolean): { erro
     if (typeof input.isActive !== 'boolean') return { error: 'isActive must be a boolean' }
     data.isActive = input.isActive
   }
+  if (input.emailReminder !== undefined) {
+    if (typeof input.emailReminder !== 'boolean') return { error: 'emailReminder must be a boolean' }
+    data.emailReminder = input.emailReminder
+  }
+  if (input.reminderHour !== undefined) {
+    const h = input.reminderHour
+    if (typeof h !== 'number' || !Number.isInteger(h) || h < 0 || h > 23) return { error: 'reminderHour must be a whole number from 0 to 23' }
+    data.reminderHour = h
+  }
   return { data }
 }
 
@@ -62,6 +79,8 @@ export async function listHabits(ctx: HabitCtx, opts: { includeInactive?: boolea
     name: h.name,
     targetPerWeek: h.targetPerWeek,
     isActive: h.isActive,
+    emailReminder: h.emailReminder,
+    reminderHour: h.reminderHour,
     ...computeHabitStats({
       checkIns: h.checkIns.map((c) => c.date),
       targetPerWeek: h.targetPerWeek,
@@ -84,6 +103,8 @@ export async function createHabit(ctx: HabitCtx, data: ParsedHabit & { name: str
       name: data.name,
       targetPerWeek: data.targetPerWeek ?? 7,
       isActive: data.isActive ?? true,
+      emailReminder: data.emailReminder ?? false,
+      reminderHour: data.reminderHour ?? 8,
       sortOrder: (last?.sortOrder ?? -1) + 1,
     },
   })
@@ -100,6 +121,32 @@ export async function updateHabit(ctx: HabitCtx, id: string, data: ParsedHabit) 
 export async function deleteHabit(ctx: HabitCtx, id: string): Promise<boolean> {
   const { count } = await prisma.habit.deleteMany({ where: { id, familyId: ctx.familyId, userId: ctx.userId } })
   return count > 0
+}
+
+/**
+ * Email "Mark Done" link: there is no session, so the signed token supplies the
+ * owner (userId) and the family timezone is read from the habit. Ticks the local
+ * day the reminder was sent (not the click day), so a click just after midnight
+ * still credits the right day. Idempotent; setHabitCheckIn enforces the 7-day window.
+ */
+export async function checkInHabitFromEmail(
+  habitId: string,
+  userId: string,
+  reminderSentAt: Date
+): Promise<{ status: 'ok' | 'not-found' | 'bad-date'; name?: string }> {
+  const habit = await prisma.habit.findFirst({
+    where: { id: habitId, userId, isActive: true },
+    select: { id: true, name: true, familyId: true, family: { select: { timezone: true } } },
+  })
+  if (!habit) return { status: 'not-found' }
+  const timezone = habit.family?.timezone ?? 'UTC'
+  const status = await setHabitCheckIn(
+    { familyId: habit.familyId, userId, timezone, weekStartsOn: 0 },
+    habit.id,
+    true,
+    dateStringInTz(reminderSentAt, timezone)
+  )
+  return { status, name: habit.name }
 }
 
 /**

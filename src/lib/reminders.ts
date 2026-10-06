@@ -2,10 +2,10 @@
 
 import { prisma } from '@/lib/prisma'
 import { sendEmail } from '@/lib/email'
-import { choreReminderHtml, eventReminderHtml, documentExpiryHtml, billReminderHtml } from '@/lib/email-templates'
+import { choreReminderHtml, eventReminderHtml, documentExpiryHtml, billReminderHtml, habitReminderHtml } from '@/lib/email-templates'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
 import { generateCompleteToken } from '@/lib/complete-token'
-import { dateStringInTz, todayStringInTz, localMidnightToUtc, DEFAULT_TIMEZONE } from '@/lib/timezone'
+import { dateStringInTz, todayStringInTz, localMidnightToUtc, getLocalHourMinute, DEFAULT_TIMEZONE } from '@/lib/timezone'
 import { liveBillWhere } from '@/lib/finance-live-filter'
 
 /**
@@ -343,6 +343,50 @@ export async function processBillReminders(): Promise<number> {
       })
       if (ok) sent++
     }
+  }
+  return sent
+}
+
+/**
+ * Daily habit reminders. Runs on the hourly cron. A habit is reminded once per
+ * local day, from its reminderHour onwards (so a missed tick or restart still
+ * catches up later that day), and only while it has no check-in for today.
+ * Dedup is the shared EmailReminderLog via logAndSend.
+ */
+export async function processHabitReminders(): Promise<number> {
+  const habits = await prisma.habit.findMany({
+    where: { emailReminder: true, isActive: true },
+    include: {
+      user: { select: { name: true, email: true } },
+      family: { select: { timezone: true } },
+    },
+  })
+
+  const now = new Date()
+  let sent = 0
+  for (const habit of habits) {
+    if (!habit.user.email) continue
+
+    const tz = habit.family?.timezone ?? DEFAULT_TIMEZONE
+    if (getLocalHourMinute(now.toISOString(), tz).hour < habit.reminderHour) continue
+
+    const today = todayStringInTz(tz)
+    const reminderKey = `habit_${habit.id}_${today}`
+    const done = await prisma.habitCheckIn.findUnique({ where: { habitId_date: { habitId: habit.id, date: today } }, select: { id: true } })
+    if (done) continue
+
+    const appUrl = process.env.NEXTAUTH_URL ?? ''
+    const token = generateCompleteToken('habit', habit.id, habit.userId)
+    const tickUrl = `${appUrl}/api/complete?token=${token}`
+
+    const ok = await logAndSend({
+      reminderKey,
+      entityType: 'habit',
+      to: habit.user.email,
+      subject: `Reminder: "${habit.name}"`,
+      html: habitReminderHtml(habit.name, habit.user.name, tickUrl),
+    })
+    if (ok) sent++
   }
   return sent
 }

@@ -1,7 +1,7 @@
 // Singleton cron scheduler — initialised once via instrumentation.ts
 
 import cron from 'node-cron'
-import { processAllReminders, processTimedChoreReminders } from '@/lib/reminders'
+import { processAllReminders, processTimedChoreReminders, processHabitReminders } from '@/lib/reminders'
 import { sendDailyBriefings } from '@/lib/daily-briefing'
 
 declare global {
@@ -43,6 +43,11 @@ export function initScheduler(): void {
       await processTimedChoreReminders()
     } catch (err) {
       console.error('[scheduler] Timed chore reminder processing failed:', err)
+    }
+    try {
+      await processHabitReminders()
+    } catch (err) {
+      console.error('[scheduler] Habit reminder processing failed:', err)
     }
   })
 

@@ -522,6 +522,8 @@ model Habit {
   targetPerWeek Int            @default(7)
   isActive      Boolean        @default(true)
   sortOrder     Int            @default(0)
+  emailReminder Boolean        @default(false)  // Email the owner daily if not yet ticked
+  reminderHour  Int            @default(8)      // Local hour (0-23, family timezone) from which the reminder may send
   createdAt     DateTime       @default(now())
   checkIns      HabitCheckIn[]
 

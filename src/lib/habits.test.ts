@@ -42,6 +42,12 @@ describe('parseHabitInput', () => {
     for (const t of [0, 8, 2.5, '3']) expect('error' in parseHabitInput({ name: 'x', targetPerWeek: t }, true)).toBe(true)
     expect(parseHabitInput({ name: 'x', targetPerWeek: 3 }, true)).toEqual({ data: { name: 'x', targetPerWeek: 3 } })
   })
+
+  it('validates email reminder fields', () => {
+    expect(parseHabitInput({ emailReminder: true, reminderHour: 18 }, false)).toEqual({ data: { emailReminder: true, reminderHour: 18 } })
+    expect('error' in parseHabitInput({ emailReminder: 'yes' }, false)).toBe(true)
+    for (const h of [-1, 24, 7.5, '8']) expect('error' in parseHabitInput({ reminderHour: h }, false)).toBe(true)
+  })
 })
 
 describe('setHabitCheckIn', () => {

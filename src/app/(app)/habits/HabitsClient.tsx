@@ -16,11 +16,15 @@ interface HabitForm {
   name: string
   targetPerWeek: number
   isActive: boolean
+  emailReminder: boolean
+  reminderHour: number
 }
 
-const emptyForm: HabitForm = { name: '', targetPerWeek: 7, isActive: true }
+const emptyForm: HabitForm = { name: '', targetPerWeek: 7, isActive: true, emailReminder: false, reminderHour: 8 }
 
 const targetLabel = (n: number) => (n === 7 ? 'Every day' : `${n}× per week`)
+
+const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? 'am' : 'pm'}`
 
 export function HabitsClient({ initialHabits }: { initialHabits: HabitView[] }) {
   const [habits, setHabits] = useState(initialHabits)
@@ -42,7 +46,7 @@ export function HabitsClient({ initialHabits }: { initialHabits: HabitView[] }) 
 
   function openEdit(h: HabitView) {
     setEditingId(h.id)
-    setForm({ name: h.name, targetPerWeek: h.targetPerWeek, isActive: h.isActive })
+    setForm({ name: h.name, targetPerWeek: h.targetPerWeek, isActive: h.isActive, emailReminder: h.emailReminder, reminderHour: h.reminderHour })
     setOpen(true)
   }
 
@@ -56,7 +60,13 @@ export function HabitsClient({ initialHabits }: { initialHabits: HabitView[] }) 
       const res = await fetch(editingId ? `/api/habits/${editingId}` : '/api/habits', {
         method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: form.name, targetPerWeek: form.targetPerWeek, isActive: form.isActive }),
+        body: JSON.stringify({
+          name: form.name,
+          targetPerWeek: form.targetPerWeek,
+          isActive: form.isActive,
+          emailReminder: form.emailReminder,
+          reminderHour: form.reminderHour,
+        }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
@@ -136,6 +146,28 @@ export function HabitsClient({ initialHabits }: { initialHabits: HabitView[] }) 
             <p className="text-xs text-muted-foreground">
               Paused habits are hidden from Today and keep their history.
             </p>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="habit-email-reminder">Email reminder</Label>
+              <Switch id="habit-email-reminder" checked={form.emailReminder} onCheckedChange={(v) => setForm({ ...form, emailReminder: v })} />
+            </div>
+            {form.emailReminder && (
+              <div className="space-y-1.5">
+                <Label htmlFor="habit-reminder-hour">Remind me from</Label>
+                <Select value={String(form.reminderHour)} onValueChange={(v) => { if (v) setForm({ ...form, reminderHour: Number(v) }) }}>
+                  <SelectTrigger id="habit-reminder-hour">
+                    <SelectValue>{hourLabel(form.reminderHour)}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  One email a day, sent from this hour (family timezone) only if the habit isn&apos;t ticked off yet.
+                </p>
+              </div>
+            )}
           </div>
           <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2">
             {editingId && (

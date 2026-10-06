@@ -84,6 +84,27 @@ export function choreReminderHtml(chore: {
   return baseLayout('Chore Reminder', body)
 }
 
+export function habitReminderHtml(habitName: string, userName: string, tickUrl?: string): string {
+  const appUrl = process.env.NEXTAUTH_URL ?? ''
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1e293b;font-size:20px">Habit Reminder</h2>
+    <p style="margin:0 0 24px;color:#64748b;font-size:14px">Hi ${userName}, you haven't ticked this habit off today.</p>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:20px;margin-bottom:24px">
+      <p style="margin:0;font-size:18px;font-weight:600;color:#1e293b">${habitName}</p>
+    </div>
+
+    ${tickUrl
+      ? `<div style="text-align:center;margin:0 0 24px">
+          <a href="${tickUrl}" style="display:inline-block;padding:14px 28px;background:#16a34a;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600">✓ Mark Done</a>
+         </div>`
+      : ''}
+
+    <p style="margin:0;color:#94a3b8;font-size:13px">${tickUrl ? 'Or log' : 'Log'} in to HomeBase${appUrl ? ` (<a href="${appUrl}/habits" style="color:#94a3b8">${appUrl}/habits</a>)` : ''} to tick it off.</p>
+  `
+  return baseLayout('Habit Reminder', body)
+}
+
 export function eventReminderHtml(event: {
   title: string
   description: string | null

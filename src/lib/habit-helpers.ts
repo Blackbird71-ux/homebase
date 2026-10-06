@@ -95,4 +95,6 @@ export interface HabitView extends HabitStats {
   name: string
   targetPerWeek: number
   isActive: boolean
+  emailReminder: boolean
+  reminderHour: number
 }

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyCompleteToken } from '@/lib/complete-token'
 import { completeChore } from '@/lib/chore-completion'
+import { checkInHabitFromEmail } from '@/lib/habits'
 
 function htmlPage(title: string, heading: string, body: string, success: boolean): Response {
   const color = success ? '#16a34a' : '#dc2626'
@@ -106,6 +107,18 @@ async function _GET(req: Request): Promise<Response> {
       `"${chore.title}" has been marked as complete. ${nextDueDate ? `Next due: ${nextDueDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone })}.` : 'The chore has been deactivated as it has reached its end date.'}`,
       true
     )
+  }
+
+  if (payload.type === 'habit') {
+    const reminderSentAt = new Date(payload.exp - 7 * 24 * 3600 * 1000)
+    const result = await checkInHabitFromEmail(payload.id, payload.assigneeId, reminderSentAt)
+    if (result.status === 'not-found') {
+      return htmlPage('Not found', 'Habit not found', 'This habit no longer exists or has been paused.', false)
+    }
+    if (result.status === 'bad-date') {
+      return htmlPage('Link expired', 'Link expired', 'This reminder is too old to tick off. Please log in to HomeBase to update the habit.', false)
+    }
+    return htmlPage('Done!', 'Habit ticked off!', `"${result.name}" has been marked as done.`, true)
   }
 
   if (payload.type === 'bill') {
