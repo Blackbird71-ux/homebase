@@ -313,13 +313,37 @@ if [ -f /etc/cloudflared/config.yml ]; then
   # SRV lookups needed by cloudflared and hangs after network interruptions.
   printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
 
+  # Watchdog: restart cloudflared if it exits, AND if it is running but has not
+  # been connected (/ready != 200) for TUNNEL_STALL_SECS. After a power cut the
+  # NAS boots before the internet is back and cloudflared can hang without
+  # exiting, so exit-only supervision leaves the tunnel down until a manual restart.
   (
+    TUNNEL_STALL_SECS=60
     while true; do
       su-exec nextjs:nodejs cloudflared tunnel \
         --no-autoupdate \
         --metrics 127.0.0.1:20241 \
         --config /etc/cloudflared/config.yml \
-        run
+        run &
+      CF_PID=$!
+      NOT_READY=0
+      while kill -0 "$CF_PID" 2>/dev/null; do
+        sleep 10
+        if wget -q -T 5 -O /dev/null http://127.0.0.1:20241/ready 2>/dev/null; then
+          NOT_READY=0
+        else
+          NOT_READY=$((NOT_READY + 10))
+          if [ "$NOT_READY" -ge "$TUNNEL_STALL_SECS" ]; then
+            echo "   Cloudflare tunnel not ready for ${NOT_READY}s – killing for restart..."
+            kill "$CF_PID" 2>/dev/null
+            sleep 2
+            kill -9 "$CF_PID" 2>/dev/null
+            break
+          fi
+        fi
+      done
+      wait "$CF_PID" 2>/dev/null
+      printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
       echo "   Cloudflare tunnel exited – restarting in 5 seconds..."
       sleep 5
     done
