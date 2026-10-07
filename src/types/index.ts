@@ -99,6 +99,8 @@ export interface CalendarWeekEvent {
   timeLabel: string | null
   color: string | null
   category: string | null
+  /** 'chore' for chore lines (colours via eventColor); absent for calendar events */
+  source?: string
 }
 
 export type StickyNoteScope = 'shared' | 'personal'

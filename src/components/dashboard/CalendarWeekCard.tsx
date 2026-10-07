@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { eventColor } from '@/lib/event-color'
 import type { CalendarWeekEvent } from '@/types'
 
-export function CalendarWeekCard({ events }: { events: CalendarWeekEvent[] }) {
+export function CalendarWeekCard({ events: allEvents, variant }: { events: CalendarWeekEvent[]; variant?: string }) {
+  const events = variant === 'events' ? allEvents.filter((e) => e.source !== 'chore') : allEvents
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">

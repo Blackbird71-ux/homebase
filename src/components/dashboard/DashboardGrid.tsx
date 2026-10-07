@@ -217,7 +217,7 @@ function renderCard(
     case 'current-weather':
       return <WeatherCard key={card.id} />
     case 'calendar-week':
-      return <CalendarWeekCard key={card.id} events={data.calendarWeek} />
+      return <CalendarWeekCard key={card.id} events={data.calendarWeek} variant={getCardVariant(card)} />
     case 'sticky-note':
       return <StickyNoteCard key={card.id} note={data.stickyNotes.shared} scope="shared" />
     case 'sticky-note-personal':

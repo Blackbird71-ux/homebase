@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { generateRecurrenceInstances } from '@/lib/recurrence'
-import { todayBoundsInTz, addLocalDays, formatInTz } from '@/lib/timezone'
+import { todayBoundsInTz, addLocalDays, formatInTz, dateStringInTz } from '@/lib/timezone'
+import { choreScheduleWhere } from '@/lib/chore-helpers'
 import type { CalendarWeekEvent } from '@/types'
 
 /** How many days ahead the dashboard "Next 7 Days" card lists. */
@@ -8,7 +9,7 @@ export const CALENDAR_WEEK_DAYS = 7
 
 /**
  * Calendar events for the dashboard "Next 7 Days" card, one line per event
- * occurrence, formatted as `22/9 Tuesday` + optional `3:30pm` + title.
+ * occurrence (plus due/overdue chores), formatted as `22/9 Tuesday` + optional `3:30pm` + title.
  *
  * Window is [local midnight today, local midnight today + 7 days), DST-correct.
  * Recurring series are expanded to their occurrences. Events already in
@@ -29,7 +30,8 @@ export async function getCalendarWeekEvents(
     where: {
       familyId,
       OR: [
-        { isRecurring: false, start: { lt: windowEnd }, end: { gt: windowStart } },
+        { isRecurring: false, start: { gte: windowStart, lt: windowEnd } },
+        { isRecurring: false, start: { lt: windowStart }, end: { gt: windowStart } },
         { isRecurring: true },
       ],
     },
@@ -50,28 +52,63 @@ export async function getCalendarWeekEvents(
     return [e]
   })
 
-  return occurrences
-    .filter((e) => e.start < windowEnd && e.end > windowStart)
+  // Chores due in the window; overdue / due-now (null) chores are listed under today.
+  const chores = await prisma.chore.findMany({
+    where: choreScheduleWhere(familyId, windowStart, CALENDAR_WEEK_DAYS, timezone),
+    select: { id: true, title: true, nextDueDate: true },
+  })
+
+  type Row = { dayKey: string; line: CalendarWeekEvent }
+  const label = (day: Date) =>
+    `${formatInTz(day, timezone, { day: 'numeric' })}/${formatInTz(day, timezone, { month: 'numeric' })} ` +
+    formatInTz(day, timezone, { weekday: 'long' })
+
+  const eventRows: Row[] = occurrences
+    .filter((e) => e.start < windowEnd && (e.end > windowStart || e.start >= windowStart))
     .sort((a, b) => a.start.getTime() - b.start.getTime())
     .map((e) => {
       const ongoing = e.start < windowStart
       const day = ongoing ? windowStart : e.start
-      const dateLabel =
-        `${formatInTz(day, timezone, { day: 'numeric' })}/${formatInTz(day, timezone, { month: 'numeric' })} ` +
-        formatInTz(day, timezone, { weekday: 'long' })
       const timeLabel = e.isAllDay || ongoing
         ? null
         : formatInTz(e.start, timezone, { hour: 'numeric', minute: '2-digit', hour12: true })
             .replace(/\s/g, '')
             .toLowerCase()
       return {
-        key: `${e.id}:${e.start.toISOString()}`,
-        eventId: e.id,
-        title: e.title,
-        dateLabel,
-        timeLabel,
-        color: e.color,
-        category: e.category,
+        dayKey: dateStringInTz(day, timezone),
+        line: {
+          key: `${e.id}:${e.start.toISOString()}`,
+          eventId: e.id,
+          title: e.title,
+          dateLabel: label(day),
+          timeLabel,
+          color: e.color,
+          category: e.category,
+        },
       }
     })
+
+  const choreRows: Row[] = chores
+    .filter((c) => !c.nextDueDate || c.nextDueDate < windowEnd)
+    .map((c) => {
+      const day = c.nextDueDate && c.nextDueDate >= windowStart ? c.nextDueDate : windowStart
+      return {
+        dayKey: dateStringInTz(day, timezone),
+        line: {
+          key: `chore:${c.id}`,
+          eventId: c.id,
+          title: `Chore: ${c.title}`,
+          dateLabel: label(day),
+          timeLabel: null,
+          color: null,
+          category: null,
+          source: 'chore',
+        },
+      }
+    })
+
+  // Stable sort by local day: events (already time-ordered) precede chores within a day.
+  return [...eventRows, ...choreRows]
+    .sort((a, b) => (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0))
+    .map((r) => r.line)
 }

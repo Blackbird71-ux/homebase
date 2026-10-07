@@ -46,7 +46,8 @@ export const DASHBOARD_CARDS: DashboardCardDefinition[] = [
   { id: 'upcoming-trips',   label: 'Upcoming Trips',   defaultVisible: true  },
   { id: 'pinned-notes',     label: 'Notes',            defaultVisible: false },
   { id: 'current-weather',  label: 'Current Weather',  defaultVisible: false },
-  { id: 'calendar-week',    label: 'Next 7 Days',      defaultVisible: false },
+  { id: 'calendar-week',    label: 'Next 7 Days',      defaultVisible: false,
+    variants: [{ value: 'events-chores', label: 'Events + chores' }, { value: 'events', label: 'Events only' }] },
   { id: 'sticky-note',      label: 'Family Sticky Note', defaultVisible: false },
   { id: 'sticky-note-personal', label: 'My Sticky Note', defaultVisible: false },
 ]
