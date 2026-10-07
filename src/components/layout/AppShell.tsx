@@ -53,7 +53,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
   return (
     <div className="flex h-screen-dvh w-screen overflow-hidden">
       <OfflineBanner />
-      <div className="relative shrink-0 hidden md:block">
+      <div className="relative shrink-0 hidden md:flex">
         <Sidebar collapsed={sidebarCollapsed} isAdmin={isAdmin} hideFinanceModule={hideFinanceModule} familyName={familyName} memberName={memberName} memberRole={memberRole} mainNav={mainNav} />
         <button
           type="button"
