@@ -121,6 +121,10 @@ export function generateRecurrenceInstances(
   const { freq, interval, byDay, count } = parsed
   const duration = eventEnd.getTime() - eventStart.getTime()
   const instances: RecurrenceInstance[] = []
+  // A zero-length event (e.g. all-day stored start==end at local midnight) sitting exactly
+  // on rangeStart is inside the range; a non-zero event ending exactly at rangeStart is not.
+  const endsAfterRangeStart = (end: Date) =>
+    duration === 0 ? end.getTime() >= rangeStart.getTime() : end.getTime() > rangeStart.getTime()
 
   // For WEEKLY+BYDAY, anchor each instance at the event's local time-of-day:
   // ms elapsed from the event's local midnight (in the user's tz) to its start.
@@ -232,7 +236,7 @@ export function generateRecurrenceInstances(
 
         // Check if this instance is within the requested view range
         if (
-          instanceEnd.getTime() > rangeStart.getTime() &&
+          endsAfterRangeStart(instanceEnd) &&
           instanceStart.getTime() < rangeEnd.getTime() &&
           !exceptions.has(instanceStart.getTime())
         ) {
@@ -259,7 +263,7 @@ export function generateRecurrenceInstances(
 
     // Check if this instance is within range
     if (
-      instanceEnd.getTime() > rangeStart.getTime() &&
+      endsAfterRangeStart(instanceEnd) &&
       currentStart.getTime() < rangeEnd.getTime() &&
       !exceptions.has(currentStart.getTime())
     ) {
