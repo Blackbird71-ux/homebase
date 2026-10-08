@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { PillNav } from '@/components/shared/PillNav'
 import { CheckCircle, AlertCircle, Sun, Moon, Monitor, Eye, Loader2, MapPin, LayoutList, LayoutGrid, Palette, Type, LayoutDashboard, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { FONT_SCALE_MIN, FONT_SCALE_MAX, FONT_SCALE_STEP, getStoredFontScale, setFontScale } from '@/lib/font-scale'
 
 interface AppearanceTabProps {
   initialTheme: string
@@ -136,8 +137,16 @@ export function AppearanceTab({
   const [calShowMeals, setCalShowMeals] = useState(false)
   const [calShowTodos, setCalShowTodos] = useState(false)
   const [calShowChores, setCalShowChores] = useState(false)
+  const [deviceScale, setDeviceScale] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<Status>(null)
+
+  useEffect(() => { setDeviceScale(getStoredFontScale()) }, [])
+
+  function changeDeviceScale(percent: number | null) {
+    setDeviceScale(percent)
+    setFontScale(percent)
+  }
 
   const [shoppingLists, setShoppingLists] = useState<ShoppingListOption[]>([])
   const [dashboardShoppingListId, setDashboardShoppingListId] = useState<string>('')
@@ -346,7 +355,34 @@ export function AppearanceTab({
             Scales all text across the app. Large or Extra Large is recommended for mobile use.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="device-font-scale">This device</Label>
+              <span className="text-sm text-muted-foreground">
+                {deviceScale === null ? 'Using account preset' : `${deviceScale}%`}
+              </span>
+            </div>
+            <input
+              id="device-font-scale"
+              type="range"
+              min={FONT_SCALE_MIN}
+              max={FONT_SCALE_MAX}
+              step={FONT_SCALE_STEP}
+              value={deviceScale ?? 100}
+              onChange={(e) => changeDeviceScale(Number(e.target.value))}
+              className="w-full accent-primary"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Applies instantly and only on this device. Drag right for bigger text.
+              </p>
+              <Button type="button" variant="outline" size="sm" disabled={deviceScale === null} onClick={() => changeDeviceScale(null)}>
+                Reset
+              </Button>
+            </div>
+          </div>
+          <p className="text-sm font-medium pt-2">Account preset (all devices, needs Save)</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {fontSizeOptions.map(({ value, label, previewClass, description }) => (
               <button

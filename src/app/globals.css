@@ -1085,3 +1085,22 @@ body {
   }
 }
 
+
+/* ── Headings grow slower than body text when a per-device scale is set ──
+   Root font-size scales everything sized in rem; zoom on headings cancels part of it so
+   titles don't wrap. --hb-font-scale is unset (=1) when no device scale is chosen. */
+h1, h2, h3, h4,
+[data-slot="sheet-title"],
+[data-slot="dialog-title"] {
+  zoom: calc((1 + (var(--hb-font-scale, 1) - 1) * 0.5) / var(--hb-font-scale, 1));
+}
+/* Card titles share a row with controls: keep them at their normal size. */
+[data-slot="card-title"] {
+  zoom: calc(1 / var(--hb-font-scale, 1));
+}
+/* Titles sized in fixed px ignore the root size, so grow them directly (half rate). */
+.hb-page-head__title,
+.hb-section-head__title,
+.page-title {
+  zoom: calc(1 + (var(--hb-font-scale, 1) - 1) * 0.5);
+}

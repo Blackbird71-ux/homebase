@@ -12,6 +12,7 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { ViewTransitions } from '@/components/providers/ViewTransitions'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { FONT_SCALE_INIT_SCRIPT } from '@/lib/font-scale'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -78,6 +79,9 @@ export default async function RootLayout({
       data-font-weight={fontWeight}
       suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: FONT_SCALE_INIT_SCRIPT }} />
+      </head>
       <body className={`${inter.className} h-full bg-background text-foreground overflow-hidden`}>
         <ThemeProvider>
           <ViewTransitions />

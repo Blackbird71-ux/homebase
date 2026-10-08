@@ -189,12 +189,12 @@ export function HomeClient({
 
   return (
     <div className="flex flex-col h-full p-6 overflow-hidden">
-      <div className="flex items-start justify-between gap-4 mb-4 shrink-0">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4 shrink-0">
+        <div className="min-w-[12rem] flex-1">
           <h1 className="hb-page-head__title">{greeting}, {firstName}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{dateLabel}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           {weather && (
             <div
               className="hidden sm:flex items-center gap-1.5 mr-2"
