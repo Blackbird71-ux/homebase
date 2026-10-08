@@ -104,7 +104,7 @@ export function MealSlotCell({
           ) : (
             <div key={recipe.id} className="flex items-start gap-0.5">
               {recipe.courseType && (
-                <span className="text-[9px] font-medium text-muted-foreground shrink-0">
+                <span className="text-[0.5625rem] font-medium text-muted-foreground shrink-0">
                   {recipe.courseType}:
                 </span>
               )}
@@ -120,7 +120,7 @@ export function MealSlotCell({
         })}
         {hasNote && (
           <div className={cn(
-            'text-[9px] text-muted-foreground italic',
+            'text-[0.5625rem] text-muted-foreground italic',
             naturalHeight ? '' : 'line-clamp-1'
           )}>
             {note}
@@ -138,7 +138,7 @@ export function MealSlotCell({
         )}>{recipeName}</p>
         {hasNote && (
           <div className={cn(
-            'text-[9px] text-muted-foreground italic',
+            'text-[0.5625rem] text-muted-foreground italic',
             naturalHeight ? '' : 'line-clamp-1'
           )}>
             {note}
@@ -361,7 +361,7 @@ function DraggableRecipeItem({
         <GripVerticalIcon className="h-2.5 w-2.5 text-muted-foreground" />
       </div>
       {recipe.courseType && (
-        <span className="text-[9px] font-medium text-muted-foreground shrink-0">
+        <span className="text-[0.5625rem] font-medium text-muted-foreground shrink-0">
           {recipe.courseType}:
         </span>
       )}

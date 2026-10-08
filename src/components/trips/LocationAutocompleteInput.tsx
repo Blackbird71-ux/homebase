@@ -96,7 +96,7 @@ export function LocationAutocompleteInput({
               onMouseDown={() => selectSuggestion(s)}
               style={{
                 padding: '8px 12px',
-                fontSize: 13,
+                fontSize: '0.8125rem',
                 cursor: 'pointer',
                 borderBottom: i < suggestions.length - 1 ? '1px solid var(--border)' : undefined,
                 background: 'var(--background)',

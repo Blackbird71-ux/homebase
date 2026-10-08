@@ -201,7 +201,7 @@ export function BillRow({
                 ? 'text-green-600' : 'text-muted-foreground')}>
             <Paperclip className="h-3.5 w-3.5" />
             {!isAttachmentOpen && bill.attachments && bill.attachments.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-green-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-green-500 text-white text-[0.5625rem] font-bold flex items-center justify-center px-0.5">
                 {bill.attachments.length}
               </span>
             )}

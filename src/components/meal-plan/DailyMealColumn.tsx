@@ -107,7 +107,7 @@ function DroppableMealSlot({
         style={isDragActive ? undefined : { marginTop: 0, marginBottom: 0 }}
       >
         <Icon className="h-2.5 w-2.5 shrink-0" />
-        <span className="text-[10px]">
+        <span className="text-[0.625rem]">
           {isOver ? `Drop to add — ${mealType.label}` : mealType.label}
         </span>
       </div>
@@ -225,7 +225,7 @@ export function DailyMealColumn({
               'text-xl font-bold leading-tight tabular-nums',
               isToday ? 'text-primary' : 'text-foreground'
             )}>{dayDate.getDate()}</span>
-            <span className="text-[9px] text-muted-foreground/60 leading-none mt-0.5">
+            <span className="text-[0.5625rem] text-muted-foreground/60 leading-none mt-0.5">
               {dayDate.toLocaleDateString(undefined, { month: 'short' })}
             </span>
             {isToday && <div className="mt-1 h-1 w-1 rounded-full bg-primary" aria-hidden />}

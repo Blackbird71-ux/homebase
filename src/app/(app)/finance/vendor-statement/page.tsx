@@ -203,7 +203,7 @@ export default function VendorStatementPage() {
                 )}>
                   {fmt(Math.abs(data.closingBalance))}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[0.625rem] text-muted-foreground">
                   {data.closingBalance > 0.005
                     ? (data.type === 'ap' ? 'Outstanding payable' : 'Outstanding receivable')
                     : 'Fully settled'}

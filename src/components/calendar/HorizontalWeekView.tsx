@@ -90,7 +90,7 @@ export function HorizontalWeekView({
                 className="absolute inset-y-0 flex items-center border-r border-border/20"
                 style={{ left: (h - GRID_START) * HOUR_PX, width: HOUR_PX }}
               >
-                <span className="text-[10px] font-medium text-muted-foreground pl-1.5 leading-none select-none">
+                <span className="text-[0.625rem] font-medium text-muted-foreground pl-1.5 leading-none select-none">
                   {hourLabel(h)}
                 </span>
               </div>
@@ -118,7 +118,7 @@ export function HorizontalWeekView({
                 style={{ width: DAY_COL_W, minHeight: rowH }}
               >
                 <span className={[
-                  'text-[10px] font-bold uppercase tracking-wider leading-none',
+                  'text-[0.625rem] font-bold uppercase tracking-wider leading-none',
                   today ? 'text-primary' : 'text-muted-foreground',
                 ].join(' ')}>
                   {formatInTz(day, timezone, { weekday: 'short' })}
@@ -134,7 +134,7 @@ export function HorizontalWeekView({
                     {allDay.slice(0, 2).map(e => (
                       <span
                         key={e.id}
-                        className="text-[9px] leading-tight px-1 py-0.5 rounded-sm truncate text-white text-center"
+                        className="text-[0.5625rem] leading-tight px-1 py-0.5 rounded-sm truncate text-white text-center"
                         style={{ background: eventColor(e) }}
                         title={e.title}
                         onClick={ev => { ev.stopPropagation(); onEventClick(e) }}
@@ -143,7 +143,7 @@ export function HorizontalWeekView({
                       </span>
                     ))}
                     {allDay.length > 2 && (
-                      <span className="text-[9px] text-muted-foreground text-center">+{allDay.length - 2} more</span>
+                      <span className="text-[0.5625rem] text-muted-foreground text-center">+{allDay.length - 2} more</span>
                     )}
                   </div>
                 )}
@@ -198,7 +198,7 @@ export function HorizontalWeekView({
                         background: eventColor(e),
                       }}
                     >
-                      <span className="text-white text-[10px] font-medium leading-tight truncate select-none">
+                      <span className="text-white text-[0.625rem] font-medium leading-tight truncate select-none">
                         {e.title}
                       </span>
                     </button>

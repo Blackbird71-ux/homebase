@@ -231,7 +231,7 @@ export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayCli
               {Array.from({ length: hourCount }).map((_, i) => (
                 <div
                   key={i}
-                  className="absolute right-1 text-[10px] text-muted-foreground/60 leading-none select-none"
+                  className="absolute right-1 text-[0.625rem] text-muted-foreground/60 leading-none select-none"
                   style={{ top: Math.max(2, i * HOUR_PX - 6) }}
                 >
                   {hourLabel(GRID_START + i)}
@@ -289,7 +289,7 @@ export function WeekView({ currentDate, events, weekStartsOn, timezone, onDayCli
                         onClick={(ev) => ev.stopPropagation()}
                       >
                         {height >= 36 && (
-                          <span className="text-[9px] text-muted-foreground px-1 pt-0.5 shrink-0 leading-none">
+                          <span className="text-[0.5625rem] text-muted-foreground px-1 pt-0.5 shrink-0 leading-none">
                             {formatInTz(new Date(event.start), timezone, { hour: 'numeric', minute: '2-digit', hour12: true })}
                           </span>
                         )}

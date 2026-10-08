@@ -219,7 +219,7 @@ export function ActivityEditDialog({
           </div>
           <div className="flex items-center gap-2">
             <FileText size={14} style={{ color: 'var(--muted-foreground)' }} aria-hidden />
-            <span style={{ fontSize: 13, fontWeight: 500 }}>Edit Activity</span>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 500 }}>Edit Activity</span>
             <button className="hb-drawer__close" onClick={onClose} aria-label="Close">
               <X size={16} />
             </button>
@@ -229,7 +229,7 @@ export function ActivityEditDialog({
         {/* Body */}
         <div className="hb-drawer__body">
           {error && (
-            <div className="p-3 rounded-lg" style={{ background: 'color-mix(in srgb, var(--destructive) 12%, transparent)', color: 'var(--destructive)', fontSize: 13 }}>
+            <div className="p-3 rounded-lg" style={{ background: 'color-mix(in srgb, var(--destructive) 12%, transparent)', color: 'var(--destructive)', fontSize: '0.8125rem' }}>
               {error}
             </div>
           )}
@@ -328,7 +328,7 @@ export function ActivityEditDialog({
                 border: 'none',
                 cursor: saving ? 'default' : 'pointer',
                 padding: 0,
-                fontSize: 13,
+                fontSize: '0.8125rem',
                 color: 'var(--foreground)',
               }}
             >
@@ -365,14 +365,14 @@ export function ActivityEditDialog({
               <button
                 type="button"
                 onClick={onOpenTagManager}
-                style={{ fontSize: 11, color: 'var(--muted-foreground)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                style={{ fontSize: '0.6875rem', color: 'var(--muted-foreground)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
               >
                 <Settings2 size={11} />
                 Manage
               </button>
             </div>
             {availableTags.length === 0 ? (
-              <p style={{ fontSize: 12, color: 'var(--muted-foreground)', fontStyle: 'italic', margin: 0 }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', fontStyle: 'italic', margin: 0 }}>
                 No tags yet —{' '}
                 <button type="button" onClick={onOpenTagManager} style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', color: 'inherit', fontSize: 'inherit', fontStyle: 'italic', padding: 0 }}>
                   create some in Tag Manager

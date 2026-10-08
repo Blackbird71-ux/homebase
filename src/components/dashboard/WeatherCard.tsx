@@ -188,11 +188,11 @@ export function WeatherCard() {
             <div className="min-w-0">
               <div className="flex items-baseline gap-1">
                 <span className="text-xl font-bold">{Math.round(weather.temperature)}°</span>
-                <span className="text-[10px] text-muted-foreground capitalize truncate">
+                <span className="text-[0.625rem] text-muted-foreground capitalize truncate">
                   {weather.description}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
+              <p className="text-[0.625rem] text-muted-foreground truncate flex items-center gap-1">
                 <MapPin className="h-2.5 w-2.5 shrink-0" />
                 {locationName}
               </p>
@@ -200,7 +200,7 @@ export function WeatherCard() {
           </div>
         </div>
 
-        <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10px] text-muted-foreground">
+        <div className="mt-2 grid grid-cols-3 gap-1.5 text-[0.625rem] text-muted-foreground">
           <div className="flex items-center gap-1">
             <Thermometer className="h-3 w-3 shrink-0" />
             <span className="truncate">{Math.round(weather.feelsLike)}° feels</span>

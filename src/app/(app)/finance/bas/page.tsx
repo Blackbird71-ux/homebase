@@ -315,7 +315,7 @@ function SummaryCard({
       <p className={cn('hb-stat__num hb-stat__num--money', valueClass)}>
         {loading ? <span className="text-muted-foreground">—</span> : fmt(value)}
       </p>
-      <p className="text-[10px] text-muted-foreground">{description}</p>
+      <p className="text-[0.625rem] text-muted-foreground">{description}</p>
     </div>
   )
 }

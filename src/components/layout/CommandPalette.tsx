@@ -248,7 +248,7 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mai
             placeholder="Search, or type > to create…"
             className="flex-1 h-12 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
           />
-          <kbd className="hidden sm:inline-flex items-center rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">esc</kbd>
+          <kbd className="hidden sm:inline-flex items-center rounded border border-border px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">esc</kbd>
         </div>
 
         <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-2">

@@ -189,7 +189,7 @@ export default function PrepaymentsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{s.description}</span>
-                          <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium border', badge.cls)}>
+                          <span className={cn('px-1.5 py-0.5 rounded text-[0.625rem] font-medium border', badge.cls)}>
                             {badge.label}
                           </span>
                         </div>

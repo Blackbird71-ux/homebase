@@ -1008,7 +1008,7 @@ export function TemplateFormDialog({
           <div className="w-[38%] shrink-0 flex flex-col border-r border-border overflow-hidden">
             <div className="flex-1 flex flex-col min-h-0 border-b border-border overflow-hidden">
               <div className="px-3 py-1 border-b border-border shrink-0">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Overview</span>
+                <span className="text-[0.625rem] font-semibold uppercase tracking-widest text-muted-foreground">Overview</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <OverviewTab
@@ -1020,7 +1020,7 @@ export function TemplateFormDialog({
             </div>
             <div className="shrink-0 flex flex-col overflow-hidden max-h-[45%]">
               <div className="px-3 py-1 border-b border-border shrink-0">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Schedule</span>
+                <span className="text-[0.625rem] font-semibold uppercase tracking-widest text-muted-foreground">Schedule</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <FrequencyTab form={form} setForm={setForm} errors={errors} isEdit={isEdit} />
@@ -1029,7 +1029,7 @@ export function TemplateFormDialog({
           </div>
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-3 py-1 border-b border-border shrink-0">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Transaction</span>
+              <span className="text-[0.625rem] font-semibold uppercase tracking-widest text-muted-foreground">Transaction</span>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               <TransactionTab

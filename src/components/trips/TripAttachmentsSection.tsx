@@ -171,7 +171,7 @@ export function TripAttachmentsSection({
             ? 'color-mix(in srgb, var(--primary) 18%, transparent)'
             : 'color-mix(in srgb, var(--primary) 10%, transparent)',
           color: 'var(--primary)',
-          fontSize: 12,
+          fontSize: '0.75rem',
           fontWeight: 500,
           cursor: 'pointer',
           transition: 'background 0.15s',
@@ -185,7 +185,7 @@ export function TripAttachmentsSection({
             color: 'var(--primary-foreground)',
             borderRadius: 999,
             padding: '1px 6px',
-            fontSize: 11,
+            fontSize: '0.6875rem',
             fontWeight: 600,
           }}>
             {attachments.length}

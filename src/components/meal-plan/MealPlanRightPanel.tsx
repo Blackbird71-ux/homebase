@@ -89,7 +89,7 @@ function DraggableRecipeRow({ recipe }: { recipe: RecipeSearchResult }) {
         />
       ) : (
         <div className="h-7 w-7 rounded bg-muted shrink-0 flex items-center justify-center">
-          <span className="text-[9px] text-muted-foreground font-medium">
+          <span className="text-[0.5625rem] text-muted-foreground font-medium">
             {recipe.title.slice(0, 2).toUpperCase()}
           </span>
         </div>
@@ -98,7 +98,7 @@ function DraggableRecipeRow({ recipe }: { recipe: RecipeSearchResult }) {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="text-xs font-medium text-foreground truncate">{recipe.title}</p>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[0.625rem] text-muted-foreground">
           {totalTime > 0 ? `${totalTime} min` : null}
           {totalTime > 0 && recipe.servings ? ' · ' : null}
           {recipe.servings ? `${recipe.servings} srv` : null}
@@ -141,7 +141,7 @@ function SpotlightRecipeCard({
       'border-border bg-card',
     )}>
       {/* Meal type badge */}
-      <div className={cn('px-3 py-1.5 flex items-center gap-1.5 text-[10px] font-medium border-b border-border/50', mealColor)}>
+      <div className={cn('px-3 py-1.5 flex items-center gap-1.5 text-[0.625rem] font-medium border-b border-border/50', mealColor)}>
         {mealConfig && <mealConfig.icon className="h-2.5 w-2.5" />}
         {mealLabel}
       </div>
@@ -159,14 +159,14 @@ function SpotlightRecipeCard({
               />
             ) : (
               <div className="h-8 w-8 rounded-md bg-muted shrink-0 flex items-center justify-center">
-                <span className="text-[9px] text-muted-foreground font-medium">
+                <span className="text-[0.5625rem] text-muted-foreground font-medium">
                   {r.recipe.title.slice(0, 2).toUpperCase()}
                 </span>
               </div>
             )}
             <div className="flex-1 min-w-0">
               {r.courseType && (
-                <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wide">{r.courseType}</p>
+                <p className="text-[0.5625rem] text-muted-foreground font-medium uppercase tracking-wide">{r.courseType}</p>
               )}
               <p className="text-xs font-medium truncate">{r.recipe.title}</p>
             </div>
@@ -185,7 +185,7 @@ function SpotlightRecipeCard({
 
         {/* Note */}
         {entry.note && (
-          <p className="text-[10px] text-muted-foreground italic">{entry.note}</p>
+          <p className="text-[0.625rem] text-muted-foreground italic">{entry.note}</p>
         )}
       </div>
     </div>
@@ -251,10 +251,10 @@ function OverviewTab({
       {/* Week coverage */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
             {days.length}‑day coverage
           </p>
-          <p className="text-[10px] font-medium text-foreground">{filledSlots} / {totalSlots} slots</p>
+          <p className="text-[0.625rem] font-medium text-foreground">{filledSlots} / {totalSlots} slots</p>
         </div>
         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
           <div
@@ -268,15 +268,15 @@ function OverviewTab({
       <div className="grid grid-cols-2 gap-1.5">
         <div className="rounded-lg border border-border bg-background p-2">
           <p className="text-base font-semibold text-foreground leading-none">{breakfastCount}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Breakfasts</p>
+          <p className="text-[0.625rem] text-muted-foreground mt-0.5">Breakfasts</p>
         </div>
         <div className="rounded-lg border border-border bg-background p-2">
           <p className="text-base font-semibold text-foreground leading-none">{lunchCount}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Lunches</p>
+          <p className="text-[0.625rem] text-muted-foreground mt-0.5">Lunches</p>
         </div>
         <div className="rounded-lg border border-border bg-background p-2">
           <p className="text-base font-semibold text-foreground leading-none">{dinnerCount}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Dinners</p>
+          <p className="text-[0.625rem] text-muted-foreground mt-0.5">Dinners</p>
         </div>
         <div className={cn(
           'rounded-lg border p-2',
@@ -286,7 +286,7 @@ function OverviewTab({
             'text-base font-semibold leading-none',
             emptyDays.length > 0 ? 'text-destructive' : 'text-foreground'
           )}>{emptyDays.length}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Empty days</p>
+          <p className="text-[0.625rem] text-muted-foreground mt-0.5">Empty days</p>
         </div>
       </div>
 
@@ -298,7 +298,7 @@ function OverviewTab({
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-medium text-foreground">{spotlightLabel}</p>
           {spotlightEntries.length > 0 && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[0.625rem] text-muted-foreground">
               {spotlightEntries.length} meal{spotlightEntries.length !== 1 ? 's' : ''}
             </p>
           )}
@@ -308,7 +308,7 @@ function OverviewTab({
           <div className="flex flex-col items-center gap-1.5 py-4 text-center">
             <CalendarOffIcon className="h-5 w-5 text-muted-foreground/40" />
             <p className="text-xs text-muted-foreground">No meals planned</p>
-            <p className="text-[10px] text-muted-foreground/60">Use Find & drag to add some</p>
+            <p className="text-[0.625rem] text-muted-foreground/60">Use Find & drag to add some</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -328,7 +328,7 @@ function OverviewTab({
         <>
           <div className="border-t border-border" />
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Coming up</p>
+            <p className="text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground mb-2">Coming up</p>
             <div className="flex flex-col gap-1">
               {upcomingEntries.map(entry => {
                 const entryDate = entry.date.slice(0, 10)
@@ -350,7 +350,7 @@ function OverviewTab({
                       <div className="h-6 w-6 rounded bg-muted shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-medium truncate">
+                      <p className="text-[0.6875rem] font-medium truncate">
                         {firstRecipe?.title ?? entry.note ?? 'Meal'}
                         {(entry.recipes?.length ?? 0) > 1 && (
                           <span className="text-muted-foreground font-normal"> +{entry.recipes.length - 1}</span>
@@ -358,9 +358,9 @@ function OverviewTab({
                       </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] text-muted-foreground">{dateLabel}</span>
-                      <span className="text-[9px] text-muted-foreground/50">·</span>
-                      <span className="text-[9px] text-muted-foreground">{mealConfig?.label ?? entry.mealType}</span>
+                      <span className="text-[0.5625rem] text-muted-foreground">{dateLabel}</span>
+                      <span className="text-[0.5625rem] text-muted-foreground/50">·</span>
+                      <span className="text-[0.5625rem] text-muted-foreground">{mealConfig?.label ?? entry.mealType}</span>
                     </div>
                   </div>
                 )
@@ -436,13 +436,13 @@ function FindDragTab({ onAssignFromSearch }: { onAssignFromSearch?: (recipeId: s
           <>
             {recentRecipes.length > 0 && (
               <>
-                <p className="text-[9px] font-medium uppercase tracking-widest text-muted-foreground px-2 mb-1">Recent</p>
+                <p className="text-[0.5625rem] font-medium uppercase tracking-widest text-muted-foreground px-2 mb-1">Recent</p>
                 {recentRecipes.map(r => <DraggableRecipeRow key={r.id} recipe={r} />)}
               </>
             )}
             {otherRecipes.length > 0 && (
               <>
-                <p className="text-[9px] font-medium uppercase tracking-widest text-muted-foreground px-2 mb-1 mt-2">All recipes</p>
+                <p className="text-[0.5625rem] font-medium uppercase tracking-widest text-muted-foreground px-2 mb-1 mt-2">All recipes</p>
                 {otherRecipes.map(r => <DraggableRecipeRow key={r.id} recipe={r} />)}
               </>
             )}
@@ -451,7 +451,7 @@ function FindDragTab({ onAssignFromSearch }: { onAssignFromSearch?: (recipeId: s
       </div>
 
       {/* Drag hint */}
-      <div className="shrink-0 text-center py-2 px-3 rounded-lg border border-dashed border-border text-[10px] text-muted-foreground">
+      <div className="shrink-0 text-center py-2 px-3 rounded-lg border border-dashed border-border text-[0.625rem] text-muted-foreground">
         <GripVerticalIcon className="h-3 w-3 inline-block mr-1 opacity-50" aria-hidden />
         Drag any recipe onto a day slot to assign it
       </div>

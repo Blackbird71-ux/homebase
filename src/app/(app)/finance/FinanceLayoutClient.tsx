@@ -129,7 +129,7 @@ function useActiveItem(pathname: string, items: NavItem[]) {
 function DraftBadge({ count }: { count: number }) {
   if (count === 0) return null
   return (
-    <span className="ml-auto shrink-0 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none px-1.5 py-0.5 min-w-[1.25rem] text-center">
+    <span className="ml-auto shrink-0 rounded-full bg-primary text-primary-foreground text-[0.625rem] font-bold leading-none px-1.5 py-0.5 min-w-[1.25rem] text-center">
       {count > 99 ? '99+' : count}
     </span>
   )

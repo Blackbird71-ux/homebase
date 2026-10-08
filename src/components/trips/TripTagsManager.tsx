@@ -224,12 +224,12 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-[11px] text-muted-foreground font-medium">Emoji</p>
+            <p className="text-[0.6875rem] text-muted-foreground font-medium">Emoji</p>
             <EmojiRow value={newEmoji} onChange={setNewEmoji} />
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-[11px] text-muted-foreground font-medium">Colour</p>
+            <p className="text-[0.6875rem] text-muted-foreground font-medium">Colour</p>
             <ColorSwatches value={newColor} onChange={setNewColor} />
           </div>
 
@@ -289,11 +289,11 @@ export function TripTagsManager({ open, onClose, onChanged }: TripTagsManagerPro
                     </button>
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-[11px] text-muted-foreground font-medium">Emoji</p>
+                    <p className="text-[0.6875rem] text-muted-foreground font-medium">Emoji</p>
                     <EmojiRow value={editEmoji} onChange={setEditEmoji} />
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-[11px] text-muted-foreground font-medium">Colour</p>
+                    <p className="text-[0.6875rem] text-muted-foreground font-medium">Colour</p>
                     <ColorSwatches value={editColor} onChange={setEditColor} />
                   </div>
                   <div className="flex items-center gap-2">

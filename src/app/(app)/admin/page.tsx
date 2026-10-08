@@ -1313,7 +1313,7 @@ function TestSuitePanel() {
                     {result.failures.map((f, i) => (
                       <div key={i} className="rounded-md border border-border bg-card px-3 py-2.5 text-sm space-y-1">
                         <p className="font-medium">{f.test}</p>
-                        <p className="text-[11px] text-muted-foreground font-mono">{f.file}</p>
+                        <p className="text-[0.6875rem] text-muted-foreground font-mono">{f.file}</p>
                         <pre className="mt-1 max-h-48 overflow-y-auto rounded bg-[#0d1117] p-2 font-mono text-xs text-slate-300 whitespace-pre-wrap break-all leading-5">
                           {f.messages.join('\n\n')}
                         </pre>

@@ -84,7 +84,7 @@ function ChoreCalendarBadge({
         type="button"
         onClick={onClick}
         className={[
-          'w-full flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium leading-tight transition-all',
+          'w-full flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.6875rem] font-medium leading-tight transition-all',
           isOverdue
             ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25'
             : isCompleted
@@ -289,7 +289,7 @@ export function ChoreCalendarView({
                   {formatInTz(day, timezone, { day: 'numeric' })}
                 </span>
                 {dayChores.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground font-medium">
+                  <span className="text-[0.625rem] text-muted-foreground font-medium">
                     {dayChores.length}
                   </span>
                 )}
@@ -313,12 +313,12 @@ export function ChoreCalendarView({
                   />
                 ))}
                 {dayChores.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground/60 pl-0.5 mt-0.5">
+                  <span className="text-[0.625rem] text-muted-foreground/60 pl-0.5 mt-0.5">
                     +{dayChores.length - 3} more
                   </span>
                 )}
                 {dayChores.length === 0 && inMonth && (
-                  <span className="text-[10px] text-muted-foreground/20 select-none flex-1 flex items-end pb-0.5">
+                  <span className="text-[0.625rem] text-muted-foreground/20 select-none flex-1 flex items-end pb-0.5">
                     —
                   </span>
                 )}

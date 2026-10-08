@@ -80,7 +80,7 @@ function TodoCalendarBadge({
         type="button"
         onClick={onClick}
         className={[
-          'w-full flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium leading-tight transition-all',
+          'w-full flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.6875rem] font-medium leading-tight transition-all',
           isOverdue
             ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25'
             : item.isCompleted
@@ -382,7 +382,7 @@ export function TodoCalendarView({
                   {cell.day}
                 </span>
                 {dayItems.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground font-medium">
+                  <span className="text-[0.625rem] text-muted-foreground font-medium">
                     {dayItems.length}
                   </span>
                 )}
@@ -401,12 +401,12 @@ export function TodoCalendarView({
                   />
                 ))}
                 {dayItems.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground/60 pl-0.5 mt-0.5">
+                  <span className="text-[0.625rem] text-muted-foreground/60 pl-0.5 mt-0.5">
                     +{dayItems.length - 3} more
                   </span>
                 )}
                 {dayItems.length === 0 && inMonth && (
-                  <span className="text-[10px] text-muted-foreground/20 select-none flex-1 flex items-end pb-0.5">
+                  <span className="text-[0.625rem] text-muted-foreground/20 select-none flex-1 flex items-end pb-0.5">
                     &mdash;
                   </span>
                 )}
@@ -428,7 +428,7 @@ export function TodoCalendarView({
                 key={item.id}
                 onClick={() => handleEditItem(item)}
                 className={[
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium leading-tight cursor-pointer transition-colors',
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[0.6875rem] font-medium leading-tight cursor-pointer transition-colors',
                   item.isCompleted
                     ? 'bg-green-500/10 text-green-600 dark:text-green-400 line-through opacity-60'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80',
@@ -450,7 +450,7 @@ export function TodoCalendarView({
               </span>
             ))}
             {itemsWithoutDates.length > 10 && (
-              <span className="text-[11px] text-muted-foreground/60 self-center">
+              <span className="text-[0.6875rem] text-muted-foreground/60 self-center">
                 +{itemsWithoutDates.length - 10} more
               </span>
             )}

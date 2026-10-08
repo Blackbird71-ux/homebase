@@ -53,7 +53,7 @@ export function EventBadge({
         {specialIcon ? (
           <span className="shrink-0 text-xs" title={specialIcon.title}>{specialIcon.icon}</span>
         ) : (event.isRecurring || isRecurringInstance) ? (
-          <span className="shrink-0 text-[9px]" title="Repeating">↻</span>
+          <span className="shrink-0 text-[0.5625rem]" title="Repeating">↻</span>
         ) : null}
         <span className="truncate">{event.title}</span>
       </span>

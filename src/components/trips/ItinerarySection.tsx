@@ -320,7 +320,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
         {/* Missing-days quick-add banner */}
         {missingDays.length > 0 && days.length > 0 && (
-          <div style={{ padding: '6px 8px', marginBottom: 4, borderRadius: 8, background: 'color-mix(in srgb, var(--primary) 6%, transparent)', fontSize: 11, color: 'var(--muted-foreground)' }}>
+          <div style={{ padding: '6px 8px', marginBottom: 4, borderRadius: 8, background: 'color-mix(in srgb, var(--primary) 6%, transparent)', fontSize: '0.6875rem', color: 'var(--muted-foreground)' }}>
             <p style={{ margin: '0 0 4px' }}>{missingDays.length} trip day{missingDays.length !== 1 ? 's' : ''} not yet added:</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {missingDays.map((m) => (
@@ -328,7 +328,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                   key={m.date}
                   onClick={() => quickAddDay(m.date, m.label)}
                   className="hb-chip hb-chip--ghost"
-                  style={{ fontSize: 10 }}
+                  style={{ fontSize: '0.625rem' }}
                 >
                   + {formatDate(m.date, { day: 'numeric', month: 'short' })}
                 </button>
@@ -349,7 +349,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                 min={startDate.slice(0, 10)}
                 max={endDate.slice(0, 10)}
                 className="hb-input"
-                style={{ fontSize: 12, padding: '6px 8px' }}
+                style={{ fontSize: '0.75rem', padding: '6px 8px' }}
               />
             </div>
             <div className="hb-field" style={{ marginBottom: 8 }}>
@@ -359,7 +359,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
                 onChange={(e) => setNewDayLabel(e.target.value)}
                 placeholder="e.g. Travel Day"
                 className="hb-input"
-                style={{ fontSize: 12, padding: '6px 8px' }}
+                style={{ fontSize: '0.75rem', padding: '6px 8px' }}
               />
             </div>
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -377,7 +377,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
         {/* Day chips */}
         {days.length === 0 && !addingDay && (
-          <div style={{ padding: '16px 8px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 12 }}>
+          <div style={{ padding: '16px 8px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '0.75rem' }}>
             <Sun size={20} style={{ margin: '0 auto 6px', opacity: 0.3, display: 'block' }} />
             No days yet
           </div>
@@ -546,7 +546,7 @@ export function ItinerarySection({ days, tripId, startDate, endDate, onDaysUpdat
 
             {/* Activities */}
             {localActivities.length === 0 && (
-              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
+              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '0.8125rem' }}>
                 No activities yet — add one below
               </div>
             )}
@@ -690,7 +690,7 @@ function DayTagRow({
               </button>
             </div>
             {availableTags.length === 0 ? (
-              <p style={{ fontSize: 12, color: 'var(--muted-foreground)', padding: '6px 8px', margin: 0 }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', padding: '6px 8px', margin: 0 }}>
                 No tags yet —{' '}
                 <button type="button" onClick={() => { setShowPicker(false); onOpenTagManager() }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', color: 'inherit', fontSize: 'inherit', padding: 0 }}>
@@ -782,7 +782,7 @@ function ActivityCard({
           </p>
         )}
         {noteText && (
-          <p className="hb-activity__note-text" style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '4px 0 0', lineHeight: 1.5 }}>
+          <p className="hb-activity__note-text" style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', margin: '4px 0 0', lineHeight: 1.5 }}>
             <StickyNote size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-top' }} />
             {noteText}
           </p>
@@ -793,7 +793,7 @@ function ActivityCard({
               <span
                 key={tag.id}
                 className="hb-chip hb-chip--filled"
-                style={{ background: tag.color ?? '#64748b', fontSize: 10, height: 18 }}
+                style={{ background: tag.color ?? '#64748b', fontSize: '0.625rem', height: 18 }}
               >
                 {tag.emoji && <span>{tag.emoji}</span>}
                 {tag.name}

@@ -347,7 +347,7 @@ export function NoteEditor({
               {/* Color picker — shown when user is typing a new tag */}
               {newTag.trim() && (
                 <div className="mt-1.5 space-y-1">
-                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <p className="text-[0.625rem] text-muted-foreground flex items-center gap-1">
                     <PaletteIcon className="h-3 w-3" />
                     Choose tag colour:
                   </p>

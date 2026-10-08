@@ -51,7 +51,7 @@ export function ScheduleView({ currentDate, events, timezone, onEventClick, onDa
                 onClick={() => onDayClick(day)}
                 className="w-14 shrink-0 text-left"
               >
-                <p className={['text-[10px] font-bold uppercase tracking-widest leading-none mb-1', today ? 'text-primary' : 'text-muted-foreground'].join(' ')}>
+                <p className={['text-[0.625rem] font-bold uppercase tracking-widest leading-none mb-1', today ? 'text-primary' : 'text-muted-foreground'].join(' ')}>
                   {formatInTz(day, timezone, { weekday: 'short' })}
                 </p>
                 <p className={[

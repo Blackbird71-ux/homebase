@@ -110,7 +110,7 @@ export function DayView({ currentDate, events, timezone, onEventClick, onDayClic
       {/* All-day banner */}
       {allDay.length > 0 && (
         <div className="border-b border-border/60 shrink-0 bg-muted/10 px-2 py-1 flex flex-col gap-0.5">
-          <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-0.5">All day</p>
+          <p className="text-[0.625rem] text-muted-foreground/60 uppercase tracking-wider mb-0.5">All day</p>
           {visible.map(e => <EventBadge key={e.id} event={e} onClick={onEventClick} />)}
           {extra > 0 && (
             <button
@@ -133,7 +133,7 @@ export function DayView({ currentDate, events, timezone, onEventClick, onDayClic
           {/* Hour gutter */}
           <div className="relative border-r border-border/40">
             {Array.from({ length: hourCount }).map((_, i) => (
-              <div key={i} className="absolute right-1 text-[10px] text-muted-foreground/60 leading-none select-none"
+              <div key={i} className="absolute right-1 text-[0.625rem] text-muted-foreground/60 leading-none select-none"
                 style={{ top: Math.max(2, i * HOUR_PX - 6) }}>
                 {hourLabel(GRID_START + i)}
               </div>
@@ -169,7 +169,7 @@ export function DayView({ currentDate, events, timezone, onEventClick, onDayClic
                   onClick={ev => ev.stopPropagation()}
                 >
                   {height >= 36 && (
-                    <span className="text-[9px] text-muted-foreground px-1 pt-0.5 shrink-0 leading-none">
+                    <span className="text-[0.5625rem] text-muted-foreground px-1 pt-0.5 shrink-0 leading-none">
                       {formatInTz(new Date(event.start), timezone, { hour: 'numeric', minute: '2-digit', hour12: true })}
                     </span>
                   )}

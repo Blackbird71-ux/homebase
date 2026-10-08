@@ -70,7 +70,7 @@ export function PillNav({ items, active, onChange, className, size = 'md' }: Pil
             {badge !== undefined && badge > 0 && (
               <span className={cn(
                 'ml-0.5 rounded-full px-1.5 py-px font-semibold leading-none',
-                size === 'sm' ? 'text-[9px]' : 'text-[10px]',
+                size === 'sm' ? 'text-[0.5625rem]' : 'text-[0.625rem]',
                 isActive
                   ? 'bg-primary-foreground/20 text-primary-foreground'
                   : 'bg-muted text-muted-foreground',

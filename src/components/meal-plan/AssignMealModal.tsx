@@ -397,7 +397,7 @@ function DraggableRecipeRow({ recipe, onSelect }: { recipe: Recipe; onSelect: ()
         <GripVerticalIcon className="h-4 w-4" />
       </span>
       <div className="h-7 w-7 rounded bg-muted shrink-0 flex items-center justify-center">
-        <span className="text-[9px] font-semibold text-muted-foreground">{initials}</span>
+        <span className="text-[0.5625rem] font-semibold text-muted-foreground">{initials}</span>
       </div>
       <button type="button" className="flex-1 text-left text-sm font-medium text-foreground truncate" onClick={onSelect}>
         {recipe.title}

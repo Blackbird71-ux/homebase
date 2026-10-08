@@ -183,7 +183,7 @@ function SeverityBadge({ severity }: { severity: IntegrityFinding['severity'] })
   }[severity]
   const { cls, Icon } = map
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide', cls)}>
+    <span className={cn('inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[0.625rem] font-medium uppercase tracking-wide', cls)}>
       <Icon className="h-3 w-3" />
       {severity}
     </span>
@@ -255,7 +255,7 @@ function IntegrityResultView({ result }: { result: IntegrityResponse }) {
                 <span className="font-medium truncate">{f.label}</span>
               </div>
               <p className="text-muted-foreground">{f.message}</p>
-              <p className="text-[11px] text-muted-foreground/70 font-mono truncate">{f.code} · {f.recordId}</p>
+              <p className="text-[0.6875rem] text-muted-foreground/70 font-mono truncate">{f.code} · {f.recordId}</p>
             </div>
           ))}
         </div>

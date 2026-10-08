@@ -305,7 +305,7 @@ function TripMapInner({
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
             Route · {stops.length} stop{stops.length !== 1 ? 's' : ''}
           </p>
-          <p className="text-[10px] text-muted-foreground/60 mb-3">{geoStatus}</p>
+          <p className="text-[0.625rem] text-muted-foreground/60 mb-3">{geoStatus}</p>
 
           {stops.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
@@ -331,7 +331,7 @@ function TripMapInner({
                   >
                     <span
                       style={{ backgroundColor: stop.color }}
-                      className="mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
+                      className="mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-white text-[0.625rem] font-bold shadow-sm"
                     >
                       {i + 1}
                     </span>
