@@ -185,6 +185,7 @@ export function HomeClient({
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const firstName = userName.split(' ')[0]
   const dateLabel = formatInTz(now, timezone, { weekday: 'long', day: 'numeric', month: 'long' })
+  const dateLabelShort = formatInTz(now, timezone, { weekday: 'short', day: 'numeric', month: 'short' })
   const { weather } = useCurrentWeather()
 
   return (
@@ -192,7 +193,7 @@ export function HomeClient({
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4 shrink-0">
         <div className="min-w-[12rem] flex-1 max-sm:flex max-sm:items-baseline max-sm:gap-2">
           <h1 className="hb-page-head__title max-sm:!text-xl max-sm:!leading-tight max-sm:whitespace-nowrap"><span className="sm:hidden">Hi, {firstName}</span><span className="hidden sm:inline">{greeting}, {firstName}</span></h1>
-          <p className="text-sm text-muted-foreground mt-0.5 max-sm:mt-0">{dateLabel}</p>
+          <p className="text-sm text-muted-foreground mt-0.5 max-sm:mt-0"><span className="sm:hidden">{dateLabelShort}</span><span className="hidden sm:inline">{dateLabel}</span></p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {weather && (
