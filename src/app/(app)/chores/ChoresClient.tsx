@@ -482,7 +482,7 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
                 return (
                   <div
                     key={chore.id}
-                    className={`group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''} ${isCompleted ? 'opacity-50' : ''}`}
+                    className={`group flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-0.5 px-2 sm:px-3 py-2.5 transition-colors hover:bg-muted/30 ${overdue ? 'border-l-2 border-l-amber-500' : ''} ${isCompleted ? 'opacity-50' : ''}`}
                   >
                     {/* Complete button (checkbox-style) — chores not yet due (and not
                         flagged for early completion) show a clock instead, matching the
@@ -516,11 +516,11 @@ export function ChoresClient({ initialChores, members, currentUserId, weekStarts
                     <HoverCard
                       content={<HoverDetails chore={chore} />}
                       side="bottom"
-                      className="flex-1 min-w-0"
+                      className="flex-1 min-w-[10rem] sm:min-w-0"
                       contentClassName=""
                     >
                       <span
-                        className={`text-sm font-medium truncate block ${isCompleted ? 'line-through text-muted-foreground cursor-default' : 'cursor-pointer'}`}
+                        className={`text-sm font-medium sm:truncate break-words block ${isCompleted ? 'line-through text-muted-foreground cursor-default' : 'cursor-pointer'}`}
                         onDoubleClick={() => openEditChore(chore)}
                       >
                         {chore.title}

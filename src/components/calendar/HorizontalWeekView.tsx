@@ -178,7 +178,7 @@ export function HorizontalWeekView({
                   const { hour: sh, minute: sm } = getLocalHourMinute(e.start, timezone)
                   const { hour: eh, minute: em } = getLocalHourMinute(e.end, timezone)
                   const left   = topPx(sh, sm)
-                  const width  = Math.max(6, heightPx(sh, sm, eh, em))
+                  const width  = Math.max(Math.min(e.title.length * 6 + 14, 160), heightPx(sh, sm, eh, em))
                   const laneH  = EVENT_H
                   const top    = ROW_PAD + col * (laneH + 3)
                   void totalCols

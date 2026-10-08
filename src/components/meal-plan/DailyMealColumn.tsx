@@ -222,7 +222,7 @@ export function DailyMealColumn({
               isToday ? 'text-primary' : 'text-muted-foreground'
             )}>{dayDate.toLocaleDateString(undefined, { weekday: 'short' })}</span>
             <span className={cn(
-              'text-xl font-bold leading-tight tabular-nums',
+              'text-base sm:text-xl font-bold leading-tight tabular-nums',
               isToday ? 'text-primary' : 'text-foreground'
             )}>{dayDate.getDate()}</span>
             <span className="text-[0.5625rem] text-muted-foreground/60 leading-none mt-0.5">
