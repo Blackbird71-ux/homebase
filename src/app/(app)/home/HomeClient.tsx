@@ -188,11 +188,11 @@ export function HomeClient({
   const { weather } = useCurrentWeather()
 
   return (
-    <div className="flex flex-col h-full p-6 overflow-hidden">
+    <div className="flex flex-col h-full p-3 sm:p-6 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4 shrink-0">
-        <div className="min-w-[12rem] flex-1">
-          <h1 className="hb-page-head__title max-sm:!text-xl max-sm:!leading-tight">{greeting}, {firstName}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{dateLabel}</p>
+        <div className="min-w-[12rem] flex-1 max-sm:flex max-sm:items-baseline max-sm:gap-2">
+          <h1 className="hb-page-head__title max-sm:!text-xl max-sm:!leading-tight max-sm:whitespace-nowrap"><span className="sm:hidden">Hi, {firstName}</span><span className="hidden sm:inline">{greeting}, {firstName}</span></h1>
+          <p className="text-sm text-muted-foreground mt-0.5 max-sm:mt-0">{dateLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {weather && (
