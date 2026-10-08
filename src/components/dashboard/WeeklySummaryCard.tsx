@@ -193,7 +193,7 @@ export function WeeklySummaryCard({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-            <CalendarDays className="h-4 w-4" /> Next {scope ?? 7} Days — {data.weekLabel}
+            <CalendarDays className="h-4 w-4 shrink-0" /> <span className="whitespace-nowrap">Next {scope ?? 7} Days</span><span className="hidden sm:inline whitespace-nowrap">— {data.weekLabel}</span>
           </CardTitle>
           <div className="flex items-center gap-1">
             {/* Weather button */}
@@ -224,6 +224,7 @@ export function WeeklySummaryCard({
             )}
           </div>
         </div>
+        <p className="sm:hidden text-xs text-muted-foreground mt-1">{data.weekLabel}</p>
       </CardHeader>
 
       <WeatherDialog

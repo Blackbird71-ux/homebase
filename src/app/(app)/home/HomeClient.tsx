@@ -191,7 +191,7 @@ export function HomeClient({
     <div className="flex flex-col h-full p-6 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4 shrink-0">
         <div className="min-w-[12rem] flex-1">
-          <h1 className="hb-page-head__title">{greeting}, {firstName}</h1>
+          <h1 className="hb-page-head__title max-sm:!text-xl max-sm:!leading-tight">{greeting}, {firstName}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{dateLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -217,18 +217,20 @@ export function HomeClient({
           <Button
             variant="outline"
             size="sm"
+            aria-label="Reset Layout"
             onClick={handleResetLayout}
           >
-            <LayoutGridIcon className="h-4 w-4 mr-1" />
-            Reset Layout
+            <LayoutGridIcon className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Reset Layout</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
+            aria-label="Customise"
             onClick={() => setCustomiserOpen(true)}
           >
-            <Settings2Icon className="h-4 w-4 mr-1" />
-            Customise
+            <Settings2Icon className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Customise</span>
           </Button>
         </div>
       </div>
