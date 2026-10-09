@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Eye, CookingPot } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { MAIN_NAV_KEYS, MAIN_NAV_GROUPS } from '@/lib/mainNavKeys'
 
 export function MenuTab() {
+  const router = useRouter()
   const [mainNav, setMainNav] = useState<Record<string, boolean>>({})
   const [savingMainNav, setSavingMainNav] = useState(false)
   const [hidePantryPrompts, setHidePantryPrompts] = useState(false)
@@ -34,6 +36,7 @@ export function MenuTab() {
       })
       if (res.ok) {
         setMainNav(updated)
+        router.refresh()
       } else {
         toast.error('Failed to save menu visibility')
       }
