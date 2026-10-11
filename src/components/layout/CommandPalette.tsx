@@ -23,6 +23,8 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { SearchResult, SearchResultType } from '@/lib/global-search'
 import { isMainNavVisible } from '@/lib/mainNavKeys'
 import { NAV_ITEMS } from '@/lib/nav-items'
+import type { ResolvedPin } from '@/lib/pinned-shortcuts'
+import { usePins } from './PinsProvider'
 
 interface PageEntry {
   label: string
@@ -63,12 +65,14 @@ const RESULT_GROUPS: { type: SearchResultType; label: string; icon: React.ReactN
 ]
 
 type PaletteItem =
+  | { kind: 'pin'; pin: ResolvedPin }
   | { kind: 'page'; page: PageEntry }
   | { kind: 'result'; result: SearchResult }
   | { kind: 'action'; action: QuickAction }
 
 export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mainNav = {} }: { isAdmin?: boolean; hideFinanceModule?: boolean; mainNav?: Record<string, boolean> }) {
   const router = useRouter()
+  const { shownPins } = usePins()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -149,6 +153,8 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mai
       : quickActions
     items.push(...filtered.map((action): PaletteItem => ({ kind: 'action', action })))
   } else {
+    // Pinned shortcuts lead the empty-query view only
+    if (!term) items.push(...shownPins.map((pin): PaletteItem => ({ kind: 'pin', pin })))
     const matchedPages = term
       ? pages.filter(p => p.label.toLowerCase().includes(term.toLowerCase()))
       : pages
@@ -173,7 +179,9 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mai
 
   function execute(item: PaletteItem) {
     handleOpenChange(false)
-    if (item.kind === 'page') {
+    if (item.kind === 'pin') {
+      router.push(item.pin.href)
+    } else if (item.kind === 'page') {
       router.push(item.page.url)
     } else if (item.kind === 'result') {
       router.push(item.result.url)
@@ -229,6 +237,7 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mai
     )
   }
 
+  const pinItems = items.filter(i => i.kind === 'pin')
   const pageItems = items.filter(i => i.kind === 'page')
   const actionItems = items.filter(i => i.kind === 'action')
 
@@ -264,6 +273,14 @@ export function CommandPalette({ isAdmin = false, hideFinanceModule = false, mai
             </>
           ) : (
             <>
+              {pinItems.length > 0 && (
+                <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Pinned</p>
+              )}
+              {pinItems.map(item => {
+                if (item.kind !== 'pin') return null
+                const Icon = item.pin.icon
+                return row(item, <Icon className="h-4 w-4" />, item.pin.label)
+              })}
               {pageItems.length > 0 && (
                 <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Go to</p>
               )}

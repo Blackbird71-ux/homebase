@@ -10,10 +10,8 @@ import {
   ChefHat,
   StickyNote,
   Plus,
-  Home,
   CheckSquare,
   ListChecks,
-  Settings,
   LogOut,
   DollarSign,
   ShoppingCart,
@@ -25,10 +23,8 @@ import {
   Target,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isMainNavVisible } from '@/lib/mainNavKeys'
-import { NAV_ITEMS } from '@/lib/nav-items'
-import { pinHref, type Pin } from '@/lib/mobile-pins'
-import { PinsDrawer, type PinnableList } from './PinsDrawer'
+import { pinnablePages } from '@/lib/pinned-shortcuts'
+import { usePins } from './PinsProvider'
 import { splitQuickAdds, type QuickAddId } from '@/lib/mobile-quick-adds'
 import type { HabitView } from '@/lib/habit-helpers'
 import { HabitList } from '@/components/habits/HabitList'
@@ -36,12 +32,6 @@ import { QuickAddDrawer } from './QuickAddDrawer'
 
 // Actions that open a QuickAdd form; 'habits' is handled inline in the sheet.
 type QuickAction = Exclude<QuickAddId, 'habits'>
-
-const navItems = [
-  { href: '/home', label: 'Home', icon: Home },
-  ...NAV_ITEMS.map(({ href, label, shortLabel, icon }) => ({ href, label: shortLabel ?? label, icon })),
-  { href: '/settings', label: 'Settings', icon: Settings },
-]
 
 const quickActions: { id: QuickAddId; label: string; icon: React.ReactNode; description: string }[] = [
   { id: 'event',         label: 'Event',         icon: <CalendarPlus className="h-5 w-5" />,  description: 'Add a calendar event' },
@@ -64,35 +54,19 @@ interface UniversalFABProps {
   onQuickAction?: (action: QuickAction) => void
   hideFinanceModule?: boolean
   mainNav?: Record<string, boolean>
-  /** The user's pinned shortcuts (uiPreferences.mobilePins) */
-  pins?: Pin[]
   /** The user's chosen Quick Add actions (uiPreferences.mobileQuickAdds); null = show all */
   quickAdds?: QuickAddId[] | null
 }
 
-export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav = {}, pins: initialPins = [], quickAdds: initialQuickAdds = null }: UniversalFABProps) {
+export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav = {}, quickAdds: initialQuickAdds = null }: UniversalFABProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [pins, setPins] = useState<Pin[]>(initialPins)
-  const [pinsOpen, setPinsOpen] = useState(false)
+  const { shownPins, openEditor } = usePins()
   const [quickAdds, setQuickAdds] = useState<QuickAddId[] | null>(initialQuickAdds)
   const [quickAddsOpen, setQuickAddsOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
-  const [lists, setLists] = useState<PinnableList[]>([])
   const [habitsOpen, setHabitsOpen] = useState(false)
   const [habits, setHabits] = useState<HabitView[] | null>(null)
-
-  // Active lists (id/name/type only) are fetched each time the sheet opens, so pinned
-  // lists show current names and a pin to an archived/deleted list simply drops out.
-  useEffect(() => {
-    if (!open && !pinsOpen) return
-    let cancelled = false
-    fetch('/api/lists?meta=true')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: PinnableList[]) => { if (!cancelled) setLists(data) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [open, pinsOpen])
 
   // Habits load only when the user opens the inline checklist in the sheet.
   useEffect(() => {
@@ -105,15 +79,7 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
     return () => { cancelled = true }
   }, [open, habitsOpen])
 
-  const visibleNavItems = navItems.filter(({ href }) => !(hideFinanceModule && href === '/finance') && isMainNavVisible(mainNav, href))
-  const shownPins = pins.flatMap((pin): { pin: Pin; label: string; icon: React.ComponentType<{ className?: string }> }[] => {
-    if (pin.type === 'page') {
-      const item = visibleNavItems.find((n) => n.href === pin.href)
-      return item ? [{ pin, label: item.label, icon: item.icon }] : []
-    }
-    const list = lists.find((l) => l.id === pin.id)
-    return list ? [{ pin, label: list.name, icon: list.type === 'SHOPPING' ? ShoppingCart : CheckSquare }] : []
-  })
+  const visibleNavItems = pinnablePages(hideFinanceModule, mainNav)
 
   const { shown: shownActions, more: moreActions } = splitQuickAdds(quickActions, quickAdds)
 
@@ -223,7 +189,7 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pinned</p>
                 <button
                   type="button"
-                  onClick={() => { setOpen(false); setPinsOpen(true) }}
+                  onClick={() => { setOpen(false); openEditor() }}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <PencilIcon className="h-3 w-3" />
@@ -234,10 +200,10 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
                 <p className="text-xs text-muted-foreground">Pin your most-used lists and pages for one-tap access.</p>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  {shownPins.map(({ pin, label, icon: Icon }) => (
+                  {shownPins.map(({ href, label, icon: Icon }) => (
                     <Link
-                      key={pinHref(pin)}
-                      href={pinHref(pin)}
+                      key={href}
+                      href={href}
                       onClick={() => setOpen(false)}
                       className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border hover:bg-accent active:scale-95 transition-all"
                     >
@@ -339,15 +305,6 @@ export function UniversalFAB({ onQuickAction, hideFinanceModule = false, mainNav
           </div>
         </>
       )}
-
-      <PinsDrawer
-        open={pinsOpen}
-        onOpenChange={setPinsOpen}
-        pins={pins}
-        pages={visibleNavItems.map(({ href, label }) => ({ href, label }))}
-        lists={lists}
-        onSaved={setPins}
-      />
 
       <QuickAddDrawer
         open={quickAddsOpen}

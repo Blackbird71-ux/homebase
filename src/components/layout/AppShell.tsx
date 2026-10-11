@@ -7,6 +7,8 @@ import { QuickAdd } from './QuickAdd'
 import { CommandPalette } from './CommandPalette'
 import { UniversalFAB } from './UniversalFAB'
 import type { Pin } from '@/lib/mobile-pins'
+import { PinsProvider } from './PinsProvider'
+import { PinnedBar } from './PinnedBar'
 import type { QuickAddId } from '@/lib/mobile-quick-adds'
 import { OfflineBanner } from './OfflineBanner'
 import { PullToRefresh } from './PullToRefresh'
@@ -51,6 +53,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
   }
 
   return (
+    <PinsProvider initialPins={mobilePins} hideFinanceModule={hideFinanceModule} mainNav={mainNav}>
     <div className="flex h-screen-dvh w-screen overflow-hidden">
       <OfflineBanner />
       <div className="relative shrink-0 hidden md:flex">
@@ -68,6 +71,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       <main className="flex-1 overflow-hidden flex flex-col min-w-0 relative">
         {/* pb-16 gives clearance for the universal FAB on all screen sizes.
             PullToRefresh owns this wrapper so a pull from the top reloads. */}
+        <PinnedBar />
         <PullToRefresh>
           {children}
         </PullToRefresh>
@@ -77,7 +81,7 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       <NavBubbles />
 
       {/* Universal floating action button — visible on all screen sizes */}
-      <UniversalFAB hideFinanceModule={hideFinanceModule} mainNav={mainNav} pins={mobilePins} quickAdds={mobileQuickAdds} />
+      <UniversalFAB hideFinanceModule={hideFinanceModule} mainNav={mainNav} quickAdds={mobileQuickAdds} />
 
       {/* Quick-add dialog — triggered by FAB, sidebar button, or the palette's > actions */}
       <QuickAdd />
@@ -91,5 +95,6 @@ export function AppShell({ children, isAdmin = false, hideFinanceModule = false,
       {/* AI voice/chat assistant panel */}
       <AIAssistant open={aiOpen} onOpenChange={setAiOpen} />
     </div>
+    </PinsProvider>
   )
 }
