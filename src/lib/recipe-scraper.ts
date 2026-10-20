@@ -29,6 +29,16 @@ function extractImageFromJsonLd(data: Record<string, unknown>): string | null {
   return null
 }
 
+/** Find the page's own address in pasted HTML (canonical link, then og:url). http(s) only. */
+export function extractPageUrl(html: string): string {
+  const $ = load(html)
+  const candidates = [$('link[rel="canonical"]').attr('href'), $('meta[property="og:url"]').attr('content')]
+  for (const c of candidates) {
+    if (c && /^https?:\/\//i.test(c.trim())) return c.trim()
+  }
+  return ''
+}
+
 /** Extract recipe data from raw HTML. Tries JSON-LD first, then gives up gracefully. */
 export function parseRecipePage(html: string, url: string): ScrapedRecipe {
   const $ = load(html)

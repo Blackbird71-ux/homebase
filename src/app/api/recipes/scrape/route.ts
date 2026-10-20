@@ -2,14 +2,25 @@ import { withRouteErrors } from '@/lib/route-errors'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import type { SessionUser } from '@/types'
-import { parseRecipePage } from '@/lib/recipe-scraper'
+import { parseRecipePage, extractPageUrl } from '@/lib/recipe-scraper'
 
 async function _POST(req: Request) {
   const session = await auth()
   const user = session?.user as SessionUser | undefined
   if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { url } = body
+  const { url, html: pastedHtml } = body
+
+  // Pasted page source (for sites that block server-side fetches, e.g. bot protection)
+  if (pastedHtml !== undefined) {
+    if (typeof pastedHtml !== 'string' || !pastedHtml.trim()) {
+      return NextResponse.json({ error: 'html must be a non-empty string' }, { status: 400 })
+    }
+    if (pastedHtml.length > 5_000_000) {
+      return NextResponse.json({ error: 'html is too large' }, { status: 413 })
+    }
+    return NextResponse.json(parseRecipePage(pastedHtml, (typeof url === 'string' && url.trim()) || extractPageUrl(pastedHtml)))
+  }
 
   if (!url || typeof url !== 'string') {
     return NextResponse.json({ error: 'url is required' }, { status: 400 })

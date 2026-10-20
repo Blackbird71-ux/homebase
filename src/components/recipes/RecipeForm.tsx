@@ -95,23 +95,28 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
   const [scrapeUrl, setScrapeUrl] = useState('')
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
+  const [pastedHtml, setPastedHtml] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
-  async function handleScrape(e: React.FormEvent) {
+  async function handleScrape(e: React.FormEvent, html?: string) {
     e.preventDefault()
-    if (!scrapeUrl.trim()) return
+    if (!html && !scrapeUrl.trim()) return
     setScraping(true)
     setScrapeError('')
     try {
       const res = await fetch('/api/recipes/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: scrapeUrl.trim() }),
+        body: JSON.stringify(html ? { html, url: scrapeUrl.trim() } : { url: scrapeUrl.trim() }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data) {
         setScrapeError(data?.error ?? 'Failed to scrape')
+        return
+      }
+      if (html && !data.title) {
+        setScrapeError('No recipe found in the pasted page source.')
         return
       }
       setTitle(data.title ?? '')
@@ -119,13 +124,22 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
       setIngredients((data.ingredients ?? []).join('\n'))
       setInstructions((data.instructions ?? []).join('\n'))
       setTags(data.tags ?? [])
-      setSourceUrl(scrapeUrl.trim())
+      setSourceUrl(data.sourceUrl || scrapeUrl.trim())
       if (data.image) {
         setImageUrl(data.image)
         setImagePreview(data.image)
       }
     } finally {
       setScraping(false)
+    }
+  }
+
+  async function pasteFromClipboard() {
+    try {
+      setPastedHtml(await navigator.clipboard.readText())
+      setScrapeError('')
+    } catch {
+      setScrapeError('Could not read the clipboard. Long-press in the box below and choose Paste instead.')
     }
   }
 
@@ -262,6 +276,36 @@ export function RecipeForm({ open, onOpenChange, onCreated, onUpdated, initialDa
               {scrapeError && (
                 <p className="text-sm text-destructive mt-2">{scrapeError}</p>
               )}
+              <form onSubmit={(e) => handleScrape(e, pastedHtml)} className="flex flex-col gap-2 mt-4">
+                <Label htmlFor="scrape-html">Or paste page source</Label>
+                <p className="text-xs text-muted-foreground">
+                  For sites that block imports. Computer: open the recipe, press Ctrl+U, select all, copy.
+                  Android Chrome: type <span className="font-mono">view-source:</span> before the recipe address, load it, select all, copy.
+                  Or use the bookmarklet: save a bookmark with the address below, then tap it on the recipe page.
+                  Afterwards tap Paste from clipboard here. The recipe link is filled in automatically.
+                </p>
+                <input
+                  readOnly
+                  value="javascript:navigator.clipboard.writeText(document.documentElement.outerHTML)"
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="Bookmarklet address"
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-3 text-xs font-mono"
+                />
+                <Button type="button" variant="outline" onClick={pasteFromClipboard} className="self-start">
+                  Paste from clipboard
+                </Button>
+                <textarea
+                  id="scrape-html"
+                  value={pastedHtml}
+                  onChange={(e) => setPastedHtml(e.target.value)}
+                  rows={4}
+                  placeholder="<!DOCTYPE html>..."
+                  className="flex min-h-[80px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm font-mono outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+                <Button type="submit" variant="outline" disabled={scraping || !pastedHtml.trim()} className="self-start">
+                  {scraping ? 'Importing...' : 'Import from pasted source'}
+                </Button>
+              </form>
               {title && (
                 <p className="text-sm text-muted-foreground mt-2">
                   Found: <strong>{title}</strong>. Switch to Manual entry tab to review and save.
