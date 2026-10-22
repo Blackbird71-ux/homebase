@@ -128,6 +128,10 @@ export function ListItemRow({
         disabled={isEditing}
       />
       <button
+        onClick={() => {
+          // Single tap edits on mobile (no double-click on touch); desktop keeps double-click.
+          if (window.matchMedia('(max-width: 767px)').matches && !isCompleted && !isLocked) onEdit?.(id)
+        }}
         onDoubleClick={() => !isCompleted && !isLocked && onEdit?.(id)}
         className={`flex-1 min-w-0 text-left ${!isCompleted && !isLocked && onEdit ? 'cursor-pointer hover:bg-muted/30 rounded px-1 -mx-1' : ''}`}
         style={isCompleted ? { color: doneColor } : undefined}
@@ -217,7 +221,7 @@ export function ListItemRow({
                 const val = e.target.value
                 if (val) onAssign(id, val)
               }}
-              className="h-6 text-xs rounded-full border border-input bg-transparent px-1.5 text-muted-foreground hover:text-foreground appearance-none cursor-pointer opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              className="h-6 text-xs rounded-full border border-input bg-transparent px-1.5 text-muted-foreground hover:text-foreground appearance-none cursor-pointer hidden md:block opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
               aria-label="Assign to"
             >
               <option value="">Assign</option>
