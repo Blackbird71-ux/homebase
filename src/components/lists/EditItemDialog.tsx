@@ -163,8 +163,12 @@ export function EditItemDialog({
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="sm:max-w-[560px]" showCloseButton={true}>
-        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border">
+        <DrawerHeader className="px-4 pt-4 pb-2 shrink-0 border-b border-border flex-row items-center justify-between pr-14 sm:pr-4">
           <DrawerTitle>Edit Item</DrawerTitle>
+          {/* Mobile: Save lives in the header so the on-screen keyboard can't cover it */}
+          <Button size="sm" className="sm:hidden" onClick={handleSave} disabled={isSaving || !content.trim()}>
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
         </DrawerHeader>
         <div className="flex flex-col gap-4 px-4 py-4 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-2">
@@ -300,7 +304,7 @@ export function EditItemDialog({
             </div>
           )}
         </div>
-        <DrawerFooter className="px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2 sm:justify-end">
+        <DrawerFooter className="hidden sm:flex px-4 py-3 border-t border-border shrink-0 flex-col sm:flex-row gap-2 sm:justify-end">
           <Button onClick={handleSave} disabled={isSaving || !content.trim()}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
