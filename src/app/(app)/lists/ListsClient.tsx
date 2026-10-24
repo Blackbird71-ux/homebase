@@ -71,7 +71,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
 
   const [lists, setLists] = useState<SerializedList[]>(initialLists)
   const [defaultListId, setDefaultListId] = useState<string | null>(initialDefaultListId ?? null)
-  const [listFilter, setListFilter] = useState<'all' | 'mine' | 'archived'>('mine')
+  const [listFilter, setListFilter] = useState<'all' | 'mine' | 'archived'>('all')
   const [archivedLists, setArchivedLists] = useState<ArchivedListMeta[]>([])
   const [archivedLoading, setArchivedLoading] = useState(false)
   const activeChipRef = useRef<HTMLButtonElement | null>(null)
@@ -83,7 +83,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     ? []
     : listFilter === 'mine'
       ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
-      : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
+      : lists
 
   const initialActiveId = (() => {
     const urlListId = searchParams.get('list')
@@ -102,7 +102,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     const target = lists.find((l) => l.id === urlListId)
     if (!target) return
     setActiveListId(target.id)
-    setListFilter(!target.createdBy || target.createdBy === currentUserId ? 'mine' : 'all')
+    setListFilter('all')
     // only react to the URL changing, not to every list edit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlListId])
@@ -308,7 +308,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     }
     const newVisible = filter === 'mine'
       ? lists.filter((l) => !l.createdBy || l.createdBy === currentUserId)
-      : lists.filter((l) => l.createdBy && l.createdBy !== currentUserId)
+      : lists
     if (activeListId && !newVisible.some((l) => l.id === activeListId)) {
       const first = newVisible[0]
       if (first) setActiveListId(first.id)
@@ -321,7 +321,7 @@ export function ListsClient({ initialLists, defaultListId: initialDefaultListId,
     <PillNav
       items={[
         { id: 'mine',   label: 'Mine',   icon: User },
-        { id: 'all',    label: 'Family', icon: Users },
+        { id: 'all',    label: 'All', icon: Users },
         { id: 'archived', label: 'Archived', icon: ArchiveIcon },
       ]}
       active={listFilter}
