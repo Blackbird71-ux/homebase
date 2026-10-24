@@ -31,7 +31,7 @@ export function useTodoList(
   // Guards optimistic local state against stale background reads (poll / app-event).
   // Supersedes the old lastMutAt time-window ref. See QA.md §12.27.
   const guard = useMutationGuard()
-  const [filter, setFilter] = useState<TodoFilter>('mine')
+  const [filter, setFilter] = useState<TodoFilter>('all')
   const [categories, setCategories] = useState<string[]>(initialCategoryOrder ?? [])
   const [newContent, setNewContent] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
