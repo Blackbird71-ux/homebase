@@ -203,9 +203,14 @@ export function calculateInitialDueDate(
 
   switch (frequency) {
     case 'daily':
-    case 'biweekly':
     case 'one-off': {
       result = base
+      break
+    }
+    case 'biweekly': {
+      // Optionally pinned to one weekday: first such day on/after the start date.
+      const weekdays = effectiveWeekdays(dayOfWeek, daysOfWeek).slice(0, 1)
+      result = weekdays.length > 0 ? nextWeekdayInSet(base, weekdays, true) : base
       break
     }
     case 'weekly': {
@@ -275,6 +280,27 @@ export function calculateNextDueDate(
 ): Date | null {
   // One-off chores have no next occurrence — deactivate after completion
   if (chore.frequency === 'one-off') return null
+
+  // Biweekly pinned to a weekday ("every second Thursday"): a fixed fortnightly
+  // slot, anchored on the scheduled due date regardless of triggerOnComplete, so
+  // late/early completion never moves the weekday. If completed more than a
+  // fortnight late, skip forward to the first slot after the completion day.
+  const pinnedBiweekly =
+    chore.frequency === 'biweekly'
+      ? effectiveWeekdays(chore.dayOfWeek, chore.daysOfWeek).slice(0, 1)
+      : []
+  if (pinnedBiweekly.length > 0) {
+    const toUtcMidnight = (d: Date) =>
+      new Date(`${d.toLocaleDateString('en-CA', { timeZone: timezone })}T00:00:00Z`)
+    const completedDay = toUtcMidnight(completedAt)
+    let slot = nextWeekdayInSet(toUtcMidnight(chore.nextDueDate ?? completedAt), pinnedBiweekly, true)
+    do {
+      slot = new Date(slot)
+      slot.setUTCDate(slot.getUTCDate() + 14)
+    } while (slot <= completedDay)
+    if (chore.endDate && slot > chore.endDate) return null
+    return utcMidnightToLocalMidnight(slot, timezone)
+  }
 
   // Anchor: advance from the scheduled due date, not from "now"
   let baseDate: Date

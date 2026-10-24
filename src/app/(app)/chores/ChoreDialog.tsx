@@ -128,6 +128,11 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
   const [saving, setSaving] = useState(false)
 
   function toggleDay(day: number) {
+    // Bi-weekly pins to a single weekday; weekly allows a set.
+    if (frequency === 'biweekly') {
+      setSelectedDays((prev) => (prev.length === 1 && prev[0] === day ? [] : [day]))
+      return
+    }
     setSelectedDays((prev) =>
       prev.includes(day)
         ? prev.filter((d) => d !== day)
@@ -150,8 +155,8 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
         frequency,
         // dayOfWeek mirrors the first selected day for backward compatibility;
         // daysOfWeek carries the full set. Both only apply to weekly chores.
-        dayOfWeek: frequency === 'weekly' && selectedDays.length > 0 ? selectedDays[0] : null,
-        daysOfWeek: frequency === 'weekly' ? selectedDays : [],
+        dayOfWeek: (frequency === 'weekly' || frequency === 'biweekly') && selectedDays.length > 0 ? selectedDays[0] : null,
+        daysOfWeek: frequency === 'weekly' ? selectedDays : frequency === 'biweekly' ? selectedDays.slice(0, 1) : [],
         dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : null,
         rotationInterval: parseInt(rotationInterval) || 1,
         currentAssigneeId: currentAssigneeId || null,
@@ -270,9 +275,9 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
               </div>
               )}
             </div>
-            {frequency === 'weekly' && (
+            {(frequency === 'weekly' || frequency === 'biweekly') && (
               <div className="space-y-1.5">
-                <Label>Days of week</Label>
+                <Label>{frequency === 'biweekly' ? 'Day of week' : 'Days of week'}</Label>
                 <div className="flex gap-1">
                   {DAY_OPTIONS.map((d) => {
                     const dayNum = parseInt(d.value)
@@ -295,7 +300,9 @@ export function ChoreDialog({ open, onOpenChange, chore, members, onSaved }: Cho
                   })}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {selectedDays.length > 1
+                  {frequency === 'biweekly'
+                    ? 'Pick a day to fix it to every second week on that day (set Start date to choose which week). Leave unselected to repeat 14 days after each completion.'
+                    : selectedDays.length > 1
                     ? 'Rolls to the next selected day each time it’s completed.'
                     : 'Pick one or more days. Leave all unselected for any day.'}
                 </p>

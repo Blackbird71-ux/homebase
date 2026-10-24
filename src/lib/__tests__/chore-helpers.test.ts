@@ -161,3 +161,31 @@ describe('calculateNextDueDate — one-off', () => {
     expect(calculateNextDueDate(chore, new Date('2026-06-05T08:00:00Z'), TZ)).toBeNull()
   })
 })
+
+describe('calculateNextDueDate — biweekly pinned to a weekday', () => {
+  const base = { frequency: 'biweekly', dayOfWeek: 4, triggerOnComplete: true } as const // Thursday
+
+  it('late completion (Sat) keeps Thursday, two weeks after the due Thursday', () => {
+    const chore = makeChore({ ...base, nextDueDate: localMidnight('2026-09-24') })
+    const next = calculateNextDueDate(chore, new Date('2026-09-26T07:25:00+10:00'), TZ)
+    expect(localDay(next)).toBe('2026-10-08')
+  })
+
+  it('early completion still lands on the next fortnightly Thursday', () => {
+    const chore = makeChore({ ...base, nextDueDate: localMidnight('2026-10-08') })
+    const next = calculateNextDueDate(chore, new Date('2026-10-07T10:00:00+10:00'), TZ)
+    expect(localDay(next)).toBe('2026-10-22')
+  })
+
+  it('more than a fortnight late skips to the first slot after completion', () => {
+    const chore = makeChore({ ...base, nextDueDate: localMidnight('2026-10-08') })
+    const next = calculateNextDueDate(chore, new Date('2026-11-02T10:00:00+11:00'), TZ)
+    expect(localDay(next)).toBe('2026-11-05')
+  })
+
+  it('unpinned biweekly still floats 14 days from completion', () => {
+    const chore = makeChore({ frequency: 'biweekly', triggerOnComplete: true })
+    const next = calculateNextDueDate(chore, new Date('2026-10-11T15:28:00+11:00'), TZ)
+    expect(localDay(next)).toBe('2026-10-25')
+  })
+})
