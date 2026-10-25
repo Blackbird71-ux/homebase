@@ -328,7 +328,7 @@ export function CategoryManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Ingredient Categories</h2>
+          <h2 className="text-2xl font-bold">Meal &amp; Shopping Categories</h2>
           <p className="text-muted-foreground">Manage categories for organizing ingredients in shopping lists</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>

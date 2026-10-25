@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { PillNav } from '@/components/shared/PillNav'
 import {
   User, Palette, Plug, Database, Upload, Tag, FolderOpen,
-  CalendarDays, Soup, DollarSign, Bell, ActivitySquare, Bot,
-  MonitorPlay, Mail, BookOpen, PanelLeft, ListChecks,
+  DollarSign, Bell, ActivitySquare, Bot,
+  MonitorPlay, Mail, BookOpen, PanelLeft,
 } from 'lucide-react'
 import { AccountTab } from '@/components/settings/AccountTab'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
@@ -13,11 +13,7 @@ import { IntegrationsTab } from '@/components/settings/IntegrationsTab'
 import { DataTab } from '@/components/settings/DataTab'
 import { ImportTab } from '@/components/settings/ImportTab'
 import { TagManager } from '@/components/tags/TagManager'
-import { CategoryManager } from '@/components/categories/CategoryManager'
-import { IngredientMappingsTab } from '@/components/settings/IngredientMappingsTab'
 import { RecipeBookManager } from '@/components/recipes/RecipeBookManager'
-import { ListCategoryManager } from '@/components/lists/ListCategoryManager'
-import { EventCategoryManager } from '@/components/calendar/EventCategoryManager'
 import { NotificationSettings } from '@/components/settings/NotificationSettings'
 import { ActivityLogTab } from '@/components/settings/ActivityLogTab'
 import { EmailTab } from '@/components/settings/EmailTab'
@@ -25,6 +21,7 @@ import { AISettingsTab } from '@/components/settings/AISettingsTab'
 import { LoginPageTab } from '@/components/settings/LoginPageTab'
 import { FinanceTab } from '@/components/settings/FinanceTab'
 import { MenuTab } from '@/components/settings/MenuTab'
+import { CategoriesTab } from '@/components/settings/CategoriesTab'
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
 
@@ -37,9 +34,6 @@ const BASE_TABS = [
   { id: 'import',               label: 'Import',              icon: Upload },
   { id: 'tags',                 label: 'Tags',                icon: Tag },
   { id: 'categories',           label: 'Categories',          icon: FolderOpen },
-  { id: 'list-categories',      label: 'List Categories',     icon: ListChecks },
-  { id: 'event-categories',     label: 'Event Categories',    icon: CalendarDays },
-  { id: 'ingredient-mappings',  label: 'Ingredients',         icon: Soup },
   { id: 'recipe-books',         label: 'Recipe Books',        icon: BookOpen },
   { id: 'finance',              label: 'Finance',             icon: DollarSign },
   { id: 'notifications',        label: 'Notifications',       icon: Bell },
@@ -173,10 +167,7 @@ export function SettingsClient({ isAdmin, user, coziImports, supportedTimezones 
         {activeTab === 'menu'               && <MenuTab />}
         {activeTab === 'import'             && <ImportTab />}
         {activeTab === 'tags'               && <TagManager />}
-        {activeTab === 'categories'         && <CategoryManager />}
-        {activeTab === 'list-categories'    && <ListCategoryManager />}
-        {activeTab === 'event-categories'   && <EventCategoryManager />}
-        {activeTab === 'ingredient-mappings'&& <IngredientMappingsTab />}
+        {activeTab === 'categories'         && <CategoriesTab />}
         {activeTab === 'recipe-books'       && <RecipeBookManager />}
         {activeTab === 'finance'            && <FinanceTab />}
         {activeTab === 'notifications'      && <NotificationSettings />}
