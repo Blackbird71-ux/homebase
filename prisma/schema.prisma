@@ -35,6 +35,7 @@ model Family {
   stickyNotes          StickyNote[]
   habits               Habit[]
   eventCategories      EventCategory[]
+  listCategories       ListCategory[]
   mealPlanTemplates    MealPlanTemplate[]
   chores               Chore[]
   pocketMoneyEntries   PocketMoneyEntry[]
@@ -472,6 +473,19 @@ model EventCategory {
   sortOrder Int      @default(0)
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([familyId, name])
+  @@index([familyId])
+}
+
+model ListCategory {
+  id        String   @id @default(cuid())
+  name      String
+  color     String?
+  sortOrder Int      @default(0)
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([familyId, name])
