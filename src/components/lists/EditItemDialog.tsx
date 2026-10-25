@@ -1,5 +1,6 @@
 'use client'
 
+import { CategoryColorSwatches } from './CategoryColorSwatches'
 import { useState, useEffect } from 'react'
 import {
   Drawer,
@@ -32,7 +33,10 @@ interface EditItemDialogProps {
   /** When provided, saves made offline (or on a not-yet-synced tmp_ item) are
       queued for replay instead of failing. */
   queueOfflineEdit?: (id: string, body: Record<string, unknown>) => Promise<void>
-  onCategoryAdded?: (name: string) => Promise<void>
+  onCategoryAdded?: (name: string, color?: string) => Promise<void>
+  /** Todo lists only: show a colour picker when creating a new category. */
+  showCategoryColor?: boolean
+  defaultCategoryColor?: string
   initialUnitPrice?: number | null
   initialQuantity?: number | null
   initialDueDate?: string | null
@@ -51,6 +55,8 @@ export function EditItemDialog({
   onSaved,
   queueOfflineEdit,
   onCategoryAdded,
+  showCategoryColor,
+  defaultCategoryColor,
   initialUnitPrice,
   initialQuantity,
   initialDueDate,
@@ -68,6 +74,7 @@ export function EditItemDialog({
   const [showNewCatInput, setShowNewCatInput] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [isAddingCat, setIsAddingCat] = useState(false)
+  const [newCatColor, setNewCatColor] = useState(defaultCategoryColor ?? '')
 
   useEffect(() => {
     if (open) {
@@ -80,7 +87,10 @@ export function EditItemDialog({
       setLocalCategories(availableCategories)
       setShowNewCatInput(false)
       setNewCatName('')
+      setNewCatColor(defaultCategoryColor ?? '')
     }
+  // defaultCategoryColor is deliberately not a dependency: it changes whenever the catalogue does and would wipe in-progress edits
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialContent, initialCategory, availableCategories, initialUnitPrice, initialQuantity, initialDueDate, initialAssignedToUserId])
 
   async function handleAddCategory() {
@@ -88,7 +98,7 @@ export function EditItemDialog({
     if (!trimmed || localCategories.includes(trimmed)) return
     setIsAddingCat(true)
     try {
-      if (onCategoryAdded) await onCategoryAdded(trimmed)
+      if (onCategoryAdded) await onCategoryAdded(trimmed, showCategoryColor ? newCatColor || undefined : undefined)
       setLocalCategories((prev) => [...prev, trimmed])
       setCategory(trimmed)
       setShowNewCatInput(false)
@@ -214,7 +224,7 @@ export function EditItemDialog({
                 </SelectContent>
               </Select>
               {showNewCatInput && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Input
                     value={newCatName}
                     onChange={(e) => setNewCatName(e.target.value)}
@@ -233,6 +243,11 @@ export function EditItemDialog({
                   <Button type="button" size="sm" variant="ghost" onClick={() => { setShowNewCatInput(false); setNewCatName('') }} disabled={isAddingCat}>
                     Cancel
                   </Button>
+                  {showCategoryColor && newCatColor && (
+                    <div className="basis-full">
+                      <CategoryColorSwatches value={newCatColor} onChange={setNewCatColor} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

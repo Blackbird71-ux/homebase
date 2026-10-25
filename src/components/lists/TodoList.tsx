@@ -17,6 +17,7 @@ import { DoneSection } from './DoneSection'
 import { EditItemDialog } from './EditItemDialog'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
 import { GripVerticalIcon, PlusIcon, RotateCcwIcon, TagIcon, XIcon } from 'lucide-react'
+import { CategoryColorSwatches } from './CategoryColorSwatches'
 import { useTodoList } from '@/hooks/lists/useTodoList'
 
 // ── Sortable wrapper for a single todo item ──────────────────────────────────
@@ -131,7 +132,16 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
     groupedItems,
     editDialogCategories,
     suggestedCategories,
+    categoryColors,
+    newCategoryColor,
+    setPickedCategoryColor,
+    nextColor,
   } = useTodoList(listId, initialItems, initialCategoryOrder, currentUserId, timezone)
+
+  const dot = (name: string) =>
+    categoryColors[name] ? (
+      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: categoryColors[name] }} />
+    ) : null
 
   const filters: { label: string; value: TodoFilter }[] = [
     { label: 'All', value: 'all' },
@@ -214,6 +224,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             key={cat}
             className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground"
           >
+            {dot(cat)}
             {cat}
             <button
               type="button"
@@ -236,11 +247,13 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             aria-label={`Add ${name} category to this list`}
           >
             <PlusIcon className="h-3 w-3" />
+            {dot(name)}
             {name}
           </button>
         ))}
         {showCategoryInput ? (
-          <form onSubmit={handleAddCategory} className="flex items-center gap-1">
+          <form onSubmit={handleAddCategory} className="flex flex-wrap items-center gap-2">
+            <span className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: newCategoryColor }} />
             <Input
               value={newCategoryInput}
               onChange={(e) => setNewCategoryInput(e.target.value)}
@@ -254,6 +267,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             <Button type="submit" size="icon-sm" className="h-6 w-6">
               <PlusIcon className="h-3 w-3" />
             </Button>
+            <div className="basis-full">
+              <CategoryColorSwatches value={newCategoryColor} onChange={setPickedCategoryColor} />
+            </div>
           </form>
         ) : (
           <Button
@@ -288,7 +304,8 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                 if (catItems.length === 0) return null
                 return (
                   <div key={cat} className="flex flex-col gap-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {dot(cat)}
                       {cat}
                     </p>
                     <SortableContext
@@ -370,6 +387,8 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
         onSaved={handleItemSaved}
         queueOfflineEdit={queueItemEdit}
         onCategoryAdded={editDialogCategories.length > 0 ? handleEditDialogCategoryAdded : undefined}
+        showCategoryColor
+        defaultCategoryColor={nextColor()}
         initialDueDate={editItemDueDate}
         initialAssignedToUserId={editItemAssignedToUserId}
         members={members}

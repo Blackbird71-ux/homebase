@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition, useCallback } from 'react'
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
 import { useMutationGuard } from '@/hooks/useMutationGuard'
+import { nextCategoryColor } from '@/lib/category-colors'
 import {
   PointerSensor,
   KeyboardSensor,
@@ -34,7 +35,9 @@ export function useTodoList(
   const [filter, setFilter] = useState<TodoFilter>('all')
   const [categories, setCategories] = useState<string[]>(initialCategoryOrder ?? [])
   // Family-wide list-category catalogue (Settings → List Categories); offered as one-tap suggestions
-  const [catalogue, setCatalogue] = useState<string[]>([])
+  const [catalogue, setCatalogue] = useState<{ name: string; color: string | null }[]>([])
+  const [catalogueLoaded, setCatalogueLoaded] = useState(false)
+  const [pickedCategoryColor, setPickedCategoryColor] = useState<string | null>(null)
   const [newContent, setNewContent] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
   const [newItemCategory, setNewItemCategory] = useState<string>('')
@@ -81,9 +84,34 @@ export function useTodoList(
     if (!navigator.onLine) return
     fetch('/api/list-categories')
       .then((r) => (r.ok ? r.json() : []))
-      .then((rows: { name: string }[]) => setCatalogue(rows.map((r) => r.name)))
+      .then((rows: { name: string; color: string | null }[]) => {
+        setCatalogue(rows.map((r) => ({ name: r.name, color: r.color })))
+        setCatalogueLoaded(true)
+      })
       .catch(() => {})
   }, [])
+
+  // Categories that predate the catalogue (created on this list before it existed) join it,
+  // so they get a colour and show up in Settings → Categories → Lists.
+  useEffect(() => {
+    if (!catalogueLoaded || !navigator.onLine) return
+    const missing = categories.filter((n) => !catalogue.some((c) => c.name === n))
+    if (missing.length === 0) return
+    const used = catalogue.map((c) => c.color)
+    const added = missing.map((name) => {
+      const color = nextCategoryColor(used)
+      used.push(color)
+      return { name, color }
+    })
+    setCatalogue((prev) => [...prev, ...added])
+    added.forEach((c) =>
+      fetch('/api/list-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c),
+      }).catch(() => {}),
+    )
+  }, [catalogueLoaded, categories, catalogue])
 
   // Auto-suggest a category as the item is typed (online only), unless chosen by hand
   useEffect(() => {
@@ -119,7 +147,10 @@ export function useTodoList(
     return groups
   })()
 
-  const suggestedCategories = catalogue.filter((n) => !categories.includes(n))
+  const suggestedCategories = catalogue.map((c) => c.name).filter((n) => !categories.includes(n))
+  const categoryColors: Record<string, string> = Object.fromEntries(
+    catalogue.filter((c) => c.color).map((c) => [c.name, c.color as string]),
+  )
 
   // Catalogue categories are offered in the edit dialog too; choosing one adds it to this list on save
   const editDialogCategories = categories.length > 0 ? [...categories, ...suggestedCategories, 'Other'] : []
@@ -358,15 +389,19 @@ export function useTodoList(
   }
 
   // A category created on a list joins the family catalogue so other lists can reuse it.
-  function registerInCatalogue(name: string) {
-    if (!navigator.onLine || catalogue.includes(name)) return
-    setCatalogue((prev) => [...prev, name])
+  function registerInCatalogue(name: string, color?: string) {
+    if (!navigator.onLine || catalogue.some((c) => c.name === name)) return
+    const chosen = color ?? nextCategoryColor(catalogue.map((c) => c.color))
+    setCatalogue((prev) => [...prev, { name, color: chosen }])
     fetch('/api/list-categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, color: chosen }),
     }).catch(() => {})
   }
+
+  // Colour shown in the add-category picker: the user's pick, else the next unused palette colour
+  const newCategoryColor = pickedCategoryColor ?? nextCategoryColor(catalogue.map((c) => c.color))
 
   function handleAddCategory(e: React.FormEvent) {
     e.preventDefault()
@@ -377,7 +412,8 @@ export function useTodoList(
     setNewCategoryInput('')
     setShowCategoryInput(false)
     saveCategoryOrder(updated)
-    registerInCatalogue(trimmed)
+    registerInCatalogue(trimmed, newCategoryColor)
+    setPickedCategoryColor(null)
   }
 
   function handleRemoveCategory(name: string) {
@@ -386,13 +422,13 @@ export function useTodoList(
     saveCategoryOrder(updated)
   }
 
-  async function handleEditDialogCategoryAdded(name: string) {
+  async function handleEditDialogCategoryAdded(name: string, color?: string) {
     const trimmed = name.trim()
     if (!trimmed || categories.includes(trimmed)) return
     const updated = [...categories, trimmed]
     setCategories(updated)
     await saveCategoryOrder(updated)
-    registerInCatalogue(trimmed)
+    registerInCatalogue(trimmed, color)
   }
 
   // Reset for re-use: clears completion only — locked items and categories are kept.
@@ -450,5 +486,9 @@ export function useTodoList(
     groupedItems,
     editDialogCategories,
     suggestedCategories,
+    categoryColors,
+    newCategoryColor,
+    setPickedCategoryColor,
+    nextColor: () => nextCategoryColor(catalogue.map((c) => c.color)),
   }
 }

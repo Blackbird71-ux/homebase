@@ -1,13 +1,21 @@
 import { prisma } from '@/lib/prisma'
+import { nextCategoryColor } from '@/lib/category-colors'
 
 /** Server-only. Family-wide todo/packing list categories — separate from shopping IngredientCategory. */
 
 export async function createListCategory(familyId: string, name: string, color: string | null) {
-  const last = await prisma.listCategory.findFirst({
+  const existing = await prisma.listCategory.findMany({
     where: { familyId },
-    orderBy: { sortOrder: 'desc' },
+    select: { color: true, sortOrder: true },
   })
+  const last = Math.max(0, ...existing.map((c) => c.sortOrder))
+  // No colour chosen → give it the next unused one so every category is visually distinct
   return prisma.listCategory.create({
-    data: { name, color, sortOrder: (last?.sortOrder ?? 0) + 10, familyId },
+    data: {
+      name,
+      color: color ?? nextCategoryColor(existing.map((c) => c.color)),
+      sortOrder: last + 10,
+      familyId,
+    },
   })
 }
