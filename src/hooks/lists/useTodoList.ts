@@ -136,6 +136,7 @@ export function useTodoList(
       dueDate: newDueDate || null,
       category: newItemCategory || null,
     }
+    if (body.category && !categories.includes(body.category)) void handleEditDialogCategoryAdded(body.category)
 
     if (!navigator.onLine) {
       const tempId = `tmp_${crypto.randomUUID()}`

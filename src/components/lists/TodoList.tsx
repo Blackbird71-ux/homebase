@@ -162,6 +162,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
               {categories.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
+              {suggestedCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           )}
           <input
