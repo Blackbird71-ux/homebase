@@ -16,7 +16,7 @@ import { ListItemRow } from './ListItemRow'
 import { DoneSection } from './DoneSection'
 import { EditItemDialog } from './EditItemDialog'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
-import { GripVerticalIcon, PlusIcon, TagIcon, XIcon } from 'lucide-react'
+import { GripVerticalIcon, PlusIcon, RotateCcwIcon, TagIcon, XIcon } from 'lucide-react'
 import { useTodoList } from '@/hooks/lists/useTodoList'
 
 // ── Sortable wrapper for a single todo item ──────────────────────────────────
@@ -125,10 +125,12 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
     handleAddCategory,
     handleRemoveCategory,
     handleEditDialogCategoryAdded,
+    uncheckAll,
     activeItems,
     completedItems,
     groupedItems,
     editDialogCategories,
+    suggestedCategories,
   } = useTodoList(listId, initialItems, initialCategoryOrder, currentUserId, timezone)
 
   const filters: { label: string; value: TodoFilter }[] = [
@@ -187,6 +189,19 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             {f.label}
           </Button>
         ))}
+        {completedItems.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto gap-1"
+            onClick={() => {
+              if (confirm('Uncheck all items so this list can be used again? Locked items are kept.')) void uncheckAll()
+            }}
+          >
+            <RotateCcwIcon className="h-3.5 w-3.5" />
+            Uncheck all
+          </Button>
+        )}
       </div>
 
       {/* Category management */}
@@ -206,6 +221,20 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
               <XIcon className="h-3 w-3" />
             </button>
           </span>
+        ))}
+        {/* Suggestions stay hidden on lists that don't use categories until "Add category" is tapped */}
+        {(categories.length > 0 || showCategoryInput) && suggestedCategories.map((name) => (
+          <button
+            key={name}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleEditDialogCategoryAdded(name)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            aria-label={`Add ${name} category to this list`}
+          >
+            <PlusIcon className="h-3 w-3" />
+            {name}
+          </button>
         ))}
         {showCategoryInput ? (
           <form onSubmit={handleAddCategory} className="flex items-center gap-1">

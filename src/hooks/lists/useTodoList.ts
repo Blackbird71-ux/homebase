@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
+import { useState, useEffect, useTransition, useCallback } from 'react'
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
 import { useMutationGuard } from '@/hooks/useMutationGuard'
 import {
@@ -33,9 +33,13 @@ export function useTodoList(
   const guard = useMutationGuard()
   const [filter, setFilter] = useState<TodoFilter>('all')
   const [categories, setCategories] = useState<string[]>(initialCategoryOrder ?? [])
+  // Family-wide list-category catalogue (Settings → List Categories); offered as one-tap suggestions
+  const [catalogue, setCatalogue] = useState<string[]>([])
   const [newContent, setNewContent] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
   const [newItemCategory, setNewItemCategory] = useState<string>('')
+  // Once the user picks a category by hand, stop auto-suggesting for this item
+  const [categoryManuallySet, setCategoryManuallySet] = useState(false)
   const [newCategoryInput, setNewCategoryInput] = useState('')
   const [showCategoryInput, setShowCategoryInput] = useState(false)
   const [, startTransition] = useTransition()
@@ -73,6 +77,29 @@ export function useTodoList(
     500,
   )
 
+  useEffect(() => {
+    if (!navigator.onLine) return
+    fetch('/api/list-categories')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { name: string }[]) => setCatalogue(rows.map((r) => r.name)))
+      .catch(() => {})
+  }, [])
+
+  // Auto-suggest a category as the item is typed (online only), unless chosen by hand
+  useEffect(() => {
+    const q = newContent.trim()
+    if (categoryManuallySet || !q || categories.length === 0 || !navigator.onLine) return
+    const t = setTimeout(() => {
+      fetch(`/api/lists/${listId}/category-hint?q=${encodeURIComponent(q)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { category: string | null } | null) => {
+          if (d?.category) setNewItemCategory(d.category)
+        })
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [newContent, categoryManuallySet, categories.length, listId])
+
   // ── Derived ─────────────────────────────────────────────────────────────────
 
   const filtered = filterTodoItems(items, filter, undefined, currentUserId, timezone)
@@ -92,7 +119,10 @@ export function useTodoList(
     return groups
   })()
 
-  const editDialogCategories = categories.length > 0 ? [...categories, 'Other'] : []
+  const suggestedCategories = catalogue.filter((n) => !categories.includes(n))
+
+  // Catalogue categories are offered in the edit dialog too; choosing one adds it to this list on save
+  const editDialogCategories = categories.length > 0 ? [...categories, ...suggestedCategories, 'Other'] : []
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
@@ -129,6 +159,8 @@ export function useTodoList(
       setItems((prev) => [...prev, optimisticItem])
       setNewContent('')
       setNewDueDate('')
+      setNewItemCategory('')
+      setCategoryManuallySet(false)
       // Carry the tempId as clientMutationId so a replayed POST (committed-but-lost
       // response on a flaky reconnect) is de-duped server-side instead of re-created.
       await queueMutation({ endpoint: `/api/lists/${listId}/items`, method: 'POST', body: { ...body, clientMutationId: tempId }, tempId })
@@ -148,6 +180,8 @@ export function useTodoList(
       ])
       setNewContent('')
       setNewDueDate('')
+      setNewItemCategory('')
+      setCategoryManuallySet(false)
     } else {
       toast.error('Failed to save. Please try again.')
     }
@@ -193,6 +227,7 @@ export function useTodoList(
 
   function handleItemSaved(id: string, content: string, category: string | null, dueDate?: string | null, assignedToUserId?: string | null) {
     guard.bump()
+    if (category && !categories.includes(category)) void handleEditDialogCategoryAdded(category)
     setItems((prev) =>
       prev.map((i) => (i.id === id ? {
         ...i,
@@ -321,6 +356,17 @@ export function useTodoList(
     if (!res.ok) toast.error('Failed to save categories')
   }
 
+  // A category created on a list joins the family catalogue so other lists can reuse it.
+  function registerInCatalogue(name: string) {
+    if (!navigator.onLine || catalogue.includes(name)) return
+    setCatalogue((prev) => [...prev, name])
+    fetch('/api/list-categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).catch(() => {})
+  }
+
   function handleAddCategory(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = newCategoryInput.trim()
@@ -330,6 +376,7 @@ export function useTodoList(
     setNewCategoryInput('')
     setShowCategoryInput(false)
     saveCategoryOrder(updated)
+    registerInCatalogue(trimmed)
   }
 
   function handleRemoveCategory(name: string) {
@@ -344,6 +391,24 @@ export function useTodoList(
     const updated = [...categories, trimmed]
     setCategories(updated)
     await saveCategoryOrder(updated)
+    registerInCatalogue(trimmed)
+  }
+
+  // Reset for re-use: clears completion only — locked items and categories are kept.
+  async function uncheckAll() {
+    guard.bump()
+    const endpoint = `/api/lists/${listId}/uncheck-all`
+    if (!navigator.onLine) {
+      setItems((prev) => prev.map((i) => ({ ...i, isCompleted: false })))
+      await queueMutation({ id: `uncheckall_${listId}`, endpoint, method: 'POST', body: {} })
+      return
+    }
+    const res = await fetch(endpoint, { method: 'POST' })
+    if (res.ok) {
+      setItems((prev) => prev.map((i) => ({ ...i, isCompleted: false })))
+    } else {
+      toast.error('Failed to uncheck items.')
+    }
   }
 
   return {
@@ -353,7 +418,8 @@ export function useTodoList(
     categories,
     newContent, setNewContent,
     newDueDate, setNewDueDate,
-    newItemCategory, setNewItemCategory,
+    newItemCategory,
+    setNewItemCategory: (c: string) => { setNewItemCategory(c); setCategoryManuallySet(true) },
     newCategoryInput, setNewCategoryInput,
     showCategoryInput, setShowCategoryInput,
     editItemId, setEditItemId,
@@ -376,10 +442,12 @@ export function useTodoList(
     handleAddCategory,
     handleRemoveCategory,
     handleEditDialogCategoryAdded,
+    uncheckAll,
     // Derived
     activeItems,
     completedItems,
     groupedItems,
     editDialogCategories,
+    suggestedCategories,
   }
 }
