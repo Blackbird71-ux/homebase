@@ -16,8 +16,11 @@ import { ListItemRow } from './ListItemRow'
 import { DoneSection } from './DoneSection'
 import { EditItemDialog } from './EditItemDialog'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
-import { GripVerticalIcon, PlusIcon, RotateCcwIcon, TagIcon, XIcon } from 'lucide-react'
+import { CheckSquareIcon, ClipboardPasteIcon, GripVerticalIcon, LockIcon, PlusIcon, RotateCcwIcon, TagIcon, XIcon } from 'lucide-react'
 import { CategoryColorSwatches } from './CategoryColorSwatches'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { parsePastedItems } from '@/lib/list-bulk-helpers'
+import { useState } from 'react'
 import { useTodoList } from '@/hooks/lists/useTodoList'
 
 // ── Sortable wrapper for a single todo item ──────────────────────────────────
@@ -31,6 +34,9 @@ function SortableTodoItem({
   onToggleLock,
   onEdit,
   onAssign,
+  selectMode,
+  selected,
+  onSelect,
 }: {
   item: ListItemShape
   members: { id: string; name: string }[]
@@ -40,6 +46,9 @@ function SortableTodoItem({
   onToggleLock: (id: string, isLocked: boolean) => void
   onEdit: (id: string) => void
   onAssign: (id: string, assignedToUserId: string | null) => void
+  selectMode: boolean
+  selected: boolean
+  onSelect: (id: string) => void
 }) {
   const {
     attributes,
@@ -49,12 +58,32 @@ function SortableTodoItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id, data: { type: 'item', category: item.category } })
+  } = useSortable({ id: item.id, data: { type: 'item', category: item.category }, disabled: selectMode })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  }
+
+  if (selectMode) {
+    return (
+      <label
+        ref={setNodeRef as React.Ref<HTMLLabelElement>}
+        style={style}
+        className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50"
+      >
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onSelect(item.id)}
+          className="h-4 w-4 shrink-0"
+          aria-label={`Select ${item.content}`}
+        />
+        <span className="flex-1 min-w-0 truncate text-sm">{item.content}</span>
+        {item.isLocked && <LockIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+      </label>
+    )
   }
 
   return (
@@ -136,12 +165,33 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
     newCategoryColor,
     setPickedCategoryColor,
     nextColor,
+    addMany,
+    selectMode, selectedIds, toggleSelectMode, toggleSelected, toggleSelectMany, bulkApply,
   } = useTodoList(listId, initialItems, initialCategoryOrder, currentUserId, timezone)
 
   const dot = (name: string) =>
     categoryColors[name] ? (
       <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: categoryColors[name] }} />
     ) : null
+
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteCategory, setPasteCategory] = useState('')
+  const pasteCount = parsePastedItems(pasteText).length
+
+  async function submitPaste() {
+    if (await addMany(pasteText, pasteCategory || null)) {
+      setPasteOpen(false)
+      setPasteText('')
+      setPasteCategory('')
+    }
+  }
+
+  const selectProps = (item: ListItemShape) => ({
+    selectMode,
+    selected: selectedIds.has(item.id),
+    onSelect: toggleSelected,
+  })
 
   const filters: { label: string; value: TodoFilter }[] = [
     { label: 'All', value: 'all' },
@@ -187,8 +237,58 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
           <Button type="submit" size="sm" className="shrink-0">
             <PlusIcon className="h-4 w-4" />
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1"
+            onClick={() => { setPasteCategory(newItemCategory); setPasteOpen(true) }}
+          >
+            <ClipboardPasteIcon className="h-4 w-4" />
+            Paste list
+          </Button>
         </div>
       </form>
+
+      <Dialog open={pasteOpen} onOpenChange={setPasteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Paste several items</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">One item per line. Bullets, numbers and tick boxes are removed automatically.</p>
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={8}
+            autoFocus
+            placeholder={'Milk\nBread\nEggs'}
+            className="w-full rounded-lg border border-input bg-transparent p-2 text-sm"
+            aria-label="Items to add, one per line"
+          />
+          {categories.length > 0 && (
+            <select
+              value={pasteCategory}
+              onChange={(e) => setPasteCategory(e.target.value)}
+              className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
+              aria-label="Category for all pasted items"
+            >
+              <option value="">No category</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              {suggestedCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasteOpen(false)}>Cancel</Button>
+            <Button disabled={pasteCount === 0} onClick={() => void submitPaste()}>
+              Add {pasteCount} item{pasteCount === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Filters */}
       <div className="flex gap-2">
@@ -202,11 +302,20 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             {f.label}
           </Button>
         ))}
-        {completedItems.length > 0 && (
+        <Button
+          variant={selectMode ? 'default' : 'outline'}
+          size="sm"
+          className="ml-auto gap-1"
+          onClick={toggleSelectMode}
+        >
+          <CheckSquareIcon className="h-3.5 w-3.5" />
+          {selectMode ? 'Cancel' : 'Select'}
+        </Button>
+        {completedItems.length > 0 && !selectMode && (
           <Button
             variant="outline"
             size="sm"
-            className="ml-auto gap-1"
+            className="gap-1"
             onClick={() => {
               if (confirm('Uncheck all items so this list can be used again? Locked items are kept.')) void uncheckAll()
             }}
@@ -305,6 +414,15 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                 return (
                   <div key={cat} className="flex flex-col gap-1">
                     <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {selectMode && (
+                        <input
+                          type="checkbox"
+                          checked={catItems.every((i) => selectedIds.has(i.id))}
+                          onChange={() => toggleSelectMany(catItems.map((i) => i.id))}
+                          className="h-4 w-4"
+                          aria-label={`Select all in ${cat}`}
+                        />
+                      )}
                       {dot(cat)}
                       {cat}
                     </p>
@@ -324,6 +442,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                             onToggleLock={toggleLock}
                             onEdit={handleEditItem}
                             onAssign={assignItem}
+                            {...selectProps(item)}
                           />
                         ))}
                       </div>
@@ -355,6 +474,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                     onToggleLock={toggleLock}
                     onEdit={handleEditItem}
                     onAssign={assignItem}
+                    {...selectProps(item)}
                   />
                 ))}
               </div>
@@ -373,6 +493,58 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
           )}
         </div>
       </DndContext>
+
+      {selectMode && (
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-2 shadow-md">
+          <span className="text-sm font-medium px-1">{selectedIds.size} selected</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toggleSelectMany(activeItems.map((i) => i.id))}
+          >
+            {activeItems.length > 0 && activeItems.every((i) => selectedIds.has(i.id)) ? 'Clear' : 'Select all'}
+          </Button>
+          {categories.length > 0 && (
+            <select
+              value=""
+              disabled={selectedIds.size === 0}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === '__none__') void bulkApply({ type: 'category', category: null })
+                else if (v) void bulkApply({ type: 'category', category: v })
+              }}
+              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+              aria-label="Move selected to category"
+            >
+              <option value="">Move to…</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              {suggestedCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value="__none__">No category</option>
+            </select>
+          )}
+          <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => void bulkApply({ type: 'lock' })}>
+            Lock
+          </Button>
+          <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => void bulkApply({ type: 'unlock' })}>
+            Unlock
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive"
+            disabled={selectedIds.size === 0}
+            onClick={() => {
+              if (confirm(`Delete ${selectedIds.size} selected item${selectedIds.size === 1 ? '' : 's'}? Locked items are kept.`)) void bulkApply({ type: 'delete' })
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      )}
 
       <EditItemDialog
         open={editItemId !== null}

@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition, useCallback } from 'react'
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
 import { useMutationGuard } from '@/hooks/useMutationGuard'
 import { nextCategoryColor } from '@/lib/category-colors'
+import { applyBulkChange, type BulkChange, parsePastedItems } from '@/lib/list-bulk-helpers'
 import {
   PointerSensor,
   KeyboardSensor,
@@ -36,6 +37,9 @@ export function useTodoList(
   const [categories, setCategories] = useState<string[]>(initialCategoryOrder ?? [])
   // Family-wide list-category catalogue (Settings → List Categories); offered as one-tap suggestions
   const [catalogue, setCatalogue] = useState<{ name: string; color: string | null }[]>([])
+  // Bulk-edit mode: tick several items, then move / lock / unlock / delete them together
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [catalogueLoaded, setCatalogueLoaded] = useState(false)
   const [pickedCategoryColor, setPickedCategoryColor] = useState<string | null>(null)
   const [newContent, setNewContent] = useState('')
@@ -157,18 +161,9 @@ export function useTodoList(
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
-  async function addItem(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newContent.trim()) return
-    guard.bump()
-
-    const body = {
-      content: newContent.trim(),
-      dueDate: newDueDate || null,
-      category: newItemCategory || null,
-    }
-    if (body.category && !categories.includes(body.category)) void handleEditDialogCategoryAdded(body.category)
-
+  /** Creates one item (online POST, or optimistic + queued when offline). Returns false if the save failed. */
+  async function createItem(body: { content: string; dueDate: string | null; category: string | null }): Promise<boolean> {
+    const newDueDate = body.dueDate ?? ''
     if (!navigator.onLine) {
       const tempId = `tmp_${crypto.randomUUID()}`
       const optimisticItem: ListItemShape = {
@@ -189,14 +184,10 @@ export function useTodoList(
         assignedToUserId: null,
       }
       setItems((prev) => [...prev, optimisticItem])
-      setNewContent('')
-      setNewDueDate('')
-      setNewItemCategory('')
-      setCategoryManuallySet(false)
       // Carry the tempId as clientMutationId so a replayed POST (committed-but-lost
       // response on a flaky reconnect) is de-duped server-side instead of re-created.
       await queueMutation({ endpoint: `/api/lists/${listId}/items`, method: 'POST', body: { ...body, clientMutationId: tempId }, tempId })
-      return
+      return true
     }
 
     const res = await fetch(`/api/lists/${listId}/items`, {
@@ -210,6 +201,24 @@ export function useTodoList(
         ...prev,
         { ...item, dueDate: item.dueDate ? new Date(item.dueDate) : null, createdAt: new Date(item.createdAt) },
       ])
+      return true
+    }
+    return false
+  }
+
+  async function addItem(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newContent.trim()) return
+    guard.bump()
+
+    const body = {
+      content: newContent.trim(),
+      dueDate: newDueDate || null,
+      category: newItemCategory || null,
+    }
+    if (body.category && !categories.includes(body.category)) void handleEditDialogCategoryAdded(body.category)
+
+    if (await createItem(body)) {
       setNewContent('')
       setNewDueDate('')
       setNewItemCategory('')
@@ -217,6 +226,21 @@ export function useTodoList(
     } else {
       toast.error('Failed to save. Please try again.')
     }
+  }
+
+  /** Adds one item per pasted line, all into the same category. Returns true when every line saved. */
+  async function addMany(text: string, category: string | null): Promise<boolean> {
+    const lines = parsePastedItems(text)
+    if (lines.length === 0) return false
+    guard.bump()
+    if (category && !categories.includes(category)) await handleEditDialogCategoryAdded(category)
+    let failed = 0
+    for (const content of lines) {
+      if (!(await createItem({ content, dueDate: null, category }))) failed++
+    }
+    if (failed > 0) toast.error(`${failed} of ${lines.length} items failed to save.`)
+    else toast.success(`Added ${lines.length} item${lines.length === 1 ? '' : 's'}.`)
+    return failed === 0
   }
 
   async function toggleItem(id: string, isCompleted: boolean) {
@@ -315,6 +339,60 @@ export function useTodoList(
     } else {
       toast.error('Failed to update item.')
     }
+  }
+
+  function toggleSelectMode() {
+    setSelectMode((on) => !on)
+    setSelectedIds(new Set())
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  /** Select every id given, or clear them all if they are already all selected. */
+  function toggleSelectMany(ids: string[]) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      const allIn = ids.length > 0 && ids.every((id) => next.has(id))
+      ids.forEach((id) => (allIn ? next.delete(id) : next.add(id)))
+      return next
+    })
+  }
+
+  async function bulkApply(change: BulkChange) {
+    // Items still waiting to sync (tmp_ ids) don't exist on the server yet
+    const ids = [...selectedIds].filter((id) => !id.startsWith('tmp_'))
+    if (ids.length === 0) return
+    guard.bump()
+    if (change.type === 'category' && change.category && !categories.includes(change.category)) {
+      await handleEditDialogCategoryAdded(change.category)
+    }
+    const endpoint = `/api/lists/${listId}/items/bulk`
+    if (!navigator.onLine) {
+      setItems((prev) => applyBulkChange(prev, ids, change))
+      await queueMutation({ endpoint, method: 'POST', body: { ids, change } })
+      setSelectedIds(new Set())
+      return
+    }
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, change }),
+    })
+    if (!res.ok) {
+      toast.error('Failed to update items.')
+      return
+    }
+    const { skipped } = (await res.json()) as { skipped: number }
+    setItems((prev) => applyBulkChange(prev, ids, change))
+    if (skipped > 0) toast.info(`${skipped} locked item${skipped === 1 ? ' was' : 's were'} kept.`)
+    setSelectedIds(new Set())
   }
 
   async function assignItem(id: string, assignedToUserId: string | null) {
@@ -486,6 +564,13 @@ export function useTodoList(
     groupedItems,
     editDialogCategories,
     suggestedCategories,
+    addMany,
+    selectMode,
+    selectedIds,
+    toggleSelectMode,
+    toggleSelected,
+    toggleSelectMany,
+    bulkApply,
     categoryColors,
     newCategoryColor,
     setPickedCategoryColor,
