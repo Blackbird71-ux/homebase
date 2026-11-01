@@ -187,6 +187,23 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
     }
   }
 
+  const [catPanelOpen, setCatPanelOpen] = useState(false)
+  const [bulkNewCategory, setBulkNewCategory] = useState('')
+
+  async function moveSelected(category: string | null) {
+    await bulkApply({ type: 'category', category })
+    setCatPanelOpen(false)
+  }
+
+  async function createAndMove() {
+    const name = bulkNewCategory.trim()
+    if (!name) return
+    await bulkApply({ type: 'category', category: name }, newCategoryColor)
+    setBulkNewCategory('')
+    setPickedCategoryColor(null)
+    setCatPanelOpen(false)
+  }
+
   const selectProps = (item: ListItemShape) => ({
     selectMode,
     selected: selectedIds.has(item.id),
@@ -211,22 +228,20 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
           className="flex-1"
         />
         <div className="flex gap-2">
-          {categories.length > 0 && (
-            <select
-              value={newItemCategory}
-              onChange={(e) => setNewItemCategory(e.target.value)}
-              className="flex-1 sm:flex-none h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
-              aria-label="Category"
-            >
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-              {suggestedCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          )}
+          <select
+            value={newItemCategory}
+            onChange={(e) => setNewItemCategory(e.target.value)}
+            className="flex-1 sm:flex-none h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
+            aria-label="Category"
+          >
+            <option value="">No category</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            {suggestedCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
           <input
             type="date"
             value={newDueDate}
@@ -265,22 +280,20 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             className="w-full rounded-lg border border-input bg-transparent p-2 text-sm"
             aria-label="Items to add, one per line"
           />
-          {categories.length > 0 && (
-            <select
-              value={pasteCategory}
-              onChange={(e) => setPasteCategory(e.target.value)}
-              className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
-              aria-label="Category for all pasted items"
-            >
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-              {suggestedCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          )}
+          <select
+            value={pasteCategory}
+            onChange={(e) => setPasteCategory(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
+            aria-label="Category for all pasted items"
+          >
+            <option value="">No category</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            {suggestedCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPasteOpen(false)}>Cancel</Button>
             <Button disabled={pasteCount === 0} onClick={() => void submitPaste()}>
@@ -345,8 +358,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             </button>
           </span>
         ))}
-        {/* Suggestions stay hidden on lists that don't use categories until "Add category" is tapped */}
-        {(categories.length > 0 || showCategoryInput) && suggestedCategories.map((name) => (
+        {suggestedCategories.map((name) => (
           <button
             key={name}
             type="button"
@@ -496,6 +508,51 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
 
       {selectMode && (
         <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-2 shadow-md">
+          {catPanelOpen && selectedIds.size > 0 && (
+            <div className="basis-full flex flex-col gap-2 border-b border-border pb-2">
+              <p className="text-xs text-muted-foreground">
+                Move {selectedIds.size} item{selectedIds.size === 1 ? '' : 's'} to:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...categories, ...suggestedCategories].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => void moveSelected(c)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border text-xs hover:bg-muted"
+                  >
+                    {dot(c)}
+                    {c}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => void moveSelected(null)}
+                  className="px-2.5 py-1 rounded-full border border-dashed border-border text-xs text-muted-foreground hover:bg-muted"
+                >
+                  No category
+                </button>
+              </div>
+              <form
+                onSubmit={(e) => { e.preventDefault(); void createAndMove() }}
+                className="flex flex-wrap items-center gap-2"
+              >
+                <span className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: newCategoryColor }} />
+                <Input
+                  value={bulkNewCategory}
+                  onChange={(e) => setBulkNewCategory(e.target.value)}
+                  placeholder="Or create a new category…"
+                  className="h-8 text-sm w-56"
+                />
+                <Button type="submit" size="sm" disabled={!bulkNewCategory.trim()}>
+                  Create &amp; move
+                </Button>
+                <div className="basis-full">
+                  <CategoryColorSwatches value={newCategoryColor} onChange={setPickedCategoryColor} />
+                </div>
+              </form>
+            </div>
+          )}
           <span className="text-sm font-medium px-1">{selectedIds.size} selected</span>
           <Button
             variant="outline"
@@ -504,28 +561,16 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
           >
             {activeItems.length > 0 && activeItems.every((i) => selectedIds.has(i.id)) ? 'Clear' : 'Select all'}
           </Button>
-          {categories.length > 0 && (
-            <select
-              value=""
-              disabled={selectedIds.size === 0}
-              onChange={(e) => {
-                const v = e.target.value
-                if (v === '__none__') void bulkApply({ type: 'category', category: null })
-                else if (v) void bulkApply({ type: 'category', category: v })
-              }}
-              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
-              aria-label="Move selected to category"
-            >
-              <option value="">Move to…</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-              {suggestedCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-              <option value="__none__">No category</option>
-            </select>
-          )}
+          <Button
+            variant={catPanelOpen ? 'default' : 'outline'}
+            size="sm"
+            className="gap-1"
+            disabled={selectedIds.size === 0}
+            onClick={() => setCatPanelOpen((o) => !o)}
+          >
+            <TagIcon className="h-3.5 w-3.5" />
+            Category
+          </Button>
           <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => void bulkApply({ type: 'lock' })}>
             Lock
           </Button>
@@ -558,7 +603,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
         listId={listId}
         onSaved={handleItemSaved}
         queueOfflineEdit={queueItemEdit}
-        onCategoryAdded={editDialogCategories.length > 0 ? handleEditDialogCategoryAdded : undefined}
+        onCategoryAdded={handleEditDialogCategoryAdded}
         showCategoryColor
         defaultCategoryColor={nextColor()}
         initialDueDate={editItemDueDate}

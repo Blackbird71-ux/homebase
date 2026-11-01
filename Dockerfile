@@ -68,7 +68,7 @@ ENV TZ=Australia/Sydney
 #              (without it, Node.js date/time uses UTC internally, causing
 #               cron schedules, SQLite datetime('now'), and backup timestamps
 #               to all be offset from Australia/Sydney time)
-COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
+COPY --from=cloudflare/cloudflared:2026.10.3 /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 RUN apk add --no-cache su-exec dcron sqlite tzdata \
  && cp /usr/share/zoneinfo/Australia/Sydney /etc/localtime \
  && echo "Australia/Sydney" > /etc/timezone

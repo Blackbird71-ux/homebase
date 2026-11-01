@@ -157,7 +157,7 @@ export function useTodoList(
   )
 
   // Catalogue categories are offered in the edit dialog too; choosing one adds it to this list on save
-  const editDialogCategories = categories.length > 0 ? [...categories, ...suggestedCategories, 'Other'] : []
+  const editDialogCategories = [...categories, ...suggestedCategories, 'Other']
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
@@ -365,13 +365,13 @@ export function useTodoList(
     })
   }
 
-  async function bulkApply(change: BulkChange) {
+  async function bulkApply(change: BulkChange, newColor?: string) {
     // Items still waiting to sync (tmp_ ids) don't exist on the server yet
     const ids = [...selectedIds].filter((id) => !id.startsWith('tmp_'))
     if (ids.length === 0) return
     guard.bump()
     if (change.type === 'category' && change.category && !categories.includes(change.category)) {
-      await handleEditDialogCategoryAdded(change.category)
+      await handleEditDialogCategoryAdded(change.category, newColor)
     }
     const endpoint = `/api/lists/${listId}/items/bulk`
     if (!navigator.onLine) {
