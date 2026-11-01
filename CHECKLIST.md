@@ -24,6 +24,17 @@ Domain logic keeps getting hand-copied inline across routes; the copies drift an
 
 ---
 
+## Before reporting done - walk it from the user's chair (AGENTS.md "Finish the feature")
+
+- [ ] Listed every place the thing appears or is chosen (add form, edit dialog, bulk/paste, settings, filters, done/archived views) and updated all of them
+- [ ] Default and empty states work for a brand-new user/list - nothing hidden until "set up"
+- [ ] Full lifecycle covered: create, see, use, change, reorder, rename, remove, undo - removing doesn't orphan data
+- [ ] Natural gestures supported (drag, multi-select, paste many, tap on phone) or the gap is stated plainly
+- [ ] Offline and mobile behave the same, or the gap is noted
+- [ ] Summary states the walk-through done and any known gap, with a recommendation
+
+---
+
 ## Date and time — #1 source of bugs in this codebase
 
 The server is UTC. The user is UTC+10/+11. They are not the same. **All app date logic uses Luxon (via `src/lib/timezone.ts` helpers), not `date-fns` or raw `Date` math. See AGENTS.md §Timezone and QA.md §12.20.**
