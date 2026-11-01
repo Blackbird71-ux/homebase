@@ -23,6 +23,10 @@ async function _GET(
   let allowed: string[] = []
   try { allowed = list.categoryOrder ? JSON.parse(list.categoryOrder) : [] } catch { /* none */ }
 
+  // Lists without their own categories still get suggestions from the family catalogue
+  const catalogue = await prisma.listCategory.findMany({ where: { familyId: user.familyId }, select: { name: true } })
+  allowed = [...new Set([...allowed, ...catalogue.map((c) => c.name)])]
+
   const q = new URL(req.url).searchParams.get('q') ?? ''
   const category = await suggestListCategory(user.familyId, q, allowed)
   return NextResponse.json({ category })

@@ -120,7 +120,7 @@ export function useTodoList(
   // Auto-suggest a category as the item is typed (online only), unless chosen by hand
   useEffect(() => {
     const q = newContent.trim()
-    if (categoryManuallySet || !q || categories.length === 0 || !navigator.onLine) return
+    if (categoryManuallySet || !q || !navigator.onLine) return
     const t = setTimeout(() => {
       fetch(`/api/lists/${listId}/category-hint?q=${encodeURIComponent(q)}`)
         .then((r) => (r.ok ? r.json() : null))
@@ -130,7 +130,7 @@ export function useTodoList(
         .catch(() => {})
     }, 300)
     return () => clearTimeout(t)
-  }, [newContent, categoryManuallySet, categories.length, listId])
+  }, [newContent, categoryManuallySet, listId])
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -147,7 +147,7 @@ export function useTodoList(
     const uncategorized = activeItems.filter(
       (i) => !i.category || !categories.includes(i.category)
     )
-    if (uncategorized.length > 0) groups['Other'] = uncategorized
+    groups['Other'] = uncategorized
     return groups
   })()
 
@@ -228,14 +228,33 @@ export function useTodoList(
     }
   }
 
-  /** Adds one item per pasted line, all into the same category. Returns true when every line saved. */
-  async function addMany(text: string, category: string | null): Promise<boolean> {
+  /** Maps a pasted heading to an existing list/catalogue category (case-insensitive); unknown headings become new categories. */
+  function resolveHeading(heading: string | null): string | null {
+    if (heading === null) return null
+    const key = heading.toLowerCase()
+    return [...categories, ...suggestedCategories].find((c) => c.toLowerCase() === key) ?? heading
+  }
+
+  /** Per-line categories for the paste dialog: how many items, and which categories they land in. */
+  function previewPaste(text: string, defaultCategory: string | null) {
     const lines = parsePastedItems(text)
+    const cats = new Set(lines.map((l) => (l.heading === undefined ? defaultCategory : resolveHeading(l.heading))))
+    return { count: lines.length, categoryCount: [...cats].filter((c) => c).length }
+  }
+
+  /** Adds one item per pasted line. A "Heading:" line files the lines under it into that category; others use defaultCategory. Returns true when every line saved. */
+  async function addMany(text: string, defaultCategory: string | null): Promise<boolean> {
+    const lines = parsePastedItems(text).map((l) => ({
+      content: l.content,
+      category: l.heading === undefined ? defaultCategory : resolveHeading(l.heading),
+    }))
     if (lines.length === 0) return false
     guard.bump()
-    if (category && !categories.includes(category)) await handleEditDialogCategoryAdded(category)
+    for (const cat of new Set(lines.map((l) => l.category))) {
+      if (cat && !categories.includes(cat)) await handleEditDialogCategoryAdded(cat)
+    }
     let failed = 0
-    for (const content of lines) {
+    for (const { content, category } of lines) {
       if (!(await createItem({ content, dueDate: null, category }))) failed++
     }
     if (failed > 0) toast.error(`${failed} of ${lines.length} items failed to save.`)
@@ -365,10 +384,10 @@ export function useTodoList(
     })
   }
 
-  async function bulkApply(change: BulkChange, newColor?: string) {
-    // Items still waiting to sync (tmp_ ids) don't exist on the server yet
-    const ids = [...selectedIds].filter((id) => !id.startsWith('tmp_'))
-    if (ids.length === 0) return
+  /** Applies one change to the given items (tmp_ ids skipped — not on the server yet). Returns true if applied or queued. */
+  async function applyBulk(allIds: string[], change: BulkChange, newColor?: string): Promise<boolean> {
+    const ids = allIds.filter((id) => !id.startsWith('tmp_'))
+    if (ids.length === 0) return false
     guard.bump()
     if (change.type === 'category' && change.category && !categories.includes(change.category)) {
       await handleEditDialogCategoryAdded(change.category, newColor)
@@ -377,8 +396,7 @@ export function useTodoList(
     if (!navigator.onLine) {
       setItems((prev) => applyBulkChange(prev, ids, change))
       await queueMutation({ endpoint, method: 'POST', body: { ids, change } })
-      setSelectedIds(new Set())
-      return
+      return true
     }
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -387,12 +405,16 @@ export function useTodoList(
     })
     if (!res.ok) {
       toast.error('Failed to update items.')
-      return
+      return false
     }
     const { skipped } = (await res.json()) as { skipped: number }
     setItems((prev) => applyBulkChange(prev, ids, change))
     if (skipped > 0) toast.info(`${skipped} locked item${skipped === 1 ? ' was' : 's were'} kept.`)
-    setSelectedIds(new Set())
+    return true
+  }
+
+  async function bulkApply(change: BulkChange, newColor?: string) {
+    if (await applyBulk([...selectedIds], change, newColor)) setSelectedIds(new Set())
   }
 
   async function assignItem(id: string, assignedToUserId: string | null) {
@@ -414,15 +436,33 @@ export function useTodoList(
     }
   }
 
+  /** Group an item is shown in: its category if this list uses it, else "Other". */
+  function groupOf(item: ListItemShape): string {
+    return item.category && categories.includes(item.category) ? item.category : 'Other'
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
     guard.bump()
 
-    const isGrouped = categories.length > 0
-    if (isGrouped) {
-      const activeCategory = active.data.current?.category as string | null | undefined
-      const catItems = activeItems.filter((i) => i.category === activeCategory)
+    if (categories.length > 0) {
+      const dragged = items.find((i) => i.id === active.id)
+      if (!dragged) return
+      const fromGroup = groupOf(dragged)
+      // Dropped on a group (header / empty placeholder) or on an item inside one
+      const overGroup =
+        (over.data.current?.group as string | undefined) ??
+        (() => {
+          const overItem = items.find((i) => i.id === over.id)
+          return overItem ? groupOf(overItem) : undefined
+        })()
+      if (!overGroup) return
+      if (overGroup !== fromGroup) {
+        void applyBulk([dragged.id], { type: 'category', category: overGroup === 'Other' ? null : overGroup })
+        return
+      }
+      const catItems = activeItems.filter((i) => groupOf(i) === fromGroup)
       const oldIndex = catItems.findIndex((i) => i.id === active.id)
       const newIndex = catItems.findIndex((i) => i.id === over.id)
       if (oldIndex === -1 || newIndex === -1) return
@@ -494,8 +534,38 @@ export function useTodoList(
     setPickedCategoryColor(null)
   }
 
-  function handleRemoveCategory(name: string) {
+  /** Removes a category from this list; its items (done ones too) move to Other. */
+  async function handleRemoveCategory(name: string) {
+    const ids = items.filter((i) => i.category === name).map((i) => i.id)
+    if (ids.length > 0) await applyBulk(ids, { type: 'category', category: null })
     const updated = categories.filter((c) => c !== name)
+    setCategories(updated)
+    saveCategoryOrder(updated)
+  }
+
+  /** Renames a category on this list, moving its items; merges if the new name already exists. The old colour carries over. */
+  async function handleRenameCategory(oldName: string, rawNew: string) {
+    const newName = rawNew.trim()
+    if (!newName || newName === oldName) return
+    const clash = categories.find((c) => c !== oldName && c.toLowerCase() === newName.toLowerCase())
+    const target = clash ?? newName
+    const ids = items.filter((i) => i.category === oldName).map((i) => i.id)
+    const oldColor = catalogue.find((c) => c.name === oldName)?.color ?? undefined
+    if (ids.length > 0) await applyBulk(ids, { type: 'category', category: target })
+    const updated = clash
+      ? categories.filter((c) => c !== oldName)
+      : categories.map((c) => (c === oldName ? target : c))
+    setCategories(updated)
+    saveCategoryOrder(updated)
+    registerInCatalogue(target, oldColor)
+  }
+
+  /** Moves a category one place earlier (-1) or later (+1) in this list's order. */
+  function handleMoveCategory(name: string, dir: -1 | 1) {
+    const from = categories.indexOf(name)
+    const to = from + dir
+    if (from === -1 || to < 0 || to >= categories.length) return
+    const updated = arrayMove(categories, from, to)
     setCategories(updated)
     saveCategoryOrder(updated)
   }
@@ -556,6 +626,9 @@ export function useTodoList(
     assignItem,
     handleAddCategory,
     handleRemoveCategory,
+    handleRenameCategory,
+    handleMoveCategory,
+    previewPaste,
     handleEditDialogCategoryAdded,
     uncheckAll,
     // Derived

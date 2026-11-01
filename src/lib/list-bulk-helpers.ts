@@ -45,22 +45,44 @@ export function applyBulkChange(items: ListItemShape[], ids: string[], change: B
 
 export const PASTE_MAX_ITEMS = 200
 
-/** Turns pasted text into item names: one per line, bullets / tick-box markers / numbering stripped, blanks and repeats dropped. */
-export function parsePastedItems(text: string): string[] {
+export interface PastedItem {
+  content: string
+  /** Section heading the line sat under ("Other" / "No category" = null); undefined = no heading, use the dialog's category. */
+  heading: string | null | undefined
+}
+
+const NO_CATEGORY_HEADINGS = new Set(['other', 'no category', 'uncategorised', 'uncategorized'])
+
+/**
+ * Turns pasted text into items: one per line, bullets / tick-box markers / numbering stripped,
+ * blanks and repeats dropped. A plain line ending in ":" starts a section; the lines under it
+ * carry that heading so they can be filed into the matching category.
+ */
+export function parsePastedItems(text: string): PastedItem[] {
   const seen = new Set<string>()
-  const out: string[] = []
+  const out: PastedItem[] = []
+  let heading: string | null | undefined = undefined
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw
-      .trim()
+    const trimmed = raw.trim()
+    if (!trimmed) continue
+    const bullet = /^(?:[-*•·▪◦]|\[[ xX]?\]|\d+[.)])\s+/.test(trimmed)
+    if (!bullet && trimmed.length > 1 && trimmed.endsWith(':')) {
+      const name = trimmed.slice(0, -1).trim().slice(0, 100)
+      if (name) {
+        heading = NO_CATEGORY_HEADINGS.has(name.toLowerCase()) ? null : name
+        continue
+      }
+    }
+    const line = trimmed
       .replace(/^(?:[-*•·▪◦]|\[[ xX]?\]|\d+[.)])\s+/, '')
       .replace(/^\[[ xX]?\]\s*/, '')
       .trim()
     if (!line) continue
     const content = line.slice(0, 500)
-    const key = content.toLowerCase()
+    const key = `${heading ?? ''}|${content.toLowerCase()}`
     if (seen.has(key)) continue
     seen.add(key)
-    out.push(content)
+    out.push({ content, heading })
   }
   return out.slice(0, PASTE_MAX_ITEMS)
 }

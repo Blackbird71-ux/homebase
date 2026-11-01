@@ -3,6 +3,7 @@
 import {
   DndContext,
   closestCenter,
+  useDroppable,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -16,10 +17,9 @@ import { ListItemRow } from './ListItemRow'
 import { DoneSection } from './DoneSection'
 import { EditItemDialog } from './EditItemDialog'
 import type { ListItemShape, TodoFilter } from '@/lib/list-helpers'
-import { CheckSquareIcon, ClipboardPasteIcon, GripVerticalIcon, LockIcon, PlusIcon, RotateCcwIcon, TagIcon, XIcon } from 'lucide-react'
+import { CheckSquareIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardPasteIcon, GripVerticalIcon, LockIcon, PencilIcon, PlusIcon, RotateCcwIcon, TagIcon, XIcon } from 'lucide-react'
 import { CategoryColorSwatches } from './CategoryColorSwatches'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { parsePastedItems } from '@/lib/list-bulk-helpers'
 import { useState } from 'react'
 import { useTodoList } from '@/hooks/lists/useTodoList'
 
@@ -119,6 +119,120 @@ function SortableTodoItem({
   )
 }
 
+// ── Category group: a drop target, collapsible, with a count ─────────────────
+
+function CategoryGroup({
+  name,
+  count,
+  dot,
+  collapsed,
+  onToggleCollapsed,
+  header,
+  children,
+}: {
+  name: string
+  count: number
+  dot: React.ReactNode
+  collapsed: boolean
+  onToggleCollapsed: () => void
+  header?: React.ReactNode
+  children: React.ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `group:${name}`, data: { group: name } })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex flex-col gap-1 rounded-lg ${isOver ? 'bg-muted/60 ring-1 ring-primary/40' : ''}`}
+    >
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        {header}
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="flex items-center gap-1.5 uppercase tracking-wide"
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${name}`}
+        >
+          {collapsed ? <ChevronRightIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />}
+          {dot}
+          {name}
+          <span className="font-normal normal-case">({count})</span>
+        </button>
+      </div>
+      {!collapsed && (count > 0 ? children : (
+        <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          No items - drag one here
+        </p>
+      ))}
+    </div>
+  )
+}
+
+// ── Category chip: colour dot, count, reorder, rename, confirmed remove ──────
+
+function CategoryChip({
+  name,
+  count,
+  dot,
+  first,
+  last,
+  onRename,
+  onMove,
+  onRemove,
+}: {
+  name: string
+  count: number
+  dot: React.ReactNode
+  first: boolean
+  last: boolean
+  onRename: (newName: string) => void
+  onMove: (dir: -1 | 1) => void
+  onRemove: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={(e) => { e.preventDefault(); onRename(draft); setEditing(false) }}
+        className="flex items-center gap-1"
+      >
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="h-6 text-xs w-32"
+          autoFocus
+          aria-label={`Rename ${name}`}
+          onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false) }}
+        />
+        <Button type="submit" size="sm" className="h-6 px-2 text-xs">Save</Button>
+        <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+      </form>
+    )
+  }
+
+  return (
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground">
+      <button type="button" disabled={first} onClick={() => onMove(-1)} className="hover:text-foreground disabled:opacity-30" aria-label={`Move ${name} earlier`}>
+        <ChevronLeftIcon className="h-3 w-3" />
+      </button>
+      {dot}
+      {name}
+      <span className="opacity-70">{count}</span>
+      <button type="button" disabled={last} onClick={() => onMove(1)} className="hover:text-foreground disabled:opacity-30" aria-label={`Move ${name} later`}>
+        <ChevronRightIcon className="h-3 w-3" />
+      </button>
+      <button type="button" onClick={() => { setDraft(name); setEditing(true) }} className="hover:text-foreground" aria-label={`Rename ${name}`}>
+        <PencilIcon className="h-3 w-3" />
+      </button>
+      <button type="button" onClick={onRemove} className="hover:text-destructive transition-colors" aria-label={`Remove ${name} category`}>
+        <XIcon className="h-3 w-3" />
+      </button>
+    </span>
+  )
+}
+
 interface TodoListProps {
   listId: string
   initialItems: ListItemShape[]
@@ -154,6 +268,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
     assignItem,
     handleAddCategory,
     handleRemoveCategory,
+    handleRenameCategory,
+    handleMoveCategory,
+    previewPaste,
     handleEditDialogCategoryAdded,
     uncheckAll,
     activeItems,
@@ -177,7 +294,20 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteCategory, setPasteCategory] = useState('')
-  const pasteCount = parsePastedItems(pasteText).length
+  const paste = previewPaste(pasteText, pasteCategory || null)
+  const pasteCount = paste.count
+  const allItems = [...activeItems, ...completedItems]
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [dragging, setDragging] = useState(false)
+
+  function toggleCollapsed(name: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
 
   async function submitPaste() {
     if (await addMany(pasteText, pasteCategory || null)) {
@@ -270,7 +400,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
           <DialogHeader>
             <DialogTitle>Paste several items</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">One item per line. Bullets, numbers and tick boxes are removed automatically.</p>
+          <p className="text-sm text-muted-foreground">One item per line. Bullets, numbers and tick boxes are removed automatically. End a line with a colon (e.g. &quot;Dairy:&quot;) to file the lines under it into that category.</p>
           <textarea
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
@@ -284,7 +414,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
             value={pasteCategory}
             onChange={(e) => setPasteCategory(e.target.value)}
             className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm"
-            aria-label="Category for all pasted items"
+            aria-label="Category for pasted items without a heading"
           >
             <option value="">No category</option>
             {categories.map((c) => (
@@ -297,7 +427,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
           <DialogFooter>
             <Button variant="outline" onClick={() => setPasteOpen(false)}>Cancel</Button>
             <Button disabled={pasteCount === 0} onClick={() => void submitPaste()}>
-              Add {pasteCount} item{pasteCount === 1 ? '' : 's'}
+              Add {pasteCount} item{pasteCount === 1 ? '' : 's'}{paste.categoryCount > 1 ? ` in ${paste.categoryCount} categories` : ''}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -341,22 +471,24 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
 
       {/* Category management */}
       <div className="flex flex-wrap items-center gap-2">
-        {categories.map((cat) => (
-          <span
+        {categories.map((cat, idx) => (
+          <CategoryChip
             key={cat}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground"
-          >
-            {dot(cat)}
-            {cat}
-            <button
-              type="button"
-              onClick={() => handleRemoveCategory(cat)}
-              className="hover:text-destructive transition-colors"
-              aria-label={`Remove ${cat} category`}
-            >
-              <XIcon className="h-3 w-3" />
-            </button>
-          </span>
+            name={cat}
+            count={allItems.filter((i) => i.category === cat).length}
+            dot={dot(cat)}
+            first={idx === 0}
+            last={idx === categories.length - 1}
+            onRename={(n) => void handleRenameCategory(cat, n)}
+            onMove={(dir) => handleMoveCategory(cat, dir)}
+            onRemove={() => {
+              const n = allItems.filter((i) => i.category === cat).length
+              const msg = n > 0
+                ? `Remove "${cat}"? ${n} item${n === 1 ? '' : 's'} will move to Other.`
+                : `Remove "${cat}"?`
+              if (confirm(msg)) void handleRemoveCategory(cat)
+            }}
+          />
         ))}
         {suggestedCategories.map((name) => (
           <button
@@ -410,7 +542,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
+        onDragStart={() => setDragging(true)}
+        onDragCancel={() => setDragging(false)}
+        onDragEnd={(e) => { setDragging(false); handleDragEnd(e) }}
       >
         <div className="flex flex-col gap-4">
           {groupedItems ? (
@@ -422,22 +556,26 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                 <p className="text-sm text-muted-foreground py-4 text-center">All done!</p>
               )}
               {Object.entries(groupedItems).map(([cat, catItems]) => {
-                if (catItems.length === 0) return null
+                // "Other" only shows when it has items, or while dragging (so items can be dropped back into it)
+                if (cat === 'Other' && catItems.length === 0 && !dragging) return null
                 return (
-                  <div key={cat} className="flex flex-col gap-1">
-                    <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      {selectMode && (
-                        <input
-                          type="checkbox"
-                          checked={catItems.every((i) => selectedIds.has(i.id))}
-                          onChange={() => toggleSelectMany(catItems.map((i) => i.id))}
-                          className="h-4 w-4"
-                          aria-label={`Select all in ${cat}`}
-                        />
-                      )}
-                      {dot(cat)}
-                      {cat}
-                    </p>
+                  <CategoryGroup
+                    key={cat}
+                    name={cat}
+                    count={catItems.length}
+                    dot={dot(cat)}
+                    collapsed={collapsedGroups.has(cat)}
+                    onToggleCollapsed={() => toggleCollapsed(cat)}
+                    header={selectMode && catItems.length > 0 ? (
+                      <input
+                        type="checkbox"
+                        checked={catItems.every((i) => selectedIds.has(i.id))}
+                        onChange={() => toggleSelectMany(catItems.map((i) => i.id))}
+                        className="h-4 w-4"
+                        aria-label={`Select all in ${cat}`}
+                      />
+                    ) : undefined}
+                  >
                     <SortableContext
                       items={catItems.map((i) => i.id)}
                       strategy={verticalListSortingStrategy}
@@ -459,7 +597,7 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
                         ))}
                       </div>
                     </SortableContext>
-                  </div>
+                  </CategoryGroup>
                 )
               })}
             </>
@@ -501,6 +639,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
               onDelete={deleteItem}
               onToggleLock={toggleLock}
               onEdit={handleEditItem}
+              selectMode={selectMode}
+              selectedIds={selectedIds}
+              onSelect={toggleSelected}
             />
           )}
         </div>
@@ -557,9 +698,9 @@ export function TodoList({ listId, initialItems, initialCategoryOrder, members, 
           <Button
             variant="outline"
             size="sm"
-            onClick={() => toggleSelectMany(activeItems.map((i) => i.id))}
+            onClick={() => toggleSelectMany(allItems.map((i) => i.id))}
           >
-            {activeItems.length > 0 && activeItems.every((i) => selectedIds.has(i.id)) ? 'Clear' : 'Select all'}
+            {allItems.length > 0 && allItems.every((i) => selectedIds.has(i.id)) ? 'Clear' : 'Select all'}
           </Button>
           <Button
             variant={catPanelOpen ? 'default' : 'outline'}
