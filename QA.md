@@ -65,6 +65,18 @@ Before touching any file, answer these questions:
 - Finance commits: always note which lifecycle stage is affected
   - e.g. `fix: payslip data lost at draft spawn and mark-received stages`
 
+### 1.5 Deferred-Issue Report Template
+
+Used by AGENTS.md "Defer, don't drop". Write it as if the reader has none of your current context — the cheap thing to lose is *what* to change; the expensive thing is *why the code is shaped this way and what breaks if you touch it*.
+
+- **Location** — file(s), function/component, line refs. List *every* site if it's a class of issue.
+- **Symptom** — how it manifests to the user, the GL, or data integrity.
+- **Why the code is like this** — the constraint, history or assumption behind the current shape.
+- **Naïve-fix failure modes** — what a careless change breaks; the invariant or smoke test to re-run (e.g. "keep DR=CR", "re-run J1–J7", "preserve retry-on-conflict").
+- **Blast radius** — importers/dependants (§9 for finance, §1.1 otherwise).
+- **Suggested fix direction** — a sketch, marked as a proposal.
+- **Severity** — live data damage vs. cosmetic.
+
 ---
 
 ## 2. Finance Module — Accounting Invariants

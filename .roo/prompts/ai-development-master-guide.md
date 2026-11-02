@@ -205,7 +205,7 @@ Deferral is sequencing, not a verdict. The default end-state of a documented fin
 1. **Stop and surface it** — don't work past it silently.
 2. **Document it thoroughly, now, while the context is loaded.** This is the most important step. A deferred find is only safe if a future reader (you, another agent, or the user) can act on it cold, without re-deriving everything. The cheap thing to lose later is *what to change*; the expensive thing is *why the code is shaped this way and what breaks if you touch it*. A one-line "fix X later" is a trap, not a deferral.
 3. **Return to the original task and finish it.**
-4. **When the task is complete, address the documented finds.** Fix them in their own commits — one intent per commit, never folded into the task's diff. Safe fixes proceed without asking. Ask the user first only when the fix would change GL output or posted accounting data, alter data semantics, or is otherwise risky enough to need triage.
+4. **When the task is complete, address the documented finds.** Fix them in their own commits — one intent per commit, never folded into the task's diff. Safe fixes proceed without asking. Ask the user first only when the fix would change already-posted accounting data or closed-period reports, alter data semantics, or is otherwise risky enough to need triage (finance tiers 4–5 in AGENTS.md).
 5. **Log only what genuinely can't be fixed this session** (too large, needs a user decision, blocked). Propose where (follow-up task, a `QA.md` §12 bug-pattern entry, or an audit-prompt sweep) and let the user triage. Logging is the fallback for what can't be fixed now — not a substitute for fixing.
 
 **A deferred-issue report must contain — do not abbreviate:**
