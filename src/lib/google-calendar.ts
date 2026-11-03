@@ -45,8 +45,9 @@ export async function getAccessToken(refreshToken: string): Promise<string> {
       grant_type: 'refresh_token',
     }),
   })
-  const data = await res.json() as { access_token?: string }
-  if (!data.access_token) throw new Error('Failed to obtain Google access token')
+  const data = await res.json() as { access_token?: string; error?: string }
+  // Google's error code (e.g. invalid_grant = revoked/expired token) is kept in the message
+  if (!data.access_token) throw new Error(`Failed to obtain Google access token${data.error ? `: ${data.error}` : ''}`)
   return data.access_token
 }
 

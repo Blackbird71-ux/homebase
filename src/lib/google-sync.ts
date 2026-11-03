@@ -1,5 +1,38 @@
 import { prisma } from '@/lib/prisma'
 import { getAccessToken, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from '@/lib/google-calendar'
+import { sendPushToUser } from '@/lib/push'
+
+/**
+ * Exchange every stored refresh token for an access token. Google deletes
+ * OAuth clients with no token activity for 5+ months, and calendar pushes
+ * alone can be too infrequent — this weekly exchange keeps the client alive.
+ * A revoked/expired token (invalid_grant) gets a push asking the user to
+ * reconnect; transient failures are only logged.
+ */
+export async function keepGoogleTokensAlive(): Promise<void> {
+  const users = await prisma.user.findMany({
+    where: { googleConnected: true, googleRefreshToken: { not: null } },
+    select: { id: true, googleRefreshToken: true },
+  })
+
+  for (const user of users) {
+    try {
+      await getAccessToken(user.googleRefreshToken!)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(`[google-sync] Token refresh failed for user ${user.id}: ${message}`)
+      if (message.includes('invalid_grant')) {
+        await sendPushToUser(user.id, {
+          title: 'Google Calendar disconnected',
+          body: 'Google no longer accepts HomeBase\'s calendar access. Reconnect in Settings → Integrations.',
+          url: '/settings?tab=integrations',
+        }).catch(() => {})
+      }
+    }
+  }
+
+  console.log(`[google-sync] Token keep-alive refreshed ${users.length} connection(s)`)
+}
 
 export async function pushEventToGoogle(
   eventId: string,

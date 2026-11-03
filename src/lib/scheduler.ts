@@ -3,6 +3,7 @@
 import cron from 'node-cron'
 import { processAllReminders, processTimedChoreReminders, processHabitReminders } from '@/lib/reminders'
 import { sendDailyBriefings } from '@/lib/daily-briefing'
+import { keepGoogleTokensAlive } from '@/lib/google-sync'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -70,4 +71,24 @@ export function initScheduler(): void {
   })
 
   console.log(`[scheduler] Daily briefing cron scheduled: ${briefingSchedule}`)
+
+  // Google OAuth keep-alive — weekly refresh-token exchange so Google doesn't
+  // flag the OAuth client as inactive (5 months) and delete it.
+  if (process.env.GOOGLE_CLIENT_ID) {
+    const googleSchedule = process.env.GOOGLE_KEEPALIVE_CRON_SCHEDULE ?? '0 3 * * 1'
+
+    if (!cron.validate(googleSchedule)) {
+      console.warn(`[scheduler] Invalid GOOGLE_KEEPALIVE_CRON_SCHEDULE "${googleSchedule}", defaulting to "0 3 * * 1"`)
+    }
+
+    cron.schedule(cron.validate(googleSchedule) ? googleSchedule : '0 3 * * 1', async () => {
+      try {
+        await keepGoogleTokensAlive()
+      } catch (err) {
+        console.error('[scheduler] Google token keep-alive failed:', err)
+      }
+    })
+
+    console.log(`[scheduler] Google token keep-alive cron scheduled: ${googleSchedule}`)
+  }
 }
